@@ -120,6 +120,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::PageDown | KeyCode::Char('D') => Some(Event::PageDown),
         KeyCode::Char('t') => Some(Event::JumpToLogsTop),
         KeyCode::Char('b') => Some(Event::JumpToLogsBottom),
+        KeyCode::Char('C') => Some(Event::ClearLogs),
         KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
         KeyCode::Char('p') => Some(Event::TogglePinnedTask),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
@@ -325,7 +326,7 @@ fn encode_key(key: KeyEvent) -> Vec<u8> {
                     10 => "\x1b[21",
                     11 => "\x1b[23",
                     12 => "\x1b[24",
-                    _ => panic!("unhandled fkey number {}", n),
+                    _ => panic!("unhandled fkey number {n}"),
                 };
                 let encoded_mods = encode_modifiers(mods);
                 if encoded_mods == 0 {

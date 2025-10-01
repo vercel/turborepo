@@ -7,7 +7,7 @@
 
 use std::time::Duration;
 
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
 use tokio::{
     select,
@@ -15,7 +15,7 @@ use tokio::{
     task::{JoinError, JoinHandle},
 };
 use tracing::debug;
-use turborepo_api_client::{analytics::AnalyticsClient, APIAuth};
+use turborepo_api_client::{APIAuth, analytics::AnalyticsClient};
 pub use turborepo_vercel_api::AnalyticsEvent;
 use uuid::Uuid;
 
@@ -188,10 +188,11 @@ mod tests {
         select,
         sync::{mpsc, mpsc::UnboundedReceiver},
     };
-    use turborepo_api_client::{analytics::AnalyticsClient, APIAuth};
+    use turborepo_api_client::{APIAuth, analytics::AnalyticsClient};
     use turborepo_vercel_api::{AnalyticsEvent, CacheEvent, CacheSource};
+    use uuid::Uuid;
 
-    use crate::start_analytics;
+    use crate::{add_session_id, start_analytics};
 
     #[derive(Clone)]
     struct DummyClient {
@@ -379,5 +380,85 @@ mod tests {
         assert_eq!(found.len(), 1);
         let payloads = &found[0];
         assert_eq!(payloads.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_client_error_handling() {
+        let (tx, _rx) = mpsc::unbounded_channel();
+
+        let client = ErrorClient { tx };
+
+        let (analytics_sender, analytics_handle) = start_analytics(
+            APIAuth {
+                token: "foo".to_string(),
+                team_id: Some("bar".to_string()),
+                team_slug: None,
+            },
+            client,
+        );
+
+        // Send an event that will cause the client to error
+        assert!(
+            analytics_sender
+                .send(AnalyticsEvent {
+                    session_id: None,
+                    source: CacheSource::Local,
+                    event: CacheEvent::Hit,
+                    hash: "".to_string(),
+                    duration: 0,
+                })
+                .is_ok(),
+            "sender should swallow client errors"
+        );
+
+        // Wait a bit for the error to be handled
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Should not panic when closing
+        analytics_handle.close_with_timeout().await;
+    }
+
+    #[test]
+    fn test_add_session_id() {
+        let mut events = vec![
+            AnalyticsEvent {
+                session_id: None,
+                source: CacheSource::Local,
+                event: CacheEvent::Hit,
+                hash: "hash1".to_string(),
+                duration: 100,
+            },
+            AnalyticsEvent {
+                session_id: Some("existing".to_string()),
+                source: CacheSource::Remote,
+                event: CacheEvent::Miss,
+                hash: "hash2".to_string(),
+                duration: 200,
+            },
+        ];
+
+        let session_id = Uuid::new_v4();
+        add_session_id(session_id, &mut events);
+
+        assert_eq!(events[0].session_id, Some(session_id.to_string()));
+        assert_eq!(events[1].session_id, Some(session_id.to_string()));
+    }
+
+    #[derive(Clone)]
+    struct ErrorClient {
+        tx: mpsc::UnboundedSender<()>,
+    }
+
+    impl AnalyticsClient for ErrorClient {
+        async fn record_analytics(
+            &self,
+            _api_auth: &APIAuth,
+            _events: Vec<AnalyticsEvent>,
+        ) -> Result<(), turborepo_api_client::Error> {
+            // Simulate an error using a simple error type
+            Err(turborepo_api_client::Error::ReadError(
+                std::io::Error::other("test error"),
+            ))
+        }
     }
 }

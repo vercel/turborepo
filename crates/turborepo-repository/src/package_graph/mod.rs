@@ -149,7 +149,7 @@ impl PackageGraph {
     pub fn builder(
         repo_root: &AbsoluteSystemPath,
         root_package_json: PackageJson,
-    ) -> PackageGraphBuilder<LocalPackageDiscoveryBuilder> {
+    ) -> PackageGraphBuilder<'_, LocalPackageDiscoveryBuilder> {
         PackageGraphBuilder::new(repo_root, root_package_json)
     }
 
@@ -667,7 +667,7 @@ mod test {
             pkg_graph.transitive_closure(Some(&PackageNode::Workspace(PackageName::Root)));
         assert!(closure.contains(&PackageNode::Root));
         let result = pkg_graph.validate();
-        assert!(result.is_ok(), "expected ok {:?}", result);
+        assert!(result.is_ok(), "expected ok {result:?}");
     }
 
     #[tokio::test]

@@ -13,6 +13,7 @@ use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
 use turborepo_frameworks::{infer_framework, Slug as FrameworkSlug};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
+use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
 };
@@ -22,7 +23,6 @@ use crate::{
     engine::TaskNode,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
     opts::RunOpts,
-    run::task_id::TaskId,
     task_graph::TaskDefinition,
     DaemonClient, DaemonConnector,
 };
@@ -190,7 +190,8 @@ impl PackageInputsHashes {
                         let local_hash_result = scm.get_package_file_hashes(
                             repo_root,
                             package_path,
-                            &task_definition.inputs,
+                            &task_definition.inputs.globs,
+                            task_definition.inputs.default,
                             Some(scm_telemetry),
                         );
                         match local_hash_result {
@@ -309,7 +310,7 @@ impl<'a> TaskHasher<'a> {
                 .get("TURBO_CI_VENDOR_ENV_KEY")
                 .filter(|prefix| !prefix.is_empty())
             {
-                let computed_exclude = format!("!{}*", exclude_prefix);
+                let computed_exclude = format!("!{exclude_prefix}*");
                 debug!(
                     "excluding environment variables matching wildcard {}",
                     computed_exclude
@@ -455,6 +456,8 @@ impl<'a> TaskHasher<'a> {
                     "DISPLAY",
                     "TMP",
                     "TEMP",
+                    // Windows
+                    "WINDIR",
                     // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
                     "VSCODE_*",
                     "ELECTRON_RUN_AS_NODE",
@@ -541,7 +544,7 @@ pub fn get_internal_deps_hash(
 
     let file_hashes = package_dirs
         .into_par_iter()
-        .map(|package_dir| scm.get_package_file_hashes::<&str>(root, package_dir, &[], None))
+        .map(|package_dir| scm.get_package_file_hashes::<&str>(root, package_dir, &[], false, None))
         .reduce(
             || Ok(HashMap::new()),
             |acc, hashes| {

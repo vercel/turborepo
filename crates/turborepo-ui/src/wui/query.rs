@@ -54,7 +54,7 @@ impl RunQuery {
 
 #[Object]
 impl RunQuery {
-    async fn current_run(&self) -> Option<CurrentRun> {
+    async fn current_run(&self) -> Option<CurrentRun<'_>> {
         Some(CurrentRun {
             state: self.state.as_ref()?,
         })

@@ -1,14 +1,14 @@
-use std::sync::{atomic::AtomicU8, Arc, Mutex};
+use std::sync::{Arc, Mutex, atomic::AtomicU8};
 
-use futures::{stream::FuturesUnordered, StreamExt};
-use tokio::sync::{mpsc, oneshot, Semaphore};
-use tracing::{warn, Instrument, Level};
+use futures::{StreamExt, stream::FuturesUnordered};
+use tokio::sync::{Semaphore, mpsc, oneshot};
+use tracing::{Instrument, Level, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{
-    http::UploadMap, multiplexer::CacheMultiplexer, CacheError, CacheHitMetadata, CacheOpts,
+    CacheError, CacheHitMetadata, CacheOpts, http::UploadMap, multiplexer::CacheMultiplexer,
 };
 
 const WARNING_CUTOFF: u8 = 4;
@@ -226,9 +226,9 @@ mod tests {
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
-        test_cases::{get_test_cases, TestCase},
         AsyncCache, CacheActions, CacheConfig, CacheHitMetadata, CacheOpts, CacheSource,
         RemoteCacheOpts,
+        test_cases::{TestCase, get_test_cases},
     };
 
     #[tokio::test]
@@ -274,7 +274,7 @@ mod tests {
         };
 
         let api_client = APIClient::new(
-            format!("http://localhost:{}", port),
+            format!("http://localhost:{port}"),
             Some(Duration::from_secs(200)),
             None,
             "2.0.0",
@@ -311,7 +311,7 @@ mod tests {
         async_cache.wait().await.unwrap();
 
         let fs_cache_path =
-            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{hash}.tar.zst")]);
 
         // Confirm that fs cache file does *not* exist
         assert!(!fs_cache_path.exists());
@@ -402,7 +402,7 @@ mod tests {
         async_cache.wait().await.unwrap();
 
         let fs_cache_path =
-            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{hash}.tar.zst")]);
 
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());
@@ -462,7 +462,7 @@ mod tests {
         };
 
         let api_client = APIClient::new(
-            format!("http://localhost:{}", port),
+            format!("http://localhost:{port}"),
             Some(Duration::from_secs(200)),
             None,
             "2.0.0",
@@ -499,7 +499,7 @@ mod tests {
         async_cache.wait().await.unwrap();
 
         let fs_cache_path =
-            repo_root_path.join_components(&[".turbo", "cache", &format!("{}.tar.zst", hash)]);
+            repo_root_path.join_components(&[".turbo", "cache", &format!("{hash}.tar.zst")]);
 
         // Confirm that fs cache file exists
         assert!(fs_cache_path.exists());

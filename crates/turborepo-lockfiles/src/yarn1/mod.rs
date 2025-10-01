@@ -190,8 +190,7 @@ mod test {
         ] {
             assert!(
                 lockfile.inner.contains_key(key),
-                "missing {} in lockfile",
-                key
+                "missing {key} in lockfile"
             );
         }
     }

@@ -140,6 +140,9 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v2
         with:
@@ -202,7 +205,7 @@ jobs:
 
       - name: Run cargo clippy
         run: |
-          cargo clippy --workspace --features rustls-tls -- --deny clippy::all
+          cargo clippy --workspace --features rustls-tls --all-targets -- --deny clippy::all
 
   rust_check:
     # We test dependency changes only on main

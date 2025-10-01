@@ -226,8 +226,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql"
-version = "7.0.16"
-source = "git+https://github.com/yasamoka/async-graphql.git?rev=15fed95142019722e7da2c214ff9d8e2e755c9e5#15fed95142019722e7da2c214ff9d8e2e755c9e5"
+version = "7.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "036618f842229ba0b89652ffe425f96c7c16a49f7e3cb23b56fca7f61fd74980"
 dependencies = [
  "async-graphql-derive",
  "async-graphql-parser",
@@ -275,8 +276,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-derive"
-version = "7.0.16"
-source = "git+https://github.com/yasamoka/async-graphql.git?rev=15fed95142019722e7da2c214ff9d8e2e755c9e5#15fed95142019722e7da2c214ff9d8e2e755c9e5"
+version = "7.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd45deb3dbe5da5cdb8d6a670a7736d735ba65b455328440f236dfb113727a3d"
 dependencies = [
  "Inflector",
  "async-graphql-parser",
@@ -291,8 +293,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-parser"
-version = "7.0.16"
-source = "git+https://github.com/yasamoka/async-graphql.git?rev=15fed95142019722e7da2c214ff9d8e2e755c9e5#15fed95142019722e7da2c214ff9d8e2e755c9e5"
+version = "7.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60b7607e59424a35dadbc085b0d513aa54ec28160ee640cf79ec3b634eba66d3"
 dependencies = [
  "async-graphql-value",
  "pest",
@@ -302,8 +305,9 @@ dependencies = [
 
 [[package]]
 name = "async-graphql-value"
-version = "7.0.16"
-source = "git+https://github.com/yasamoka/async-graphql.git?rev=15fed95142019722e7da2c214ff9d8e2e755c9e5#15fed95142019722e7da2c214ff9d8e2e755c9e5"
+version = "7.0.17"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34ecdaff7c9cffa3614a9f9999bf9ee4c3078fe3ce4d6a6e161736b56febf2de"
 dependencies = [
  "bytes",
  "indexmap 2.2.6",
@@ -1415,6 +1419,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7704b5fdd17b18ae31c4c1da5a2e0305a2bf17b5249300a9ee9ed7b72114c636"
 
 [[package]]
+name = "coverage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "glob",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+ "which 6.0.3",
+]
+
+[[package]]
 name = "cpp_demangle"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2230,6 +2247,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "glob"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
+
+[[package]]
 name = "globset"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2407,6 +2430,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest",
+]
+
+[[package]]
+name = "home"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf"
+dependencies = [
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4253,7 +4285,7 @@ dependencies = [
  "regex",
  "syn 1.0.109",
  "tempfile",
- "which",
+ "which 4.4.0",
 ]
 
 [[package]]
@@ -6179,17 +6211,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
 
 [[package]]
-name = "tower-uds"
-version = "0.1.0"
-dependencies = [
- "async-io",
- "tokio",
- "tokio-util",
- "tower 0.4.13",
- "uds_windows",
-]
-
-[[package]]
 name = "tracing"
 version = "0.1.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6383,7 +6404,7 @@ dependencies = [
  "tempfile",
  "turbopath",
  "turborepo-lib",
- "which",
+ "which 4.4.0",
 ]
 
 [[package]]
@@ -6784,6 +6805,7 @@ dependencies = [
  "turborepo-repository",
  "turborepo-scm",
  "turborepo-signals",
+ "turborepo-task-id",
  "turborepo-telemetry",
  "turborepo-ui",
  "turborepo-unescape",
@@ -6793,7 +6815,7 @@ dependencies = [
  "uds_windows",
  "wax",
  "webbrowser",
- "which",
+ "which 4.4.0",
 ]
 
 [[package]]
@@ -6905,6 +6927,7 @@ dependencies = [
  "biome_json_parser",
  "either",
  "globwalk",
+ "insta",
  "itertools 0.10.5",
  "lazy-regex",
  "miette",
@@ -6928,7 +6951,7 @@ dependencies = [
  "turborepo-lockfiles",
  "turborepo-unescape",
  "wax",
- "which",
+ "which 4.4.0",
 ]
 
 [[package]]
@@ -6952,7 +6975,7 @@ dependencies = [
  "turborepo-ci",
  "turborepo-telemetry",
  "wax",
- "which",
+ "which 4.4.0",
 ]
 
 [[package]]
@@ -6962,6 +6985,16 @@ dependencies = [
  "futures",
  "thiserror 1.0.63",
  "tokio",
+]
+
+[[package]]
+name = "turborepo-task-id"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "test-case",
+ "thiserror 1.0.63",
+ "turborepo-repository",
 ]
 
 [[package]]
@@ -7024,7 +7057,7 @@ dependencies = [
  "turbopath",
  "turborepo-ci",
  "turborepo-vt100",
- "which",
+ "which 4.4.0",
  "windows-sys 0.59.0",
 ]
 
@@ -7543,6 +7576,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "which"
+version = "6.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4ee928febd44d98f2f459a4a79bd4d928591333a494a10a868418ac1b39cf1f"
+dependencies = [
+ "either",
+ "home",
+ "rustix 0.38.31",
+ "winsafe",
+]
+
+[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7858,6 +7903,12 @@ checksum = "80d0f4e272c85def139476380b12f9ac60926689dd2e01d4923222f40580869d"
 dependencies = [
  "winapi",
 ]
+
+[[package]]
+name = "winsafe"
+version = "0.0.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "wit-bindgen-rt"

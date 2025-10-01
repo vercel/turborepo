@@ -206,7 +206,7 @@ impl Default for PtySize {
 mod test {
     use std::time::Instant;
 
-    use futures::{stream::FuturesUnordered, StreamExt};
+    use futures::{StreamExt, stream::FuturesUnordered};
     use test_case::test_case;
     use tokio::{join, time::sleep};
     use tracing_test::traced_test;
@@ -285,9 +285,11 @@ mod test {
         );
 
         // Verify that we can't start new child processes
-        assert!(manager
-            .spawn(get_command(), Duration::from_secs(2))
-            .is_none());
+        assert!(
+            manager
+                .spawn(get_command(), Duration::from_secs(2))
+                .is_none()
+        );
 
         manager.stop().await;
     }
@@ -384,8 +386,7 @@ mod test {
         // tasks return proper exit code
         assert!(
             tasks.all(|v| async { v.unwrap() == expected }).await,
-            "not all tasks returned the correct code: {:?}",
-            expected
+            "not all tasks returned the correct code: {expected:?}"
         );
     }
 

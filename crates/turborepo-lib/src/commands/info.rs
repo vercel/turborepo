@@ -20,7 +20,7 @@ fn is_wsl() -> bool {
 
 pub async fn run(base: CommandBase) {
     let system = System::new_all();
-    let connector = DaemonConnector::new(false, false, &base.repo_root);
+    let connector = DaemonConnector::new(false, false, &base.repo_root, None);
     let daemon_status = match connector.connect().await {
         Ok(_status) => "Running",
         Err(DaemonConnectorError::NotRunning) => "Not running",
@@ -41,9 +41,9 @@ pub async fn run(base: CommandBase) {
         |path| path.to_string_lossy().into_owned(),
     );
 
-    println!("   Path to executable: {}", exe_path);
-    println!("   Daemon status: {}", daemon_status);
-    println!("   Package manager: {}", package_manager);
+    println!("   Path to executable: {exe_path}");
+    println!("   Daemon status: {daemon_status}");
+    println!("   Package manager: {package_manager}");
     println!();
 
     println!("Platform:");

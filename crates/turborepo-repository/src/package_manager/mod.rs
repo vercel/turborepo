@@ -14,7 +14,7 @@ use std::{
 
 use bun::BunDetector;
 use itertools::{Either, Itertools};
-use lazy_regex::{lazy_regex, Lazy};
+use lazy_regex::{Lazy, lazy_regex};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use node_semver::SemverError;
 use npm::NpmDetector;
@@ -109,7 +109,7 @@ impl Display for MissingWorkspaceError {
                  defined in the root package.json"
             }
         };
-        write!(f, "{}", err)
+        write!(f, "{err}")
     }
 }
 
@@ -573,7 +573,7 @@ mod tests {
                 return ancestor.to_owned();
             }
         }
-        panic!("Couldn't find Turborepo root from {}", cwd);
+        panic!("Couldn't find Turborepo root from {cwd}");
     }
 
     #[test]

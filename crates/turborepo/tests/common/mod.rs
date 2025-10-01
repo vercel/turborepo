@@ -26,10 +26,7 @@ pub fn setup_fixture(
 
     Command::new(bash)
         .arg("-c")
-        .arg(format!(
-            "{} {} {}",
-            unix_script_path, fixture, package_manager
-        ))
+        .arg(format!("{unix_script_path} {fixture} {package_manager}"))
         .current_dir(test_dir)
         .spawn()?
         .wait()?;

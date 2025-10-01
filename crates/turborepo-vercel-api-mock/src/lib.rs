@@ -1,20 +1,22 @@
+//! Mock server implementation for a subset of the Vercel API.
+
 #![deny(clippy::all)]
 
 use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use axum::{
+    Json, Router,
     body::Body,
     extract::Path,
-    http::{header::CONTENT_LENGTH, HeaderMap, HeaderValue, StatusCode},
+    http::{HeaderMap, HeaderValue, StatusCode, header::CONTENT_LENGTH},
     routing::{get, head, options, post, put},
-    Json, Router,
 };
 use futures_util::StreamExt;
 use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
     AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
-    User, UserResponse, VerificationResponse,
+    User, UserResponse, VerificationResponse, telemetry::TelemetryEvent,
 };
 
 pub const EXPECTED_TOKEN: &str = "expected_token";
@@ -40,6 +42,8 @@ pub async fn start_test_server(port: u16) -> Result<()> {
 
     let get_analytics_events_ref = Arc::new(Mutex::new(Vec::new()));
     let post_analytics_events_ref = get_analytics_events_ref.clone();
+
+    let telemetry_events_ref = Arc::new(Mutex::new(Vec::new()));
 
     let app = Router::new()
         .route(
@@ -223,12 +227,21 @@ pub async fn start_test_server(port: u16) -> Result<()> {
 
                 headers
             }),
+        )
+        .route(
+            "/api/turborepo/v1/events",
+            post(
+                |Json(telemetry_events): Json<Vec<TelemetryEvent>>| async move {
+                    telemetry_events_ref.lock().await.extend(telemetry_events);
+                    StatusCode::OK
+                },
+            ),
         );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = TcpListener::bind(addr).await?;
     // We print the port so integration tests can use it
-    println!("{}", port);
+    println!("{port}");
     axum::serve(listener, app).await?;
 
     Ok(())

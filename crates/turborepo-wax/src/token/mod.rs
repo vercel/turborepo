@@ -7,24 +7,24 @@ use std::{
     collections::VecDeque,
     mem,
     ops::Deref,
-    path::{PathBuf, MAIN_SEPARATOR},
+    path::{MAIN_SEPARATOR, PathBuf},
     slice, str,
 };
 
 use itertools::Itertools as _;
 
 pub use crate::token::{
-    parse::{parse, Annotation, ParseError, ROOT_SEPARATOR_EXPRESSION},
+    parse::{Annotation, ParseError, ROOT_SEPARATOR_EXPRESSION, parse},
     variance::{
-        invariant_text_prefix, is_exhaustive, Boundedness, InvariantSize, InvariantText, Variance,
+        Boundedness, InvariantSize, InvariantText, Variance, invariant_text_prefix, is_exhaustive,
     },
 };
 use crate::{
+    PATHS_ARE_CASE_INSENSITIVE, StrExt as _,
     token::variance::{
         CompositeBreadth, CompositeDepth, ConjunctiveVariance, DisjunctiveVariance,
         IntoInvariantText, Invariance, UnitBreadth, UnitDepth, UnitVariance,
     },
-    StrExt as _, PATHS_ARE_CASE_INSENSITIVE,
 };
 
 pub trait TokenTree<'t>: Sized {

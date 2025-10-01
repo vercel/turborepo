@@ -85,7 +85,7 @@ Select a terminal UI for the repository.
 
 `"tui"` allows for viewing each log at once and interacting with the task. `"stream"` outputs logs as they come in and is not interactive.
 
-```json title="Terminal"
+```json title="./turbo.json"
 {
   "ui": "tui" | "stream"
 }
@@ -419,7 +419,11 @@ Defines if task outputs should be cached. Setting `cache` to false is useful for
 
 Default: `[]`, all files in the package that are checked into source control
 
-A list of file glob patterns relative to the package's `package.json` to consider when determining if a package has changed. `turbo.json` is **always** considered an input.
+A list of file glob patterns relative to the package's `package.json` to consider when determining if a package has changed. The following files are **always** considered inputs, even if you try to explicitly ignore them:
+
+- `package.json`
+- `turbo.json`
+- Package manager lockfiles
 
 Visit the [file glob specification](/docs/reference/globs) for more information on globbing syntax.
 

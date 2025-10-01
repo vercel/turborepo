@@ -7,13 +7,13 @@ use oxc_resolver::{
     EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
 };
 use swc_common::{
+    FileName, SourceMap,
     comments::SingleThreadedComments,
     errors::{ColorConfig, Handler},
     input::StringInput,
-    FileName, SourceMap,
 };
 use swc_ecma_ast::EsVersion;
-use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
+use swc_ecma_parser::{Capturing, EsSyntax, Parser, Syntax, TsSyntax, lexer::Lexer};
 use swc_ecma_visit::VisitWith;
 use thiserror::Error;
 use tokio::task::JoinSet;
@@ -224,8 +224,8 @@ impl Tracer {
                 Err(err) => {
                     if !import.starts_with(".") {
                         // Try to resolve the import as a type import via `@/types/<import>`
-                        let type_package = format!("@types/{}", import);
-                        debug!("trying to resolve type import: {}", type_package);
+                        let type_package = format!("@types/{import}");
+                        debug!("trying to resolve type import: {type_package}");
                         let resolved_type_import = resolver
                             .resolve(file_dir, type_package.as_str())
                             .ok()
@@ -387,10 +387,10 @@ impl Tracer {
         let resolver = Self::create_resolver(self.ts_config.as_deref());
 
         while let Some((file_path, file_depth)) = self.files.pop() {
-            if let Some(max_depth) = max_depth {
-                if file_depth > max_depth {
-                    continue;
-                }
+            if let Some(max_depth) = max_depth
+                && file_depth > max_depth
+            {
+                continue;
             }
             self.trace_file(&resolver, file_path, file_depth, &mut seen)
                 .await;
@@ -424,7 +424,7 @@ impl Tracer {
                     source_map: self.source_map.clone(),
                     files: HashMap::new(),
                     errors: vec![TraceError::GlobError(Arc::new(e))],
-                }
+                };
             }
         };
 

@@ -1,3 +1,8 @@
+//! Diagnostic utilities to preserve source for more actionable error messages
+//! Used in conjunction with `miette` to include source snippets in errors.
+//! Any parsing of files should attempt to produce value of `Spanned<T>` so if
+//! we need to reference where T came from the span is available.
+
 use std::{
     fmt::Display,
     iter,

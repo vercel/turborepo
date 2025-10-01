@@ -5,7 +5,7 @@ use tracing::log::warn;
 use crate::{
     sender::{TaskSender, UISender},
     tui::event::{CacheResult, OutputLogs, TaskResult},
-    wui::{event::WebUIEvent, Error},
+    wui::{Error, event::WebUIEvent},
 };
 
 #[derive(Debug, Clone)]

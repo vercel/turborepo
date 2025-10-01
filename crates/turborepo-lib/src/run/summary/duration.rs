@@ -28,7 +28,7 @@ impl fmt::Display for TurboDuration {
         // If duration is less than a second, we print milliseconds
         if duration.num_seconds() <= 0 {
             let milliseconds = duration.num_milliseconds() - duration.num_seconds() * 1000;
-            return write!(f, "{}ms", milliseconds);
+            return write!(f, "{milliseconds}ms");
         }
 
         if duration.num_hours() > 0 {
@@ -37,13 +37,13 @@ impl fmt::Display for TurboDuration {
 
         if duration.num_minutes() > 0 {
             let minutes = duration.num_minutes() - duration.num_hours() * 60;
-            write!(f, "{}m", minutes)?;
+            write!(f, "{minutes}m")?;
         }
 
         if duration.num_seconds() > 0 {
             let seconds_in_ms = duration.num_milliseconds() - duration.num_minutes() * 60 * 1000;
             let seconds = (seconds_in_ms as f64) / 1000.0;
-            write!(f, "{}s", seconds)?;
+            write!(f, "{seconds}s")?;
         }
 
         Ok(())

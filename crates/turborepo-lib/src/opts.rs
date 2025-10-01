@@ -6,15 +6,15 @@ use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
+use turborepo_task_id::{TaskId, TaskName};
 
 use crate::{
     cli::{
         Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
         OutputLogsMode, RunArgs,
     },
-    config::ConfigurationOptions,
-    run::task_id::{TaskId, TaskName},
-    turbo_json::{UIMode, CONFIG_FILE},
+    config::{ConfigurationOptions, CONFIG_FILE},
+    turbo_json::{FutureFlags, UIMode},
     Args,
 };
 
@@ -55,6 +55,7 @@ pub struct APIClientOpts {
     pub team_slug: Option<String>,
     pub login_url: String,
     pub preflight: bool,
+    pub sso_login_callback_port: Option<u16>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -76,6 +77,7 @@ pub struct Opts {
     pub runcache_opts: RunCacheOpts,
     pub scope_opts: ScopeOpts,
     pub tui_opts: TuiOpts,
+    pub future_flags: FutureFlags,
 }
 
 impl Opts {
@@ -179,6 +181,7 @@ impl Opts {
         let api_client_opts = APIClientOpts::from(inputs);
         let repo_opts = RepoOpts::from(inputs);
         let tui_opts = TuiOpts::from(inputs);
+        let future_flags = config.future_flags();
 
         Ok(Self {
             repo_opts,
@@ -188,6 +191,7 @@ impl Opts {
             runcache_opts,
             api_client_opts,
             tui_opts,
+            future_flags,
         })
     }
 }
@@ -247,7 +251,7 @@ pub struct TaskArgs<'a> {
 }
 
 impl RunOpts {
-    pub fn task_args(&self) -> TaskArgs {
+    pub fn task_args(&self) -> TaskArgs<'_> {
         TaskArgs {
             pass_through_args: &self.pass_through_args,
             tasks: &self.tasks,
@@ -449,6 +453,7 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
         let team_id = inputs.config.team_id().map(|s| s.to_string());
         let team_slug = inputs.config.team_slug().map(|s| s.to_string());
         let login_url = inputs.config.login_url().to_string();
+        let sso_login_callback_port = inputs.config.sso_login_callback_port();
 
         APIClientOpts {
             api_url,
@@ -459,6 +464,7 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
             team_slug,
             login_url,
             preflight,
+            sso_login_callback_port,
         }
     }
 }
@@ -564,16 +570,16 @@ mod test {
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
+    use turborepo_task_id::TaskId;
     use turborepo_ui::ColorConfig;
 
     use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
     use crate::{
         cli::{Command, ContinueMode, DryRunMode, RunArgs},
         commands::CommandBase,
-        config::ConfigurationOptions,
+        config::{ConfigurationOptions, CONFIG_FILE},
         opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
-        run::task_id::TaskId,
-        turbo_json::{UIMode, CONFIG_FILE},
+        turbo_json::UIMode,
         Args,
     };
 
@@ -737,12 +743,14 @@ mod test {
                 team_slug: None,
                 login_url: "".to_string(),
                 preflight: false,
+                sso_login_callback_port: None,
             },
             scope_opts,
             run_opts,
             cache_opts,
             runcache_opts,
             tui_opts,
+            future_flags: Default::default(),
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);

@@ -144,7 +144,7 @@ impl FromStr for CacheConfig {
                         text: s.to_string(),
                         s: ty.to_string(),
                         span: Some(SourceSpan::new(idx.into(), ty.len())),
-                    })
+                    });
                 }
             }
 
@@ -190,7 +190,7 @@ impl FromStr for CacheActions {
                         c,
                         text: String::new(),
                         span: None,
-                    })
+                    });
                 }
             }
         }

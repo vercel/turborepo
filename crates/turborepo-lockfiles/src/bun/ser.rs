@@ -1,4 +1,4 @@
-use serde::{ser::SerializeTuple, Serialize};
+use serde::{Serialize, ser::SerializeTuple};
 
 use super::PackageEntry;
 

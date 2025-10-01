@@ -1,12 +1,13 @@
 {
   "name": "@turbo/types",
-  "version": "2.5.5-canary.0",
+  "version": "2.5.9-canary.0",
   "description": "Turborepo types",
+  "type": "commonjs",
   "homepage": "https://turborepo.com",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turborepo",
+    "url": "git+https://github.com/vercel/turborepo.git",
     "directory": "packages/turbo-types"
   },
   "bugs": {
@@ -19,12 +20,16 @@
     "lint": "eslint src/",
     "lint:prettier": "prettier -c . --cache",
     "generate-schema": "tsx scripts/generate-schema.ts",
-    "copy-schema": "cp schemas/schema.json ../turbo/schema.json"
+    "copy-schema": "cp schemas/schema.json ../turbo/schema.json",
+    "package:lint": "publint --strict",
+    "package:types": "attw --profile node16 --pack"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.2",
     "@turbo/eslint-config": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@types/node": "^20",
+    "publint": "^0.3.12",
     "ts-json-schema-generator": "2.3.0",
     "tsx": "4.19.1"
   },

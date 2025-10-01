@@ -7,7 +7,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
-use super::{dep_path::DepPath, Error, LockfileVersion, SupportedLockfileVersion};
+use super::{Error, LockfileVersion, SupportedLockfileVersion, dep_path::DepPath};
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
@@ -322,7 +322,7 @@ impl PnpmLockfile {
 
     // Create a projection of all fields in the lockfile that could affect all
     // workspaces
-    fn global_fields(&self) -> GlobalFields {
+    fn global_fields(&self) -> GlobalFields<'_> {
         GlobalFields {
             version: &self.lockfile_version.version,
             checksum: self.package_extensions_checksum.as_deref(),
@@ -806,12 +806,10 @@ mod tests {
             (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
             (Err(actual), Err(expected_msg)) => assert!(
                 actual.to_string().contains(expected_msg),
-                "Expected '{}' to appear in error message: '{}'",
-                expected_msg,
-                actual,
+                "Expected '{expected_msg}' to appear in error message: '{actual}'",
             ),
             (actual, expected) => {
-                panic!("Mismatched result variants: {:?} {:?}", actual, expected)
+                panic!("Mismatched result variants: {actual:?} {expected:?}")
             }
         }
     }
@@ -939,12 +937,10 @@ mod tests {
             (Ok(actual), Ok(expected)) => assert_eq!(actual, expected),
             (Err(actual), Err(expected_msg)) => assert!(
                 actual.to_string().contains(expected_msg),
-                "Expected '{}' to appear in error message: '{}'",
-                expected_msg,
-                actual,
+                "Expected '{expected_msg}' to appear in error message: '{actual}'",
             ),
             (actual, expected) => {
-                panic!("Mismatched result variants: {:?} {:?}", actual, expected)
+                panic!("Mismatched result variants: {actual:?} {expected:?}")
             }
         }
     }

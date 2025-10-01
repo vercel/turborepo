@@ -1,7 +1,7 @@
 [package]
 name = "turborepo-repository"
 version = "0.1.0"
-edition = "2024"
+edition = { workspace = true }
 license = "MIT"
 
 [lints]
@@ -41,6 +41,7 @@ wax = { workspace = true }
 which = { workspace = true }
 
 [dev-dependencies]
+insta = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }

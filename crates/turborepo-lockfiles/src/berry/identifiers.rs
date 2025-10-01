@@ -250,7 +250,7 @@ impl<'a> Locator<'a> {
             })
     }
 
-    pub fn patched_locator(&self) -> Option<Locator> {
+    pub fn patched_locator(&self) -> Option<Locator<'_>> {
         // THis has an issue of cutting off the last char
         Locator::from_patch_reference(&self.reference)
     }

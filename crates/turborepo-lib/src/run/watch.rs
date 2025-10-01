@@ -16,10 +16,10 @@ use turborepo_ui::sender::UISender;
 
 use crate::{
     commands::CommandBase,
+    config::resolve_turbo_config_path,
     daemon::{proto, DaemonConnectorError, DaemonError},
     get_version, opts,
     run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
-    turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC},
     DaemonConnector, DaemonPaths,
 };
 
@@ -103,8 +103,6 @@ pub enum Error {
     UI(#[from] turborepo_ui::Error),
     #[error("Could not connect to UI thread: {0}")]
     UISend(String),
-    #[error("Cannot use non-standard turbo configuration at {0} with Watch Mode.")]
-    NonStandardTurboJsonPath(String),
     #[error("Invalid config: {0}")]
     Config(#[from] crate::config::Error),
     #[error(transparent)]
@@ -120,18 +118,7 @@ impl WatchClient {
         let signal = get_signal()?;
         let handler = SignalHandler::new(signal);
 
-        // Check if the turbo.json path is the standard one (either turbo.json or
-        // turbo.jsonc)
-        let standard_path_json = base.repo_root.join_component(CONFIG_FILE);
-        let standard_path_jsonc = base.repo_root.join_component(CONFIG_FILE_JSONC);
-
-        if base.opts.repo_opts.root_turbo_json_path != standard_path_json
-            && base.opts.repo_opts.root_turbo_json_path != standard_path_jsonc
-        {
-            return Err(Error::NonStandardTurboJsonPath(
-                base.opts.repo_opts.root_turbo_json_path.to_string(),
-            ));
-        }
+        let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
 
         if matches!(base.opts.run_opts.daemon, Some(false)) {
             warn!("daemon is required for watch, ignoring request to disable daemon");
@@ -148,10 +135,24 @@ impl WatchClient {
 
         let (ui_sender, ui_handle) = run.start_ui()?.unzip();
 
+        // Determine if we're using a custom turbo.json path
+        let custom_turbo_json_path =
+            if base.opts.repo_opts.root_turbo_json_path != standard_config_path {
+                tracing::info!(
+                    "Using custom turbo.json path: {} (standard: {})",
+                    base.opts.repo_opts.root_turbo_json_path,
+                    standard_config_path
+                );
+                Some(base.opts.repo_opts.root_turbo_json_path.clone())
+            } else {
+                None
+            };
+
         let connector = DaemonConnector {
             can_start_server: true,
             can_kill_server: true,
             paths: DaemonPaths::from_repo_root(&base.repo_root),
+            custom_turbo_json_path,
         };
 
         Ok(Self {

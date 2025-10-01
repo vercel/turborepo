@@ -9,7 +9,7 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
-use crate::{wait_for_success, Error, GitHashes, GitRepo};
+use crate::{Error, GitHashes, GitRepo, wait_for_success};
 
 impl GitRepo {
     #[tracing::instrument(skip(self, root_path, hashes))]
@@ -62,9 +62,8 @@ fn read_status<R: Read>(
         if entry.is_delete {
             let path = path.strip_prefix(pkg_prefix).map_err(|_| {
                 Error::git_error(format!(
-                    "'git status --untracked-files --no-renames -z -- .' run in {} found a \
-                     deleted file {} that did not have the expected prefix: {}",
-                    root_path, path, pkg_prefix
+                    "'git status --untracked-files --no-renames -z -- .' run in {root_path} found \
+                     a deleted file {path} that did not have the expected prefix: {pkg_prefix}"
                 ))
             })?;
             hashes.remove(&path);
@@ -140,9 +139,9 @@ mod tests {
             let mut hashes = to_hash_map(&[(expected_filename, "some-hash")]);
             let to_hash = read_status(input.as_bytes(), &root_path, &prefix, &mut hashes).unwrap();
             if *expect_delete {
-                assert_eq!(hashes.len(), 0, "input: {}", input);
+                assert_eq!(hashes.len(), 0, "input: {input}");
             } else {
-                assert_eq!(to_hash.len(), 1, "input: {}", input);
+                assert_eq!(to_hash.len(), 1, "input: {input}");
                 let expected = prefix.join(&RelativeUnixPathBuf::new(*expected_filename).unwrap());
                 assert_eq!(to_hash[0], expected);
             }
