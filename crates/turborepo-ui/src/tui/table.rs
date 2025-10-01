@@ -57,7 +57,7 @@ impl<'b> TaskTable<'b> {
         match self.section {
             LayoutSections::Search { results, .. }
             | LayoutSections::SearchLocked { results, .. } => {
-                !results.first_match(std::iter::once(task_name)).is_some()
+                results.first_match(std::iter::once(task_name)).is_none()
             }
             _ => false,
         }
