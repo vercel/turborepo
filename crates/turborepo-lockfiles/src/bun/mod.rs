@@ -627,14 +627,14 @@ impl BunLockfile {
         // map and have "bundled": true in their metadata
         let parent_keys: Vec<_> = new_packages.keys().cloned().collect();
         for parent_key in parent_keys {
-            let prefix = format!("{}/", parent_key);
+            let prefix = format!("{parent_key}/");
             for (key, entry) in self.data.packages.iter() {
                 if key.starts_with(&prefix) && !new_packages.contains_key(key) {
                     // Check if this is a bundled dependency
-                    if let Some(info) = &entry.info {
-                        if info.other.get("bundled") == Some(&Value::Bool(true)) {
-                            new_packages.insert(key.clone(), entry.clone());
-                        }
+                    if let Some(info) = &entry.info
+                        && info.other.get("bundled") == Some(&Value::Bool(true))
+                    {
+                        new_packages.insert(key.clone(), entry.clone());
                     }
                 }
             }
