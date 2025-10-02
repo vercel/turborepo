@@ -607,7 +607,9 @@ impl BunLockfile {
         // Filter out packages that are not in the subgraph. Note that _multiple_
         // entries can correspond to the same ident.
         let idents: HashSet<_> = packages.iter().collect();
-        let new_packages: Map<_, _> = self
+
+        // First, collect packages that match the idents
+        let mut new_packages: Map<_, _> = self
             .data
             .packages
             .iter()
@@ -619,6 +621,24 @@ impl BunLockfile {
                 }
             })
             .collect();
+
+        // Then, for each included package, also include any scoped bundled dependencies
+        // Bundled dependencies are stored as "<parent_key>/<dep_name>" in the packages
+        // map and have "bundled": true in their metadata
+        let parent_keys: Vec<_> = new_packages.keys().cloned().collect();
+        for parent_key in parent_keys {
+            let prefix = format!("{}/", parent_key);
+            for (key, entry) in self.data.packages.iter() {
+                if key.starts_with(&prefix) && !new_packages.contains_key(key) {
+                    // Check if this is a bundled dependency
+                    if let Some(info) = &entry.info {
+                        if info.other.get("bundled") == Some(&Value::Bool(true)) {
+                            new_packages.insert(key.clone(), entry.clone());
+                        }
+                    }
+                }
+            }
+        }
 
         let new_patched_dependencies = self
             .data
@@ -3688,6 +3708,100 @@ mod test {
         let common_info = common_entry.info.as_ref().unwrap();
         assert_eq!(common_info.os, Negatable::None);
         assert_eq!(common_info.cpu, Negatable::None);
+    }
+
+    #[test]
+    fn test_bundled_dependencies_included_in_subgraph() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-app",
+                    "dependencies": {
+                        "@tailwindcss/oxide-wasm32-wasi": "^4.1.13"
+                    }
+                }
+            },
+            "packages": {
+                "@tailwindcss/oxide-wasm32-wasi": [
+                    "@tailwindcss/oxide-wasm32-wasi@4.1.13",
+                    "",
+                    {
+                        "dependencies": {
+                            "@emnapi/core": "^1.4.5",
+                            "@emnapi/runtime": "^1.4.5"
+                        }
+                    },
+                    "sha512-test"
+                ],
+                "@tailwindcss/oxide-wasm32-wasi/@emnapi/core": [
+                    "@emnapi/core@1.5.0",
+                    "",
+                    {
+                        "dependencies": {
+                            "tslib": "^2.4.0"
+                        },
+                        "bundled": true
+                    },
+                    "sha512-bundled-core"
+                ],
+                "@tailwindcss/oxide-wasm32-wasi/@emnapi/runtime": [
+                    "@emnapi/runtime@1.5.0",
+                    "",
+                    {
+                        "dependencies": {
+                            "tslib": "^2.4.0"
+                        },
+                        "bundled": true
+                    },
+                    "sha512-bundled-runtime"
+                ],
+                "@tailwindcss/oxide-wasm32-wasi/tslib": [
+                    "tslib@2.8.1",
+                    "",
+                    {
+                        "bundled": true
+                    },
+                    "sha512-bundled-tslib"
+                ]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        // Create subgraph including @tailwindcss/oxide-wasm32-wasi
+        let subgraph = lockfile
+            .subgraph(&[], &["@tailwindcss/oxide-wasm32-wasi@4.1.13".into()])
+            .unwrap();
+        let subgraph_data = subgraph.lockfile().unwrap();
+
+        // Verify the main package is included
+        assert!(
+            subgraph_data
+                .packages
+                .contains_key("@tailwindcss/oxide-wasm32-wasi")
+        );
+
+        // Verify bundled dependencies are included
+        assert!(
+            subgraph_data
+                .packages
+                .contains_key("@tailwindcss/oxide-wasm32-wasi/@emnapi/core")
+        );
+        assert!(
+            subgraph_data
+                .packages
+                .contains_key("@tailwindcss/oxide-wasm32-wasi/@emnapi/runtime")
+        );
+        assert!(
+            subgraph_data
+                .packages
+                .contains_key("@tailwindcss/oxide-wasm32-wasi/tslib")
+        );
+
+        // Verify the count is correct (1 main + 3 bundled)
+        assert_eq!(subgraph_data.packages.len(), 4);
     }
 
     #[test]
