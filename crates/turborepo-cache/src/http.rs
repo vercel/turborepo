@@ -558,7 +558,7 @@ mod test {
         let refresh_result = cache.try_refresh_token().await;
         // The result can be true or false depending on system state, but the method
         // should not panic
-        assert!(refresh_result == true || refresh_result == false);
+        assert!(refresh_result || !refresh_result);
     }
 
     #[tokio::test]
@@ -660,7 +660,7 @@ mod test {
                     assert_eq!(auth.team_id, Some("my-team".to_string()));
                     // Simulate some work
                     thread::sleep(std::time::Duration::from_millis(10));
-                    format!("thread-{}", i)
+                    format!("thread-{i}")
                 })
             })
             .collect();
