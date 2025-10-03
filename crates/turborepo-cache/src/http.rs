@@ -6,7 +6,7 @@ use std::{
 };
 
 use tokio_stream::StreamExt;
-use tracing::{debug, warn};
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{
@@ -27,7 +27,7 @@ pub struct HTTPCache {
     client: APIClient,
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
     repo_root: AbsoluteSystemPathBuf,
-    api_auth: Arc<Mutex<APIAuth>>,
+    api_auth: APIAuth,
     analytics_recorder: Option<AnalyticsSender>,
     uploads: Arc<Mutex<UploadMap>>,
 }
@@ -64,67 +64,8 @@ impl HTTPCache {
             signer_verifier,
             repo_root,
             uploads: Arc::new(Mutex::new(HashMap::new())),
-            api_auth: Arc::new(Mutex::new(api_auth)),
+            api_auth,
             analytics_recorder,
-        }
-    }
-
-    /// Attempts to refresh the auth token when a cache operation encounters a
-    /// 403 forbidden error. Returns true if the token was successfully
-    /// refreshed, false otherwise.
-    async fn try_refresh_token(&self) -> bool {
-        match turborepo_auth::get_token_with_refresh().await {
-            Ok(Some(new_token)) => {
-                // Update the API auth with the new token
-                if let Ok(mut auth) = self.api_auth.lock() {
-                    auth.token = new_token;
-                    debug!("Successfully refreshed auth token for cache operations");
-                    true
-                } else {
-                    warn!("Failed to acquire lock for updating auth token");
-                    false
-                }
-            }
-            Ok(None) => {
-                debug!("No refresh token available or token doesn't support refresh");
-                false
-            }
-            Err(e) => {
-                warn!("Failed to refresh token: {:?}", e);
-                false
-            }
-        }
-    }
-
-    /// Helper method to execute a cache operation with automatic token refresh
-    /// on 403 errors.
-    async fn execute_with_token_refresh<T, F, Fut>(
-        &self,
-        hash: &str,
-        operation: F,
-    ) -> Result<T, CacheError>
-    where
-        F: Fn(APIAuth) -> Fut,
-        Fut: std::future::Future<Output = Result<T, turborepo_api_client::Error>>,
-    {
-        // Try the operation with the current token
-        let api_auth = self.api_auth.lock().unwrap().clone();
-        match operation(api_auth.clone()).await {
-            Ok(result) => Ok(result),
-            Err(turborepo_api_client::Error::UnknownStatus { code, .. }) if code == "forbidden" => {
-                // Try to refresh the token
-                if self.try_refresh_token().await {
-                    // Retry the operation with the refreshed token
-                    let refreshed_auth = self.api_auth.lock().unwrap().clone();
-                    operation(refreshed_auth)
-                        .await
-                        .map_err(|err| Self::convert_api_error(hash, err))
-                } else {
-                    // Token refresh failed, return the original error
-                    Err(CacheError::ForbiddenRemoteCacheWrite)
-                }
-            }
-            Err(e) => Err(Self::convert_api_error(hash, e)),
         }
     }
 
@@ -146,53 +87,37 @@ impl HTTPCache {
             .map(|signer| signer.generate_tag(hash.as_bytes(), &artifact_body))
             .transpose()?;
 
+        let stream = tokio_util::codec::FramedRead::new(
+            Cursor::new(artifact_body),
+            tokio_util::codec::BytesCodec::new(),
+        )
+        .map(|res| {
+            res.map(|bytes| bytes.freeze())
+                .map_err(turborepo_api_client::Error::from)
+        });
+
+        let (progress, query) = UploadProgress::<10, 100, _>::new(stream, Some(bytes));
+
+        {
+            let mut uploads = self.uploads.lock().unwrap();
+            uploads.insert(hash.to_string(), query);
+        }
+
         tracing::debug!("uploading {}", hash);
 
-        // Use the helper method to handle token refresh on 403 errors
-        let artifact_body_clone = artifact_body.clone(); // Store the artifact body for retry
-        let tag_clone = tag.clone();
-        let uploads_clone = self.uploads.clone();
-
-        self.execute_with_token_refresh(hash, |api_auth| {
-            let client = &self.client;
-            let tag_ref = tag_clone.as_deref();
-            let artifact_body_ref = artifact_body_clone.clone();
-            let uploads_ref = uploads_clone.clone();
-
-            async move {
-                // Create the stream inside the closure so it can be used for retry
-                let stream = tokio_util::codec::FramedRead::new(
-                    Cursor::new(artifact_body_ref),
-                    tokio_util::codec::BytesCodec::new(),
-                )
-                .map(|res| {
-                    res.map(|bytes| bytes.freeze())
-                        .map_err(turborepo_api_client::Error::from)
-                });
-
-                let (progress, query) = UploadProgress::<10, 100, _>::new(stream, Some(bytes));
-
-                {
-                    let mut uploads = uploads_ref.lock().unwrap();
-                    uploads.insert(hash.to_string(), query);
-                }
-
-                client
-                    .put_artifact(
-                        hash,
-                        progress,
-                        bytes,
-                        duration,
-                        tag_ref,
-                        &api_auth.token,
-                        api_auth.team_id.as_deref(),
-                        api_auth.team_slug.as_deref(),
-                    )
-                    .await
-            }
-        })
-        .await?;
-
+        self.client
+            .put_artifact(
+                hash,
+                progress,
+                bytes,
+                duration,
+                tag.as_deref(),
+                &self.api_auth.token,
+                self.api_auth.team_id.as_deref(),
+                self.api_auth.team_slug.as_deref(),
+            )
+            .await
+            .map_err(|err| Self::convert_api_error(hash, err))?;
         tracing::debug!("uploaded {}", hash);
         Ok(())
     }
@@ -214,23 +139,16 @@ impl HTTPCache {
 
     #[tracing::instrument(skip_all)]
     pub async fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
-        let response = self
-            .execute_with_token_refresh(hash, |api_auth| {
-                let client = &self.client;
-                async move {
-                    client
-                        .artifact_exists(
-                            hash,
-                            &api_auth.token,
-                            api_auth.team_id.as_deref(),
-                            api_auth.team_slug.as_deref(),
-                        )
-                        .await
-                }
-            })
-            .await?;
-
-        let Some(response) = response else {
+        let Some(response) = self
+            .client
+            .artifact_exists(
+                hash,
+                &self.api_auth.token,
+                self.api_auth.team_id.as_deref(),
+                self.api_auth.team_slug.as_deref(),
+            )
+            .await?
+        else {
             return Ok(None);
         };
 
@@ -276,23 +194,16 @@ impl HTTPCache {
         &self,
         hash: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
-        let response = self
-            .execute_with_token_refresh(hash, |api_auth| {
-                let client = &self.client;
-                async move {
-                    client
-                        .fetch_artifact(
-                            hash,
-                            &api_auth.token,
-                            api_auth.team_id.as_deref(),
-                            api_auth.team_slug.as_deref(),
-                        )
-                        .await
-                }
-            })
-            .await?;
-
-        let Some(response) = response else {
+        let Some(response) = self
+            .client
+            .fetch_artifact(
+                hash,
+                &self.api_auth.token,
+                self.api_auth.team_id.as_deref(),
+                self.api_auth.team_slug.as_deref(),
+            )
+            .await?
+        else {
             self.log_fetch(analytics::CacheEvent::Miss, hash, 0);
             return Ok(None);
         };
@@ -517,158 +428,5 @@ mod test {
             },
         );
         assert_snapshot!(err.to_string(), @"failed to contact remote cache: Cache disabled");
-    }
-
-    #[tokio::test]
-    async fn test_token_refresh_on_403() {
-        // This test verifies that the HTTPCache can handle token refresh when
-        // encountering 403 errors. Note: This is an integration test that would
-        // need a mock server setup to fully verify the token refresh flow, but
-        // the logic structure is tested through the build validation.
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
-        let api_client = APIClient::new(
-            "http://localhost:8000",
-            Some(Duration::from_secs(200)),
-            None,
-            "2.0.0",
-            false,
-        )
-        .unwrap();
-        let opts = CacheOpts {
-            cache_dir: ".turbo/cache".into(),
-            cache: Default::default(),
-            workers: 0,
-            remote_cache_opts: None,
-        };
-
-        let api_auth = APIAuth {
-            team_id: Some("my-team".to_string()),
-            token: "expired-token".to_string(),
-            team_slug: None,
-        };
-
-        let cache = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None);
-
-        // Verify that the cache has the token refresh capability
-        // The actual token refresh would be tested in integration tests with a proper
-        // mock server. The vca_ prefix check is now handled in the auth layer.
-        // The result depends on whether there are any tokens available in the system
-        //
-        // The result can be true or false depending on system state, but the method
-        // should not panic. The test will fail if it does.
-        cache.try_refresh_token().await;
-    }
-
-    #[tokio::test]
-    async fn test_cache_token_update_after_refresh() {
-        // Test that the cache properly updates its internal token after a successful
-        // refresh
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
-        let api_client = APIClient::new(
-            "http://localhost:8000",
-            Some(Duration::from_secs(200)),
-            None,
-            "2.0.0",
-            false,
-        )
-        .unwrap();
-        let opts = CacheOpts {
-            cache_dir: ".turbo/cache".into(),
-            cache: Default::default(),
-            workers: 0,
-            remote_cache_opts: None,
-        };
-
-        let initial_api_auth = APIAuth {
-            team_id: Some("my-team".to_string()),
-            token: "initial-token".to_string(),
-            team_slug: None,
-        };
-
-        let cache = HTTPCache::new(api_client, &opts, repo_root_path, initial_api_auth, None);
-
-        // Verify initial token
-        let initial_auth = cache.api_auth.lock().unwrap().clone();
-        assert_eq!(initial_auth.token, "initial-token");
-
-        // Test the token refresh mechanism (without actual HTTP call)
-        // In a real scenario, try_refresh_token would call
-        // turborepo_auth::get_token_with_refresh and update the internal token
-        // if successful
-        let refresh_result = cache.try_refresh_token().await;
-
-        // The result depends on system state - could be true or false
-        let final_auth = cache.api_auth.lock().unwrap().clone();
-
-        if refresh_result {
-            // If refresh succeeded, token should have been updated
-            assert_ne!(final_auth.token, "initial-token");
-        } else {
-            // If refresh failed, token should remain unchanged
-            assert_eq!(final_auth.token, "initial-token");
-        }
-    }
-
-    #[test]
-    fn test_cache_auth_mutex_thread_safety() {
-        // Test that the Arc<Mutex<APIAuth>> is properly thread-safe
-        use std::{sync::Arc, thread};
-
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
-        let api_client = APIClient::new(
-            "http://localhost:8000",
-            Some(Duration::from_secs(200)),
-            None,
-            "2.0.0",
-            false,
-        )
-        .unwrap();
-        let opts = CacheOpts {
-            cache_dir: ".turbo/cache".into(),
-            cache: Default::default(),
-            workers: 0,
-            remote_cache_opts: None,
-        };
-
-        let api_auth = APIAuth {
-            team_id: Some("my-team".to_string()),
-            token: "thread-test-token".to_string(),
-            team_slug: None,
-        };
-
-        let cache = Arc::new(HTTPCache::new(
-            api_client,
-            &opts,
-            repo_root_path,
-            api_auth,
-            None,
-        ));
-
-        // Test concurrent access to the auth mutex
-        let handles: Vec<_> = (0..5)
-            .map(|i| {
-                let cache_clone = Arc::clone(&cache);
-                thread::spawn(move || {
-                    let auth = cache_clone.api_auth.lock().unwrap();
-                    assert_eq!(auth.token, "thread-test-token");
-                    assert_eq!(auth.team_id, Some("my-team".to_string()));
-                    // Simulate some work
-                    thread::sleep(std::time::Duration::from_millis(10));
-                    format!("thread-{i}")
-                })
-            })
-            .collect();
-
-        // Wait for all threads to complete
-        for handle in handles {
-            let result = handle.join().unwrap();
-            assert!(result.starts_with("thread-"));
-        }
     }
 }
