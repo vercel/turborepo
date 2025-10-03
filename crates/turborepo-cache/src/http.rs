@@ -86,7 +86,7 @@ impl HTTPCache {
                 }
             }
             Ok(None) => {
-                debug!("No refresh token available");
+                debug!("No refresh token available or token doesn't support refresh");
                 false
             }
             Err(e) => {
@@ -553,7 +553,7 @@ mod test {
 
         // Verify that the cache has the token refresh capability
         // The actual token refresh would be tested in integration tests with a proper
-        // mock server
+        // mock server The vca_ prefix check is now handled in the auth layer
         assert!(!cache.try_refresh_token().await); // Should return false in
         // test environment without
         // auth.json

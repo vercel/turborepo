@@ -73,8 +73,9 @@ pub async fn get_token_with_refresh() -> Result<Option<String>, Error> {
 
     if let Some(token) = &auth_tokens.token {
         if auth_tokens.is_expired() {
-            // Try to refresh the token
-            if auth_tokens.refresh_token.is_some()
+            // Only attempt refresh for Vercel tokens that start with "vca_"
+            if token.starts_with("vca_")
+                && auth_tokens.refresh_token.is_some()
                 && let Ok(new_tokens) = auth_tokens.refresh_token().await
             {
                 let _ = new_tokens.write_to_auth_file(&auth_path);
