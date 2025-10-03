@@ -555,10 +555,10 @@ mod test {
         // The actual token refresh would be tested in integration tests with a proper
         // mock server. The vca_ prefix check is now handled in the auth layer.
         // The result depends on whether there are any tokens available in the system
-        let refresh_result = cache.try_refresh_token().await;
+        //
         // The result can be true or false depending on system state, but the method
-        // should not panic
-        assert!(refresh_result || !refresh_result);
+        // should not panic. The test will fail if it does.
+        cache.try_refresh_token().await;
     }
 
     #[tokio::test]
