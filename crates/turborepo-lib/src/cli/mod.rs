@@ -648,7 +648,7 @@ pub enum Command {
     Scan,
     #[clap(hide = true)]
     Config,
-    /// EXPERIMENTAL: List packages in your monorepo.
+    /// List packages in your monorepo.
     Ls {
         /// Show only packages that are affected by changes between
         /// the current branch and `main`
