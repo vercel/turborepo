@@ -525,7 +525,6 @@ mod test {
         // encountering 403 errors. Note: This is an integration test that would
         // need a mock server setup to fully verify the token refresh flow, but
         // the logic structure is tested through the build validation.
-
         let repo_root = tempfile::tempdir().unwrap();
         let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
@@ -537,7 +536,6 @@ mod test {
             false,
         )
         .unwrap();
-
         let opts = CacheOpts {
             cache_dir: ".turbo/cache".into(),
             cache: Default::default(),
