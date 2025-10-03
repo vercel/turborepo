@@ -153,7 +153,7 @@ mod tests {
         fs::create_dir_all(&turbo_dir).expect("Failed to create turbo dir");
         let config_file = turbo_dir.join_component("config.json");
 
-        let content = format!(r#"{{"token": "{}"}}"#, token);
+        let content = format!(r#"{{"token": "{token}"}}"#);
         config_file
             .create_with_contents(content)
             .expect("Failed to write turbo config");
@@ -328,8 +328,7 @@ mod tests {
             let has_vca_prefix = token.starts_with("vca_");
             assert_eq!(
                 has_vca_prefix, should_attempt_refresh,
-                "Token '{}' prefix check failed",
-                token
+                "Token '{token}' prefix check failed"
             );
         }
     }
