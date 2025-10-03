@@ -56,7 +56,7 @@ export async function packageManager({
       { pm: "npm", label: "npm" },
       { pm: "pnpm", label: "pnpm" },
       { pm: "yarn", label: "yarn" },
-      { pm: "bun", label: "Bun (beta)" },
+      { pm: "bun", label: "Bun" },
     ].map(({ pm, label }) => ({
       name: label,
       value: pm,
