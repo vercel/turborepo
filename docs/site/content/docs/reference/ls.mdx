@@ -3,8 +3,6 @@ title: ls
 description: API reference for the `turbo ls` command
 ---
 
-import { ExperimentalBadge } from '#components/experimental-badge';
-
 List packages in your monorepo.
 
 ```bash title="Terminal"
@@ -40,7 +38,7 @@ By default the changes considered are those between `main` and `HEAD`.
 TURBO_SCM_BASE=development turbo ls --affected
 ```
 
-### `--output <format>` <ExperimentalBadge />
+### `--output <format>`
 
 Format to output the results. `json` or `pretty` (default)
 
