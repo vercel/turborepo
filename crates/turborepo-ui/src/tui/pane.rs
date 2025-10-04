@@ -70,8 +70,8 @@ impl<'a, W> TerminalPane<'a, W> {
                 build_message_vec(&[ENTER_INTERACTIVE_HINT, SCROLL_LOGS, PAGE_LOGS, JUMP_IN_LOGS])
             }
             LayoutSections::TaskList => build_message_vec(&[SCROLL_LOGS, PAGE_LOGS, JUMP_IN_LOGS]),
-            LayoutSections::Search { results, .. } => {
-                Line::from(format!("/ {}", results.query())).left_aligned()
+            LayoutSections::Search { .. } | LayoutSections::SearchLocked { .. } => {
+                build_message_vec(&[SCROLL_LOGS, PAGE_LOGS, JUMP_IN_LOGS])
             }
         }
     }

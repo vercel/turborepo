@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{Block, Borders, Cell, Row, StatefulWidget, Table, TableState},
 };
 
-use super::{event::TaskResult, spinner::SpinnerState, task::TasksByStatus};
+use super::{app::LayoutSections, event::TaskResult, spinner::SpinnerState, task::TasksByStatus};
 
 /// A widget that renders a table of their tasks and their current status
 ///
@@ -19,29 +19,31 @@ use super::{event::TaskResult, spinner::SpinnerState, task::TasksByStatus};
 pub struct TaskTable<'b> {
     tasks_by_type: &'b TasksByStatus,
     spinner: SpinnerState,
+    section: &'b LayoutSections,
 }
 
 const TASK_NAVIGATE_INSTRUCTIONS: &str = "↑ ↓ - Select";
 const MORE_BINDS_INSTRUCTIONS: &str = "m - More binds";
+const TASK_HEADER: &str = "Tasks (/ - Search)";
 
 impl<'b> TaskTable<'b> {
     /// Construct a new table with all of the planned tasks
-    pub fn new(tasks_by_type: &'b TasksByStatus) -> Self {
+    pub fn new(tasks_by_type: &'b TasksByStatus, section: &'b LayoutSections) -> Self {
         Self {
             tasks_by_type,
             spinner: SpinnerState::default(),
+            section,
         }
     }
 
     /// Provides a suggested width for the task table
     pub fn width_hint<'a>(tasks: impl Iterator<Item = &'a str>) -> u16 {
+        let min_width = TASK_HEADER.len();
         let task_name_width = tasks
             .map(|task| task.len())
             .max()
             .unwrap_or_default()
-            // Task column width should be large enough to fit "↑ ↓ to navigate instructions
-            // and truncate tasks with more than 40 chars.
-            .clamp(TASK_NAVIGATE_INSTRUCTIONS.len(), 40) as u16;
+            .clamp(min_width, 40) as u16;
         // Add space for column divider and status emoji
         task_name_width + 1
     }
@@ -51,45 +53,89 @@ impl<'b> TaskTable<'b> {
         self.spinner.update();
     }
 
+    fn should_dim_task(&self, task_name: &str) -> bool {
+        match self.section {
+            LayoutSections::Search { results, .. }
+            | LayoutSections::SearchLocked { results, .. } => {
+                results.first_match(std::iter::once(task_name)).is_none()
+            }
+            _ => false,
+        }
+    }
+
+    /// Get base style for a task (dimmed or normal)
+    fn task_style(&self, task_name: &str) -> Style {
+        if self.should_dim_task(task_name) {
+            Style::default().add_modifier(Modifier::DIM)
+        } else {
+            Style::default()
+        }
+    }
+
+    /// Get styled status icon for a finished task
+    fn status_icon(&self, task_name: &str, result: TaskResult) -> Cell<'static> {
+        let should_dim = self.should_dim_task(task_name);
+        match result {
+            // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
+            TaskResult::Success => {
+                let style = if should_dim {
+                    Style::default().green().add_modifier(Modifier::DIM)
+                } else {
+                    Style::default().green().bold()
+                };
+                Cell::new(Text::styled("✓", style))
+            }
+            TaskResult::CacheHit => {
+                let style = if should_dim {
+                    Style::default().magenta().add_modifier(Modifier::DIM)
+                } else {
+                    Style::default().magenta()
+                };
+                Cell::new(Text::styled("⊙", style))
+            }
+            TaskResult::Failure => {
+                let style = if should_dim {
+                    Style::default().red().add_modifier(Modifier::DIM)
+                } else {
+                    Style::default().red().bold()
+                };
+                Cell::new(Text::styled("⨯", style))
+            }
+        }
+    }
+
     fn finished_rows(&self) -> impl Iterator<Item = Row<'_>> + '_ {
         self.tasks_by_type.finished.iter().map(move |task| {
+            let base_style = self.task_style(task.name());
             let name = if matches!(task.result(), TaskResult::CacheHit) {
-                Cell::new(Text::styled(task.name(), Style::default().italic()))
+                Cell::new(Text::styled(task.name(), base_style.italic()))
             } else {
-                Cell::new(task.name())
+                Cell::new(Text::styled(task.name(), base_style))
             };
 
-            Row::new(vec![
-                name,
-                match task.result() {
-                    // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
-                    TaskResult::Success => {
-                        Cell::new(Text::styled("✓", Style::default().green().bold()))
-                    }
-                    TaskResult::CacheHit => {
-                        Cell::new(Text::styled("⊙", Style::default().magenta()))
-                    }
-                    TaskResult::Failure => {
-                        Cell::new(Text::styled("⨯", Style::default().red().bold()))
-                    }
-                },
-            ])
+            Row::new(vec![name, self.status_icon(task.name(), task.result())])
         })
     }
 
     fn running_rows(&self) -> impl Iterator<Item = Row<'_>> + '_ {
         let spinner = self.spinner.current();
-        self.tasks_by_type
-            .running
-            .iter()
-            .map(move |task| Row::new(vec![Cell::new(task.name()), Cell::new(Text::raw(spinner))]))
+        self.tasks_by_type.running.iter().map(move |task| {
+            let style = self.task_style(task.name());
+            Row::new(vec![
+                Cell::new(Text::styled(task.name(), style)),
+                Cell::new(Text::styled(spinner, style)),
+            ])
+        })
     }
 
     fn planned_rows(&self) -> impl Iterator<Item = Row<'_>> + '_ {
-        self.tasks_by_type
-            .planned
-            .iter()
-            .map(move |task| Row::new(vec![Cell::new(task.name()), Cell::new(" ")]))
+        self.tasks_by_type.planned.iter().map(move |task| {
+            let style = self.task_style(task.name());
+            Row::new(vec![
+                Cell::new(Text::styled(task.name(), style)),
+                Cell::new(" "),
+            ])
+        })
     }
 }
 
@@ -112,7 +158,13 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
         .block(Block::new().borders(Borders::RIGHT))
         .header(
             vec![Text::styled(
-                "Tasks",
+                match self.section {
+                    LayoutSections::Search { results, .. }
+                    | LayoutSections::SearchLocked { results, .. } => {
+                        format!("/ {}", results.query())
+                    }
+                    _ => TASK_HEADER.to_string(),
+                },
                 Style::default().add_modifier(Modifier::DIM),
             )]
             .into_iter()
