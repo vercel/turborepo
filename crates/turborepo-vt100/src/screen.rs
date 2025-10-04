@@ -8,9 +8,10 @@ const MODE_ALTERNATE_SCREEN: u8 = 0b0000_1000;
 const MODE_BRACKETED_PASTE: u8 = 0b0001_0000;
 
 /// The xterm mouse handling mode currently in use.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub enum MouseProtocolMode {
     /// Mouse handling is disabled.
+    #[default]
     None,
 
     /// Mouse button events should be reported on button press. Also known as
@@ -34,16 +35,11 @@ pub enum MouseProtocolMode {
     // DecLocator,
 }
 
-impl Default for MouseProtocolMode {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
 /// The encoding to use for the enabled `MouseProtocolMode`.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
 pub enum MouseProtocolEncoding {
     /// Default single-printable-byte encoding.
+    #[default]
     Default,
 
     /// UTF-8-based encoding.
@@ -52,12 +48,6 @@ pub enum MouseProtocolEncoding {
     /// SGR-like encoding.
     Sgr,
     // Urxvt,
-}
-
-impl Default for MouseProtocolEncoding {
-    fn default() -> Self {
-        Self::Default
-    }
 }
 
 /// Represents the overall terminal state.
