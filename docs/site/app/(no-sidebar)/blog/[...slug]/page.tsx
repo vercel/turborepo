@@ -22,9 +22,19 @@ export async function generateMetadata(props: {
   if (!page) notFound();
 
   const version = params.slug?.[0] || "▲";
-  const ogUrl = `/api/og/blog?version=${encodeURIComponent(
-    version.replace("turbo-", "").slice(0, 3).replace("-", ".")
-  )}`;
+
+  const createOgUrl = () => {
+    const groups = /^turbo-(?<major>\d+)-(?<minor>\d+)(?:-\d+)*$/.exec(version);
+    if (groups) {
+      const { major, minor } = groups.groups as {
+        major: string;
+        minor: string;
+      };
+      return `/api/og/blog?version=${encodeURIComponent(`${major}.${minor}`)}`;
+    }
+
+    return "▲";
+  };
 
   return {
     ...createMetadata({
@@ -35,7 +45,7 @@ export async function generateMetadata(props: {
     openGraph: {
       images: [
         {
-          url: page.data.ogImage ?? ogUrl,
+          url: page.data.ogImage ?? createOgUrl(),
         },
       ],
     },

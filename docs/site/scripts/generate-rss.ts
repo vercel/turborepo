@@ -1,4 +1,4 @@
-import { promises as fs, statSync } from "node:fs";
+import { promises as fs } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import RSS from "rss";
@@ -9,7 +9,7 @@ interface FrontMatter {
     date: string;
     title: string;
     description: string;
-    ogImage: string;
+    ogImage?: string;
     href?: string;
   };
   content: string;
@@ -58,10 +58,22 @@ async function generate(): Promise<void> {
   sortedData.sort(dateSortDesc);
 
   for (const frontmatter of sortedData) {
-    // get the og image size
-    const stat = statSync(
-      path.join(currentDir, "..", "public", frontmatter.data.ogImage)
-    );
+    const createOgUrl = () => {
+      const groups = /^turbo-(?<major>\d+)-(?<minor>\d+)(?:-\d+)*$/.exec(
+        frontmatter.slug
+      );
+      if (groups) {
+        const { major, minor } = groups.groups as {
+          major: string;
+          minor: string;
+        };
+        return `/api/og/blog?version=${encodeURIComponent(
+          `${major}.${minor}`
+        )}`;
+      }
+
+      return "▲";
+    };
 
     feed.item({
       title: frontmatter.data.title,
@@ -69,9 +81,10 @@ async function generate(): Promise<void> {
       date: frontmatter.data.date,
       description: frontmatter.data.description,
       enclosure: {
-        url: `https://turborepo.com${frontmatter.data.ogImage}`, // intentionally omitting slash here
+        url: `https://turborepo.com${
+          frontmatter.data.ogImage ?? `/api/og/blog?version=${createOgUrl()}`
+        }`, // intentionally omitting slash here
         type: "image/png",
-        size: stat.size,
       },
     });
   }
