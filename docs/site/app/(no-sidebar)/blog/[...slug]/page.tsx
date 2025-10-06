@@ -21,6 +21,9 @@ export async function generateMetadata(props: {
 
   if (!page) notFound();
 
+  const version = params.slug?.[0] || "1.0.0";
+  const ogUrl = `/api/og/blog?version=${encodeURIComponent(version)}&title=${encodeURIComponent(page.data.title)}`;
+
   return {
     ...createMetadata({
       title: page.data.title,
@@ -30,7 +33,7 @@ export async function generateMetadata(props: {
     openGraph: {
       images: [
         {
-          url: `/images/blog/${params.slug?.[0]}/x-card.png`,
+          url: ogUrl,
         },
       ],
     },
