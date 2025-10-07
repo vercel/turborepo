@@ -82,7 +82,7 @@ async function generate(): Promise<void> {
       description: frontmatter.data.description,
       enclosure: {
         url: `https://turborepo.com${
-          frontmatter.data.ogImage ?? `/api/og/blog?version=${createOgUrl()}`
+          frontmatter.data.ogImage ?? createOgUrl()
         }`, // intentionally omitting slash here
         type: "image/png",
       },
