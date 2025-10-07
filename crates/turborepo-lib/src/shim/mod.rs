@@ -14,7 +14,7 @@ use thiserror::Error;
 use tiny_gradient::{GradientStr, RGB};
 use tracing::{debug, warn};
 pub use turbo_state::TurboState;
-use turbo_updater::display_update_check;
+use turbo_updater::{display_update_check, should_skip_notification};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
@@ -316,7 +316,7 @@ fn try_check_for_updates(
 ) {
     let package_manager = package_manager.unwrap_or(&PackageManager::Npm);
 
-    if args.should_check_for_update() && !config.no_update_notifier() {
+    if args.should_check_for_update() && !config.no_update_notifier() && !should_skip_notification() {
         // custom footer for update message
         let footer = format!(
             "Follow {username} for updates: {url}",
