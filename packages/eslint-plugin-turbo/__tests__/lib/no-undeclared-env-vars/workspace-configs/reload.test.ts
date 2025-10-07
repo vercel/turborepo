@@ -4,7 +4,7 @@ import { RuleTester } from "eslint";
 import { describe, expect, it, beforeEach, afterEach } from "@jest/globals";
 import type { SchemaV1 } from "@turbo/types";
 import { RULES } from "../../../../lib/constants";
-import rule from "../../../../lib/rules/no-undeclared-env-vars";
+import rule, { clearCache } from "../../../../lib/rules/no-undeclared-env-vars";
 import { Project } from "../../../../lib/utils/calculate-inputs";
 
 const ruleTester = new RuleTester({
@@ -19,16 +19,25 @@ describe("Project reload functionality", () => {
   let originalTurboJson: string;
 
   beforeEach(() => {
-    project = new Project(cwd);
     // Store original turbo.json content for restoration
     const turboJsonPath = path.join(cwd, "turbo.json");
     originalTurboJson = fs.readFileSync(turboJsonPath, "utf8");
+
+    // Clear cache AFTER reading original, so we don't cache corrupted state
+    clearCache();
+    project = new Project(cwd);
   });
 
   afterEach(() => {
-    // Restore original turbo.json content
+    // Restore original turbo.json content FIRST
     const turboJsonPath = path.join(cwd, "turbo.json");
     fs.writeFileSync(turboJsonPath, originalTurboJson);
+
+    // Force reload to pick up the restored original
+    project.reload();
+
+    // Clear ALL caches to ensure no pollution to other tests
+    clearCache();
   });
 
   it("should reload workspace configurations when called", () => {

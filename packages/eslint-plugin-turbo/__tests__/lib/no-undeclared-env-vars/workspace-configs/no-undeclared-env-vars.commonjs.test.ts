@@ -1,7 +1,8 @@
 import path from "node:path";
 import { RuleTester } from "eslint";
+import { afterEach } from "@jest/globals";
 import { RULES } from "../../../../lib/constants";
-import rule from "../../../../lib/rules/no-undeclared-env-vars";
+import rule, { clearCache } from "../../../../lib/rules/no-undeclared-env-vars";
 
 const ruleTester = new RuleTester({
   parserOptions: { ecmaVersion: 2020 },
@@ -17,6 +18,10 @@ const options = (extra: Record<string, unknown> = {}) => ({
       ...extra,
     },
   ],
+});
+
+afterEach(() => {
+  clearCache();
 });
 
 ruleTester.run(RULES.noUndeclaredEnvVars, rule, {

@@ -1,5 +1,6 @@
 import path from "node:path";
 import { readFileSync } from "node:fs";
+import crypto from "node:crypto";
 import type { Rule } from "eslint";
 import type { Node, MemberExpression } from "estree";
 import { type PackageJson, logger, searchUp } from "@turbo/utils";
@@ -12,6 +13,16 @@ const debug = process.env.RUNNER_DEBUG
   : (_: string) => {
       /* noop */
     };
+
+// Module-level caches to share state across all files in a single ESLint run
+interface CachedProject {
+  project: Project;
+  turboConfigHashes: Map<string, string>;
+}
+
+const projectCache = new Map<string, CachedProject>();
+const frameworkEnvCache = new Map<string, Set<RegExp>>();
+const packageJsonDepCache = new Map<string, Set<string>>();
 
 export interface RuleContextWithOptions extends Rule.RuleContext {
   options: Array<{
@@ -77,6 +88,12 @@ function normalizeCwd(
 
 /** for a given `package.json` file path, this will compile a Set of that package's listed dependencies */
 const packageJsonDependencies = (filePath: string): Set<string> => {
+  // Check cache first
+  const cached = packageJsonDepCache.get(filePath);
+  if (cached) {
+    return cached;
+  }
+
   // get the contents of the package.json
   let packageJsonString;
 
@@ -84,7 +101,9 @@ const packageJsonDependencies = (filePath: string): Set<string> => {
     packageJsonString = readFileSync(filePath, "utf-8");
   } catch (e) {
     logger.error(`Could not read package.json at ${filePath}`);
-    return new Set();
+    const emptySet = new Set<string>();
+    packageJsonDepCache.set(filePath, emptySet);
+    return emptySet;
   }
 
   let packageJson: PackageJson;
@@ -92,10 +111,12 @@ const packageJsonDependencies = (filePath: string): Set<string> => {
     packageJson = JSON.parse(packageJsonString) as PackageJson;
   } catch (e) {
     logger.error(`Could not parse package.json at ${filePath}`);
-    return new Set();
+    const emptySet = new Set<string>();
+    packageJsonDepCache.set(filePath, emptySet);
+    return emptySet;
   }
 
-  return (
+  const dependencies = (
     [
       "dependencies",
       "devDependencies",
@@ -105,7 +126,102 @@ const packageJsonDependencies = (filePath: string): Set<string> => {
   )
     .flatMap((key) => Object.keys(packageJson[key] ?? {}))
     .reduce((acc, dependency) => acc.add(dependency), new Set<string>());
+
+  packageJsonDepCache.set(filePath, dependencies);
+  return dependencies;
 };
+
+/**
+ * Get all turbo config file paths for a project (root + workspace configs)
+ */
+function getTurboConfigPaths(project: Project): Array<string> {
+  const paths: Array<string> = [];
+
+  // Add root turbo config if it exists
+  if (project.projectRoot?.turboConfig) {
+    const rootPath = project.projectRoot.workspacePath;
+    // Check for both turbo.json and turbo.jsonc
+    const turboJsonPath = path.join(rootPath, "turbo.json");
+    const turboJsoncPath = path.join(rootPath, "turbo.jsonc");
+    try {
+      readFileSync(turboJsonPath, "utf-8");
+      paths.push(turboJsonPath);
+    } catch {
+      try {
+        readFileSync(turboJsoncPath, "utf-8");
+        paths.push(turboJsoncPath);
+      } catch {
+        // Neither file exists or is readable
+      }
+    }
+  }
+
+  // Add workspace turbo configs
+  for (const workspace of project.projectWorkspaces) {
+    if (workspace.turboConfig) {
+      const turboJsonPath = path.join(workspace.workspacePath, "turbo.json");
+      const turboJsoncPath = path.join(workspace.workspacePath, "turbo.jsonc");
+      try {
+        readFileSync(turboJsonPath, "utf-8");
+        paths.push(turboJsonPath);
+      } catch {
+        try {
+          readFileSync(turboJsoncPath, "utf-8");
+          paths.push(turboJsoncPath);
+        } catch {
+          // Neither file exists or is readable
+        }
+      }
+    }
+  }
+
+  return paths;
+}
+
+/**
+ * Compute SHA256 hashes for all turbo config files
+ */
+function computeTurboConfigHashes(
+  configPaths: Array<string>
+): Map<string, string> {
+  const hashes = new Map<string, string>();
+
+  for (const configPath of configPaths) {
+    try {
+      const content = readFileSync(configPath, "utf-8");
+      const hash = crypto.createHash("sha256").update(content).digest("hex");
+      hashes.set(configPath, hash);
+    } catch (e) {
+      // If we can't read the file, use an empty hash
+      hashes.set(configPath, "");
+    }
+  }
+
+  return hashes;
+}
+
+/**
+ * Check if any turbo config files have changed by comparing hashes
+ */
+function haveTurboConfigsChanged(
+  oldHashes: Map<string, string>,
+  newHashes: Map<string, string>
+): boolean {
+  // Check if the set of files has changed
+  if (oldHashes.size !== newHashes.size) {
+    return true;
+  }
+
+  // Check if any file content has changed
+  for (const [filePath, newHash] of newHashes) {
+    const oldHash = oldHashes.get(filePath);
+    if (oldHash !== newHash) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 /**
  * Turborepo does some nice framework detection based on the dependencies in the package.json.  This function ports that logic to this ESLint rule.
@@ -119,15 +235,21 @@ const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
     logger.error(`Could not determine package for ${filePath}`);
     return new Set<RegExp>();
   }
+
+  // Use package.json path as cache key since all files in same package share the same framework config
+  const cacheKey = `${packageJsonDir}/package.json`;
+  const cached = frameworkEnvCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   debug(`found package.json in: ${packageJsonDir}`);
 
-  const dependencies = packageJsonDependencies(
-    `${packageJsonDir}/package.json`
-  );
+  const dependencies = packageJsonDependencies(cacheKey);
   const hasDependency = (dep: string) => dependencies.has(dep);
   debug(`dependencies for ${filePath}: ${Array.from(dependencies).join(",")}`);
 
-  return frameworks.reduce(
+  const result = frameworks.reduce(
     (
       acc,
       {
@@ -150,6 +272,9 @@ const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
     },
     new Set<RegExp>()
   );
+
+  frameworkEnvCache.set(cacheKey, result);
+  return result;
 };
 
 function create(context: RuleContextWithOptions): Rule.RuleListener {
@@ -183,7 +308,36 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
     options
   );
 
-  const project = new Project(cwd);
+  // Use cached Project instance to avoid expensive re-initialization for every file
+  const projectKey = cwd ?? process.cwd();
+  const cachedProject = projectCache.get(projectKey);
+  let project: Project;
+
+  if (!cachedProject) {
+    // No cached project, create a new one
+    project = new Project(cwd);
+    if (project.valid()) {
+      const configPaths = getTurboConfigPaths(project);
+      const hashes = computeTurboConfigHashes(configPaths);
+      projectCache.set(projectKey, {
+        project,
+        turboConfigHashes: hashes,
+      });
+      debug(`Cached new project for ${projectKey}`);
+    }
+  } else {
+    // We have a cached project, check if turbo configs have changed
+    project = cachedProject.project;
+    const configPaths = getTurboConfigPaths(project);
+    const newHashes = computeTurboConfigHashes(configPaths);
+
+    if (haveTurboConfigsChanged(cachedProject.turboConfigHashes, newHashes)) {
+      debug(`Turbo config changed for ${projectKey}, reloading...`);
+      project.reload();
+      cachedProject.turboConfigHashes = newHashes;
+    }
+  }
+
   if (!project.valid()) {
     return {};
   }
@@ -263,10 +417,6 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
   };
 
   return {
-    Program() {
-      // Reload project configuration so that changes show in the user's editor
-      project.reload();
-    },
     MemberExpression(node) {
       // we only care about complete process env declarations and non-computed keys
       if (isProcessEnv(node) || isImportMetaEnv(node)) {
@@ -300,6 +450,20 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       }
     },
   };
+}
+
+/**
+ * Clear all module-level caches. This is primarily useful for test isolation.
+ *
+ * Note: The Project instance cache is reused across files for performance.
+ * Changes to turbo.json files are detected via hash comparison, and project.reload()
+ * is automatically called when changes are detected to ensure turbo.json changes
+ * are picked up immediately for live IDE feedback.
+ */
+export function clearCache(): void {
+  projectCache.clear();
+  frameworkEnvCache.clear();
+  packageJsonDepCache.clear();
 }
 
 const rule = { create, meta };
