@@ -81,7 +81,7 @@ impl TraceResult {
                     e.clone().into_diagnostic(&handler).emit();
                 }
                 e => {
-                    eprintln!("{:?}", Report::new(e.clone()));
+                    eprintln!("{}", Report::new(e.clone()));
                 }
             }
         }

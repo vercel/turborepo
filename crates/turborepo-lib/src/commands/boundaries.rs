@@ -40,7 +40,7 @@ pub async fn run(
                     print!("{esc}c", esc = 27 as char);
                     println!();
                     println!();
-                    println!("{:?}", Report::new(diagnostic.clone()));
+                    println!("{}", Report::new(diagnostic.clone()));
                     let prompt = format!(
                         "Ignore this error by adding a {} comment?",
                         color!(run.color_config(), BOLD_GREEN, "@boundaries-ignore"),

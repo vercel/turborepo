@@ -48,7 +48,7 @@ async fn main() -> Result<(), PathError> {
 
     if !result.errors.is_empty() {
         for error in result.errors {
-            println!("{:?}", Report::new(error))
+            println!("{}", Report::new(error))
         }
         std::process::exit(1);
     } else {

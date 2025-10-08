@@ -206,7 +206,7 @@ pub async fn run(
         if !result.errors.is_empty() {
             for error in result.errors {
                 let error = QueryError::new(error, query.to_string());
-                eprintln!("{:?}", Report::new(error));
+                eprintln!("{}", Report::new(error));
             }
         }
     } else {

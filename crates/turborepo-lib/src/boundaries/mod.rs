@@ -227,7 +227,7 @@ impl BoundariesResult {
                     e.clone().into_diagnostic(&handler).emit();
                 }
                 e => {
-                    eprintln!("{:?}", Report::new(e.to_owned()));
+                    eprintln!("{}", Report::new(e.to_owned()));
                 }
             }
         }
