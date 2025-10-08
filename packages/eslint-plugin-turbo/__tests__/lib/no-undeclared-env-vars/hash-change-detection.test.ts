@@ -22,6 +22,7 @@ const KNOWN_GOOD_TURBO_JSON = {
 };
 
 const linter = new Linter();
+linter.defineRule("turbo/no-undeclared-env-vars", rule);
 
 describe("Hash-based change detection", () => {
   const turboJsonPath = path.join(cwd, "turbo.json");

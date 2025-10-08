@@ -171,7 +171,7 @@ function getTurboConfigPaths(project: Project): Array<string> {
 }
 
 /**
- * Compute SHA256 hashes for all turbo config files
+ * Compute hashes for all turbo config files
  */
 function computeTurboConfigHashes(
   configPaths: Array<string>
@@ -181,7 +181,7 @@ function computeTurboConfigHashes(
   for (const configPath of configPaths) {
     try {
       const content = readFileSync(configPath, "utf-8");
-      const hash = crypto.createHash("sha256").update(content).digest("hex");
+      const hash = crypto.createHash("md5").update(content).digest("hex");
       hashes.set(configPath, hash);
     } catch (e) {
       // If we can't read the file, use an empty hash
