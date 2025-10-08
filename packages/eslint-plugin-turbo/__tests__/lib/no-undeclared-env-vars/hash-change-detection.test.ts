@@ -21,6 +21,8 @@ const KNOWN_GOOD_TURBO_JSON = {
   },
 };
 
+const linter = new Linter();
+
 describe("Hash-based change detection", () => {
   const turboJsonPath = path.join(cwd, "turbo.json");
   let originalTurboJson: string;

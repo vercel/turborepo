@@ -1,5 +1,5 @@
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import crypto from "node:crypto";
 import type { Rule } from "eslint";
 import type { Node, MemberExpression } from "estree";
@@ -17,12 +17,14 @@ const debug = process.env.RUNNER_DEBUG
 // Module-level caches to share state across all files in a single ESLint run
 interface CachedProject {
   project: Project;
+  configPaths: Array<string>;
   turboConfigHashes: Map<string, string>;
 }
 
 const projectCache = new Map<string, CachedProject>();
 const frameworkEnvCache = new Map<string, Set<RegExp>>();
 const packageJsonDepCache = new Map<string, Set<string>>();
+const frameworkEnvRegexCache = new Map<string, RegExp>();
 
 export interface RuleContextWithOptions extends Rule.RuleContext {
   options: Array<{
@@ -143,16 +145,11 @@ function getTurboConfigPaths(project: Project): Array<string> {
     // Check for both turbo.json and turbo.jsonc
     const turboJsonPath = path.join(rootPath, "turbo.json");
     const turboJsoncPath = path.join(rootPath, "turbo.jsonc");
-    try {
-      readFileSync(turboJsonPath, "utf-8");
+
+    if (existsSync(turboJsonPath)) {
       paths.push(turboJsonPath);
-    } catch {
-      try {
-        readFileSync(turboJsoncPath, "utf-8");
-        paths.push(turboJsoncPath);
-      } catch {
-        // Neither file exists or is readable
-      }
+    } else if (existsSync(turboJsoncPath)) {
+      paths.push(turboJsoncPath);
     }
   }
 
@@ -161,16 +158,11 @@ function getTurboConfigPaths(project: Project): Array<string> {
     if (workspace.turboConfig) {
       const turboJsonPath = path.join(workspace.workspacePath, "turbo.json");
       const turboJsoncPath = path.join(workspace.workspacePath, "turbo.jsonc");
-      try {
-        readFileSync(turboJsonPath, "utf-8");
+
+      if (existsSync(turboJsonPath)) {
         paths.push(turboJsonPath);
-      } catch {
-        try {
-          readFileSync(turboJsoncPath, "utf-8");
-          paths.push(turboJsoncPath);
-        } catch {
-          // Neither file exists or is readable
-        }
+      } else if (existsSync(turboJsoncPath)) {
+        paths.push(turboJsoncPath);
       }
     }
   }
@@ -265,7 +257,14 @@ const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
       if (hasMatch) {
         return new Set([
           ...acc,
-          ...envWildcards.map((envWildcard) => RegExp(envWildcard)),
+          ...envWildcards.map((envWildcard) => {
+            let regex = frameworkEnvRegexCache.get(envWildcard);
+            if (!regex) {
+              regex = new RegExp(envWildcard);
+              frameworkEnvRegexCache.set(envWildcard, regex);
+            }
+            return regex;
+          }),
         ]);
       }
       return acc;
@@ -321,6 +320,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       const hashes = computeTurboConfigHashes(configPaths);
       projectCache.set(projectKey, {
         project,
+        configPaths,
         turboConfigHashes: hashes,
       });
       debug(`Cached new project for ${projectKey}`);
@@ -328,13 +328,15 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
   } else {
     // We have a cached project, check if turbo configs have changed
     project = cachedProject.project;
-    const configPaths = getTurboConfigPaths(project);
-    const newHashes = computeTurboConfigHashes(configPaths);
+    // Use cached paths instead of recomputing
+    const newHashes = computeTurboConfigHashes(cachedProject.configPaths);
 
     if (haveTurboConfigsChanged(cachedProject.turboConfigHashes, newHashes)) {
       debug(`Turbo config changed for ${projectKey}, reloading...`);
       project.reload();
       cachedProject.turboConfigHashes = newHashes;
+      // Recompute paths after reload in case workspace structure changed
+      cachedProject.configPaths = getTurboConfigPaths(project);
     }
   }
 
@@ -464,6 +466,7 @@ export function clearCache(): void {
   projectCache.clear();
   frameworkEnvCache.clear();
   packageJsonDepCache.clear();
+  frameworkEnvRegexCache.clear();
 }
 
 const rule = { create, meta };
