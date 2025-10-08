@@ -293,3 +293,12 @@ export function forEachTaskDef<BaseSchema extends BaseSchemaV1 | BaseSchemaV2>(
     Object.entries(config.tasks).forEach(f);
   }
 }
+
+export function clearConfigCaches(): void {
+  Object.keys(turboConfigsCache).forEach((key) => {
+    delete turboConfigsCache[key];
+  });
+  Object.keys(workspaceConfigCache).forEach((key) => {
+    delete workspaceConfigCache[key];
+  });
+}

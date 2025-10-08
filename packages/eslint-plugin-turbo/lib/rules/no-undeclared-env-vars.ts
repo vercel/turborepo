@@ -1,9 +1,14 @@
 import path from "node:path";
-import { readFileSync } from "node:fs";
+import fs from "node:fs";
 import crypto from "node:crypto";
 import type { Rule } from "eslint";
 import type { Node, MemberExpression } from "estree";
-import { type PackageJson, logger, searchUp } from "@turbo/utils";
+import {
+  type PackageJson,
+  logger,
+  searchUp,
+  clearConfigCaches,
+} from "@turbo/utils";
 import { frameworks } from "@turbo/types";
 import { RULES } from "../constants";
 import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
@@ -18,6 +23,7 @@ const debug = process.env.RUNNER_DEBUG
 interface CachedProject {
   project: Project;
   turboConfigHashes: Map<string, string>;
+  configPaths: Array<string>;
 }
 
 const projectCache = new Map<string, CachedProject>();
@@ -98,7 +104,7 @@ const packageJsonDependencies = (filePath: string): Set<string> => {
   let packageJsonString;
 
   try {
-    packageJsonString = readFileSync(filePath, "utf-8");
+    packageJsonString = fs.readFileSync(filePath, "utf-8");
   } catch (e) {
     logger.error(`Could not read package.json at ${filePath}`);
     const emptySet = new Set<string>();
@@ -140,19 +146,13 @@ function getTurboConfigPaths(project: Project): Array<string> {
   // Add root turbo config if it exists
   if (project.projectRoot?.turboConfig) {
     const rootPath = project.projectRoot.workspacePath;
-    // Check for both turbo.json and turbo.jsonc
     const turboJsonPath = path.join(rootPath, "turbo.json");
     const turboJsoncPath = path.join(rootPath, "turbo.jsonc");
-    try {
-      readFileSync(turboJsonPath, "utf-8");
+
+    if (fs.existsSync(turboJsonPath)) {
       paths.push(turboJsonPath);
-    } catch {
-      try {
-        readFileSync(turboJsoncPath, "utf-8");
-        paths.push(turboJsoncPath);
-      } catch {
-        // Neither file exists or is readable
-      }
+    } else if (fs.existsSync(turboJsoncPath)) {
+      paths.push(turboJsoncPath);
     }
   }
 
@@ -161,16 +161,11 @@ function getTurboConfigPaths(project: Project): Array<string> {
     if (workspace.turboConfig) {
       const turboJsonPath = path.join(workspace.workspacePath, "turbo.json");
       const turboJsoncPath = path.join(workspace.workspacePath, "turbo.jsonc");
-      try {
-        readFileSync(turboJsonPath, "utf-8");
+
+      if (fs.existsSync(turboJsonPath)) {
         paths.push(turboJsonPath);
-      } catch {
-        try {
-          readFileSync(turboJsoncPath, "utf-8");
-          paths.push(turboJsoncPath);
-        } catch {
-          // Neither file exists or is readable
-        }
+      } else if (fs.existsSync(turboJsoncPath)) {
+        paths.push(turboJsoncPath);
       }
     }
   }
@@ -188,8 +183,8 @@ function computeTurboConfigHashes(
 
   for (const configPath of configPaths) {
     try {
-      const content = readFileSync(configPath, "utf-8");
-      const hash = crypto.createHash("sha256").update(content).digest("hex");
+      const content = fs.readFileSync(configPath, "utf-8");
+      const hash = crypto.createHash("md5").update(content).digest("hex");
       hashes.set(configPath, hash);
     } catch (e) {
       // If we can't read the file, use an empty hash
@@ -322,19 +317,22 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       projectCache.set(projectKey, {
         project,
         turboConfigHashes: hashes,
+        configPaths,
       });
       debug(`Cached new project for ${projectKey}`);
     }
   } else {
     // We have a cached project, check if turbo configs have changed
     project = cachedProject.project;
-    const configPaths = getTurboConfigPaths(project);
-    const newHashes = computeTurboConfigHashes(configPaths);
+    const newHashes = computeTurboConfigHashes(cachedProject.configPaths);
 
     if (haveTurboConfigsChanged(cachedProject.turboConfigHashes, newHashes)) {
       debug(`Turbo config changed for ${projectKey}, reloading...`);
       project.reload();
-      cachedProject.turboConfigHashes = newHashes;
+      const configPaths = getTurboConfigPaths(project);
+      const reloadedHashes = computeTurboConfigHashes(configPaths);
+      cachedProject.turboConfigHashes = reloadedHashes;
+      cachedProject.configPaths = configPaths;
     }
   }
 
@@ -464,6 +462,7 @@ export function clearCache(): void {
   projectCache.clear();
   frameworkEnvCache.clear();
   packageJsonDepCache.clear();
+  clearConfigCaches();
 }
 
 const rule = { create, meta };

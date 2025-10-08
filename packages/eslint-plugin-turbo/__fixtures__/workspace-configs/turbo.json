@@ -1,10 +1,17 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "globalEnv": ["CI"],
-  "globalDotEnv": [".env", "missing.env"],
+  "globalEnv": [
+    "CI"
+  ],
+  "globalDotEnv": [
+    ".env",
+    "missing.env"
+  ],
   "pipeline": {
     "build": {
-      "env": ["ENV_1"]
+      "env": [
+        "ENV_1"
+      ]
     }
   }
 }

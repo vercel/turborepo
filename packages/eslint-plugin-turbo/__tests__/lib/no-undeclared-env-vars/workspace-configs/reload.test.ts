@@ -34,7 +34,12 @@ describe("Project reload functionality", () => {
     fs.writeFileSync(turboJsonPath, originalTurboJson);
 
     // Force reload to pick up the restored original
-    project.reload();
+    // Wrap in try/catch to ensure cache clearing always happens
+    try {
+      project.reload();
+    } catch (e) {
+      // Ignore reload errors in cleanup
+    }
 
     // Clear ALL caches to ensure no pollution to other tests
     clearCache();
