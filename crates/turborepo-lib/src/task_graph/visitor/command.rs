@@ -218,15 +218,7 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
             .package_json
             .all_dependencies()
             .any(|(package, _version)| package.as_str() == MICROFRONTENDS_PACKAGE);
-        if !has_mfe_dependency && !has_custom_proxy {
-            let mfe_config_filename = self.mfe_configs.config_filename(task_id.package());
-            return Err(Error::MissingMFEDependency {
-                package: task_id.package().into(),
-                mfe_config_filename: mfe_config_filename
-                    .map(|p| p.to_string())
-                    .unwrap_or_default(),
-            });
-        }
+
         let local_apps = dev_tasks.iter().filter_map(|(task, app_name)| {
             self.tasks_in_graph
                 .contains(task)
@@ -238,6 +230,7 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
             .config_filename(task_id.package())
             .expect("every microfrontends default application should have configuration path");
         let mfe_path = self.repo_root.join_unix_path(mfe_config_filename);
+
         let cmd = if has_custom_proxy {
             let package_manager = self.package_graph.package_manager();
             let mut proxy_args = vec![mfe_path.as_str(), "--names"];
@@ -251,19 +244,22 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
             let program = which::which(package_manager.command())?;
             let mut cmd = Command::new(&program);
             cmd.current_dir(package_dir).args(args).open_stdin();
-            cmd
-        } else {
+            Some(cmd)
+        } else if has_mfe_dependency {
             let mut args = vec!["proxy", mfe_path.as_str(), "--names"];
             args.extend(local_apps);
 
-            // TODO: leverage package manager to find the local proxy
             let program = package_dir.join_components(&["node_modules", ".bin", "microfrontends"]);
             let mut cmd = Command::new(program.as_std_path());
             cmd.current_dir(package_dir).args(args).open_stdin();
-            cmd
+            Some(cmd)
+        } else {
+            // No custom proxy and no @vercel/microfrontends dependency.
+            // The Turborepo proxy will be started separately.
+            None
         };
 
-        Ok(Some(cmd))
+        Ok(cmd)
     }
 }
 

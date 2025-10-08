@@ -13,25 +13,25 @@ use console::{Style, StyledObject};
 use convert_case::{Case, Casing};
 use error::{TaskError, TaskWarning};
 use exec::ExecContextFactory;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use output::{StdWriter, TaskOutput};
 use regex::Regex;
 use tokio::sync::mpsc;
-use tracing::{debug, error, warn, Span};
+use tracing::{Span, debug, error, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
-use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
+use turborepo_env::{EnvironmentVariableMap, platform::PlatformEnv};
 use turborepo_errors::TURBO_SITE;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
-    generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
+    EventBuilder, TrackedErrors, generic::GenericEventBuilder, task::PackageTaskEventBuilder,
 };
 use turborepo_ui::{
-    sender::UISender, ColorConfig, ColorSelector, OutputClient, OutputSink, PrefixedUI,
+    ColorConfig, ColorSelector, OutputClient, OutputSink, PrefixedUI, sender::UISender,
 };
 
 use crate::{
@@ -40,10 +40,10 @@ use crate::{
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
     run::{
+        RunCache,
         global_hash::GlobalHashableInputs,
         summary::{self, GlobalHashSummary, RunTracker},
         task_access::TaskAccess,
-        RunCache,
     },
     task_hash::{self, PackageInputsHashes, TaskHashTrackerState, TaskHasher},
 };
@@ -113,14 +113,6 @@ pub enum Error {
     InternalErrors(String),
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
-    #[error(
-        "'{package}' is configured with a {mfe_config_filename}, but doesn't have \
-         '@vercel/microfrontends' listed as a dependency."
-    )]
-    MissingMFEDependency {
-        package: String,
-        mfe_config_filename: String,
-    },
 }
 
 impl<'a> Visitor<'a> {
