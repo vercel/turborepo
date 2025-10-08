@@ -42,7 +42,7 @@ pub(crate) fn write_graph(
             } else if extension == "dot" {
                 let mut opts = OpenOptions::new();
                 opts.truncate(true).create(true).write(true);
-                let mut file = filename
+                let file = filename
                     .open_with_options(opts)
                     .map_err(Error::GraphOutput)?;
                 render_dot_graph(file, engine, single_package)?;
