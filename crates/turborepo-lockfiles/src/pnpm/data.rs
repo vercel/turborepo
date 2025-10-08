@@ -650,7 +650,8 @@ mod tests {
     const PNPM6_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm6turbo.yaml").as_slice();
     const PNPM8_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm8turbo.yaml").as_slice();
     const PNPM10_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-10-patch.lock").as_slice();
-    const PNPM_INJECT_WORKSPACE: &[u8] = include_bytes!("../../fixtures/pnpm-inject-workspace.yaml").as_slice();
+    const PNPM_INJECT_WORKSPACE: &[u8] =
+        include_bytes!("../../fixtures/pnpm-inject-workspace.yaml").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -1571,7 +1572,11 @@ c:
 
         // Verify the original lockfile has injectWorkspacePackages set to true
         assert_eq!(
-            lockfile.settings.as_ref().unwrap().inject_workspace_packages,
+            lockfile
+                .settings
+                .as_ref()
+                .unwrap()
+                .inject_workspace_packages,
             Some(true)
         );
 
@@ -1590,7 +1595,11 @@ c:
 
         // Verify that injectWorkspacePackages is preserved in the pruned lockfile
         assert_eq!(
-            pruned_pnpm.settings.as_ref().unwrap().inject_workspace_packages,
+            pruned_pnpm
+                .settings
+                .as_ref()
+                .unwrap()
+                .inject_workspace_packages,
             Some(true),
             "injectWorkspacePackages setting should be preserved in pruned lockfile"
         );
@@ -1601,7 +1610,11 @@ c:
             Some(true)
         );
         assert_eq!(
-            pruned_pnpm.settings.as_ref().unwrap().exclude_links_from_lockfile,
+            pruned_pnpm
+                .settings
+                .as_ref()
+                .unwrap()
+                .exclude_links_from_lockfile,
             Some(false)
         );
 
