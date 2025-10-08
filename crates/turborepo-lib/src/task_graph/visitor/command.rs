@@ -422,6 +422,7 @@ mod test {
         let microfrontends_configs = MicrofrontendsConfigs::from_configs(
             ["web", "docs"].iter().copied().collect(),
             std::iter::once(("web", Ok(Some(config)))),
+            std::collections::HashMap::new(),
         )
         .unwrap()
         .unwrap();

@@ -24,32 +24,33 @@ use chrono::{DateTime, Local};
 use futures::StreamExt;
 use rayon::iter::ParallelBridge;
 use tokio::{pin, select, task::JoinHandle};
-use tracing::{debug, instrument};
+use tracing::{debug, info, instrument, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{
-    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
-    BOLD_GREY, GREY,
+    BOLD_GREY, ColorConfig, GREY, cprint, cprintln, sender::UISender, tui, tui::TuiSender,
+    wui::sender::WebUISender,
 };
 
 pub use crate::run::error::Error;
 use crate::{
+    DaemonClient, DaemonConnector,
     cli::EnvMode,
     engine::Engine,
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
+    task_hash::{PackageInputsHashes, get_external_deps_hash, get_internal_deps_hash},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
-    DaemonClient, DaemonConnector,
 };
 
 #[derive(Clone)]
@@ -291,6 +292,63 @@ impl Run {
     }
 
     pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
+        // Start Turborepo proxy if microfrontends are configured and should use
+        // built-in proxy
+        let proxy_handle = if let Some(mfe_configs) = &self.micro_frontend_configs {
+            if mfe_configs.should_use_turborepo_proxy() {
+                info!("Starting Turborepo microfrontends proxy");
+                // Load the config from the first package that has one
+                let config_path = mfe_configs.configs().find_map(|(_, tasks)| {
+                    tasks
+                        .keys()
+                        .next()
+                        .and_then(|task_id| mfe_configs.config_filename(task_id.package()))
+                });
+
+                if let Some(config_path) = config_path {
+                    let full_path = self.repo_root.join_unix_path(config_path);
+                    match std::fs::read_to_string(&full_path) {
+                        Ok(contents) => {
+                            match turborepo_microfrontends::Config::from_str(
+                                &contents,
+                                full_path.as_str(),
+                            ) {
+                                Ok(config) => match ProxyServer::new(config) {
+                                    Ok(server) => {
+                                        let handle = tokio::spawn(async move {
+                                            if let Err(e) = server.run().await {
+                                                warn!("Turborepo proxy error: {}", e);
+                                            }
+                                        });
+                                        info!("Turborepo proxy started successfully");
+                                        Some(handle)
+                                    }
+                                    Err(e) => {
+                                        warn!("Failed to create Turborepo proxy: {}", e);
+                                        None
+                                    }
+                                },
+                                Err(e) => {
+                                    warn!("Failed to parse microfrontends config: {}", e);
+                                    None
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            warn!("Failed to read microfrontends config file: {}", e);
+                            None
+                        }
+                    }
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let skip_cache_writes = self.opts.cache_opts.cache.skip_writes();
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let run_cache = self.run_cache.clone();
@@ -517,6 +575,12 @@ impl Run {
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
             )
             .await?;
+
+        // Clean up proxy server if it was started
+        if let Some(handle) = proxy_handle {
+            debug!("Shutting down Turborepo proxy");
+            handle.abort();
+        }
 
         Ok(exit_code)
     }

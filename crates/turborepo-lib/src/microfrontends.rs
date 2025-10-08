@@ -22,6 +22,8 @@ struct ConfigInfo {
     ports: HashMap<TaskId<'static>, u16>,
     version: &'static str,
     path: Option<RelativeUnixPathBuf>,
+    // Whether to use the Turborepo proxy (true) or create a proxy task (false)
+    use_turborepo_proxy: bool,
 }
 
 impl MicrofrontendsConfigs {
@@ -34,6 +36,15 @@ impl MicrofrontendsConfigs {
             .packages()
             .map(|(name, _)| name.as_str())
             .collect();
+        let package_has_proxy_script: HashMap<&str, bool> = package_graph
+            .packages()
+            .map(|(name, info)| {
+                (
+                    name.as_str(),
+                    info.package_json.scripts.contains_key("proxy"),
+                )
+            })
+            .collect();
         Self::from_configs(
             package_names,
             package_graph.packages().map(|(name, info)| {
@@ -42,6 +53,7 @@ impl MicrofrontendsConfigs {
                     MFEConfig::load_from_dir(repo_root, info.package_path()),
                 )
             }),
+            package_has_proxy_script,
         )
     }
 
@@ -49,6 +61,7 @@ impl MicrofrontendsConfigs {
     pub fn from_configs<'a>(
         package_names: HashSet<&str>,
         configs: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
+        package_has_proxy_script: HashMap<&str, bool>,
     ) -> Result<Option<Self>, Error> {
         let PackageGraphResult {
             configs,
@@ -56,7 +69,7 @@ impl MicrofrontendsConfigs {
             missing_applications,
             unsupported_version,
             mfe_package,
-        } = PackageGraphResult::new(package_names, configs)?;
+        } = PackageGraphResult::new(package_names, configs, package_has_proxy_script)?;
 
         for (package, err) in unsupported_version {
             warn!("Ignoring {package}: {err}");
@@ -111,6 +124,12 @@ impl MicrofrontendsConfigs {
             .find_map(|config| config.ports.get(task_id).copied())
     }
 
+    pub fn should_use_turborepo_proxy(&self) -> bool {
+        self.configs
+            .values()
+            .any(|config| config.use_turborepo_proxy)
+    }
+
     pub fn update_turbo_json(
         &self,
         package_name: &PackageName,
@@ -132,7 +151,18 @@ impl MicrofrontendsConfigs {
         // - contains the proxy task
         // - a member of one of the microfrontends
         // then we need to modify its task definitions
-        if let Some(FindResult { dev, proxy, .. }) = self.package_turbo_json_update(package_name) {
+        if let Some(FindResult {
+            dev,
+            proxy,
+            use_turborepo_proxy,
+            ..
+        }) = self.package_turbo_json_update(package_name)
+        {
+            // If using Turborepo's built-in proxy, don't add proxy task to task graph
+            if use_turborepo_proxy {
+                return turbo_json;
+            }
+
             // We need to modify turbo.json, use default one if there isn't one present
             let mut turbo_json = turbo_json.or_else(|err| match err {
                 config::Error::NoTurboJSON => Ok(TurboJson::default()),
@@ -169,12 +199,14 @@ impl MicrofrontendsConfigs {
                     dev: Some(task.as_borrowed()),
                     proxy: TaskId::new(config, "proxy"),
                     version: info.version,
+                    use_turborepo_proxy: info.use_turborepo_proxy,
                 })
             });
             let proxy_owner = (config.as_str() == package_name.as_str()).then(|| FindResult {
                 dev: None,
                 proxy: TaskId::new(config, "proxy"),
                 version: info.version,
+                use_turborepo_proxy: info.use_turborepo_proxy,
             });
             dev_task.or(proxy_owner)
         });
@@ -207,6 +239,7 @@ impl PackageGraphResult {
     fn new<'a>(
         packages_in_graph: HashSet<&str>,
         packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
+        package_has_proxy_script: HashMap<&str, bool>,
     ) -> Result<Self, Error> {
         let mut configs = HashMap::new();
         let mut referenced_default_apps = HashSet::new();
@@ -238,6 +271,14 @@ impl PackageGraphResult {
             if let Some(path) = config.path() {
                 info.path = Some(path.to_unix());
             }
+            // Use Turborepo proxy if:
+            // - No @vercel/microfrontends package in workspace AND
+            // - No custom proxy script in this package
+            let has_custom_proxy = package_has_proxy_script
+                .get(package_name)
+                .copied()
+                .unwrap_or(false);
+            info.use_turborepo_proxy = mfe_package.is_none() && !has_custom_proxy;
             referenced_packages.insert(package_name.to_string());
             referenced_packages.extend(info.tasks.keys().map(|task| task.package().to_string()));
             configs.insert(package_name.to_string(), info);
@@ -268,6 +309,7 @@ struct FindResult<'a> {
     dev: Option<TaskId<'a>>,
     proxy: TaskId<'a>,
     version: &'static str,
+    use_turborepo_proxy: bool,
 }
 
 impl ConfigInfo {
@@ -288,6 +330,7 @@ impl ConfigInfo {
             version,
             ports,
             path: None,
+            use_turborepo_proxy: false,
         }
     }
 }
@@ -310,7 +353,7 @@ mod test {
                         let _dev_application = _dev_task_id.package().to_owned();
                         _dev_tasks.insert(_dev_task_id, _dev_application);
                     }
-                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "1", path: None, ports: std::collections::HashMap::new() });
+                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "1", path: None, ports: std::collections::HashMap::new(), use_turborepo_proxy: false });
                 )+
                 _map
             }
@@ -368,11 +411,13 @@ mod test {
                     dev: Some(Self::str_to_task(dev)),
                     proxy: Self::str_to_task(proxy),
                     version: self.version,
+                    use_turborepo_proxy: false,
                 }),
                 Some(TestFindResult { dev: None, proxy }) => Some(FindResult {
                     dev: None,
                     proxy: Self::str_to_task(proxy),
                     version: self.version,
+                    use_turborepo_proxy: false,
                 }),
                 None => None,
             }
@@ -391,6 +436,7 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::default(),
             vec![(MICROFRONTENDS_PACKAGE, Ok(None))].into_iter(),
+            HashMap::new(),
         )
         .unwrap();
         assert_eq!(result.mfe_package, Some(MICROFRONTENDS_PACKAGE));
@@ -401,6 +447,7 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::default(),
             vec![("foo", Ok(None)), ("bar", Ok(None))].into_iter(),
+            HashMap::new(),
         )
         .unwrap();
         assert_eq!(result.mfe_package, None);
@@ -411,6 +458,7 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::default(),
             vec![("foo", Err(Error::UnsupportedVersion("bad version".into())))].into_iter(),
+            HashMap::new(),
         )
         .unwrap();
         assert_eq!(result.configs, HashMap::new());
@@ -427,6 +475,7 @@ mod test {
                 }),
             )]
             .into_iter(),
+            HashMap::new(),
         )
         .unwrap();
         assert_eq!(result.configs, HashMap::new());
@@ -447,6 +496,7 @@ mod test {
                 ),
             ]
             .into_iter(),
+            HashMap::new(),
         );
         assert!(result.is_err());
     }
@@ -472,12 +522,13 @@ mod test {
         let mut result = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
         )
         .unwrap();
-        result
-            .configs
-            .values_mut()
-            .for_each(|config| config.ports.clear());
+        result.configs.values_mut().for_each(|config| {
+            config.ports.clear();
+            config.use_turborepo_proxy = false;
+        });
         assert_eq!(
             result.configs,
             mfe_configs!(
@@ -507,12 +558,14 @@ mod test {
         let missing_result = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config.clone())))].into_iter(),
+            HashMap::new(),
         )
         .unwrap();
         assert_eq!(missing_result.missing_applications, vec!["docs", "web"]);
         let found_result = PackageGraphResult::new(
             HashSet::from_iter(["docs", "web"].iter().copied()),
             vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
         )
         .unwrap();
         assert!(
@@ -546,6 +599,7 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
         )
         .unwrap();
         let web_ports = result.configs["web"].ports.clone();
