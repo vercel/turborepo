@@ -6881,6 +6881,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-microfrontends-proxy"
+version = "0.1.0"
+dependencies = [
+ "http-body-util",
+ "hyper 1.4.1",
+ "hyper-util",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turborepo-microfrontends",
+]
+
+[[package]]
 name = "turborepo-napi"
 version = "0.1.0"
 dependencies = [
