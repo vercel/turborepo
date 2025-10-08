@@ -372,6 +372,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
           const newHashes = computeTurboConfigHashes(currentConfigPaths);
           project.reload();
           cachedProject.turboConfigHashes = newHashes;
+          cachedProject.configPaths = currentConfigPaths;
         }
       }
     } catch (error) {
