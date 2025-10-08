@@ -137,35 +137,69 @@ const packageJsonDependencies = (filePath: string): Set<string> => {
 };
 
 /**
- * Get all turbo config file paths for a project (root + workspace configs)
+ * Find turbo.json or turbo.jsonc in a directory if it exists
+ */
+function findTurboConfigInDir(dirPath: string): string | null {
+  const turboJsonPath = path.join(dirPath, "turbo.json");
+  const turboJsoncPath = path.join(dirPath, "turbo.jsonc");
+
+  if (fs.existsSync(turboJsonPath)) {
+    return turboJsonPath;
+  }
+  if (fs.existsSync(turboJsoncPath)) {
+    return turboJsoncPath;
+  }
+  return null;
+}
+
+/**
+ * Get all turbo config file paths that are currently loaded in the project
  */
 function getTurboConfigPaths(project: Project): Array<string> {
   const paths: Array<string> = [];
 
-  // Add root turbo config if it exists
+  // Add root turbo config if it exists and is loaded
   if (project.projectRoot?.turboConfig) {
-    const rootPath = project.projectRoot.workspacePath;
-    const turboJsonPath = path.join(rootPath, "turbo.json");
-    const turboJsoncPath = path.join(rootPath, "turbo.jsonc");
-
-    if (fs.existsSync(turboJsonPath)) {
-      paths.push(turboJsonPath);
-    } else if (fs.existsSync(turboJsoncPath)) {
-      paths.push(turboJsoncPath);
+    const configPath = findTurboConfigInDir(project.projectRoot.workspacePath);
+    if (configPath) {
+      paths.push(configPath);
     }
   }
 
-  // Add workspace turbo configs
+  // Add workspace turbo configs that are loaded
   for (const workspace of project.projectWorkspaces) {
     if (workspace.turboConfig) {
-      const turboJsonPath = path.join(workspace.workspacePath, "turbo.json");
-      const turboJsoncPath = path.join(workspace.workspacePath, "turbo.jsonc");
-
-      if (fs.existsSync(turboJsonPath)) {
-        paths.push(turboJsonPath);
-      } else if (fs.existsSync(turboJsoncPath)) {
-        paths.push(turboJsoncPath);
+      const configPath = findTurboConfigInDir(workspace.workspacePath);
+      if (configPath) {
+        paths.push(configPath);
       }
+    }
+  }
+
+  return paths;
+}
+
+/**
+ * Scan filesystem for all turbo.json/turbo.jsonc files across all workspaces.
+ * This scans ALL workspaces regardless of whether they currently have turboConfig loaded,
+ * allowing detection of newly created turbo.json files.
+ */
+function scanForTurboConfigs(project: Project): Array<string> {
+  const paths: Array<string> = [];
+
+  // Check root turbo config
+  if (project.projectRoot) {
+    const configPath = findTurboConfigInDir(project.projectRoot.workspacePath);
+    if (configPath) {
+      paths.push(configPath);
+    }
+  }
+
+  // Check ALL workspaces for turbo configs (not just those with turboConfig already loaded)
+  for (const workspace of project.projectWorkspaces) {
+    const configPath = findTurboConfigInDir(workspace.workspacePath);
+    if (configPath) {
+      paths.push(configPath);
     }
   }
 
@@ -190,26 +224,17 @@ function computeTurboConfigHashes(
 }
 
 /**
- * Compare hashes to see if a turbo.config(c) has changed
+ * Check if a single config file has changed by comparing its hash
  */
-function haveTurboConfigsChanged(
-  oldHashes: Map<string, string>,
-  newHashes: Map<string, string>
-): boolean {
-  // Check if the set of files has changed
-  if (oldHashes.size !== newHashes.size) {
+function hasConfigChanged(filePath: string, expectedHash: string): boolean {
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const currentHash = crypto.createHash("md5").update(content).digest("hex");
+    return currentHash !== expectedHash;
+  } catch {
+    // File no longer exists or is unreadable
     return true;
   }
-
-  // Check if any file content has changed
-  for (const [filePath, newHash] of newHashes) {
-    const oldHash = oldHashes.get(filePath);
-    if (oldHash !== newHash) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 /**
@@ -280,7 +305,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
     }
   });
 
-  const filename = context.getFilename();
+  const filename = context.filename;
   debug(`Checking file: ${filename}`);
 
   const matches = frameworkEnvMatches(filename);
@@ -291,11 +316,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
     }`
   );
 
-  const cwd = normalizeCwd(
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- needed to support older eslint versions
-    context.getCwd ? context.getCwd() : undefined,
-    options
-  );
+  const cwd = normalizeCwd(context.cwd ? context.cwd : undefined, options);
 
   // Use cached Project instance to avoid expensive re-initialization for every file
   const projectKey = cwd ?? process.cwd();
@@ -315,27 +336,50 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       debug(`Cached new project for ${projectKey}`);
     }
   } else {
-    // We have a cached project, check if turbo.json(c) configs have changed
     project = cachedProject.project;
-    let shouldReload = false;
 
+    // Check if any turbo.json(c) configs have changed
     try {
-      const newHashes = computeTurboConfigHashes(cachedProject.configPaths);
-      if (haveTurboConfigsChanged(cachedProject.turboConfigHashes, newHashes)) {
-        shouldReload = true;
+      const currentConfigPaths = scanForTurboConfigs(project);
+
+      // Quick path comparison - cheapest check first
+      const pathsUnchanged =
+        currentConfigPaths.length === cachedProject.configPaths.length &&
+        currentConfigPaths.every((p, i) => p === cachedProject.configPaths[i]);
+
+      if (!pathsUnchanged) {
+        // Paths changed (added/removed configs), must reload
+        debug(`Turbo config paths changed for ${projectKey}, reloading...`);
+        const newHashes = computeTurboConfigHashes(currentConfigPaths);
+        project.reload();
+        cachedProject.turboConfigHashes = newHashes;
+        cachedProject.configPaths = currentConfigPaths;
+      } else {
+        // Paths unchanged - check if any file content changed (early exit on first change)
+        let contentChanged = false;
+        for (const [
+          filePath,
+          expectedHash,
+        ] of cachedProject.turboConfigHashes) {
+          if (hasConfigChanged(filePath, expectedHash)) {
+            contentChanged = true;
+            break;
+          }
+        }
+
+        if (contentChanged) {
+          debug(`Turbo config content changed for ${projectKey}, reloading...`);
+          const newHashes = computeTurboConfigHashes(currentConfigPaths);
+          project.reload();
+          cachedProject.turboConfigHashes = newHashes;
+        }
       }
     } catch (error) {
-      // Config file was deleted or is unreadable, need to reload
+      // Config file was deleted or is unreadable, reload project
       debug(`Error computing hashes for ${projectKey}, reloading...`);
-      shouldReload = true;
-    }
-
-    if (shouldReload) {
-      debug(`Turbo config changed for ${projectKey}, reloading...`);
       project.reload();
-      const configPaths = getTurboConfigPaths(project);
-      const reloadedHashes = computeTurboConfigHashes(configPaths);
-      cachedProject.turboConfigHashes = reloadedHashes;
+      const configPaths = scanForTurboConfigs(project);
+      cachedProject.turboConfigHashes = computeTurboConfigHashes(configPaths);
       cachedProject.configPaths = configPaths;
     }
   }
@@ -344,7 +388,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
     return {};
   }
 
-  const filePath = context.getPhysicalFilename();
+  const filePath = context.physicalFilename;
   const hasWorkspaceConfigs = project.projectWorkspaces.some(
     (workspaceConfig) => Boolean(workspaceConfig.turboConfig)
   );
