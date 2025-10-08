@@ -296,9 +296,11 @@ export function forEachTaskDef<BaseSchema extends BaseSchemaV1 | BaseSchemaV2>(
 
 export function clearConfigCaches(): void {
   Object.keys(turboConfigsCache).forEach((key) => {
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- This is safe.
     delete turboConfigsCache[key];
   });
   Object.keys(workspaceConfigCache).forEach((key) => {
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- This is safe.
     delete workspaceConfigCache[key];
   });
 }

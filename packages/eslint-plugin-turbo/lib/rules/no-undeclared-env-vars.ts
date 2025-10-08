@@ -94,7 +94,6 @@ function normalizeCwd(
 
 /** for a given `package.json` file path, this will compile a Set of that package's listed dependencies */
 const packageJsonDependencies = (filePath: string): Set<string> => {
-  // Check cache first
   const cached = packageJsonDepCache.get(filePath);
   if (cached) {
     return cached;
@@ -174,7 +173,7 @@ function getTurboConfigPaths(project: Project): Array<string> {
 }
 
 /**
- * Compute SHA256 hashes for all turbo config files
+ * Compute hashes for all turbo.config(c) files
  */
 function computeTurboConfigHashes(
   configPaths: Array<string>
@@ -182,21 +181,16 @@ function computeTurboConfigHashes(
   const hashes = new Map<string, string>();
 
   for (const configPath of configPaths) {
-    try {
-      const content = fs.readFileSync(configPath, "utf-8");
-      const hash = crypto.createHash("md5").update(content).digest("hex");
-      hashes.set(configPath, hash);
-    } catch (e) {
-      // If we can't read the file, use an empty hash
-      hashes.set(configPath, "");
-    }
+    const content = fs.readFileSync(configPath, "utf-8");
+    const hash = crypto.createHash("md5").update(content).digest("hex");
+    hashes.set(configPath, hash);
   }
 
   return hashes;
 }
 
 /**
- * Check if any turbo config files have changed by comparing hashes
+ * Compare hashes to see if a turbo.config(c) has changed
  */
 function haveTurboConfigsChanged(
   oldHashes: Map<string, string>,
@@ -309,7 +303,6 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
   let project: Project;
 
   if (!cachedProject) {
-    // No cached project, create a new one
     project = new Project(cwd);
     if (project.valid()) {
       const configPaths = getTurboConfigPaths(project);
@@ -322,7 +315,7 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
       debug(`Cached new project for ${projectKey}`);
     }
   } else {
-    // We have a cached project, check if turbo configs have changed
+    // We have a cached project, check if turbo.json(c) configs have changed
     project = cachedProject.project;
     const newHashes = computeTurboConfigHashes(cachedProject.configPaths);
 
@@ -452,11 +445,6 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
 
 /**
  * Clear all module-level caches. This is primarily useful for test isolation.
- *
- * Note: The Project instance cache is reused across files for performance.
- * Changes to turbo.json files are detected via hash comparison, and project.reload()
- * is automatically called when changes are detected to ensure turbo.json changes
- * are picked up immediately for live IDE feedback.
  */
 export function clearCache(): void {
   projectCache.clear();
