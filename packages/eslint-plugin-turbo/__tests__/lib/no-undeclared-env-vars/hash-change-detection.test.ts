@@ -1,7 +1,14 @@
 import path from "node:path";
 import fs from "node:fs";
 import { Linter } from "eslint";
-import { describe, expect, it, beforeAll, afterAll } from "@jest/globals";
+import {
+  describe,
+  expect,
+  it,
+  beforeAll,
+  afterAll,
+  afterEach,
+} from "@jest/globals";
 import type { SchemaV1 } from "@turbo/types";
 import rule, { clearCache } from "../../../lib/rules/no-undeclared-env-vars";
 
@@ -37,6 +44,15 @@ describe("Hash-based change detection", () => {
     }
 
     // Start with known good state
+    fs.writeFileSync(
+      turboJsonPath,
+      JSON.stringify(KNOWN_GOOD_TURBO_JSON, null, 2)
+    );
+    clearCache();
+  });
+
+  afterEach(() => {
+    // Restore known good state after each test to prevent pollution
     fs.writeFileSync(
       turboJsonPath,
       JSON.stringify(KNOWN_GOOD_TURBO_JSON, null, 2)
@@ -101,7 +117,7 @@ describe("Hash-based change detection", () => {
     // Lint the same code multiple times without changing turbo.json
     for (let i = 0; i < 5; i++) {
       const results = linter.verify(
-        "const { ENV_2 } = process.env;",
+        "const { CI } = process.env;",
         {
           rules: {
             "turbo/no-undeclared-env-vars": ["error", { cwd }],
@@ -111,7 +127,7 @@ describe("Hash-based change detection", () => {
         { filename: webFilename }
       );
 
-      // Should always pass since ENV_2 is valid and nothing changed
+      // Should always pass since CI is valid and nothing changed
       expect(results).toHaveLength(0);
     }
   });
@@ -151,10 +167,35 @@ describe("Hash-based change detection", () => {
   });
 
   it("should detect changes even after multiple unchanged lints", () => {
-    // Lint several files without changes
-    for (let i = 0; i < 5; i++) {
+    const backup = fs.readFileSync(turboJsonPath, "utf8");
+
+    try {
+      // Lint several files without changes
+      for (let i = 0; i < 5; i++) {
+        const results = linter.verify(
+          "const { CI } = process.env;",
+          {
+            rules: {
+              "turbo/no-undeclared-env-vars": ["error", { cwd }],
+            },
+            parserOptions: { ecmaVersion: 2020 },
+          },
+          { filename: webFilename }
+        );
+
+        expect(results).toHaveLength(0);
+      }
+
+      // Now modify turbo.json
+      const modifiedConfig: SchemaV1 = {
+        ...(JSON.parse(backup) as SchemaV1),
+        globalEnv: ["ENV_3", "ENV_4"],
+      };
+      fs.writeFileSync(turboJsonPath, JSON.stringify(modifiedConfig, null, 2));
+
+      // Next lint should detect the change
       const results = linter.verify(
-        "const { ENV_2 } = process.env;",
+        "const { ENV_3, ENV_4 } = process.env;",
         {
           rules: {
             "turbo/no-undeclared-env-vars": ["error", { cwd }],
@@ -165,63 +206,52 @@ describe("Hash-based change detection", () => {
       );
 
       expect(results).toHaveLength(0);
+    } finally {
+      // Restore backup
+      fs.writeFileSync(turboJsonPath, backup);
     }
-
-    // Now modify turbo.json
-    const modifiedConfig: SchemaV1 = {
-      ...(JSON.parse(originalTurboJson) as SchemaV1),
-      globalEnv: ["ENV_3", "ENV_4"],
-    };
-    fs.writeFileSync(turboJsonPath, JSON.stringify(modifiedConfig, null, 2));
-
-    // Next lint should detect the change
-    const results = linter.verify(
-      "const { ENV_3, ENV_4 } = process.env;",
-      {
-        rules: {
-          "turbo/no-undeclared-env-vars": ["error", { cwd }],
-        },
-        parserOptions: { ecmaVersion: 2020 },
-      },
-      { filename: webFilename }
-    );
-
-    expect(results).toHaveLength(0);
   });
 
   it("should handle whitespace-only changes correctly", () => {
-    // First lint
-    const firstResults = linter.verify(
-      "const { ENV_2 } = process.env;",
-      {
-        rules: {
-          "turbo/no-undeclared-env-vars": ["error", { cwd }],
+    const backup = fs.readFileSync(turboJsonPath, "utf8");
+
+    try {
+      // First lint
+      const firstResults = linter.verify(
+        "const { CI } = process.env;",
+        {
+          rules: {
+            "turbo/no-undeclared-env-vars": ["error", { cwd }],
+          },
+          parserOptions: { ecmaVersion: 2020 },
         },
-        parserOptions: { ecmaVersion: 2020 },
-      },
-      { filename: webFilename }
-    );
+        { filename: webFilename }
+      );
 
-    expect(firstResults).toHaveLength(0);
+      expect(firstResults).toHaveLength(0);
 
-    // Modify turbo.json with only whitespace changes
-    const config = JSON.parse(originalTurboJson) as SchemaV1;
-    const whitespaceChanged = JSON.stringify(config, null, 4); // Different indentation
-    fs.writeFileSync(turboJsonPath, whitespaceChanged);
+      // Modify turbo.json with only whitespace changes
+      const config = JSON.parse(backup) as SchemaV1;
+      const whitespaceChanged = JSON.stringify(config, null, 4); // Different indentation
+      fs.writeFileSync(turboJsonPath, whitespaceChanged);
 
-    // Should still work correctly (whitespace doesn't affect functionality)
-    const secondResults = linter.verify(
-      "const { ENV_2 } = process.env;",
-      {
-        rules: {
-          "turbo/no-undeclared-env-vars": ["error", { cwd }],
+      // Should still work correctly (whitespace doesn't affect functionality)
+      const secondResults = linter.verify(
+        "const { CI } = process.env;",
+        {
+          rules: {
+            "turbo/no-undeclared-env-vars": ["error", { cwd }],
+          },
+          parserOptions: { ecmaVersion: 2020 },
         },
-        parserOptions: { ecmaVersion: 2020 },
-      },
-      { filename: webFilename }
-    );
+        { filename: webFilename }
+      );
 
-    expect(secondResults).toHaveLength(0);
+      expect(secondResults).toHaveLength(0);
+    } finally {
+      // Restore backup
+      fs.writeFileSync(turboJsonPath, backup);
+    }
   });
 
   it("should detect changes across different workspace turbo.json files", () => {
