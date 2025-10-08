@@ -42,6 +42,8 @@ impl ProxyServer {
     pub async fn run(self) -> Result<(), ProxyError> {
         let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
 
+        println!("AKLJSDFKLJSJEDL");
+
         let listener = TcpListener::bind(addr)
             .await
             .map_err(|e| ProxyError::BindError {

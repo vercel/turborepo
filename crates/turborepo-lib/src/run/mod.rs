@@ -22,6 +22,7 @@ use std::{
 pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use futures::StreamExt;
+use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, info, instrument, warn};
@@ -298,12 +299,11 @@ impl Run {
             if mfe_configs.should_use_turborepo_proxy() {
                 info!("Starting Turborepo microfrontends proxy");
                 // Load the config from the first package that has one
-                let config_path = mfe_configs.configs().find_map(|(_, tasks)| {
-                    tasks
-                        .keys()
-                        .next()
-                        .and_then(|task_id| mfe_configs.config_filename(task_id.package()))
-                });
+                // Sort packages to ensure deterministic behavior
+                let config_path = mfe_configs
+                    .configs()
+                    .sorted_by(|(a, _), (b, _)| a.cmp(b))
+                    .find_map(|(pkg, _tasks)| mfe_configs.config_filename(pkg));
 
                 if let Some(config_path) = config_path {
                     let full_path = self.repo_root.join_unix_path(config_path);
