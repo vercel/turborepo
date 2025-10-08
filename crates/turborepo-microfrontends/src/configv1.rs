@@ -15,6 +15,13 @@ pub enum ParseResult {
 pub struct ConfigV1 {
     version: Option<String>,
     applications: BTreeMap<String, Application>,
+    options: Option<Options>,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
+struct Options {
+    local_proxy_port: Option<u16>,
+    disable_overrides: Option<bool>,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
@@ -26,12 +33,30 @@ struct ChildConfig {
 struct Application {
     package_name: Option<String>,
     development: Option<Development>,
+    routing: Option<Vec<PathGroup>>,
+    asset_prefix: Option<String>,
+    production: Option<ProductionConfig>,
+    vercel: Option<VercelConfig>,
 }
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
+pub struct PathGroup {
+    pub paths: Vec<String>,
+    pub group: Option<String>,
+    pub flag: Option<String>,
+}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
+struct ProductionConfig {}
+
+#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
+struct VercelConfig {}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 struct Development {
     task: Option<String>,
     local: Option<LocalHost>,
+    fallback: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone, Copy)]
@@ -89,6 +114,15 @@ impl ConfigV1 {
     pub fn port(&self, name: &str) -> Option<u16> {
         let application = self.applications.get(name)?;
         Some(application.port(name))
+    }
+
+    pub fn local_proxy_port(&self) -> Option<u16> {
+        self.options.as_ref()?.local_proxy_port
+    }
+
+    pub fn routing(&self, app_name: &str) -> Option<&[PathGroup]> {
+        let application = self.applications.get(app_name)?;
+        application.routing.as_deref()
     }
 }
 

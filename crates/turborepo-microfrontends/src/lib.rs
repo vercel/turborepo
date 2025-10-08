@@ -17,6 +17,7 @@ use std::io;
 use biome_deserialize_macros::Deserializable;
 use biome_json_parser::JsonParserOptions;
 use configv1::ConfigV1;
+pub use configv1::PathGroup;
 pub use error::Error;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
@@ -146,6 +147,18 @@ impl Config {
     pub fn version(&self) -> &'static str {
         match &self.inner {
             ConfigInner::V1(_) => "1",
+        }
+    }
+
+    pub fn local_proxy_port(&self) -> Option<u16> {
+        match &self.inner {
+            ConfigInner::V1(config_v1) => config_v1.local_proxy_port(),
+        }
+    }
+
+    pub fn routing(&self, app_name: &str) -> Option<&[PathGroup]> {
+        match &self.inner {
+            ConfigInner::V1(config_v1) => config_v1.routing(app_name),
         }
     }
 

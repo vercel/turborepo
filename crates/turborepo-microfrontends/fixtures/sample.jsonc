@@ -1,115 +1,124 @@
 {
+  // This sample demonstrates the complete microfrontends configuration schema.
+  // Both Turborepo-only and Vercel proxies can read this same configuration.
+  //
+  // TURBOREPO-ONLY PROXY:
+  // - Uses: version, options.localProxyPort, applications[].development.local/task, applications[].routing
+  // - Ignores: development.fallback, production, vercel, assetPrefix, options.disableOverrides
+  //
+  // VERCEL PROXY (@vercel/microfrontends package):
+  // - Uses all fields for full production integration
+  //
+  // To switch from Turborepo-only to Vercel:
+  // 1. Add the fields marked as "Vercel-only" below
+  // 2. Install @vercel/microfrontends in the package with the proxy task
+
+  "$schema": "https://openapi.vercel.sh/microfrontends.json",
   "version": "1",
+
+  "options": {
+    // Port for the local development proxy server (default: 3024)
+    "localProxyPort": 3024,
+
+    // Vercel-only: Disables the Vercel toolbar overrides
+    "disableOverrides": false
+  },
+
   "applications": {
+    // Default application - catches all routes not matched by child apps
     "main-site": {
+      "packageName": "web",
+
       "development": {
+        // Local development port (Turborepo-only uses this)
         "local": {
-          "protocol": "http",
-          "host": "localhost",
           "port": 3331
         },
+
+        // Vercel-only: Fallback to preview/production when not running locally
         "fallback": {
           "protocol": "https",
-          "host": "main-preview.sh"
+          "host": "main-preview.vercel.app"
         }
       },
+
+      // Vercel-only: Production configuration
       "production": {
         "protocol": "https",
         "host": "main.com"
       },
+
+      // Vercel-only: Vercel project ID
       "vercel": {
-        "projectId": "id1"
+        "projectId": "prj_abc123"
       }
     },
-    "vercel-marketing": {
+
+    // Child application - handles specific routes via routing config
+    "marketing": {
+      "packageName": "marketing-site",
+
+      // Routing configuration (Turborepo-only uses this for path matching)
       "routing": [
         {
+          // Optional: Group name for organization
           "group": "blog",
           "paths": [
             "/blog",
             "/blog/:slug*",
             "/press",
             "/changelog",
-            "/changelog/:slug*",
-            "/customers/:slug*"
-          ]
+            "/changelog/:slug*"
+          ],
+          // Vercel-only: Feature flag integration
+          "flag": "enable_blog"
         },
         {
-          "group": "navbar",
-          "paths": [
-            "/",
-            "/contact",
-            "/pricing",
-            "/enterprise",
-            // Resources
-            "/customers",
-            "/solutions/composable-commerce"
-          ]
+          "group": "marketing-pages",
+          "paths": ["/contact", "/pricing", "/enterprise"]
         }
       ],
+
       "development": {
         "local": {
-          "protocol": "http",
-          "host": "localhost",
           "port": 3332
         },
+        "task": "dev",
+
+        // Vercel-only: Fallback for this specific app
         "fallback": {
           "protocol": "https",
-          "host": "market-preview.sh"
+          "host": "marketing-preview.vercel.app"
         }
       },
+
+      // Vercel-only: Production configuration
       "production": {
         "protocol": "https",
-        "host": "market.main.com"
+        "host": "marketing.main.com"
       },
+
+      // Vercel-only: Vercel project ID
       "vercel": {
-        "projectId": "id2"
-      }
+        "projectId": "prj_def456"
+      },
+
+      // Vercel-only: Custom asset prefix for production
+      "assetPrefix": "mkt-assets"
     },
-    "foo-docs": {
+
+    // Minimal child application (Turborepo-only compatible)
+    "docs": {
       "routing": [
         {
-          "paths": ["/foo/:path*"]
+          "paths": ["/docs", "/docs/:path*"]
         }
       ],
       "development": {
-        "fallback": {
-          "protocol": "https",
-          "host": "foo-preview.sh"
-        },
         "local": {
-          "protocol": "http",
-          "host": "localhost",
           "port": 3333
-        }
-      },
-      "production": {
-        "protocol": "https",
-        "host": "foo.main.com"
-      },
-      "vercel": {
-        "projectId": "id3"
-      }
-    },
-    "docs": {
-      "routing": [],
-      "development": {
-        "fallback": {
-          "protocol": "https",
-          "host": "docs-preview.sh"
         },
-        "local": {
-          "protocol": "http",
-          "host": "localhost",
-          "port": 3334
-        }
-      },
-      "production": {
-        "protocol": "https",
-        "host": "docs.main.com"
-      },
-      "vercel": {
-        "projectId": "id4"
+        "task": "dev"
       }
     }
   }
