@@ -317,9 +317,20 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
   } else {
     // We have a cached project, check if turbo.json(c) configs have changed
     project = cachedProject.project;
-    const newHashes = computeTurboConfigHashes(cachedProject.configPaths);
+    let shouldReload = false;
 
-    if (haveTurboConfigsChanged(cachedProject.turboConfigHashes, newHashes)) {
+    try {
+      const newHashes = computeTurboConfigHashes(cachedProject.configPaths);
+      if (haveTurboConfigsChanged(cachedProject.turboConfigHashes, newHashes)) {
+        shouldReload = true;
+      }
+    } catch (error) {
+      // Config file was deleted or is unreadable, need to reload
+      debug(`Error computing hashes for ${projectKey}, reloading...`);
+      shouldReload = true;
+    }
+
+    if (shouldReload) {
       debug(`Turbo config changed for ${projectKey}, reloading...`);
       project.reload();
       const configPaths = getTurboConfigPaths(project);
