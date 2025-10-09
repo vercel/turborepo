@@ -6,11 +6,13 @@ license = "MPL-2.0"
 rust-version = "1.76"
 
 [dependencies]
+futures-util = "0.3"
 http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
 hyper-util = { version = "0.1", features = ["full"] }
 thiserror = { workspace = true }
 tokio = { workspace = true }
+tokio-tungstenite = "0.21"
 tracing = { workspace = true }
 turborepo-microfrontends = { path = "../turborepo-microfrontends" }
 

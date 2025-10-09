@@ -6885,11 +6885,13 @@ dependencies = [
 name = "turborepo-microfrontends-proxy"
 version = "0.1.0"
 dependencies = [
+ "futures-util",
  "http-body-util",
  "hyper 1.4.1",
  "hyper-util",
  "thiserror 1.0.63",
  "tokio",
+ "tokio-tungstenite 0.21.0",
  "tracing",
  "turborepo-microfrontends",
 ]

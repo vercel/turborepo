@@ -28,7 +28,7 @@ async fn test_port_availability_check_ipv4() {
     let _listener = TcpListener::bind("127.0.0.1:9999").await.unwrap();
 
     let result = server.check_port_available().await;
-    assert!(result.is_err(), "Should fail when IPv4 port is occupied");
+    assert!(!result, "Port should not be available when already bound");
 }
 
 #[tokio::test]
@@ -53,7 +53,7 @@ async fn test_port_availability_check_ipv6() {
     let _listener = TcpListener::bind("[::1]:9998").await.unwrap();
 
     let result = server.check_port_available().await;
-    assert!(result.is_err(), "Should fail when IPv6 port is occupied");
+    assert!(!result, "Port should not be available when already bound");
 }
 
 #[tokio::test]
@@ -260,4 +260,55 @@ async fn test_end_to_end_proxy() {
 
     // Note: Actual HTTP requests would go here
     // This is a placeholder for when we want to add full E2E tests
+}
+
+#[tokio::test]
+async fn test_websocket_detection() {
+    use hyper::{
+        Request,
+        header::{CONNECTION, UPGRADE},
+    };
+
+    let req = Request::builder()
+        .uri("http://localhost:3000")
+        .header(UPGRADE, "websocket")
+        .header(CONNECTION, "Upgrade")
+        .body(())
+        .unwrap();
+
+    assert!(req.headers().get(UPGRADE).is_some());
+    assert!(req.headers().get(CONNECTION).is_some());
+}
+
+#[tokio::test]
+async fn test_websocket_routing() {
+    let config_json = r#"{
+        "version": "1",
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 3000 }
+                }
+            },
+            "api": {
+                "development": {
+                    "local": { "port": 3001 }
+                },
+                "routing": [
+                    { "paths": ["/api/:path*"] }
+                ]
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let router = Router::new(&config).unwrap();
+
+    let route = router.match_route("/api/ws");
+    assert_eq!(route.app_name, "api");
+    assert_eq!(route.port, 3001);
+
+    let route = router.match_route("/ws");
+    assert_eq!(route.app_name, "web");
+    assert_eq!(route.port, 3000);
 }

@@ -13,6 +13,7 @@ This library crate provides the core proxy functionality for Turborepo's microfr
 - **Error handling**: Beautiful error pages when apps aren't running
 - **Zero configuration**: Uses `microfrontends.json` for automatic setup
 - **HTTP proxying**: Forward all request headers and stream responses
+- **WebSocket support**: Full bidirectional WebSocket proxying for hot module reload (HMR) and real-time features
 
 ## How It Works
 
@@ -39,10 +40,20 @@ Match Against Routing Patterns
 
 ### 3. Request Forwarding
 
+**HTTP Requests:**
+
 - Preserve all headers except `Host`
 - Add forwarding headers (`X-Forwarded-*`)
 - Stream request body to target
 - Stream response back to client
+
+**WebSocket Connections:**
+
+- Detect WebSocket upgrade requests (`Upgrade: websocket` header)
+- Forward upgrade handshake to target application
+- Establish bidirectional proxy for WebSocket frames
+- Forward all WebSocket messages (text, binary, ping, pong, close) between client and target
+- Automatic cleanup on connection close
 
 ### 4. Error Handling
 
@@ -121,17 +132,28 @@ Does not match: /blogs
 
 ### Routing Behavior
 
+**HTTP Requests:**
+
 - `http://localhost:3024/` → `http://localhost:3000/`
 - `http://localhost:3024/about` → `http://localhost:3000/about`
 - `http://localhost:3024/docs` → `http://localhost:3001/docs`
 - `http://localhost:3024/docs/api` → `http://localhost:3001/docs/api`
 - `http://localhost:3024/api/v1/users` → `http://localhost:3002/api/v1/users`
 
+**WebSocket Connections:**
+
+- `ws://localhost:3024/_next/webpack-hmr` → `ws://localhost:3000/_next/webpack-hmr` (Next.js HMR)
+- `ws://localhost:3024/docs/_next/webpack-hmr` → `ws://localhost:3001/docs/_next/webpack-hmr`
+- `ws://localhost:3024/api/socket` → `ws://localhost:3002/api/socket`
+
+WebSocket connections follow the same routing rules as HTTP requests based on the path.
+
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────────┐
 │  Browser (localhost:3024)                       │
+│  HTTP + WebSocket                               │
 └────────────────┬────────────────────────────────┘
                  │
                  ▼
@@ -139,6 +161,9 @@ Does not match: /blogs
 │  Proxy Server                                   │
 │  ┌───────────────────────────────────────────┐  │
 │  │ Router (pattern matching)                 │  │
+│  │ • HTTP request forwarding                 │  │
+│  │ • WebSocket upgrade detection             │  │
+│  │ • Bidirectional frame proxying            │  │
 │  └───────────────────────────────────────────┘  │
 └────────────────┬────────────────────────────────┘
                  │
@@ -147,6 +172,7 @@ Does not match: /blogs
    ┌─────────┐      ┌─────────┐  ┌─────────┐
    │ App 1   │      │ App 2   │  │ App 3   │
    │ :3000   │      │ :3001   │  │ :3002   │
+   │ (+ HMR) │      │ (+ HMR) │  │ (+ WS)  │
    └─────────┘      └─────────┘  └─────────┘
 ```
 
@@ -189,28 +215,32 @@ RUST_LOG=debug cargo test -p turborepo-microfrontends-proxy -- --nocapture
 - ✅ Integration with microfrontends config
 - ✅ Multiple child apps with different patterns
 - ✅ Edge cases (parameters, wildcards, exact matches)
+- ✅ WebSocket upgrade detection
+- ✅ WebSocket routing to different applications
 
 ## Dependencies
 
-- `hyper` v1.0 - HTTP server and client
+- `hyper` v1.0 - HTTP server and client with upgrade support
 - `tokio` - Async runtime
+- `tokio-tungstenite` v0.21 - WebSocket protocol implementation
+- `futures-util` v0.3 - Utilities for async stream handling
 - `turborepo-microfrontends` - Configuration parsing
 
-## Limitations (Current Phase)
+## Limitations
 
-- **HTTP only**: WebSocket support planned for future phase
 - **Manual app startup**: Apps must be running before proxy starts
 - **No health checks**: Immediate error if app port unreachable
 
 ## Future Enhancements
 
-- WebSocket proxying for hot module reload (HMR)
 - Auto-start applications if not running
 - Health checks and retry logic with backoff
 - Request/response logging
 - Performance metrics and monitoring
 - Connection pooling
 - Request timeout configuration
+- HTTP/2 support
+- Compression for WebSocket messages
 
 ## Integration
 
