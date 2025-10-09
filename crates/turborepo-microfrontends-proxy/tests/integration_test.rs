@@ -7,6 +7,56 @@ use turborepo_microfrontends::Config;
 use turborepo_microfrontends_proxy::{ProxyServer, Router};
 
 #[tokio::test]
+async fn test_port_availability_check_ipv4() {
+    let config_json = r#"{
+        "version": "1",
+        "options": {
+            "localProxyPort": 9999
+        },
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 3000 }
+                }
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let server = ProxyServer::new(config.clone()).unwrap();
+
+    let _listener = TcpListener::bind("127.0.0.1:9999").await.unwrap();
+
+    let result = server.check_port_available().await;
+    assert!(result.is_err(), "Should fail when IPv4 port is occupied");
+}
+
+#[tokio::test]
+async fn test_port_availability_check_ipv6() {
+    let config_json = r#"{
+        "version": "1",
+        "options": {
+            "localProxyPort": 9998
+        },
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 3000 }
+                }
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let server = ProxyServer::new(config).unwrap();
+
+    let _listener = TcpListener::bind("[::1]:9998").await.unwrap();
+
+    let result = server.check_port_available().await;
+    assert!(result.is_err(), "Should fail when IPv6 port is occupied");
+}
+
+#[tokio::test]
 async fn test_router_with_config() {
     let config_json = r#"{
         "version": "1",

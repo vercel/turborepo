@@ -62,4 +62,6 @@ pub enum Error {
     Tui(#[from] tui::Error),
     #[error("Failed to read microfrontends configuration: {0}")]
     MicroFrontends(#[from] turborepo_microfrontends::Error),
+    #[error("Microfrontends proxy error: {0}")]
+    Proxy(String),
 }

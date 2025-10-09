@@ -39,10 +39,13 @@ impl ProxyServer {
         })
     }
 
+    pub async fn check_port_available(&self) -> bool {
+        let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
+        TcpListener::bind(addr).await.is_ok()
+    }
+
     pub async fn run(self) -> Result<(), ProxyError> {
         let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
-
-        println!("AKLJSDFKLJSJEDL");
 
         let listener = TcpListener::bind(addr)
             .await

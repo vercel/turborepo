@@ -25,7 +25,7 @@ use futures::StreamExt;
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tokio::{pin, select, task::JoinHandle};
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, error, info, instrument};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
@@ -315,28 +315,40 @@ impl Run {
                             ) {
                                 Ok(config) => match ProxyServer::new(config) {
                                     Ok(server) => {
+                                        if !server.check_port_available().await {
+                                            return Err(Error::Proxy(
+                                                "Port is not available.".to_string(),
+                                            ));
+                                        }
+
                                         let handle = tokio::spawn(async move {
                                             if let Err(e) = server.run().await {
-                                                warn!("Turborepo proxy error: {}", e);
+                                                error!("Turborepo proxy error: {}", e);
                                             }
                                         });
                                         info!("Turborepo proxy started successfully");
                                         Some(handle)
                                     }
                                     Err(e) => {
-                                        warn!("Failed to create Turborepo proxy: {}", e);
-                                        None
+                                        return Err(Error::Proxy(format!(
+                                            "Failed to create Turborepo proxy: {}",
+                                            e
+                                        )));
                                     }
                                 },
                                 Err(e) => {
-                                    warn!("Failed to parse microfrontends config: {}", e);
-                                    None
+                                    return Err(Error::Proxy(format!(
+                                        "Failed to parse microfrontends config: {}",
+                                        e
+                                    )));
                                 }
                             }
                         }
                         Err(e) => {
-                            warn!("Failed to read microfrontends config file: {}", e);
-                            None
+                            return Err(Error::Proxy(format!(
+                                "Failed to read microfrontends config file: {}",
+                                e
+                            )));
                         }
                     }
                 } else {
