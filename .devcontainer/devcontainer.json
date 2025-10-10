@@ -1,52 +1,62 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
-// https://github.com/microsoft/vscode-dev-containers/tree/v0.233.0/containers/go
 {
-  "name": "turbo (go, node, rust)",
+  "name": "Turborepo Development Environment",
   "build": {
-    "dockerfile": "Dockerfile",
-    "args": {
-      // Update the VARIANT arg to pick a version of Go: 1, 1.18, 1.17
-      // Append -bullseye or -buster to pin to an OS version.
-      // Use -bullseye variants on local arm64/Apple Silicon.
-      "VARIANT": "1.18-bullseye",
-      // Options
-      "NODE_VERSION": "lts/*"
-    }
+    "dockerfile": "Dockerfile"
   },
   "runArgs": [
     "--cap-add=SYS_PTRACE",
     "--security-opt",
     "seccomp=unconfined"
   ],
-  // Add the IDs of extensions you want installed when the container is created.
-  "extensions": [
-    "bradlc.vscode-tailwindcss",
-    "christian-kohler.npm-intellisense",
-    "dbaeumer.vscode-eslint",
-    "eamodio.gitlens",
-    "EditorConfig.EditorConfig",
-    "esbenp.prettier-vscode",
-    "github.copilot",
-    "github.vscode-pull-request-github",
-    "golang.go",
-    "heybourn.headwind",
-    "rust-lang.rust-analyzer",
-    "silvenon.mdx",
-    "windmilleng.vscode-go-autotest",
-    "yzhang.markdown-all-in-one"
-  ],
-  // Use 'forwardPorts' to make a list of ports inside the container available locally.
-  // "forwardPorts": [],
-
-  // Use 'postCreateCommand' to run commands after the container is created.
-  "postCreateCommand": "cargo --version",
-  // Invoking `cargo` will eagerly install the toolchain specified in rust-toolchain file
-
-  // Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
-  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "tamasfe.even-better-toml",
+        "serayuzgur.crates",
+        "vadimcn.vscode-lldb",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "bradlc.vscode-tailwindcss",
+        "christian-kohler.npm-intellisense",
+        "eamodio.gitlens",
+        "EditorConfig.EditorConfig",
+        "github.copilot",
+        "github.vscode-pull-request-github",
+        "heybourn.headwind",
+        "silvenon.mdx",
+        "yzhang.markdown-all-in-one"
+      ],
+      "settings": {
+        "rust-analyzer.server.path": "rust-analyzer",
+        "rust-analyzer.cargo.buildScripts.enable": true,
+        "rust-analyzer.procMacro.enable": true,
+        "rust-analyzer.cargo.loadOutDirsFromCheck": true,
+        "rust-analyzer.checkOnSave.command": "clippy",
+        "[rust]": {
+          "editor.defaultFormatter": "rust-lang.rust-analyzer",
+          "editor.formatOnSave": true
+        },
+        "[javascript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.formatOnSave": true
+        },
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode", 
+          "editor.formatOnSave": true
+        },
+        "[json]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.formatOnSave": true
+        }
+      }
+    }
+  },
   "features": {
-    "docker-in-docker": "latest",
-    "git": "latest",
-    "github-cli": "latest"
-  }
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "postCreateCommand": ".devcontainer/post-create.sh",
+  "remoteUser": "vscode"
 }

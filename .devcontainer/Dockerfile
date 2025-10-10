@@ -1,33 +1,77 @@
-# See here for image contents: https://github.com/microsoft/vscode-dev-containers/tree/v0.233.0/containers/go/.devcontainer/base.Dockerfile
+# Use the official Microsoft devcontainers Ubuntu base image
+FROM mcr.microsoft.com/devcontainers/base:ubuntu-22.04
 
-# [Choice] Go version (use -bullseye variants on local arm64/Apple Silicon): 1, 1.16, 1.17, 1-bullseye, 1.16-bullseye, 1.17-bullseye, 1-buster, 1.16-buster, 1.17-buster
-ARG VARIANT="1.18-bullseye"
-FROM mcr.microsoft.com/vscode/devcontainers/go:0-${VARIANT}
+# Avoid warnings by switching to noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-  && apt-get -y install --no-install-recommends \
-  # Chromium for running Turbopack benchmarks
-  chromium \
-  # Used for plotters graph visualizations in turbopack benchmarks
-  libfontconfig1-dev
+# Update package list and install dependencies
+RUN apt-get update && apt-get install -y \
+    # Basic build tools
+    build-essential \
+    curl \
+    wget \
+    git \
+    pkg-config \
+    libssl-dev \
+    # LLD linker (required for Linux as mentioned in CONTRIBUTING.md)
+    lld \
+    # Protocol Buffers compiler
+    protobuf-compiler \
+    # Cap'n Proto
+    capnproto \
+    libcapnp-dev \
+    # Test dependencies (jq and zstd)
+    jq \
+    zstd \
+    # Additional useful tools
+    htop \
+    vim \
+    nano \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
 
-# Add hyperfine, a useful benchmarking tool
-RUN dpkgArch="$(dpkg --print-architecture)"; \
-  wget "https://github.com/sharkdp/hyperfine/releases/download/v1.12.0/hyperfine_1.12.0_${dpkgArch}.deb" && dpkg -i "hyperfine_1.12.0_${dpkgArch}.deb"
+# Install Node.js v22 using NodeSource repository (as root)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs
 
-#
-# Everything below is run as the vscode user. If superuser permissions are necessary,
-# run it before this. Otherwise, prefer running as the vscode user.
-#
+# Switch to vscode user for the rest of the setup
 USER vscode
 
-# [Choice] Node.js version: none, lts/*, 16, 14, 12, 10
-ARG NODE_VERSION="none"
-RUN if [ "${NODE_VERSION}" != "none" ]; then umask 0002 && sh -c ". /usr/local/share/nvm/nvm.sh && nvm install ${NODE_VERSION}" 2>&1; fi
+# Install pnpm with the specific version from package.json
+RUN curl -fsSL https://get.pnpm.io/install.sh | env PNPM_VERSION=8.14.0 sh -
 
-RUN sh -c ". /usr/local/share/nvm/nvm.sh && npm install -g vercel yarn yalc pnpm nodemon" 2>&1
+# Add pnpm to PATH
+ENV PATH="/home/vscode/.local/share/pnpm:$PATH"
 
-# The installer from https://rustup.rs/ homepage, with the following changes:
-#   * `-y` to accept without interactivity
-#   * `--default-toolchain none` to avoid installing stable rust. Our specific toolchain is installed post-create.
+# Install Rust using rustup
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+
+# Add Rust to PATH
+ENV PATH="/home/vscode/.cargo/bin:$PATH"
+
+# Install the specific Rust toolchain (nightly-2025-06-20) with required components
+RUN /home/vscode/.cargo/bin/rustup toolchain install nightly-2025-06-20 --component rustfmt,clippy
+
+# Set the default toolchain to match rust-toolchain.toml
+RUN /home/vscode/.cargo/bin/rustup default nightly-2025-06-20
+
+# Install llvm-tools-preview for coverage reporting
+RUN /home/vscode/.cargo/bin/rustup component add llvm-tools-preview
+
+# Install cargo-llvm-cov for coverage
+RUN /home/vscode/.cargo/bin/cargo install cargo-llvm-cov
+
+# Install other useful cargo tools
+RUN /home/vscode/.cargo/bin/cargo install cargo-watch cargo-edit
+
+# Create a custom cargo coverage command alias
+RUN echo 'alias cargo-coverage="cargo llvm-cov --html --open"' >> /home/vscode/.bashrc
+
+# Verify installations
+RUN node --version && npm --version && pnpm --version
+RUN /home/vscode/.cargo/bin/rustc --version && /home/vscode/.cargo/bin/cargo --version
+RUN protoc --version && capnp --version
+RUN jq --version && zstd --version
+
+# Switch back to noninteractive to avoid warnings
+ENV DEBIAN_FRONTEND=noninteractive
