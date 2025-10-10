@@ -11,7 +11,7 @@ const counterFormatter = Intl.NumberFormat(undefined, {
 
 // A number to start the counter at that is lower than the actual time saved
 // to make the counter not start at 0
-const ARBITRARY_START_NUMBER = 176070400 / 60;
+const ARBITRARY_START_NUMBER = 240000000;
 
 export function RemoteCacheCounterClient({
   className,
