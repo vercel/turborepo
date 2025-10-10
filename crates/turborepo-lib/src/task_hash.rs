@@ -446,7 +446,7 @@ impl<'a> TaskHasher<'a> {
                     "PWD",
                     "XDG_RUNTIME_DIR",
                     "XAUTHORITY",
-                    "DBUS_SESSION_BUS_ADDRESS"
+                    "DBUS_SESSION_BUS_ADDRESS",
                     "CI",
                     "NODE_OPTIONS",
                     "COREPACK_HOME",
