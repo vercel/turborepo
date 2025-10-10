@@ -316,9 +316,15 @@ Then, configure the files in your application so the styles from the UI package 
 
 ```css title="./apps/web/app/globals.css"
 @import 'tailwindcss';
+@source "../../../packages/ui/dist";
 @import '@repo/tailwind-config';
 @import '@repo/ui/styles.css';
 ```
+
+<Callout type="good-to-know">
+  In order for Tailwind to include class names used in the UI package, we need to register that source directory. You can read more
+  [here](https://tailwindcss.com/docs/detecting-classes-in-source-files).
+</Callout>
 
 </Tab>
 
