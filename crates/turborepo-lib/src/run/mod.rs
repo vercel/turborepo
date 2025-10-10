@@ -25,7 +25,7 @@ use futures::StreamExt;
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
 use tokio::{pin, select, task::JoinHandle};
-use tracing::{debug, error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_ci::Vendor;
@@ -295,7 +295,7 @@ impl Run {
     pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
         // Start Turborepo proxy if microfrontends are configured and should use
         // built-in proxy
-        let proxy_handle = if let Some(mfe_configs) = &self.micro_frontend_configs {
+        let proxy_shutdown = if let Some(mfe_configs) = &self.micro_frontend_configs {
             if mfe_configs.should_use_turborepo_proxy() {
                 info!("Starting Turborepo microfrontends proxy");
                 // Load the config from the first package that has one
@@ -321,13 +321,54 @@ impl Run {
                                             ));
                                         }
 
-                                        let handle = tokio::spawn(async move {
+                                        let shutdown_handle = server.shutdown_handle();
+
+                                        // Register signal handler to shutdown proxy when signal
+                                        // received AND delay process manager from stopping
+                                        if let Some(subscriber) = self.signal_handler.subscribe() {
+                                            let proxy_shutdown_on_signal = shutdown_handle.clone();
+                                            let process_manager = self.processes.clone();
+                                            tokio::spawn(async move {
+                                                info!(
+                                                    "Proxy signal handler registered and waiting"
+                                                );
+                                                let _guard = subscriber.listen().await;
+                                                info!(
+                                                    "Signal received! Shutting down proxy BEFORE \
+                                                     process manager stops"
+                                                );
+                                                let _ = proxy_shutdown_on_signal.send(());
+                                                debug!(
+                                                    "Proxy shutdown signal sent, waiting for \
+                                                     websockets to close"
+                                                );
+                                                // Wait for websockets to close before allowing
+                                                // process manager to kill processes
+                                                tokio::time::sleep(
+                                                    tokio::time::Duration::from_millis(200),
+                                                )
+                                                .await;
+                                                info!(
+                                                    "Proxy websocket close complete, now stopping \
+                                                     child processes"
+                                                );
+                                                process_manager.stop().await;
+                                                debug!("Child processes stopped");
+                                            });
+                                        } else {
+                                            warn!(
+                                                "Could not subscribe to signal handler for proxy \
+                                                 shutdown"
+                                            );
+                                        }
+
+                                        let _task_handle = tokio::spawn(async move {
                                             if let Err(e) = server.run().await {
                                                 error!("Turborepo proxy error: {}", e);
                                             }
                                         });
                                         info!("Turborepo proxy started successfully");
-                                        Some(handle)
+                                        Some(shutdown_handle)
                                     }
                                     Err(e) => {
                                         return Err(Error::Proxy(format!(
@@ -561,6 +602,8 @@ impl Run {
             .visit(self.engine.clone(), &self.run_telemetry)
             .await?;
 
+        debug!("visitor completed, calculating exit code");
+
         let exit_code = errors
             .iter()
             .filter_map(|err| err.exit_code())
@@ -577,6 +620,18 @@ impl Run {
             writeln!(std::io::stderr(), "{error_prefix}{err}").ok();
         }
 
+        // Clean up proxy server if it was started - CRITICAL: do this BEFORE
+        // visitor.finish() because visitor.finish() may trigger process manager
+        // shutdown which will kill child processes (including dev servers with
+        // WebSocket connections)
+        if let Some(shutdown_tx) = proxy_shutdown {
+            info!("Shutting down Turborepo proxy gracefully BEFORE stopping child processes");
+            let _ = shutdown_tx.send(());
+            debug!("Sent shutdown signal to proxy, waiting for websockets to close gracefully");
+            tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
+            info!("Proxy shutdown wait complete, proceeding with visitor cleanup");
+        }
+
         visitor
             .finish(
                 exit_code,
@@ -588,11 +643,7 @@ impl Run {
             )
             .await?;
 
-        // Clean up proxy server if it was started
-        if let Some(handle) = proxy_handle {
-            debug!("Shutting down Turborepo proxy");
-            handle.abort();
-        }
+        debug!("visitor.finish() completed, run cleanup done");
 
         Ok(exit_code)
     }
