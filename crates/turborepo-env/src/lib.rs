@@ -15,7 +15,7 @@ use thiserror::Error;
 
 pub mod platform;
 
-const DEFAULT_ENV_VARS: &[&str] = ["VERCEL_ANALYTICS_ID", "VERCEL_TARGET_ENV", "XDG_RUNTIME_DIR"].as_slice();
+const DEFAULT_ENV_VARS: &[&str] = ["VERCEL_ANALYTICS_ID", "VERCEL_TARGET_ENV"].as_slice();
 
 #[derive(Clone, Debug, Error)]
 pub enum Error {

@@ -444,6 +444,7 @@ impl<'a> TaskHasher<'a> {
                     "LANG",
                     "SHELL",
                     "PWD",
+                    "XDG_RUNTIME_DIR",
                     "CI",
                     "NODE_OPTIONS",
                     "COREPACK_HOME",
