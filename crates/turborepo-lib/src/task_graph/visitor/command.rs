@@ -255,7 +255,7 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
         } else {
             // TODO: leverage package manager to find the local proxy
             let program = package_dir.join_components(&["node_modules", ".bin", "microfrontends"]);
-            let mut args = vec![program.as_std_path(), "proxy", mfe_path.as_str(), "--names"];
+            let mut args = vec![program.as_str(), "proxy", mfe_path.as_str(), "--names"];
             args.extend(local_apps);
 
             let mut cmd = Command::new("node");
