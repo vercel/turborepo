@@ -51,8 +51,8 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- \
     && chmod -R a+w $RUSTUP_HOME $CARGO_HOME
 
 # Create cache directories for better performance
-RUN mkdir -p /home/vscode/.cache /home/vscode/.cargo \
-    && chown -R vscode:vscode /home/vscode/.cache /home/vscode/.cargo
+RUN mkdir -p /home/vscode/.cache /usr/local/cargo \
+    && chown -R vscode:vscode /home/vscode/.cache /usr/local/cargo
 
 # Set the default user to vscode
 USER vscode
