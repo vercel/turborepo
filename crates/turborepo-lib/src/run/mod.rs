@@ -294,9 +294,11 @@ impl Run {
 
     pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
         // Start Turborepo proxy if microfrontends are configured and should use
-        // built-in proxy
+        // built-in proxy and we're running dev tasks
         let proxy_shutdown = if let Some(mfe_configs) = &self.micro_frontend_configs {
-            if mfe_configs.should_use_turborepo_proxy() {
+            if mfe_configs.should_use_turborepo_proxy()
+                && mfe_configs.has_dev_task(self.engine.task_ids())
+            {
                 info!("Starting Turborepo microfrontends proxy");
                 // Load the config from the first package that has one
                 // Sort packages to ensure deterministic behavior

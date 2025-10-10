@@ -6,7 +6,7 @@ use std::{
 
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_ui::{cprintln, cwrite, cwriteln, ColorConfig, BOLD, BOLD_YELLOW_REVERSE, YELLOW};
+use turborepo_ui::{BOLD, BOLD_YELLOW_REVERSE, ColorConfig, YELLOW, cprintln, cwrite, cwriteln};
 use which::which;
 
 use crate::{engine::Engine, opts::GraphOpts, spawn_child};

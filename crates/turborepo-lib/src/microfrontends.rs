@@ -130,6 +130,10 @@ impl MicrofrontendsConfigs {
             .any(|config| config.use_turborepo_proxy)
     }
 
+    pub fn has_dev_task<'a>(&self, task_ids: impl Iterator<Item = &'a TaskId<'static>>) -> bool {
+        task_ids.into_iter().any(|task_id| task_id.task() == "dev")
+    }
+
     pub fn update_turbo_json(
         &self,
         package_name: &PackageName,
@@ -633,5 +637,53 @@ mod test {
             .update_turbo_json(&PackageName::Root, Ok(turbo_json))
             .unwrap();
         assert_eq!(actual.global_deps, &["web/microfrontends.json".to_owned()]);
+    }
+
+    #[test]
+    fn test_has_dev_task_with_dev() {
+        let configs = MicrofrontendsConfigs {
+            configs: HashMap::new(),
+            mfe_package: None,
+        };
+
+        let task_ids = vec![TaskId::new("web", "dev"), TaskId::new("docs", "build")];
+
+        assert!(configs.has_dev_task(task_ids.iter()));
+    }
+
+    #[test]
+    fn test_has_dev_task_without_dev() {
+        let configs = MicrofrontendsConfigs {
+            configs: HashMap::new(),
+            mfe_package: None,
+        };
+
+        let task_ids = vec![TaskId::new("web", "build"), TaskId::new("docs", "lint")];
+
+        assert!(!configs.has_dev_task(task_ids.iter()));
+    }
+
+    #[test]
+    fn test_has_dev_task_only_dev() {
+        let configs = MicrofrontendsConfigs {
+            configs: HashMap::new(),
+            mfe_package: None,
+        };
+
+        let task_ids = vec![TaskId::new("web", "dev")];
+
+        assert!(configs.has_dev_task(task_ids.iter()));
+    }
+
+    #[test]
+    fn test_has_dev_task_empty() {
+        let configs = MicrofrontendsConfigs {
+            configs: HashMap::new(),
+            mfe_package: None,
+        };
+
+        let task_ids: Vec<TaskId> = vec![];
+
+        assert!(!configs.has_dev_task(task_ids.iter()));
     }
 }
