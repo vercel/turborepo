@@ -295,7 +295,10 @@ impl Run {
     pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
         // Start Turborepo proxy if microfrontends are configured and should use
         // built-in proxy and we're running dev tasks
-        let proxy_shutdown = if let Some(mfe_configs) = &self.micro_frontend_configs {
+        let proxy_shutdown: Option<(
+            tokio::sync::broadcast::Sender<()>,
+            tokio::sync::oneshot::Receiver<()>,
+        )> = if let Some(mfe_configs) = &self.micro_frontend_configs {
             if mfe_configs.should_use_turborepo_proxy()
                 && mfe_configs.has_dev_task(self.engine.task_ids())
             {
@@ -316,7 +319,7 @@ impl Run {
                                 full_path.as_str(),
                             ) {
                                 Ok(config) => match ProxyServer::new(config) {
-                                    Ok(server) => {
+                                    Ok(mut server) => {
                                         if !server.check_port_available().await {
                                             return Err(Error::Proxy(
                                                 "Port is not available.".to_string(),
@@ -324,6 +327,10 @@ impl Run {
                                         }
 
                                         let shutdown_handle = server.shutdown_handle();
+
+                                        let (shutdown_complete_tx, shutdown_complete_rx) =
+                                            tokio::sync::oneshot::channel();
+                                        server.set_shutdown_complete_tx(shutdown_complete_tx);
 
                                         // Register signal handler to shutdown proxy when signal
                                         // received AND delay process manager from stopping
@@ -370,7 +377,7 @@ impl Run {
                                             }
                                         });
                                         info!("Turborepo proxy started successfully");
-                                        Some(shutdown_handle)
+                                        Some((shutdown_handle, shutdown_complete_rx))
                                     }
                                     Err(e) => {
                                         return Err(Error::Proxy(format!(
@@ -626,12 +633,26 @@ impl Run {
         // visitor.finish() because visitor.finish() may trigger process manager
         // shutdown which will kill child processes (including dev servers with
         // WebSocket connections)
-        if let Some(shutdown_tx) = proxy_shutdown {
+        if let Some((shutdown_tx, shutdown_complete_rx)) = proxy_shutdown {
             info!("Shutting down Turborepo proxy gracefully BEFORE stopping child processes");
             let _ = shutdown_tx.send(());
-            debug!("Sent shutdown signal to proxy, waiting for websockets to close gracefully");
-            tokio::time::sleep(tokio::time::Duration::from_millis(1500)).await;
-            info!("Proxy shutdown wait complete, proceeding with visitor cleanup");
+            debug!("Sent shutdown signal to proxy, waiting for completion signal");
+
+            match tokio::time::timeout(tokio::time::Duration::from_secs(2), shutdown_complete_rx)
+                .await
+            {
+                Ok(Ok(())) => {
+                    info!("Proxy shutdown completed successfully");
+                }
+                Ok(Err(_)) => {
+                    warn!("Proxy shutdown channel closed unexpectedly");
+                }
+                Err(_) => {
+                    warn!("Proxy shutdown timed out after 2 seconds");
+                }
+            }
+
+            info!("Proxy shutdown complete, proceeding with visitor cleanup");
         }
 
         visitor

@@ -18,7 +18,7 @@ use hyper::{
 use hyper_util::{client::legacy::Client, rt::TokioIo};
 use tokio::{
     net::TcpListener,
-    sync::{Mutex, broadcast},
+    sync::{Mutex, broadcast, oneshot},
 };
 use tokio_tungstenite::{WebSocketStream, tungstenite::protocol::Role};
 use tracing::{debug, error, info, warn};
@@ -48,6 +48,7 @@ pub struct ProxyServer {
     ws_handles: Arc<Mutex<Vec<WebSocketHandle>>>,
     ws_id_counter: Arc<AtomicUsize>,
     http_client: HttpClient,
+    shutdown_complete_tx: Option<oneshot::Sender<()>>,
 }
 
 impl ProxyServer {
@@ -68,11 +69,16 @@ impl ProxyServer {
             ws_handles: Arc::new(Mutex::new(Vec::new())),
             ws_id_counter: Arc::new(AtomicUsize::new(0)),
             http_client,
+            shutdown_complete_tx: None,
         })
     }
 
     pub fn shutdown_handle(&self) -> broadcast::Sender<()> {
         self.shutdown_tx.clone()
+    }
+
+    pub fn set_shutdown_complete_tx(&mut self, tx: oneshot::Sender<()>) {
+        self.shutdown_complete_tx = Some(tx);
     }
 
     pub async fn check_port_available(&self) -> bool {
@@ -98,6 +104,7 @@ impl ProxyServer {
 
         let mut shutdown_rx = self.shutdown_tx.subscribe();
         let ws_handles = self.ws_handles.clone();
+        let shutdown_complete_tx = self.shutdown_complete_tx;
 
         loop {
             tokio::select! {
@@ -116,6 +123,11 @@ impl ProxyServer {
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
                     info!("Turborepo microfrontends proxy shut down");
+
+                    if let Some(tx) = shutdown_complete_tx {
+                        let _ = tx.send(());
+                    }
+
                     return Ok(());
                 }
                 result = listener.accept() => {
