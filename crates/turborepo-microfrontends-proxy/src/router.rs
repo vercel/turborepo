@@ -56,9 +56,12 @@ impl Router {
 
         for task in config.development_tasks() {
             let app_name = task.application_name;
-            let port = config
-                .port(app_name)
-                .ok_or_else(|| format!("No port configured for application '{}'", app_name))?;
+            let port = config.port(app_name).ok_or_else(|| {
+                format!(
+                    "No port configured for application '{}'. Check your configuration file.",
+                    app_name
+                )
+            })?;
 
             app_ports.insert(app_name.to_string(), port);
 
@@ -66,7 +69,12 @@ impl Router {
                 let mut patterns = Vec::new();
                 for path_group in routing {
                     for path in &path_group.paths {
-                        patterns.push(PathPattern::parse(path)?);
+                        patterns.push(PathPattern::parse(path).map_err(|e| {
+                            format!(
+                                "Invalid routing pattern '{}' for application '{}': {}",
+                                path, app_name, e
+                            )
+                        })?);
                     }
                 }
 
@@ -81,7 +89,9 @@ impl Router {
         }
 
         let default_app = default_app.ok_or_else(|| {
-            "No default application found (application without routing configuration)".to_string()
+            "No default application found. At least one application without routing configuration \
+             is required."
+                .to_string()
         })?;
 
         let mut apps = Vec::new();
@@ -195,7 +205,11 @@ impl TrieNode {
 impl PathPattern {
     fn parse(pattern: &str) -> Result<Self, String> {
         if pattern.is_empty() {
-            return Err("Pattern cannot be empty".to_string());
+            return Err(
+                "Routing pattern cannot be empty. Provide a valid path pattern like '/' or \
+                 '/docs/:path*'"
+                    .to_string(),
+            );
         }
 
         let pattern = if pattern.starts_with('/') {
@@ -216,6 +230,13 @@ impl PathPattern {
 
             if segment.starts_with(':') {
                 let param_name = &segment[1..];
+                if param_name.is_empty() {
+                    return Err(
+                        "Parameter name cannot be empty after ':'. Use a format like ':id' or \
+                         ':path*'"
+                            .to_string(),
+                    );
+                }
                 if param_name.ends_with('*') {
                     segments.push(Segment::Wildcard);
                 } else {
@@ -341,7 +362,11 @@ mod tests {
 
     #[test]
     fn test_pattern_parse_errors() {
-        assert!(PathPattern::parse("").is_err());
+        let err = PathPattern::parse("").unwrap_err();
+        assert!(err.contains("cannot be empty"));
+
+        let err = PathPattern::parse("/api/:").unwrap_err();
+        assert!(err.contains("Parameter name cannot be empty"));
     }
 
     #[test]
