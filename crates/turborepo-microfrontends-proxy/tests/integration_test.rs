@@ -1,10 +1,12 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use hyper::{Request, Response, body::Incoming, service::service_fn};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 use turborepo_microfrontends::Config;
 use turborepo_microfrontends_proxy::{ProxyServer, Router};
+
+const WEBSOCKET_CLOSE_DELAY: Duration = Duration::from_millis(100);
 
 #[tokio::test]
 async fn test_port_availability_check_ipv4() {
@@ -217,7 +219,7 @@ async fn mock_server(
         }
     });
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    tokio::time::sleep(WEBSOCKET_CLOSE_DELAY).await;
     Ok(())
 }
 

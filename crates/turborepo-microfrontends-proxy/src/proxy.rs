@@ -35,6 +35,9 @@ type BoxedBody = BoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 type HttpClient = Client<hyper_util::client::legacy::connect::HttpConnector, Incoming>;
 
 const MAX_WEBSOCKET_CONNECTIONS: usize = 1000;
+const DEFAULT_PROXY_PORT: u16 = 3024;
+const WEBSOCKET_CLOSE_DELAY: Duration = Duration::from_millis(100);
+const SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(1);
 
 #[derive(Clone)]
 struct WebSocketHandle {
@@ -57,7 +60,7 @@ impl ProxyServer {
         let router = Router::new(&config)
             .map_err(|e| ProxyError::Config(format!("Failed to build router: {}", e)))?;
 
-        let port = config.local_proxy_port().unwrap_or(3024);
+        let port = config.local_proxy_port().unwrap_or(DEFAULT_PROXY_PORT);
         let (shutdown_tx, _) = broadcast::channel(1);
 
         let http_client = Client::builder(hyper_util::rt::TokioExecutor::new())
@@ -122,7 +125,7 @@ impl ProxyServer {
                         let _ = entry.value().shutdown_tx.send(());
                     }
 
-                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                    tokio::time::sleep(SHUTDOWN_GRACE_PERIOD).await;
 
                     info!("Turborepo microfrontends proxy shut down");
 
@@ -603,7 +606,7 @@ where
     let _ = server_sink.flush().await;
     debug!("Close frames sent and flushed for {}", app_name);
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    tokio::time::sleep(WEBSOCKET_CLOSE_DELAY).await;
 
     let _ = client_sink.close().await;
     let _ = server_sink.close().await;
@@ -738,28 +741,31 @@ mod tests {
     use super::*;
 
     fn create_test_config() -> Config {
-        let config_json = r#"{
+        let config_json = format!(
+            r#"{{
             "version": "1",
-            "options": {
-                "localProxyPort": 3024
-            },
-            "applications": {
-                "web": {
-                    "development": {
-                        "local": { "port": 3000 }
-                    }
-                },
-                "docs": {
-                    "development": {
-                        "local": { "port": 3001 }
-                    },
+            "options": {{
+                "localProxyPort": {}
+            }},
+            "applications": {{
+                "web": {{
+                    "development": {{
+                        "local": {{ "port": 3000 }}
+                    }}
+                }},
+                "docs": {{
+                    "development": {{
+                        "local": {{ "port": 3001 }}
+                    }},
                     "routing": [
-                        { "paths": ["/docs", "/docs/:path*"] }
+                        {{ "paths": ["/docs", "/docs/:path*"] }}
                     ]
-                }
-            }
-        }"#;
-        Config::from_str(config_json, "test.json").unwrap()
+                }}
+            }}
+        }}"#,
+            DEFAULT_PROXY_PORT
+        );
+        Config::from_str(&config_json, "test.json").unwrap()
     }
 
     #[test]
@@ -769,7 +775,7 @@ mod tests {
         assert!(result.is_ok());
 
         let server = result.unwrap();
-        assert_eq!(server.port, 3024);
+        assert_eq!(server.port, DEFAULT_PROXY_PORT);
     }
 
     #[test]
@@ -789,7 +795,7 @@ mod tests {
         assert!(result.is_ok());
 
         let server = result.unwrap();
-        assert_eq!(server.port, 3024);
+        assert_eq!(server.port, DEFAULT_PROXY_PORT);
     }
 
     #[test]
@@ -1033,12 +1039,12 @@ mod tests {
     #[test]
     fn test_proxy_error_bind_error_display() {
         let error = ProxyError::BindError {
-            port: 3024,
+            port: DEFAULT_PROXY_PORT,
             source: std::io::Error::new(std::io::ErrorKind::AddrInUse, "address in use"),
         };
 
         let error_string = error.to_string();
-        assert!(error_string.contains("3024"));
+        assert!(error_string.contains(&DEFAULT_PROXY_PORT.to_string()));
     }
 
     #[test]
@@ -1113,11 +1119,9 @@ mod tests {
             let _ = shutdown_tx.send(());
         });
 
-        let result1 =
-            tokio::time::timeout(tokio::time::Duration::from_millis(100), rx1.recv()).await;
+        let result1 = tokio::time::timeout(WEBSOCKET_CLOSE_DELAY, rx1.recv()).await;
 
-        let result2 =
-            tokio::time::timeout(tokio::time::Duration::from_millis(100), rx2.recv()).await;
+        let result2 = tokio::time::timeout(WEBSOCKET_CLOSE_DELAY, rx2.recv()).await;
 
         assert!(result1.is_ok());
         assert!(result2.is_ok());
@@ -1125,15 +1129,15 @@ mod tests {
 
     #[test]
     fn test_remote_addr_creation() {
-        let addr = SocketAddr::from(([127, 0, 0, 1], 3024));
-        assert_eq!(addr.port(), 3024);
+        let addr = SocketAddr::from(([127, 0, 0, 1], DEFAULT_PROXY_PORT));
+        assert_eq!(addr.port(), DEFAULT_PROXY_PORT);
         assert_eq!(addr.ip().to_string(), "127.0.0.1");
     }
 
     #[test]
     fn test_socket_addr_v4_creation() {
-        let addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 3024);
-        assert_eq!(addr.port(), 3024);
+        let addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), DEFAULT_PROXY_PORT);
+        assert_eq!(addr.port(), DEFAULT_PROXY_PORT);
         assert_eq!(addr.ip().to_string(), "127.0.0.1");
     }
 
@@ -1222,7 +1226,7 @@ mod tests {
             let _ = tx.send(());
         });
 
-        let result = tokio::time::timeout(tokio::time::Duration::from_millis(100), rx.recv()).await;
+        let result = tokio::time::timeout(WEBSOCKET_CLOSE_DELAY, rx.recv()).await;
 
         assert!(result.is_ok());
     }
@@ -1270,7 +1274,7 @@ mod tests {
             let _ = tx.send(());
         });
 
-        let result = tokio::time::timeout(tokio::time::Duration::from_millis(100), rx).await;
+        let result = tokio::time::timeout(WEBSOCKET_CLOSE_DELAY, rx).await;
 
         assert!(result.is_ok());
     }
