@@ -42,7 +42,7 @@ pub(crate) async fn handle_http_request(
 pub(crate) fn handle_forward_result(
     result: Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>>,
     path: String,
-    app_name: String,
+    app_name: impl AsRef<str>,
     port: u16,
     remote_addr: SocketAddr,
     request_type: &str,
@@ -52,28 +52,29 @@ pub(crate) fn handle_forward_result(
             debug!(
                 "Forwarding {} response from {} with status {} to client {}",
                 request_type,
-                app_name,
+                app_name.as_ref(),
                 response.status(),
                 remote_addr.ip()
             );
-            convert_response_to_boxed_body(response, app_name)
+            convert_response_to_boxed_body(response, app_name.as_ref())
         }
         Err(e) => {
             warn!(
                 "Failed to {} forward request to {}: {}",
                 request_type.to_lowercase(),
-                app_name,
+                app_name.as_ref(),
                 e
             );
-            build_error_response(path, app_name, port, e)
+            build_error_response(path, app_name.as_ref(), port, e)
         }
     }
 }
 
 pub(crate) fn convert_response_to_boxed_body(
     response: Response<Incoming>,
-    app_name: String,
+    app_name: &str,
 ) -> Result<Response<BoxedBody>, ProxyError> {
+    let app_name = app_name.to_string();
     let (parts, body) = response.into_parts();
     let boxed_body = body
         .map_err(move |e| {
@@ -86,11 +87,11 @@ pub(crate) fn convert_response_to_boxed_body(
 
 pub(crate) fn build_error_response(
     path: String,
-    app_name: String,
+    app_name: &str,
     port: u16,
     error: Box<dyn std::error::Error + Send + Sync>,
 ) -> Result<Response<BoxedBody>, ProxyError> {
-    let error_page = ErrorPage::new(path, app_name, port, error.to_string());
+    let error_page = ErrorPage::new(path, app_name.to_string(), port, error.to_string());
 
     let html = error_page.to_html();
     let response = Response::builder()

@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use turborepo_microfrontends::Config;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteMatch {
-    pub app_name: String,
+    pub app_name: Arc<str>,
     pub port: u16,
 }
 
@@ -17,7 +17,7 @@ pub struct Router {
 
 #[derive(Debug, Clone)]
 struct AppInfo {
-    app_name: String,
+    app_name: Arc<str>,
     port: u16,
 }
 
@@ -100,7 +100,7 @@ impl Router {
         for route in routes {
             let app_idx = apps.len();
             apps.push(AppInfo {
-                app_name: route.app_name,
+                app_name: Arc::from(route.app_name),
                 port: route.port,
             });
 
@@ -111,7 +111,7 @@ impl Router {
 
         let default_app_idx = apps.len();
         apps.push(AppInfo {
-            app_name: default_app.0,
+            app_name: Arc::from(default_app.0),
             port: default_app.1,
         });
 

@@ -42,9 +42,10 @@ pub(crate) async fn handle_websocket_request(
     ws_ctx: WebSocketContext,
     http_client: HttpClient,
 ) -> Result<Response<BoxedBody>, ProxyError> {
+    let app_name = route_match.app_name.clone();
     let result = forward_websocket(
         req,
-        &route_match.app_name,
+        app_name.clone(),
         route_match.port,
         remote_addr,
         req_upgrade,
@@ -56,7 +57,7 @@ pub(crate) async fn handle_websocket_request(
     handle_forward_result(
         result,
         path,
-        route_match.app_name,
+        app_name,
         route_match.port,
         remote_addr,
         "WebSocket",
@@ -65,7 +66,7 @@ pub(crate) async fn handle_websocket_request(
 
 async fn forward_websocket(
     mut req: Request<Incoming>,
-    app_name: &str,
+    app_name: Arc<str>,
     port: u16,
     remote_addr: SocketAddr,
     client_upgrade: hyper::upgrade::OnUpgrade,
@@ -125,7 +126,7 @@ fn prepare_websocket_request(
 }
 
 fn spawn_websocket_proxy(
-    app_name: &str,
+    app_name: Arc<str>,
     remote_addr: SocketAddr,
     client_upgrade: hyper::upgrade::OnUpgrade,
     server_upgrade: hyper::upgrade::OnUpgrade,
@@ -149,12 +150,11 @@ fn spawn_websocket_proxy(
         },
     );
 
-    let app_name_clone = app_name.to_string();
     tokio::spawn(async move {
         handle_websocket_upgrades(
             client_upgrade,
             server_upgrade,
-            app_name_clone,
+            app_name,
             ws_shutdown_tx,
             ws_handles,
             ws_id,
@@ -168,7 +168,7 @@ fn spawn_websocket_proxy(
 async fn handle_websocket_upgrades(
     client_upgrade: hyper::upgrade::OnUpgrade,
     server_upgrade: hyper::upgrade::OnUpgrade,
-    app_name: String,
+    app_name: Arc<str>,
     ws_shutdown_tx: broadcast::Sender<()>,
     ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id: usize,
@@ -206,7 +206,7 @@ async fn handle_websocket_upgrades(
 async fn proxy_websocket_connection(
     client_upgraded: Upgraded,
     server_upgraded: Upgraded,
-    app_name: String,
+    app_name: Arc<str>,
     ws_shutdown_tx: broadcast::Sender<()>,
     ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id: usize,

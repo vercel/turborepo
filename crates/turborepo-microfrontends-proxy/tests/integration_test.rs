@@ -83,19 +83,19 @@ async fn test_router_with_config() {
     let router = Router::new(&config).unwrap();
 
     let route = router.match_route("/");
-    assert_eq!(route.app_name, "web");
+    assert_eq!(route.app_name.as_ref(), "web");
     assert_eq!(route.port, 3000);
 
     let route = router.match_route("/docs");
-    assert_eq!(route.app_name, "docs");
+    assert_eq!(route.app_name.as_ref(), "docs");
     assert_eq!(route.port, 3001);
 
     let route = router.match_route("/docs/api/reference");
-    assert_eq!(route.app_name, "docs");
+    assert_eq!(route.app_name.as_ref(), "docs");
     assert_eq!(route.port, 3001);
 
     let route = router.match_route("/about");
-    assert_eq!(route.app_name, "web");
+    assert_eq!(route.app_name.as_ref(), "web");
     assert_eq!(route.port, 3000);
 }
 
@@ -131,12 +131,12 @@ async fn test_multiple_child_apps() {
     let config = Config::from_str(config_json, "test.json").unwrap();
     let router = Router::new(&config).unwrap();
 
-    assert_eq!(router.match_route("/").app_name, "main");
-    assert_eq!(router.match_route("/blog").app_name, "blog");
-    assert_eq!(router.match_route("/blog/post").app_name, "blog");
-    assert_eq!(router.match_route("/docs").app_name, "docs");
-    assert_eq!(router.match_route("/docs/api").app_name, "docs");
-    assert_eq!(router.match_route("/other").app_name, "main");
+    assert_eq!(router.match_route("/").app_name.as_ref(), "main");
+    assert_eq!(router.match_route("/blog").app_name.as_ref(), "blog");
+    assert_eq!(router.match_route("/blog/post").app_name.as_ref(), "blog");
+    assert_eq!(router.match_route("/docs").app_name.as_ref(), "docs");
+    assert_eq!(router.match_route("/docs/api").app_name.as_ref(), "docs");
+    assert_eq!(router.match_route("/other").app_name.as_ref(), "main");
 }
 
 #[tokio::test]
@@ -185,11 +185,17 @@ async fn test_pattern_matching_edge_cases() {
     let config = Config::from_str(config_json, "test.json").unwrap();
     let router = Router::new(&config).unwrap();
 
-    assert_eq!(router.match_route("/api/v1/users").app_name, "api");
-    assert_eq!(router.match_route("/api/v1/posts").app_name, "api");
+    assert_eq!(router.match_route("/api/v1/users").app_name.as_ref(), "api");
+    assert_eq!(router.match_route("/api/v1/posts").app_name.as_ref(), "api");
 
-    assert_eq!(router.match_route("/api/v1/users/123").app_name, "main");
-    assert_eq!(router.match_route("/api/v2/users").app_name, "main");
+    assert_eq!(
+        router.match_route("/api/v1/users/123").app_name.as_ref(),
+        "main"
+    );
+    assert_eq!(
+        router.match_route("/api/v2/users").app_name.as_ref(),
+        "main"
+    );
 }
 
 async fn mock_server(
@@ -307,10 +313,10 @@ async fn test_websocket_routing() {
     let router = Router::new(&config).unwrap();
 
     let route = router.match_route("/api/ws");
-    assert_eq!(route.app_name, "api");
+    assert_eq!(route.app_name.as_ref(), "api");
     assert_eq!(route.port, 3001);
 
     let route = router.match_route("/ws");
-    assert_eq!(route.app_name, "web");
+    assert_eq!(route.app_name.as_ref(), "web");
     assert_eq!(route.port, 3000);
 }
