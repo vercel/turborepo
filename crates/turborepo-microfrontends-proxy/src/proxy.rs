@@ -6,6 +6,7 @@ use std::{
     },
 };
 
+use dashmap::DashMap;
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{
     Request, Response, StatusCode,
@@ -18,7 +19,7 @@ use hyper::{
 use hyper_util::{client::legacy::Client, rt::TokioIo};
 use tokio::{
     net::TcpListener,
-    sync::{Mutex, broadcast, oneshot},
+    sync::{broadcast, oneshot},
 };
 use tokio_tungstenite::{WebSocketStream, tungstenite::protocol::Role};
 use tracing::{debug, error, info, warn};
@@ -36,7 +37,6 @@ const MAX_WEBSOCKET_CONNECTIONS: usize = 1000;
 
 #[derive(Clone)]
 struct WebSocketHandle {
-    id: usize,
     shutdown_tx: broadcast::Sender<()>,
 }
 
@@ -45,7 +45,7 @@ pub struct ProxyServer {
     router: Arc<Router>,
     port: u16,
     shutdown_tx: broadcast::Sender<()>,
-    ws_handles: Arc<Mutex<Vec<WebSocketHandle>>>,
+    ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id_counter: Arc<AtomicUsize>,
     http_client: HttpClient,
     shutdown_complete_tx: Option<oneshot::Sender<()>>,
@@ -66,7 +66,7 @@ impl ProxyServer {
             router: Arc::new(router),
             port,
             shutdown_tx,
-            ws_handles: Arc::new(Mutex::new(Vec::new())),
+            ws_handles: Arc::new(DashMap::new()),
             ws_id_counter: Arc::new(AtomicUsize::new(0)),
             http_client,
             shutdown_complete_tx: None,
@@ -111,14 +111,11 @@ impl ProxyServer {
                 _ = shutdown_rx.recv() => {
                     info!("Received shutdown signal, closing websocket connections...");
 
-                    let handles = ws_handles.lock().await;
-                    info!("Closing {} active websocket connection(s)", handles.len());
+                    info!("Closing {} active websocket connection(s)", ws_handles.len());
 
-                    for handle in handles.iter() {
-                        let _ = handle.shutdown_tx.send(());
+                    for entry in ws_handles.iter() {
+                        let _ = entry.value().shutdown_tx.send(());
                     }
-
-                    drop(handles);
 
                     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
 
@@ -223,7 +220,7 @@ async fn handle_request(
     router: Arc<Router>,
     _config: Arc<Config>,
     remote_addr: SocketAddr,
-    ws_handles: Arc<Mutex<Vec<WebSocketHandle>>>,
+    ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id_counter: Arc<AtomicUsize>,
     http_client: HttpClient,
 ) -> Result<Response<BoxedBody>, ProxyError> {
@@ -367,7 +364,7 @@ async fn forward_websocket(
     port: u16,
     remote_addr: SocketAddr,
     client_upgrade: hyper::upgrade::OnUpgrade,
-    ws_handles: Arc<Mutex<Vec<WebSocketHandle>>>,
+    ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id_counter: Arc<AtomicUsize>,
     http_client: HttpClient,
 ) -> Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
@@ -404,8 +401,7 @@ async fn forward_websocket(
 
         let (ws_shutdown_tx, _) = broadcast::channel(1);
         let ws_id = {
-            let mut handles = ws_handles.lock().await;
-            if handles.len() >= MAX_WEBSOCKET_CONNECTIONS {
+            if ws_handles.len() >= MAX_WEBSOCKET_CONNECTIONS {
                 warn!(
                     "WebSocket connection limit reached ({} connections), rejecting new \
                      connection from {}",
@@ -415,10 +411,12 @@ async fn forward_websocket(
             }
 
             let id = ws_id_counter.fetch_add(1, Ordering::SeqCst);
-            handles.push(WebSocketHandle {
+            ws_handles.insert(
                 id,
-                shutdown_tx: ws_shutdown_tx.clone(),
-            });
+                WebSocketHandle {
+                    shutdown_tx: ws_shutdown_tx.clone(),
+                },
+            );
             id
         };
 
@@ -444,13 +442,11 @@ async fn forward_websocket(
                 }
                 (Err(e), _) => {
                     error!("Failed to upgrade client WebSocket connection: {}", e);
-                    let mut handles = ws_handles.lock().await;
-                    handles.retain(|h| h.id != ws_id);
+                    ws_handles.remove(&ws_id);
                 }
                 (_, Err(e)) => {
                     error!("Failed to upgrade server WebSocket connection: {}", e);
-                    let mut handles = ws_handles.lock().await;
-                    handles.retain(|h| h.id != ws_id);
+                    ws_handles.remove(&ws_id);
                 }
             }
         });
@@ -464,7 +460,7 @@ async fn proxy_websocket_connection(
     server_upgraded: Upgraded,
     app_name: String,
     ws_shutdown_tx: broadcast::Sender<()>,
-    ws_handles: Arc<Mutex<Vec<WebSocketHandle>>>,
+    ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id: usize,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use futures_util::{SinkExt, StreamExt};
@@ -558,8 +554,7 @@ async fn proxy_websocket_connection(
         }
     }
 
-    let mut handles = ws_handles.lock().await;
-    handles.retain(|h| h.id != ws_id);
+    ws_handles.remove(&ws_id);
     debug!(
         "WebSocket connection closed for {} (id: {})",
         app_name, ws_id
@@ -833,24 +828,15 @@ mod tests {
     #[test]
     fn test_websocket_handle_creation() {
         let (tx, _rx) = broadcast::channel(1);
-        let handle = WebSocketHandle {
-            id: 42,
-            shutdown_tx: tx,
-        };
-
-        assert_eq!(handle.id, 42);
+        let _handle = WebSocketHandle { shutdown_tx: tx };
     }
 
     #[test]
     fn test_websocket_handle_clone() {
         let (tx, _rx) = broadcast::channel(1);
-        let handle = WebSocketHandle {
-            id: 42,
-            shutdown_tx: tx,
-        };
+        let handle = WebSocketHandle { shutdown_tx: tx };
 
-        let cloned = handle.clone();
-        assert_eq!(cloned.id, 42);
+        let _cloned = handle.clone();
     }
 
     #[tokio::test]
@@ -868,57 +854,47 @@ mod tests {
 
     #[tokio::test]
     async fn test_websocket_handles_management() {
-        let ws_handles: Arc<Mutex<Vec<WebSocketHandle>>> = Arc::new(Mutex::new(Vec::new()));
+        let ws_handles: Arc<DashMap<usize, WebSocketHandle>> = Arc::new(DashMap::new());
         let (tx, _rx) = broadcast::channel(1);
 
-        {
-            let mut handles = ws_handles.lock().await;
-            handles.push(WebSocketHandle {
-                id: 1,
+        ws_handles.insert(
+            1,
+            WebSocketHandle {
                 shutdown_tx: tx.clone(),
-            });
-            handles.push(WebSocketHandle {
-                id: 2,
+            },
+        );
+        ws_handles.insert(
+            2,
+            WebSocketHandle {
                 shutdown_tx: tx.clone(),
-            });
-        }
+            },
+        );
 
-        {
-            let handles = ws_handles.lock().await;
-            assert_eq!(handles.len(), 2);
-        }
+        assert_eq!(ws_handles.len(), 2);
 
-        {
-            let mut handles = ws_handles.lock().await;
-            handles.retain(|h| h.id != 1);
-        }
+        ws_handles.remove(&1);
 
-        {
-            let handles = ws_handles.lock().await;
-            assert_eq!(handles.len(), 1);
-            assert_eq!(handles[0].id, 2);
-        }
+        assert_eq!(ws_handles.len(), 1);
+        assert!(ws_handles.contains_key(&2));
     }
 
     #[tokio::test]
     async fn test_max_websocket_connections() {
         assert_eq!(MAX_WEBSOCKET_CONNECTIONS, 1000);
 
-        let ws_handles: Arc<Mutex<Vec<WebSocketHandle>>> = Arc::new(Mutex::new(Vec::new()));
+        let ws_handles: Arc<DashMap<usize, WebSocketHandle>> = Arc::new(DashMap::new());
         let (tx, _rx) = broadcast::channel(1);
 
-        {
-            let mut handles = ws_handles.lock().await;
-            for i in 0..MAX_WEBSOCKET_CONNECTIONS {
-                handles.push(WebSocketHandle {
-                    id: i,
+        for i in 0..MAX_WEBSOCKET_CONNECTIONS {
+            ws_handles.insert(
+                i,
+                WebSocketHandle {
                     shutdown_tx: tx.clone(),
-                });
-            }
+                },
+            );
         }
 
-        let handles = ws_handles.lock().await;
-        assert_eq!(handles.len(), MAX_WEBSOCKET_CONNECTIONS);
+        assert_eq!(ws_handles.len(), MAX_WEBSOCKET_CONNECTIONS);
     }
 
     #[test]
@@ -1105,7 +1081,6 @@ mod tests {
     async fn test_websocket_handle_shutdown_signal() {
         let (tx, mut rx) = broadcast::channel(1);
         let _handle = WebSocketHandle {
-            id: 1,
             shutdown_tx: tx.clone(),
         };
 
