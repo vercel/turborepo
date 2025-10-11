@@ -237,13 +237,12 @@ async fn handle_request(
 
     if is_websocket_upgrade(&req) {
         debug!("WebSocket upgrade request detected");
-
         let req_upgrade = hyper::upgrade::on(&mut req);
 
-        match forward_websocket(
+        handle_websocket_request(
             req,
-            &route_match.app_name,
-            route_match.port,
+            route_match,
+            path,
             remote_addr,
             req_upgrade,
             ws_handles,
@@ -251,111 +250,121 @@ async fn handle_request(
             http_client,
         )
         .await
-        {
-            Ok(response) => {
-                let status = response.status();
-                debug!(
-                    "Forwarding WebSocket response from {} with status {} to client {}",
-                    route_match.app_name,
-                    status,
-                    remote_addr.ip()
-                );
-                let (parts, body) = response.into_parts();
-                let app_name = route_match.app_name.clone();
-                let boxed_body = body
-                    .map_err(move |e| {
-                        error!(
-                            "Error reading body from WebSocket upgrade {}: {}",
-                            app_name, e
-                        );
-                        Box::new(e) as Box<dyn std::error::Error + Send + Sync>
-                    })
-                    .boxed();
-                Ok(Response::from_parts(parts, boxed_body))
-            }
-            Err(e) => {
-                warn!(
-                    "Failed to establish WebSocket connection to {}: {}",
-                    route_match.app_name, e
-                );
-
-                let error_page = ErrorPage::new(
-                    path,
-                    route_match.app_name.clone(),
-                    route_match.port,
-                    e.to_string(),
-                );
-
-                let html = error_page.to_html();
-                let response = Response::builder()
-                    .status(StatusCode::BAD_GATEWAY)
-                    .header("Content-Type", "text/html; charset=utf-8")
-                    .body(
-                        Full::new(Bytes::from(html))
-                            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
-                            .boxed(),
-                    )
-                    .map_err(ProxyError::Http)?;
-
-                Ok(response)
-            }
-        }
     } else {
-        match forward_request(
-            req,
-            &route_match.app_name,
-            route_match.port,
-            remote_addr,
-            http_client,
-        )
-        .await
-        {
-            Ok(response) => {
-                let status = response.status();
-                let (parts, body) = response.into_parts();
-                debug!(
-                    "Forwarding response from {} with status {} to client {}",
-                    route_match.app_name,
-                    status,
-                    remote_addr.ip()
-                );
-                let app_name = route_match.app_name.clone();
-                let boxed_body = body
-                    .map_err(move |e| {
-                        error!("Error reading body from upstream {}: {}", app_name, e);
-                        Box::new(e) as Box<dyn std::error::Error + Send + Sync>
-                    })
-                    .boxed();
-                Ok(Response::from_parts(parts, boxed_body))
-            }
-            Err(e) => {
-                warn!(
-                    "Failed to forward request to {}: {}",
-                    route_match.app_name, e
-                );
+        handle_http_request(req, route_match, path, remote_addr, http_client).await
+    }
+}
 
-                let error_page = ErrorPage::new(
-                    path,
-                    route_match.app_name.clone(),
-                    route_match.port,
-                    e.to_string(),
-                );
-
-                let html = error_page.to_html();
-                let response = Response::builder()
-                    .status(StatusCode::BAD_GATEWAY)
-                    .header("Content-Type", "text/html; charset=utf-8")
-                    .body(
-                        Full::new(Bytes::from(html))
-                            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
-                            .boxed(),
-                    )
-                    .map_err(ProxyError::Http)?;
-
-                Ok(response)
-            }
+async fn handle_websocket_request(
+    req: Request<Incoming>,
+    route_match: crate::router::RouteMatch,
+    path: String,
+    remote_addr: SocketAddr,
+    req_upgrade: hyper::upgrade::OnUpgrade,
+    ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
+    ws_id_counter: Arc<AtomicUsize>,
+    http_client: HttpClient,
+) -> Result<Response<BoxedBody>, ProxyError> {
+    match forward_websocket(
+        req,
+        &route_match.app_name,
+        route_match.port,
+        remote_addr,
+        req_upgrade,
+        ws_handles,
+        ws_id_counter,
+        http_client,
+    )
+    .await
+    {
+        Ok(response) => {
+            debug!(
+                "Forwarding WebSocket response from {} with status {} to client {}",
+                route_match.app_name,
+                response.status(),
+                remote_addr.ip()
+            );
+            convert_response_to_boxed_body(response, route_match.app_name.clone())
+        }
+        Err(e) => {
+            warn!(
+                "Failed to establish WebSocket connection to {}: {}",
+                route_match.app_name, e
+            );
+            build_error_response(path, route_match.app_name, route_match.port, e)
         }
     }
+}
+
+async fn handle_http_request(
+    req: Request<Incoming>,
+    route_match: crate::router::RouteMatch,
+    path: String,
+    remote_addr: SocketAddr,
+    http_client: HttpClient,
+) -> Result<Response<BoxedBody>, ProxyError> {
+    match forward_request(
+        req,
+        &route_match.app_name,
+        route_match.port,
+        remote_addr,
+        http_client,
+    )
+    .await
+    {
+        Ok(response) => {
+            debug!(
+                "Forwarding response from {} with status {} to client {}",
+                route_match.app_name,
+                response.status(),
+                remote_addr.ip()
+            );
+            convert_response_to_boxed_body(response, route_match.app_name.clone())
+        }
+        Err(e) => {
+            warn!(
+                "Failed to forward request to {}: {}",
+                route_match.app_name, e
+            );
+            build_error_response(path, route_match.app_name, route_match.port, e)
+        }
+    }
+}
+
+fn convert_response_to_boxed_body(
+    response: Response<Incoming>,
+    app_name: String,
+) -> Result<Response<BoxedBody>, ProxyError> {
+    let (parts, body) = response.into_parts();
+    let boxed_body = body
+        .map_err(move |e| {
+            error!("Error reading body from upstream {}: {}", app_name, e);
+            Box::new(e) as Box<dyn std::error::Error + Send + Sync>
+        })
+        .boxed();
+    Ok(Response::from_parts(parts, boxed_body))
+}
+
+fn build_error_response(
+    path: String,
+    app_name: String,
+    port: u16,
+    error: Box<dyn std::error::Error + Send + Sync>,
+) -> Result<Response<BoxedBody>, ProxyError> {
+    let error_page = ErrorPage::new(path, app_name, port, error.to_string());
+
+    let html = error_page.to_html();
+    let response = Response::builder()
+        .status(StatusCode::BAD_GATEWAY)
+        .header("Content-Type", "text/html; charset=utf-8")
+        .body(
+            Full::new(Bytes::from(html))
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+                .boxed(),
+        )
+        .map_err(ProxyError::Http)?;
+
+    Ok(response)
 }
 
 async fn forward_websocket(
@@ -368,6 +377,36 @@ async fn forward_websocket(
     ws_id_counter: Arc<AtomicUsize>,
     http_client: HttpClient,
 ) -> Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
+    prepare_websocket_request(&mut req, port, remote_addr)?;
+
+    let mut response = http_client.request(req).await?;
+
+    debug!(
+        "WebSocket upgrade response from {}: {}",
+        app_name,
+        response.status()
+    );
+
+    if response.status() == StatusCode::SWITCHING_PROTOCOLS {
+        let server_upgrade = hyper::upgrade::on(&mut response);
+        spawn_websocket_proxy(
+            app_name,
+            remote_addr,
+            client_upgrade,
+            server_upgrade,
+            ws_handles,
+            ws_id_counter,
+        )?;
+    }
+
+    Ok(response)
+}
+
+fn prepare_websocket_request(
+    req: &mut Request<Incoming>,
+    port: u16,
+    remote_addr: SocketAddr,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let target_uri = format!(
         "http://localhost:{}{}",
         port,
@@ -387,72 +426,86 @@ async fn forward_websocket(
 
     *req.uri_mut() = target_uri.parse()?;
 
-    let mut response = http_client.request(req).await?;
+    Ok(())
+}
 
-    debug!(
-        "WebSocket upgrade response from {}: {}",
-        app_name,
-        response.status()
-    );
-
-    if response.status() == StatusCode::SWITCHING_PROTOCOLS {
-        let server_upgrade = hyper::upgrade::on(&mut response);
-        let app_name_clone = app_name.to_string();
-
-        let (ws_shutdown_tx, _) = broadcast::channel(1);
-        let ws_id = {
-            if ws_handles.len() >= MAX_WEBSOCKET_CONNECTIONS {
-                warn!(
-                    "WebSocket connection limit reached ({} connections), rejecting new \
-                     connection from {}",
-                    MAX_WEBSOCKET_CONNECTIONS, remote_addr
-                );
-                return Err("WebSocket connection limit reached".into());
-            }
-
-            let id = ws_id_counter.fetch_add(1, Ordering::SeqCst);
-            ws_handles.insert(
-                id,
-                WebSocketHandle {
-                    shutdown_tx: ws_shutdown_tx.clone(),
-                },
-            );
-            id
-        };
-
-        tokio::spawn(async move {
-            let client_result = client_upgrade.await;
-            let server_result = server_upgrade.await;
-
-            match (client_result, server_result) {
-                (Ok(client_upgraded), Ok(server_upgraded)) => {
-                    debug!("Both WebSocket upgrades successful for {}", app_name_clone);
-                    if let Err(e) = proxy_websocket_connection(
-                        client_upgraded,
-                        server_upgraded,
-                        app_name_clone,
-                        ws_shutdown_tx,
-                        ws_handles.clone(),
-                        ws_id,
-                    )
-                    .await
-                    {
-                        error!("WebSocket proxy error: {}", e);
-                    }
-                }
-                (Err(e), _) => {
-                    error!("Failed to upgrade client WebSocket connection: {}", e);
-                    ws_handles.remove(&ws_id);
-                }
-                (_, Err(e)) => {
-                    error!("Failed to upgrade server WebSocket connection: {}", e);
-                    ws_handles.remove(&ws_id);
-                }
-            }
-        });
+fn spawn_websocket_proxy(
+    app_name: &str,
+    remote_addr: SocketAddr,
+    client_upgrade: hyper::upgrade::OnUpgrade,
+    server_upgrade: hyper::upgrade::OnUpgrade,
+    ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
+    ws_id_counter: Arc<AtomicUsize>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    if ws_handles.len() >= MAX_WEBSOCKET_CONNECTIONS {
+        warn!(
+            "WebSocket connection limit reached ({} connections), rejecting new connection from {}",
+            MAX_WEBSOCKET_CONNECTIONS, remote_addr
+        );
+        return Err("WebSocket connection limit reached".into());
     }
 
-    Ok(response)
+    let (ws_shutdown_tx, _) = broadcast::channel(1);
+    let ws_id = ws_id_counter.fetch_add(1, Ordering::SeqCst);
+    ws_handles.insert(
+        ws_id,
+        WebSocketHandle {
+            shutdown_tx: ws_shutdown_tx.clone(),
+        },
+    );
+
+    let app_name_clone = app_name.to_string();
+    tokio::spawn(async move {
+        handle_websocket_upgrades(
+            client_upgrade,
+            server_upgrade,
+            app_name_clone,
+            ws_shutdown_tx,
+            ws_handles,
+            ws_id,
+        )
+        .await;
+    });
+
+    Ok(())
+}
+
+async fn handle_websocket_upgrades(
+    client_upgrade: hyper::upgrade::OnUpgrade,
+    server_upgrade: hyper::upgrade::OnUpgrade,
+    app_name: String,
+    ws_shutdown_tx: broadcast::Sender<()>,
+    ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
+    ws_id: usize,
+) {
+    let client_result = client_upgrade.await;
+    let server_result = server_upgrade.await;
+
+    match (client_result, server_result) {
+        (Ok(client_upgraded), Ok(server_upgraded)) => {
+            debug!("Both WebSocket upgrades successful for {}", app_name);
+            if let Err(e) = proxy_websocket_connection(
+                client_upgraded,
+                server_upgraded,
+                app_name,
+                ws_shutdown_tx,
+                ws_handles.clone(),
+                ws_id,
+            )
+            .await
+            {
+                error!("WebSocket proxy error: {}", e);
+            }
+        }
+        (Err(e), _) => {
+            error!("Failed to upgrade client WebSocket connection: {}", e);
+            ws_handles.remove(&ws_id);
+        }
+        (_, Err(e)) => {
+            error!("Failed to upgrade server WebSocket connection: {}", e);
+            ws_handles.remove(&ws_id);
+        }
+    }
 }
 
 async fn proxy_websocket_connection(
@@ -463,8 +516,7 @@ async fn proxy_websocket_connection(
     ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id: usize,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    use futures_util::{SinkExt, StreamExt};
-    use tokio_tungstenite::tungstenite::Message;
+    use futures_util::StreamExt;
 
     let client_ws =
         WebSocketStream::from_raw_socket(TokioIo::new(client_upgraded), Role::Server, None).await;
@@ -482,85 +534,148 @@ async fn proxy_websocket_connection(
     loop {
         tokio::select! {
             _ = shutdown_rx.recv() => {
-                info!("Received shutdown signal for websocket connection to {}", app_name);
-                debug!("Sending close frames to client and server for {}", app_name);
-                // Send close frames to both sides
-                if let Err(e) = client_sink.send(Message::Close(None)).await {
-                    warn!("Failed to send close frame to client for {}: {}", app_name, e);
-                }
-                if let Err(e) = server_sink.send(Message::Close(None)).await {
-                    warn!("Failed to send close frame to server for {}: {}", app_name, e);
-                }
-                let _ = client_sink.flush().await;
-                let _ = server_sink.flush().await;
-                debug!("Close frames sent and flushed for {}", app_name);
-
-                // Give a moment for the close handshake to complete
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-                let _ = client_sink.close().await;
-                let _ = server_sink.close().await;
-                info!("Websocket connection to {} closed gracefully", app_name);
+                handle_websocket_shutdown(&mut client_sink, &mut server_sink, &app_name).await;
                 break;
             }
             client_msg = client_stream.next() => {
-                match client_msg {
-                    Some(Ok(msg)) => {
-                        if msg.is_close() {
-                            debug!("Client sent close frame");
-                            let _ = server_sink.send(msg).await;
-                            let _ = server_sink.close().await;
-                            break;
-                        }
-                        if let Err(e) = server_sink.send(msg).await {
-                            error!("Error forwarding client -> server: {}", e);
-                            break;
-                        }
-                    }
-                    Some(Err(e)) => {
-                        error!("Error reading from client: {}", e);
-                        break;
-                    }
-                    None => {
-                        debug!("Client stream ended");
-                        break;
-                    }
+                if !handle_client_message(client_msg, &mut server_sink).await {
+                    break;
                 }
             }
             server_msg = server_stream.next() => {
-                match server_msg {
-                    Some(Ok(msg)) => {
-                        if msg.is_close() {
-                            debug!("Server sent close frame");
-                            let _ = client_sink.send(msg).await;
-                            let _ = client_sink.close().await;
-                            break;
-                        }
-                        if let Err(e) = client_sink.send(msg).await {
-                            error!("Error forwarding server -> client: {}", e);
-                            break;
-                        }
-                    }
-                    Some(Err(e)) => {
-                        error!("Error reading from server: {}", e);
-                        break;
-                    }
-                    None => {
-                        debug!("Server stream ended");
-                        break;
-                    }
+                if !handle_server_message(server_msg, &mut client_sink).await {
+                    break;
                 }
             }
         }
     }
 
+    cleanup_websocket_connection(&ws_handles, ws_id, &app_name);
+
+    Ok(())
+}
+
+async fn handle_websocket_shutdown<S>(client_sink: &mut S, server_sink: &mut S, app_name: &str)
+where
+    S: futures_util::Sink<tokio_tungstenite::tungstenite::Message> + Unpin,
+    <S as futures_util::Sink<tokio_tungstenite::tungstenite::Message>>::Error: std::fmt::Display,
+{
+    use futures_util::SinkExt;
+    use tokio_tungstenite::tungstenite::Message;
+
+    info!(
+        "Received shutdown signal for websocket connection to {}",
+        app_name
+    );
+    debug!("Sending close frames to client and server for {}", app_name);
+
+    if let Err(e) = client_sink.send(Message::Close(None)).await {
+        warn!(
+            "Failed to send close frame to client for {}: {}",
+            app_name, e
+        );
+    }
+    if let Err(e) = server_sink.send(Message::Close(None)).await {
+        warn!(
+            "Failed to send close frame to server for {}: {}",
+            app_name, e
+        );
+    }
+    let _ = client_sink.flush().await;
+    let _ = server_sink.flush().await;
+    debug!("Close frames sent and flushed for {}", app_name);
+
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+    let _ = client_sink.close().await;
+    let _ = server_sink.close().await;
+    info!("Websocket connection to {} closed gracefully", app_name);
+}
+
+async fn handle_client_message<S>(
+    client_msg: Option<
+        Result<tokio_tungstenite::tungstenite::Message, tokio_tungstenite::tungstenite::Error>,
+    >,
+    server_sink: &mut S,
+) -> bool
+where
+    S: futures_util::Sink<tokio_tungstenite::tungstenite::Message> + Unpin,
+    <S as futures_util::Sink<tokio_tungstenite::tungstenite::Message>>::Error: std::fmt::Display,
+{
+    use futures_util::SinkExt;
+
+    match client_msg {
+        Some(Ok(msg)) => {
+            if msg.is_close() {
+                debug!("Client sent close frame");
+                let _ = server_sink.send(msg).await;
+                let _ = server_sink.close().await;
+                return false;
+            }
+            if let Err(e) = server_sink.send(msg).await {
+                error!("Error forwarding client -> server: {}", e);
+                return false;
+            }
+            true
+        }
+        Some(Err(e)) => {
+            error!("Error reading from client: {}", e);
+            false
+        }
+        None => {
+            debug!("Client stream ended");
+            false
+        }
+    }
+}
+
+async fn handle_server_message<S>(
+    server_msg: Option<
+        Result<tokio_tungstenite::tungstenite::Message, tokio_tungstenite::tungstenite::Error>,
+    >,
+    client_sink: &mut S,
+) -> bool
+where
+    S: futures_util::Sink<tokio_tungstenite::tungstenite::Message> + Unpin,
+    <S as futures_util::Sink<tokio_tungstenite::tungstenite::Message>>::Error: std::fmt::Display,
+{
+    use futures_util::SinkExt;
+
+    match server_msg {
+        Some(Ok(msg)) => {
+            if msg.is_close() {
+                debug!("Server sent close frame");
+                let _ = client_sink.send(msg).await;
+                let _ = client_sink.close().await;
+                return false;
+            }
+            if let Err(e) = client_sink.send(msg).await {
+                error!("Error forwarding server -> client: {}", e);
+                return false;
+            }
+            true
+        }
+        Some(Err(e)) => {
+            error!("Error reading from server: {}", e);
+            false
+        }
+        None => {
+            debug!("Server stream ended");
+            false
+        }
+    }
+}
+
+fn cleanup_websocket_connection(
+    ws_handles: &Arc<DashMap<usize, WebSocketHandle>>,
+    ws_id: usize,
+    app_name: &str,
+) {
     ws_handles.remove(&ws_id);
     debug!(
         "WebSocket connection closed for {} (id: {})",
         app_name, ws_id
     );
-
-    Ok(())
 }
 
 async fn forward_request(
