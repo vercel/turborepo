@@ -10,8 +10,23 @@ pub struct RouteMatch {
 
 #[derive(Clone)]
 pub struct Router {
-    routes: Vec<Route>,
-    default_app: RouteMatch,
+    trie: TrieNode,
+    apps: Vec<AppInfo>,
+    default_app_idx: usize,
+}
+
+#[derive(Debug, Clone)]
+struct AppInfo {
+    app_name: String,
+    port: u16,
+}
+
+#[derive(Clone, Default)]
+struct TrieNode {
+    exact_children: HashMap<String, TrieNode>,
+    param_child: Option<Box<TrieNode>>,
+    wildcard_match: Option<usize>,
+    terminal_match: Option<usize>,
 }
 
 #[derive(Debug, Clone)]
@@ -61,10 +76,7 @@ impl Router {
                     patterns,
                 });
             } else if default_app.is_none() {
-                default_app = Some(RouteMatch {
-                    app_name: app_name.to_string(),
-                    port,
-                });
+                default_app = Some((app_name.to_string(), port));
             }
         }
 
@@ -72,25 +84,111 @@ impl Router {
             "No default application found (application without routing configuration)".to_string()
         })?;
 
+        let mut apps = Vec::new();
+        let mut trie = TrieNode::default();
+
+        for route in routes {
+            let app_idx = apps.len();
+            apps.push(AppInfo {
+                app_name: route.app_name,
+                port: route.port,
+            });
+
+            for pattern in route.patterns {
+                trie.insert(&pattern.segments, app_idx);
+            }
+        }
+
+        let default_app_idx = apps.len();
+        apps.push(AppInfo {
+            app_name: default_app.0,
+            port: default_app.1,
+        });
+
         Ok(Self {
-            routes,
-            default_app,
+            trie,
+            apps,
+            default_app_idx,
         })
     }
 
     pub fn match_route(&self, path: &str) -> RouteMatch {
-        for route in &self.routes {
-            for pattern in &route.patterns {
-                if pattern.matches(path) {
-                    return RouteMatch {
-                        app_name: route.app_name.clone(),
-                        port: route.port,
-                    };
+        let path = if path.starts_with('/') {
+            &path[1..]
+        } else {
+            path
+        };
+
+        let app_idx = if path.is_empty() {
+            self.trie.lookup(&[])
+        } else {
+            let mut segments = Vec::with_capacity(8);
+            for segment in path.split('/') {
+                if !segment.is_empty() {
+                    segments.push(segment);
                 }
+            }
+            self.trie.lookup(&segments)
+        }
+        .unwrap_or(self.default_app_idx);
+
+        let app = &self.apps[app_idx];
+        RouteMatch {
+            app_name: app.app_name.clone(),
+            port: app.port,
+        }
+    }
+}
+
+impl TrieNode {
+    fn insert(&mut self, segments: &[Segment], app_idx: usize) {
+        if segments.is_empty() {
+            self.terminal_match = Some(app_idx);
+            return;
+        }
+
+        match &segments[0] {
+            Segment::Exact(name) => {
+                let child = self
+                    .exact_children
+                    .entry(name.clone())
+                    .or_insert_with(TrieNode::default);
+                child.insert(&segments[1..], app_idx);
+            }
+            Segment::Param => {
+                let child = self
+                    .param_child
+                    .get_or_insert_with(|| Box::new(TrieNode::default()));
+                child.insert(&segments[1..], app_idx);
+            }
+            Segment::Wildcard => {
+                self.wildcard_match = Some(app_idx);
+            }
+        }
+    }
+
+    fn lookup(&self, segments: &[&str]) -> Option<usize> {
+        if segments.is_empty() {
+            return self.terminal_match.or(self.wildcard_match);
+        }
+
+        if let Some(app_idx) = self.wildcard_match {
+            return Some(app_idx);
+        }
+
+        if let Some(child) = self.exact_children.get(segments[0]) {
+            if let Some(app_idx) = child.lookup(&segments[1..]) {
+                return Some(app_idx);
             }
         }
 
-        self.default_app.clone()
+        if let Some(child) = &self.param_child {
+            if let Some(app_idx) = child.lookup(&segments[1..]) {
+                return Some(app_idx);
+            }
+        }
+
+        None
     }
 }
 
@@ -131,6 +229,7 @@ impl PathPattern {
         Ok(Self { segments })
     }
 
+    #[cfg(test)]
     fn matches(&self, path: &str) -> bool {
         let path = if path.starts_with('/') {
             &path[1..]
@@ -151,6 +250,7 @@ impl PathPattern {
         self.matches_segments(&path_segments)
     }
 
+    #[cfg(test)]
     fn matches_segments(&self, path_segments: &[&str]) -> bool {
         let mut pattern_idx = 0;
         let mut path_idx = 0;
