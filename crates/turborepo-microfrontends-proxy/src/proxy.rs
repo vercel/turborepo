@@ -1,4 +1,10 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::SocketAddr,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{
@@ -26,6 +32,8 @@ use crate::{
 type BoxedBody = BoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 type HttpClient = Client<hyper_util::client::legacy::connect::HttpConnector, Incoming>;
 
+const MAX_WEBSOCKET_CONNECTIONS: usize = 1000;
+
 #[derive(Clone)]
 struct WebSocketHandle {
     id: usize,
@@ -38,6 +46,7 @@ pub struct ProxyServer {
     port: u16,
     shutdown_tx: broadcast::Sender<()>,
     ws_handles: Arc<Mutex<Vec<WebSocketHandle>>>,
+    ws_id_counter: Arc<AtomicUsize>,
     http_client: HttpClient,
 }
 
@@ -57,6 +66,7 @@ impl ProxyServer {
             port,
             shutdown_tx,
             ws_handles: Arc::new(Mutex::new(Vec::new())),
+            ws_id_counter: Arc::new(AtomicUsize::new(0)),
             http_client,
         })
     }
@@ -115,6 +125,7 @@ impl ProxyServer {
                     let router = self.router.clone();
                     let config = self.config.clone();
                     let ws_handles_clone = ws_handles.clone();
+                    let ws_id_counter_clone = self.ws_id_counter.clone();
                     let http_client = self.http_client.clone();
 
                     tokio::task::spawn(async move {
@@ -124,8 +135,9 @@ impl ProxyServer {
                             let router = router.clone();
                             let config = config.clone();
                             let ws_handles = ws_handles_clone.clone();
+                            let ws_id_counter = ws_id_counter_clone.clone();
                             let http_client = http_client.clone();
-                            async move { handle_request(req, router, config, remote_addr, ws_handles, http_client).await }
+                            async move { handle_request(req, router, config, remote_addr, ws_handles, ws_id_counter, http_client).await }
                         });
 
                         let conn = http1::Builder::new()
@@ -200,6 +212,7 @@ async fn handle_request(
     _config: Config,
     remote_addr: SocketAddr,
     ws_handles: Arc<Mutex<Vec<WebSocketHandle>>>,
+    ws_id_counter: Arc<AtomicUsize>,
     http_client: HttpClient,
 ) -> Result<Response<BoxedBody>, ProxyError> {
     let path = req.uri().path().to_string();
@@ -225,6 +238,7 @@ async fn handle_request(
             remote_addr,
             req_upgrade,
             ws_handles,
+            ws_id_counter,
             http_client,
         )
         .await
@@ -342,6 +356,7 @@ async fn forward_websocket(
     remote_addr: SocketAddr,
     client_upgrade: hyper::upgrade::OnUpgrade,
     ws_handles: Arc<Mutex<Vec<WebSocketHandle>>>,
+    ws_id_counter: Arc<AtomicUsize>,
     http_client: HttpClient,
 ) -> Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
     let target_uri = format!(
@@ -378,7 +393,16 @@ async fn forward_websocket(
         let (ws_shutdown_tx, _) = broadcast::channel(1);
         let ws_id = {
             let mut handles = ws_handles.lock().await;
-            let id = handles.len();
+            if handles.len() >= MAX_WEBSOCKET_CONNECTIONS {
+                warn!(
+                    "WebSocket connection limit reached ({} connections), rejecting new \
+                     connection from {}",
+                    MAX_WEBSOCKET_CONNECTIONS, remote_addr
+                );
+                return Err("WebSocket connection limit reached".into());
+            }
+
+            let id = ws_id_counter.fetch_add(1, Ordering::SeqCst);
             handles.push(WebSocketHandle {
                 id,
                 shutdown_tx: ws_shutdown_tx.clone(),
