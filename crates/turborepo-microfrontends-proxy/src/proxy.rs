@@ -265,7 +265,7 @@ async fn handle_websocket_request(
     ws_id_counter: Arc<AtomicUsize>,
     http_client: HttpClient,
 ) -> Result<Response<BoxedBody>, ProxyError> {
-    match forward_websocket(
+    let result = forward_websocket(
         req,
         &route_match.app_name,
         route_match.port,
@@ -275,25 +275,16 @@ async fn handle_websocket_request(
         ws_id_counter,
         http_client,
     )
-    .await
-    {
-        Ok(response) => {
-            debug!(
-                "Forwarding WebSocket response from {} with status {} to client {}",
-                route_match.app_name,
-                response.status(),
-                remote_addr.ip()
-            );
-            convert_response_to_boxed_body(response, route_match.app_name.clone())
-        }
-        Err(e) => {
-            warn!(
-                "Failed to establish WebSocket connection to {}: {}",
-                route_match.app_name, e
-            );
-            build_error_response(path, route_match.app_name, route_match.port, e)
-        }
-    }
+    .await;
+
+    handle_forward_result(
+        result,
+        path,
+        route_match.app_name,
+        route_match.port,
+        remote_addr,
+        "WebSocket",
+    )
 }
 
 async fn handle_http_request(
@@ -303,30 +294,52 @@ async fn handle_http_request(
     remote_addr: SocketAddr,
     http_client: HttpClient,
 ) -> Result<Response<BoxedBody>, ProxyError> {
-    match forward_request(
+    let result = forward_request(
         req,
         &route_match.app_name,
         route_match.port,
         remote_addr,
         http_client,
     )
-    .await
-    {
+    .await;
+
+    handle_forward_result(
+        result,
+        path,
+        route_match.app_name,
+        route_match.port,
+        remote_addr,
+        "HTTP",
+    )
+}
+
+fn handle_forward_result(
+    result: Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>>,
+    path: String,
+    app_name: String,
+    port: u16,
+    remote_addr: SocketAddr,
+    request_type: &str,
+) -> Result<Response<BoxedBody>, ProxyError> {
+    match result {
         Ok(response) => {
             debug!(
-                "Forwarding response from {} with status {} to client {}",
-                route_match.app_name,
+                "Forwarding {} response from {} with status {} to client {}",
+                request_type,
+                app_name,
                 response.status(),
                 remote_addr.ip()
             );
-            convert_response_to_boxed_body(response, route_match.app_name.clone())
+            convert_response_to_boxed_body(response, app_name)
         }
         Err(e) => {
             warn!(
-                "Failed to forward request to {}: {}",
-                route_match.app_name, e
+                "Failed to {} forward request to {}: {}",
+                request_type.to_lowercase(),
+                app_name,
+                e
             );
-            build_error_response(path, route_match.app_name, route_match.port, e)
+            build_error_response(path, app_name, port, e)
         }
     }
 }
