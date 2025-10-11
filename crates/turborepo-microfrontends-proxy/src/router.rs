@@ -58,8 +58,8 @@ impl Router {
             let app_name = task.application_name;
             let port = config.port(app_name).ok_or_else(|| {
                 format!(
-                    "No port configured for application '{}'. Check your configuration file.",
-                    app_name
+                    "No port configured for application '{app_name}'. Check your configuration \
+                     file."
                 )
             })?;
 
@@ -71,8 +71,8 @@ impl Router {
                     for path in &path_group.paths {
                         patterns.push(PathPattern::parse(path).map_err(|e| {
                             format!(
-                                "Invalid routing pattern '{}' for application '{}': {}",
-                                path, app_name, e
+                                "Invalid routing pattern '{path}' for application '{app_name}': \
+                                 {e}"
                             )
                         })?);
                     }
@@ -123,11 +123,7 @@ impl Router {
     }
 
     pub fn match_route(&self, path: &str) -> RouteMatch {
-        let path = if path.starts_with('/') {
-            &path[1..]
-        } else {
-            path
-        };
+        let path = path.strip_prefix('/').unwrap_or(path);
 
         let app_idx = if path.is_empty() {
             self.trie.lookup(&[])
@@ -159,10 +155,7 @@ impl TrieNode {
 
         match &segments[0] {
             Segment::Exact(name) => {
-                let child = self
-                    .exact_children
-                    .entry(name.clone())
-                    .or_insert_with(TrieNode::default);
+                let child = self.exact_children.entry(name.clone()).or_default();
                 child.insert(&segments[1..], app_idx);
             }
             Segment::Param => {
@@ -212,11 +205,7 @@ impl PathPattern {
             );
         }
 
-        let pattern = if pattern.starts_with('/') {
-            &pattern[1..]
-        } else {
-            pattern
-        };
+        let pattern = pattern.strip_prefix('/').unwrap_or(pattern);
 
         if pattern.is_empty() {
             return Ok(Self { segments: vec![] });
@@ -228,8 +217,7 @@ impl PathPattern {
                 continue;
             }
 
-            if segment.starts_with(':') {
-                let param_name = &segment[1..];
+            if let Some(param_name) = segment.strip_prefix(':') {
                 if param_name.is_empty() {
                     return Err(
                         "Parameter name cannot be empty after ':'. Use a format like ':id' or \

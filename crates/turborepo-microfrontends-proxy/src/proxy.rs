@@ -12,7 +12,7 @@ use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{
     Request, Response, StatusCode,
     body::{Bytes, Incoming},
-    header::{CONNECTION, UPGRADE},
+    header::{CONNECTION, CONTENT_LENGTH, TRANSFER_ENCODING, UPGRADE},
     server::conn::http1,
     service::service_fn,
     upgrade::Upgraded,
@@ -44,6 +44,11 @@ struct WebSocketHandle {
     shutdown_tx: broadcast::Sender<()>,
 }
 
+struct WebSocketContext {
+    handles: Arc<DashMap<usize, WebSocketHandle>>,
+    id_counter: Arc<AtomicUsize>,
+}
+
 pub struct ProxyServer {
     config: Arc<Config>,
     router: Arc<Router>,
@@ -58,7 +63,7 @@ pub struct ProxyServer {
 impl ProxyServer {
     pub fn new(config: Config) -> Result<Self, ProxyError> {
         let router = Router::new(&config)
-            .map_err(|e| ProxyError::Config(format!("Failed to build router: {}", e)))?;
+            .map_err(|e| ProxyError::Config(format!("Failed to build router: {e}")))?;
 
         let port = config.local_proxy_port().unwrap_or(DEFAULT_PROXY_PORT);
         let (shutdown_tx, _) = broadcast::channel(1);
@@ -151,10 +156,12 @@ impl ProxyServer {
                         let service = service_fn(move |req| {
                             let router = router.clone();
                             let config = config.clone();
-                            let ws_handles = ws_handles_clone.clone();
-                            let ws_id_counter = ws_id_counter_clone.clone();
+                            let ws_ctx = WebSocketContext {
+                                handles: ws_handles_clone.clone(),
+                                id_counter: ws_id_counter_clone.clone(),
+                            };
                             let http_client = http_client.clone();
-                            async move { handle_request(req, router, config, remote_addr, ws_handles, ws_id_counter, http_client).await }
+                            async move { handle_request(req, router, config, remote_addr, ws_ctx, http_client).await }
                         });
 
                         let conn = http1::Builder::new()
@@ -206,6 +213,25 @@ impl ProxyServer {
     }
 }
 
+/// Validates request headers to prevent HTTP request smuggling attacks.
+///
+/// While this proxy is intended for local development only, we implement
+/// defense-in-depth by checking for conflicting Content-Length and
+/// Transfer-Encoding headers, which could be exploited if different servers
+/// in the chain interpret them differently.
+fn validate_request_headers<B>(req: &Request<B>) -> Result<(), ProxyError> {
+    let has_content_length = req.headers().contains_key(CONTENT_LENGTH);
+    let has_transfer_encoding = req.headers().contains_key(TRANSFER_ENCODING);
+
+    if has_content_length && has_transfer_encoding {
+        return Err(ProxyError::InvalidRequest(
+            "Conflicting Content-Length and Transfer-Encoding headers".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 fn is_websocket_upgrade<B>(req: &Request<B>) -> bool {
     req.headers()
         .get(UPGRADE)
@@ -228,10 +254,11 @@ async fn handle_request(
     router: Arc<Router>,
     _config: Arc<Config>,
     remote_addr: SocketAddr,
-    ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
-    ws_id_counter: Arc<AtomicUsize>,
+    ws_ctx: WebSocketContext,
     http_client: HttpClient,
 ) -> Result<Response<BoxedBody>, ProxyError> {
+    validate_request_headers(&req)?;
+
     let path = req.uri().path().to_string();
     let method = req.method().clone();
 
@@ -253,8 +280,7 @@ async fn handle_request(
             path,
             remote_addr,
             req_upgrade,
-            ws_handles,
-            ws_id_counter,
+            ws_ctx,
             http_client,
         )
         .await
@@ -269,8 +295,7 @@ async fn handle_websocket_request(
     path: String,
     remote_addr: SocketAddr,
     req_upgrade: hyper::upgrade::OnUpgrade,
-    ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
-    ws_id_counter: Arc<AtomicUsize>,
+    ws_ctx: WebSocketContext,
     http_client: HttpClient,
 ) -> Result<Response<BoxedBody>, ProxyError> {
     let result = forward_websocket(
@@ -279,8 +304,7 @@ async fn handle_websocket_request(
         route_match.port,
         remote_addr,
         req_upgrade,
-        ws_handles,
-        ws_id_counter,
+        ws_ctx,
         http_client,
     )
     .await;
@@ -394,8 +418,7 @@ async fn forward_websocket(
     port: u16,
     remote_addr: SocketAddr,
     client_upgrade: hyper::upgrade::OnUpgrade,
-    ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
-    ws_id_counter: Arc<AtomicUsize>,
+    ws_ctx: WebSocketContext,
     http_client: HttpClient,
 ) -> Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
     prepare_websocket_request(&mut req, port, remote_addr)?;
@@ -415,8 +438,8 @@ async fn forward_websocket(
             remote_addr,
             client_upgrade,
             server_upgrade,
-            ws_handles,
-            ws_id_counter,
+            ws_ctx.handles,
+            ws_ctx.id_counter,
         )?;
     }
 
@@ -440,7 +463,7 @@ fn prepare_websocket_request(
     let original_host = req.uri().host().unwrap_or("localhost").to_string();
 
     let headers = req.headers_mut();
-    headers.insert("Host", format!("localhost:{}", port).parse()?);
+    headers.insert("Host", format!("localhost:{port}").parse()?);
     headers.insert("X-Forwarded-For", remote_addr.ip().to_string().parse()?);
     headers.insert("X-Forwarded-Proto", "http".parse()?);
     headers.insert("X-Forwarded-Host", original_host.parse()?);
@@ -718,7 +741,7 @@ async fn forward_request(
     let original_host = req.uri().host().unwrap_or("localhost").to_string();
 
     let headers = req.headers_mut();
-    headers.insert("Host", format!("localhost:{}", port).parse()?);
+    headers.insert("Host", format!("localhost:{port}").parse()?);
     headers.insert("X-Forwarded-For", remote_addr.ip().to_string().parse()?);
     headers.insert("X-Forwarded-Proto", "http".parse()?);
     headers.insert("X-Forwarded-Host", original_host.parse()?);
@@ -1229,6 +1252,58 @@ mod tests {
         let result = tokio::time::timeout(WEBSOCKET_CLOSE_DELAY, rx.recv()).await;
 
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_request_headers_valid() {
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("http://localhost:3000/api")
+            .header(CONTENT_LENGTH, "100")
+            .body(())
+            .unwrap();
+
+        assert!(validate_request_headers(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_request_headers_conflicting() {
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("http://localhost:3000/api")
+            .header(CONTENT_LENGTH, "100")
+            .header(TRANSFER_ENCODING, "chunked")
+            .body(())
+            .unwrap();
+
+        let result = validate_request_headers(&req);
+        assert!(result.is_err());
+        if let Err(ProxyError::InvalidRequest(msg)) = result {
+            assert!(msg.contains("Conflicting"));
+        }
+    }
+
+    #[test]
+    fn test_validate_request_headers_no_body_headers() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:3000/api")
+            .body(())
+            .unwrap();
+
+        assert!(validate_request_headers(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_request_headers_transfer_encoding_only() {
+        let req = Request::builder()
+            .method(Method::POST)
+            .uri("http://localhost:3000/api")
+            .header(TRANSFER_ENCODING, "chunked")
+            .body(())
+            .unwrap();
+
+        assert!(validate_request_headers(&req).is_ok());
     }
 
     #[test]

@@ -19,6 +19,9 @@ pub enum ProxyError {
 
     #[error("Failed to connect to application '{app}' on port {port}")]
     AppUnreachable { app: String, port: u16 },
+
+    #[error("Invalid request: {0}")]
+    InvalidRequest(String),
 }
 
 impl Classify for ProxyError {
@@ -30,6 +33,7 @@ impl Classify for ProxyError {
             ProxyError::Io(_) => ErrorClassification::FileSystem,
             ProxyError::Config(_) => ErrorClassification::Configuration,
             ProxyError::AppUnreachable { .. } => ErrorClassification::Proxy,
+            ProxyError::InvalidRequest(_) => ErrorClassification::Proxy,
         }
     }
 }
