@@ -41,8 +41,8 @@ struct WebSocketHandle {
 }
 
 pub struct ProxyServer {
-    config: Config,
-    router: Router,
+    config: Arc<Config>,
+    router: Arc<Router>,
     port: u16,
     shutdown_tx: broadcast::Sender<()>,
     ws_handles: Arc<Mutex<Vec<WebSocketHandle>>>,
@@ -62,8 +62,8 @@ impl ProxyServer {
         let http_client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
         Ok(Self {
-            config,
-            router,
+            config: Arc::new(config),
+            router: Arc::new(router),
             port,
             shutdown_tx,
             ws_handles: Arc::new(Mutex::new(Vec::new())),
@@ -220,8 +220,8 @@ fn is_websocket_upgrade<B>(req: &Request<B>) -> bool {
 
 async fn handle_request(
     mut req: Request<Incoming>,
-    router: Router,
-    _config: Config,
+    router: Arc<Router>,
+    _config: Arc<Config>,
     remote_addr: SocketAddr,
     ws_handles: Arc<Mutex<Vec<WebSocketHandle>>>,
     ws_id_counter: Arc<AtomicUsize>,
