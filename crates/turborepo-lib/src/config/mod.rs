@@ -254,6 +254,58 @@ pub enum Error {
     InvalidSsoLoginCallbackPort(#[source] std::num::ParseIntError),
 }
 
+impl turborepo_errors::Classify for Error {
+    fn classify(&self) -> turborepo_errors::ErrorClassification {
+        use turborepo_errors::ErrorClassification;
+
+        match self {
+            Error::Auth(_) => ErrorClassification::Authentication,
+            Error::NoGlobalConfigPath => ErrorClassification::Configuration,
+            Error::NoGlobalAuthFilePath => ErrorClassification::Authentication,
+            Error::NoGlobalConfigDir => ErrorClassification::Configuration,
+            Error::PackageJson(_) => ErrorClassification::Parsing,
+            Error::NoTurboJSON => ErrorClassification::Configuration,
+            Error::MultipleTurboConfigs { .. } => ErrorClassification::Configuration,
+            Error::SerdeJson(_) => ErrorClassification::Parsing,
+            Error::Io(_) => ErrorClassification::FileSystem,
+            Error::Camino(_) => ErrorClassification::FileSystem,
+            Error::Reqwest(_) => ErrorClassification::Network,
+            Error::FailedToReadConfig { .. } => ErrorClassification::FileSystem,
+            Error::FailedToSetConfig { .. } => ErrorClassification::FileSystem,
+            Error::Cache(_) => ErrorClassification::Cache,
+            Error::PackageTaskInSinglePackageMode { .. } => ErrorClassification::Configuration,
+            Error::InterruptibleButNotPersistent { .. } => ErrorClassification::Configuration,
+            Error::InvalidEnvPrefix(_) => ErrorClassification::Configuration,
+            Error::PathError(_) => ErrorClassification::FileSystem,
+            Error::UnnecessaryPackageTaskSyntax(_) => ErrorClassification::Configuration,
+            Error::ExtendFromNonRoot { .. } => ErrorClassification::Configuration,
+            Error::ExtendsRootFirst { .. } => ErrorClassification::Configuration,
+            Error::InvalidDependsOnValue { .. } => ErrorClassification::Configuration,
+            Error::AbsolutePathInConfig { .. } => ErrorClassification::Configuration,
+            Error::NoExtends { .. } => ErrorClassification::Configuration,
+            Error::InteractiveNoCacheable { .. } => ErrorClassification::Configuration,
+            Error::PipelineField { .. } => ErrorClassification::Configuration,
+            Error::ApiClient(_) => ErrorClassification::Network,
+            Error::Encoding(_) => ErrorClassification::Parsing,
+            Error::InvalidSignature => ErrorClassification::Configuration,
+            Error::InvalidRemoteCacheEnabled => ErrorClassification::Configuration,
+            Error::InvalidRemoteCacheTimeout(_) => ErrorClassification::Configuration,
+            Error::InvalidUploadTimeout(_) => ErrorClassification::Configuration,
+            Error::InvalidPreflight => ErrorClassification::Configuration,
+            Error::InvalidLogOrder(_) => ErrorClassification::Configuration,
+            Error::TurboJsonParseError(_) => ErrorClassification::Parsing,
+            Error::AbsoluteCacheDir { .. } => ErrorClassification::Configuration,
+            Error::InvalidTurboJsonLoad(_) => ErrorClassification::Parsing,
+            Error::InvalidTurboRootUse { .. } => ErrorClassification::Configuration,
+            Error::InvalidTurboRootNeedsSlash { .. } => ErrorClassification::Configuration,
+            Error::InvalidTaskWith { .. } => ErrorClassification::Configuration,
+            Error::FutureFlagsInPackage { .. } => ErrorClassification::Configuration,
+            Error::InvalidTuiScrollbackLength(_) => ErrorClassification::Configuration,
+            Error::InvalidSsoLoginCallbackPort(_) => ErrorClassification::Configuration,
+        }
+    }
+}
+
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
 const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 const DEFAULT_TIMEOUT: u64 = 30;
@@ -616,8 +668,8 @@ mod test {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::config::{
-        ConfigurationOptions, TurborepoConfigBuilder, CONFIG_FILE, CONFIG_FILE_JSONC,
-        DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
+        CONFIG_FILE, CONFIG_FILE_JSONC, ConfigurationOptions, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
+        DEFAULT_TIMEOUT, TurborepoConfigBuilder,
     };
 
     #[test]

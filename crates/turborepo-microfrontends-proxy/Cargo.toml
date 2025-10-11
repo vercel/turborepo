@@ -15,6 +15,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 tokio-tungstenite = "0.21"
 tracing = { workspace = true }
+turborepo-errors = { path = "../turborepo-errors" }
 turborepo-microfrontends = { path = "../turborepo-microfrontends" }
 
 [dev-dependencies]

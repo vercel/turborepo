@@ -115,6 +115,23 @@ pub enum Error {
     Which(#[from] which::Error),
 }
 
+impl turborepo_errors::Classify for Error {
+    fn classify(&self) -> turborepo_errors::ErrorClassification {
+        use turborepo_errors::ErrorClassification;
+
+        match self {
+            Error::MissingPackage { .. } => ErrorClassification::Configuration,
+            Error::RecursiveTurbo(_) => ErrorClassification::Configuration,
+            Error::MissingDefinition => ErrorClassification::Configuration,
+            Error::Engine(_) => ErrorClassification::Internal,
+            Error::TaskHash(_) => ErrorClassification::Internal,
+            Error::RunSummary(_) => ErrorClassification::Internal,
+            Error::InternalErrors(_) => ErrorClassification::Internal,
+            Error::Which(_) => ErrorClassification::Environment,
+        }
+    }
+}
+
 impl<'a> Visitor<'a> {
     // Disabling this lint until we stop adding state to the visitor.
     // Once we have the full picture we will go about grouping these pieces of data

@@ -65,3 +65,34 @@ pub enum Error {
     #[error("Microfrontends proxy error: {0}")]
     Proxy(String),
 }
+
+impl turborepo_errors::Classify for Error {
+    fn classify(&self) -> turborepo_errors::ErrorClassification {
+        use turborepo_errors::ErrorClassification;
+
+        match self {
+            Error::EngineValidation(_) => ErrorClassification::Configuration,
+            Error::Graph(_) => ErrorClassification::Internal,
+            Error::Builder(_) => ErrorClassification::Configuration,
+            Error::Env(_) => ErrorClassification::Environment,
+            Error::Opts(_) => ErrorClassification::UserInput,
+            Error::PackageJson(_) => ErrorClassification::Parsing,
+            Error::PackageManager(_) => ErrorClassification::Configuration,
+            Error::Config(_) => ErrorClassification::Configuration,
+            Error::PackageGraphBuilder(_) => ErrorClassification::Configuration,
+            Error::DaemonConnector(_) => ErrorClassification::Daemon,
+            Error::Cache(_) => ErrorClassification::Cache,
+            Error::Path(_) => ErrorClassification::FileSystem,
+            Error::Scope(_) => ErrorClassification::UserInput,
+            Error::GlobalHash(_) => ErrorClassification::Internal,
+            Error::TaskHash(_) => ErrorClassification::Internal,
+            Error::Visitor(_) => ErrorClassification::Internal,
+            Error::SignalHandler(_) => ErrorClassification::Internal,
+            Error::Daemon(_) => ErrorClassification::Daemon,
+            Error::UI(_) => ErrorClassification::Internal,
+            Error::Tui(_) => ErrorClassification::Internal,
+            Error::MicroFrontends(_) => ErrorClassification::Configuration,
+            Error::Proxy(_) => ErrorClassification::Proxy,
+        }
+    }
+}

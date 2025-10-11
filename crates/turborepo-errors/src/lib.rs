@@ -3,6 +3,8 @@
 //! Any parsing of files should attempt to produce value of `Spanned<T>` so if
 //! we need to reference where T came from the span is available.
 
+pub mod classification;
+
 use std::{
     fmt::Display,
     iter,
@@ -12,6 +14,7 @@ use std::{
 };
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
+pub use classification::{Classify, ErrorClassification};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
