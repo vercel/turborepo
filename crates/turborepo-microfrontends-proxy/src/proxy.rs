@@ -4,6 +4,7 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
+    time::Duration,
 };
 
 use dashmap::DashMap;
@@ -59,7 +60,11 @@ impl ProxyServer {
         let port = config.local_proxy_port().unwrap_or(3024);
         let (shutdown_tx, _) = broadcast::channel(1);
 
-        let http_client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+        let http_client = Client::builder(hyper_util::rt::TokioExecutor::new())
+            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_max_idle_per_host(32)
+            .http2_adaptive_window(true)
+            .build_http();
 
         Ok(Self {
             config: Arc::new(config),
