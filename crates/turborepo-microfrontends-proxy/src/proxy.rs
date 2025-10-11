@@ -201,7 +201,7 @@ impl ProxyServer {
     }
 }
 
-fn is_websocket_upgrade(req: &Request<Incoming>) -> bool {
+fn is_websocket_upgrade<B>(req: &Request<B>) -> bool {
     req.headers()
         .get(UPGRADE)
         .and_then(|v| v.to_str().ok())
@@ -599,4 +599,594 @@ async fn forward_request(
     debug!("Response from {}: {}", app_name, response.status());
 
     Ok(response)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{Ipv4Addr, SocketAddrV4};
+
+    use hyper::{Method, header::HeaderValue};
+
+    use super::*;
+
+    fn create_test_config() -> Config {
+        let config_json = r#"{
+            "version": "1",
+            "options": {
+                "localProxyPort": 3024
+            },
+            "applications": {
+                "web": {
+                    "development": {
+                        "local": { "port": 3000 }
+                    }
+                },
+                "docs": {
+                    "development": {
+                        "local": { "port": 3001 }
+                    },
+                    "routing": [
+                        { "paths": ["/docs", "/docs/:path*"] }
+                    ]
+                }
+            }
+        }"#;
+        Config::from_str(config_json, "test.json").unwrap()
+    }
+
+    #[test]
+    fn test_proxy_server_new() {
+        let config = create_test_config();
+        let result = ProxyServer::new(config);
+        assert!(result.is_ok());
+
+        let server = result.unwrap();
+        assert_eq!(server.port, 3024);
+    }
+
+    #[test]
+    fn test_proxy_server_new_with_default_port() {
+        let config_json = r#"{
+            "version": "1",
+            "applications": {
+                "web": {
+                    "development": {
+                        "local": { "port": 3000 }
+                    }
+                }
+            }
+        }"#;
+        let config = Config::from_str(config_json, "test.json").unwrap();
+        let result = ProxyServer::new(config);
+        assert!(result.is_ok());
+
+        let server = result.unwrap();
+        assert_eq!(server.port, 3024);
+    }
+
+    #[test]
+    fn test_proxy_server_shutdown_handle() {
+        let config = create_test_config();
+        let server = ProxyServer::new(config).unwrap();
+
+        let handle = server.shutdown_handle();
+        let _rx = handle.subscribe();
+        assert_eq!(handle.receiver_count(), 1);
+    }
+
+    #[test]
+    fn test_proxy_server_set_shutdown_complete_tx() {
+        let config = create_test_config();
+        let mut server = ProxyServer::new(config).unwrap();
+
+        let (tx, _rx) = oneshot::channel();
+        server.set_shutdown_complete_tx(tx);
+        assert!(server.shutdown_complete_tx.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_check_port_available_when_free() {
+        let config_json = r#"{
+            "version": "1",
+            "options": {
+                "localProxyPort": 19999
+            },
+            "applications": {
+                "web": {
+                    "development": {
+                        "local": { "port": 3000 }
+                    }
+                }
+            }
+        }"#;
+        let config = Config::from_str(config_json, "test.json").unwrap();
+        let server = ProxyServer::new(config).unwrap();
+
+        let available = server.check_port_available().await;
+        assert!(available);
+    }
+
+    #[tokio::test]
+    async fn test_check_port_available_when_taken() {
+        let config_json = r#"{
+            "version": "1",
+            "options": {
+                "localProxyPort": 19998
+            },
+            "applications": {
+                "web": {
+                    "development": {
+                        "local": { "port": 3000 }
+                    }
+                }
+            }
+        }"#;
+        let config = Config::from_str(config_json, "test.json").unwrap();
+        let server = ProxyServer::new(config).unwrap();
+
+        let _listener = TcpListener::bind("127.0.0.1:19998").await.unwrap();
+
+        let available = server.check_port_available().await;
+        assert!(!available);
+    }
+
+    #[test]
+    fn test_is_websocket_upgrade_valid() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:3000/ws")
+            .header(UPGRADE, "websocket")
+            .header(CONNECTION, "Upgrade")
+            .body(())
+            .unwrap();
+
+        assert!(is_websocket_upgrade(&req));
+    }
+
+    #[test]
+    fn test_is_websocket_upgrade_case_insensitive() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:3000/ws")
+            .header(UPGRADE, "WebSocket")
+            .header(CONNECTION, "upgrade")
+            .body(())
+            .unwrap();
+
+        assert!(is_websocket_upgrade(&req));
+    }
+
+    #[test]
+    fn test_is_websocket_upgrade_with_multiple_connection_values() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:3000/ws")
+            .header(UPGRADE, "websocket")
+            .header(CONNECTION, "keep-alive, Upgrade")
+            .body(())
+            .unwrap();
+
+        assert!(is_websocket_upgrade(&req));
+    }
+
+    #[test]
+    fn test_is_websocket_upgrade_missing_upgrade_header() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:3000/ws")
+            .header(CONNECTION, "Upgrade")
+            .body(())
+            .unwrap();
+
+        assert!(!is_websocket_upgrade(&req));
+    }
+
+    #[test]
+    fn test_is_websocket_upgrade_missing_connection_header() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:3000/ws")
+            .header(UPGRADE, "websocket")
+            .body(())
+            .unwrap();
+
+        assert!(!is_websocket_upgrade(&req));
+    }
+
+    #[test]
+    fn test_is_websocket_upgrade_wrong_upgrade_value() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:3000/ws")
+            .header(UPGRADE, "h2c")
+            .header(CONNECTION, "Upgrade")
+            .body(())
+            .unwrap();
+
+        assert!(!is_websocket_upgrade(&req));
+    }
+
+    #[test]
+    fn test_is_websocket_upgrade_wrong_connection_value() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:3000/ws")
+            .header(UPGRADE, "websocket")
+            .header(CONNECTION, "close")
+            .body(())
+            .unwrap();
+
+        assert!(!is_websocket_upgrade(&req));
+    }
+
+    #[test]
+    fn test_is_websocket_upgrade_no_headers() {
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("http://localhost:3000/ws")
+            .body(())
+            .unwrap();
+
+        assert!(!is_websocket_upgrade(&req));
+    }
+
+    #[test]
+    fn test_websocket_handle_creation() {
+        let (tx, _rx) = broadcast::channel(1);
+        let handle = WebSocketHandle {
+            id: 42,
+            shutdown_tx: tx,
+        };
+
+        assert_eq!(handle.id, 42);
+    }
+
+    #[test]
+    fn test_websocket_handle_clone() {
+        let (tx, _rx) = broadcast::channel(1);
+        let handle = WebSocketHandle {
+            id: 42,
+            shutdown_tx: tx,
+        };
+
+        let cloned = handle.clone();
+        assert_eq!(cloned.id, 42);
+    }
+
+    #[tokio::test]
+    async fn test_websocket_counter_increment() {
+        let counter = Arc::new(AtomicUsize::new(0));
+
+        let id1 = counter.fetch_add(1, Ordering::SeqCst);
+        let id2 = counter.fetch_add(1, Ordering::SeqCst);
+        let id3 = counter.fetch_add(1, Ordering::SeqCst);
+
+        assert_eq!(id1, 0);
+        assert_eq!(id2, 1);
+        assert_eq!(id3, 2);
+    }
+
+    #[tokio::test]
+    async fn test_websocket_handles_management() {
+        let ws_handles: Arc<Mutex<Vec<WebSocketHandle>>> = Arc::new(Mutex::new(Vec::new()));
+        let (tx, _rx) = broadcast::channel(1);
+
+        {
+            let mut handles = ws_handles.lock().await;
+            handles.push(WebSocketHandle {
+                id: 1,
+                shutdown_tx: tx.clone(),
+            });
+            handles.push(WebSocketHandle {
+                id: 2,
+                shutdown_tx: tx.clone(),
+            });
+        }
+
+        {
+            let handles = ws_handles.lock().await;
+            assert_eq!(handles.len(), 2);
+        }
+
+        {
+            let mut handles = ws_handles.lock().await;
+            handles.retain(|h| h.id != 1);
+        }
+
+        {
+            let handles = ws_handles.lock().await;
+            assert_eq!(handles.len(), 1);
+            assert_eq!(handles[0].id, 2);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_max_websocket_connections() {
+        assert_eq!(MAX_WEBSOCKET_CONNECTIONS, 1000);
+
+        let ws_handles: Arc<Mutex<Vec<WebSocketHandle>>> = Arc::new(Mutex::new(Vec::new()));
+        let (tx, _rx) = broadcast::channel(1);
+
+        {
+            let mut handles = ws_handles.lock().await;
+            for i in 0..MAX_WEBSOCKET_CONNECTIONS {
+                handles.push(WebSocketHandle {
+                    id: i,
+                    shutdown_tx: tx.clone(),
+                });
+            }
+        }
+
+        let handles = ws_handles.lock().await;
+        assert_eq!(handles.len(), MAX_WEBSOCKET_CONNECTIONS);
+    }
+
+    #[test]
+    fn test_proxy_error_bind_error_display() {
+        let error = ProxyError::BindError {
+            port: 3024,
+            source: std::io::Error::new(std::io::ErrorKind::AddrInUse, "address in use"),
+        };
+
+        let error_string = error.to_string();
+        assert!(error_string.contains("3024"));
+    }
+
+    #[test]
+    fn test_proxy_error_config_display() {
+        let error = ProxyError::Config("Invalid configuration".to_string());
+        assert_eq!(
+            error.to_string(),
+            "Configuration error: Invalid configuration"
+        );
+    }
+
+    #[test]
+    fn test_proxy_error_app_unreachable_display() {
+        let error = ProxyError::AppUnreachable {
+            app: "web".to_string(),
+            port: 3000,
+        };
+
+        let error_string = error.to_string();
+        assert!(error_string.contains("web"));
+        assert!(error_string.contains("3000"));
+    }
+
+    #[test]
+    fn test_boxed_body_type() {
+        let body = Full::new(Bytes::from("test"))
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+            .boxed();
+
+        assert_eq!(
+            std::mem::size_of_val(&body),
+            std::mem::size_of::<BoxedBody>()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_proxy_server_with_invalid_config() {
+        let config_json = r#"{
+            "version": "1",
+            "applications": {
+                "web": {
+                    "development": {
+                        "local": { "port": 3000 }
+                    },
+                    "routing": [
+                        { "paths": ["/web/:path*"] }
+                    ]
+                }
+            }
+        }"#;
+
+        let config = Config::from_str(config_json, "test.json").unwrap();
+        let result = ProxyServer::new(config);
+
+        assert!(result.is_err());
+        if let Err(err) = result {
+            assert!(matches!(err, ProxyError::Config(_)));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_shutdown_signal_broadcasting() {
+        let config = create_test_config();
+        let server = ProxyServer::new(config).unwrap();
+
+        let shutdown_tx = server.shutdown_handle();
+        let mut rx1 = shutdown_tx.subscribe();
+        let mut rx2 = shutdown_tx.subscribe();
+
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let _ = shutdown_tx.send(());
+        });
+
+        let result1 =
+            tokio::time::timeout(tokio::time::Duration::from_millis(100), rx1.recv()).await;
+
+        let result2 =
+            tokio::time::timeout(tokio::time::Duration::from_millis(100), rx2.recv()).await;
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+    }
+
+    #[test]
+    fn test_remote_addr_creation() {
+        let addr = SocketAddr::from(([127, 0, 0, 1], 3024));
+        assert_eq!(addr.port(), 3024);
+        assert_eq!(addr.ip().to_string(), "127.0.0.1");
+    }
+
+    #[test]
+    fn test_socket_addr_v4_creation() {
+        let addr = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 3024);
+        assert_eq!(addr.port(), 3024);
+        assert_eq!(addr.ip().to_string(), "127.0.0.1");
+    }
+
+    #[tokio::test]
+    async fn test_http_client_creation() {
+        let config = create_test_config();
+        let server = ProxyServer::new(config).unwrap();
+
+        let client = &server.http_client;
+        assert_eq!(
+            std::mem::size_of_val(client),
+            std::mem::size_of::<HttpClient>()
+        );
+    }
+
+    #[test]
+    fn test_multiple_proxy_servers() {
+        let config1_json = r#"{
+            "version": "1",
+            "options": { "localProxyPort": 4001 },
+            "applications": {
+                "web": {
+                    "development": {
+                        "local": { "port": 3000 }
+                    }
+                }
+            }
+        }"#;
+
+        let config2_json = r#"{
+            "version": "1",
+            "options": { "localProxyPort": 4002 },
+            "applications": {
+                "web": {
+                    "development": {
+                        "local": { "port": 3000 }
+                    }
+                }
+            }
+        }"#;
+
+        let config1 = Config::from_str(config1_json, "test1.json").unwrap();
+        let config2 = Config::from_str(config2_json, "test2.json").unwrap();
+
+        let server1 = ProxyServer::new(config1);
+        let server2 = ProxyServer::new(config2);
+
+        assert!(server1.is_ok());
+        assert!(server2.is_ok());
+
+        assert_eq!(server1.unwrap().port, 4001);
+        assert_eq!(server2.unwrap().port, 4002);
+    }
+
+    #[tokio::test]
+    async fn test_ws_id_counter_concurrent_access() {
+        let counter = Arc::new(AtomicUsize::new(0));
+        let mut handles = vec![];
+
+        for _ in 0..10 {
+            let counter_clone = counter.clone();
+            let handle = tokio::spawn(async move { counter_clone.fetch_add(1, Ordering::SeqCst) });
+            handles.push(handle);
+        }
+
+        let mut ids = vec![];
+        for handle in handles {
+            ids.push(handle.await.unwrap());
+        }
+
+        ids.sort();
+        assert_eq!(ids.len(), 10);
+        assert_eq!(*ids.first().unwrap(), 0);
+        assert_eq!(*ids.last().unwrap(), 9);
+    }
+
+    #[tokio::test]
+    async fn test_websocket_handle_shutdown_signal() {
+        let (tx, mut rx) = broadcast::channel(1);
+        let _handle = WebSocketHandle {
+            id: 1,
+            shutdown_tx: tx.clone(),
+        };
+
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let _ = tx.send(());
+        });
+
+        let result = tokio::time::timeout(tokio::time::Duration::from_millis(100), rx.recv()).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_header_value_creation() {
+        let host = HeaderValue::from_str("localhost:3000");
+        assert!(host.is_ok());
+
+        let forwarded_for = HeaderValue::from_str("127.0.0.1");
+        assert!(forwarded_for.is_ok());
+
+        let forwarded_proto = HeaderValue::from_str("http");
+        assert!(forwarded_proto.is_ok());
+    }
+
+    #[test]
+    fn test_uri_construction() {
+        let target_uri = format!("http://localhost:{}{}", 3000, "/api/test");
+        assert_eq!(target_uri, "http://localhost:3000/api/test");
+
+        let parsed = target_uri.parse::<hyper::Uri>();
+        assert!(parsed.is_ok());
+    }
+
+    #[test]
+    fn test_uri_with_query_params() {
+        let target_uri = format!("http://localhost:{}{}", 3000, "/api/test?foo=bar&baz=qux");
+        assert_eq!(target_uri, "http://localhost:3000/api/test?foo=bar&baz=qux");
+
+        let parsed = target_uri.parse::<hyper::Uri>();
+        assert!(parsed.is_ok());
+
+        let uri = parsed.unwrap();
+        assert_eq!(uri.path(), "/api/test");
+        assert_eq!(uri.query(), Some("foo=bar&baz=qux"));
+    }
+
+    #[tokio::test]
+    async fn test_oneshot_channel_communication() {
+        let (tx, rx) = oneshot::channel::<()>();
+
+        tokio::spawn(async move {
+            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+            let _ = tx.send(());
+        });
+
+        let result = tokio::time::timeout(tokio::time::Duration::from_millis(100), rx).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_broadcast_channel_multiple_receivers() {
+        let (tx, _rx) = broadcast::channel::<()>(10);
+
+        let mut rx1 = tx.subscribe();
+        let mut rx2 = tx.subscribe();
+        let mut rx3 = tx.subscribe();
+
+        assert_eq!(tx.receiver_count(), 4);
+
+        tokio::spawn(async move {
+            let _ = tx.send(());
+        });
+
+        let result1 = rx1.recv().await;
+        let result2 = rx2.recv().await;
+        let result3 = rx3.recv().await;
+
+        assert!(result1.is_ok());
+        assert!(result2.is_ok());
+        assert!(result3.is_ok());
+    }
 }

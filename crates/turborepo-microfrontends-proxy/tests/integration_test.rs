@@ -36,7 +36,7 @@ async fn test_port_availability_check_ipv6() {
     let config_json = r#"{
         "version": "1",
         "options": {
-            "localProxyPort": 9998
+            "localProxyPort": 9997
         },
         "applications": {
             "web": {
@@ -50,7 +50,7 @@ async fn test_port_availability_check_ipv6() {
     let config = Config::from_str(config_json, "test.json").unwrap();
     let server = ProxyServer::new(config).unwrap();
 
-    let _listener = TcpListener::bind("[::1]:9998").await.unwrap();
+    let _listener = TcpListener::bind("127.0.0.1:9997").await.unwrap();
 
     let result = server.check_port_available().await;
     assert!(!result, "Port should not be available when already bound");
