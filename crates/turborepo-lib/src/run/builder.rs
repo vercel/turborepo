@@ -2,13 +2,13 @@ use std::{
     collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 use chrono::Local;
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
+use turborepo_analytics::{AnalyticsHandle, AnalyticsSender, start_analytics};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
@@ -24,33 +24,34 @@ use turborepo_scm::SCM;
 use turborepo_signals::{SignalHandler, SignalSubscriber};
 use turborepo_task_id::TaskName;
 use turborepo_telemetry::events::{
+    EventBuilder, TrackedErrors,
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
-    EventBuilder, TrackedErrors,
 };
 use turborepo_ui::{ColorConfig, ColorSelector};
 #[cfg(feature = "daemon-package-discovery")]
 use {
     crate::run::package_discovery::DaemonPackageDiscovery,
-    std::time::Duration,
     turborepo_repository::discovery::{
         Error as DiscoveryError, FallbackPackageDiscovery, LocalPackageDiscoveryBuilder,
         PackageDiscoveryBuilder,
     },
 };
 
+const PROCESS_MANAGER_SHUTDOWN_DELAY: Duration = Duration::from_millis(300);
+
 use crate::{
+    DaemonConnector,
     cli::DryRunMode,
     commands::CommandBase,
     config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
+    run::{Error, Run, RunCache, scope, task_access::TaskAccess},
     shim::TurboState,
     turbo_json::{TurboJson, TurboJsonLoader, TurboJsonReader, UIMode},
-    DaemonConnector,
 };
 
 pub struct RunBuilder {
@@ -139,7 +140,7 @@ impl RunBuilder {
             // Add a small delay to allow proxy shutdown handlers to run first
             // The proxy handler will call manager.stop() after closing websockets
             // If no proxy is present, this just adds a tiny delay before stopping
-            tokio::time::sleep(tokio::time::Duration::from_millis(300)).await;
+            tokio::time::sleep(PROCESS_MANAGER_SHUTDOWN_DELAY).await;
             debug!("Process manager signal handler stopping processes (after delay)");
             manager.stop().await;
         });

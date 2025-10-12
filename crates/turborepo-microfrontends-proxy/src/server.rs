@@ -1,6 +1,6 @@
 use std::{
     net::SocketAddr,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{Arc, atomic::AtomicUsize},
     time::Duration,
 };
 
@@ -15,14 +15,16 @@ use tracing::{debug, error, info};
 use turborepo_microfrontends::Config;
 
 use crate::{
+    ProxyError,
     http::HttpClient,
     router::Router,
     websocket::{WebSocketContext, WebSocketHandle},
-    ProxyError,
 };
 
 pub(crate) const DEFAULT_PROXY_PORT: u16 = 3024;
 pub(crate) const SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(1);
+pub(crate) const HTTP_CLIENT_POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
+pub(crate) const HTTP_CLIENT_MAX_IDLE_PER_HOST: usize = 32;
 
 pub struct ProxyServer {
     config: Arc<Config>,
@@ -44,8 +46,8 @@ impl ProxyServer {
         let (shutdown_tx, _) = broadcast::channel(1);
 
         let http_client = Client::builder(hyper_util::rt::TokioExecutor::new())
-            .pool_idle_timeout(Duration::from_secs(90))
-            .pool_max_idle_per_host(32)
+            .pool_idle_timeout(HTTP_CLIENT_POOL_IDLE_TIMEOUT)
+            .pool_max_idle_per_host(HTTP_CLIENT_MAX_IDLE_PER_HOST)
             .http2_adaptive_window(true)
             .build_http();
 

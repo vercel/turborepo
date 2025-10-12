@@ -2,6 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use turborepo_microfrontends::Config;
 
+const DEFAULT_PATH_SEGMENT_CAPACITY: usize = 8;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteMatch {
     pub app_name: Arc<str>,
@@ -50,7 +52,7 @@ enum Segment {
 
 impl Router {
     pub fn new(config: &Config) -> Result<Self, String> {
-        let mut routes = Vec::new();
+        let mut routes = Vec::with_capacity(config.development_tasks().len());
         let mut default_app = None;
         let mut app_ports: HashMap<String, u16> = HashMap::new();
 
@@ -68,14 +70,16 @@ impl Router {
             if let Some(routing) = config.routing(app_name) {
                 let mut patterns = Vec::new();
                 for path_group in routing {
+                    let mut group_patterns = Vec::with_capacity(path_group.paths.len());
                     for path in &path_group.paths {
-                        patterns.push(PathPattern::parse(path).map_err(|e| {
+                        group_patterns.push(PathPattern::parse(path).map_err(|e| {
                             format!(
                                 "Invalid routing pattern '{path}' for application '{app_name}': \
                                  {e}"
                             )
                         })?);
                     }
+                    patterns.extend(group_patterns);
                 }
 
                 routes.push(Route {
@@ -128,7 +132,7 @@ impl Router {
         let app_idx = if path.is_empty() {
             self.trie.lookup(&[])
         } else {
-            let mut segments = Vec::with_capacity(8);
+            let mut segments = Vec::with_capacity(DEFAULT_PATH_SEGMENT_CAPACITY);
             for segment in path.split('/') {
                 if !segment.is_empty() {
                     segments.push(segment);

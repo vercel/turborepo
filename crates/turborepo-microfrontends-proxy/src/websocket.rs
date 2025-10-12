@@ -1,27 +1,28 @@
 use std::{
     net::SocketAddr,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
 
 use dashmap::DashMap;
-use hyper::{body::Incoming, upgrade::Upgraded, Request, Response, StatusCode};
+use hyper::{Request, Response, StatusCode, body::Incoming, upgrade::Upgraded};
 use hyper_util::rt::TokioIo;
 use tokio::sync::broadcast;
-use tokio_tungstenite::{tungstenite::protocol::Role, WebSocketStream};
+use tokio_tungstenite::{WebSocketStream, tungstenite::protocol::Role};
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    http::{handle_forward_result, BoxedBody, HttpClient},
-    router::RouteMatch,
     ProxyError,
+    http::{BoxedBody, HttpClient, handle_forward_result},
+    router::RouteMatch,
 };
 
 pub(crate) const MAX_WEBSOCKET_CONNECTIONS: usize = 1000;
 pub(crate) const WEBSOCKET_CLOSE_DELAY: Duration = Duration::from_millis(100);
+pub(crate) const WEBSOCKET_SHUTDOWN_CHANNEL_CAPACITY: usize = 1;
 
 #[derive(Clone)]
 pub(crate) struct WebSocketHandle {
@@ -141,7 +142,7 @@ fn spawn_websocket_proxy(
         return Err("WebSocket connection limit reached".into());
     }
 
-    let (ws_shutdown_tx, _) = broadcast::channel(1);
+    let (ws_shutdown_tx, _) = broadcast::channel(WEBSOCKET_SHUTDOWN_CHANNEL_CAPACITY);
     let ws_id = ws_id_counter.fetch_add(1, Ordering::SeqCst);
     ws_handles.insert(
         ws_id,
