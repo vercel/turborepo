@@ -1,6 +1,6 @@
 use hyper::{
-    Request,
     header::{CONNECTION, CONTENT_LENGTH, TRANSFER_ENCODING, UPGRADE},
+    Request,
 };
 
 use crate::error::ProxyError;
@@ -43,7 +43,7 @@ pub(crate) fn is_websocket_upgrade<B>(req: &Request<B>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use hyper::{Method, header::HeaderValue};
+    use hyper::{header::HeaderValue, Method};
 
     use super::*;
 

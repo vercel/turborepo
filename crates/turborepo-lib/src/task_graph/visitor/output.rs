@@ -3,7 +3,7 @@ use std::io::Write;
 use either::Either;
 use turbopath::AbsoluteSystemPath;
 use turborepo_ui::{
-    OutputClient, OutputWriter, PrefixedUI, sender::TaskSender, tui::event::CacheResult,
+    sender::TaskSender, tui::event::CacheResult, OutputClient, OutputWriter, PrefixedUI,
 };
 
 use crate::run::CacheOutput;

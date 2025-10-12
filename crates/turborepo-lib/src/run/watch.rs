@@ -10,17 +10,17 @@ use thiserror::Error;
 use tokio::{select, sync::Notify, task::JoinHandle};
 use tracing::{instrument, trace, warn};
 use turborepo_repository::package_graph::PackageName;
-use turborepo_signals::{SignalHandler, listeners::get_signal};
+use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
 
 use crate::{
-    DaemonConnector, DaemonPaths,
     commands::CommandBase,
     config::resolve_turbo_config_path,
-    daemon::{DaemonConnectorError, DaemonError, proto},
+    daemon::{proto, DaemonConnectorError, DaemonError},
     get_version, opts,
-    run::{self, Run, builder::RunBuilder, scope::target_selector::InvalidSelectorError},
+    run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
+    DaemonConnector, DaemonPaths,
 };
 
 #[derive(Debug)]

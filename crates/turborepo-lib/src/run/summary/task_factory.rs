@@ -5,16 +5,16 @@ use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName
 use turborepo_task_id::TaskId;
 
 use super::{
-    SinglePackageTaskSummary, TaskSummary,
     execution::TaskExecutionSummary,
     task::{SharedTaskSummary, TaskEnvVarSummary},
+    SinglePackageTaskSummary, TaskSummary,
 };
 use crate::{
     cli,
     engine::{Engine, TaskNode},
     opts::RunOpts,
     task_graph::TaskDefinition,
-    task_hash::{TaskHashTracker, get_external_deps_hash},
+    task_hash::{get_external_deps_hash, TaskHashTracker},
 };
 
 pub struct TaskSummaryFactory<'a> {

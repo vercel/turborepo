@@ -1,14 +1,14 @@
 use std::net::SocketAddr;
 
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
+use http_body_util::{combinators::BoxBody, BodyExt, Full};
 use hyper::{
-    Request, Response, StatusCode,
     body::{Bytes, Incoming},
+    Request, Response, StatusCode,
 };
 use hyper_util::client::legacy::Client;
 use tracing::{debug, error, warn};
 
-use crate::{ProxyError, error::ErrorPage, router::RouteMatch};
+use crate::{error::ErrorPage, router::RouteMatch, ProxyError};
 
 pub(crate) type BoxedBody = BoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 pub(crate) type HttpClient = Client<hyper_util::client::legacy::connect::HttpConnector, Incoming>;

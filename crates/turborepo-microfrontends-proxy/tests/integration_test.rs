@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, time::Duration};
 
-use hyper::{Request, Response, body::Incoming, service::service_fn};
+use hyper::{body::Incoming, service::service_fn, Request, Response};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 use turborepo_microfrontends::Config;
@@ -273,8 +273,8 @@ async fn test_end_to_end_proxy() {
 #[tokio::test]
 async fn test_websocket_detection() {
     use hyper::{
-        Request,
         header::{CONNECTION, UPGRADE},
+        Request,
     };
 
     let req = Request::builder()
