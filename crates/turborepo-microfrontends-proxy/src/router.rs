@@ -52,7 +52,7 @@ enum Segment {
 
 impl Router {
     pub fn new(config: &Config) -> Result<Self, String> {
-        let mut routes = Vec::with_capacity(config.development_tasks().len());
+        let mut routes = Vec::new();
         let mut default_app = None;
         let mut app_ports: HashMap<String, u16> = HashMap::new();
 
