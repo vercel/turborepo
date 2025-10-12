@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, time::Duration};
 
-use hyper::{body::Incoming, service::service_fn, Request, Response};
+use hyper::{Request, Response, body::Incoming, service::service_fn};
 use hyper_util::rt::TokioIo;
 use tokio::net::TcpListener;
 use turborepo_microfrontends::Config;
@@ -201,11 +201,11 @@ async fn test_pattern_matching_edge_cases() {
 async fn mock_server(
     port: u16,
     response_text: &'static str,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<tokio::task::JoinHandle<()>, Box<dyn std::error::Error>> {
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = TcpListener::bind(addr).await?;
 
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         loop {
             let (stream, _) = listener.accept().await.unwrap();
             let io = TokioIo::new(stream);
@@ -226,14 +226,14 @@ async fn mock_server(
     });
 
     tokio::time::sleep(WEBSOCKET_CLOSE_DELAY).await;
-    Ok(())
+    Ok(handle)
 }
 
 #[tokio::test]
 #[ignore] // This test requires actual HTTP servers and may conflict with other tests
 async fn test_end_to_end_proxy() {
-    mock_server(5000, "web app").await.unwrap();
-    mock_server(5001, "docs app").await.unwrap();
+    let web_handle = mock_server(5000, "web app").await.unwrap();
+    let docs_handle = mock_server(5001, "docs app").await.unwrap();
 
     let config_json = r#"{
         "version": "1",
@@ -268,13 +268,16 @@ async fn test_end_to_end_proxy() {
 
     // Note: Actual HTTP requests would go here
     // This is a placeholder for when we want to add full E2E tests
+
+    web_handle.abort();
+    docs_handle.abort();
 }
 
 #[tokio::test]
 async fn test_websocket_detection() {
     use hyper::{
-        header::{CONNECTION, UPGRADE},
         Request,
+        header::{CONNECTION, UPGRADE},
     };
 
     let req = Request::builder()
