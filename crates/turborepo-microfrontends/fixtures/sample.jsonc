@@ -31,9 +31,8 @@
 
       "development": {
         // Local development port (Turborepo-only uses this)
-        "local": {
-          "port": 3331
-        },
+        // Can be a plain number or a string with hostname:port
+        "local": 3331,
 
         // Vercel-only: Fallback to preview/production when not running locally
         "fallback": {
@@ -80,9 +79,7 @@
       ],
 
       "development": {
-        "local": {
-          "port": 3332
-        },
+        "local": 3332,
         "task": "dev",
 
         // Vercel-only: Fallback for this specific app
@@ -115,9 +112,7 @@
         }
       ],
       "development": {
-        "local": {
-          "port": 3333
-        },
+        "local": 3333,
         "task": "dev"
       }
     }

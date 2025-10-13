@@ -59,9 +59,66 @@ struct Development {
     fallback: Option<String>,
 }
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Serialize, Default, Clone, Copy)]
 struct LocalHost {
     port: Option<u16>,
+}
+
+impl biome_deserialize::Deserializable for LocalHost {
+    fn deserialize(
+        value: &impl biome_deserialize::DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<biome_deserialize::DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        use biome_deserialize::VisitableType;
+
+        // Check what type we have
+        match value.visitable_type()? {
+            // Deserialize as a plain number (just the port)
+            VisitableType::NUMBER => {
+                let port_num = u16::deserialize(value, name, diagnostics)?;
+                Some(LocalHost {
+                    port: Some(port_num),
+                })
+            }
+            // Deserialize as a string (host with optional port)
+            VisitableType::STR => {
+                let host_str = String::deserialize(value, name, diagnostics)?;
+                let port = parse_port_from_host(&host_str);
+                Some(LocalHost { port })
+            }
+            _ => {
+                diagnostics.push(
+                    biome_deserialize::DeserializationDiagnostic::new(format!(
+                        "Expected a number or string for '{name}'"
+                    ))
+                    .with_range(value.range()),
+                );
+                None
+            }
+        }
+    }
+}
+
+fn parse_port_from_host(host: &str) -> Option<u16> {
+    // Try to extract port from host string
+    // Formats: "hostname:port", "protocol://hostname:port"
+
+    // Remove protocol if present
+    let without_protocol = if let Some(idx) = host.find("://") {
+        &host[idx + 3..]
+    } else {
+        host
+    };
+
+    // Extract port after the last colon
+    if let Some(colon_idx) = without_protocol.rfind(':')
+        && let Ok(port) = without_protocol[colon_idx + 1..].parse::<u16>()
+    {
+        return Some(port);
+    }
+
+    None
 }
 
 impl ConfigV1 {
@@ -296,5 +353,128 @@ mod test {
     #[test]
     fn test_generate_port() {
         assert_eq!(generate_port_from_name("test-450"), 7724);
+    }
+
+    #[test]
+    fn test_local_port_plain_number() {
+        let input = r#"{
+        "version": "1",
+        "applications": {
+          "web": {
+            "development": {
+              "local": 3000
+            }
+          }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "somewhere").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(config_v1.port("web"), Some(3000));
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_local_port_string_with_port() {
+        let input = r#"{
+        "version": "1",
+        "applications": {
+          "web": {
+            "development": {
+              "local": "localhost:3002"
+            }
+          }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "somewhere").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(config_v1.port("web"), Some(3002));
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_local_port_string_with_protocol() {
+        let input = r#"{
+        "version": "1",
+        "applications": {
+          "web": {
+            "development": {
+              "local": "http://localhost:3003"
+            }
+          }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "somewhere").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(config_v1.port("web"), Some(3003));
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_local_port_string_without_port() {
+        let input = r#"{
+        "version": "1",
+        "applications": {
+          "web": {
+            "development": {
+              "local": "localhost"
+            }
+          }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "somewhere").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                // Should fall back to generated port
+                assert!(config_v1.port("web").is_some());
+                let port = config_v1.port("web").unwrap();
+                assert!(port >= MIN_PORT && port < MAX_PORT);
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_user_config_format() {
+        // Test the exact format from the user's issue
+        let input = r#"{
+        "$schema": "https://openapi.vercel.sh/microfrontends.json",
+        "applications": {
+          "microfrontends-marketing": {
+            "development": {
+              "local": 3000,
+              "fallback": "microfrontends-marketing.labs.vercel.dev"
+            }
+          },
+          "microfrontends-docs": {
+            "development": {
+              "local": 3001
+            },
+            "routing": [
+              {
+                "group": "docs",
+                "paths": ["/docs", "/docs/:path*"]
+              }
+            ]
+          }
+        }
+      }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                // Verify the ports are correctly parsed
+                assert_eq!(config_v1.port("microfrontends-marketing"), Some(3000));
+                assert_eq!(config_v1.port("microfrontends-docs"), Some(3001));
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
     }
 }
