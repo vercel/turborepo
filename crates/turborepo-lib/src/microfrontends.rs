@@ -458,6 +458,106 @@ mod test {
     }
 
     #[test]
+    fn test_use_turborepo_proxy_disabled_when_vercel_microfrontends_present() {
+        // Create a microfrontends config
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                    "docs": {
+                        "development": {
+                            "task": "serve"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        )
+        .unwrap();
+
+        // When @vercel/microfrontends package is present, use_turborepo_proxy should be
+        // false
+        let result_with_mfe_package = PackageGraphResult::new(
+            HashSet::default(),
+            vec![
+                (MICROFRONTENDS_PACKAGE, Ok(None)),
+                ("web", Ok(Some(config.clone()))),
+            ]
+            .into_iter(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            result_with_mfe_package.mfe_package,
+            Some(MICROFRONTENDS_PACKAGE)
+        );
+        assert!(
+            result_with_mfe_package
+                .configs
+                .values()
+                .all(|config| !config.use_turborepo_proxy),
+            "use_turborepo_proxy should be false when @vercel/microfrontends is present"
+        );
+
+        // When @vercel/microfrontends package is NOT present, use_turborepo_proxy
+        // should be true
+        let result_without_mfe_package = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        assert_eq!(result_without_mfe_package.mfe_package, None);
+        assert!(
+            result_without_mfe_package
+                .configs
+                .values()
+                .all(|config| config.use_turborepo_proxy),
+            "use_turborepo_proxy should be true when @vercel/microfrontends is NOT present"
+        );
+    }
+
+    #[test]
+    fn test_use_turborepo_proxy_disabled_with_custom_proxy_script() {
+        // Create a microfrontends config
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        )
+        .unwrap();
+
+        // When package has a custom proxy script, use_turborepo_proxy should be false
+        let mut proxy_scripts = HashMap::new();
+        proxy_scripts.insert("web", true);
+
+        let result_with_proxy_script = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("web", Ok(Some(config)))].into_iter(),
+            proxy_scripts,
+        )
+        .unwrap();
+
+        assert_eq!(result_with_proxy_script.mfe_package, None);
+        assert!(
+            result_with_proxy_script
+                .configs
+                .values()
+                .all(|config| !config.use_turborepo_proxy),
+            "use_turborepo_proxy should be false when package has custom proxy script"
+        );
+    }
+
+    #[test]
     fn test_unsupported_versions_ignored() {
         let result = PackageGraphResult::new(
             HashSet::default(),
