@@ -273,8 +273,8 @@ mod tests {
         assert!(html.contains("/docs/api"));
         assert!(html.contains("docs"));
         assert!(html.contains("3001"));
-        assert!(html.contains("Connection refused"));
-        assert!(html.contains("turbo run docs#dev"));
+        assert!(html.contains("Application unreachable"));
+        assert!(html.contains("turbo run dev"));
     }
 
     #[test]

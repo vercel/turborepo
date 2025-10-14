@@ -155,6 +155,12 @@ impl MicrofrontendsConfigs {
         task_ids.into_iter().any(|task_id| task_id.task() == "dev")
     }
 
+    pub fn task_uses_turborepo_proxy(&self, task_id: &TaskId) -> bool {
+        self.configs
+            .values()
+            .any(|config| config.tasks.contains_key(task_id) && config.use_turborepo_proxy)
+    }
+
     pub fn update_turbo_json(
         &self,
         package_name: &PackageName,
@@ -904,5 +910,214 @@ mod test {
         let task_ids: Vec<TaskId> = vec![];
 
         assert!(!configs.has_dev_task(task_ids.iter()));
+    }
+
+    #[test]
+    fn test_task_uses_turborepo_proxy_when_enabled() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        )
+        .unwrap();
+
+        let result = PackageGraphResult::new(
+            HashSet::from_iter(["web"].iter().copied()),
+            vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        let configs = MicrofrontendsConfigs {
+            configs: result.configs,
+            mfe_package: None,
+            has_mfe_dependency: false,
+        };
+
+        let task_id = TaskId::new("web", "dev");
+        assert!(
+            configs.task_uses_turborepo_proxy(&task_id),
+            "Task should be using Turborepo proxy when @vercel/microfrontends is not present"
+        );
+    }
+
+    #[test]
+    fn test_task_not_uses_turborepo_proxy_with_mfe_package() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        )
+        .unwrap();
+
+        let result = PackageGraphResult::new(
+            HashSet::from_iter(["web"].iter().copied()),
+            vec![
+                (MICROFRONTENDS_PACKAGE, Ok(None)),
+                ("web", Ok(Some(config))),
+            ]
+            .into_iter(),
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        let configs = MicrofrontendsConfigs {
+            configs: result.configs,
+            mfe_package: Some(MICROFRONTENDS_PACKAGE),
+            has_mfe_dependency: false,
+        };
+
+        let task_id = TaskId::new("web", "dev");
+        assert!(
+            !configs.task_uses_turborepo_proxy(&task_id),
+            "Task should not be using Turborepo proxy when @vercel/microfrontends package is \
+             present"
+        );
+    }
+
+    #[test]
+    fn test_task_not_uses_turborepo_proxy_with_mfe_dependency() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        )
+        .unwrap();
+
+        let mut mfe_dependencies = HashMap::new();
+        mfe_dependencies.insert("web", true);
+
+        let result = PackageGraphResult::new(
+            HashSet::from_iter(["web"].iter().copied()),
+            vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
+            mfe_dependencies,
+        )
+        .unwrap();
+
+        let configs = MicrofrontendsConfigs {
+            configs: result.configs,
+            mfe_package: None,
+            has_mfe_dependency: true,
+        };
+
+        let task_id = TaskId::new("web", "dev");
+        assert!(
+            !configs.task_uses_turborepo_proxy(&task_id),
+            "Task should not be using Turborepo proxy when package depends on \
+             @vercel/microfrontends"
+        );
+    }
+
+    #[test]
+    fn test_task_uses_turborepo_proxy_returns_false_for_non_mfe_task() {
+        let configs = MicrofrontendsConfigs {
+            configs: HashMap::new(),
+            mfe_package: None,
+            has_mfe_dependency: false,
+        };
+
+        let task_id = TaskId::new("web", "build");
+        assert!(
+            !configs.task_uses_turborepo_proxy(&task_id),
+            "Non-MFE task should not be using Turborepo proxy"
+        );
+    }
+
+    #[test]
+    fn test_turbo_mfe_port_with_port_number() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {
+                        "development": {
+                            "local": 3001
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        )
+        .unwrap();
+
+        let result = PackageGraphResult::new(
+            HashSet::from_iter(["web"].iter().copied()),
+            vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        let configs = MicrofrontendsConfigs {
+            configs: result.configs,
+            mfe_package: None,
+            has_mfe_dependency: false,
+        };
+
+        let task_id = TaskId::new("web", "dev");
+        assert_eq!(
+            configs.dev_task_port(&task_id),
+            Some(3001),
+            "Port should be extracted from local config"
+        );
+    }
+
+    #[test]
+    fn test_turbo_mfe_port_with_url_string() {
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {
+                        "development": {
+                            "local": "http://localhost:3000"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        )
+        .unwrap();
+
+        let result = PackageGraphResult::new(
+            HashSet::from_iter(["web"].iter().copied()),
+            vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        let configs = MicrofrontendsConfigs {
+            configs: result.configs,
+            mfe_package: None,
+            has_mfe_dependency: false,
+        };
+
+        let task_id = TaskId::new("web", "dev");
+        assert_eq!(
+            configs.dev_task_port(&task_id),
+            Some(3000),
+            "Port should be extracted from URL string"
+        );
     }
 }

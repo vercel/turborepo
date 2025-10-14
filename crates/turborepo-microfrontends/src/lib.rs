@@ -162,6 +162,12 @@ impl Config {
         }
     }
 
+    pub fn fallback(&self, app_name: &str) -> Option<&str> {
+        match &self.inner {
+            ConfigInner::V1(config_v1) => config_v1.fallback(app_name),
+        }
+    }
+
     fn load_v1_dir(
         dir: &AbsoluteSystemPath,
     ) -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
@@ -347,5 +353,29 @@ mod test {
         let config = Config::load_from_dir(repo_root, pkg_dir);
 
         assert_matches!(config, Err(Error::UnsupportedVersion(..)));
+    }
+
+    #[test]
+    fn test_fallback_accessor() {
+        let input = r#"{
+        "applications": {
+          "web": {
+            "development": {
+              "local": 3000,
+              "fallback": "web.example.com"
+            }
+          },
+          "docs": {
+            "development": {
+              "local": 3001
+            }
+          }
+        }
+      }"#;
+        let config = Config::from_str(input, "microfrontends.json").unwrap();
+
+        assert_eq!(config.fallback("web"), Some("web.example.com"));
+        assert_eq!(config.fallback("docs"), None);
+        assert_eq!(config.fallback("nonexistent"), None);
     }
 }

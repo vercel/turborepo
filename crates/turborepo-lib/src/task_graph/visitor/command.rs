@@ -151,6 +151,16 @@ impl<'a> CommandProvider for PackageGraphCommandProvider<'a> {
             cmd.env("TURBO_PORT", port.to_string());
         }
 
+        // If this task is using the Turborepo proxy (not @vercel/microfrontends),
+        // set the local port value in an env var
+        if let Some(mfe_configs) = self.mfe_configs {
+            if mfe_configs.task_uses_turborepo_proxy(task_id) {
+                if let Some(port) = mfe_configs.dev_task_port(task_id) {
+                    cmd.env("TURBO_MFE_PORT", port.to_string());
+                }
+            }
+        }
+
         // We always open stdin and the visitor will close it depending on task
         // configuration
         cmd.open_stdin();

@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use http_body_util::{BodyExt, Full, combinators::BoxBody};
+use http_body_util::{BodyExt, Empty, Full, combinators::BoxBody};
 use hyper::{
     Request, Response, StatusCode,
     body::{Bytes, Incoming},
@@ -25,7 +25,7 @@ pub(crate) async fn handle_http_request(
         &route_match.app_name,
         route_match.port,
         remote_addr,
-        http_client,
+        http_client.clone(),
     )
     .await;
 
@@ -34,17 +34,22 @@ pub(crate) async fn handle_http_request(
         path,
         route_match.app_name,
         route_match.port,
+        route_match.fallback,
         remote_addr,
+        http_client,
         "HTTP",
     )
+    .await
 }
 
-pub(crate) fn handle_forward_result(
+pub(crate) async fn handle_forward_result(
     result: Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>>,
     path: String,
     app_name: impl AsRef<str>,
     port: u16,
+    fallback: Option<std::sync::Arc<str>>,
     remote_addr: SocketAddr,
+    http_client: HttpClient,
     request_type: &str,
 ) -> Result<Response<BoxedBody>, ProxyError> {
     match result {
@@ -65,6 +70,29 @@ pub(crate) fn handle_forward_result(
                 app_name.as_ref(),
                 e
             );
+
+            if let Some(fallback_url) = fallback {
+                match try_fallback(
+                    &path,
+                    &fallback_url,
+                    remote_addr,
+                    http_client,
+                    app_name.as_ref(),
+                )
+                .await
+                {
+                    Ok(response) => return Ok(response),
+                    Err(fallback_error) => {
+                        warn!(
+                            "Fallback URL {} also failed for {}: {}",
+                            fallback_url,
+                            app_name.as_ref(),
+                            fallback_error
+                        );
+                    }
+                }
+            }
+
             build_error_response(path, app_name.as_ref(), port)
         }
     }
@@ -139,6 +167,62 @@ pub(crate) async fn forward_request(
     Ok(response)
 }
 
+async fn try_fallback(
+    path: &str,
+    fallback_base_url: &str,
+    remote_addr: SocketAddr,
+    _http_client: HttpClient,
+    app_name: &str,
+) -> Result<Response<BoxedBody>, Box<dyn std::error::Error + Send + Sync>> {
+    let fallback_url = normalize_fallback_url(fallback_base_url, path)?;
+
+    debug!(
+        "Attempting fallback for {} to URL: {}",
+        app_name, fallback_url
+    );
+
+    let https = hyper_rustls::HttpsConnectorBuilder::new()
+        .with_native_roots()?
+        .https_or_http()
+        .enable_http1()
+        .build();
+
+    let client: Client<_, Empty<Bytes>> =
+        Client::builder(hyper_util::rt::TokioExecutor::new()).build(https);
+
+    let req = Request::builder()
+        .uri(&fallback_url)
+        .header("X-Forwarded-For", remote_addr.ip().to_string())
+        .header("X-Forwarded-Proto", "http")
+        .body(Empty::<Bytes>::new())?;
+
+    let response = client.request(req).await?;
+
+    debug!(
+        "Fallback response for {} status: {}",
+        app_name,
+        response.status()
+    );
+
+    convert_response_to_boxed_body(response, app_name).map_err(|e| Box::new(e) as Box<_>)
+}
+
+fn normalize_fallback_url(
+    fallback_base: &str,
+    path: &str,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let base = if fallback_base.starts_with("http://") || fallback_base.starts_with("https://") {
+        fallback_base.to_string()
+    } else {
+        format!("https://{}", fallback_base)
+    };
+
+    let base = base.trim_end_matches('/');
+    let normalized_path = if path.is_empty() { "/" } else { path };
+
+    Ok(format!("{}{}", base, normalized_path))
+}
+
 #[cfg(test)]
 mod tests {
     use http_body_util::Full;
@@ -178,5 +262,33 @@ mod tests {
         let uri = parsed.unwrap();
         assert_eq!(uri.path(), "/api/test");
         assert_eq!(uri.query(), Some("foo=bar&baz=qux"));
+    }
+
+    #[test]
+    fn test_normalize_fallback_url() {
+        assert_eq!(
+            normalize_fallback_url("example.com", "/docs").unwrap(),
+            "https://example.com/docs"
+        );
+
+        assert_eq!(
+            normalize_fallback_url("https://example.com", "/api/test").unwrap(),
+            "https://example.com/api/test"
+        );
+
+        assert_eq!(
+            normalize_fallback_url("http://localhost:8080", "/").unwrap(),
+            "http://localhost:8080/"
+        );
+
+        assert_eq!(
+            normalize_fallback_url("example.com/", "/path").unwrap(),
+            "https://example.com/path"
+        );
+
+        assert_eq!(
+            normalize_fallback_url("example.com", "").unwrap(),
+            "https://example.com/"
+        );
     }
 }

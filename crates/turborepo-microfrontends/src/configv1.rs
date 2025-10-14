@@ -190,6 +190,11 @@ impl ConfigV1 {
         let application = self.applications.get(app_name)?;
         application.routing.as_deref()
     }
+
+    pub fn fallback(&self, name: &str) -> Option<&str> {
+        let application = self.applications.get(name)?;
+        application.fallback()
+    }
 }
 
 impl Application {
@@ -208,6 +213,10 @@ impl Application {
 
     fn package_name<'a>(&'a self, key: &'a str) -> &'a str {
         self.package_name.as_deref().unwrap_or(key)
+    }
+
+    fn fallback(&self) -> Option<&str> {
+        self.development.as_ref()?.fallback.as_deref()
     }
 }
 
@@ -482,6 +491,41 @@ mod test {
                 // Verify the ports are correctly parsed
                 assert_eq!(config_v1.port("microfrontends-marketing"), Some(3000));
                 assert_eq!(config_v1.port("microfrontends-docs"), Some(3001));
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_fallback_parsing() {
+        let input = r#"{
+        "applications": {
+          "web": {
+            "development": {
+              "local": 3000,
+              "fallback": "example.com"
+            }
+          },
+          "docs": {
+            "development": {
+              "local": 3001,
+              "fallback": "https://docs.example.com"
+            }
+          },
+          "api": {
+            "development": {
+              "local": 3002
+            }
+          }
+        }
+      }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(config_v1.fallback("web"), Some("example.com"));
+                assert_eq!(config_v1.fallback("docs"), Some("https://docs.example.com"));
+                assert_eq!(config_v1.fallback("api"), None);
+                assert_eq!(config_v1.fallback("nonexistent"), None);
             }
             ParseResult::Reference(_) => panic!("expected to get main config"),
         }

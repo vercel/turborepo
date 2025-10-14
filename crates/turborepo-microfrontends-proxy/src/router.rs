@@ -8,6 +8,7 @@ const DEFAULT_PATH_SEGMENT_CAPACITY: usize = 8;
 pub struct RouteMatch {
     pub app_name: Arc<str>,
     pub port: u16,
+    pub fallback: Option<Arc<str>>,
 }
 
 #[derive(Clone)]
@@ -21,6 +22,7 @@ pub struct Router {
 struct AppInfo {
     app_name: Arc<str>,
     port: u16,
+    fallback: Option<Arc<str>>,
 }
 
 #[derive(Clone, Default)]
@@ -103,9 +105,13 @@ impl Router {
 
         for route in routes {
             let app_idx = apps.len();
+            let fallback = config
+                .fallback(&route.app_name)
+                .map(|s| Arc::from(s.to_string()));
             apps.push(AppInfo {
                 app_name: Arc::from(route.app_name),
                 port: route.port,
+                fallback,
             });
 
             for pattern in route.patterns {
@@ -114,9 +120,13 @@ impl Router {
         }
 
         let default_app_idx = apps.len();
+        let default_fallback = config
+            .fallback(&default_app.0)
+            .map(|s| Arc::from(s.to_string()));
         apps.push(AppInfo {
             app_name: Arc::from(default_app.0),
             port: default_app.1,
+            fallback: default_fallback,
         });
 
         Ok(Self {
@@ -146,6 +156,7 @@ impl Router {
         RouteMatch {
             app_name: app.app_name.clone(),
             port: app.port,
+            fallback: app.fallback.clone(),
         }
     }
 }
