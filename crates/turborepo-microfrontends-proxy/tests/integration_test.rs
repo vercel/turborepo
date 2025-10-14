@@ -1,7 +1,12 @@
 use std::{net::SocketAddr, time::Duration};
 
-use hyper::{Request, Response, body::Incoming, service::service_fn};
-use hyper_util::rt::TokioIo;
+use http_body_util::{BodyExt, Full};
+use hyper::{
+    Request, Response,
+    body::{Bytes, Incoming},
+    service::service_fn,
+};
+use hyper_util::{client::legacy::Client, rt::TokioIo};
 use tokio::net::TcpListener;
 use turborepo_microfrontends::Config;
 use turborepo_microfrontends_proxy::{ProxyServer, Router};
@@ -198,6 +203,12 @@ async fn test_pattern_matching_edge_cases() {
     );
 }
 
+async fn find_available_port() -> Result<u16, Box<dyn std::error::Error>> {
+    let listener = TcpListener::bind("127.0.0.1:0").await?;
+    let port = listener.local_addr()?.port();
+    Ok(port)
+}
+
 async fn mock_server(
     port: u16,
     response_text: &'static str,
@@ -214,7 +225,7 @@ async fn mock_server(
                 Ok::<_, hyper::Error>(
                     Response::builder()
                         .status(200)
-                        .body(response_text.to_string())
+                        .body(Full::new(Bytes::from(response_text)))
                         .unwrap(),
                 )
             });
@@ -230,44 +241,97 @@ async fn mock_server(
 }
 
 #[tokio::test]
-#[ignore] // This test requires actual HTTP servers and may conflict with other tests
 async fn test_end_to_end_proxy() {
-    let web_handle = mock_server(5000, "web app").await.unwrap();
-    let docs_handle = mock_server(5001, "docs app").await.unwrap();
+    let web_port = find_available_port().await.unwrap();
+    let docs_port = find_available_port().await.unwrap();
+    let proxy_port = find_available_port().await.unwrap();
 
-    let config_json = r#"{
+    let web_handle = mock_server(web_port, "web app").await.unwrap();
+    let docs_handle = mock_server(docs_port, "docs app").await.unwrap();
+
+    let config_json = format!(
+        r#"{{
         "version": "1",
-        "options": {
-            "localProxyPort": 5024
-        },
-        "applications": {
-            "web": {
-                "development": {
-                    "local": { "port": 5000 }
-                }
-            },
-            "docs": {
-                "development": {
-                    "local": { "port": 5001 }
-                },
+        "options": {{
+            "localProxyPort": {}
+        }},
+        "applications": {{
+            "web": {{
+                "development": {{
+                    "local": {{ "port": {} }}
+                }}
+            }},
+            "docs": {{
+                "development": {{
+                    "local": {{ "port": {} }}
+                }},
                 "routing": [
-                    { "paths": ["/docs", "/docs/:path*"] }
+                    {{ "paths": ["/docs", "/docs/:path*"] }}
                 ]
-            }
-        }
-    }"#;
+            }}
+        }}
+    }}"#,
+        proxy_port, web_port, docs_port
+    );
 
-    let config = Config::from_str(config_json, "test.json").unwrap();
-    let server = ProxyServer::new(config).unwrap();
+    let config = Config::from_str(&config_json, "test.json").unwrap();
+    let mut server = ProxyServer::new(config).unwrap();
+
+    let (shutdown_complete_tx, shutdown_complete_rx) = tokio::sync::oneshot::channel();
+    server.set_shutdown_complete_tx(shutdown_complete_tx);
+    let shutdown_handle = server.shutdown_handle();
 
     tokio::spawn(async move {
         server.run().await.unwrap();
     });
 
-    tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+    tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // Note: Actual HTTP requests would go here
-    // This is a placeholder for when we want to add full E2E tests
+    let connector = hyper_util::client::legacy::connect::HttpConnector::new();
+    let client: Client<_, Full<Bytes>> =
+        Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector);
+
+    let web_response = client
+        .get(format!("http://127.0.0.1:{}/", proxy_port).parse().unwrap())
+        .await
+        .unwrap();
+    let web_body = web_response.into_body().collect().await.unwrap().to_bytes();
+    assert_eq!(web_body, "web app");
+
+    let docs_response = client
+        .get(
+            format!("http://127.0.0.1:{}/docs", proxy_port)
+                .parse()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let docs_body = docs_response
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    assert_eq!(docs_body, "docs app");
+
+    let docs_subpath_response = client
+        .get(
+            format!("http://127.0.0.1:{}/docs/api/reference", proxy_port)
+                .parse()
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let docs_subpath_body = docs_subpath_response
+        .into_body()
+        .collect()
+        .await
+        .unwrap()
+        .to_bytes();
+    assert_eq!(docs_subpath_body, "docs app");
+
+    let _ = shutdown_handle.send(());
+    let _ = tokio::time::timeout(Duration::from_secs(2), shutdown_complete_rx).await;
 
     web_handle.abort();
     docs_handle.abort();
