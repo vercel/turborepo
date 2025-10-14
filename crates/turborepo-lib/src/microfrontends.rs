@@ -33,40 +33,44 @@ impl MicrofrontendsConfigs {
         repo_root: &AbsoluteSystemPath,
         package_graph: &PackageGraph,
     ) -> Result<Option<Self>, Error> {
-        let package_names = package_graph
-            .packages()
-            .map(|(name, _)| name.as_str())
-            .collect();
-        let package_has_proxy_script: HashMap<&str, bool> = package_graph
-            .packages()
-            .map(|(name, info)| {
-                (
-                    name.as_str(),
-                    info.package_json.scripts.contains_key("proxy"),
-                )
-            })
-            .collect();
-        let package_has_mfe_dependency: HashMap<&str, bool> = package_graph
-            .packages()
-            .map(|(name, info)| {
-                (
-                    name.as_str(),
+        struct PackageMetadata<'a> {
+            names: HashSet<&'a str>,
+            has_proxy: HashMap<&'a str, bool>,
+            has_mfe_dep: HashMap<&'a str, bool>,
+            configs: Vec<(&'a str, Result<Option<MFEConfig>, Error>)>,
+        }
+
+        let metadata = package_graph.packages().fold(
+            PackageMetadata {
+                names: HashSet::new(),
+                has_proxy: HashMap::new(),
+                has_mfe_dep: HashMap::new(),
+                configs: Vec::new(),
+            },
+            |mut acc, (name, info)| {
+                let name_str = name.as_str();
+                acc.names.insert(name_str);
+                acc.has_proxy
+                    .insert(name_str, info.package_json.scripts.contains_key("proxy"));
+                acc.has_mfe_dep.insert(
+                    name_str,
                     info.package_json
                         .all_dependencies()
                         .any(|(dep, _)| dep.as_str() == MICROFRONTENDS_PACKAGE),
-                )
-            })
-            .collect();
-        Self::from_configs(
-            package_names,
-            package_graph.packages().map(|(name, info)| {
-                (
-                    name.as_str(),
+                );
+                acc.configs.push((
+                    name_str,
                     MFEConfig::load_from_dir(repo_root, info.package_path()),
-                )
-            }),
-            package_has_proxy_script,
-            package_has_mfe_dependency,
+                ));
+                acc
+            },
+        );
+
+        Self::from_configs(
+            metadata.names,
+            metadata.configs.into_iter(),
+            metadata.has_proxy,
+            metadata.has_mfe_dep,
         )
     }
 
