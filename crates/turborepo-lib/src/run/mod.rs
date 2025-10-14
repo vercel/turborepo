@@ -338,10 +338,21 @@ impl Run {
         }
 
         let shutdown_handle = server.shutdown_handle();
-        let (shutdown_complete_tx, shutdown_complete_rx) = tokio::sync::oneshot::channel();
-        server.set_shutdown_complete_tx(shutdown_complete_tx);
+        let (proxy_shutdown_complete_tx, proxy_shutdown_complete_rx) =
+            tokio::sync::oneshot::channel();
+        let (cleanup_complete_tx, cleanup_complete_rx) = tokio::sync::oneshot::channel();
+        let (signal_handler_complete_tx, signal_handler_complete_rx) =
+            tokio::sync::oneshot::channel();
+        server.set_shutdown_complete_tx(proxy_shutdown_complete_tx);
 
-        self.register_proxy_signal_handler(shutdown_handle.clone());
+        tokio::spawn(async move {
+            if proxy_shutdown_complete_rx.await.is_ok() {
+                let _ = cleanup_complete_tx.send(());
+                let _ = signal_handler_complete_tx.send(());
+            }
+        });
+
+        self.register_proxy_signal_handler(shutdown_handle.clone(), signal_handler_complete_rx);
 
         tokio::spawn(async move {
             if let Err(e) = server.run().await {
@@ -350,10 +361,14 @@ impl Run {
         });
 
         info!("Turborepo proxy started successfully");
-        Ok(Some((shutdown_handle, shutdown_complete_rx)))
+        Ok(Some((shutdown_handle, cleanup_complete_rx)))
     }
 
-    fn register_proxy_signal_handler(&self, shutdown_handle: tokio::sync::broadcast::Sender<()>) {
+    fn register_proxy_signal_handler(
+        &self,
+        shutdown_handle: tokio::sync::broadcast::Sender<()>,
+        shutdown_complete_rx: tokio::sync::oneshot::Receiver<()>,
+    ) {
         if let Some(subscriber) = self.signal_handler.subscribe() {
             let process_manager = self.processes.clone();
             tokio::spawn(async move {
@@ -361,9 +376,25 @@ impl Run {
                 let _guard = subscriber.listen().await;
                 info!("Signal received! Shutting down proxy BEFORE process manager stops");
                 let _ = shutdown_handle.send(());
-                debug!("Proxy shutdown signal sent, waiting for websockets to close");
-                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                info!("Proxy websocket close complete, now stopping child processes");
+                debug!("Proxy shutdown signal sent, waiting for shutdown completion notification");
+
+                match tokio::time::timeout(
+                    tokio::time::Duration::from_secs(2),
+                    shutdown_complete_rx,
+                )
+                .await
+                {
+                    Ok(Ok(())) => {
+                        info!("Proxy websocket close complete, now stopping child processes");
+                    }
+                    Ok(Err(_)) => {
+                        warn!("Proxy shutdown notification channel closed unexpectedly");
+                    }
+                    Err(_) => {
+                        warn!("Proxy shutdown notification timed out after 2 seconds");
+                    }
+                }
+
                 process_manager.stop().await;
                 debug!("Child processes stopped");
             });
