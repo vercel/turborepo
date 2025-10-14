@@ -34,24 +34,24 @@ use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{
-    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
-    BOLD_GREY, GREY,
+    BOLD_GREY, ColorConfig, GREY, cprint, cprintln, sender::UISender, tui, tui::TuiSender,
+    wui::sender::WebUISender,
 };
 
 pub use crate::run::error::Error;
 use crate::{
+    DaemonClient, DaemonConnector,
     cli::EnvMode,
     engine::Engine,
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
+    task_hash::{PackageInputsHashes, get_external_deps_hash, get_internal_deps_hash},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
-    DaemonClient, DaemonConnector,
 };
 
 #[derive(Clone)]
@@ -292,213 +292,202 @@ impl Run {
         }
     }
 
-    pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
-        // Start Turborepo proxy if microfrontends are configured and should use
-        // built-in proxy and we're running dev tasks
-        let proxy_shutdown: Option<(
+    async fn start_proxy_if_needed(
+        &self,
+    ) -> Result<
+        Option<(
             tokio::sync::broadcast::Sender<()>,
             tokio::sync::oneshot::Receiver<()>,
-        )> = if let Some(mfe_configs) = &self.micro_frontend_configs {
-            if mfe_configs.should_use_turborepo_proxy()
-                && mfe_configs.has_dev_task(self.engine.task_ids())
-            {
-                info!("Starting Turborepo microfrontends proxy");
-                // Load the config from the first package that has one
-                // Sort packages to ensure deterministic behavior
-                let config_path = mfe_configs
-                    .configs()
-                    .sorted_by(|(a, _), (b, _)| a.cmp(b))
-                    .find_map(|(pkg, _tasks)| mfe_configs.config_filename(pkg));
-
-                if let Some(config_path) = config_path {
-                    let full_path = self.repo_root.join_unix_path(config_path);
-                    match std::fs::read_to_string(&full_path) {
-                        Ok(contents) => {
-                            match turborepo_microfrontends::Config::from_str(
-                                &contents,
-                                full_path.as_str(),
-                            ) {
-                                Ok(config) => match ProxyServer::new(config) {
-                                    Ok(mut server) => {
-                                        if !server.check_port_available().await {
-                                            return Err(Error::Proxy(
-                                                "Port is not available.".to_string(),
-                                            ));
-                                        }
-
-                                        let shutdown_handle = server.shutdown_handle();
-
-                                        let (shutdown_complete_tx, shutdown_complete_rx) =
-                                            tokio::sync::oneshot::channel();
-                                        server.set_shutdown_complete_tx(shutdown_complete_tx);
-
-                                        // Register signal handler to shutdown proxy when signal
-                                        // received AND delay process manager from stopping
-                                        if let Some(subscriber) = self.signal_handler.subscribe() {
-                                            let proxy_shutdown_on_signal = shutdown_handle.clone();
-                                            let process_manager = self.processes.clone();
-                                            tokio::spawn(async move {
-                                                info!(
-                                                    "Proxy signal handler registered and waiting"
-                                                );
-                                                let _guard = subscriber.listen().await;
-                                                info!(
-                                                    "Signal received! Shutting down proxy BEFORE \
-                                                     process manager stops"
-                                                );
-                                                let _ = proxy_shutdown_on_signal.send(());
-                                                debug!(
-                                                    "Proxy shutdown signal sent, waiting for \
-                                                     websockets to close"
-                                                );
-                                                // Wait for websockets to close before allowing
-                                                // process manager to kill processes
-                                                tokio::time::sleep(
-                                                    tokio::time::Duration::from_millis(200),
-                                                )
-                                                .await;
-                                                info!(
-                                                    "Proxy websocket close complete, now stopping \
-                                                     child processes"
-                                                );
-                                                process_manager.stop().await;
-                                                debug!("Child processes stopped");
-                                            });
-                                        } else {
-                                            warn!(
-                                                "Could not subscribe to signal handler for proxy \
-                                                 shutdown"
-                                            );
-                                        }
-
-                                        let _task_handle = tokio::spawn(async move {
-                                            if let Err(e) = server.run().await {
-                                                error!("Turborepo proxy error: {}", e);
-                                            }
-                                        });
-                                        info!("Turborepo proxy started successfully");
-                                        Some((shutdown_handle, shutdown_complete_rx))
-                                    }
-                                    Err(e) => {
-                                        return Err(Error::Proxy(format!(
-                                            "Failed to create Turborepo proxy: {}",
-                                            e
-                                        )));
-                                    }
-                                },
-                                Err(e) => {
-                                    return Err(Error::Proxy(format!(
-                                        "Failed to parse microfrontends config: {}",
-                                        e
-                                    )));
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            return Err(Error::Proxy(format!(
-                                "Failed to read microfrontends config file: {}",
-                                e
-                            )));
-                        }
-                    }
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
-        } else {
-            None
+        )>,
+        Error,
+    > {
+        let Some(mfe_configs) = &self.micro_frontend_configs else {
+            return Ok(None);
         };
 
-        let skip_cache_writes = self.opts.cache_opts.cache.skip_writes();
+        if !mfe_configs.should_use_turborepo_proxy()
+            || !mfe_configs.has_dev_task(self.engine.task_ids())
+        {
+            return Ok(None);
+        }
+
+        info!("Starting Turborepo microfrontends proxy");
+
+        let config_path = mfe_configs
+            .configs()
+            .sorted_by(|(a, _), (b, _)| a.cmp(b))
+            .find_map(|(pkg, _tasks)| mfe_configs.config_filename(pkg));
+
+        let Some(config_path) = config_path else {
+            return Ok(None);
+        };
+
+        let full_path = self.repo_root.join_unix_path(config_path);
+        let contents = std::fs::read_to_string(&full_path).map_err(|e| {
+            Error::Proxy(format!("Failed to read microfrontends config file: {}", e))
+        })?;
+
+        let config = turborepo_microfrontends::Config::from_str(&contents, full_path.as_str())
+            .map_err(|e| Error::Proxy(format!("Failed to parse microfrontends config: {}", e)))?;
+
+        let mut server = ProxyServer::new(config)
+            .map_err(|e| Error::Proxy(format!("Failed to create Turborepo proxy: {}", e)))?;
+
+        if !server.check_port_available().await {
+            return Err(Error::Proxy("Port is not available.".to_string()));
+        }
+
+        let shutdown_handle = server.shutdown_handle();
+        let (shutdown_complete_tx, shutdown_complete_rx) = tokio::sync::oneshot::channel();
+        server.set_shutdown_complete_tx(shutdown_complete_tx);
+
+        self.register_proxy_signal_handler(shutdown_handle.clone());
+
+        tokio::spawn(async move {
+            if let Err(e) = server.run().await {
+                error!("Turborepo proxy error: {}", e);
+            }
+        });
+
+        info!("Turborepo proxy started successfully");
+        Ok(Some((shutdown_handle, shutdown_complete_rx)))
+    }
+
+    fn register_proxy_signal_handler(&self, shutdown_handle: tokio::sync::broadcast::Sender<()>) {
         if let Some(subscriber) = self.signal_handler.subscribe() {
-            let run_cache = self.run_cache.clone();
+            let process_manager = self.processes.clone();
             tokio::spawn(async move {
-                // Cache writes are disabled, can skip setting up cache write listener
-                if skip_cache_writes {
-                    return;
-                }
+                info!("Proxy signal handler registered and waiting");
                 let _guard = subscriber.listen().await;
-                let spinner = turborepo_ui::start_spinner("...Finishing writing to cache...");
-                if let Ok((status, closed)) = run_cache.shutdown_cache().await {
-                    let fut = async {
-                        loop {
-                            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                            // loop through hashmap, extract items that are still running,
-                            // sum up bit per second
-                            let (bytes_per_second, bytes_uploaded, bytes_total) = {
-                                let status = status.lock().unwrap();
-                                let total_bps: f64 = status
-                                    .iter()
-                                    .filter_map(|(_hash, task)| task.average_bps())
-                                    .sum();
-                                let bytes_uploaded: usize =
-                                    status.iter().filter_map(|(_hash, task)| task.bytes()).sum();
-                                let bytes_total: usize = status
-                                    .iter()
-                                    .filter(|(_hash, task)| !task.done())
-                                    .filter_map(|(_hash, task)| task.size())
-                                    .sum();
-                                (total_bps, bytes_uploaded, bytes_total)
-                            };
-
-                            if bytes_total == 0 {
-                                continue;
-                            }
-
-                            // convert to human readable
-                            let mut formatter = human_format::Formatter::new();
-                            let formatter = formatter.with_decimals(2).with_separator("");
-                            let bytes_per_second =
-                                formatter.with_units("B/s").format(bytes_per_second);
-                            let bytes_remaining = formatter
-                                .with_units("B")
-                                .format(bytes_total.saturating_sub(bytes_uploaded) as f64);
-
-                            spinner.set_message(format!(
-                                "...Finishing writing to cache... ({bytes_remaining} remaining, \
-                                 {bytes_per_second})"
-                            ));
-                        }
-                    };
-
-                    let interrupt = async {
-                        if let Ok(fut) = get_signal() {
-                            pin!(fut);
-                            fut.next().await;
-                        } else {
-                            tracing::warn!("could not register ctrl-c handler");
-                            // wait forever
-                            tokio::time::sleep(Duration::MAX).await;
-                        }
-                    };
-
-                    select! {
-                        _ = closed => {}
-                        _ = fut => {}
-                        _ = interrupt => {tracing::debug!("received interrupt, exiting");}
-                    }
-                } else {
-                    tracing::warn!("could not start shutdown, exiting");
-                }
-                spinner.finish_and_clear();
+                info!("Signal received! Shutting down proxy BEFORE process manager stops");
+                let _ = shutdown_handle.send(());
+                debug!("Proxy shutdown signal sent, waiting for websockets to close");
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                info!("Proxy websocket close complete, now stopping child processes");
+                process_manager.stop().await;
+                debug!("Child processes stopped");
             });
+        } else {
+            warn!("Could not subscribe to signal handler for proxy shutdown");
+        }
+    }
+
+    fn setup_cache_shutdown_handler(&self) {
+        let skip_cache_writes = self.opts.cache_opts.cache.skip_writes();
+        if skip_cache_writes {
+            return;
         }
 
-        if let Some(graph_opts) = &self.opts.run_opts.graph {
-            graph_visualizer::write_graph(
-                self.color_config,
-                graph_opts,
-                &self.engine,
-                self.opts.run_opts.single_package,
-                // Note that cwd used to be pulled from CommandBase, which had it set
-                // as the repo root.
-                &self.repo_root,
-            )?;
-            return Ok(0);
+        let Some(subscriber) = self.signal_handler.subscribe() else {
+            return;
+        };
+
+        let run_cache = self.run_cache.clone();
+        tokio::spawn(async move {
+            let _guard = subscriber.listen().await;
+            let spinner = turborepo_ui::start_spinner("...Finishing writing to cache...");
+
+            if let Ok((status, closed)) = run_cache.shutdown_cache().await {
+                let fut = async {
+                    loop {
+                        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+                        let (bytes_per_second, bytes_uploaded, bytes_total) = {
+                            let status = status.lock().unwrap();
+                            let total_bps: f64 = status
+                                .iter()
+                                .filter_map(|(_hash, task)| task.average_bps())
+                                .sum();
+                            let bytes_uploaded: usize =
+                                status.iter().filter_map(|(_hash, task)| task.bytes()).sum();
+                            let bytes_total: usize = status
+                                .iter()
+                                .filter(|(_hash, task)| !task.done())
+                                .filter_map(|(_hash, task)| task.size())
+                                .sum();
+                            (total_bps, bytes_uploaded, bytes_total)
+                        };
+
+                        if bytes_total == 0 {
+                            continue;
+                        }
+
+                        let mut formatter = human_format::Formatter::new();
+                        let formatter = formatter.with_decimals(2).with_separator("");
+                        let bytes_per_second = formatter.with_units("B/s").format(bytes_per_second);
+                        let bytes_remaining = formatter
+                            .with_units("B")
+                            .format(bytes_total.saturating_sub(bytes_uploaded) as f64);
+
+                        spinner.set_message(format!(
+                            "...Finishing writing to cache... ({bytes_remaining} remaining, \
+                             {bytes_per_second})"
+                        ));
+                    }
+                };
+
+                let interrupt = async {
+                    if let Ok(fut) = get_signal() {
+                        pin!(fut);
+                        fut.next().await;
+                    } else {
+                        tracing::warn!("could not register ctrl-c handler");
+                        tokio::time::sleep(Duration::MAX).await;
+                    }
+                };
+
+                select! {
+                    _ = closed => {}
+                    _ = fut => {}
+                    _ = interrupt => {tracing::debug!("received interrupt, exiting");}
+                }
+            } else {
+                tracing::warn!("could not start shutdown, exiting");
+            }
+            spinner.finish_and_clear();
+        });
+    }
+
+    async fn cleanup_proxy(
+        &self,
+        proxy_shutdown: Option<(
+            tokio::sync::broadcast::Sender<()>,
+            tokio::sync::oneshot::Receiver<()>,
+        )>,
+    ) {
+        let Some((shutdown_tx, shutdown_complete_rx)) = proxy_shutdown else {
+            return;
+        };
+
+        info!("Shutting down Turborepo proxy gracefully BEFORE stopping child processes");
+        let _ = shutdown_tx.send(());
+        debug!("Sent shutdown signal to proxy, waiting for completion signal");
+
+        match tokio::time::timeout(tokio::time::Duration::from_secs(2), shutdown_complete_rx).await
+        {
+            Ok(Ok(())) => {
+                info!("Proxy shutdown completed successfully");
+            }
+            Ok(Err(_)) => {
+                warn!("Proxy shutdown channel closed unexpectedly");
+            }
+            Err(_) => {
+                warn!("Proxy shutdown timed out after 2 seconds");
+            }
         }
 
+        info!("Proxy shutdown complete, proceeding with visitor cleanup");
+    }
+
+    async fn execute_visitor(
+        &self,
+        ui_sender: Option<UISender>,
+        is_watch: bool,
+        proxy_shutdown: Option<(
+            tokio::sync::broadcast::Sender<()>,
+            tokio::sync::oneshot::Receiver<()>,
+        )>,
+    ) -> Result<i32, Error> {
         let workspaces = self.pkg_dep_graph.packages().collect();
         let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
             &self.scm,
@@ -534,10 +523,7 @@ impl Run {
         let global_hash_inputs = {
             let env_mode = self.opts.run_opts.env_mode;
             let pass_through_env = match env_mode {
-                EnvMode::Loose => {
-                    // Remove the passthroughs from hash consideration if we're explicitly loose.
-                    None
-                }
+                EnvMode::Loose => None,
                 EnvMode::Strict => self.root_turbo_json.global_pass_through_env.as_deref(),
             };
 
@@ -603,8 +589,6 @@ impl Run {
             visitor.dry_run();
         }
 
-        // we look for this log line to mark the start of the run
-        // in benchmarks, so please don't remove it
         debug!("running visitor");
 
         let errors = visitor
@@ -617,7 +601,6 @@ impl Run {
             .iter()
             .filter_map(|err| err.exit_code())
             .max()
-            // We hit some error, it shouldn't be exit code 0
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
         let error_prefix = if self.opts.run_opts.is_github_actions {
@@ -629,31 +612,7 @@ impl Run {
             writeln!(std::io::stderr(), "{error_prefix}{err}").ok();
         }
 
-        // Clean up proxy server if it was started - CRITICAL: do this BEFORE
-        // visitor.finish() because visitor.finish() may trigger process manager
-        // shutdown which will kill child processes (including dev servers with
-        // WebSocket connections)
-        if let Some((shutdown_tx, shutdown_complete_rx)) = proxy_shutdown {
-            info!("Shutting down Turborepo proxy gracefully BEFORE stopping child processes");
-            let _ = shutdown_tx.send(());
-            debug!("Sent shutdown signal to proxy, waiting for completion signal");
-
-            match tokio::time::timeout(tokio::time::Duration::from_secs(2), shutdown_complete_rx)
-                .await
-            {
-                Ok(Ok(())) => {
-                    info!("Proxy shutdown completed successfully");
-                }
-                Ok(Err(_)) => {
-                    warn!("Proxy shutdown channel closed unexpectedly");
-                }
-                Err(_) => {
-                    warn!("Proxy shutdown timed out after 2 seconds");
-                }
-            }
-
-            info!("Proxy shutdown complete, proceeding with visitor cleanup");
-        }
+        self.cleanup_proxy(proxy_shutdown).await;
 
         visitor
             .finish(
@@ -669,6 +628,25 @@ impl Run {
         debug!("visitor.finish() completed, run cleanup done");
 
         Ok(exit_code)
+    }
+
+    pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
+        let proxy_shutdown = self.start_proxy_if_needed().await?;
+        self.setup_cache_shutdown_handler();
+
+        if let Some(graph_opts) = &self.opts.run_opts.graph {
+            graph_visualizer::write_graph(
+                self.color_config,
+                graph_opts,
+                &self.engine,
+                self.opts.run_opts.single_package,
+                &self.repo_root,
+            )?;
+            return Ok(0);
+        }
+
+        self.execute_visitor(ui_sender, is_watch, proxy_shutdown)
+            .await
     }
 }
 
