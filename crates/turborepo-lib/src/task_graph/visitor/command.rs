@@ -423,6 +423,7 @@ mod test {
             ["web", "docs"].iter().copied().collect(),
             std::iter::once(("web", Ok(Some(config)))),
             std::collections::HashMap::new(),
+            std::collections::HashMap::new(),
         )
         .unwrap()
         .unwrap();

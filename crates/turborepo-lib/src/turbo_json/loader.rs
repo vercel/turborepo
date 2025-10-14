@@ -13,7 +13,7 @@ use turborepo_task_id::TaskName;
 use super::{Pipeline, RawTaskDefinition, TurboJson};
 use crate::{
     cli::EnvMode,
-    config::{Error, CONFIG_FILE, CONFIG_FILE_JSONC},
+    config::{CONFIG_FILE, CONFIG_FILE_JSONC, Error},
     microfrontends::MicrofrontendsConfigs,
     run::task_access::TASK_ACCESS_CONFIG_PATH,
     turbo_json::FutureFlags,
@@ -880,6 +880,7 @@ mod test {
             ]
             .into_iter(),
             std::collections::HashMap::from([("web", true)]),
+            std::collections::HashMap::new(),
         )
         .unwrap();
 

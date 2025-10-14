@@ -13,6 +13,7 @@ use crate::{config, turbo_json::TurboJson};
 pub struct MicrofrontendsConfigs {
     configs: HashMap<String, ConfigInfo>,
     mfe_package: Option<&'static str>,
+    has_mfe_dependency: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -45,6 +46,17 @@ impl MicrofrontendsConfigs {
                 )
             })
             .collect();
+        let package_has_mfe_dependency: HashMap<&str, bool> = package_graph
+            .packages()
+            .map(|(name, info)| {
+                (
+                    name.as_str(),
+                    info.package_json
+                        .all_dependencies()
+                        .any(|(dep, _)| dep.as_str() == MICROFRONTENDS_PACKAGE),
+                )
+            })
+            .collect();
         Self::from_configs(
             package_names,
             package_graph.packages().map(|(name, info)| {
@@ -54,6 +66,7 @@ impl MicrofrontendsConfigs {
                 )
             }),
             package_has_proxy_script,
+            package_has_mfe_dependency,
         )
     }
 
@@ -62,6 +75,7 @@ impl MicrofrontendsConfigs {
         package_names: HashSet<&str>,
         configs: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
         package_has_proxy_script: HashMap<&str, bool>,
+        package_has_mfe_dependency: HashMap<&str, bool>,
     ) -> Result<Option<Self>, Error> {
         let PackageGraphResult {
             configs,
@@ -69,7 +83,13 @@ impl MicrofrontendsConfigs {
             missing_applications,
             unsupported_version,
             mfe_package,
-        } = PackageGraphResult::new(package_names, configs, package_has_proxy_script)?;
+            has_mfe_dependency,
+        } = PackageGraphResult::new(
+            package_names,
+            configs,
+            package_has_proxy_script,
+            package_has_mfe_dependency,
+        )?;
 
         for (package, err) in unsupported_version {
             warn!("Ignoring {package}: {err}");
@@ -94,6 +114,7 @@ impl MicrofrontendsConfigs {
         Ok((!configs.is_empty()).then_some(Self {
             configs,
             mfe_package,
+            has_mfe_dependency,
         }))
     }
 
@@ -127,7 +148,7 @@ impl MicrofrontendsConfigs {
     pub fn should_use_turborepo_proxy(&self) -> bool {
         self.configs
             .values()
-            .any(|config| config.use_turborepo_proxy)
+            .all(|config| config.use_turborepo_proxy)
     }
 
     pub fn has_dev_task<'a>(&self, task_ids: impl Iterator<Item = &'a TaskId<'static>>) -> bool {
@@ -237,6 +258,7 @@ struct PackageGraphResult {
     missing_applications: Vec<String>,
     unsupported_version: Vec<(String, String)>,
     mfe_package: Option<&'static str>,
+    has_mfe_dependency: bool,
 }
 
 impl PackageGraphResult {
@@ -244,17 +266,30 @@ impl PackageGraphResult {
         packages_in_graph: HashSet<&str>,
         packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
         package_has_proxy_script: HashMap<&str, bool>,
+        package_has_mfe_dependency: HashMap<&str, bool>,
     ) -> Result<Self, Error> {
         let mut configs = HashMap::new();
         let mut referenced_default_apps = HashSet::new();
         let mut referenced_packages = HashSet::new();
         let mut unsupported_version = Vec::new();
         let mut mfe_package = None;
+        let mut has_mfe_dependency = false;
         // We sort packages to ensure deterministic behavior
         let sorted_packages = packages.sorted_by(|(a, _), (b, _)| a.cmp(b));
         for (package_name, config) in sorted_packages {
+            // Check if this package is the @vercel/microfrontends package itself (workspace
+            // package)
             if package_name == MICROFRONTENDS_PACKAGE {
                 mfe_package = Some(MICROFRONTENDS_PACKAGE);
+            }
+
+            // Check if any package depends on @vercel/microfrontends
+            if package_has_mfe_dependency
+                .get(package_name)
+                .copied()
+                .unwrap_or(false)
+            {
+                has_mfe_dependency = true;
             }
 
             let Some(config) = config.or_else(|err| match err {
@@ -277,12 +312,18 @@ impl PackageGraphResult {
             }
             // Use Turborepo proxy if:
             // - No @vercel/microfrontends package in workspace AND
+            // - No package depends on @vercel/microfrontends AND
             // - No custom proxy script in this package
             let has_custom_proxy = package_has_proxy_script
                 .get(package_name)
                 .copied()
                 .unwrap_or(false);
-            info.use_turborepo_proxy = mfe_package.is_none() && !has_custom_proxy;
+            let pkg_has_mfe_dep = package_has_mfe_dependency
+                .get(package_name)
+                .copied()
+                .unwrap_or(false);
+            info.use_turborepo_proxy =
+                mfe_package.is_none() && !has_custom_proxy && !pkg_has_mfe_dep;
             referenced_packages.insert(package_name.to_string());
             referenced_packages.extend(info.tasks.keys().map(|task| task.package().to_string()));
             configs.insert(package_name.to_string(), info);
@@ -304,6 +345,7 @@ impl PackageGraphResult {
             missing_applications,
             unsupported_version,
             mfe_package,
+            has_mfe_dependency,
         })
     }
 }
@@ -441,6 +483,7 @@ mod test {
             HashSet::default(),
             vec![(MICROFRONTENDS_PACKAGE, Ok(None))].into_iter(),
             HashMap::new(),
+            HashMap::new(),
         )
         .unwrap();
         assert_eq!(result.mfe_package, Some(MICROFRONTENDS_PACKAGE));
@@ -451,6 +494,7 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::default(),
             vec![("foo", Ok(None)), ("bar", Ok(None))].into_iter(),
+            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -487,6 +531,7 @@ mod test {
             ]
             .into_iter(),
             HashMap::new(),
+            HashMap::new(),
         )
         .unwrap();
 
@@ -507,6 +552,7 @@ mod test {
         let result_without_mfe_package = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -544,6 +590,7 @@ mod test {
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
             proxy_scripts,
+            HashMap::new(),
         )
         .unwrap();
 
@@ -563,6 +610,7 @@ mod test {
             HashSet::default(),
             vec![("foo", Err(Error::UnsupportedVersion("bad version".into())))].into_iter(),
             HashMap::new(),
+            HashMap::new(),
         )
         .unwrap();
         assert_eq!(result.configs, HashMap::new());
@@ -579,6 +627,7 @@ mod test {
                 }),
             )]
             .into_iter(),
+            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -600,6 +649,7 @@ mod test {
                 ),
             ]
             .into_iter(),
+            HashMap::new(),
             HashMap::new(),
         );
         assert!(result.is_err());
@@ -626,6 +676,7 @@ mod test {
         let mut result = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -663,12 +714,14 @@ mod test {
             HashSet::default(),
             vec![("web", Ok(Some(config.clone())))].into_iter(),
             HashMap::new(),
+            HashMap::new(),
         )
         .unwrap();
         assert_eq!(missing_result.missing_applications, vec!["docs", "web"]);
         let found_result = PackageGraphResult::new(
             HashSet::from_iter(["docs", "web"].iter().copied()),
             vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -704,6 +757,7 @@ mod test {
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
             HashMap::new(),
+            HashMap::new(),
         )
         .unwrap();
         let web_ports = result.configs["web"].ports.clone();
@@ -714,6 +768,66 @@ mod test {
         assert_eq!(
             web_ports.get(&TaskId::new("web", "dev")).copied(),
             Some(5588)
+        );
+    }
+
+    #[test]
+    fn test_use_turborepo_proxy_disabled_when_package_has_mfe_dependency() {
+        // Create a microfrontends config
+        let config = MFEConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "web": {},
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        )
+        .unwrap();
+
+        // When a package depends on @vercel/microfrontends, use_turborepo_proxy should
+        // be false
+        let mut mfe_dependencies = HashMap::new();
+        mfe_dependencies.insert("web", true);
+
+        let result_with_dependency = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("web", Ok(Some(config.clone())))].into_iter(),
+            HashMap::new(),
+            mfe_dependencies,
+        )
+        .unwrap();
+
+        assert_eq!(result_with_dependency.mfe_package, None);
+        assert!(result_with_dependency.has_mfe_dependency);
+        assert!(
+            result_with_dependency
+                .configs
+                .values()
+                .all(|config| !config.use_turborepo_proxy),
+            "use_turborepo_proxy should be false when package depends on @vercel/microfrontends"
+        );
+
+        // When package does NOT depend on @vercel/microfrontends, use_turborepo_proxy
+        // should be true
+        let result_without_dependency = PackageGraphResult::new(
+            HashSet::default(),
+            vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        assert_eq!(result_without_dependency.mfe_package, None);
+        assert!(!result_without_dependency.has_mfe_dependency);
+        assert!(
+            result_without_dependency
+                .configs
+                .values()
+                .all(|config| config.use_turborepo_proxy),
+            "use_turborepo_proxy should be true when package does NOT depend on \
+             @vercel/microfrontends"
         );
     }
 
@@ -730,6 +844,7 @@ mod test {
             .into_iter()
             .collect(),
             mfe_package: None,
+            has_mfe_dependency: false,
         };
 
         let turbo_json = TurboJson::default();
@@ -744,6 +859,7 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: HashMap::new(),
             mfe_package: None,
+            has_mfe_dependency: false,
         };
 
         let task_ids = vec![TaskId::new("web", "dev"), TaskId::new("docs", "build")];
@@ -756,6 +872,7 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: HashMap::new(),
             mfe_package: None,
+            has_mfe_dependency: false,
         };
 
         let task_ids = vec![TaskId::new("web", "build"), TaskId::new("docs", "lint")];
@@ -768,6 +885,7 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: HashMap::new(),
             mfe_package: None,
+            has_mfe_dependency: false,
         };
 
         let task_ids = vec![TaskId::new("web", "dev")];
@@ -780,6 +898,7 @@ mod test {
         let configs = MicrofrontendsConfigs {
             configs: HashMap::new(),
             mfe_package: None,
+            has_mfe_dependency: false,
         };
 
         let task_ids: Vec<TaskId> = vec![];
