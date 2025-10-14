@@ -32,6 +32,8 @@ pub enum Error {
         root_app: String,
         root_package: String,
     },
+    #[error("Invalid package path: {0}. Path traversal outside repository root is not allowed.")]
+    PathTraversal(String),
 }
 
 impl Error {
