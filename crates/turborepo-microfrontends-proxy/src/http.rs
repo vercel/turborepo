@@ -59,7 +59,7 @@ pub(crate) fn handle_forward_result(
             convert_response_to_boxed_body(response, app_name.as_ref())
         }
         Err(e) => {
-            warn!(
+            debug!(
                 "Failed to {} forward request to {}: {}",
                 request_type.to_lowercase(),
                 app_name.as_ref(),

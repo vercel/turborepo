@@ -233,7 +233,7 @@ impl ErrorPage {
         <div class="troubleshooting">
             <h2>Troubleshooting</h2>
             <ul>
-                <li>Make sure the application is running with <code>turbo dev</code></li>
+                <li>Make sure the application is running with <code>turbo run dev</code></li>
                 <li>Check that port {port} is not being used by another process</li>
                 <li>Verify the application configuration in <code>microfrontends.json</code></li>
                 <li>Look for errors in the application's console output</li>
