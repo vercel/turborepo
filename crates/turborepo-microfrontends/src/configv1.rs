@@ -87,10 +87,19 @@ impl biome_deserialize::Deserializable for LocalHost {
                 let port = parse_port_from_host(&host_str);
                 Some(LocalHost { port })
             }
+            // Deserialize as an object (with explicit port field)
+            VisitableType::MAP => {
+                #[derive(Deserializable, Default)]
+                struct LocalHostObject {
+                    port: Option<u16>,
+                }
+                let obj = LocalHostObject::deserialize(value, name, diagnostics)?;
+                Some(LocalHost { port: obj.port })
+            }
             _ => {
                 diagnostics.push(
                     biome_deserialize::DeserializationDiagnostic::new(format!(
-                        "Expected a number or string for '{name}'"
+                        "Expected a number, string, or object for '{name}'"
                     ))
                     .with_range(value.range()),
                 );
