@@ -63,6 +63,9 @@ impl ErrorPage {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Microfrontend Proxy Error</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         * {{
             margin: 0;
@@ -70,8 +73,9 @@ impl ErrorPage {
             box-sizing: border-box;
         }}
         body {{
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: hsl(0, 0%, 100%);
+            color: hsl(0, 0%, 9%);
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -79,61 +83,48 @@ impl ErrorPage {
             padding: 20px;
         }}
         .container {{
-            background: white;
+            background: hsl(0, 0%, 95%);
+            border: 1px solid hsl(0, 0%, 92%);
             border-radius: 12px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             max-width: 600px;
             width: 100%;
             padding: 40px;
         }}
         h1 {{
-            color: #e53e3e;
+            color: hsl(358, 75%, 59%);
             font-size: 24px;
             margin-bottom: 16px;
-        }}
-        .error-icon {{
-            width: 64px;
-            height: 64px;
-            background: #fed7d7;
-            border-radius: 50%;
             display: flex;
             align-items: center;
-            justify-content: center;
-            margin: 0 auto 24px;
-            font-size: 32px;
+            gap: 12px;
+        }}
+        .error-icon {{
+            font-size: 24px;
+            flex-shrink: 0;
         }}
         .info-box {{
-            background: #f7fafc;
-            border-left: 4px solid #4299e1;
+            background: hsl(0, 0%, 100%);
+            border-left: 4px solid hsl(212, 100%, 48%);
             padding: 16px;
             margin: 20px 0;
             border-radius: 4px;
         }}
         .info-box strong {{
-            color: #2d3748;
+            color: hsl(0, 0%, 9%);
             display: block;
             margin-bottom: 8px;
         }}
         .info-box code {{
-            background: #edf2f7;
+            background: hsl(0, 0%, 92%);
             padding: 2px 6px;
             border-radius: 3px;
-            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            font-family: 'Geist Mono', 'Monaco', 'Menlo', 'Consolas', monospace;
             font-size: 14px;
-            color: #2d3748;
-        }}
-        .command {{
-            background: #2d3748;
-            color: #f7fafc;
-            padding: 16px;
-            border-radius: 6px;
-            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
-            font-size: 14px;
-            margin: 20px 0;
-            overflow-x: auto;
+            color: hsl(0, 0%, 9%);
         }}
         .details {{
-            color: #718096;
+            color: hsl(0, 0%, 40%);
             font-size: 14px;
             line-height: 1.6;
             margin-top: 20px;
@@ -141,11 +132,11 @@ impl ErrorPage {
         .troubleshooting {{
             margin-top: 24px;
             padding-top: 24px;
-            border-top: 1px solid #e2e8f0;
+            border-top: 1px solid hsl(0, 0%, 92%);
         }}
         .troubleshooting h2 {{
             font-size: 18px;
-            color: #2d3748;
+            color: hsl(0, 0%, 9%);
             margin-bottom: 12px;
         }}
         .troubleshooting ul {{
@@ -154,21 +145,65 @@ impl ErrorPage {
         }}
         .troubleshooting li {{
             padding: 8px 0;
-            color: #4a5568;
+            color: hsl(0, 0%, 40%);
             font-size: 14px;
         }}
         .troubleshooting li:before {{
             content: "→";
-            color: #4299e1;
+            color: hsl(212, 100%, 48%);
             font-weight: bold;
             margin-right: 8px;
+        }}
+        @media (prefers-color-scheme: dark) {{
+            body {{
+                background: hsl(0, 0%, 3.9%);
+                color: hsl(0, 0%, 93%);
+            }}
+            .container {{
+                background: hsl(0, 0%, 10%);
+                border-color: hsl(0, 0%, 12%);
+                box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            }}
+            h1 {{
+                color: hsl(358, 100%, 69%);
+            }}
+            .info-box {{
+                background: hsl(0, 0%, 12%);
+                border-left-color: hsl(210, 100%, 66%);
+            }}
+            .info-box strong {{
+                color: hsl(0, 0%, 93%);
+            }}
+            .info-box code {{
+                background: hsl(0, 0%, 16%);
+                color: hsl(0, 0%, 93%);
+            }}
+            .details {{
+                color: hsl(0, 0%, 63%);
+            }}
+            .troubleshooting {{
+                border-top-color: hsl(0, 0%, 12%);
+            }}
+            .troubleshooting h2 {{
+                color: hsl(0, 0%, 93%);
+            }}
+            .troubleshooting li {{
+                color: hsl(0, 0%, 63%);
+            }}
+            .troubleshooting li:before {{
+                color: hsl(210, 100%, 66%);
+            }}
         }}
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="error-icon">⚠️</div>
-        <h1>Application Not Reachable</h1>
+        <h1><span class="error-icon">⚠️</span>Application unreachable</h1>
+
+        <p class="details">
+            The Turborepo microfrontends proxy tried to forward your request to the <strong>{app}</strong> application,
+            but it's not currently running or not responding on port {port}.
+        </p>
 
         <div class="info-box">
             <strong>Request Path:</strong>
@@ -183,15 +218,6 @@ impl ErrorPage {
         <div class="info-box">
             <strong>Error:</strong>
             <code>{error}</code>
-        </div>
-
-        <p class="details">
-            The Turborepo microfrontends proxy tried to forward your request to the <strong>{app}</strong> application,
-            but it's not currently running or not responding on port {port}.
-        </p>
-
-        <div class="command">
-turbo run {app}#dev
         </div>
 
         <div class="troubleshooting">
