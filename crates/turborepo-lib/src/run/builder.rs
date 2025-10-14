@@ -393,12 +393,16 @@ impl RunBuilder {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
         let micro_frontend_configs =
-            MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph)
-                .inspect_err(|err| {
+            match MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph) {
+                Ok(configs) => configs,
+                Err(err @ turborepo_microfrontends::Error::ConfigInWrongPackage { .. }) => {
+                    return Err(Error::MicroFrontends(err));
+                }
+                Err(err) => {
                     warn!("Ignoring invalid microfrontends configuration: {err}");
-                })
-                .ok()
-                .flatten();
+                    None
+                }
+            };
 
         let scm = scm.await.expect("detecting scm panicked");
         let async_cache = AsyncCache::new(

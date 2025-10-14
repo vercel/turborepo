@@ -168,6 +168,15 @@ impl Config {
         }
     }
 
+    /// Returns the name and package of the application that serves the root
+    /// route. The root route app is the one without explicit routing
+    /// configuration.
+    pub fn root_route_app(&self) -> Option<(&str, &str)> {
+        match &self.inner {
+            ConfigInner::V1(config_v1) => config_v1.root_route_app(),
+        }
+    }
+
     fn load_v1_dir(
         dir: &AbsoluteSystemPath,
     ) -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {

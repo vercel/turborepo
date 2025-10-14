@@ -21,6 +21,17 @@ pub enum Error {
         actual: String,
         path: String,
     },
+    #[error(
+        "The microfrontends.json file must be located in the package that serves the root route \
+         ('/'). Found configuration in package '{found_package}' but the root route is served by \
+         application '{root_app}' (package: '{root_package}'). Please move the \
+         microfrontends.json file to the '{root_package}' package."
+    )]
+    ConfigInWrongPackage {
+        found_package: String,
+        root_app: String,
+        root_package: String,
+    },
 }
 
 impl Error {

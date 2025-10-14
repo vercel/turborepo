@@ -195,6 +195,16 @@ impl ConfigV1 {
         let application = self.applications.get(name)?;
         application.fallback()
     }
+
+    /// Returns the name and package of the application that serves the root
+    /// route. The root route app is the first one without explicit routing
+    /// configuration.
+    pub fn root_route_app(&self) -> Option<(&str, &str)> {
+        self.applications
+            .iter()
+            .find(|(_, app)| app.routing.is_none())
+            .map(|(app_name, app)| (app_name.as_str(), app.package_name(app_name)))
+    }
 }
 
 impl Application {
