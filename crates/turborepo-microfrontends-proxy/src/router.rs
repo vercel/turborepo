@@ -27,7 +27,7 @@ struct AppInfo {
 
 #[derive(Clone, Default)]
 struct TrieNode {
-    exact_children: HashMap<String, TrieNode>,
+    exact_children: HashMap<Arc<str>, TrieNode>,
     param_child: Option<Box<TrieNode>>,
     wildcard_match: Option<usize>,
     terminal_match: Option<usize>,
@@ -47,7 +47,7 @@ struct PathPattern {
 
 #[derive(Debug, Clone, PartialEq)]
 enum Segment {
-    Exact(String),
+    Exact(Arc<str>),
     Param,
     Wildcard,
 }
@@ -170,7 +170,7 @@ impl TrieNode {
 
         match &segments[0] {
             Segment::Exact(name) => {
-                let child = self.exact_children.entry(name.clone()).or_default();
+                let child = self.exact_children.entry(Arc::clone(name)).or_default();
                 child.insert(&segments[1..], app_idx);
             }
             Segment::Param => {
@@ -246,7 +246,7 @@ impl PathPattern {
                     segments.push(Segment::Param);
                 }
             } else {
-                segments.push(Segment::Exact(segment.to_string()));
+                segments.push(Segment::Exact(Arc::from(segment)));
             }
         }
 
@@ -282,7 +282,7 @@ impl PathPattern {
         while pattern_idx < self.segments.len() && path_idx < path_segments.len() {
             match &self.segments[pattern_idx] {
                 Segment::Exact(expected) => {
-                    if path_segments[path_idx] != expected {
+                    if path_segments[path_idx] != expected.as_ref() {
                         return false;
                     }
                     pattern_idx += 1;
