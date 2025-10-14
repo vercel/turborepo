@@ -42,17 +42,11 @@ pub struct ErrorPage {
     path: String,
     app: String,
     port: u16,
-    error_message: String,
 }
 
 impl ErrorPage {
-    pub fn new(path: String, app: String, port: u16, error_message: String) -> Self {
-        Self {
-            path,
-            app,
-            port,
-            error_message,
-        }
+    pub fn new(path: String, app: String, port: u16) -> Self {
+        Self { path, app, port }
     }
 
     pub fn to_html(&self) -> String {
@@ -154,6 +148,20 @@ impl ErrorPage {
             font-weight: bold;
             margin-right: 8px;
         }}
+        .docs-link {{
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid hsl(0, 0%, 92%);
+            font-size: 14px;
+            color: hsl(0, 0%, 40%);
+        }}
+        .docs-link a {{
+            color: hsl(212, 100%, 48%);
+            text-decoration: none;
+        }}
+        .docs-link a:hover {{
+            text-decoration: underline;
+        }}
         @media (prefers-color-scheme: dark) {{
             body {{
                 background: hsl(0, 0%, 3.9%);
@@ -193,6 +201,13 @@ impl ErrorPage {
             .troubleshooting li:before {{
                 color: hsl(210, 100%, 66%);
             }}
+            .docs-link {{
+                border-top-color: hsl(0, 0%, 12%);
+                color: hsl(0, 0%, 63%);
+            }}
+            .docs-link a {{
+                color: hsl(210, 100%, 66%);
+            }}
         }}
     </style>
 </head>
@@ -215,11 +230,6 @@ impl ErrorPage {
             <code>{app}</code> on port <code>{port}</code>
         </div>
 
-        <div class="info-box">
-            <strong>Error:</strong>
-            <code>{error}</code>
-        </div>
-
         <div class="troubleshooting">
             <h2>Troubleshooting</h2>
             <ul>
@@ -228,6 +238,9 @@ impl ErrorPage {
                 <li>Verify the application configuration in <code>microfrontends.json</code></li>
                 <li>Look for errors in the application's console output</li>
             </ul>
+            <p class="docs-link">
+                For more troubleshooting information, visit <a href="https://turborepo.com/docs/guides/microfrontends" target="_blank">the microfrontends documentation</a>.
+            </p>
         </div>
     </div>
 </body>
@@ -235,7 +248,6 @@ impl ErrorPage {
             path = html_escape(&self.path),
             app = html_escape(&self.app),
             port = self.port,
-            error = html_escape(&self.error_message),
         )
     }
 }
@@ -254,12 +266,7 @@ mod tests {
 
     #[test]
     fn test_error_page_html_generation() {
-        let page = ErrorPage::new(
-            "/docs/api".to_string(),
-            "docs".to_string(),
-            3001,
-            "Connection refused".to_string(),
-        );
+        let page = ErrorPage::new("/docs/api".to_string(), "docs".to_string(), 3001);
 
         let html = page.to_html();
 

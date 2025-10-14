@@ -1,14 +1,14 @@
 use std::net::SocketAddr;
 
-use http_body_util::{combinators::BoxBody, BodyExt, Full};
+use http_body_util::{BodyExt, Full, combinators::BoxBody};
 use hyper::{
-    body::{Bytes, Incoming},
     Request, Response, StatusCode,
+    body::{Bytes, Incoming},
 };
 use hyper_util::client::legacy::Client;
 use tracing::{debug, error, warn};
 
-use crate::{error::ErrorPage, router::RouteMatch, ProxyError};
+use crate::{ProxyError, error::ErrorPage, router::RouteMatch};
 
 pub(crate) type BoxedBody = BoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 pub(crate) type HttpClient = Client<hyper_util::client::legacy::connect::HttpConnector, Incoming>;
@@ -65,7 +65,7 @@ pub(crate) fn handle_forward_result(
                 app_name.as_ref(),
                 e
             );
-            build_error_response(path, app_name.as_ref(), port, e)
+            build_error_response(path, app_name.as_ref(), port)
         }
     }
 }
@@ -89,9 +89,8 @@ pub(crate) fn build_error_response(
     path: String,
     app_name: &str,
     port: u16,
-    error: Box<dyn std::error::Error + Send + Sync>,
 ) -> Result<Response<BoxedBody>, ProxyError> {
-    let error_page = ErrorPage::new(path, app_name.to_string(), port, error.to_string());
+    let error_page = ErrorPage::new(path, app_name.to_string(), port);
 
     let html = error_page.to_html();
     let response = Response::builder()
