@@ -2,9 +2,9 @@ use std::{net::SocketAddr, time::Duration};
 
 use http_body_util::{BodyExt, Full};
 use hyper::{
-    Request, Response,
     body::{Bytes, Incoming},
     service::service_fn,
+    Request, Response,
 };
 use hyper_util::{client::legacy::Client, rt::TokioIo};
 use tokio::net::TcpListener;
@@ -340,8 +340,8 @@ async fn test_end_to_end_proxy() {
 #[tokio::test]
 async fn test_websocket_detection() {
     use hyper::{
-        Request,
         header::{CONNECTION, UPGRADE},
+        Request,
     };
 
     let req = Request::builder()

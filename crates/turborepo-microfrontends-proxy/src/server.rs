@@ -1,6 +1,6 @@
 use std::{
     net::SocketAddr,
-    sync::{Arc, atomic::AtomicUsize},
+    sync::{atomic::AtomicUsize, Arc},
     time::Duration,
 };
 
@@ -15,10 +15,10 @@ use tracing::{debug, error, info};
 use turborepo_microfrontends::Config;
 
 use crate::{
-    ProxyError,
     http::HttpClient,
     router::Router,
     websocket::{WebSocketContext, WebSocketHandle},
+    ProxyError,
 };
 
 pub(crate) const DEFAULT_PROXY_PORT: u16 = 3024;
