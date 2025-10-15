@@ -58,8 +58,8 @@ impl Router {
         let mut default_app = None;
         let mut app_ports: HashMap<String, u16> = HashMap::new();
 
-        for task in config.development_tasks() {
-            let app_name = task.application_name;
+        for app in config.applications() {
+            let app_name = app.application_name;
             let port = config.port(app_name).ok_or_else(|| {
                 format!(
                     "No port configured for application '{app_name}'. Check your configuration \

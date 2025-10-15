@@ -3,8 +3,9 @@
   // Both Turborepo-only and Vercel proxies can read this same configuration.
   //
   // TURBOREPO-ONLY PROXY:
-  // - Uses: version, options.localProxyPort, applications[].development.local/task, applications[].routing
-  // - Ignores: development.fallback, production, vercel, assetPrefix, options.disableOverrides
+  // - Uses: version, options.localProxyPort, applications[].development.local, applications[].routing
+  // - Ignores: development.task, development.fallback, production, vercel, assetPrefix, options.disableOverrides
+  // - Note: The proxy only routes traffic. Task execution is handled by Turborepo's task runner.
   //
   // VERCEL PROXY (@vercel/microfrontends package):
   // - Uses all fields for full production integration

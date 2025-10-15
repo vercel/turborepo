@@ -177,6 +177,15 @@ impl ConfigV1 {
             })
     }
 
+    pub fn applications(&self) -> impl Iterator<Item = crate::Application<'_>> {
+        self.applications
+            .iter()
+            .map(|(application, config)| crate::Application {
+                application_name: application,
+                package: config.package_name(application),
+            })
+    }
+
     pub fn port(&self, name: &str) -> Option<u16> {
         let application = self.applications.get(name)?;
         Some(application.port(name))

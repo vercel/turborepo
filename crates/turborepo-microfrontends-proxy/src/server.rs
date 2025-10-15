@@ -1,6 +1,6 @@
 use std::{
     net::SocketAddr,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{Arc, atomic::AtomicUsize},
     time::Duration,
 };
 
@@ -15,10 +15,10 @@ use tracing::{debug, error, info};
 use turborepo_microfrontends::Config;
 
 use crate::{
+    ProxyError,
     http::HttpClient,
     router::Router,
     websocket::{WebSocketContext, WebSocketHandle},
-    ProxyError,
 };
 
 pub(crate) const DEFAULT_PROXY_PORT: u16 = 3024;
@@ -175,8 +175,8 @@ impl ProxyServer {
     fn print_routes(&self) {
         info!("Route configuration:");
 
-        for task in self.config.development_tasks() {
-            let app_name = task.application_name;
+        for app in self.config.applications() {
+            let app_name = app.application_name;
             if let Some(port) = self.config.port(app_name) {
                 if let Some(routing) = self.config.routing(app_name) {
                     for path_group in routing {

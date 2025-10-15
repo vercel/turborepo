@@ -49,6 +49,14 @@ pub struct DevelopmentTask<'a> {
     pub task: Option<&'a str>,
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
+pub struct Application<'a> {
+    // The key in the applications object in microfrontends.json
+    pub application_name: &'a str,
+    // The package name (either from packageName field or defaults to application_name)
+    pub package: &'a str,
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum ConfigInner {
     V1(ConfigV1),
@@ -159,6 +167,12 @@ impl Config {
     pub fn development_tasks<'a>(&'a self) -> Box<dyn Iterator<Item = DevelopmentTask<'a>> + 'a> {
         match &self.inner {
             ConfigInner::V1(config_v1) => Box::new(config_v1.development_tasks()),
+        }
+    }
+
+    pub fn applications<'a>(&'a self) -> Box<dyn Iterator<Item = Application<'a>> + 'a> {
+        match &self.inner {
+            ConfigInner::V1(config_v1) => Box::new(config_v1.applications()),
         }
     }
 
