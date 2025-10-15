@@ -1,5 +1,3 @@
-use turborepo_errors::{Classify, ErrorClassification};
-
 #[derive(Debug, thiserror::Error)]
 pub enum ProxyError {
     #[error("Failed to bind to port {port}: {source}")]
@@ -22,20 +20,6 @@ pub enum ProxyError {
 
     #[error("Invalid request: {0}")]
     InvalidRequest(String),
-}
-
-impl Classify for ProxyError {
-    fn classify(&self) -> ErrorClassification {
-        match self {
-            ProxyError::BindError { .. } => ErrorClassification::Network,
-            ProxyError::Hyper(_) => ErrorClassification::Proxy,
-            ProxyError::Http(_) => ErrorClassification::Proxy,
-            ProxyError::Io(_) => ErrorClassification::FileSystem,
-            ProxyError::Config(_) => ErrorClassification::Configuration,
-            ProxyError::AppUnreachable { .. } => ErrorClassification::Proxy,
-            ProxyError::InvalidRequest(_) => ErrorClassification::Proxy,
-        }
-    }
 }
 
 pub struct ErrorPage {

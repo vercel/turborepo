@@ -1,5 +1,3 @@
-use turborepo_errors::{Classify, ErrorClassification};
-
 // Warning that comes from the execution of the task
 #[derive(Debug, Clone)]
 pub struct TaskWarning {
@@ -24,22 +22,6 @@ pub enum TaskErrorCause {
     Exit { command: String, exit_code: i32 },
     #[error("turbo has internal error processing task")]
     Internal,
-}
-
-impl Classify for TaskError {
-    fn classify(&self) -> ErrorClassification {
-        self.cause.classify()
-    }
-}
-
-impl Classify for TaskErrorCause {
-    fn classify(&self) -> ErrorClassification {
-        match self {
-            TaskErrorCause::Spawn { .. } => ErrorClassification::ProcessExecution,
-            TaskErrorCause::Exit { .. } => ErrorClassification::TaskExecution,
-            TaskErrorCause::Internal => ErrorClassification::Internal,
-        }
-    }
 }
 
 impl TaskWarning {
