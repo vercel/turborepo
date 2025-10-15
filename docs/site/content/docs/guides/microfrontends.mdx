@@ -132,6 +132,8 @@ The port where the application runs locally. Can be specified as:
 
 An array of path groups that should route to this application. If no routing is provided, the application becomes the **default application** that catches all unmatched routes.
 
+Only one application can have no `routing` configuration. This is your "root" application that handles all routes not matched by other applications.
+
 ```json title="./apps/web/microfrontends.json"
 {
   "routing": [
@@ -145,11 +147,6 @@ An array of path groups that should route to this application. If no routing is 
   ]
 }
 ```
-
-<Callout type="info">
-  Only one application should have no `routing` configuration. This application
-  will handle all routes not matched by other applications.
-</Callout>
 
 ### Path patterns
 
