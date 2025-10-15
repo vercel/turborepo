@@ -34,24 +34,24 @@ use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{
-    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
-    BOLD_GREY, GREY,
+    BOLD_GREY, ColorConfig, GREY, cprint, cprintln, sender::UISender, tui, tui::TuiSender,
+    wui::sender::WebUISender,
 };
 
 pub use crate::run::error::Error;
 use crate::{
+    DaemonClient, DaemonConnector,
     cli::EnvMode,
     engine::Engine,
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
+    task_hash::{PackageInputsHashes, get_external_deps_hash, get_internal_deps_hash},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
-    DaemonClient, DaemonConnector,
 };
 
 #[derive(Clone)]
@@ -479,6 +479,20 @@ impl Run {
         });
     }
 
+    fn setup_process_manager_shutdown_handler(&self) {
+        let Some(subscriber) = self.signal_handler.subscribe() else {
+            return;
+        };
+
+        let process_manager = self.processes.clone();
+        tokio::spawn(async move {
+            let _guard = subscriber.listen().await;
+            debug!("Signal received, stopping child processes");
+            process_manager.stop().await;
+            debug!("Child processes stopped");
+        });
+    }
+
     async fn cleanup_proxy(
         &self,
         proxy_shutdown: Option<(
@@ -664,6 +678,13 @@ impl Run {
     pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
         let proxy_shutdown = self.start_proxy_if_needed().await?;
         self.setup_cache_shutdown_handler();
+
+        // If there's no proxy, we need a fallback signal handler for the process
+        // manager When a proxy is present, register_proxy_signal_handler
+        // handles process manager shutdown
+        if proxy_shutdown.is_none() {
+            self.setup_process_manager_shutdown_handler();
+        }
 
         if let Some(graph_opts) = &self.opts.run_opts.graph {
             graph_visualizer::write_graph(
