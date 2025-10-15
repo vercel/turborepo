@@ -256,12 +256,15 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
             let mut args = vec!["proxy", mfe_path.as_str(), "--names"];
             args.extend(local_apps);
 
-            // TODO: leverage package manager to find the local proxy
+            // On Windows, a package manager will rework the binary to be a .cmd extension
+            // since that's what Windows needs
             let bin_name = if cfg!(windows) {
                 "microfrontends.cmd"
             } else {
                 "microfrontends"
             };
+
+            // TODO: leverage package manager to find the local proxy
             let program = package_dir.join_components(&["node_modules", ".bin", bin_name]);
             let mut cmd = Command::new(program.as_std_path());
             cmd.current_dir(package_dir).args(args).open_stdin();
