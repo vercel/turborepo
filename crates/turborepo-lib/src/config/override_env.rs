@@ -3,7 +3,7 @@ use std::{
     ffi::{OsStr, OsString},
 };
 
-use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions, env::truth_env_var};
+use super::{env::truth_env_var, ConfigurationOptions, Error, ResolvedConfigurationOptions};
 use crate::turbo_json::UIMode;
 
 /*

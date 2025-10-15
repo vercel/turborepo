@@ -6,25 +6,25 @@ use std::{
 
 use console::StyledObject;
 use tokio::sync::oneshot;
-use tracing::{Instrument, error};
-use turborepo_env::{EnvironmentVariableMap, platform::PlatformEnv};
+use tracing::{error, Instrument};
+use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_process::{ChildExit, Command, ProcessManager};
 use turborepo_repository::package_manager::PackageManager;
 use turborepo_task_id::TaskId;
-use turborepo_telemetry::events::{TrackedErrors, task::PackageTaskEventBuilder};
+use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{ColorConfig, OutputWriter};
 
 use super::{
-    TaskOutput, Visitor,
     command::{CommandFactory, MicroFrontendProxyProvider, PackageGraphCommandProvider},
     error::{TaskError, TaskErrorCause, TaskWarning},
     output::TaskCacheOutput,
+    TaskOutput, Visitor,
 };
 use crate::{
     cli::ContinueMode,
     config::UIMode,
     engine::{Engine, StopExecution},
-    run::{CacheOutput, TaskCache, summary::TaskTracker, task_access::TaskAccess},
+    run::{summary::TaskTracker, task_access::TaskAccess, CacheOutput, TaskCache},
     task_hash::TaskHashTracker,
 };
 
