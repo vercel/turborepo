@@ -6,10 +6,13 @@ description: Learn how to use Turborepo's built-in microfrontends proxy for loca
 import { Callout } from '#components/callout';
 import { File, Folder, Files } from '#components/files';
 import { PackageManagerTabs, Tab } from '#components/tabs';
+import { PrereleaseBadge } from '#components/prerelease-badge';
+
+<PrereleaseBadge />
 
 Microfrontends are an architectural pattern where a web application is decomposed into smaller, independently developed and deployed applications that work together.
 
-Turborepo provides built-in support for running vertical microfrontends locally during development through an integrated proxy server. The proxy coordinates multiple applications and routes traffic between them.
+Turborepo provides built-in support for running vertical microfrontends (sometimes called "zones") locally during development through an integrated proxy server. The proxy coordinates multiple applications and routes traffic between them.
 
 Let's imagine you have a monorepo with multiple frontend applications:
 
@@ -46,7 +49,7 @@ Turborepo provides a built-in proxy server that automatically routes traffic bet
 
 ### Configuration
 
-Create a `microfrontends.json` file in one of your application packages (typically the "main" or "root" application):
+Create a `microfrontends.json` file in your parent application. This application is the one that all requests will fall through to when not matched by another application.
 
 ```json title="./apps/main/microfrontends.json"
 {
@@ -68,16 +71,6 @@ Create a `microfrontends.json` file in one of your application packages (typical
       ]
     }
   }
-}
-```
-
-#### Schema validation
-
-The `microfrontends.json` file follows the [OpenAPI schema](https://TODOTODOTODO/microfrontends.json). Most editors will provide autocomplete and validation if you include the `$schema` property:
-
-```json title="./apps/web/microfrontends.json"
-{
-  "$schema": "TODO"
 }
 ```
 
@@ -124,6 +117,35 @@ The port where the application runs locally. Can be specified as:
 {
   "development": {
     "local": 3000
+  }
+}
+```
+
+#### `development.task` (optional)
+
+The task name to run for this application. Defaults to `"dev"` if not specified.
+
+**Important:** This field is used by Turborepo's task runner to determine which task to execute for each application. The proxy itself does not use this field - it only routes traffic based on ports and path patterns.
+
+```json title="./apps/web/microfrontends.json"
+{
+  "development": {
+    "local": 3000,
+    "task": "start:dev"
+  }
+}
+```
+
+#### `development.fallback` (optional)
+
+A target to proxy to when an application is not running locally. This is most frequently used to route to production to make commands like `turbo dev --filter=web` that only run a subset of applications a seamless experience.
+
+Must be a fully qualified URL.
+
+```json title="./apps/web/microfrontends.json"
+{
+  "development": {
+    "fallback": "https://example.com"
   }
 }
 ```
@@ -182,7 +204,7 @@ Segments starting with `:` match any single path segment. For example, `/blog/:s
 
 Parameters ending with `*` match zero or more path segments. For example, `/docs/:path*` matches `/docs`, `/docs/intro`, and `/docs/api/reference`.
 
-## Automatic integration with `turbo dev`
+### Automatic integration with `turbo dev`
 
 When you run `turbo dev` in a repository with a `microfrontends.json` file, Turborepo automatically:
 
@@ -262,7 +284,7 @@ To start, we've built Turborepo's local proxy to integrate with Vercel's microfr
 
 Vercel has native support for microfrontends that provide:
 
-- Production proxy implementation
+- Production proxy implementation with enhance performance
 - Fallback URL support across environments
 - Vercel toolbar integration
 - Feature flag support
@@ -288,6 +310,16 @@ By default, the microfrontends proxy will try to use port 3024. If you already u
 
 Ensure that the paths that the microfrontends matches for in its [`routing` configuration](#routing-optional) include the routes for the assets. Check your network tab to find paths that are or aren't matching as expected.
 
+### Links across applications causing errors
+
+If you use a Single-Page Application (SPA) link (like the Next.js `<Link>` component) to link across applications, this can result in errors. Even though the port and domain remain the same, the applications are different. This means the routing is, by definition, not a "single-page application".
+
+### Visiting a proxied port does not redirect
+
+You are still be able to reach a proxied port directly. For example, if `localhost:3000` is proxied to `localhost:3042`, you can still visit `localhost:3000` in your browser.
+
+If you would like for `localhost:3000` to redirect to `localhost:3024`, you must set this up manually in your application.
+
 ### Applications not starting
 
 Verify that:
@@ -303,7 +335,6 @@ Here's a full example of a microfrontends configuration for an e-commerce platfo
 
 ```json title="./apps/web/microfrontends.json"
 {
-  "$schema": "https://openapi.vercel.sh/microfrontends.json",
   "version": "1",
   "options": {
     "localProxyPort": 3024
