@@ -150,3 +150,15 @@ Make sure to run your package manager's install command. You also may need to up
 ### Customizing tasks
 
 By default, the new application will use the tasks defined in the root `turbo.json`. If you'd like to configure tasks differently for the new application, use [Package Configurations](/docs/reference/package-configurations).
+
+### Microfrontends
+
+When using Nuxt with [Turborepo's microfrontends](/docs/guides/microfrontends), make sure to set the `basePath` property for child applications. This ensures the assets like images and CSS will be routed to the correct application.
+
+```ts title="./apps/my-app/vite.config.ts"
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  base: '/thing',
+});
+```
