@@ -10,7 +10,7 @@ use hyper::server::conn::http1;
 use hyper_util::{client::legacy::Client, rt::TokioIo};
 use tokio::{
     net::TcpListener,
-    sync::{broadcast, oneshot},
+    sync::{Semaphore, broadcast, oneshot},
 };
 use tracing::{debug, error, info};
 use turborepo_microfrontends::Config;
@@ -26,6 +26,7 @@ pub(crate) const DEFAULT_PROXY_PORT: u16 = 3024;
 pub(crate) const SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(1);
 pub(crate) const HTTP_CLIENT_POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 pub(crate) const HTTP_CLIENT_MAX_IDLE_PER_HOST: usize = 32;
+pub(crate) const MAX_CONCURRENT_CONNECTIONS: usize = 512;
 
 fn is_connection_closed_error(err: &hyper::Error) -> bool {
     if err.is_closed() {
@@ -54,6 +55,7 @@ pub struct ProxyServer {
     ws_id_counter: Arc<AtomicUsize>,
     http_client: HttpClient,
     shutdown_complete_tx: Option<oneshot::Sender<()>>,
+    connection_semaphore: Arc<Semaphore>,
 }
 
 impl ProxyServer {
@@ -79,6 +81,7 @@ impl ProxyServer {
             ws_id_counter: Arc::new(AtomicUsize::new(0)),
             http_client,
             shutdown_complete_tx: None,
+            connection_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS)),
         })
     }
 
@@ -114,6 +117,7 @@ impl ProxyServer {
         let mut shutdown_rx = self.shutdown_tx.subscribe();
         let ws_handles = self.ws_handles.clone();
         let shutdown_complete_tx = self.shutdown_complete_tx;
+        let connection_semaphore = self.connection_semaphore.clone();
 
         loop {
             tokio::select! {
@@ -144,8 +148,11 @@ impl ProxyServer {
                     let ws_handles_clone = ws_handles.clone();
                     let ws_id_counter_clone = self.ws_id_counter.clone();
                     let http_client = self.http_client.clone();
+                    let semaphore = connection_semaphore.clone();
 
                     tokio::task::spawn(async move {
+                        let _permit = semaphore.acquire().await.ok()?;
+
                         debug!("New connection from {}", remote_addr);
 
                         let service = hyper::service::service_fn(move |req| {
@@ -182,6 +189,7 @@ impl ProxyServer {
                                 }
                             }
                         }
+                        Some(())
                     });
                 }
             }
