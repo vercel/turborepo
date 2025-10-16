@@ -13,6 +13,8 @@ pub enum ParseResult {
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 pub struct ConfigV1 {
+    #[serde(rename = "$schema", skip)]
+    schema: Option<String>,
     version: Option<String>,
     applications: BTreeMap<String, Application>,
     options: Option<Options>,
@@ -47,10 +49,16 @@ pub struct PathGroup {
 }
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
-struct ProductionConfig {}
+struct ProductionConfig {
+    protocol: Option<String>,
+    host: Option<String>,
+}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
-struct VercelConfig {}
+struct VercelConfig {
+    #[serde(rename = "projectId")]
+    project_id: Option<String>,
+}
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 struct Development {
@@ -152,6 +160,10 @@ impl ConfigV1 {
         .consume();
 
         if let Some(config) = config {
+            // Only accept the config if there were no errors during parsing
+            if !errs.is_empty() {
+                return Err(Error::biome_error(errs));
+            }
             // Accept any version. This allows the Turborepo proxy to work with
             // configurations that have different version numbers than expected,
             // as long as the structure is compatible with what Turborepo needs
@@ -200,6 +212,7 @@ impl ConfigV1 {
                 local_proxy_port: Some(port),
                 disable_overrides: None,
             }),
+            schema: None,
         }
     }
 
@@ -584,5 +597,74 @@ mod test {
             }
             ParseResult::Reference(_) => panic!("expected to get main config"),
         }
+    }
+
+    #[test]
+    fn test_malformed_json_unclosed_bracket() {
+        let input = r#"{"applications": {"web": {"development": {"local": 3000}}"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json");
+        assert!(
+            config.is_err(),
+            "Parser should reject JSON with unclosed bracket"
+        );
+    }
+
+    #[test]
+    fn test_malformed_json_trailing_comma() {
+        let input = r#"{"applications": {"web": {"development": {"local": 3000,}}}}"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json");
+        assert!(
+            config.is_err(),
+            "Parser should reject JSON with trailing comma"
+        );
+    }
+
+    #[test]
+    fn test_missing_required_applications() {
+        // Even though applications has defaults, if JSON structure is invalid it should
+        // fail
+        let input = r#"{"applications": {, "web": {}}}"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json");
+        assert!(
+            config.is_err(),
+            "Parser should reject JSON with syntax errors"
+        );
+    }
+
+    #[test]
+    fn test_invalid_routing_structure() {
+        let input = r#"{
+        "applications": {
+          "docs": {
+            "routing": "invalid"
+          }
+        }
+      }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json");
+        assert!(
+            config.is_err(),
+            "Parser should reject routing that is not an array"
+        );
+    }
+
+    #[test]
+    fn test_invalid_path_group_structure() {
+        let input = r#"{
+        "applications": {
+          "docs": {
+            "routing": [
+              {
+                "group": "docs",
+                "paths": "should_be_array"
+              }
+            ]
+          }
+        }
+      }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json");
+        assert!(
+            config.is_err(),
+            "Parser should reject paths that is not an array"
+        );
     }
 }

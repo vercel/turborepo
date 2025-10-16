@@ -277,6 +277,9 @@ impl Config {
         )
         .consume();
 
+        // If version extraction had errors, we should still try to parse the full
+        // config, but we won't let those errors be silently ignored in the full
+        // parse below.
         let version = match version_only {
             Some(VersionOnly {
                 version: Some(version),

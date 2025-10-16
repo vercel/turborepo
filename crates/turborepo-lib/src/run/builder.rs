@@ -6,7 +6,7 @@ use std::{
 };
 
 use chrono::Local;
-use tracing::{debug, warn};
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -377,12 +377,8 @@ impl RunBuilder {
         let micro_frontend_configs =
             match MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph) {
                 Ok(configs) => configs,
-                Err(err @ turborepo_microfrontends::Error::ConfigInWrongPackage { .. }) => {
-                    return Err(Error::MicroFrontends(err));
-                }
                 Err(err) => {
-                    warn!("Ignoring invalid microfrontends configuration: {err}");
-                    None
+                    return Err(Error::MicroFrontends(err));
                 }
             };
 

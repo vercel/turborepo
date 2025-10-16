@@ -305,7 +305,7 @@ mod test {
 
     use insta::assert_snapshot;
     use turbopath::AnchoredSystemPath;
-    use turborepo_microfrontends::Config;
+    use turborepo_microfrontends::TurborepoMfeConfig as Config;
     use turborepo_repository::package_json::PackageJson;
 
     use super::*;
@@ -421,7 +421,7 @@ mod test {
                 }
             }
         }
-        let mut config = Config::from_str(
+        let config = Config::from_str(
             r#"
         {
             "applications": {
@@ -437,7 +437,6 @@ mod test {
             "microfrontends.json",
         )
         .unwrap();
-        config.set_path(AnchoredSystemPath::new("microfrontends.json").unwrap());
         let microfrontends_configs = MicrofrontendsConfigs::from_configs(
             ["web", "docs"].iter().copied().collect(),
             std::iter::once(("web", Ok(Some(config)))),

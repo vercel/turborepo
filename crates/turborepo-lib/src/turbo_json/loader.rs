@@ -865,7 +865,7 @@ mod test {
             vec![
                 (
                     "web",
-                    turborepo_microfrontends::Config::from_str(
+                    turborepo_microfrontends::TurborepoMfeConfig::from_str(
                         r#"{"version": "1", "applications": {"web": {}, "docs": {"routing": [{"paths": ["/docs"]}]}}}"#,
                         "mfe.json",
                     )

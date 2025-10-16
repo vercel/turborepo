@@ -661,7 +661,7 @@ mod test {
     #[test]
     fn test_use_turborepo_proxy_false_when_package_has_mfe_dependency() {
         // Create a microfrontends config
-        let config = MFEConfig::from_str(
+        let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {},
@@ -770,7 +770,7 @@ mod test {
     #[test]
     fn test_config_in_correct_package() {
         // Config file is in "web" package, and "web" is the root route app (no routing)
-        let config = MFEConfig::from_str(
+        let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {},
@@ -796,7 +796,7 @@ mod test {
     #[test]
     fn test_config_in_wrong_package() {
         // Config file is in "docs" package, but "web" is the root route app
-        let config = MFEConfig::from_str(
+        let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {},
@@ -829,7 +829,7 @@ mod test {
     fn test_config_with_package_name_mapping() {
         // Config file is in "marketing" package, which is where "web" app (root route)
         // is actually implemented
-        let config = MFEConfig::from_str(
+        let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {
@@ -861,7 +861,7 @@ mod test {
     fn test_config_with_package_name_mapping_in_wrong_package() {
         // Config file is in "docs" package, but "marketing" maps to "web" app (root
         // route)
-        let config = MFEConfig::from_str(
+        let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {
@@ -894,7 +894,7 @@ mod test {
 
     #[test]
     fn test_task_uses_turborepo_proxy_when_enabled() {
-        let config = MFEConfig::from_str(
+        let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {},
@@ -942,7 +942,7 @@ mod test {
 
     #[test]
     fn test_turbo_mfe_port_with_port_number() {
-        let config = MFEConfig::from_str(
+        let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {
@@ -980,7 +980,7 @@ mod test {
 
     #[test]
     fn test_turbo_mfe_port_with_url_string() {
-        let config = MFEConfig::from_str(
+        let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {

@@ -122,6 +122,10 @@ impl TurborepoConfig {
         .consume();
 
         if let Some(config) = config {
+            // Only accept the config if there were no errors during parsing
+            if !errs.is_empty() {
+                return Err(Error::biome_error(errs));
+            }
             Ok(config)
         } else {
             Err(Error::biome_error(errs))
@@ -260,5 +264,61 @@ mod test {
     }"#;
         let config = TurborepoConfig::from_str(input, "somewhere").unwrap();
         assert_eq!(config.port("web"), Some(3000));
+    }
+
+    #[test]
+    fn test_malformed_json_unclosed_bracket() {
+        let input = r#"{"applications": {"web": {"development": {"local": 3000}}"#;
+        let config = TurborepoConfig::from_str(input, "somewhere");
+        assert!(
+            config.is_err(),
+            "Parser should reject JSON with unclosed bracket"
+        );
+    }
+
+    #[test]
+    fn test_malformed_json_trailing_comma() {
+        let input = r#"{"applications": {"web": {"development": {"local": 3000,}}}}"#;
+        let config = TurborepoConfig::from_str(input, "somewhere");
+        assert!(
+            config.is_err(),
+            "Parser should reject JSON with trailing comma"
+        );
+    }
+
+    #[test]
+    fn test_invalid_routing_type() {
+        let input = r#"{
+        "applications": {
+          "docs": {
+            "routing": "should_be_array"
+          }
+        }
+    }"#;
+        let config = TurborepoConfig::from_str(input, "somewhere");
+        assert!(
+            config.is_err(),
+            "Parser should reject routing that is not an array"
+        );
+    }
+
+    #[test]
+    fn test_invalid_paths_structure() {
+        let input = r#"{
+        "applications": {
+          "docs": {
+            "routing": [
+              {
+                "paths": "should_be_array"
+              }
+            ]
+          }
+        }
+    }"#;
+        let config = TurborepoConfig::from_str(input, "somewhere");
+        assert!(
+            config.is_err(),
+            "Parser should reject paths that is not an array"
+        );
     }
 }
