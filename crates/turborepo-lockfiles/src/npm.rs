@@ -464,6 +464,67 @@ mod test {
     }
 
     #[test]
+    fn test_issue_10985_peer_dependencies_with_different_versions() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/issue-10985.json"))?;
+
+        let closures = crate::all_transitive_closures(
+            &lockfile,
+            vec![
+                (
+                    "apps/app-one".into(),
+                    vec![
+                        ("@repo/components".into(), "*".into()),
+                        ("next".into(), "^14.0.0".into()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+                (
+                    "apps/app-two".into(),
+                    vec![
+                        ("@repo/components".into(), "*".into()),
+                        ("next".into(), "^15.0.0".into()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            false,
+        )?;
+
+        let app_one_deps = closures.get("apps/app-one").unwrap();
+        let app_two_deps = closures.get("apps/app-two").unwrap();
+
+        assert!(app_one_deps.contains(&Package {
+            key: "apps/app-one/node_modules/next".into(),
+            version: "14.2.5".into()
+        }));
+        assert!(app_two_deps.contains(&Package {
+            key: "apps/app-two/node_modules/next".into(),
+            version: "15.0.0".into()
+        }));
+
+        assert!(
+            !app_one_deps.contains(&Package {
+                key: "apps/app-two/node_modules/next".into(),
+                version: "15.0.0".into()
+            }),
+            "app-one should not include next@15.0.0"
+        );
+        assert!(
+            !app_two_deps.contains(&Package {
+                key: "apps/app-one/node_modules/next".into(),
+                version: "14.2.5".into()
+            }),
+            "app-two should not include next@14.2.5"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn test_turbo_version() -> Result<(), Error> {
         let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
         assert_eq!(lockfile.turbo_version().as_deref(), Some("1.5.5"));
