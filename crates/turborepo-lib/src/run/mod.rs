@@ -34,24 +34,24 @@ use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{
-    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
-    BOLD_GREY, GREY,
+    BOLD_GREY, ColorConfig, GREY, cprint, cprintln, sender::UISender, tui, tui::TuiSender,
+    wui::sender::WebUISender,
 };
 
 pub use crate::run::error::Error;
 use crate::{
+    DaemonClient, DaemonConnector,
     cli::EnvMode,
     engine::Engine,
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
+    task_hash::{PackageInputsHashes, get_external_deps_hash, get_internal_deps_hash},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
-    DaemonClient, DaemonConnector,
 };
 
 #[derive(Clone)]
@@ -313,13 +313,35 @@ impl Run {
 
         info!("Starting Turborepo microfrontends proxy");
 
+        let config = self.load_proxy_config(mfe_configs).await?;
+        let (mut server, shutdown_handle) = self.start_proxy_server(config).await?;
+
+        let signal_handler_complete_rx =
+            self.setup_shutdown_handlers(&mut server, shutdown_handle.clone());
+
+        tokio::spawn(async move {
+            if let Err(e) = server.run().await {
+                error!("Turborepo proxy error: {}", e);
+            }
+        });
+
+        info!("Turborepo proxy started successfully");
+        Ok(Some((shutdown_handle, signal_handler_complete_rx)))
+    }
+
+    async fn load_proxy_config(
+        &self,
+        mfe_configs: &MicrofrontendsConfigs,
+    ) -> Result<turborepo_microfrontends::Config, Error> {
         let config_path = mfe_configs
             .configs()
             .sorted_by(|(a, _), (b, _)| a.cmp(b))
             .find_map(|(pkg, _tasks)| mfe_configs.config_filename(pkg));
 
         let Some(config_path) = config_path else {
-            return Ok(None);
+            return Err(Error::Proxy(
+                "No microfrontends config file found".to_string(),
+            ));
         };
 
         let full_path = self.repo_root.join_unix_path(config_path);
@@ -333,7 +355,14 @@ impl Run {
         )
         .map_err(|e| Error::Proxy(format!("Failed to parse microfrontends config: {}", e)))?;
 
-        let mut server = ProxyServer::new(config.into_config())
+        Ok(config.into_config())
+    }
+
+    async fn start_proxy_server(
+        &self,
+        config: turborepo_microfrontends::Config,
+    ) -> Result<(ProxyServer, tokio::sync::broadcast::Sender<()>), Error> {
+        let server = ProxyServer::new(config)
             .map_err(|e| Error::Proxy(format!("Failed to create Turborepo proxy: {}", e)))?;
 
         if !server.check_port_available().await {
@@ -341,11 +370,20 @@ impl Run {
         }
 
         let shutdown_handle = server.shutdown_handle();
+        Ok((server, shutdown_handle))
+    }
+
+    fn setup_shutdown_handlers(
+        &self,
+        server: &mut ProxyServer,
+        shutdown_handle: tokio::sync::broadcast::Sender<()>,
+    ) -> tokio::sync::oneshot::Receiver<()> {
         let (proxy_shutdown_complete_tx, proxy_shutdown_complete_rx) =
             tokio::sync::oneshot::channel();
         let (cleanup_complete_tx, cleanup_complete_rx) = tokio::sync::oneshot::channel();
         let (signal_handler_complete_tx, signal_handler_complete_rx) =
             tokio::sync::oneshot::channel();
+
         server.set_shutdown_complete_tx(proxy_shutdown_complete_tx);
 
         tokio::spawn(async move {
@@ -355,16 +393,9 @@ impl Run {
             }
         });
 
-        self.register_proxy_signal_handler(shutdown_handle.clone(), signal_handler_complete_rx);
+        self.register_proxy_signal_handler(shutdown_handle, signal_handler_complete_rx);
 
-        tokio::spawn(async move {
-            if let Err(e) = server.run().await {
-                error!("Turborepo proxy error: {}", e);
-            }
-        });
-
-        info!("Turborepo proxy started successfully");
-        Ok(Some((shutdown_handle, cleanup_complete_rx)))
+        cleanup_complete_rx
     }
 
     fn register_proxy_signal_handler(
