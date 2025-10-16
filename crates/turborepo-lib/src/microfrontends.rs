@@ -363,7 +363,7 @@ impl ConfigInfo {
         let mut ports = HashMap::new();
         let mut tasks = HashMap::new();
         for dev_task in config.development_tasks() {
-            let task = TaskId::new(dev_task.package, dev_task.task.unwrap_or("dev")).into_owned();
+            let task = TaskId::new(dev_task.package, "dev").into_owned();
             if let Some(port) = config.port(dev_task.application_name) {
                 ports.insert(task.clone(), port);
             }
@@ -598,42 +598,6 @@ mod test {
             HashMap::new(),
         );
         assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_dev_task_collection() {
-        let config = MFEConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "applications": {
-                    "web": {},
-                    "docs": {
-                        "development": {
-                            "task": "serve"
-                        },
-                        "routing": [{"paths": ["/docs", "/docs/:path*"]}]
-                    }
-                }
-            }))
-            .unwrap(),
-            "something.txt",
-        )
-        .unwrap();
-        let mut result = PackageGraphResult::new(
-            HashSet::default(),
-            vec![("web", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
-        )
-        .unwrap();
-        result.configs.values_mut().for_each(|config| {
-            config.ports.clear();
-            config.use_turborepo_proxy = false;
-        });
-        assert_eq!(
-            result.configs,
-            mfe_configs!(
-                "web" => ["web#dev", "docs#serve"]
-            )
-        )
     }
 
     #[test]
