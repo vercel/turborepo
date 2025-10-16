@@ -425,7 +425,7 @@ impl Run {
                         warn!("Proxy shutdown notification channel closed unexpectedly");
                     }
                     Err(_) => {
-                        warn!("Proxy shutdown notification timed out after 500 milliseconds");
+                        info!("Proxy shutdown notification timed out after 500 milliseconds");
                     }
                 }
 
