@@ -286,16 +286,37 @@ impl PackageGraphResult {
                 has_mfe_dependency = true;
             }
 
-            let Some(config) = config.or_else(|err| match err {
-                turborepo_microfrontends::Error::UnsupportedVersion(_) => {
-                    unsupported_version.push((package_name.to_string(), err.to_string()));
-                    Ok(None)
+            let Some(config) = config.or_else(|err| {
+                match &err {
+                    turborepo_microfrontends::Error::UnsupportedVersion(_) => {
+                        unsupported_version.push((package_name.to_string(), err.to_string()));
+                        Ok(None)
+                    }
+                    turborepo_microfrontends::Error::ChildConfig { reference } => {
+                        referenced_default_apps.insert(reference.clone());
+                        Ok(None)
+                    }
+                    turborepo_microfrontends::Error::JsonParse(msg)
+                        if msg.contains("Found an unknown key") =>
+                    {
+                        // Only allow unknown keys if this package has @vercel/microfrontends
+                        // dependency
+                        let has_mfe_dep = package_has_mfe_dependency
+                            .get(package_name)
+                            .copied()
+                            .unwrap_or(false);
+                        if has_mfe_dep {
+                            // Package uses @vercel/microfrontends, so Vercel-specific fields are
+                            // allowed
+                            Ok(None)
+                        } else {
+                            // Package doesn't use @vercel/microfrontends, reject Vercel-specific
+                            // fields
+                            Err(err)
+                        }
+                    }
+                    _ => Err(err),
                 }
-                turborepo_microfrontends::Error::ChildConfig { reference } => {
-                    referenced_default_apps.insert(reference);
-                    Ok(None)
-                }
-                err => Err(err),
             })?
             else {
                 continue;
@@ -1013,6 +1034,76 @@ mod test {
             configs.dev_task_port(&task_id),
             Some(3000),
             "Port should be extracted from URL string"
+        );
+    }
+
+    #[test]
+    fn test_vercel_fields_rejected_without_dependency() {
+        // Config with Vercel-specific fields
+        let config_result = MfeConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "$schema": "https://example.com/schema.json",
+                "version": "1",
+                "applications": {
+                    "web": {
+                        "development": {
+                            "local": 3000,
+                            "task": "dev"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        );
+
+        // Should fail for package without @vercel/microfrontends dependency
+        let result = PackageGraphResult::new(
+            HashSet::from_iter(["web"].iter().copied()),
+            vec![("web", config_result.map(Some))].into_iter(),
+            HashMap::new(),
+        );
+
+        assert!(
+            result.is_err(),
+            "Config with Vercel fields should be rejected for packages without \
+             @vercel/microfrontends"
+        );
+    }
+
+    #[test]
+    fn test_vercel_fields_accepted_with_dependency() {
+        // Config with Vercel-specific fields
+        let config_result = MfeConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "$schema": "https://example.com/schema.json",
+                "version": "1",
+                "applications": {
+                    "web": {
+                        "development": {
+                            "local": 3000,
+                            "task": "dev"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        );
+
+        // Should succeed for package with @vercel/microfrontends dependency
+        let mut deps = std::collections::HashMap::new();
+        deps.insert("web", true);
+
+        let result = PackageGraphResult::new(
+            HashSet::from_iter(["web"].iter().copied()),
+            vec![("web", config_result.map(Some))].into_iter(),
+            deps,
+        );
+
+        assert!(
+            result.is_ok(),
+            "Config with Vercel fields should be accepted for packages with @vercel/microfrontends"
         );
     }
 }

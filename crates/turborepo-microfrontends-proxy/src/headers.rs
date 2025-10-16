@@ -38,6 +38,8 @@ pub(crate) fn validate_host_header(host: &str) -> Result<(), ProxyError> {
         {
             return Ok(());
         }
+    } else if host == "localhost" || host == "127.0.0.1" {
+        return Ok(());
     }
 
     Err(ProxyError::InvalidRequest(
@@ -230,6 +232,16 @@ mod tests {
     fn test_validate_host_header_127_0_0_1() {
         assert!(validate_host_header("127.0.0.1:3000").is_ok());
         assert!(validate_host_header("127.0.0.1:8080").is_ok());
+    }
+
+    #[test]
+    fn test_validate_host_header_localhost_no_port() {
+        assert!(validate_host_header("localhost").is_ok());
+    }
+
+    #[test]
+    fn test_validate_host_header_127_0_0_1_no_port() {
+        assert!(validate_host_header("127.0.0.1").is_ok());
     }
 
     #[test]

@@ -321,4 +321,37 @@ mod test {
             "Parser should reject paths that is not an array"
         );
     }
+
+    #[test]
+    fn test_vercel_specific_fields_accepted() {
+        let input = r#"{
+        "$schema": "https://example.com/schema.json",
+        "version": "1",
+        "applications": {
+          "web": {
+            "development": {
+              "local": 3000,
+              "task": "dev"
+            }
+          },
+          "docs": {
+            "routing": [
+              {
+                "paths": ["/docs"],
+                "group": "docs",
+                "flag": "enable_docs"
+              }
+            ],
+            "development": {
+              "local": 3001
+            }
+          }
+        }
+    }"#;
+        let config = TurborepoConfig::from_str(input, "somewhere");
+        assert!(
+            config.is_err(),
+            "Strict parser should reject Vercel-specific fields like $schema, task, and flag"
+        );
+    }
 }

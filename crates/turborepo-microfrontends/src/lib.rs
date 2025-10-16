@@ -24,7 +24,7 @@
 #![deny(clippy::all)]
 mod configv1;
 mod error;
-mod turborepo_schema;
+mod schema;
 
 use std::io;
 
@@ -33,10 +33,10 @@ use biome_json_parser::JsonParserOptions;
 use configv1::ConfigV1;
 pub use configv1::PathGroup;
 pub use error::Error;
+pub use schema::{TurborepoConfig, TurborepoDevelopment};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
-pub use turborepo_schema::{TurborepoConfig, TurborepoDevelopment};
 
 /// Currently the default path for a package that provides a configuration.
 ///
@@ -119,7 +119,7 @@ impl TurborepoMfeConfig {
         self.inner.local_proxy_port()
     }
 
-    pub fn routing(&self, app_name: &str) -> Option<&[turborepo_schema::PathGroup]> {
+    pub fn routing(&self, app_name: &str) -> Option<&[schema::PathGroup]> {
         self.inner.routing(app_name)
     }
 

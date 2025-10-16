@@ -177,7 +177,7 @@ impl ConfigV1 {
     /// Converts a TurborepoConfig to ConfigV1 for compatibility with
     /// the proxy. This preserves only the fields that TurborepoConfig knows
     /// about, discarding any Vercel-specific metadata.
-    pub fn from_turborepo_config(config: &crate::turborepo_schema::TurborepoConfig) -> Self {
+    pub fn from_turborepo_config(config: &crate::schema::TurborepoConfig) -> Self {
         let mut applications = BTreeMap::new();
 
         for (app_name, turbo_app) in config.applications() {
