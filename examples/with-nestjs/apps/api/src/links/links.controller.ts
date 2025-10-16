@@ -6,13 +6,13 @@ import {
   Patch,
   Param,
   Delete,
-} from "@nestjs/common";
+} from '@nestjs/common';
 
-import type { CreateLinkDto, UpdateLinkDto } from "@repo/api";
+import type { CreateLinkDto, UpdateLinkDto } from '@repo/api';
 
-import { LinksService } from "./links.service";
+import { LinksService } from './links.service';
 
-@Controller("links")
+@Controller('links')
 export class LinksController {
   constructor(private readonly linksService: LinksService) {}
 
@@ -26,18 +26,18 @@ export class LinksController {
     return this.linksService.findAll();
   }
 
-  @Get(":id")
-  findOne(@Param("id") id: string) {
+  @Get(':id')
+  findOne(@Param('id') id: string) {
     return this.linksService.findOne(+id);
   }
 
-  @Patch(":id")
-  update(@Param("id") id: string, @Body() updateLinkDto: UpdateLinkDto) {
+  @Patch(':id')
+  update(@Param('id') id: string, @Body() updateLinkDto: UpdateLinkDto) {
     return this.linksService.update(+id, updateLinkDto);
   }
 
-  @Delete(":id")
-  remove(@Param("id") id: string) {
+  @Delete(':id')
+  remove(@Param('id') id: string) {
     return this.linksService.remove(+id);
   }
 }

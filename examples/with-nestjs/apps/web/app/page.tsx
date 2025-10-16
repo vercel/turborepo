@@ -1,10 +1,10 @@
-import type { Link } from "@repo/api";
-import { Button } from "@repo/ui/button";
-import Image, { type ImageProps } from "next/image";
+import type { Link } from '@repo/api';
+import { Button } from '@repo/ui/button';
+import Image, { type ImageProps } from 'next/image';
 
-import styles from "./page.module.css";
+import styles from './page.module.css';
 
-type Props = Omit<ImageProps, "src"> & {
+type Props = Omit<ImageProps, 'src'> & {
   srcLight: string;
   srcDark: string;
 };
@@ -22,17 +22,17 @@ const ThemeImage = (props: Props) => {
 
 async function getLinks(): Promise<Link[]> {
   try {
-    const res = await fetch("http://localhost:3000/links", {
-      cache: "no-store",
+    const res = await fetch('http://localhost:3000/links', {
+      cache: 'no-store',
     });
 
     if (!res.ok) {
-      throw new Error("Failed to fetch links");
+      throw new Error('Failed to fetch links');
     }
 
     return res.json();
   } catch (error) {
-    console.error("Error fetching links:", error);
+    console.error('Error fetching links:', error);
     return [];
   }
 }
@@ -105,7 +105,7 @@ export default async function Home() {
             ))}
           </div>
         ) : (
-          <div style={{ color: "#666" }}>
+          <div style={{ color: '#666' }}>
             No links available. Make sure the NestJS API is running on port
             3000.
           </div>
