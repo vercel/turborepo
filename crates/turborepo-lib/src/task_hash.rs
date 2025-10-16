@@ -452,7 +452,6 @@ impl<'a> TaskHasher<'a> {
                     "LIBPATH",
                     "LD_PRELOAD",
                     "DYLD_INSERT_LIBRARIES",
-                    "MIRRORD_*",
                     "COLORTERM",
                     "TERM",
                     "TERM_PROGRAM",
