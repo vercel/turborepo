@@ -13,7 +13,7 @@ use turborepo_task_id::TaskName;
 use super::{Pipeline, RawTaskDefinition, TurboJson};
 use crate::{
     cli::EnvMode,
-    config::{Error, CONFIG_FILE, CONFIG_FILE_JSONC},
+    config::{CONFIG_FILE, CONFIG_FILE_JSONC, Error},
     microfrontends::MicrofrontendsConfigs,
     run::task_access::TASK_ACCESS_CONFIG_PATH,
     turbo_json::FutureFlags,
@@ -866,7 +866,7 @@ mod test {
                 (
                     "web",
                     turborepo_microfrontends::Config::from_str(
-                        r#"{"version": "1", "applications": {"web": {}, "docs": {}}}"#,
+                        r#"{"version": "1", "applications": {"web": {}, "docs": {"routing": [{"paths": ["/docs"]}]}}}"#,
                         "mfe.json",
                     )
                     .map(Some),
@@ -879,8 +879,11 @@ mod test {
                 ),
             ]
             .into_iter(),
-            std::collections::HashMap::from([("web", true)]),
-            std::collections::HashMap::new(),
+            {
+                let mut deps = std::collections::HashMap::new();
+                deps.insert("web", true);
+                deps
+            },
         )
         .unwrap();
 

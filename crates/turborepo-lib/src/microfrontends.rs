@@ -35,7 +35,6 @@ impl MicrofrontendsConfigs {
     ) -> Result<Option<Self>, Error> {
         struct PackageMetadata<'a> {
             names: HashSet<&'a str>,
-            has_proxy: HashMap<&'a str, bool>,
             has_mfe_dep: HashMap<&'a str, bool>,
             configs: Vec<(&'a str, Result<Option<MFEConfig>, Error>)>,
         }
@@ -43,15 +42,12 @@ impl MicrofrontendsConfigs {
         let metadata = package_graph.packages().fold(
             PackageMetadata {
                 names: HashSet::new(),
-                has_proxy: HashMap::new(),
                 has_mfe_dep: HashMap::new(),
                 configs: Vec::new(),
             },
             |mut acc, (name, info)| {
                 let name_str = name.as_str();
                 acc.names.insert(name_str);
-                acc.has_proxy
-                    .insert(name_str, info.package_json.scripts.contains_key("proxy"));
                 acc.has_mfe_dep.insert(
                     name_str,
                     info.package_json
@@ -69,7 +65,6 @@ impl MicrofrontendsConfigs {
         Self::from_configs(
             metadata.names,
             metadata.configs.into_iter(),
-            metadata.has_proxy,
             metadata.has_mfe_dep,
         )
     }
@@ -78,7 +73,6 @@ impl MicrofrontendsConfigs {
     pub fn from_configs<'a>(
         package_names: HashSet<&str>,
         configs: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
-        package_has_proxy_script: HashMap<&str, bool>,
         package_has_mfe_dependency: HashMap<&str, bool>,
     ) -> Result<Option<Self>, Error> {
         let PackageGraphResult {
@@ -88,12 +82,7 @@ impl MicrofrontendsConfigs {
             unsupported_version,
             mfe_package,
             has_mfe_dependency,
-        } = PackageGraphResult::new(
-            package_names,
-            configs,
-            package_has_proxy_script,
-            package_has_mfe_dependency,
-        )?;
+        } = PackageGraphResult::new(package_names, configs, package_has_mfe_dependency)?;
 
         for (package, err) in unsupported_version {
             warn!("Ignoring {package}: {err}");
@@ -275,7 +264,6 @@ impl PackageGraphResult {
     fn new<'a>(
         packages_in_graph: HashSet<&str>,
         packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
-        package_has_proxy_script: HashMap<&str, bool>,
         package_has_mfe_dependency: HashMap<&str, bool>,
     ) -> Result<Self, Error> {
         let mut configs = HashMap::new();
@@ -322,18 +310,12 @@ impl PackageGraphResult {
             }
             // Use Turborepo proxy if:
             // - No @vercel/microfrontends package in workspace AND
-            // - No package depends on @vercel/microfrontends AND
-            // - No custom proxy script in this package
-            let has_custom_proxy = package_has_proxy_script
-                .get(package_name)
-                .copied()
-                .unwrap_or(false);
+            // - No package depends on @vercel/microfrontends
             let pkg_has_mfe_dep = package_has_mfe_dependency
                 .get(package_name)
                 .copied()
                 .unwrap_or(false);
-            info.use_turborepo_proxy =
-                mfe_package.is_none() && !has_custom_proxy && !pkg_has_mfe_dep;
+            info.use_turborepo_proxy = mfe_package.is_none() && !pkg_has_mfe_dep;
             referenced_packages.insert(package_name.to_string());
             referenced_packages.extend(info.tasks.keys().map(|task| task.package().to_string()));
 
@@ -505,7 +487,6 @@ mod test {
             HashSet::default(),
             vec![(MICROFRONTENDS_PACKAGE, Ok(None))].into_iter(),
             HashMap::new(),
-            HashMap::new(),
         )
         .unwrap();
         assert_eq!(result.mfe_package, Some(MICROFRONTENDS_PACKAGE));
@@ -517,7 +498,6 @@ mod test {
             HashSet::default(),
             vec![("foo", Ok(None)), ("bar", Ok(None))].into_iter(),
             HashMap::new(),
-            HashMap::new(),
         )
         .unwrap();
         assert_eq!(result.mfe_package, None);
@@ -528,7 +508,6 @@ mod test {
         // Create a microfrontends config
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {},
                     "docs": {
@@ -554,7 +533,6 @@ mod test {
             ]
             .into_iter(),
             HashMap::new(),
-            HashMap::new(),
         )
         .unwrap();
 
@@ -576,7 +554,6 @@ mod test {
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
             HashMap::new(),
-            HashMap::new(),
         )
         .unwrap();
 
@@ -591,48 +568,10 @@ mod test {
     }
 
     #[test]
-    fn test_use_turborepo_proxy_disabled_with_custom_proxy_script() {
-        // Create a microfrontends config
-        let config = MFEConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "version": "1",
-                "applications": {
-                    "web": {},
-                }
-            }))
-            .unwrap(),
-            "microfrontends.json",
-        )
-        .unwrap();
-
-        // When package has a custom proxy script, use_turborepo_proxy should be false
-        let mut proxy_scripts = HashMap::new();
-        proxy_scripts.insert("web", true);
-
-        let result_with_proxy_script = PackageGraphResult::new(
-            HashSet::default(),
-            vec![("web", Ok(Some(config)))].into_iter(),
-            proxy_scripts,
-            HashMap::new(),
-        )
-        .unwrap();
-
-        assert_eq!(result_with_proxy_script.mfe_package, None);
-        assert!(
-            result_with_proxy_script
-                .configs
-                .values()
-                .all(|config| !config.use_turborepo_proxy),
-            "use_turborepo_proxy should be false when package has custom proxy script"
-        );
-    }
-
-    #[test]
     fn test_unsupported_versions_ignored() {
         let result = PackageGraphResult::new(
             HashSet::default(),
             vec![("foo", Err(Error::UnsupportedVersion("bad version".into())))].into_iter(),
-            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -650,7 +589,6 @@ mod test {
                 }),
             )]
             .into_iter(),
-            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -672,7 +610,6 @@ mod test {
                 ),
             ]
             .into_iter(),
-            HashMap::new(),
             HashMap::new(),
         );
         assert!(result.is_err());
@@ -700,7 +637,6 @@ mod test {
         let mut result = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -739,14 +675,12 @@ mod test {
             HashSet::default(),
             vec![("web", Ok(Some(config.clone())))].into_iter(),
             HashMap::new(),
-            HashMap::new(),
         )
         .unwrap();
         assert_eq!(missing_result.missing_applications, vec!["docs", "web"]);
         let found_result = PackageGraphResult::new(
             HashSet::from_iter(["docs", "web"].iter().copied()),
             vec![("web", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -782,7 +716,6 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -820,7 +753,6 @@ mod test {
         let result_with_dependency = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config.clone())))].into_iter(),
-            HashMap::new(),
             mfe_dependencies,
         )
         .unwrap();
@@ -840,7 +772,6 @@ mod test {
         let result_without_dependency = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -954,7 +885,6 @@ mod test {
             HashSet::from_iter(["web", "docs"].iter().copied()),
             vec![("web", Ok(Some(config)))].into_iter(),
             HashMap::new(),
-            HashMap::new(),
         );
 
         assert!(result.is_ok(), "Config in correct package should succeed");
@@ -981,7 +911,6 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::from_iter(["web", "docs"].iter().copied()),
             vec![("docs", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
             HashMap::new(),
         );
 
@@ -1018,7 +947,6 @@ mod test {
             HashSet::from_iter(["marketing", "docs"].iter().copied()),
             vec![("marketing", Ok(Some(config)))].into_iter(),
             HashMap::new(),
-            HashMap::new(),
         );
 
         assert!(
@@ -1052,7 +980,6 @@ mod test {
             HashSet::from_iter(["marketing", "docs"].iter().copied()),
             vec![("docs", Ok(Some(config)))].into_iter(),
             HashMap::new(),
-            HashMap::new(),
         );
 
         match result {
@@ -1081,7 +1008,6 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::from_iter(["web"].iter().copied()),
             vec![("web", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();
@@ -1121,7 +1047,6 @@ mod test {
             ]
             .into_iter(),
             HashMap::new(),
-            HashMap::new(),
         )
         .unwrap();
 
@@ -1159,7 +1084,6 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::from_iter(["web"].iter().copied()),
             vec![("web", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
             mfe_dependencies,
         )
         .unwrap();
@@ -1215,7 +1139,6 @@ mod test {
             HashSet::from_iter(["web"].iter().copied()),
             vec![("web", Ok(Some(config)))].into_iter(),
             HashMap::new(),
-            HashMap::new(),
         )
         .unwrap();
 
@@ -1254,7 +1177,6 @@ mod test {
         let result = PackageGraphResult::new(
             HashSet::from_iter(["web"].iter().copied()),
             vec![("web", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
             HashMap::new(),
         )
         .unwrap();

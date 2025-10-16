@@ -421,7 +421,7 @@ mod test {
                 },
                 "docs-app": {
                     "packageName": "docs",
-                    "routes": []
+                    "routing": [{"paths": ["/docs"]}]
                 }
             }
         }"#,
@@ -432,7 +432,6 @@ mod test {
         let microfrontends_configs = MicrofrontendsConfigs::from_configs(
             ["web", "docs"].iter().copied().collect(),
             std::iter::once(("web", Ok(Some(config)))),
-            std::collections::HashMap::new(),
             std::collections::HashMap::new(),
         )
         .unwrap()
