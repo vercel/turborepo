@@ -2,16 +2,21 @@
   // This sample demonstrates the complete microfrontends configuration schema.
   // Both Turborepo-only and Vercel proxies can read this same configuration.
   //
-  // TURBOREPO-ONLY PROXY:
-  // - Uses: version, options.localProxyPort, applications[].development.local, applications[].routing
-  // - Ignores: development.task, development.fallback, production, vercel, assetPrefix, options.disableOverrides
+  // TURBOREPO STRICT SCHEMA:
+  // - Parses: version, options.localProxyPort, applications[].packageName, applications[].development.local, applications[].routing, applications[].development.fallback
+  // - Does NOT parse: development.task (task execution handled by Turborepo), partOf (Vercel feature), production, vercel, assetPrefix, options.disableOverrides
   // - Note: The proxy only routes traffic. Task execution is handled by Turborepo's task runner.
   //
   // VERCEL PROXY (@vercel/microfrontends package):
-  // - Uses all fields for full production integration
+  // - Supersets the Turborepo strict schema with additional fields:
+  //   * partOf: References parent config for child applications (Vercel-only)
+  //   * development.task: Task orchestration handled by Vercel (not by proxy)
+  //   * development.fallback: Can be string or object (Turborepo uses simplified string version)
+  //   * production, vercel, assetPrefix: Vercel production configuration
+  //   * options.disableOverrides: Vercel toolbar control
   //
-  // To switch from Turborepo-only to Vercel:
-  // 1. Add the fields marked as "Vercel-only" below
+  // To use with Vercel:
+  // 1. Ensure you use the extended config format below
   // 2. Install @vercel/microfrontends in the package with the proxy task
 
   "$schema": "https://openapi.vercel.sh/microfrontends.json",
@@ -19,6 +24,7 @@
 
   "options": {
     // Port for the local development proxy server (default: 3024)
+    // Supported by both Turborepo and Vercel
     "localProxyPort": 3024,
 
     // Vercel-only: Disables the Vercel toolbar overrides
@@ -28,18 +34,21 @@
   "applications": {
     // Default application - catches all routes not matched by child apps
     "main-site": {
+      // Turborepo and Vercel both support packageName
       "packageName": "web",
 
       "development": {
-        // Local development port (Turborepo-only uses this)
+        // Local development port (used by both Turborepo and Vercel)
         // Can be a plain number or a string with hostname:port
         "local": 3331,
 
-        // Vercel-only: Fallback to preview/production when not running locally
-        "fallback": {
-          "protocol": "https",
-          "host": "main-preview.vercel.app"
-        }
+        // Fallback URL for when the local server is unavailable
+        // Both Turborepo and Vercel support this
+        "fallback": "https://main-preview.vercel.app",
+
+        // Vercel-only: Task orchestration by Vercel
+        // NOT supported by Turborepo proxy (Turborepo uses separate task configuration)
+        "task": "dev"
       },
 
       // Vercel-only: Production configuration
@@ -58,7 +67,7 @@
     "marketing": {
       "packageName": "marketing-site",
 
-      // Routing configuration (Turborepo-only uses this for path matching)
+      // Routing configuration (used by both Turborepo and Vercel)
       "routing": [
         {
           // Optional: Group name for organization
@@ -69,9 +78,9 @@
             "/press",
             "/changelog",
             "/changelog/:slug*"
-          ],
-          // Vercel-only: Feature flag integration
-          "flag": "enable_blog"
+          ]
+          // Vercel-only: Feature flag integration ("flag" field not in Turborepo schema)
+          // "flag": "enable_blog"
         },
         {
           "group": "marketing-pages",
@@ -80,14 +89,14 @@
       ],
 
       "development": {
+        // Used by both Turborepo and Vercel
         "local": 3332,
+
+        // Vercel-only: Task orchestration
         "task": "dev",
 
-        // Vercel-only: Fallback for this specific app
-        "fallback": {
-          "protocol": "https",
-          "host": "marketing-preview.vercel.app"
-        }
+        // Used by both
+        "fallback": "https://marketing-preview.vercel.app"
       },
 
       // Vercel-only: Production configuration
@@ -105,16 +114,19 @@
       "assetPrefix": "mkt-assets"
     },
 
-    // Minimal child application (Turborepo-only compatible)
+    // Minimal application (fully compatible with Turborepo)
     "docs": {
+      // Turborepo-only compatible routing
       "routing": [
         {
           "paths": ["/docs", "/docs/:path*"]
         }
       ],
       "development": {
-        "local": 3333,
-        "task": "dev"
+        // Turborepo-only compatible development config
+        "local": 3333
+
+        // Note: No task or other Vercel-specific fields - this config works with both
       }
     }
   }

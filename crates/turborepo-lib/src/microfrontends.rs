@@ -388,24 +388,6 @@ mod test {
 
     use super::*;
 
-    macro_rules! mfe_configs {
-        {$($config_owner:expr => $dev_tasks:expr),+} => {
-            {
-                let mut _map = std::collections::HashMap::new();
-                $(
-                    let mut _dev_tasks = std::collections::HashMap::new();
-                    for _dev_task in $dev_tasks.as_slice() {
-                        let _dev_task_id = turborepo_task_id::TaskName::from(*_dev_task).task_id().unwrap().into_owned();
-                        let _dev_application = _dev_task_id.package().to_owned();
-                        _dev_tasks.insert(_dev_task_id, _dev_application);
-                    }
-                    _map.insert($config_owner.to_string(), ConfigInfo { tasks: _dev_tasks, version: "1", path: None, ports: std::collections::HashMap::new(), use_turborepo_proxy: false });
-                )+
-                _map
-            }
-        };
-    }
-
     struct PackageUpdateTest {
         package_name: &'static str,
         version: &'static str,
@@ -507,9 +489,6 @@ mod test {
                 "applications": {
                     "web": {},
                     "docs": {
-                        "development": {
-                            "task": "serve"
-                        },
                         "routing": [{"paths": ["/docs", "/docs/:path*"]}]
                     }
                 }
@@ -643,12 +622,16 @@ mod test {
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
-                    "web": {},
+                    "web": {
+                        "development": {
+                            "local": 5588
+                        }
+                    },
                     "docs": {
                         "development": {
                             "local": {
                                 "port": 3030
-                            }
+                            },
                         },
                         "routing": [{"paths": ["/docs", "/docs/:path*"]}]
                     }
@@ -666,7 +649,7 @@ mod test {
         .unwrap();
         let web_ports = result.configs["web"].ports.clone();
         assert_eq!(
-            web_ports.get(&TaskId::new("docs", "serve")).copied(),
+            web_ports.get(&TaskId::new("docs", "dev")).copied(),
             Some(3030)
         );
         assert_eq!(
@@ -844,12 +827,13 @@ mod test {
 
     #[test]
     fn test_config_with_package_name_mapping() {
-        // Config file is in "marketing" package, which maps to "web" app (root route)
+        // Config file is in "marketing" package, which is where "web" app (root route)
+        // is actually implemented
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {
-                        "packageName": "foo"
+                        "packageName": "marketing"
                     },
                     "docs": {
                         "routing": [{"paths": ["/docs", "/docs/:path*"]}]
@@ -862,7 +846,7 @@ mod test {
         .unwrap();
 
         let result = PackageGraphResult::new(
-            HashSet::from_iter(["foo", "docs"].iter().copied()),
+            HashSet::from_iter(["marketing", "docs"].iter().copied()),
             vec![("marketing", Ok(Some(config)))].into_iter(),
             HashMap::new(),
         );

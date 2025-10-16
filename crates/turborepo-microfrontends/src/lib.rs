@@ -6,11 +6,27 @@
 //! The information required for the local proxy is the default package and the
 //! package names that are a part of microfrontend and their development task
 //! names.
+//!
+//! # Configuration Schemas
+//!
+//! This crate provides two configuration schemas:
+//!
+//! 1. **TurborepoStrictConfig** - Strict, Turborepo-only configuration
+//!    - Only parses fields that Turborepo's proxy actually uses
+//!    - Designed to be extended by provider packages like
+//!      `@vercel/microfrontends`
+//!    - Recommended for new integrations
+//!
+//! 2. **Config** - Full configuration (for compatibility)
+//!    - Parses all fields including those for provider packages
+//!    - Maintains backward compatibility
+//!    - Used by turborepo-lib for task orchestration
 
 #![feature(assert_matches)]
 #![deny(clippy::all)]
 mod configv1;
 mod error;
+mod turborepo_schema;
 
 use std::io;
 
@@ -22,6 +38,7 @@ pub use error::Error;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
+pub use turborepo_schema::{TurborepoConfig, TurborepoDevelopment};
 
 /// Currently the default path for a package that provides a configuration.
 ///
@@ -30,6 +47,107 @@ pub const DEFAULT_MICROFRONTENDS_CONFIG_V1: &str = "microfrontends.json";
 pub const DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT: &str = "microfrontends.jsonc";
 pub const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
 pub const SUPPORTED_VERSIONS: &[&str] = ["1"].as_slice();
+
+/// Strict Turborepo-only configuration for the microfrontends proxy.
+/// This configuration parser only accepts fields that Turborepo's native proxy
+/// actually uses. Provider packages can extend this with additional fields as
+/// needed.
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct TurborepoStrictConfig {
+    inner: TurborepoConfig,
+    filename: String,
+    path: Option<AnchoredSystemPathBuf>,
+}
+
+impl TurborepoStrictConfig {
+    /// Reads config from given path using strict Turborepo schema.
+    /// Returns `Ok(None)` if the file does not exist
+    pub fn load(config_path: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
+        let Some(contents) = config_path.read_existing_to_string()? else {
+            return Ok(None);
+        };
+        let config = Self::from_str(&contents, config_path.as_str())?;
+        Ok(Some(config))
+    }
+
+    /// Attempts to load a configuration file from the given directory using
+    /// strict schema Returns `Ok(None)` if no configuration is found in the
+    /// directory
+    pub fn load_from_dir(
+        repo_root: &AbsoluteSystemPath,
+        package_dir: &AnchoredSystemPath,
+    ) -> Result<Option<Self>, Error> {
+        let absolute_dir = repo_root.resolve(package_dir);
+
+        Config::validate_package_path(repo_root, &absolute_dir)?;
+
+        let Some((contents, path)) = Self::load_v1_dir(&absolute_dir) else {
+            return Ok(None);
+        };
+        let contents = contents?;
+        let mut config = Self::from_str(&contents, path.as_str())?;
+        config.filename = path
+            .file_name()
+            .expect("microfrontends config should not be root")
+            .to_owned();
+        config.set_path(package_dir);
+        Ok(Some(config))
+    }
+
+    pub fn from_str(input: &str, source: &str) -> Result<Self, Error> {
+        let config = TurborepoConfig::from_str(input, source)?;
+        Ok(Self {
+            inner: config,
+            filename: source.to_owned(),
+            path: None,
+        })
+    }
+
+    pub fn port(&self, name: &str) -> Option<u16> {
+        self.inner.port(name)
+    }
+
+    pub fn filename(&self) -> &str {
+        &self.filename
+    }
+
+    pub fn path(&self) -> Option<&AnchoredSystemPath> {
+        self.path.as_deref()
+    }
+
+    pub fn local_proxy_port(&self) -> Option<u16> {
+        self.inner.local_proxy_port()
+    }
+
+    pub fn routing(&self, app_name: &str) -> Option<&[turborepo_schema::PathGroup]> {
+        self.inner.routing(app_name)
+    }
+
+    pub fn fallback(&self, app_name: &str) -> Option<&str> {
+        self.inner.fallback(app_name)
+    }
+
+    pub fn root_route_app(&self) -> Option<(&str, &str)> {
+        self.inner.root_route_app()
+    }
+
+    fn load_v1_dir(
+        dir: &AbsoluteSystemPath,
+    ) -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+        let load_config =
+            |filename: &str| -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+                let path = dir.join_component(filename);
+                let contents = path.read_existing_to_string().transpose()?;
+                Some((contents, path))
+            };
+        load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
+            .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
+    }
+
+    fn set_path(&mut self, dir: &AnchoredSystemPath) {
+        self.path = Some(dir.join_component(&self.filename));
+    }
+}
 
 /// The minimal amount of information Turborepo needs to correctly start a local
 /// proxy server for microfrontends
@@ -74,7 +192,7 @@ impl Config {
     }
 
     /// Validates that the resolved path is within the repository root
-    fn validate_package_path(
+    pub fn validate_package_path(
         repo_root: &AbsoluteSystemPath,
         resolved_path: &AbsoluteSystemPath,
     ) -> Result<(), Error> {
@@ -169,7 +287,7 @@ impl Config {
         }
     }
 
-    pub fn applications<'a>(&'a self) -> Box<dyn Iterator<Item = Application<'a>> + 'a> {
+    pub fn applications(&self) -> Box<dyn Iterator<Item = Application> + '_> {
         match &self.inner {
             ConfigInner::V1(config_v1) => Box::new(config_v1.applications()),
         }
