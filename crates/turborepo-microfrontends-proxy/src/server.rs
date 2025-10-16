@@ -122,7 +122,6 @@ impl ProxyServer {
                     let io = TokioIo::new(stream);
 
                     let router = self.router.clone();
-                    let config = self.config.clone();
                     let ws_handles_clone = ws_handles.clone();
                     let ws_id_counter_clone = self.ws_id_counter.clone();
                     let http_client = self.http_client.clone();
@@ -132,14 +131,13 @@ impl ProxyServer {
 
                         let service = hyper::service::service_fn(move |req| {
                             let router = router.clone();
-                            let config = config.clone();
                             let ws_ctx = WebSocketContext {
                                 handles: ws_handles_clone.clone(),
                                 id_counter: ws_id_counter_clone.clone(),
                             };
                             let http_client = http_client.clone();
                             async move {
-                                crate::proxy::handle_request(req, router, config, remote_addr, ws_ctx, http_client).await
+                                crate::proxy::handle_request(req, router, remote_addr, ws_ctx, http_client).await
                             }
                         });
 
