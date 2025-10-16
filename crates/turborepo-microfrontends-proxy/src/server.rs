@@ -18,7 +18,7 @@ use turborepo_microfrontends::Config;
 use crate::{
     ProxyError,
     http::HttpClient,
-    router::Router,
+    http_router::Router,
     websocket::{WebSocketContext, WebSocketHandle},
 };
 

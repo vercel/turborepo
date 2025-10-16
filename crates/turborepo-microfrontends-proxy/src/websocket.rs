@@ -18,7 +18,7 @@ use crate::{
     ProxyError,
     headers::validate_host_header,
     http::{BoxedBody, HttpClient, handle_forward_result},
-    router::RouteMatch,
+    http_router::RouteMatch,
 };
 
 pub(crate) const MAX_WEBSOCKET_CONNECTIONS: usize = 1000;

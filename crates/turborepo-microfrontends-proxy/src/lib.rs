@@ -3,11 +3,11 @@
 mod error;
 mod headers;
 mod http;
+mod http_router;
 mod proxy;
-mod router;
 mod server;
 mod websocket;
 
 pub use error::{ErrorPage, ProxyError};
-pub use router::{RouteMatch, Router};
+pub use http_router::{RouteMatch, Router};
 pub use server::ProxyServer;

@@ -306,7 +306,7 @@ impl Config {
         }
     }
 
-    pub fn applications(&self) -> Box<dyn Iterator<Item = Application> + '_> {
+    pub fn applications<'a>(&'a self) -> Box<dyn Iterator<Item = Application<'a>> + 'a> {
         match &self.inner {
             ConfigInner::V1(config_v1) => Box::new(config_v1.applications()),
         }

@@ -8,7 +8,7 @@ use hyper::{
 use hyper_util::client::legacy::Client;
 use tracing::{debug, error, warn};
 
-use crate::{ProxyError, error::ErrorPage, headers::validate_host_header, router::RouteMatch};
+use crate::{ProxyError, error::ErrorPage, headers::validate_host_header, http_router::RouteMatch};
 
 pub(crate) type BoxedBody = BoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 pub(crate) type HttpClient = Client<hyper_util::client::legacy::connect::HttpConnector, Incoming>;

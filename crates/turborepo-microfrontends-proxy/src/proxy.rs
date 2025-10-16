@@ -11,7 +11,7 @@ use crate::{
     ProxyError,
     headers::{is_websocket_upgrade, validate_request_headers},
     http::{BoxedBody, HttpClient, handle_http_request},
-    router::Router,
+    http_router::Router,
     websocket::{WebSocketContext, handle_websocket_request},
 };
 
