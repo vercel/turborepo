@@ -162,6 +162,47 @@ impl ConfigV1 {
         }
     }
 
+    /// Converts a TurborepoConfig to ConfigV1 for compatibility with
+    /// the proxy. This preserves only the fields that TurborepoConfig knows
+    /// about, discarding any Vercel-specific metadata.
+    pub fn from_turborepo_config(config: &crate::turborepo_schema::TurborepoConfig) -> Self {
+        let mut applications = BTreeMap::new();
+
+        for (app_name, turbo_app) in config.applications() {
+            let app = Application {
+                package_name: turbo_app.package_name.clone(),
+                development: turbo_app.development.as_ref().map(|dev| Development {
+                    task: None,
+                    local: dev.local.map(|lh| LocalHost { port: lh.port }),
+                    fallback: dev.fallback.clone(),
+                }),
+                routing: turbo_app.routing.as_ref().map(|routes| {
+                    routes
+                        .iter()
+                        .map(|r| PathGroup {
+                            paths: r.paths.clone(),
+                            group: r.group.clone(),
+                            flag: None,
+                        })
+                        .collect()
+                }),
+                asset_prefix: None,
+                production: None,
+                vercel: None,
+            };
+            applications.insert(app_name, app);
+        }
+
+        ConfigV1 {
+            version: None,
+            applications,
+            options: config.local_proxy_port().map(|port| Options {
+                local_proxy_port: Some(port),
+                disable_overrides: None,
+            }),
+        }
+    }
+
     pub fn development_tasks(&self) -> impl Iterator<Item = DevelopmentTask<'_>> {
         self.applications
             .iter()

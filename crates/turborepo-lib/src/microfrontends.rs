@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
-use turborepo_microfrontends::{Config as MFEConfig, Error, MICROFRONTENDS_PACKAGE};
+use turborepo_microfrontends::{Error, MICROFRONTENDS_PACKAGE, TurborepoMfeConfig as MfeConfig};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_id::{TaskId, TaskName};
 
@@ -36,7 +36,7 @@ impl MicrofrontendsConfigs {
         struct PackageMetadata<'a> {
             names: HashSet<&'a str>,
             has_mfe_dep: HashMap<&'a str, bool>,
-            configs: Vec<(&'a str, Result<Option<MFEConfig>, Error>)>,
+            configs: Vec<(&'a str, Result<Option<MfeConfig>, Error>)>,
         }
 
         let metadata = package_graph.packages().fold(
@@ -56,7 +56,7 @@ impl MicrofrontendsConfigs {
                 );
                 acc.configs.push((
                     name_str,
-                    MFEConfig::load_from_dir(repo_root, info.package_path()),
+                    MfeConfig::load_from_dir(repo_root, info.package_path()),
                 ));
                 acc
             },
@@ -72,7 +72,7 @@ impl MicrofrontendsConfigs {
     /// Constructs a collection of configurations from a list of configurations
     pub fn from_configs<'a>(
         package_names: HashSet<&str>,
-        configs: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
+        configs: impl Iterator<Item = (&'a str, Result<Option<MfeConfig>, Error>)>,
         package_has_mfe_dependency: HashMap<&str, bool>,
     ) -> Result<Option<Self>, Error> {
         let PackageGraphResult {
@@ -259,7 +259,7 @@ struct PackageGraphResult {
 impl PackageGraphResult {
     fn new<'a>(
         packages_in_graph: HashSet<&str>,
-        packages: impl Iterator<Item = (&'a str, Result<Option<MFEConfig>, Error>)>,
+        packages: impl Iterator<Item = (&'a str, Result<Option<MfeConfig>, Error>)>,
         package_has_mfe_dependency: HashMap<&str, bool>,
     ) -> Result<Self, Error> {
         let mut configs = HashMap::new();
@@ -359,7 +359,7 @@ struct FindResult<'a> {
 }
 
 impl ConfigInfo {
-    fn new(config: &MFEConfig) -> Self {
+    fn new(config: &MfeConfig) -> Self {
         let mut ports = HashMap::new();
         let mut tasks = HashMap::new();
         for dev_task in config.development_tasks() {
@@ -484,7 +484,7 @@ mod test {
     #[test]
     fn test_use_turborepo_proxy_disabled_when_vercel_microfrontends_present() {
         // Create a microfrontends config
-        let config = MFEConfig::from_str(
+        let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {},
@@ -581,7 +581,7 @@ mod test {
 
     #[test]
     fn test_missing_packages() {
-        let config = MFEConfig::from_str(
+        let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
                     "web": {},

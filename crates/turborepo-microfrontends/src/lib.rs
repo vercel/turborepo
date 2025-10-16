@@ -7,20 +7,18 @@
 //! package names that are a part of microfrontend and their development task
 //! names.
 //!
-//! # Configuration Schemas
+//! ## Architecture
 //!
-//! This crate provides two configuration schemas:
-//!
-//! 1. **TurborepoMfeConfig** - Strict, Turborepo-only configuration
-//!    - Only parses fields that Turborepo's proxy actually uses
-//!    - Designed to be extended by provider packages like
-//!      `@vercel/microfrontends`
-//!    - Recommended for new integrations
-//!
-//! 2. **Config** - Full configuration (for compatibility)
-//!    - Parses all fields including those for provider packages
-//!    - Maintains backward compatibility
-//!    - Used by turborepo-lib for task orchestration
+//! **Data Flow:**
+//! 1. turborepo-lib loads configuration using
+//!    `TurborepoMfeConfig::load_from_dir()`
+//! 2. `TurborepoMfeConfig` only extracts Turborepo-relevant fields
+//! 3. When starting the proxy, `TurborepoMfeConfig` is converted to `Config`
+//!    via `into_config()`
+//! 4. The proxy (`turborepo-microfrontends-proxy`) receives the full `Config`
+//!    and can route requests
+//! 5. Vercel-specific fields (asset_prefix, production, vercel config) are
+//!    passed through but ignored by Turborepo
 
 #![feature(assert_matches)]
 #![deny(clippy::all)]
@@ -55,6 +53,7 @@ pub const SUPPORTED_VERSIONS: &[&str] = ["1"].as_slice();
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct TurborepoMfeConfig {
     inner: TurborepoConfig,
+    config_v1: ConfigV1,
     filename: String,
     path: Option<AnchoredSystemPathBuf>,
 }
@@ -97,7 +96,8 @@ impl TurborepoMfeConfig {
     pub fn from_str(input: &str, source: &str) -> Result<Self, Error> {
         let config = TurborepoConfig::from_str(input, source)?;
         Ok(Self {
-            inner: config,
+            inner: config.clone(),
+            config_v1: ConfigV1::from_turborepo_config(&config),
             filename: source.to_owned(),
             path: None,
         })
@@ -129,6 +129,25 @@ impl TurborepoMfeConfig {
 
     pub fn root_route_app(&self) -> Option<(&str, &str)> {
         self.inner.root_route_app()
+    }
+
+    pub fn development_tasks<'a>(&'a self) -> Box<dyn Iterator<Item = DevelopmentTask<'a>> + 'a> {
+        Box::new(self.config_v1.development_tasks())
+    }
+
+    pub fn version(&self) -> &'static str {
+        "1"
+    }
+
+    /// Converts this strict Turborepo config to a full Config for use by the
+    /// proxy. This is needed because the proxy requires routing information
+    /// to function.
+    pub fn into_config(self) -> Config {
+        Config {
+            inner: ConfigInner::V1(self.config_v1),
+            filename: self.filename,
+            path: self.path,
+        }
     }
 
     fn load_v1_dir(
