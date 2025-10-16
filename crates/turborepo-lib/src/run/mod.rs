@@ -34,24 +34,24 @@ use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{
-    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
-    BOLD_GREY, GREY,
+    BOLD_GREY, ColorConfig, GREY, cprint, cprintln, sender::UISender, tui, tui::TuiSender,
+    wui::sender::WebUISender,
 };
 
 pub use crate::run::error::Error;
 use crate::{
+    DaemonClient, DaemonConnector,
     cli::EnvMode,
     engine::Engine,
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
+    task_hash::{PackageInputsHashes, get_external_deps_hash, get_internal_deps_hash},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
-    DaemonClient, DaemonConnector,
 };
 
 #[derive(Clone)]
@@ -568,7 +568,10 @@ impl Run {
         let global_hash_inputs = {
             let env_mode = self.opts.run_opts.env_mode;
             let pass_through_env = match env_mode {
-                EnvMode::Loose => None,
+                EnvMode::Loose => {
+                    // Remove the passthroughs from hash consideration if we're explicitly loose.
+                    None
+                }
                 EnvMode::Strict => self.root_turbo_json.global_pass_through_env.as_deref(),
             };
 

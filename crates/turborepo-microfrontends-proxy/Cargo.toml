@@ -1,9 +1,8 @@
 [package]
 name = "turborepo-microfrontends-proxy"
 version = "0.1.0"
-edition = "2021"
-license = "MPL-2.0"
-rust-version = "1.76"
+edition = { workspace = true }
+license = "MIT"
 
 [dependencies]
 dashmap = "6.1"
