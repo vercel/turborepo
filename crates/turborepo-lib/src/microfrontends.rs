@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
-use turborepo_microfrontends::{Error, MICROFRONTENDS_PACKAGE, TurborepoMfeConfig as MfeConfig};
+use turborepo_microfrontends::{Error, TurborepoMfeConfig as MfeConfig, MICROFRONTENDS_PACKAGE};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_id::{TaskId, TaskName};
 
