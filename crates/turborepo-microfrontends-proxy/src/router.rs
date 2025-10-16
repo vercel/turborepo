@@ -2,8 +2,6 @@ use std::{collections::HashMap, sync::Arc};
 
 use turborepo_microfrontends::Config;
 
-const DEFAULT_PATH_SEGMENT_CAPACITY: usize = 8;
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteMatch {
     pub app_name: Arc<str>,
@@ -142,7 +140,7 @@ impl Router {
         let app_idx = if path.is_empty() {
             self.trie.lookup(&[])
         } else {
-            let mut segments = Vec::with_capacity(DEFAULT_PATH_SEGMENT_CAPACITY);
+            let mut segments = Vec::new();
             for segment in path.split('/') {
                 if !segment.is_empty() {
                     segments.push(segment);
