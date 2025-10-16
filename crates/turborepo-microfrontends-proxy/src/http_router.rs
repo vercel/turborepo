@@ -188,10 +188,6 @@ impl TrieNode {
             return self.terminal_match.or(self.wildcard_match);
         }
 
-        if let Some(app_idx) = self.wildcard_match {
-            return Some(app_idx);
-        }
-
         if let Some(child) = self.exact_children.get(segments[0]) {
             if let Some(app_idx) = child.lookup(&segments[1..]) {
                 return Some(app_idx);
@@ -202,6 +198,10 @@ impl TrieNode {
             if let Some(app_idx) = child.lookup(&segments[1..]) {
                 return Some(app_idx);
             }
+        }
+
+        if let Some(app_idx) = self.wildcard_match {
+            return Some(app_idx);
         }
 
         None
@@ -377,5 +377,27 @@ mod tests {
         assert!(!pattern.matches("/api/v1/posts"));
         assert!(!pattern.matches("/api/v1"));
         assert!(!pattern.matches("/api/v1/users/123"));
+    }
+
+    #[test]
+    fn test_exact_match_precedence_over_wildcard() {
+        let pattern_specific = PathPattern::parse("/blog").unwrap();
+        let pattern_wildcard = PathPattern::parse("/:path*").unwrap();
+
+        assert!(pattern_specific.matches("/blog"));
+        assert!(pattern_wildcard.matches("/blog"));
+        assert!(!pattern_specific.matches("/other"));
+        assert!(pattern_wildcard.matches("/other"));
+    }
+
+    #[test]
+    fn test_param_match_precedence_over_wildcard() {
+        let pattern_param = PathPattern::parse("/user/:id").unwrap();
+        let pattern_wildcard = PathPattern::parse("/:path*").unwrap();
+
+        assert!(pattern_param.matches("/user/123"));
+        assert!(pattern_wildcard.matches("/user/123"));
+        assert!(!pattern_param.matches("/post/abc"));
+        assert!(pattern_wildcard.matches("/post/abc"));
     }
 }
