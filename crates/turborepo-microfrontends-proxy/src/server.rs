@@ -203,7 +203,6 @@ mod tests {
     fn create_test_config() -> Config {
         let config_json = format!(
             r#"{{
-            "version": "1",
             "options": {{
                 "localProxyPort": {}
             }},
@@ -241,7 +240,6 @@ mod tests {
     #[test]
     fn test_proxy_server_new_with_default_port() {
         let config_json = r#"{
-            "version": "1",
             "applications": {
                 "web": {
                     "development": {
@@ -281,7 +279,6 @@ mod tests {
     #[tokio::test]
     async fn test_check_port_available_when_free() {
         let config_json = r#"{
-            "version": "1",
             "options": {
                 "localProxyPort": 19999
             },
@@ -303,7 +300,6 @@ mod tests {
     #[tokio::test]
     async fn test_check_port_available_when_taken() {
         let config_json = r#"{
-            "version": "1",
             "options": {
                 "localProxyPort": 19998
             },
@@ -327,7 +323,6 @@ mod tests {
     #[tokio::test]
     async fn test_proxy_server_with_invalid_config() {
         let config_json = r#"{
-            "version": "1",
             "applications": {
                 "web": {
                     "development": {
@@ -400,7 +395,6 @@ mod tests {
     #[test]
     fn test_multiple_proxy_servers() {
         let config1_json = r#"{
-            "version": "1",
             "options": { "localProxyPort": 4001 },
             "applications": {
                 "web": {
@@ -412,7 +406,6 @@ mod tests {
         }"#;
 
         let config2_json = r#"{
-            "version": "1",
             "options": { "localProxyPort": 4002 },
             "applications": {
                 "web": {

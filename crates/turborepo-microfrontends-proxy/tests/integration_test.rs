@@ -16,7 +16,6 @@ const WEBSOCKET_CLOSE_DELAY: Duration = Duration::from_millis(100);
 #[tokio::test]
 async fn test_port_availability_check_ipv4() {
     let config_json = r#"{
-        "version": "1",
         "options": {
             "localProxyPort": 9999
         },
@@ -41,7 +40,6 @@ async fn test_port_availability_check_ipv4() {
 #[tokio::test]
 async fn test_port_availability_check_ipv6() {
     let config_json = r#"{
-        "version": "1",
         "options": {
             "localProxyPort": 9997
         },
@@ -66,7 +64,6 @@ async fn test_port_availability_check_ipv6() {
 #[tokio::test]
 async fn test_router_with_config() {
     let config_json = r#"{
-        "version": "1",
         "applications": {
             "web": {
                 "development": {
@@ -107,7 +104,6 @@ async fn test_router_with_config() {
 #[tokio::test]
 async fn test_multiple_child_apps() {
     let config_json = r#"{
-        "version": "1",
         "applications": {
             "main": {
                 "development": {
@@ -147,7 +143,6 @@ async fn test_multiple_child_apps() {
 #[tokio::test]
 async fn test_proxy_server_creation() {
     let config_json = r#"{
-        "version": "1",
         "options": {
             "localProxyPort": 4000
         },
@@ -169,7 +164,6 @@ async fn test_proxy_server_creation() {
 #[tokio::test]
 async fn test_pattern_matching_edge_cases() {
     let config_json = r#"{
-        "version": "1",
         "applications": {
             "main": {
                 "development": {
@@ -251,7 +245,6 @@ async fn test_end_to_end_proxy() {
 
     let config_json = format!(
         r#"{{
-        "version": "1",
         "options": {{
             "localProxyPort": {}
         }},
@@ -358,7 +351,6 @@ async fn test_websocket_detection() {
 #[tokio::test]
 async fn test_websocket_routing() {
     let config_json = r#"{
-        "version": "1",
         "applications": {
             "web": {
                 "development": {

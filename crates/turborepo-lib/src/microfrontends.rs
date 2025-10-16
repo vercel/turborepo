@@ -680,7 +680,6 @@ mod test {
         // Create a microfrontends config
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {},
                 }
