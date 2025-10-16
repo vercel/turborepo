@@ -413,7 +413,7 @@ impl Run {
                 debug!("Proxy shutdown signal sent, waiting for shutdown completion notification");
 
                 match tokio::time::timeout(
-                    tokio::time::Duration::from_secs(2),
+                    tokio::time::Duration::from_millis(500),
                     shutdown_complete_rx,
                 )
                 .await
@@ -425,7 +425,7 @@ impl Run {
                         warn!("Proxy shutdown notification channel closed unexpectedly");
                     }
                     Err(_) => {
-                        warn!("Proxy shutdown notification timed out after 2 seconds");
+                        warn!("Proxy shutdown notification timed out after 500 milliseconds");
                     }
                 }
 
