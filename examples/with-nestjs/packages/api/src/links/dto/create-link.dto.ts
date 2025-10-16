@@ -1,1 +1,5 @@
-export class CreateLinkDto {}
+export class CreateLinkDto {
+  title: string;
+  url: string;
+  description: string;
+}
