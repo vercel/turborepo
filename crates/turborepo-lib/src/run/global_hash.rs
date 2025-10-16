@@ -9,7 +9,7 @@ use itertools::Itertools;
 use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
-use turborepo_env::{get_global_hashable_env_vars, DetailedMap, EnvironmentVariableMap};
+use turborepo_env::{DetailedMap, EnvironmentVariableMap, get_global_hashable_env_vars};
 use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
     package_graph::PackageInfo,

@@ -1,23 +1,23 @@
 use std::{
     net::SocketAddr,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
 
 use dashmap::DashMap;
-use hyper::{body::Incoming, upgrade::Upgraded, Request, Response, StatusCode};
+use hyper::{Request, Response, StatusCode, body::Incoming, upgrade::Upgraded};
 use hyper_util::rt::TokioIo;
 use tokio::sync::broadcast;
-use tokio_tungstenite::{tungstenite::protocol::Role, WebSocketStream};
+use tokio_tungstenite::{WebSocketStream, tungstenite::protocol::Role};
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    http::{handle_forward_result, BoxedBody, HttpClient},
-    router::RouteMatch,
     ProxyError,
+    http::{BoxedBody, HttpClient, handle_forward_result},
+    router::RouteMatch,
 };
 
 pub(crate) const MAX_WEBSOCKET_CONNECTIONS: usize = 1000;

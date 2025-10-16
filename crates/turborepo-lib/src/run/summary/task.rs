@@ -6,7 +6,7 @@ use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{DetailedMap, EnvironmentVariableMap};
 use turborepo_task_id::TaskId;
 
-use super::{execution::TaskExecutionSummary, EnvMode};
+use super::{EnvMode, execution::TaskExecutionSummary};
 use crate::{
     cli::OutputLogsMode,
     task_graph::{TaskDefinition, TaskOutputs},

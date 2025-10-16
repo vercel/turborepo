@@ -9,7 +9,7 @@ use turborepo_repository::{
     },
     package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::{git::InvalidRange, SCM};
+use turborepo_scm::{SCM, git::InvalidRange};
 
 use crate::run::scope::ResolutionError;
 

@@ -2,18 +2,18 @@ use std::{net::SocketAddr, sync::Arc};
 
 use http_body_util::{BodyExt, Full};
 use hyper::{
-    body::{Bytes, Incoming},
     Request, Response, StatusCode,
+    body::{Bytes, Incoming},
 };
 use tracing::{debug, error};
 use turborepo_microfrontends::Config;
 
 use crate::{
-    headers::{is_websocket_upgrade, validate_request_headers},
-    http::{handle_http_request, BoxedBody, HttpClient},
-    router::Router,
-    websocket::{handle_websocket_request, WebSocketContext},
     ProxyError,
+    headers::{is_websocket_upgrade, validate_request_headers},
+    http::{BoxedBody, HttpClient, handle_http_request},
+    router::Router,
+    websocket::{WebSocketContext, handle_websocket_request},
 };
 
 pub(crate) async fn handle_request(
