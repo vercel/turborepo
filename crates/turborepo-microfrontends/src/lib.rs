@@ -11,7 +11,7 @@
 //!
 //! This crate provides two configuration schemas:
 //!
-//! 1. **TurborepoStrictConfig** - Strict, Turborepo-only configuration
+//! 1. **TurborepoMfeConfig** - Strict, Turborepo-only configuration
 //!    - Only parses fields that Turborepo's proxy actually uses
 //!    - Designed to be extended by provider packages like
 //!      `@vercel/microfrontends`
@@ -53,13 +53,13 @@ pub const SUPPORTED_VERSIONS: &[&str] = ["1"].as_slice();
 /// actually uses. Provider packages can extend this with additional fields as
 /// needed.
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct TurborepoStrictConfig {
+pub struct TurborepoMfeConfig {
     inner: TurborepoConfig,
     filename: String,
     path: Option<AnchoredSystemPathBuf>,
 }
 
-impl TurborepoStrictConfig {
+impl TurborepoMfeConfig {
     /// Reads config from given path using strict Turborepo schema.
     /// Returns `Ok(None)` if the file does not exist
     pub fn load(config_path: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
@@ -370,9 +370,16 @@ mod test {
 
     #[test]
     fn test_example_parses() {
-        let input = include_str!("../fixtures/sample.jsonc");
+        let input = include_str!("../fixtures/vercel-package.jsonc");
         let example_config = Config::from_str(input, "something.json");
         assert!(example_config.is_ok());
+    }
+
+    #[test]
+    fn test_turborepo_strict_config_parses() {
+        let input = include_str!("../fixtures/turborepo-only.jsonc");
+        let strict_config = TurborepoMfeConfig::from_str(input, "something.jsonc");
+        assert!(strict_config.is_ok());
     }
 
     #[test]
