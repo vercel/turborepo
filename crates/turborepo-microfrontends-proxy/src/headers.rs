@@ -7,11 +7,10 @@ use crate::error::ProxyError;
 
 /// Validates request headers to prevent HTTP request smuggling attacks.
 ///
-/// While this proxy is intended for local development only, we implement
-/// defense-in-depth by checking for conflicting Content-Length and
-/// Transfer-Encoding headers, which could be exploited if different servers
-/// in the chain interpret them differently.
-pub(crate) fn validate_request_headers<B>(req: &Request<B>) -> Result<(), ProxyError> {
+/// While this proxy is intended for local development only, we check for
+/// conflicting Content-Length and Transfer-Encoding headers, which could be
+/// exploited if different servers in the chain interpret them differently.
+pub(crate) fn validate_request_headers<T>(req: &Request<T>) -> Result<(), ProxyError> {
     let has_content_length = req.headers().contains_key(CONTENT_LENGTH);
     let has_transfer_encoding = req.headers().contains_key(TRANSFER_ENCODING);
 
@@ -24,7 +23,7 @@ pub(crate) fn validate_request_headers<B>(req: &Request<B>) -> Result<(), ProxyE
     Ok(())
 }
 
-pub(crate) fn is_websocket_upgrade<B>(req: &Request<B>) -> bool {
+pub(crate) fn is_websocket_upgrade<T>(req: &Request<T>) -> bool {
     req.headers()
         .get(UPGRADE)
         .and_then(|v| v.to_str().ok())

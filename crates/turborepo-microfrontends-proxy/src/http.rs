@@ -42,6 +42,39 @@ pub(crate) async fn handle_http_request(
     .await
 }
 
+pub(crate) async fn forward_request(
+    mut req: Request<Incoming>,
+    app_name: &str,
+    port: u16,
+    remote_addr: SocketAddr,
+    http_client: HttpClient,
+) -> Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
+    let target_uri = format!(
+        "http://localhost:{}{}",
+        port,
+        req.uri()
+            .path_and_query()
+            .map(|pq| pq.as_str())
+            .unwrap_or("/")
+    );
+
+    let original_host = req.uri().host().unwrap_or("localhost").to_string();
+
+    let headers = req.headers_mut();
+    headers.insert("Host", format!("localhost:{port}").parse()?);
+    headers.insert("X-Forwarded-For", remote_addr.ip().to_string().parse()?);
+    headers.insert("X-Forwarded-Proto", "http".parse()?);
+    headers.insert("X-Forwarded-Host", original_host.parse()?);
+
+    *req.uri_mut() = target_uri.parse()?;
+
+    let response = http_client.request(req).await?;
+
+    debug!("Response from {}: {}", app_name, response.status());
+
+    Ok(response)
+}
+
 pub(crate) async fn handle_forward_result(
     result: Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>>,
     path: String,
@@ -130,39 +163,6 @@ pub(crate) fn build_error_response(
                 .boxed(),
         )
         .map_err(ProxyError::Http)?;
-
-    Ok(response)
-}
-
-pub(crate) async fn forward_request(
-    mut req: Request<Incoming>,
-    app_name: &str,
-    port: u16,
-    remote_addr: SocketAddr,
-    http_client: HttpClient,
-) -> Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
-    let target_uri = format!(
-        "http://localhost:{}{}",
-        port,
-        req.uri()
-            .path_and_query()
-            .map(|pq| pq.as_str())
-            .unwrap_or("/")
-    );
-
-    let original_host = req.uri().host().unwrap_or("localhost").to_string();
-
-    let headers = req.headers_mut();
-    headers.insert("Host", format!("localhost:{port}").parse()?);
-    headers.insert("X-Forwarded-For", remote_addr.ip().to_string().parse()?);
-    headers.insert("X-Forwarded-Proto", "http".parse()?);
-    headers.insert("X-Forwarded-Host", original_host.parse()?);
-
-    *req.uri_mut() = target_uri.parse()?;
-
-    let response = http_client.request(req).await?;
-
-    debug!("Response from {}: {}", app_name, response.status());
 
     Ok(response)
 }
