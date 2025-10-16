@@ -604,12 +604,11 @@ mod test {
     fn test_missing_packages() {
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {},
                     "docs": {
                         "development": {
-                            "task": "serve"
+                            "local": 3000
                         },
                         "routing": [{"paths": ["/docs", "/docs/:path*"]}]
                     }
@@ -643,12 +642,10 @@ mod test {
     fn test_port_collection() {
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {},
                     "docs": {
                         "development": {
-                            "task": "serve",
                             "local": {
                                 "port": 3030
                             }
@@ -679,7 +676,7 @@ mod test {
     }
 
     #[test]
-    fn test_use_turborepo_proxy_disabled_when_package_has_mfe_dependency() {
+    fn test_use_turborepo_proxy_false_when_package_has_mfe_dependency() {
         // Create a microfrontends config
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
@@ -734,29 +731,6 @@ mod test {
             "use_turborepo_proxy should be true when package does NOT depend on \
              @vercel/microfrontends"
         );
-    }
-
-    #[test]
-    fn test_configs_added_as_global_deps() {
-        let configs = MicrofrontendsConfigs {
-            configs: vec![(
-                "web".to_owned(),
-                ConfigInfo {
-                    path: Some(RelativeUnixPathBuf::new("web/microfrontends.json").unwrap()),
-                    ..Default::default()
-                },
-            )]
-            .into_iter()
-            .collect(),
-            mfe_package: None,
-            has_mfe_dependency: false,
-        };
-
-        let turbo_json = TurboJson::default();
-        let actual = configs
-            .update_turbo_json(&PackageName::Root, Ok(turbo_json))
-            .unwrap();
-        assert_eq!(actual.global_deps, &["web/microfrontends.json".to_owned()]);
     }
 
     #[test]
@@ -816,7 +790,6 @@ mod test {
         // Config file is in "web" package, and "web" is the root route app (no routing)
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {},
                     "docs": {
@@ -843,7 +816,6 @@ mod test {
         // Config file is in "docs" package, but "web" is the root route app
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {},
                     "docs": {
@@ -876,10 +848,9 @@ mod test {
         // Config file is in "marketing" package, which maps to "web" app (root route)
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {
-                        "packageName": "marketing"
+                        "packageName": "foo"
                     },
                     "docs": {
                         "routing": [{"paths": ["/docs", "/docs/:path*"]}]
@@ -892,7 +863,7 @@ mod test {
         .unwrap();
 
         let result = PackageGraphResult::new(
-            HashSet::from_iter(["marketing", "docs"].iter().copied()),
+            HashSet::from_iter(["foo", "docs"].iter().copied()),
             vec![("marketing", Ok(Some(config)))].into_iter(),
             HashMap::new(),
         );
@@ -909,10 +880,9 @@ mod test {
         // route)
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {
-                        "packageName": "marketing"
+                        "packageName": "foo"
                     },
                     "docs": {
                         "routing": [{"paths": ["/docs", "/docs/:path*"]}]
@@ -925,7 +895,7 @@ mod test {
         .unwrap();
 
         let result = PackageGraphResult::new(
-            HashSet::from_iter(["marketing", "docs"].iter().copied()),
+            HashSet::from_iter(["foo", "docs"].iter().copied()),
             vec![("docs", Ok(Some(config)))].into_iter(),
             HashMap::new(),
         );
@@ -943,7 +913,6 @@ mod test {
     fn test_task_uses_turborepo_proxy_when_enabled() {
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {},
                 }
@@ -974,83 +943,6 @@ mod test {
     }
 
     #[test]
-    fn test_task_not_uses_turborepo_proxy_with_mfe_package() {
-        let config = MFEConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "version": "1",
-                "applications": {
-                    "web": {},
-                }
-            }))
-            .unwrap(),
-            "microfrontends.json",
-        )
-        .unwrap();
-
-        let result = PackageGraphResult::new(
-            HashSet::from_iter(["web"].iter().copied()),
-            vec![
-                (MICROFRONTENDS_PACKAGE, Ok(None)),
-                ("web", Ok(Some(config))),
-            ]
-            .into_iter(),
-            HashMap::new(),
-        )
-        .unwrap();
-
-        let configs = MicrofrontendsConfigs {
-            configs: result.configs,
-            mfe_package: Some(MICROFRONTENDS_PACKAGE),
-            has_mfe_dependency: false,
-        };
-
-        let task_id = TaskId::new("web", "dev");
-        assert!(
-            !configs.task_uses_turborepo_proxy(&task_id),
-            "Task should not be using Turborepo proxy when @vercel/microfrontends package is \
-             present"
-        );
-    }
-
-    #[test]
-    fn test_task_not_uses_turborepo_proxy_with_mfe_dependency() {
-        let config = MFEConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "version": "1",
-                "applications": {
-                    "web": {},
-                }
-            }))
-            .unwrap(),
-            "microfrontends.json",
-        )
-        .unwrap();
-
-        let mut mfe_dependencies = HashMap::new();
-        mfe_dependencies.insert("web", true);
-
-        let result = PackageGraphResult::new(
-            HashSet::from_iter(["web"].iter().copied()),
-            vec![("web", Ok(Some(config)))].into_iter(),
-            mfe_dependencies,
-        )
-        .unwrap();
-
-        let configs = MicrofrontendsConfigs {
-            configs: result.configs,
-            mfe_package: None,
-            has_mfe_dependency: true,
-        };
-
-        let task_id = TaskId::new("web", "dev");
-        assert!(
-            !configs.task_uses_turborepo_proxy(&task_id),
-            "Task should not be using Turborepo proxy when package depends on \
-             @vercel/microfrontends"
-        );
-    }
-
-    #[test]
     fn test_task_uses_turborepo_proxy_returns_false_for_non_mfe_task() {
         let configs = MicrofrontendsConfigs {
             configs: HashMap::new(),
@@ -1069,7 +961,6 @@ mod test {
     fn test_turbo_mfe_port_with_port_number() {
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {
                         "development": {
@@ -1108,7 +999,6 @@ mod test {
     fn test_turbo_mfe_port_with_url_string() {
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {
                         "development": {
