@@ -8,7 +8,7 @@ use miette::Diagnostic;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{ChangeMapError, PackageInclusionReason, merge_changed_packages},
+    change_mapper::{merge_changed_packages, ChangeMapError, PackageInclusionReason},
     package_graph::{self, PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
@@ -724,7 +724,7 @@ mod test {
 
     use super::{FilterResolver, PackageInference, TargetSelector};
     use crate::run::scope::{
-        ResolutionError, change_detector::GitChangeDetector, target_selector::GitRange,
+        change_detector::GitChangeDetector, target_selector::GitRange, ResolutionError,
     };
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
