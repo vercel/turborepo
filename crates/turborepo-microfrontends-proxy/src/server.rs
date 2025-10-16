@@ -1,4 +1,5 @@
 use std::{
+    error::Error,
     net::SocketAddr,
     sync::{Arc, atomic::AtomicUsize},
     time::Duration,
@@ -25,6 +26,24 @@ pub(crate) const DEFAULT_PROXY_PORT: u16 = 3024;
 pub(crate) const SHUTDOWN_GRACE_PERIOD: Duration = Duration::from_secs(1);
 pub(crate) const HTTP_CLIENT_POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(90);
 pub(crate) const HTTP_CLIENT_MAX_IDLE_PER_HOST: usize = 32;
+
+fn is_connection_closed_error(err: &hyper::Error) -> bool {
+    if err.is_closed() {
+        return true;
+    }
+
+    if let Some(io_err) = err
+        .source()
+        .and_then(|e| e.downcast_ref::<std::io::Error>())
+    {
+        matches!(
+            io_err.kind(),
+            std::io::ErrorKind::BrokenPipe | std::io::ErrorKind::ConnectionReset
+        )
+    } else {
+        false
+    }
+}
 
 pub struct ProxyServer {
     config: Arc<Config>,
@@ -150,14 +169,13 @@ impl ProxyServer {
                                 debug!("Connection from {} closed successfully", remote_addr);
                             }
                             Err(err) => {
-                                let err_str = err.to_string();
-                                if err_str.contains("IncompleteMessage") {
+                                if err.is_incomplete_message() {
                                     error!(
                                         "IncompleteMessage error on connection from {}: {:?}. \
                                         This may indicate the client closed the connection before receiving the full response.",
                                         remote_addr, err
                                     );
-                                } else if err_str.contains("connection closed") || err_str.contains("broken pipe") {
+                                } else if is_connection_closed_error(&err) {
                                     debug!("Connection from {} closed by client: {:?}", remote_addr, err);
                                 } else {
                                     error!("Error serving connection from {}: {:?}", remote_addr, err);
