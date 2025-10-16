@@ -8,7 +8,7 @@ use hyper::{
 use hyper_util::client::legacy::Client;
 use tracing::{debug, error, warn};
 
-use crate::{ProxyError, error::ErrorPage, router::RouteMatch};
+use crate::{ProxyError, error::ErrorPage, headers::validate_host_header, router::RouteMatch};
 
 pub(crate) type BoxedBody = BoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 pub(crate) type HttpClient = Client<hyper_util::client::legacy::connect::HttpConnector, Incoming>;
@@ -59,6 +59,7 @@ pub(crate) async fn forward_request(
     );
 
     let original_host = req.uri().host().unwrap_or("localhost").to_string();
+    validate_host_header(&original_host)?;
 
     let headers = req.headers_mut();
     headers.insert("Host", format!("localhost:{port}").parse()?);

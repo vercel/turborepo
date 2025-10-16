@@ -16,6 +16,7 @@ use tracing::{debug, error, info, warn};
 
 use crate::{
     ProxyError,
+    headers::validate_host_header,
     http::{BoxedBody, HttpClient, handle_forward_result},
     router::RouteMatch,
 };
@@ -119,6 +120,7 @@ fn prepare_websocket_request(
     );
 
     let original_host = req.uri().host().unwrap_or("localhost").to_string();
+    validate_host_header(&original_host)?;
 
     let headers = req.headers_mut();
     headers.insert("Host", format!("localhost:{port}").parse()?);

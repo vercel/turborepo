@@ -23,6 +23,28 @@ pub(crate) fn validate_request_headers<T>(req: &Request<T>) -> Result<(), ProxyE
     Ok(())
 }
 
+/// Validates the Host header to prevent host header injection attacks.
+///
+/// This proxy is intended for local development only, so we restrict
+/// Host headers to localhost or 127.0.0.1 addresses only.
+pub(crate) fn validate_host_header(host: &str) -> Result<(), ProxyError> {
+    if let Some(colon_idx) = host.rfind(':') {
+        let host_part = &host[..colon_idx];
+        let port_part = &host[colon_idx + 1..];
+
+        if (host_part == "localhost" || host_part == "127.0.0.1")
+            && !port_part.is_empty()
+            && port_part.chars().all(|c| c.is_ascii_digit())
+        {
+            return Ok(());
+        }
+    }
+
+    Err(ProxyError::InvalidRequest(
+        "Invalid host header: only localhost and 127.0.0.1 are allowed".to_string(),
+    ))
+}
+
 pub(crate) fn is_websocket_upgrade<T>(req: &Request<T>) -> bool {
     req.headers()
         .get(UPGRADE)
@@ -196,6 +218,42 @@ mod tests {
             .unwrap();
 
         assert!(validate_request_headers(&req).is_ok());
+    }
+
+    #[test]
+    fn test_validate_host_header_localhost() {
+        assert!(validate_host_header("localhost:3000").is_ok());
+        assert!(validate_host_header("localhost:8080").is_ok());
+    }
+
+    #[test]
+    fn test_validate_host_header_127_0_0_1() {
+        assert!(validate_host_header("127.0.0.1:3000").is_ok());
+        assert!(validate_host_header("127.0.0.1:8080").is_ok());
+    }
+
+    #[test]
+    fn test_validate_host_header_invalid_hostname() {
+        let result = validate_host_header("example.com:3000");
+        assert!(result.is_err());
+        if let Err(ProxyError::InvalidRequest(msg)) = result {
+            assert!(msg.contains("Invalid host header"));
+        }
+    }
+
+    #[test]
+    fn test_validate_host_header_invalid_ip() {
+        let result = validate_host_header("192.168.1.1:3000");
+        assert!(result.is_err());
+        if let Err(ProxyError::InvalidRequest(msg)) = result {
+            assert!(msg.contains("Invalid host header"));
+        }
+    }
+
+    #[test]
+    fn test_validate_host_header_malicious_injection() {
+        let result = validate_host_header("localhost:3000\r\nX-Injected: evil");
+        assert!(result.is_err());
     }
 
     #[test]
