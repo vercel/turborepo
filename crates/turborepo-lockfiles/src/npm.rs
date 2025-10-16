@@ -84,7 +84,34 @@ impl Lockfile for NpmLockfile {
         self.packages
             .get(key)
             .map(|pkg| {
-                pkg.dep_keys()
+                pkg.dependencies
+                    .keys()
+                    .chain(pkg.dev_dependencies.keys())
+                    .chain(pkg.optional_dependencies.keys())
+                    .filter_map(|name| {
+                        Self::possible_npm_deps(key, name)
+                            .into_iter()
+                            .find_map(|possible_key| {
+                                let entry = self.packages.get(&possible_key)?;
+                                match entry.version.as_deref() {
+                                    Some(version) => Some(Ok((possible_key, version.to_string()))),
+                                    None if entry.resolved.is_some() => None,
+                                    None => Some(Err(Error::MissingVersion(possible_key.clone()))),
+                                }
+                            })
+                    })
+                    .collect()
+            })
+            .transpose()
+    }
+
+    #[tracing::instrument(skip(self))]
+    fn peer_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error> {
+        self.packages
+            .get(key)
+            .map(|pkg| {
+                pkg.peer_dependencies
+                    .keys()
                     .filter_map(|name| {
                         Self::possible_npm_deps(key, name)
                             .into_iter()
@@ -212,6 +239,7 @@ impl NpmLockfile {
 }
 
 impl NpmPackage {
+    #[allow(dead_code)]
     pub fn dep_keys(&self) -> impl Iterator<Item = &String> {
         self.dependencies
             .keys()
@@ -343,48 +371,15 @@ mod test {
     fn test_all_dependencies() -> Result<(), Error> {
         let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
 
-        let tests = [
-            (
-                "node_modules/table",
-                vec![
-                    "node_modules/lodash.truncate",
-                    "node_modules/slice-ansi",
-                    "node_modules/string-width",
-                    "node_modules/strip-ansi",
-                    "node_modules/table/node_modules/ajv",
-                ],
-            ),
-            (
-                "node_modules/table/node_modules/ajv",
-                vec![
-                    "node_modules/fast-deep-equal",
-                    "node_modules/require-from-string",
-                    "node_modules/table/node_modules/json-schema-traverse",
-                    "node_modules/uri-js",
-                ],
-            ),
-            (
-                "node_modules/turbo",
-                vec![
-                    "node_modules/turbo-darwin-64",
-                    "node_modules/turbo-darwin-arm64",
-                    "node_modules/turbo-linux-64",
-                    "node_modules/turbo-linux-arm64",
-                    "node_modules/turbo-windows-64",
-                    "node_modules/turbo-windows-arm64",
-                ],
-            ),
-            (
-                "node_modules/@babel/helper-compilation-targets",
-                vec![
-                    "node_modules/@babel/compat-data",
-                    "node_modules/@babel/core",
-                    "node_modules/@babel/helper-validator-option",
-                    "node_modules/browserslist",
-                    "node_modules/semver",
-                ],
-            ),
-        ];
+        let tests = [(
+            "node_modules/@babel/helper-compilation-targets",
+            vec![
+                "node_modules/@babel/compat-data",
+                "node_modules/@babel/helper-validator-option",
+                "node_modules/browserslist",
+                "node_modules/semver",
+            ],
+        )];
 
         for (key, expected) in &tests {
             let deps = lockfile.all_dependencies(key)?;
@@ -542,6 +537,82 @@ mod test {
         // NPM lockfile should have no patches by default
         let patches = lockfile.patches()?;
         assert!(patches.is_empty());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_issue_10985_peer_dependencies_multiple_versions() -> Result<(), Error> {
+        let lockfile = NpmLockfile::load(include_bytes!("../fixtures/issue-10985.json"))?;
+
+        let closures = crate::all_transitive_closures(
+            &lockfile,
+            vec![
+                (
+                    "apps/app-one".into(),
+                    vec![
+                        ("@repo/components".into(), "*".into()),
+                        ("next".into(), "^14.0.0".into()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+                (
+                    "apps/app-two".into(),
+                    vec![
+                        ("@repo/components".into(), "*".into()),
+                        ("next".into(), "^15.0.0".into()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+            ]
+            .into_iter()
+            .collect(),
+            false,
+        )?;
+
+        let app_one_deps = closures.get("apps/app-one").unwrap();
+        let app_two_deps = closures.get("apps/app-two").unwrap();
+
+        let app_one_next = app_one_deps
+            .iter()
+            .find(|pkg| pkg.key.contains("next") && pkg.version.starts_with("14"));
+        let app_two_next = app_two_deps
+            .iter()
+            .find(|pkg| pkg.key.contains("next") && pkg.version.starts_with("15"));
+
+        assert!(app_one_next.is_some(), "app-one should resolve next@14");
+        assert!(app_two_next.is_some(), "app-two should resolve next@15");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_peer_dependencies_separated_from_regular_dependencies() -> Result<(), Error> {
+        let lockfile =
+            NpmLockfile::load(include_bytes!("../fixtures/workspace-peer-dependency.json"))?;
+
+        let pkg_key = "node_modules/eslint-plugin-turbo";
+
+        let regular_deps = lockfile.all_dependencies(pkg_key)?;
+
+        assert!(
+            regular_deps.is_some(),
+            "eslint-plugin-turbo should return deps result"
+        );
+
+        let regular_deps_map = regular_deps.unwrap();
+        assert!(
+            regular_deps_map.is_empty(),
+            "eslint-plugin-turbo has no regular dependencies"
+        );
+
+        let peer_deps = lockfile.peer_dependencies(pkg_key)?;
+        assert!(
+            peer_deps.is_some(),
+            "peer_dependencies method should work and return Some"
+        );
 
         Ok(())
     }

@@ -35,7 +35,7 @@ impl MicrofrontendsConfigs {
     ) -> Result<Option<Self>, Error> {
         struct PackageMetadata<'a> {
             names: HashSet<&'a str>,
-            has_proxy: HashMap<&'a str, bool>,
+            has_proxy_script: HashMap<&'a str, bool>,
             has_mfe_dep: HashMap<&'a str, bool>,
             configs: Vec<(&'a str, Result<Option<MFEConfig>, Error>)>,
         }
@@ -43,14 +43,14 @@ impl MicrofrontendsConfigs {
         let metadata = package_graph.packages().fold(
             PackageMetadata {
                 names: HashSet::new(),
-                has_proxy: HashMap::new(),
+                has_proxy_script: HashMap::new(),
                 has_mfe_dep: HashMap::new(),
                 configs: Vec::new(),
             },
             |mut acc, (name, info)| {
                 let name_str = name.as_str();
                 acc.names.insert(name_str);
-                acc.has_proxy
+                acc.has_proxy_script
                     .insert(name_str, info.package_json.scripts.contains_key("proxy"));
                 acc.has_mfe_dep.insert(
                     name_str,
@@ -69,7 +69,7 @@ impl MicrofrontendsConfigs {
         Self::from_configs(
             metadata.names,
             metadata.configs.into_iter(),
-            metadata.has_proxy,
+            metadata.has_proxy_script,
             metadata.has_mfe_dep,
         )
     }
@@ -528,7 +528,6 @@ mod test {
         // Create a microfrontends config
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {},
                     "docs": {

@@ -25,14 +25,14 @@ use std::{
 };
 
 pub use berry::{Error as BerryError, *};
-pub use bun::{BunLockfile, bun_global_change};
+pub use bun::{bun_global_change, BunLockfile};
 pub use error::Error;
 pub use npm::*;
-pub use pnpm::{PnpmLockfile, pnpm_global_change, pnpm_subgraph};
+pub use pnpm::{pnpm_global_change, pnpm_subgraph, PnpmLockfile};
 use rayon::prelude::*;
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
-pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
+pub use yarn1::{yarn_subgraph, Yarn1Lockfile};
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
@@ -69,6 +69,13 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
     /// Given a lockfile key return all (prod/dev/optional) direct dependencies
     /// of that package.
     fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error>;
+
+    /// Given a lockfile key, return only peer dependencies of that package.
+    /// These should not be included in all_dependencies since peer dependencies
+    /// require special workspace-aware resolution.
+    fn peer_dependencies(&self, _key: &str) -> Result<Option<HashMap<String, String>>, Error> {
+        Ok(None)
+    }
 
     /// Given a list of workspace packages and external packages that are
     /// dependencies of the workspace packages, produce a lockfile that only
@@ -183,10 +190,8 @@ fn transitive_closure_helper<L: Lockfile + ?Sized>(
             }
             Some(pkg) => {
                 let all_deps = lockfile.all_dependencies(&pkg.key)?;
-                resolved_deps.insert(pkg);
+                resolved_deps.insert(pkg.clone());
                 if let Some(deps) = all_deps {
-                    // we've already found one unresolved dependency, so we can't ignore its set of
-                    // dependencies.
                     transitive_closure_helper(
                         lockfile,
                         workspace_path,
@@ -194,6 +199,33 @@ fn transitive_closure_helper<L: Lockfile + ?Sized>(
                         resolved_deps,
                         false,
                     )?;
+                }
+
+                let peer_deps = lockfile.peer_dependencies(&pkg.key)?;
+                if let Some(peer_deps_map) = peer_deps {
+                    for (peer_name, peer_specifier) in peer_deps_map {
+                        match lockfile.resolve_package(workspace_path, &peer_name, &peer_specifier)
+                        {
+                            Ok(Some(peer_pkg)) if !resolved_deps.contains(&peer_pkg) => {
+                                resolved_deps.insert(peer_pkg.clone());
+
+                                if let Ok(Some(peer_transitive)) =
+                                    lockfile.all_dependencies(&peer_pkg.key)
+                                {
+                                    transitive_closure_helper(
+                                        lockfile,
+                                        workspace_path,
+                                        peer_transitive,
+                                        resolved_deps,
+                                        false,
+                                    )?;
+                                }
+                            }
+                            Ok(Some(_)) => {}
+                            Ok(None) => {}
+                            Err(_) => {}
+                        }
+                    }
                 }
             }
         }
