@@ -79,14 +79,10 @@ impl MicrofrontendsConfigs {
             configs,
             missing_default_apps,
             missing_applications,
-            unsupported_version,
+            unsupported_version: _,
             mfe_package,
             has_mfe_dependency,
         } = PackageGraphResult::new(package_names, configs, package_has_mfe_dependency)?;
-
-        for (package, err) in unsupported_version {
-            warn!("Ignoring {package}: {err}");
-        }
 
         if !missing_default_apps.is_empty() {
             warn!(
@@ -568,17 +564,6 @@ mod test {
     }
 
     #[test]
-    fn test_unsupported_versions_ignored() {
-        let result = PackageGraphResult::new(
-            HashSet::default(),
-            vec![("foo", Err(Error::UnsupportedVersion("bad version".into())))].into_iter(),
-            HashMap::new(),
-        )
-        .unwrap();
-        assert_eq!(result.configs, HashMap::new());
-    }
-
-    #[test]
     fn test_child_configs_with_missing_default() {
         let result = PackageGraphResult::new(
             HashSet::default(),
@@ -619,7 +604,6 @@ mod test {
     fn test_dev_task_collection() {
         let config = MFEConfig::from_str(
             &serde_json::to_string_pretty(&json!({
-                "version": "1",
                 "applications": {
                     "web": {},
                     "docs": {

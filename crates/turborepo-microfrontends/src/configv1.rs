@@ -152,16 +152,11 @@ impl ConfigV1 {
         .consume();
 
         if let Some(config) = config {
-            let version = config.version.clone().unwrap_or("1".to_string());
-            if version == "1" {
-                Ok(ParseResult::Actual(config))
-            } else {
-                Err(Error::InvalidVersion {
-                    expected: "1",
-                    actual: version,
-                    path: source.to_string(),
-                })
-            }
+            // Accept any version. This allows the Turborepo proxy to work with
+            // configurations that have different version numbers than expected,
+            // as long as the structure is compatible with what Turborepo needs
+            // to route traffic.
+            Ok(ParseResult::Actual(config))
         } else {
             Err(Error::biome_error(errs))
         }

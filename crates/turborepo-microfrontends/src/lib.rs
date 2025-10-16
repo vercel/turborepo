@@ -149,13 +149,12 @@ impl Config {
         };
 
         let inner = match version.as_str() {
-            "1" => ConfigV1::from_str(input, source).and_then(|result| match result {
+            "1" | _ => ConfigV1::from_str(input, source).and_then(|result| match result {
                 configv1::ParseResult::Actual(config_v1) => Ok(ConfigInner::V1(config_v1)),
                 configv1::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
                     reference: default_app,
                 }),
             }),
-            version => Err(Error::UnsupportedVersion(version.to_string())),
         }?;
         Ok(Self {
             inner,
@@ -246,9 +245,6 @@ impl Config {
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
-
-    use insta::assert_snapshot;
     use tempfile::TempDir;
     use test_case::test_case;
 
@@ -264,8 +260,10 @@ mod test {
     #[test]
     fn test_unsupported_version() {
         let input = r#"{"version": "yolo"}"#;
-        let err = Config::from_str(input, "something.json").unwrap_err();
-        assert_snapshot!(err, @r###"Unsupported microfrontends configuration version: yolo. Supported versions: ["1"]"###);
+        // Unsupported versions are now accepted if the structure is compatible.
+        // This allows the Turborepo proxy to work with configs of any version.
+        let config = Config::from_str(input, "something.json").expect("Config should parse");
+        assert_eq!(config.filename(), "something.json");
     }
 
     fn add_v1_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
@@ -409,7 +407,11 @@ mod test {
         add_v2_config(&pkg_path).unwrap();
         let config = Config::load_from_dir(repo_root, pkg_dir);
 
-        assert_matches!(config, Err(Error::UnsupportedVersion(..)));
+        // Version 2 configs are now accepted if the structure is compatible.
+        // This allows the Turborepo proxy to work with configs of any version.
+        assert!(config.is_ok(), "Version 2 config should be accepted");
+        let cfg = config.unwrap().expect("Config should be loaded");
+        assert_eq!(cfg.version(), "1");
     }
 
     #[test]
