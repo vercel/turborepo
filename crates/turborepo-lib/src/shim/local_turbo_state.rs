@@ -117,6 +117,11 @@ impl LocalTurboState {
         let platform_package_name = TurboState::platform_package_name();
         let binary_name = TurboState::binary_name();
 
+        debug!(
+            "Searching for local turbo. Platform: {}, Binary: {}",
+            platform_package_name, binary_name
+        );
+
         let platform_package_json_path_components = [platform_package_name, "package.json"];
         let platform_package_executable_path_components =
             [platform_package_name, "bin", binary_name];
@@ -131,13 +136,20 @@ impl LocalTurboState {
 
         // Detecting the package manager is more expensive than just doing an exhaustive
         // search.
-        for root in search_functions
+        for (idx, root) in search_functions
             .iter()
             .filter_map(|search_function| search_function(root_path))
+            .enumerate()
         {
+            debug!("Trying search path #{}: {}", idx + 1, root);
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
             let bin_path = root.join_components(&platform_package_executable_path_components);
+            debug!("Looking for binary at: {}", bin_path);
+
+            let exists = bin_path.exists();
+            debug!("Binary exists: {}", exists);
+
             match fs_canonicalize(&bin_path) {
                 Ok(bin_path) => {
                     let resolved_package_json_path =
@@ -153,10 +165,14 @@ impl LocalTurboState {
                         version: local_version,
                     });
                 }
-                Err(_) => debug!("No local turbo binary found at: {}", bin_path),
+                Err(e) => debug!(
+                    "No local turbo binary found at: {} (error: {})",
+                    bin_path, e
+                ),
             }
         }
 
+        debug!("No local turbo found after searching all paths");
         None
     }
 
