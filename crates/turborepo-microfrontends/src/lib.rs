@@ -76,6 +76,17 @@ impl TurborepoMfeConfig {
         repo_root: &AbsoluteSystemPath,
         package_dir: &AnchoredSystemPath,
     ) -> Result<Option<Self>, Error> {
+        Self::load_from_dir_with_mfe_dep(repo_root, package_dir, false)
+    }
+
+    /// Attempts to load a configuration file from the given directory
+    /// If `has_mfe_dependency` is true, uses the lenient ConfigV1 parser
+    /// Otherwise uses the strict Turborepo parser
+    pub fn load_from_dir_with_mfe_dep(
+        repo_root: &AbsoluteSystemPath,
+        package_dir: &AnchoredSystemPath,
+        has_mfe_dependency: bool,
+    ) -> Result<Option<Self>, Error> {
         let absolute_dir = repo_root.resolve(package_dir);
 
         Config::validate_package_path(repo_root, &absolute_dir)?;
@@ -84,7 +95,7 @@ impl TurborepoMfeConfig {
             return Ok(None);
         };
         let contents = contents?;
-        let mut config = Self::from_str(&contents, path.as_str())?;
+        let mut config = Self::from_str_with_mfe_dep(&contents, path.as_str(), has_mfe_dependency)?;
         config.filename = path
             .file_name()
             .expect("microfrontends config should not be root")
@@ -94,39 +105,39 @@ impl TurborepoMfeConfig {
     }
 
     pub fn from_str(input: &str, source: &str) -> Result<Self, Error> {
-        // Try strict Turborepo schema first
-        let config = match TurborepoConfig::from_str(input, source) {
-            Ok(config) => config,
-            Err(err) => {
-                // If strict parsing fails due to unknown keys (like $schema),
-                // fall back to lenient ConfigV1 parser
-                if matches!(&err, Error::JsonParse(msg) if msg.contains("Found an unknown key")) {
-                    // Parse with lenient schema and convert back to TurborepoConfig
-                    let config_v1_result = ConfigV1::from_str(input, source)?;
-                    match config_v1_result {
-                        configv1::ParseResult::Actual(config_v1) => {
-                            // We have a valid ConfigV1, but we need a TurborepoConfig for the
-                            // `inner` field. Since ConfigV1 is more lenient, we need to construct
-                            // a TurborepoConfig from it by re-parsing with the ConfigV1 data.
-                            // However, TurborepoConfig doesn't have a conversion from ConfigV1.
-                            // Instead, we'll just use the config_v1 directly.
-                            return Ok(Self {
-                                inner: TurborepoConfig::default(),
-                                config_v1,
-                                filename: source.to_owned(),
-                                path: None,
-                            });
-                        }
-                        configv1::ParseResult::Reference(default_app) => {
-                            return Err(Error::ChildConfig {
-                                reference: default_app,
-                            });
-                        }
-                    }
+        Self::from_str_with_mfe_dep(input, source, false)
+    }
+
+    /// Parses configuration from a string
+    /// If `has_mfe_dependency` is true, uses the lenient ConfigV1 parser
+    /// directly Otherwise tries the strict Turborepo parser only
+    pub fn from_str_with_mfe_dep(
+        input: &str,
+        source: &str,
+        has_mfe_dependency: bool,
+    ) -> Result<Self, Error> {
+        // If package has @vercel/microfrontends dependency, use lenient ConfigV1 parser
+        if has_mfe_dependency {
+            let config_v1_result = ConfigV1::from_str(input, source)?;
+            match config_v1_result {
+                configv1::ParseResult::Actual(config_v1) => {
+                    return Ok(Self {
+                        inner: TurborepoConfig::default(),
+                        config_v1,
+                        filename: source.to_owned(),
+                        path: None,
+                    });
                 }
-                return Err(err);
+                configv1::ParseResult::Reference(default_app) => {
+                    return Err(Error::ChildConfig {
+                        reference: default_app,
+                    });
+                }
             }
-        };
+        }
+
+        // Without @vercel/microfrontends dependency, use strict Turborepo schema only
+        let config = TurborepoConfig::from_str(input, source)?;
         Ok(Self {
             inner: config.clone(),
             config_v1: ConfigV1::from_turborepo_config(&config),

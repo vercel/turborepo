@@ -61,7 +61,8 @@ impl MicrofrontendsConfigs {
                 );
                 acc.has_mfe_dep.insert(name_str, has_dep);
 
-                let config_result = MfeConfig::load_from_dir(repo_root, info.package_path());
+                let config_result =
+                    MfeConfig::load_from_dir_with_mfe_dep(repo_root, info.package_path(), has_dep);
                 if let Ok(Some(ref _config)) = config_result {
                     tracing::debug!(
                         "from_disk - found config in package: {}, path: {:?}",

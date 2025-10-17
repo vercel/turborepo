@@ -184,7 +184,7 @@ impl ConfigV1 {
             let app = Application {
                 package_name: turbo_app.package_name.clone(),
                 development: turbo_app.development.as_ref().map(|dev| Development {
-                    task: dev.task.clone(),
+                    task: None,
                     local: dev.local.map(|lh| LocalHost { port: lh.port }),
                     fallback: dev.fallback.clone(),
                 }),
