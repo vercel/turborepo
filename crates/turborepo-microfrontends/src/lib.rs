@@ -213,7 +213,7 @@ impl TurborepoMfeConfig {
             .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
     }
 
-    fn set_path(&mut self, dir: &AnchoredSystemPath) {
+    pub fn set_path(&mut self, dir: &AnchoredSystemPath) {
         self.path = Some(dir.join_component(&self.filename));
     }
 }

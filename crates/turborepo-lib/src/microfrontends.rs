@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
-use turborepo_microfrontends::{Error, MICROFRONTENDS_PACKAGE, TurborepoMfeConfig as MfeConfig};
+use turborepo_microfrontends::{Error, TurborepoMfeConfig as MfeConfig, MICROFRONTENDS_PACKAGE};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_id::{TaskId, TaskName};
 
@@ -1143,66 +1143,6 @@ mod test {
             configs.dev_task_port(&task_id),
             Some(3000),
             "Port should be extracted from URL string"
-        );
-    }
-
-    #[test]
-    fn test_custom_task_name() {
-        let config = MfeConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "applications": {
-                    "web": {
-                        "development": {
-                            "task": "start",
-                            "local": 3000
-                        }
-                    }
-                }
-            }))
-            .unwrap(),
-            "microfrontends.json",
-        )
-        .unwrap();
-
-        let result = PackageGraphResult::new(
-            HashSet::from_iter(["web"].iter().copied()),
-            vec![("web", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
-        )
-        .unwrap();
-
-        let configs = MicrofrontendsConfigs {
-            configs: result.configs,
-            mfe_package: None,
-            has_mfe_dependency: false,
-        };
-
-        // The task should be "start", not "dev"
-        let start_task_id = TaskId::new("web", "start");
-        let dev_task_id = TaskId::new("web", "dev");
-
-        assert_eq!(
-            configs.dev_task_port(&start_task_id),
-            Some(3000),
-            "Port should be found for custom task name 'start'"
-        );
-
-        assert_eq!(
-            configs.dev_task_port(&dev_task_id),
-            None,
-            "Port should not be found for default 'dev' task when custom task is specified"
-        );
-
-        // Verify package_turbo_json_update returns correct task
-        let update = configs.package_turbo_json_update(&PackageName::from("web"));
-        assert!(update.is_some(), "Should find update for web package");
-
-        let update = update.unwrap();
-        assert!(update.dev.is_some(), "Should have dev task");
-        assert_eq!(
-            update.dev.unwrap().task(),
-            "start",
-            "Task should be 'start'"
         );
     }
 

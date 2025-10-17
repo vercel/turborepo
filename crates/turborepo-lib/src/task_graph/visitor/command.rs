@@ -453,7 +453,7 @@ mod test {
                 }
             }
         }
-        let config = Config::from_str(
+        let mut config = Config::from_str(
             r#"
         {
             "applications": {
@@ -469,6 +469,8 @@ mod test {
             "microfrontends.json",
         )
         .unwrap();
+        // Set the path to simulate loading from a directory
+        config.set_path(AnchoredSystemPath::new("web").unwrap());
         let microfrontends_configs = MicrofrontendsConfigs::from_configs(
             ["web", "docs"].iter().copied().collect(),
             std::iter::once(("web", Ok(Some(config)))),
