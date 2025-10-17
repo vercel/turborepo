@@ -1,6 +1,15 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup.sh
   $ . ${TESTDIR}/setup.sh $(pwd) "linked"
+  * (glob)
+  $ echo "=== Verifying fixture state after setup ==="
+  === Verifying fixture state after setup ===
+  $ ls -la node_modules/turbo 2>&1 || echo "node_modules/turbo does not exist"
+  * (glob)
+  $ ls -la node_modules/.pnpm 2>&1 | head -5
+  * (glob)
+  $ echo "=== End verification ==="
+  === End verification ===
 
 Make sure we use local, but do not pass --skip-infer to old binary
   $ ${TESTDIR}/set_version.sh $(pwd) "1.0.0"
