@@ -264,21 +264,7 @@ impl MicrofrontendsConfigs {
         );
 
         let results = self.configs.iter().filter_map(|(config, info)| {
-            tracing::debug!(
-                "package_turbo_json_update - checking config: {}, tasks: {:?}",
-                config,
-                info.tasks.keys().collect::<Vec<_>>()
-            );
-
             let dev_task = info.tasks.iter().find_map(|(task, _app_name)| {
-                tracing::debug!(
-                    "package_turbo_json_update - checking task: {}, package: {}, target: {}, \
-                     match: {}",
-                    task,
-                    task.package(),
-                    package_name.as_str(),
-                    task.package() == package_name.as_str()
-                );
                 (task.package() == package_name.as_str()).then(|| {
                     tracing::debug!(
                         "package_turbo_json_update - MATCH found dev task {} for package {}",
@@ -311,17 +297,6 @@ impl MicrofrontendsConfigs {
         });
         // We invert the standard comparing order so higher versions are prioritized
         let result = results.sorted_by(|a, b| b.version.cmp(a.version)).next();
-
-        tracing::debug!(
-            "package_turbo_json_update - result for {}: {:?}",
-            package_name.as_str(),
-            result.as_ref().map(|r| format!(
-                "dev={:?}, proxy={}, use_turborepo_proxy={}",
-                r.dev.as_ref().map(|t| t.to_string()),
-                r.proxy,
-                r.use_turborepo_proxy
-            ))
-        );
 
         result
     }
@@ -479,27 +454,15 @@ impl ConfigInfo {
         for dev_task in config.development_tasks() {
             let task_name = dev_task.task.unwrap_or("dev");
             let task = TaskId::new(dev_task.package, task_name).into_owned();
-            tracing::debug!(
-                "ConfigInfo::new - found dev task: app={}, package={}, task={}, task_field={:?}",
-                dev_task.application_name,
-                dev_task.package,
-                task_name,
-                dev_task.task
-            );
+
             if let Some(port) = config.port(dev_task.application_name) {
                 ports.insert(task.clone(), port);
                 tracing::debug!("ConfigInfo::new - added port {} for task {}", port, task);
             }
+
             tasks.insert(task.clone(), dev_task.application_name.to_owned());
-            tracing::debug!("ConfigInfo::new - added task {} to tasks map", task);
         }
         let version = config.version();
-
-        tracing::debug!(
-            "ConfigInfo::new - created config with {} tasks, {} ports",
-            tasks.len(),
-            ports.len()
-        );
 
         Self {
             tasks,
