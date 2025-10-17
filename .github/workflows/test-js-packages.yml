@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   js_packages:
-    name: "JS Package Tests (${{matrix.os.name}}, Node ${{matrix.node-version}})"
+    name: "JS Package Tests (${{matrix.os.name}}, ${{matrix.runtime == 'bun' && 'Bun' || format('Node {0}', matrix.node-version)}})"
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -37,6 +37,22 @@ jobs:
           - 18
           - 20
           - 22
+        runtime:
+          - node
+        include:
+          # Add Bun to the matrix
+          - os:
+              name: ubuntu
+              runner: ubuntu-latest
+            runtime: bun
+          - os:
+              name: macos
+              runner: macos-13
+            runtime: bun
+          - os:
+              name: windows
+              runner: windows-latest
+            runtime: bun
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -57,11 +73,22 @@ jobs:
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
 
       - name: "Setup Node"
+        if: matrix.runtime == 'node'
         uses: ./.github/actions/setup-node
         with:
           node-version: ${{ matrix.node-version }}
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
+
+      - name: "Setup Bun"
+        if: matrix.runtime == 'bun'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: "Install dependencies with Bun"
+        if: matrix.runtime == 'bun'
+        run: bun install
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
