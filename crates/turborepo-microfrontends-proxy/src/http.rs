@@ -8,7 +8,10 @@ use hyper::{
 use hyper_util::client::legacy::Client;
 use tracing::{debug, error, warn};
 
-use crate::{ProxyError, error::ErrorPage, headers::validate_host_header, http_router::RouteMatch};
+use crate::{
+    ProxyError, error::ErrorPage, headers::validate_host_header, http_router::RouteMatch,
+    ports::validate_port,
+};
 
 pub(crate) type BoxedBody = BoxBody<Bytes, Box<dyn std::error::Error + Send + Sync>>;
 pub(crate) type HttpClient = Client<hyper_util::client::legacy::connect::HttpConnector, Incoming>;
@@ -49,6 +52,18 @@ pub(crate) async fn forward_request(
     remote_addr: SocketAddr,
     http_client: HttpClient,
 ) -> Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>> {
+    // Validate port to prevent SSRF attacks
+    validate_port(port).map_err(|e| {
+        warn!(
+            "Port validation failed for {} (port {}): {}",
+            app_name, port, e
+        );
+        Box::new(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            format!("Port validation failed: {}", e),
+        )) as Box<dyn std::error::Error + Send + Sync>
+    })?;
+
     let target_uri = format!(
         "http://localhost:{}{}",
         port,
@@ -212,16 +227,40 @@ fn normalize_fallback_url(
     fallback_base: &str,
     path: &str,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    // Ensure the base has a scheme
     let base = if fallback_base.starts_with("http://") || fallback_base.starts_with("https://") {
         fallback_base.to_string()
     } else {
         format!("https://{}", fallback_base)
     };
 
-    let base = base.trim_end_matches('/');
+    // Parse the base URL - this validates it's well-formed
+    let base_url =
+        url::Url::parse(&base).map_err(|e| format!("Invalid fallback base URL: {}", e))?;
+
+    // Store the original host for validation
+    let original_host = base_url
+        .host()
+        .ok_or("Fallback base URL must have a host")?;
+
+    // Normalize the path - if empty, use "/"
     let normalized_path = if path.is_empty() { "/" } else { path };
 
-    Ok(format!("{}{}", base, normalized_path))
+    // Use join() to safely combine base with path
+    // This automatically normalizes .. segments and prevents directory traversal
+    let final_url = base_url
+        .join(normalized_path)
+        .map_err(|e| format!("Invalid path for fallback URL: {}", e))?;
+
+    // Security check: verify the host hasn't changed
+    // This prevents attacks using absolute URLs or protocol-relative URLs in the
+    // path
+    let final_host = final_url.host().ok_or("Final URL must have a host")?;
+    if final_host != original_host {
+        return Err("Path must not change the fallback host".into());
+    }
+
+    Ok(final_url.to_string())
 }
 
 #[cfg(test)]
@@ -291,5 +330,84 @@ mod tests {
             normalize_fallback_url("example.com", "").unwrap(),
             "https://example.com/"
         );
+    }
+
+    #[test]
+    fn test_normalize_fallback_url_path_traversal_prevention() {
+        // Test basic path traversal attempt with ../
+        let result = normalize_fallback_url("example.com", "/docs/../etc/passwd");
+        assert!(result.is_ok());
+        // The url crate normalizes this to /etc/passwd (which is still on example.com)
+        assert_eq!(result.unwrap(), "https://example.com/etc/passwd");
+
+        // Test multiple .. segments
+        let result = normalize_fallback_url("example.com/app/api", "/../../../etc/passwd");
+        assert!(result.is_ok());
+        // Normalized to root, then etc/passwd
+        assert_eq!(result.unwrap(), "https://example.com/etc/passwd");
+
+        // Test that we stay on the same host even with traversal
+        let result = normalize_fallback_url("https://example.com/base", "/../../test");
+        assert!(result.is_ok());
+        let url = result.unwrap();
+        assert!(url.starts_with("https://example.com/"));
+        assert!(!url.contains(".."));
+    }
+
+    #[test]
+    fn test_normalize_fallback_url_absolute_url_rejection() {
+        // Test that absolute URLs in path are rejected if they change the host
+        let result = normalize_fallback_url("example.com", "https://evil.com/attack");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Path must not change the fallback host")
+        );
+
+        // Test protocol-relative URL
+        let result = normalize_fallback_url("example.com", "//evil.com/attack");
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Path must not change the fallback host")
+        );
+    }
+
+    #[test]
+    fn test_normalize_fallback_url_encoded_traversal() {
+        // Test URL-encoded path traversal (the url crate handles decoding)
+        let result = normalize_fallback_url("example.com", "/docs/%2e%2e/etc/passwd");
+        assert!(result.is_ok());
+        // The url crate will decode and normalize this
+        let url = result.unwrap();
+        assert!(url.starts_with("https://example.com/"));
+        assert!(!url.contains("%2e"));
+    }
+
+    #[test]
+    fn test_normalize_fallback_url_stays_on_host() {
+        // Verify that various path manipulations keep us on the same host
+        let test_cases = vec![
+            ("example.com", "/normal/path"),
+            ("example.com", "/path/./with/./dots"),
+            ("example.com", "/path/../other"),
+            ("https://example.com/base", "/new/path"),
+            ("https://example.com/base/", "/new/path"),
+        ];
+
+        for (base, path) in test_cases {
+            let result = normalize_fallback_url(base, path);
+            assert!(result.is_ok(), "Failed for base={}, path={}", base, path);
+            let url = result.unwrap();
+            assert!(
+                url.contains("example.com"),
+                "URL {} doesn't contain example.com",
+                url
+            );
+            // Ensure no .. remains in the final URL
+            assert!(!url.contains(".."), "URL {} still contains ..", url);
+        }
     }
 }

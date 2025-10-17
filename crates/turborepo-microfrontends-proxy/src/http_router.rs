@@ -2,6 +2,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use turborepo_microfrontends::Config;
 
+use crate::ports::validate_port;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RouteMatch {
     pub app_name: Arc<str>,
@@ -64,6 +66,10 @@ impl Router {
                      file."
                 )
             })?;
+
+            // Validate port for security (SSRF prevention)
+            validate_port(port)
+                .map_err(|e| format!("Invalid port {port} for application '{app_name}': {e}"))?;
 
             app_ports.insert(app_name.to_string(), port);
 

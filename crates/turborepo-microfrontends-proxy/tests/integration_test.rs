@@ -197,10 +197,26 @@ async fn test_pattern_matching_edge_cases() {
     );
 }
 
-async fn find_available_port() -> Result<u16, Box<dyn std::error::Error>> {
-    let listener = TcpListener::bind("127.0.0.1:0").await?;
-    let port = listener.local_addr()?.port();
-    Ok(port)
+async fn find_available_port_range(count: usize) -> Result<Vec<u16>, Box<dyn std::error::Error>> {
+    // Try to find consecutive available ports within the allowed range (3000-9999)
+    let mut available_ports = Vec::new();
+
+    for port in 3000..=9999 {
+        // Skip commonly blocked ports
+        if [3306, 5432, 6379].contains(&port) {
+            continue;
+        }
+        if TcpListener::bind(format!("127.0.0.1:{}", port))
+            .await
+            .is_ok()
+        {
+            available_ports.push(port);
+            if available_ports.len() == count {
+                return Ok(available_ports);
+            }
+        }
+    }
+    Err("Not enough available ports in allowed range".into())
 }
 
 async fn mock_server(
@@ -236,9 +252,10 @@ async fn mock_server(
 
 #[tokio::test]
 async fn test_end_to_end_proxy() {
-    let web_port = find_available_port().await.unwrap();
-    let docs_port = find_available_port().await.unwrap();
-    let proxy_port = find_available_port().await.unwrap();
+    let ports = find_available_port_range(3).await.unwrap();
+    let web_port = ports[0];
+    let docs_port = ports[1];
+    let proxy_port = ports[2];
 
     let web_handle = mock_server(web_port, "web app").await.unwrap();
     let docs_handle = mock_server(docs_port, "docs app").await.unwrap();
@@ -378,4 +395,79 @@ async fn test_websocket_routing() {
     let route = router.match_route("/ws");
     assert_eq!(route.app_name.as_ref(), "web");
     assert_eq!(route.port, 3000);
+}
+
+#[tokio::test]
+async fn test_port_validation_blocks_invalid_ports() {
+    // Test blocked port (SSH)
+    let config_json = r#"{
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 22 }
+                }
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let result = Router::new(&config);
+    assert!(result.is_err(), "Should reject SSH port 22");
+    if let Err(err) = result {
+        assert!(err.contains("blocked for security reasons") || err.contains("Invalid port 22"));
+    }
+
+    // Test port below range
+    let config_json = r#"{
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 1000 }
+                }
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let result = Router::new(&config);
+    assert!(result.is_err(), "Should reject port 1000 (below range)");
+    if let Err(err) = result {
+        assert!(err.contains("outside the allowed range") || err.contains("Invalid port 1000"));
+    }
+
+    // Test port above range
+    let config_json = r#"{
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 10000 }
+                }
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let result = Router::new(&config);
+    assert!(result.is_err(), "Should reject port 10000 (above range)");
+    if let Err(err) = result {
+        assert!(err.contains("outside the allowed range") || err.contains("Invalid port 10000"));
+    }
+
+    // Test MySQL port (blocked even though in range)
+    let config_json = r#"{
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 3306 }
+                }
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let result = Router::new(&config);
+    assert!(result.is_err(), "Should reject MySQL port 3306");
+    if let Err(err) = result {
+        assert!(err.contains("blocked for security reasons") || err.contains("Invalid port 3306"));
+    }
 }
