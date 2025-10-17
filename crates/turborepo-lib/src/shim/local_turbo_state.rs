@@ -62,7 +62,7 @@ impl LocalTurboState {
         let turbo_path = root_path.as_path().join("node_modules").join("turbo");
         debug!(
             "generate_linked_path: Attempting to canonicalize: {}",
-            turbo_path.display()
+            turbo_path.as_str()
         );
 
         match fs_canonicalize(&turbo_path) {
@@ -104,7 +104,7 @@ impl LocalTurboState {
             Err(e) => {
                 debug!(
                     "generate_linked_path: Failed to canonicalize {}: {}",
-                    turbo_path.display(),
+                    turbo_path.as_str(),
                     e
                 );
                 None
