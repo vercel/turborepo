@@ -34,24 +34,24 @@ use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_scm::SCM;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_ui::{
-    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
-    BOLD_GREY, GREY,
+    BOLD_GREY, ColorConfig, GREY, cprint, cprintln, sender::UISender, tui, tui::TuiSender,
+    wui::sender::WebUISender,
 };
 
 pub use crate::run::error::Error;
 use crate::{
+    DaemonClient, DaemonConnector,
     cli::EnvMode,
     engine::Engine,
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
+    task_hash::{PackageInputsHashes, get_external_deps_hash, get_internal_deps_hash},
     turbo_json::{TurboJson, TurboJsonLoader, UIMode},
-    DaemonClient, DaemonConnector,
 };
 
 #[derive(Clone)]
@@ -695,6 +695,11 @@ impl Run {
         }
 
         self.cleanup_proxy(proxy_shutdown).await;
+
+        // When a proxy is present, the signal handler only stops processes on OS
+        // signal. For normal completion without user interruption, we need an
+        // explicit stop here.
+        self.processes.stop().await;
 
         visitor
             .finish(
