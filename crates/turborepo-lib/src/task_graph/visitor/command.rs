@@ -219,15 +219,37 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
         task_id: &TaskId,
         _environment: EnvironmentVariableMap,
     ) -> Result<Option<Command>, Error> {
+        tracing::debug!(
+            "MicroFrontendProxyProvider::command - called for task: {}",
+            task_id
+        );
+
         let Some(dev_tasks) = self.dev_tasks(task_id) else {
+            tracing::debug!(
+                "MicroFrontendProxyProvider::command - no dev tasks found for {}",
+                task_id
+            );
             return Ok(None);
         };
+
+        tracing::debug!(
+            "MicroFrontendProxyProvider::command - found {} dev tasks for {}",
+            dev_tasks.len(),
+            task_id
+        );
+
         let has_custom_proxy = self.has_custom_proxy(task_id)?;
         let package_info = self.package_info(task_id)?;
         let has_mfe_dependency = package_info
             .package_json
             .all_dependencies()
             .any(|(package, _version)| package.as_str() == MICROFRONTENDS_PACKAGE);
+
+        tracing::debug!(
+            "MicroFrontendProxyProvider::command - has_custom_proxy: {}, has_mfe_dependency: {}",
+            has_custom_proxy,
+            has_mfe_dependency
+        );
 
         let local_apps = dev_tasks.iter().filter_map(|(task, app_name)| {
             self.tasks_in_graph
@@ -242,6 +264,7 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
         let mfe_path = self.repo_root.join_unix_path(mfe_config_filename);
 
         let cmd = if has_custom_proxy {
+            tracing::debug!("MicroFrontendProxyProvider::command - using custom proxy script");
             let package_manager = self.package_graph.package_manager();
             let mut proxy_args = vec![mfe_path.as_str(), "--names"];
             proxy_args.extend(local_apps);
@@ -256,6 +279,9 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
             cmd.current_dir(package_dir).args(args).open_stdin();
             Some(cmd)
         } else if has_mfe_dependency {
+            tracing::debug!(
+                "MicroFrontendProxyProvider::command - using @vercel/microfrontends proxy"
+            );
             let mut args = vec!["proxy", mfe_path.as_str(), "--names"];
             args.extend(local_apps);
 
@@ -273,10 +299,16 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
             cmd.current_dir(package_dir).args(args).open_stdin();
             Some(cmd)
         } else {
+            tracing::debug!("MicroFrontendProxyProvider::command - using Turborepo built-in proxy");
             // No custom proxy and no @vercel/microfrontends dependency.
             // The Turborepo proxy will be started separately.
             None
         };
+
+        tracing::debug!(
+            "MicroFrontendProxyProvider::command - returning command: {}",
+            if cmd.is_some() { "Some" } else { "None" }
+        );
 
         Ok(cmd)
     }

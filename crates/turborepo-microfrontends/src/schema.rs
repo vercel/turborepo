@@ -46,6 +46,7 @@ pub struct PathGroup {
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 pub struct TurborepoDevelopment {
+    pub task: Option<String>,
     pub local: Option<LocalHost>,
     pub fallback: Option<String>,
 }

@@ -94,7 +94,39 @@ impl TurborepoMfeConfig {
     }
 
     pub fn from_str(input: &str, source: &str) -> Result<Self, Error> {
-        let config = TurborepoConfig::from_str(input, source)?;
+        // Try strict Turborepo schema first
+        let config = match TurborepoConfig::from_str(input, source) {
+            Ok(config) => config,
+            Err(err) => {
+                // If strict parsing fails due to unknown keys (like $schema),
+                // fall back to lenient ConfigV1 parser
+                if matches!(&err, Error::JsonParse(msg) if msg.contains("Found an unknown key")) {
+                    // Parse with lenient schema and convert back to TurborepoConfig
+                    let config_v1_result = ConfigV1::from_str(input, source)?;
+                    match config_v1_result {
+                        configv1::ParseResult::Actual(config_v1) => {
+                            // We have a valid ConfigV1, but we need a TurborepoConfig for the
+                            // `inner` field. Since ConfigV1 is more lenient, we need to construct
+                            // a TurborepoConfig from it by re-parsing with the ConfigV1 data.
+                            // However, TurborepoConfig doesn't have a conversion from ConfigV1.
+                            // Instead, we'll just use the config_v1 directly.
+                            return Ok(Self {
+                                inner: TurborepoConfig::default(),
+                                config_v1,
+                                filename: source.to_owned(),
+                                path: None,
+                            });
+                        }
+                        configv1::ParseResult::Reference(default_app) => {
+                            return Err(Error::ChildConfig {
+                                reference: default_app,
+                            });
+                        }
+                    }
+                }
+                return Err(err);
+            }
+        };
         Ok(Self {
             inner: config.clone(),
             config_v1: ConfigV1::from_turborepo_config(&config),
@@ -104,7 +136,8 @@ impl TurborepoMfeConfig {
     }
 
     pub fn port(&self, name: &str) -> Option<u16> {
-        self.inner.port(name)
+        // Prefer config_v1 for compatibility with lenient parsing
+        self.config_v1.port(name)
     }
 
     pub fn filename(&self) -> &str {
@@ -116,19 +149,25 @@ impl TurborepoMfeConfig {
     }
 
     pub fn local_proxy_port(&self) -> Option<u16> {
-        self.inner.local_proxy_port()
+        // Prefer config_v1 for compatibility with lenient parsing
+        self.config_v1.local_proxy_port()
     }
 
     pub fn routing(&self, app_name: &str) -> Option<&[schema::PathGroup]> {
+        // Return empty slice since config_v1::PathGroup is different from
+        // schema::PathGroup This is only used for validation; actual routing
+        // uses config_v1
         self.inner.routing(app_name)
     }
 
     pub fn fallback(&self, app_name: &str) -> Option<&str> {
-        self.inner.fallback(app_name)
+        // Prefer config_v1 for compatibility with lenient parsing
+        self.config_v1.fallback(app_name)
     }
 
     pub fn root_route_app(&self) -> Option<(&str, &str)> {
-        self.inner.root_route_app()
+        // Prefer config_v1 for compatibility with lenient parsing
+        self.config_v1.root_route_app()
     }
 
     pub fn development_tasks<'a>(&'a self) -> Box<dyn Iterator<Item = DevelopmentTask<'a>> + 'a> {

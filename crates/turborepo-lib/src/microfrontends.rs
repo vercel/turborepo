@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
-use turborepo_microfrontends::{Error, TurborepoMfeConfig as MfeConfig, MICROFRONTENDS_PACKAGE};
+use turborepo_microfrontends::{Error, MICROFRONTENDS_PACKAGE, TurborepoMfeConfig as MfeConfig};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_id::{TaskId, TaskName};
 
@@ -33,6 +33,8 @@ impl MicrofrontendsConfigs {
         repo_root: &AbsoluteSystemPath,
         package_graph: &PackageGraph,
     ) -> Result<Option<Self>, Error> {
+        tracing::debug!("MicrofrontendsConfigs::from_disk - loading configurations");
+
         struct PackageMetadata<'a> {
             names: HashSet<&'a str>,
             has_mfe_dep: HashMap<&'a str, bool>,
@@ -48,18 +50,39 @@ impl MicrofrontendsConfigs {
             |mut acc, (name, info)| {
                 let name_str = name.as_str();
                 acc.names.insert(name_str);
-                acc.has_mfe_dep.insert(
+                let has_dep = info
+                    .package_json
+                    .all_dependencies()
+                    .any(|(dep, _)| dep.as_str() == MICROFRONTENDS_PACKAGE);
+                tracing::debug!(
+                    "from_disk - package: {}, has @vercel/microfrontends dep: {}",
                     name_str,
-                    info.package_json
-                        .all_dependencies()
-                        .any(|(dep, _)| dep.as_str() == MICROFRONTENDS_PACKAGE),
+                    has_dep
                 );
-                acc.configs.push((
-                    name_str,
-                    MfeConfig::load_from_dir(repo_root, info.package_path()),
-                ));
+                acc.has_mfe_dep.insert(name_str, has_dep);
+
+                let config_result = MfeConfig::load_from_dir(repo_root, info.package_path());
+                if let Ok(Some(ref _config)) = config_result {
+                    tracing::debug!(
+                        "from_disk - found config in package: {}, path: {:?}",
+                        name_str,
+                        info.package_path()
+                    );
+                } else if let Err(ref e) = config_result {
+                    tracing::debug!(
+                        "from_disk - error loading config from package {}: {}",
+                        name_str,
+                        e
+                    );
+                }
+                acc.configs.push((name_str, config_result));
                 acc
             },
+        );
+
+        tracing::debug!(
+            "from_disk - loaded {} package configs",
+            metadata.configs.len()
         );
 
         Self::from_configs(
@@ -75,6 +98,7 @@ impl MicrofrontendsConfigs {
         configs: impl Iterator<Item = (&'a str, Result<Option<MfeConfig>, Error>)>,
         package_has_mfe_dependency: HashMap<&str, bool>,
     ) -> Result<Option<Self>, Error> {
+        tracing::debug!("from_configs - processing configurations");
         let PackageGraphResult {
             configs,
             missing_default_apps,
@@ -83,6 +107,13 @@ impl MicrofrontendsConfigs {
             mfe_package,
             has_mfe_dependency,
         } = PackageGraphResult::new(package_names, configs, package_has_mfe_dependency)?;
+
+        tracing::debug!(
+            "from_configs - result: {} configs, mfe_package={:?}, has_mfe_dependency={}",
+            configs.len(),
+            mfe_package,
+            has_mfe_dependency
+        );
 
         if !missing_default_apps.is_empty() {
             warn!(
@@ -97,6 +128,15 @@ impl MicrofrontendsConfigs {
                  proxy will not route to the following applications if they are running locally: \
                  {}",
                 missing_applications.join(", ")
+            );
+        }
+
+        if configs.is_empty() {
+            tracing::debug!("from_configs - no configs found, returning None");
+        } else {
+            tracing::debug!(
+                "from_configs - returning MicrofrontendsConfigs with packages: {:?}",
+                configs.keys().collect::<Vec<_>>()
             );
         }
 
@@ -213,25 +253,76 @@ impl MicrofrontendsConfigs {
         &'a self,
         package_name: &PackageName,
     ) -> Option<FindResult<'a>> {
+        tracing::debug!(
+            "package_turbo_json_update - checking package: {}",
+            package_name.as_str()
+        );
+        tracing::debug!(
+            "package_turbo_json_update - available configs: {:?}",
+            self.configs.keys().collect::<Vec<_>>()
+        );
+
         let results = self.configs.iter().filter_map(|(config, info)| {
-            let dev_task = info.tasks.iter().find_map(|(task, _)| {
-                (task.package() == package_name.as_str()).then(|| FindResult {
-                    dev: Some(task.as_borrowed()),
+            tracing::debug!(
+                "package_turbo_json_update - checking config: {}, tasks: {:?}",
+                config,
+                info.tasks.keys().collect::<Vec<_>>()
+            );
+
+            let dev_task = info.tasks.iter().find_map(|(task, _app_name)| {
+                tracing::debug!(
+                    "package_turbo_json_update - checking task: {}, package: {}, target: {}, \
+                     match: {}",
+                    task,
+                    task.package(),
+                    package_name.as_str(),
+                    task.package() == package_name.as_str()
+                );
+                (task.package() == package_name.as_str()).then(|| {
+                    tracing::debug!(
+                        "package_turbo_json_update - MATCH found dev task {} for package {}",
+                        task,
+                        package_name.as_str()
+                    );
+                    FindResult {
+                        dev: Some(task.as_borrowed()),
+                        proxy: TaskId::new(config, "proxy"),
+                        version: info.version,
+                        use_turborepo_proxy: info.use_turborepo_proxy,
+                    }
+                })
+            });
+
+            let proxy_owner = (config.as_str() == package_name.as_str()).then(|| {
+                tracing::debug!(
+                    "package_turbo_json_update - package {} owns the proxy config",
+                    package_name.as_str()
+                );
+                FindResult {
+                    dev: None,
                     proxy: TaskId::new(config, "proxy"),
                     version: info.version,
                     use_turborepo_proxy: info.use_turborepo_proxy,
-                })
+                }
             });
-            let proxy_owner = (config.as_str() == package_name.as_str()).then(|| FindResult {
-                dev: None,
-                proxy: TaskId::new(config, "proxy"),
-                version: info.version,
-                use_turborepo_proxy: info.use_turborepo_proxy,
-            });
+
             dev_task.or(proxy_owner)
         });
         // We invert the standard comparing order so higher versions are prioritized
-        results.sorted_by(|a, b| b.version.cmp(a.version)).next()
+        let result = results.sorted_by(|a, b| b.version.cmp(a.version)).next();
+
+        tracing::debug!(
+            "package_turbo_json_update - result for {}: {:?}",
+            package_name.as_str(),
+            result.as_ref().map(|r| format!(
+                "dev={:?}, proxy={}, use_turborepo_proxy={}",
+                r.dev.as_ref().map(|t| t.to_string()),
+                r.proxy,
+                r.use_turborepo_proxy
+            ))
+        );
+
+        result
     }
 
     // Returns a list of repo relative paths to all MFE configurations
@@ -383,14 +474,31 @@ impl ConfigInfo {
     fn new(config: &MfeConfig) -> Self {
         let mut ports = HashMap::new();
         let mut tasks = HashMap::new();
+        tracing::debug!("ConfigInfo::new - creating config info");
         for dev_task in config.development_tasks() {
-            let task = TaskId::new(dev_task.package, "dev").into_owned();
+            let task_name = dev_task.task.unwrap_or("dev");
+            let task = TaskId::new(dev_task.package, task_name).into_owned();
+            tracing::debug!(
+                "ConfigInfo::new - found dev task: app={}, package={}, task={}, task_field={:?}",
+                dev_task.application_name,
+                dev_task.package,
+                task_name,
+                dev_task.task
+            );
             if let Some(port) = config.port(dev_task.application_name) {
                 ports.insert(task.clone(), port);
+                tracing::debug!("ConfigInfo::new - added port {} for task {}", port, task);
             }
-            tasks.insert(task, dev_task.application_name.to_owned());
+            tasks.insert(task.clone(), dev_task.application_name.to_owned());
+            tracing::debug!("ConfigInfo::new - added task {} to tasks map", task);
         }
         let version = config.version();
+
+        tracing::debug!(
+            "ConfigInfo::new - created config with {} tasks, {} ports",
+            tasks.len(),
+            ports.len()
+        );
 
         Self {
             tasks,
@@ -1034,6 +1142,66 @@ mod test {
             configs.dev_task_port(&task_id),
             Some(3000),
             "Port should be extracted from URL string"
+        );
+    }
+
+    #[test]
+    fn test_custom_task_name() {
+        let config = MfeConfig::from_str(
+            &serde_json::to_string_pretty(&json!({
+                "applications": {
+                    "web": {
+                        "development": {
+                            "task": "start",
+                            "local": 3000
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+        )
+        .unwrap();
+
+        let result = PackageGraphResult::new(
+            HashSet::from_iter(["web"].iter().copied()),
+            vec![("web", Ok(Some(config)))].into_iter(),
+            HashMap::new(),
+        )
+        .unwrap();
+
+        let configs = MicrofrontendsConfigs {
+            configs: result.configs,
+            mfe_package: None,
+            has_mfe_dependency: false,
+        };
+
+        // The task should be "start", not "dev"
+        let start_task_id = TaskId::new("web", "start");
+        let dev_task_id = TaskId::new("web", "dev");
+
+        assert_eq!(
+            configs.dev_task_port(&start_task_id),
+            Some(3000),
+            "Port should be found for custom task name 'start'"
+        );
+
+        assert_eq!(
+            configs.dev_task_port(&dev_task_id),
+            None,
+            "Port should not be found for default 'dev' task when custom task is specified"
+        );
+
+        // Verify package_turbo_json_update returns correct task
+        let update = configs.package_turbo_json_update(&PackageName::from("web"));
+        assert!(update.is_some(), "Should find update for web package");
+
+        let update = update.unwrap();
+        assert!(update.dev.is_some(), "Should have dev task");
+        assert_eq!(
+            update.dev.unwrap().task(),
+            "start",
+            "Task should be 'start'"
         );
     }
 
