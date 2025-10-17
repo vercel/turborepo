@@ -88,8 +88,6 @@ jobs:
             runner: ubuntu-latest
           - name: macos
             runner: macos-13
-          - name: windows
-            runner: windows-latest
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
