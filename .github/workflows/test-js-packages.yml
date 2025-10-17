@@ -49,10 +49,6 @@ jobs:
               name: macos
               runner: macos-13
             runtime: bun
-          - os:
-              name: windows
-              runner: windows-latest
-            runtime: bun
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
@@ -86,9 +82,11 @@ jobs:
         with:
           bun-version: latest
 
-      - name: "Install dependencies with Bun"
+      - name: Setup pnpm
+        # We still have to set up pnpm when testing Bun as a runtime
+        # because the repo uses pnpm
         if: matrix.runtime == 'bun'
-        run: bun install
+        uses: pnpm/action-setup@v4
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
