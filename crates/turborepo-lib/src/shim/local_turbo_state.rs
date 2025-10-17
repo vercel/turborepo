@@ -59,10 +59,57 @@ impl LocalTurboState {
         // leading to the wrong place. We could separate the Windows
         // implementation, but this workaround works for other platforms as
         // well.
-        let canonical_path =
-            fs_canonicalize(root_path.as_path().join("node_modules").join("turbo")).ok()?;
+        let turbo_path = root_path.as_path().join("node_modules").join("turbo");
+        debug!(
+            "generate_linked_path: Attempting to canonicalize: {}",
+            turbo_path.display()
+        );
 
-        AbsoluteSystemPathBuf::try_from(canonical_path.parent()?).ok()
+        match fs_canonicalize(&turbo_path) {
+            Ok(canonical_path) => {
+                debug!(
+                    "generate_linked_path: Canonicalized to: {}",
+                    canonical_path.display()
+                );
+                match canonical_path.parent() {
+                    Some(parent) => {
+                        debug!(
+                            "generate_linked_path: Parent directory: {}",
+                            parent.display()
+                        );
+                        match AbsoluteSystemPathBuf::try_from(parent) {
+                            Ok(path) => {
+                                debug!(
+                                    "generate_linked_path: Successfully created \
+                                     AbsoluteSystemPathBuf"
+                                );
+                                Some(path)
+                            }
+                            Err(e) => {
+                                debug!(
+                                    "generate_linked_path: Failed to create \
+                                     AbsoluteSystemPathBuf: {:?}",
+                                    e
+                                );
+                                None
+                            }
+                        }
+                    }
+                    None => {
+                        debug!("generate_linked_path: Canonicalized path has no parent");
+                        None
+                    }
+                }
+            }
+            Err(e) => {
+                debug!(
+                    "generate_linked_path: Failed to canonicalize {}: {}",
+                    turbo_path.display(),
+                    e
+                );
+                None
+            }
+        }
     }
 
     // The unplugged directory doesn't have a fixed path.
