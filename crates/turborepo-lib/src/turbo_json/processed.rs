@@ -112,7 +112,24 @@ impl ProcessedGlob {
 
         let glob = &self.glob;
         if self.turbo_root {
-            format!("{prefix}{turbo_root_path}/{glob}")
+            // Compute relative path from turbo_root_path back to root
+            // For "packages/web", we need "../.."
+            // For "", we need "."
+            let path_back_to_root = if turbo_root_path.as_str().is_empty() {
+                String::new()
+            } else {
+                let depth = turbo_root_path.as_str().split('/').count();
+                std::iter::repeat("..")
+                    .take(depth)
+                    .collect::<Vec<_>>()
+                    .join("/")
+            };
+
+            if path_back_to_root.is_empty() {
+                format!("{prefix}{glob}")
+            } else {
+                format!("{prefix}{path_back_to_root}/{glob}")
+            }
         } else {
             format!("{prefix}{glob}")
         }
@@ -288,6 +305,32 @@ impl ProcessedOutputs {
     }
 
     /// Resolves all globs with the given turbo_root path
+    pub fn resolve(&self, turbo_root_path: &RelativeUnixPath) -> Vec<String> {
+        self.globs
+            .iter()
+            .map(|glob| glob.resolve(turbo_root_path))
+            .collect()
+    }
+}
+
+/// Processed prune includes configuration
+#[derive(Debug, Clone, PartialEq)]
+pub struct ProcessedPruneIncludes {
+    pub globs: Vec<ProcessedGlob>,
+}
+
+impl ProcessedPruneIncludes {
+    /// Create ProcessedPruneIncludes from raw glob patterns
+    pub fn new(raw_globs: Vec<Spanned<UnescapedString>>) -> Result<Self, Error> {
+        let mut globs = Vec::with_capacity(raw_globs.len());
+        for raw_glob in raw_globs {
+            // Use from_spanned_input to get negation and $TURBO_ROOT$/ support
+            globs.push(ProcessedGlob::from_spanned_input(raw_glob)?);
+        }
+        Ok(ProcessedPruneIncludes { globs })
+    }
+
+    /// Resolve all globs with turbo root path
     pub fn resolve(&self, turbo_root_path: &RelativeUnixPath) -> Vec<String> {
         self.globs
             .iter()
@@ -644,5 +687,111 @@ mod tests {
         );
         assert!(result.is_err());
         assert_matches!(result, Err(Error::InvalidDependsOnValue { .. }));
+    }
+
+    #[test]
+    fn test_prune_includes_basic() {
+        let raw_globs = vec![
+            Spanned::new(UnescapedString::from("README.md")),
+            Spanned::new(UnescapedString::from("docs/**")),
+        ];
+
+        let prune_includes = ProcessedPruneIncludes::new(raw_globs).unwrap();
+        assert_eq!(prune_includes.globs.len(), 2);
+
+        let resolved = prune_includes.resolve(RelativeUnixPath::new("").unwrap());
+        assert_eq!(resolved.len(), 2);
+        assert!(resolved.contains(&"README.md".to_string()));
+        assert!(resolved.contains(&"docs/**".to_string()));
+    }
+
+    #[test]
+    fn test_prune_includes_negation() {
+        let raw_globs = vec![
+            Spanned::new(UnescapedString::from("docs/**")),
+            Spanned::new(UnescapedString::from("!docs/secret.md")),
+        ];
+
+        let prune_includes = ProcessedPruneIncludes::new(raw_globs).unwrap();
+        assert_eq!(prune_includes.globs.len(), 2);
+
+        let resolved = prune_includes.resolve(RelativeUnixPath::new("").unwrap());
+        assert_eq!(resolved.len(), 2);
+        assert!(resolved.contains(&"docs/**".to_string()));
+        assert!(resolved.contains(&"!docs/secret.md".to_string()));
+    }
+
+    #[test]
+    fn test_prune_includes_turbo_root() {
+        let raw_globs = vec![Spanned::new(UnescapedString::from(
+            "$TURBO_ROOT$/config.json",
+        ))];
+
+        let prune_includes = ProcessedPruneIncludes::new(raw_globs).unwrap();
+        assert_eq!(prune_includes.globs.len(), 1);
+        assert!(prune_includes.globs[0].turbo_root);
+
+        let resolved = prune_includes.resolve(RelativeUnixPath::new("packages/web").unwrap());
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved[0].starts_with("../../"));
+        assert!(resolved[0].contains("config.json"));
+    }
+
+    #[test]
+    fn test_prune_includes_empty() {
+        let raw_globs = vec![];
+
+        let prune_includes = ProcessedPruneIncludes::new(raw_globs).unwrap();
+        assert_eq!(prune_includes.globs.len(), 0);
+
+        let resolved = prune_includes.resolve(RelativeUnixPath::new("").unwrap());
+        assert_eq!(resolved.len(), 0);
+    }
+
+    #[test]
+    fn test_prune_includes_multiple_patterns() {
+        let raw_globs = vec![
+            Spanned::new(UnescapedString::from("*.md")),
+            Spanned::new(UnescapedString::from("LICENSE")),
+            Spanned::new(UnescapedString::from("config/**")),
+            Spanned::new(UnescapedString::from("!config/local.json")),
+        ];
+
+        let prune_includes = ProcessedPruneIncludes::new(raw_globs).unwrap();
+        assert_eq!(prune_includes.globs.len(), 4);
+
+        // Check that negated glob is properly detected
+        assert!(!prune_includes.globs[0].negated);
+        assert!(!prune_includes.globs[1].negated);
+        assert!(!prune_includes.globs[2].negated);
+        assert!(prune_includes.globs[3].negated);
+
+        let resolved = prune_includes.resolve(RelativeUnixPath::new("").unwrap());
+        assert_eq!(resolved.len(), 4);
+        assert!(resolved.contains(&"*.md".to_string()));
+        assert!(resolved.contains(&"LICENSE".to_string()));
+        assert!(resolved.contains(&"config/**".to_string()));
+        assert!(resolved.contains(&"!config/local.json".to_string()));
+    }
+
+    #[test]
+    fn test_prune_includes_workspace_relative_with_prefix() {
+        // Simulates workspace-level includes that have been prefixed with workspace
+        // path This is what happens in collect_prune_includes for workspace
+        // configs
+        let raw_globs = vec![
+            Spanned::new(UnescapedString::from("apps/web/README.md")),
+            Spanned::new(UnescapedString::from("apps/web/docs/**")),
+            Spanned::new(UnescapedString::from("!apps/web/docs/secret.md")),
+        ];
+
+        let prune_includes = ProcessedPruneIncludes::new(raw_globs).unwrap();
+        assert_eq!(prune_includes.globs.len(), 3);
+
+        let resolved = prune_includes.resolve(RelativeUnixPath::new("").unwrap());
+        assert_eq!(resolved.len(), 3);
+        assert!(resolved.contains(&"apps/web/README.md".to_string()));
+        assert!(resolved.contains(&"apps/web/docs/**".to_string()));
+        assert!(resolved.contains(&"!apps/web/docs/secret.md".to_string()));
     }
 }

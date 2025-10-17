@@ -2,7 +2,7 @@
 
 use super::processed::{
     ProcessedDependsOn, ProcessedEnv, ProcessedInputs, ProcessedOutputs, ProcessedPassThroughEnv,
-    ProcessedTaskDefinition, ProcessedWith,
+    ProcessedPruneIncludes, ProcessedTaskDefinition, ProcessedWith,
 };
 
 /// Trait for types that can be merged with extends behavior
@@ -84,6 +84,14 @@ impl Extendable for ProcessedInputs {
     }
 }
 
+impl Extendable for ProcessedPruneIncludes {
+    fn extend(&mut self, other: Self) {
+        // Always extend (combine) prune includes, never replace
+        // This is different from other fields - we always want the union of patterns
+        self.globs.extend(other.globs);
+    }
+}
+
 impl FromIterator<ProcessedTaskDefinition> for ProcessedTaskDefinition {
     fn from_iter<T: IntoIterator<Item = ProcessedTaskDefinition>>(iter: T) -> Self {
         iter.into_iter()
@@ -158,8 +166,8 @@ mod test {
     use crate::{
         cli::OutputLogsMode,
         turbo_json::{
-            processed::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
             FutureFlags,
+            processed::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
         },
     };
 
