@@ -28,8 +28,6 @@ mod schema;
 
 use std::io;
 
-use biome_deserialize_macros::Deserializable;
-use biome_json_parser::JsonParserOptions;
 use configv1::ConfigV1;
 pub use configv1::PathGroup;
 pub use error::Error;
@@ -316,36 +314,12 @@ impl Config {
     }
 
     pub fn from_str(input: &str, source: &str) -> Result<Self, Error> {
-        #[derive(Deserializable, Default)]
-        struct VersionOnly {
-            version: Option<String>,
-        }
-        let (version_only, _errs) = biome_deserialize::json::deserialize_from_json_str(
-            input,
-            JsonParserOptions::default().with_allow_comments(),
-            source,
-        )
-        .consume();
-
-        // If version extraction had errors, we should still try to parse the full
-        // config, but we won't let those errors be silently ignored in the full
-        // parse below.
-        let version = match version_only {
-            Some(VersionOnly {
-                version: Some(version),
-            }) => version,
-            // Default to version 1 if no version found
-            Some(VersionOnly { version: None }) | None => "1".to_string(),
-        };
-
-        let inner = match version.as_str() {
-            "1" | _ => ConfigV1::from_str(input, source).and_then(|result| match result {
-                configv1::ParseResult::Actual(config_v1) => Ok(ConfigInner::V1(config_v1)),
-                configv1::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
-                    reference: default_app,
-                }),
+        let inner = ConfigV1::from_str(input, source).and_then(|result| match result {
+            configv1::ParseResult::Actual(config_v1) => Ok(ConfigInner::V1(config_v1)),
+            configv1::ParseResult::Reference(default_app) => Err(Error::ChildConfig {
+                reference: default_app,
             }),
-        }?;
+        })?;
         Ok(Self {
             inner,
             filename: source.to_owned(),
