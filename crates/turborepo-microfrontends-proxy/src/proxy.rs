@@ -169,12 +169,11 @@ fn create_generic_error_response(error: ProxyError) -> Response<BoxedBody> {
             The Turborepo microfrontends proxy encountered an error while processing your request.
         </p>
         <div class="error-message">
-            <code>{}</code>
+            <code>{error}</code>
         </div>
     </div>
 </body>
-</html>"#,
-        error
+</html>"#
     );
 
     Response::builder()

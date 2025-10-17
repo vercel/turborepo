@@ -44,13 +44,10 @@ pub(crate) async fn handle_websocket_request(
     ws_ctx: WebSocketContext,
     http_client: HttpClient,
 ) -> Result<Response<BoxedBody>, ProxyError> {
-    let app_name = route_match.app_name.clone();
-    let port = route_match.port;
-    let fallback = route_match.fallback.clone();
     let result = forward_websocket(
         req,
-        app_name.clone(),
-        port,
+        route_match.app_name.clone(),
+        route_match.port,
         remote_addr,
         req_upgrade,
         ws_ctx,
@@ -61,9 +58,7 @@ pub(crate) async fn handle_websocket_request(
     handle_forward_result(
         result,
         path,
-        app_name,
-        port,
-        fallback,
+        route_match,
         remote_addr,
         http_client,
         "WebSocket",

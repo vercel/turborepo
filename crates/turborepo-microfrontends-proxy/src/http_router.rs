@@ -194,16 +194,16 @@ impl TrieNode {
             return self.terminal_match.or(self.wildcard_match);
         }
 
-        if let Some(child) = self.exact_children.get(segments[0]) {
-            if let Some(app_idx) = child.lookup(&segments[1..]) {
-                return Some(app_idx);
-            }
+        if let Some(child) = self.exact_children.get(segments[0])
+            && let Some(app_idx) = child.lookup(&segments[1..])
+        {
+            return Some(app_idx);
         }
 
-        if let Some(child) = &self.param_child {
-            if let Some(app_idx) = child.lookup(&segments[1..]) {
-                return Some(app_idx);
-            }
+        if let Some(child) = &self.param_child
+            && let Some(app_idx) = child.lookup(&segments[1..])
+        {
+            return Some(app_idx);
         }
 
         if let Some(app_idx) = self.wildcard_match {

@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use itertools::Itertools;
 use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
-use turborepo_microfrontends::{Error, TurborepoMfeConfig as MfeConfig, MICROFRONTENDS_PACKAGE};
+use turborepo_microfrontends::{Error, MICROFRONTENDS_PACKAGE, TurborepoMfeConfig as MfeConfig};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_id::{TaskId, TaskName};
 
@@ -296,9 +296,7 @@ impl MicrofrontendsConfigs {
             dev_task.or(proxy_owner)
         });
         // We invert the standard comparing order so higher versions are prioritized
-        let result = results.sorted_by(|a, b| b.version.cmp(a.version)).next();
-
-        result
+        results.sorted_by(|a, b| b.version.cmp(a.version)).next()
     }
 
     // Returns a list of repo relative paths to all MFE configurations

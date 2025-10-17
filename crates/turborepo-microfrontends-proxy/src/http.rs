@@ -32,17 +32,7 @@ pub(crate) async fn handle_http_request(
     )
     .await;
 
-    handle_forward_result(
-        result,
-        path,
-        route_match.app_name,
-        route_match.port,
-        route_match.fallback,
-        remote_addr,
-        http_client,
-        "HTTP",
-    )
-    .await
+    handle_forward_result(result, path, route_match, remote_addr, http_client, "HTTP").await
 }
 
 pub(crate) async fn forward_request(
@@ -60,7 +50,7 @@ pub(crate) async fn forward_request(
         );
         Box::new(std::io::Error::new(
             std::io::ErrorKind::PermissionDenied,
-            format!("Port validation failed: {}", e),
+            format!("Port validation failed: {e}"),
         )) as Box<dyn std::error::Error + Send + Sync>
     })?;
 
@@ -94,9 +84,7 @@ pub(crate) async fn forward_request(
 pub(crate) async fn handle_forward_result(
     result: Result<Response<Incoming>, Box<dyn std::error::Error + Send + Sync>>,
     path: String,
-    app_name: impl AsRef<str>,
-    port: u16,
-    fallback: Option<std::sync::Arc<str>>,
+    route_match: RouteMatch,
     remote_addr: SocketAddr,
     http_client: HttpClient,
     request_type: &str,
@@ -106,27 +94,27 @@ pub(crate) async fn handle_forward_result(
             debug!(
                 "Forwarding {} response from {} with status {} to client {}",
                 request_type,
-                app_name.as_ref(),
+                route_match.app_name,
                 response.status(),
                 remote_addr.ip()
             );
-            convert_response_to_boxed_body(response, app_name.as_ref())
+            convert_response_to_boxed_body(response, &route_match.app_name)
         }
         Err(e) => {
             debug!(
                 "Failed to {} forward request to {}: {}",
                 request_type.to_lowercase(),
-                app_name.as_ref(),
+                route_match.app_name,
                 e
             );
 
-            if let Some(fallback_url) = fallback {
+            if let Some(fallback_url) = &route_match.fallback {
                 match try_fallback(
                     &path,
-                    &fallback_url,
+                    fallback_url,
                     remote_addr,
                     http_client,
-                    app_name.as_ref(),
+                    &route_match.app_name,
                 )
                 .await
                 {
@@ -134,15 +122,13 @@ pub(crate) async fn handle_forward_result(
                     Err(fallback_error) => {
                         warn!(
                             "Fallback URL {} also failed for {}: {}",
-                            fallback_url,
-                            app_name.as_ref(),
-                            fallback_error
+                            fallback_url, route_match.app_name, fallback_error
                         );
                     }
                 }
             }
 
-            build_error_response(path, app_name.as_ref(), port)
+            build_error_response(path, &route_match.app_name, route_match.port)
         }
     }
 }
@@ -231,12 +217,11 @@ fn normalize_fallback_url(
     let base = if fallback_base.starts_with("http://") || fallback_base.starts_with("https://") {
         fallback_base.to_string()
     } else {
-        format!("https://{}", fallback_base)
+        format!("https://{fallback_base}")
     };
 
     // Parse the base URL - this validates it's well-formed
-    let base_url =
-        url::Url::parse(&base).map_err(|e| format!("Invalid fallback base URL: {}", e))?;
+    let base_url = url::Url::parse(&base).map_err(|e| format!("Invalid fallback base URL: {e}"))?;
 
     // Store the original host for validation
     let original_host = base_url
@@ -250,7 +235,7 @@ fn normalize_fallback_url(
     // This automatically normalizes .. segments and prevents directory traversal
     let final_url = base_url
         .join(normalized_path)
-        .map_err(|e| format!("Invalid path for fallback URL: {}", e))?;
+        .map_err(|e| format!("Invalid path for fallback URL: {e}"))?;
 
     // Security check: verify the host hasn't changed
     // This prevents attacks using absolute URLs or protocol-relative URLs in the
