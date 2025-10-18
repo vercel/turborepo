@@ -258,7 +258,7 @@ describe("create-turbo", () => {
       telemetry,
     });
 
-    expect(mockConsole.error).toHaveBeenCalledTimes(2);
+    expect(mockConsole.error).toHaveBeenCalledTimes(3);
     expect(mockConsole.error).toHaveBeenNthCalledWith(
       1,
       logger.turboRed(picocolors.bold(">>>")),
