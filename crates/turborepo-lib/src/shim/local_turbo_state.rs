@@ -178,6 +178,8 @@ impl LocalTurboState {
                         PackageJson::load(&resolved_package_json_path).ok()?;
                     let local_version = platform_package_json.version?;
 
+                    debug!("Local turbo path: {}", bin_path.display());
+                    debug!("Local turbo version: {}", &local_version);
                     return Some(Self {
                         bin_path,
                         version: local_version,
