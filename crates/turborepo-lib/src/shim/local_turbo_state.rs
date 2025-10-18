@@ -60,65 +60,19 @@ impl LocalTurboState {
         // implementation, but this workaround works for other platforms as
         // well.
         let turbo_path = root_path.as_path().join("node_modules").join("turbo");
-        debug!(
-            "generate_linked_path: Attempting to canonicalize: {}",
-            turbo_path
-        );
 
         match fs_canonicalize(&turbo_path) {
-            Ok(canonical_path) => {
-                debug!(
-                    "generate_linked_path: Canonicalized to: {}",
-                    canonical_path.display()
-                );
-                match canonical_path.parent() {
-                    Some(parent) => {
-                        debug!(
-                            "generate_linked_path: Parent directory: {}",
-                            parent.display()
-                        );
-                        match AbsoluteSystemPathBuf::try_from(parent) {
-                            Ok(path) => {
-                                debug!(
-                                    "generate_linked_path: Successfully created \
-                                     AbsoluteSystemPathBuf"
-                                );
-                                Some(path)
-                            }
-                            Err(e) => {
-                                debug!(
-                                    "generate_linked_path: Failed to create \
-                                     AbsoluteSystemPathBuf: {:?}",
-                                    e
-                                );
-                                None
-                            }
-                        }
-                    }
-                    None => {
-                        debug!("generate_linked_path: Canonicalized path has no parent");
-                        None
-                    }
-                }
-            }
-            Err(e) => {
-                debug!(
-                    "generate_linked_path: Failed to canonicalize {}: {}",
-                    turbo_path, e
-                );
-
+            Ok(canonical_path) => match canonical_path.parent() {
+                Some(parent) => AbsoluteSystemPathBuf::try_from(parent).ok(),
+                None => None,
+            },
+            Err(_) => {
                 // On Windows, canonicalize can fail with permission errors even when
                 // the symlink is valid. Try using read_link instead.
                 #[cfg(target_os = "windows")]
                 {
-                    debug!("generate_linked_path: Attempting Windows fallback with read_link");
                     match fs::read_link(turbo_path.as_std_path()) {
                         Ok(link_target) => {
-                            debug!(
-                                "generate_linked_path: read_link succeeded, target: {}",
-                                link_target.display()
-                            );
-
                             // The link target is relative to the symlink location
                             // e.g., ".pnpm/turbo@1.0.0/node_modules/turbo"
                             // We need to resolve it relative to node_modules directory
@@ -126,46 +80,12 @@ impl LocalTurboState {
                                 PathBuf::from(root_path.as_path().as_str()).join("node_modules");
                             let resolved = node_modules.join(&link_target);
 
-                            debug!(
-                                "generate_linked_path: Resolved path: {}",
-                                resolved.display()
-                            );
-
                             // Get the parent directory (should be .pnpm/turbo@1.0.0/node_modules)
-                            match resolved.parent() {
-                                Some(parent) => {
-                                    debug!(
-                                        "generate_linked_path: Parent directory: {}",
-                                        parent.display()
-                                    );
-                                    match AbsoluteSystemPathBuf::try_from(parent) {
-                                        Ok(path) => {
-                                            debug!(
-                                                "generate_linked_path: Successfully created \
-                                                 AbsoluteSystemPathBuf from read_link fallback"
-                                            );
-                                            Some(path)
-                                        }
-                                        Err(e) => {
-                                            debug!(
-                                                "generate_linked_path: Failed to create \
-                                                 AbsoluteSystemPathBuf: {:?}",
-                                                e
-                                            );
-                                            None
-                                        }
-                                    }
-                                }
-                                None => {
-                                    debug!("generate_linked_path: Resolved path has no parent");
-                                    None
-                                }
-                            }
+                            resolved
+                                .parent()
+                                .and_then(|parent| AbsoluteSystemPathBuf::try_from(parent).ok())
                         }
-                        Err(e) => {
-                            debug!("generate_linked_path: read_link also failed: {}", e);
-                            None
-                        }
+                        Err(_) => None,
                     }
                 }
 
@@ -229,11 +149,6 @@ impl LocalTurboState {
         let platform_package_name = TurboState::platform_package_name();
         let binary_name = TurboState::binary_name();
 
-        debug!(
-            "Searching for local turbo. Platform: {}, Binary: {}",
-            platform_package_name, binary_name
-        );
-
         let platform_package_json_path_components = [platform_package_name, "package.json"];
         let platform_package_executable_path_components =
             [platform_package_name, "bin", binary_name];
@@ -248,20 +163,13 @@ impl LocalTurboState {
 
         // Detecting the package manager is more expensive than just doing an exhaustive
         // search.
-        for (idx, root) in search_functions
+        for root in search_functions
             .iter()
             .filter_map(|search_function| search_function(root_path))
-            .enumerate()
         {
-            debug!("Trying search path #{}: {}", idx + 1, root);
             // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
             let bin_path = root.join_components(&platform_package_executable_path_components);
-            debug!("Looking for binary at: {}", bin_path);
-
-            let exists = bin_path.exists();
-            debug!("Binary exists: {}", exists);
-
             match fs_canonicalize(&bin_path) {
                 Ok(bin_path) => {
                     let resolved_package_json_path =
@@ -270,21 +178,15 @@ impl LocalTurboState {
                         PackageJson::load(&resolved_package_json_path).ok()?;
                     let local_version = platform_package_json.version?;
 
-                    debug!("Local turbo path: {}", bin_path.display());
-                    debug!("Local turbo version: {}", &local_version);
                     return Some(Self {
                         bin_path,
                         version: local_version,
                     });
                 }
-                Err(e) => debug!(
-                    "No local turbo binary found at: {} (error: {})",
-                    bin_path, e
-                ),
+                Err(_) => debug!("No local turbo binary found at: {}", bin_path),
             }
         }
 
-        debug!("No local turbo found after searching all paths");
         None
     }
 
