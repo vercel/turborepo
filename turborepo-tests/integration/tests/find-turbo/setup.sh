@@ -17,9 +17,10 @@ if [[ "$OSTYPE" == "msys" ]]; then
     rm -rf node_modules/turbo
 
     # Let's enter the node_modules directory
+    # echo "entering node_modules directory"
     pushd node_modules > /dev/null || exit 1
 
-    # Use pnpx to run symlink-dir because installing globally doesn't work with pnpm.
+    # Use pnpx to run symlnk-dir because installing globally doesn't work with pnpm.
     pnpx symlink-dir .pnpm/turbo@1.0.0/node_modules/turbo turbo > /dev/null 2>&1
 
     # Get outta there
