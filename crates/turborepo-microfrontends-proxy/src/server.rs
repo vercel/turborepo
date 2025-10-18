@@ -181,7 +181,7 @@ impl ProxyServer {
                             }
                             Err(err) => {
                                 if err.is_incomplete_message() {
-                                    error!(
+                                    debug!(
                                         "IncompleteMessage error on connection from {}: {:?}. \
                                         This may indicate the client closed the connection before receiving the full response.",
                                         remote_addr, err
