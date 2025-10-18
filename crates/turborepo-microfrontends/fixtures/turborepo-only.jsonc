@@ -1,0 +1,54 @@
+{
+  // Turborepo-only minimal schema
+  // Only includes fields that Turborepo's native proxy uses
+  "version": "1",
+
+  "options": {
+    "localProxyPort": 3024
+  },
+
+  "applications": {
+    "main-site": {
+      "packageName": "web",
+      "development": {
+        "local": 3331,
+        "fallback": "https://main-preview.vercel.app"
+      }
+    },
+
+    "marketing": {
+      "packageName": "marketing-site",
+      "routing": [
+        {
+          "group": "blog",
+          "paths": [
+            "/blog",
+            "/blog/:slug*",
+            "/press",
+            "/changelog",
+            "/changelog/:slug*"
+          ]
+        },
+        {
+          "group": "marketing-pages",
+          "paths": ["/contact", "/pricing", "/enterprise"]
+        }
+      ],
+      "development": {
+        "local": 3332,
+        "fallback": "https://marketing-preview.vercel.app"
+      }
+    },
+
+    "docs": {
+      "routing": [
+        {
+          "paths": ["/docs", "/docs/:path*"]
+        }
+      ],
+      "development": {
+        "local": 3333
+      }
+    }
+  }
+}

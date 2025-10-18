@@ -2,11 +2,11 @@ use std::{
     collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 use chrono::Local;
-use tracing::{debug, warn};
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -21,7 +21,7 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 use turborepo_scm::SCM;
-use turborepo_signals::{SignalHandler, SignalSubscriber};
+use turborepo_signals::SignalHandler;
 use turborepo_task_id::TaskName;
 use turborepo_telemetry::events::{
     command::CommandEventBuilder,
@@ -33,7 +33,6 @@ use turborepo_ui::{ColorConfig, ColorSelector};
 #[cfg(feature = "daemon-package-discovery")]
 use {
     crate::run::package_discovery::DaemonPackageDiscovery,
-    std::time::Duration,
     turborepo_repository::discovery::{
         Error as DiscoveryError, FallbackPackageDiscovery, LocalPackageDiscoveryBuilder,
         PackageDiscoveryBuilder,
@@ -132,14 +131,6 @@ impl RunBuilder {
         self
     }
 
-    fn connect_process_manager(&self, signal_subscriber: SignalSubscriber) {
-        let manager = self.processes.clone();
-        tokio::spawn(async move {
-            let _guard = signal_subscriber.listen().await;
-            manager.stop().await;
-        });
-    }
-
     fn will_execute_tasks(&self) -> bool {
         self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
     }
@@ -215,9 +206,6 @@ impl RunBuilder {
             TurboState::platform_name(),
         );
         let start_at = Local::now();
-        if let Some(subscriber) = signal_handler.subscribe() {
-            self.connect_process_manager(subscriber);
-        }
 
         let scm = {
             let repo_root = self.repo_root.clone();
@@ -387,12 +375,12 @@ impl RunBuilder {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
         let micro_frontend_configs =
-            MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph)
-                .inspect_err(|err| {
-                    warn!("Ignoring invalid microfrontends configuration: {err}");
-                })
-                .ok()
-                .flatten();
+            match MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph) {
+                Ok(configs) => configs,
+                Err(err) => {
+                    return Err(Error::MicroFrontends(err));
+                }
+            };
 
         let scm = scm.await.expect("detecting scm panicked");
         let async_cache = AsyncCache::new(

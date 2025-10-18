@@ -865,8 +865,8 @@ mod test {
             vec![
                 (
                     "web",
-                    turborepo_microfrontends::Config::from_str(
-                        r#"{"version": "1", "applications": {"web": {}, "docs": {}}}"#,
+                    turborepo_microfrontends::TurborepoMfeConfig::from_str(
+                        r#"{"version": "1", "applications": {"web": {}, "docs": {"routing": [{"paths": ["/docs"]}]}}}"#,
                         "mfe.json",
                     )
                     .map(Some),
@@ -879,6 +879,11 @@ mod test {
                 ),
             ]
             .into_iter(),
+            {
+                let mut deps = std::collections::HashMap::new();
+                deps.insert("web", true);
+                deps
+            },
         )
         .unwrap();
 
