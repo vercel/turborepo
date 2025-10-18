@@ -112,7 +112,7 @@ impl LocalTurboState {
                 #[cfg(target_os = "windows")]
                 {
                     debug!("generate_linked_path: Attempting Windows fallback with read_link");
-                    match fs::read_link(&turbo_path) {
+                    match fs::read_link(turbo_path.as_std_path()) {
                         Ok(link_target) => {
                             debug!(
                                 "generate_linked_path: read_link succeeded, target: {}",
@@ -122,7 +122,8 @@ impl LocalTurboState {
                             // The link target is relative to the symlink location
                             // e.g., ".pnpm/turbo@1.0.0/node_modules/turbo"
                             // We need to resolve it relative to node_modules directory
-                            let node_modules = root_path.as_path().join("node_modules");
+                            let node_modules =
+                                PathBuf::from(root_path.as_path().as_str()).join("node_modules");
                             let resolved = node_modules.join(&link_target);
 
                             debug!(
