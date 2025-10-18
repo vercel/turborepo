@@ -33,6 +33,7 @@ pub(crate) struct WebSocketHandle {
 pub(crate) struct WebSocketContext {
     pub(crate) handles: Arc<DashMap<usize, WebSocketHandle>>,
     pub(crate) id_counter: Arc<AtomicUsize>,
+    pub(crate) connection_count: Arc<AtomicUsize>,
 }
 
 pub(crate) async fn handle_websocket_request(
@@ -94,6 +95,7 @@ async fn forward_websocket(
             server_upgrade,
             ws_ctx.handles,
             ws_ctx.id_counter,
+            ws_ctx.connection_count,
         )?;
     }
 
@@ -135,13 +137,32 @@ fn spawn_websocket_proxy(
     server_upgrade: hyper::upgrade::OnUpgrade,
     ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id_counter: Arc<AtomicUsize>,
+    connection_count: Arc<AtomicUsize>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    if ws_handles.len() >= MAX_WEBSOCKET_CONNECTIONS {
-        warn!(
-            "WebSocket connection limit reached ({} connections), rejecting new connection from {}",
-            MAX_WEBSOCKET_CONNECTIONS, remote_addr
-        );
-        return Err("WebSocket connection limit reached".into());
+    // Atomically check and increment the connection count to prevent TOCTOU race condition
+    let mut current_count = connection_count.load(Ordering::SeqCst);
+    loop {
+        if current_count >= MAX_WEBSOCKET_CONNECTIONS {
+            warn!(
+                "WebSocket connection limit reached ({} connections), rejecting new connection from {}",
+                MAX_WEBSOCKET_CONNECTIONS, remote_addr
+            );
+            return Err("WebSocket connection limit reached".into());
+        }
+
+        // Try to atomically increment from current_count to current_count + 1
+        match connection_count.compare_exchange(
+            current_count,
+            current_count + 1,
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        ) {
+            Ok(_) => break, // Successfully incremented
+            Err(actual_count) => {
+                // Another thread changed the count, retry with the actual count
+                current_count = actual_count;
+            }
+        }
     }
 
     let (ws_shutdown_tx, _) = broadcast::channel(WEBSOCKET_SHUTDOWN_CHANNEL_CAPACITY);
@@ -161,6 +182,7 @@ fn spawn_websocket_proxy(
             ws_shutdown_tx,
             ws_handles,
             ws_id,
+            connection_count,
         )
         .await;
     });
@@ -175,6 +197,7 @@ async fn handle_websocket_upgrades(
     ws_shutdown_tx: broadcast::Sender<()>,
     ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id: usize,
+    connection_count: Arc<AtomicUsize>,
 ) {
     let client_result = client_upgrade.await;
     let server_result = server_upgrade.await;
@@ -189,6 +212,7 @@ async fn handle_websocket_upgrades(
                 ws_shutdown_tx,
                 ws_handles.clone(),
                 ws_id,
+                connection_count.clone(),
             )
             .await
             {
@@ -198,10 +222,12 @@ async fn handle_websocket_upgrades(
         (Err(e), _) => {
             error!("Failed to upgrade client WebSocket connection: {}", e);
             ws_handles.remove(&ws_id);
+            connection_count.fetch_sub(1, Ordering::SeqCst);
         }
         (_, Err(e)) => {
             error!("Failed to upgrade server WebSocket connection: {}", e);
             ws_handles.remove(&ws_id);
+            connection_count.fetch_sub(1, Ordering::SeqCst);
         }
     }
 }
@@ -213,6 +239,7 @@ async fn proxy_websocket_connection(
     ws_shutdown_tx: broadcast::Sender<()>,
     ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id: usize,
+    connection_count: Arc<AtomicUsize>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use futures_util::StreamExt;
 
@@ -248,7 +275,7 @@ async fn proxy_websocket_connection(
         }
     }
 
-    cleanup_websocket_connection(&ws_handles, ws_id, &app_name);
+    cleanup_websocket_connection(&ws_handles, ws_id, &app_name, connection_count);
 
     Ok(())
 }
@@ -368,8 +395,10 @@ fn cleanup_websocket_connection(
     ws_handles: &Arc<DashMap<usize, WebSocketHandle>>,
     ws_id: usize,
     app_name: &str,
+    connection_count: Arc<AtomicUsize>,
 ) {
     ws_handles.remove(&ws_id);
+    connection_count.fetch_sub(1, Ordering::SeqCst);
     debug!(
         "WebSocket connection closed for {} (id: {})",
         app_name, ws_id

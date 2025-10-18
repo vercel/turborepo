@@ -53,6 +53,7 @@ pub struct ProxyServer {
     shutdown_tx: broadcast::Sender<()>,
     ws_handles: Arc<DashMap<usize, WebSocketHandle>>,
     ws_id_counter: Arc<AtomicUsize>,
+    ws_connection_count: Arc<AtomicUsize>,
     http_client: HttpClient,
     shutdown_complete_tx: Option<oneshot::Sender<()>>,
     connection_semaphore: Arc<Semaphore>,
@@ -79,6 +80,7 @@ impl ProxyServer {
             shutdown_tx,
             ws_handles: Arc::new(DashMap::new()),
             ws_id_counter: Arc::new(AtomicUsize::new(0)),
+            ws_connection_count: Arc::new(AtomicUsize::new(0)),
             http_client,
             shutdown_complete_tx: None,
             connection_semaphore: Arc::new(Semaphore::new(MAX_CONCURRENT_CONNECTIONS)),
@@ -147,6 +149,7 @@ impl ProxyServer {
                     let router = self.router.clone();
                     let ws_handles_clone = ws_handles.clone();
                     let ws_id_counter_clone = self.ws_id_counter.clone();
+                    let ws_connection_count_clone = self.ws_connection_count.clone();
                     let http_client = self.http_client.clone();
                     let semaphore = connection_semaphore.clone();
 
@@ -160,6 +163,7 @@ impl ProxyServer {
                             let ws_ctx = WebSocketContext {
                                 handles: ws_handles_clone.clone(),
                                 id_counter: ws_id_counter_clone.clone(),
+                                connection_count: ws_connection_count_clone.clone(),
                             };
                             let http_client = http_client.clone();
                             async move {
