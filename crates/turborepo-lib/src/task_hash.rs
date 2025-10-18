@@ -450,6 +450,8 @@ impl<'a> TaskHasher<'a> {
                     "LD_LIBRARY_PATH",
                     "DYLD_FALLBACK_LIBRARY_PATH",
                     "LIBPATH",
+                    "LD_PRELOAD",
+                    "DYLD_INSERT_LIBRARIES",
                     "COLORTERM",
                     "TERM",
                     "TERM_PROGRAM",
