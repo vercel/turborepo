@@ -259,8 +259,8 @@ impl PathPattern {
 
     #[cfg(test)]
     fn matches(&self, path: &str) -> bool {
-        let path = if path.starts_with('/') {
-            &path[1..]
+        let path = if let Some(stripped) = path.strip_prefix('/') {
+            stripped
         } else {
             path
         };

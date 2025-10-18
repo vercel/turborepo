@@ -206,10 +206,7 @@ async fn find_available_port_range(count: usize) -> Result<Vec<u16>, Box<dyn std
         if [3306, 5432, 6379].contains(&port) {
             continue;
         }
-        if TcpListener::bind(format!("127.0.0.1:{}", port))
-            .await
-            .is_ok()
-        {
+        if TcpListener::bind(format!("127.0.0.1:{port}")).await.is_ok() {
             available_ports.push(port);
             if available_ports.len() == count {
                 return Ok(available_ports);
@@ -263,25 +260,24 @@ async fn test_end_to_end_proxy() {
     let config_json = format!(
         r#"{{
         "options": {{
-            "localProxyPort": {}
+            "localProxyPort": {proxy_port}
         }},
         "applications": {{
             "web": {{
                 "development": {{
-                    "local": {{ "port": {} }}
+                    "local": {{ "port": {web_port} }}
                 }}
             }},
             "docs": {{
                 "development": {{
-                    "local": {{ "port": {} }}
+                    "local": {{ "port": {docs_port} }}
                 }},
                 "routing": [
                     {{ "paths": ["/docs", "/docs/:path*"] }}
                 ]
             }}
         }}
-    }}"#,
-        proxy_port, web_port, docs_port
+    }}"#
     );
 
     let config = Config::from_str(&config_json, "test.json").unwrap();
@@ -302,7 +298,7 @@ async fn test_end_to_end_proxy() {
         Client::builder(hyper_util::rt::TokioExecutor::new()).build(connector);
 
     let web_response = client
-        .get(format!("http://127.0.0.1:{}/", proxy_port).parse().unwrap())
+        .get(format!("http://127.0.0.1:{proxy_port}/").parse().unwrap())
         .await
         .unwrap();
     let web_body = web_response.into_body().collect().await.unwrap().to_bytes();
@@ -310,7 +306,7 @@ async fn test_end_to_end_proxy() {
 
     let docs_response = client
         .get(
-            format!("http://127.0.0.1:{}/docs", proxy_port)
+            format!("http://127.0.0.1:{proxy_port}/docs")
                 .parse()
                 .unwrap(),
         )
@@ -326,7 +322,7 @@ async fn test_end_to_end_proxy() {
 
     let docs_subpath_response = client
         .get(
-            format!("http://127.0.0.1:{}/docs/api/reference", proxy_port)
+            format!("http://127.0.0.1:{proxy_port}/docs/api/reference")
                 .parse()
                 .unwrap(),
         )

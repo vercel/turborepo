@@ -234,7 +234,7 @@ mod tests {
         let config_json = format!(
             r#"{{
             "options": {{
-                "localProxyPort": {}
+                "localProxyPort": {DEFAULT_PROXY_PORT}
             }},
             "applications": {{
                 "web": {{
@@ -251,8 +251,7 @@ mod tests {
                     ]
                 }}
             }}
-        }}"#,
-            DEFAULT_PROXY_PORT
+        }}"#
         );
         Config::from_str(&config_json, "test.json").unwrap()
     }

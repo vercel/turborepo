@@ -384,15 +384,14 @@ mod tests {
 
         for (base, path) in test_cases {
             let result = normalize_fallback_url(base, path);
-            assert!(result.is_ok(), "Failed for base={}, path={}", base, path);
+            assert!(result.is_ok(), "Failed for base={base}, path={path}");
             let url = result.unwrap();
             assert!(
                 url.contains("example.com"),
-                "URL {} doesn't contain example.com",
-                url
+                "URL {url} doesn't contain example.com"
             );
             // Ensure no .. remains in the final URL
-            assert!(!url.contains(".."), "URL {} still contains ..", url);
+            assert!(!url.contains(".."), "URL {url} still contains ..");
         }
     }
 }

@@ -211,8 +211,8 @@ mod test {
         }
     }"#;
         let config = TurborepoConfig::from_str(input, "somewhere").unwrap();
-        assert!(config.applications.get("web").is_some());
-        assert!(config.applications.get("docs").is_some());
+        assert!(config.applications.contains_key("web"));
+        assert!(config.applications.contains_key("docs"));
     }
 
     #[test]

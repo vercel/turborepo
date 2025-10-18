@@ -522,7 +522,7 @@ mod test {
                 // Should fall back to generated port
                 assert!(config_v1.port("web").is_some());
                 let port = config_v1.port("web").unwrap();
-                assert!(port >= MIN_PORT && port < MAX_PORT);
+                assert!((MIN_PORT..MAX_PORT).contains(&port));
             }
             ParseResult::Reference(_) => panic!("expected to get main config"),
         }

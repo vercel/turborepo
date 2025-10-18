@@ -626,7 +626,7 @@ mod test {
         assert!(result.is_err(), "Path traversal should be rejected");
         if let Err(Error::PathTraversal(_)) = result {
         } else {
-            panic!("Expected PathTraversal error, got: {:?}", result);
+            panic!("Expected PathTraversal error, got: {result:?}");
         }
     }
 

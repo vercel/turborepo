@@ -814,7 +814,7 @@ mod test {
             has_mfe_dependency: false,
         };
 
-        let task_ids = vec![TaskId::new("web", "dev"), TaskId::new("docs", "build")];
+        let task_ids = [TaskId::new("web", "dev"), TaskId::new("docs", "build")];
 
         assert!(configs.has_dev_task(task_ids.iter()));
     }
@@ -827,7 +827,7 @@ mod test {
             has_mfe_dependency: false,
         };
 
-        let task_ids = vec![TaskId::new("web", "build"), TaskId::new("docs", "lint")];
+        let task_ids = [TaskId::new("web", "build"), TaskId::new("docs", "lint")];
 
         assert!(!configs.has_dev_task(task_ids.iter()));
     }
@@ -840,7 +840,7 @@ mod test {
             has_mfe_dependency: false,
         };
 
-        let task_ids = vec![TaskId::new("web", "dev")];
+        let task_ids = [TaskId::new("web", "dev")];
 
         assert!(configs.has_dev_task(task_ids.iter()));
     }
