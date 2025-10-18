@@ -66,6 +66,7 @@ pub struct RunBuilder {
     // We will then prune away any tasks that do not depend on tasks inside
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
+    tasks_to_run: Option<HashSet<(PackageName, String)>>,
     should_print_prelude_override: Option<bool>,
     // In query, we don't want to validate the engine. Defaults to `true`
     should_validate_engine: bool,
@@ -106,10 +107,16 @@ impl RunBuilder {
             api_auth,
             analytics_sender: None,
             entrypoint_packages: None,
+            tasks_to_run: None,
             should_print_prelude_override: None,
             should_validate_engine: true,
             add_all_tasks: false,
         })
+    }
+
+    pub fn with_tasks_to_run(mut self, tasks_to_run: HashSet<(PackageName, String)>) -> Self {
+        self.tasks_to_run = Some(tasks_to_run);
+        self
     }
 
     pub fn with_entrypoint_packages(mut self, entrypoint_packages: HashSet<PackageName>) -> Self {
@@ -558,6 +565,10 @@ impl RunBuilder {
         // tasks that are reachable from that initial task.
         if let Some(entrypoint_packages) = &self.entrypoint_packages {
             engine = engine.create_engine_for_subgraph(entrypoint_packages);
+        }
+
+        if let Some(tasks_to_run) = &self.tasks_to_run {
+            engine = engine.filter_tasks(tasks_to_run);
         }
 
         if !self.opts.run_opts.parallel && self.should_validate_engine {
