@@ -41,6 +41,14 @@ pub struct RawRemoteCacheOptions {
     pub upload_timeout: Option<Spanned<u64>>,
 }
 
+// Prune configuration
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawPruneConfig {
+    #[serde(rename = "includes", skip_serializing_if = "Option::is_none")]
+    pub(crate) includes: Option<Vec<Spanned<UnescapedString>>>,
+}
+
 // Root turbo.json
 #[derive(Default, Debug, Clone, Iterable, Deserializable)]
 pub struct RawRootTurboJson {
@@ -54,6 +62,8 @@ pub struct RawRootTurboJson {
     pub(crate) global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
     pub(crate) global_env: Option<Vec<Spanned<UnescapedString>>>,
     pub(crate) global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
+    // Prune configuration
+    pub(crate) prune: Option<RawPruneConfig>,
     // Tasks is a map of task entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     pub(crate) tasks: Option<Pipeline>,
@@ -87,6 +97,7 @@ pub struct RawPackageTurboJson {
     pub(crate) pipeline: Option<Spanned<Pipeline>>,
     pub(crate) tags: Option<Spanned<Vec<Spanned<String>>>>,
     pub(crate) boundaries: Option<Spanned<BoundariesConfig>>,
+    pub(crate) prune: Option<RawPruneConfig>,
     #[deserializable(rename = "//")]
     pub(crate) _comment: Option<String>,
 }
@@ -110,6 +121,9 @@ pub struct RawTurboJson {
     pub(crate) global_env: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
+    // Prune configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) prune: Option<RawPruneConfig>,
     // Tasks is a map of task entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -189,6 +203,7 @@ impl From<RawRootTurboJson> for RawTurboJson {
             global_dependencies: root.global_dependencies,
             global_env: root.global_env,
             global_pass_through_env: root.global_pass_through_env,
+            prune: root.prune,
             tasks: root.tasks,
             pipeline: root.pipeline,
             remote_cache: root.remote_cache,
@@ -218,6 +233,7 @@ impl From<RawPackageTurboJson> for RawTurboJson {
             pipeline: pkg.pipeline,
             boundaries: pkg.boundaries,
             tags: pkg.tags,
+            prune: pkg.prune,
             _comment: pkg._comment,
             ..Default::default()
         }
