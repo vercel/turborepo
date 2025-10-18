@@ -59,10 +59,42 @@ impl LocalTurboState {
         // leading to the wrong place. We could separate the Windows
         // implementation, but this workaround works for other platforms as
         // well.
-        let canonical_path =
-            fs_canonicalize(root_path.as_path().join("node_modules").join("turbo")).ok()?;
+        let turbo_path = root_path.as_path().join("node_modules").join("turbo");
 
-        AbsoluteSystemPathBuf::try_from(canonical_path.parent()?).ok()
+        match fs_canonicalize(&turbo_path) {
+            Ok(canonical_path) => match canonical_path.parent() {
+                Some(parent) => AbsoluteSystemPathBuf::try_from(parent).ok(),
+                None => None,
+            },
+            Err(_) => {
+                // On Windows, canonicalize can fail with permission errors even when
+                // the symlink is valid. Try using read_link instead.
+                #[cfg(target_os = "windows")]
+                {
+                    match fs::read_link(turbo_path.as_std_path()) {
+                        Ok(link_target) => {
+                            // The link target is relative to the symlink location
+                            // e.g., ".pnpm/turbo@1.0.0/node_modules/turbo"
+                            // We need to resolve it relative to node_modules directory
+                            let node_modules =
+                                PathBuf::from(root_path.as_path().as_str()).join("node_modules");
+                            let resolved = node_modules.join(&link_target);
+
+                            // Get the parent directory (should be .pnpm/turbo@1.0.0/node_modules)
+                            resolved
+                                .parent()
+                                .and_then(|parent| AbsoluteSystemPathBuf::try_from(parent).ok())
+                        }
+                        Err(_) => None,
+                    }
+                }
+
+                #[cfg(not(target_os = "windows"))]
+                {
+                    None
+                }
+            }
+        }
     }
 
     // The unplugged directory doesn't have a fixed path.
