@@ -139,12 +139,14 @@ fn spawn_websocket_proxy(
     ws_id_counter: Arc<AtomicUsize>,
     connection_count: Arc<AtomicUsize>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    // Atomically check and increment the connection count to prevent TOCTOU race condition
+    // Atomically check and increment the connection count to prevent TOCTOU race
+    // condition
     let mut current_count = connection_count.load(Ordering::SeqCst);
     loop {
         if current_count >= MAX_WEBSOCKET_CONNECTIONS {
             warn!(
-                "WebSocket connection limit reached ({} connections), rejecting new connection from {}",
+                "WebSocket connection limit reached ({} connections), rejecting new connection \
+                 from {}",
                 MAX_WEBSOCKET_CONNECTIONS, remote_addr
             );
             return Err("WebSocket connection limit reached".into());
