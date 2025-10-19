@@ -12,22 +12,24 @@ npx create-turbo@latest -e with-nestjs
 
 ## What's inside?
 
-This Turborepo includes the following packages/apps:
+This Turborepo includes the following packages & apps:
 
 ### Apps and Packages
 
-    .
-    ├── apps
-    │   ├── api                       # NestJS app (https://nestjs.com).
-    │   └── web                       # Next.js app (https://nextjs.org).
-    └── packages
-        ├── @repo/api                 # Shared `NestJS` resources.
-        ├── @repo/eslint-config       # `eslint` configurations (includes `prettier`)
-        ├── @repo/jest-config         # `jest` configurations
-        ├── @repo/typescript-config   # `tsconfig.json`s used throughout the monorepo
-        └── @repo/ui                  # Shareable stub React component library.
+```shell
+.
+├── apps
+│   ├── api                       # NestJS app (https://nestjs.com).
+│   └── web                       # Next.js app (https://nextjs.org).
+└── packages
+    ├── @repo/api                 # Shared `NestJS` resources.
+    ├── @repo/eslint-config       # `eslint` configurations (includes `prettier`)
+    ├── @repo/jest-config         # `jest` configurations
+    ├── @repo/typescript-config   # `tsconfig.json`s used throughout the monorepo
+    └── @repo/ui                  # Shareable stub React component library.
+```
 
-Each package and application are 100% [TypeScript](https://www.typescriptlang.org/) safe.
+Each package and application are mostly written in [TypeScript](https://www.typescriptlang.org/).
 
 ### Utilities
 
@@ -109,6 +111,8 @@ npx turbo link
 ```
 
 ## Useful Links
+
+This example take some inspiration the [with-nextjs](https://github.com/vercel/turborepo/tree/main/examples/with-nextjs) `Turbo` example and [01-cats-app](https://github.com/nestjs/nest/tree/master/sample/01-cats-app) `NestJs` sample.
 
 Learn more about the power of Turborepo:
 
