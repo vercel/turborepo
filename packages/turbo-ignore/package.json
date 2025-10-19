@@ -21,6 +21,7 @@
   "scripts": {
     "build": "tsup",
     "test": "jest",
+    "test:bun": "bun --bun run jest",
     "lint": "eslint src __tests__",
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"

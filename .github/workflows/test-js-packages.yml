@@ -126,8 +126,9 @@ jobs:
         # We filter out turborepo-repository because it's a native package and needs
         # to run when turbo core changes. This job (`js_packages_bun`) does not run on turborpeo core
         # changes, and we don't want to enable that beahvior for _all_ our JS packages.
+        # We use test:bun for Bun-compatible packages
         run: |
-          TURBO_API= turbo run check-types test build package-checks --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test:bun build package-checks --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
 
   summary:
     name: Turborepo JS Test Summary

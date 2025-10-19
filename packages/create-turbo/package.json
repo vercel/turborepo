@@ -18,6 +18,7 @@
   "scripts": {
     "build": "tsup",
     "test": "jest",
+    "test:bun": "bun --bun run jest",
     "lint": "eslint src/",
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"

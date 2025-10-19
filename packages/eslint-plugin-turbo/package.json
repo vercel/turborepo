@@ -25,6 +25,7 @@
   ],
   "scripts": {
     "test": "jest",
+    "test:bun": "bun --bun run jest",
     "build": "tsup && tsc --declaration",
     "check-types": "tsc --noEmit",
     "lint": "eslint lib/",
