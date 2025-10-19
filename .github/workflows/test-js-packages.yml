@@ -66,6 +66,9 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
       - name: Run tests
         # We manually set TURBO_API to an empty string to override Hetzner env
         # We filter out turborepo-repository because it's a native package and needs
