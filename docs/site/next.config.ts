@@ -18,7 +18,11 @@ const config: NextConfig = {
     remotePatterns: [
       {
         protocol: "https",
-        hostname: "pbs.twimg.com",
+        hostname: "ufa25dqjajkmio0q.public.blob.vercel-storage.com",
+      },
+      {
+        protocol: "https",
+        hostname: "x.com",
       },
     ],
     minimumCacheTTL: 1800,
