@@ -72,63 +72,9 @@ jobs:
         # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
         # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
-          TURBO_API= turbo run check-types test build package-checks --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test test:bun build package-checks --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
         env:
           NODE_VERSION: ${{ matrix.node-version }}
-
-  js_packages_bun:
-    name: "JS Package Tests (${{matrix.os.name}}, Bun)"
-    timeout-minutes: 30
-    runs-on: ${{ matrix.os.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: ubuntu
-            runner: ubuntu-latest
-          - name: macos
-            runner: macos-13
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
-
-    steps:
-      # on main -> current + prev commit
-      # pr -> pr commits + base commit
-      - name: Determine fetch depth
-        id: fetch-depth
-        run: |
-          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
-
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
-
-      - name: "Setup Bun"
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.0
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Run tests
-        # We manually set TURBO_API to an empty string to override Hetzner env
-        # We filter out turborepo-repository because it's a native package and needs
-        # to run when turbo core changes. This job (`js_packages_bun`) does not run on turborpeo core
-        # changes, and we don't want to enable that beahvior for _all_ our JS packages.
-        # We use test:bun for Bun-compatible packages
-        run: |
-          TURBO_API= turbo run check-types test:bun build package-checks --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
 
   summary:
     name: Turborepo JS Test Summary
@@ -136,7 +82,6 @@ jobs:
     if: always()
     needs:
       - js_packages
-      - js_packages_bun
     steps:
       - name: Compute info
         run: |
@@ -153,7 +98,6 @@ jobs:
           }
 
           subjob ${{needs.js_packages.result}}
-          subjob ${{needs.js_packages_bun.result}}
 
           if [ "$cancelled" = "true" ]; then
             echo "Job was cancelled."
