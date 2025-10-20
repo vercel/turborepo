@@ -7,56 +7,52 @@ import { createMetadata } from "#lib/create-metadata.ts";
 import { FaviconHandler } from "#app/_components/favicon-handler.tsx";
 import { mdxComponents } from "#mdx-components.tsx";
 
-export function generateStaticParams(): Array<{ slug: Array<string> }> {
+export function generateStaticParams() {
   return blog.getPages().map((page) => ({
-    slug: page.slugs,
+    slug: page.slugs.join("/"),
   }));
 }
 
 export async function generateMetadata(props: {
-  params: Promise<{ slug?: Array<string> }>;
+  params: Promise<{ slug?: string }>;
 }): Promise<Metadata> {
   const params = await props.params;
-  const page = blog.getPage(params.slug);
+
+  if (!params.slug) {
+    notFound();
+  }
+
+  const page = blog.getPage([params.slug]);
 
   if (!page) notFound();
-
-  const version = params.slug?.[0] || "▲";
-
-  const createOgUrl = () => {
-    const groups = /^turbo-(?<major>\d+)-(?<minor>\d+)(?:-\d+)*$/.exec(version);
-    if (groups) {
-      const { major, minor } = groups.groups as {
-        major: string;
-        minor: string;
-      };
-      return `/api/og/blog?version=${encodeURIComponent(`${major}.${minor}`)}`;
-    }
-
-    return "▲";
-  };
 
   return {
     ...createMetadata({
       title: page.data.title,
       description: page.data.description,
-      canonicalPath: `/blog/${params.slug?.join("/") ?? ""}`,
+      canonicalPath: `/blog/${params.slug}`,
     }),
-    openGraph: {
-      images: [
-        {
-          url: page.data.ogImage ?? createOgUrl(),
-        },
-      ],
-    },
+    openGraph: page.data.ogImage
+      ? {
+          images: [
+            {
+              url: page.data.ogImage,
+            },
+          ],
+        }
+      : undefined,
   };
 }
 
 export default async function Page(props: {
-  params: Promise<{ slug?: Array<string> }>;
+  params: Promise<{ slug?: string }>;
 }): Promise<JSX.Element> {
   const params = await props.params;
-  const page = blog.getPage(params.slug);
+  if (!params.slug) {
+    notFound();
+  }
+
+  const page = blog.getPage([params.slug]);
 
   if (!page) notFound();
 
@@ -75,8 +71,6 @@ export default async function Page(props: {
           Back to blog
         </Link>
       </div>
-
-      {}
       <Mdx components={mdxComponents} />
     </article>
   );

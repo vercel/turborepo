@@ -63,12 +63,6 @@ export const createMetadata = ({
     description,
     openGraph: {
       siteName: "Turborepo",
-      images: [
-        createOgImagePath({
-          title: canonicalPath === "/" ? "" : title,
-          canonicalPath,
-        }),
-      ],
       url: canonicalPath,
     },
     alternates: {
