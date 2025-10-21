@@ -1,0 +1,27 @@
+[package]
+name = "turborepo-microfrontends-proxy"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+
+[dependencies]
+dashmap = "6.1"
+futures-util = "0.3"
+http-body-util = "0.1"
+hyper = { version = "1.0", features = ["full"] }
+hyper-rustls = { version = "0.27", default-features = false, features = [
+  "http1",
+  "native-tokio",
+  "ring",
+] }
+hyper-util = { version = "0.1", features = ["full"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+tokio-tungstenite = "0.21"
+tracing = { workspace = true }
+turborepo-errors = { path = "../turborepo-errors" }
+turborepo-microfrontends = { path = "../turborepo-microfrontends" }
+url = "2.2.2"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

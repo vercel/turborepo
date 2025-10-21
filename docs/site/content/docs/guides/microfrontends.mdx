@@ -1,0 +1,449 @@
+---
+title: Microfrontends
+description: Learn how to use Turborepo's built-in microfrontends proxy for local development.
+---
+
+import { Callout } from '#components/callout';
+import { File, Folder, Files } from '#components/files';
+import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
+import { PrereleaseBadge } from '#components/prerelease-badge';
+
+<PrereleaseBadge />
+
+Microfrontends are an architectural pattern where a web application is decomposed into smaller, independently developed and deployed applications that work together.
+
+Turborepo provides built-in support for running vertical microfrontends (sometimes called "zones") locally during development through an integrated proxy server. The proxy coordinates multiple applications and routes traffic between them.
+
+Let's imagine you have a monorepo with multiple frontend applications:
+
+<Files>
+  <Folder name="apps" defaultOpen>
+    <Folder name="web">
+      <File name="package.json" />
+      <File name="next.config.js" />
+    </Folder>
+    <Folder name="docs">
+      <File name="package.json" />
+      <File name="next.config.js" />
+    </Folder>
+    <Folder name="marketing">
+      <File name="package.json" />
+      <File name="vite.config.ts" />
+    </Folder>
+  </Folder>
+  <File name="package.json" />
+  <File name="turbo.json" />
+</Files>
+
+In production, these applications might be deployed separately and composed together using a reverse proxy or edge routing. But during development, you want to:
+
+- Run all applications simultaneously with a single command
+- Access them through a unified URL (e.g., `http://localhost:3024`)
+- Route requests to the correct application based on path patterns
+- Support hot module reloading and WebSocket connections
+- Avoid port conflicts and manual coordination
+
+## Getting started
+
+Turborepo provides a built-in proxy server that automatically routes traffic between your microfrontend applications during development. The proxy reads a `microfrontends.json` configuration file and starts when you run `turbo dev`.
+
+<Callout>
+  You can try the following instructions with the monorepo created by `npx
+  create-turbo@latest -e with-microfrontends`.
+</Callout>
+
+### Create `microfrontends.json`
+
+Create a `microfrontends.json` file in your parent application. This application is the one that all requests will fall through to when not matched by another application.
+
+```json title="./apps/web/microfrontends.json"
+{
+  "applications": {
+    "web": {
+      "development": {
+        "local": 3000
+      }
+    },
+    "docs": {
+      "development": {
+        "local": 3001
+      },
+      "routing": [
+        {
+          "paths": ["/docs", "/docs/:path*"]
+        }
+      ]
+    }
+  }
+}
+```
+
+### Set application ports
+
+Next, use the `TURBO_MFE_PORT` environment variable to set the ports in your application's development scripts. For example:
+
+<Tabs items={['Next.js', 'Vite']} storageKey="framework-preference">
+
+  <Tab value="Next.js">
+
+```json title="./apps/web/package.json"
+{
+  "scripts": {
+    "dev": "next dev --port $TURBO_MFE_PORT"
+  }
+}
+```
+
+  </Tab>
+
+  <Tab value="Vite">
+
+```json title="./apps/web/package.json"
+{
+  "scripts": {
+    "dev": "vite dev --port $TURBO_MFE_PORT"
+  }
+}
+```
+
+  </Tab>
+
+</Tabs>
+
+### Handle base paths
+
+If you're using a framework, set the base path according to the needs of the framework.
+
+<Tabs items={['Next.js', 'Vite']} storageKey="framework-preference">
+
+  <Tab value="Next.js">
+
+```ts title="./apps/my-app/next.config.ts"
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  basePath: '/docs',
+};
+
+export default nextConfig;
+```
+
+  </Tab>
+
+  <Tab value="Vite">
+
+```ts title="./apps/my-app/vite.config.ts"
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  base: '/thing',
+});
+```
+
+  </Tab>
+
+</Tabs>
+
+[Visit the Microfrontends section of your framework](/docs/guides/frameworks) for framework-specific guidance.
+
+### Run `turbo dev`
+
+When you run `turbo dev`, Turborepo will:
+
+1. **Start the proxy server** on the configured port (default: `3024`)
+1. **Inject the `TURBO_MFE_PORT` environment variable** in tasks to set the applications' port
+1. **Run development tasks** for all configured applications
+1. **Route incoming requests** based on path patterns to the appropriate application
+
+Now you can access all of your microfrontends applications at `http://localhost:3024`.
+
+## Configuration
+
+Each application in the `applications` object can have the following properties:
+
+If not provided, the application key is used to match the name in `package.json.
+
+### `development.local`
+
+The port where the application runs locally. Can be specified as:
+
+- A number: `3000`
+- A hostname with port: `"localhost:3000"`
+- A URL: `"http://localhost:3000"`
+
+```json title="./apps/web/microfrontends.json"
+{
+  "development": {
+    "local": 3000
+  }
+}
+```
+
+### `development.fallback`
+
+Optionally provide a target to proxy to when an application is not running locally. This is most frequently used to route to production to make commands like `turbo dev --filter=web` that only run a subset of applications a seamless experience.
+
+Must be a fully qualified URL.
+
+```json title="./apps/web/microfrontends.json"
+{
+  "development": {
+    "fallback": "example.com"
+  }
+}
+```
+
+### `routing`
+
+An array of path groups that should route to this application. If no routing is provided, the application becomes the **default application** that catches all unmatched routes.
+
+Only one application can have no `routing` configuration. This is your "root" application that handles all routes not matched by other applications.
+
+```json title="./apps/web/microfrontends.json"
+{
+  "routing": [
+    {
+      "paths": ["/api/:version/users/:id"]
+    },
+    {
+      "paths": ["/docs", "/docs/:path*"]
+    }
+  ]
+}
+```
+
+#### Exact matches
+
+```json title="./apps/web/microfrontends.json"
+{
+  "paths": ["/pricing", "/about", "/contact"]
+}
+```
+
+These paths match exactly as written.
+
+#### Parameters
+
+```json title="./apps/web/microfrontends.json"
+{
+  "paths": ["/blog/:slug", "/users/:id/profile"]
+}
+```
+
+Segments starting with `:` match any single path segment. For example, `/blog/:slug` matches `/blog/hello` but not `/blog/hello/world`.
+
+#### Wildcards
+
+```json title="./apps/web/microfrontends.json"
+{
+  "paths": ["/docs/:path*", "/api/:version*"]
+}
+```
+
+Parameters ending with `*` match zero or more path segments. For example, `/docs/:path*` matches `/docs`, `/docs/intro`, and `/docs/api/reference`.
+
+#### Group labels
+
+Organize routes into logical groups for better maintainability:
+
+```json title="./apps/web/microfrontends.json"
+{
+  "applications": {
+    "marketing": {
+      "development": {
+        "local": 3002
+      },
+      "routing": [
+        {
+          "group": "blog",
+          "paths": ["/blog", "/blog/:slug*"]
+        },
+        {
+          "group": "sales",
+          "paths": ["/pricing", "/contact", "/demo"]
+        }
+      ]
+    }
+  }
+}
+```
+
+The `group` field is for organizational purposes and doesn't affect routing behavior.
+
+#### Complex routing patterns
+
+You can define sophisticated routing with nested parameters:
+
+```json title="./apps/web/microfrontends.json"
+{
+  "routing": [
+    {
+      "paths": [
+        "/api/:version/users",
+        "/api/:version/users/:id",
+        "/api/:version/posts/:postId/comments/:commentId"
+      ]
+    }
+  ]
+}
+```
+
+### `packageName`
+
+Optionally use the name of the package from `package.json` in your workspace.
+
+```json title="./apps/main/microfrontends.json"
+{
+  "applications": {
+    "main-site": {
+      "packageName": "web"
+    }
+  }
+}
+```
+
+### `options.localProxyPort`
+
+Optionally change the proxy port using the `localProxyPort` option
+
+Defaults to `3024`.
+
+```json title="./apps/web/microfrontends.json"
+{
+  "options": {
+    "localProxyPort": 8080
+  }
+}
+```
+
+## Integrating with production
+
+The Turborepo microfrontends proxy is meant for local usage only. How you implement and integrate your production microfrontends depends on your production infrastructure. However, we can integrate your local and production environments to create a seamless experience across environments.
+
+To start, we've built Turborepo's local proxy to integrate with Vercel's microfrontends. We look forward to working with any infrastructure providers that would also like to integrate.
+
+### Microfrontends on Vercel
+
+Vercel has native support for microfrontends that provide:
+
+- Production proxy implementation with enhance performance
+- Fallback URL support across environments
+- Vercel toolbar integration
+- Feature flag support
+- Asset prefix handling
+
+[Learn more in Vercel's documentation](https://vercel.com/docs/microfrontends).
+
+#### Migrating to `@vercel/microfrontends`
+
+If you install [`@vercel/microfrontends`](https://www.npmjs.com/package/@vercel/microfrontends) in any package or add it to your workspace, Turborepo will automatically defer to it instead of using the built-in proxy. This allows for a gradual migration path.
+
+You can use the same `microfrontends.json` configuration as for Turborepo. Turborepo's `microfrontends.json` schema is a subset of Vercel's schema, so it is compatible with `@vercel/microfrontends`.
+
+To learn more about `@vercel/microfrontends`, [visit the package on npm](https://www.npmjs.com/package/@vercel/microfrontends).
+
+## Troubleshooting
+
+### Port already in use
+
+By default, the microfrontends proxy will try to use port 3024. If you already use that port for a different purpose, you can change Turborepo's port using the [`options.localProxyPort`](#optionslocalproxyport).
+
+### Missing CSS, images, or other assets, or routes not matching
+
+Ensure that the paths that the microfrontends matches for in its [`routing` configuration](#routing) include the routes for the assets. Check your network tab to find paths that are or aren't matching as expected.
+
+### Links across applications causing errors
+
+If you use a Single-Page Application (SPA) link (like the Next.js `<Link>` component) to link across applications, this can result in errors. Even though the port and domain remain the same, the applications are different. This means the routing is, by definition, not a "single-page application".
+
+### Visiting a proxied port does not redirect
+
+You are still be able to reach a proxied port directly. For example, if `localhost:3000` is proxied to `localhost:3042`, you can still visit `localhost:3000` in your browser.
+
+If you would like for `localhost:3000` to redirect to `localhost:3024`, you must set this up manually in your application.
+
+### Applications not starting
+
+Verify that:
+
+1. The `packageName` matches your actual package name
+2. The `task` specified exists in the package's `package.json`
+3. Each application's port is available
+4. All dependencies are installed
+
+## Complete example
+
+Here's a full example of a microfrontends configuration for an e-commerce platform:
+
+```json title="./apps/web/microfrontends.json"
+{
+  "options": {
+    "localProxyPort": 3024
+  },
+  "applications": {
+    "web": {
+      "packageName": "web",
+      "development": {
+        "local": 3000
+      }
+    },
+    "docs": {
+      "packageName": "documentation",
+      "development": {
+        "local": 3001
+      },
+      "routing": [
+        {
+          "group": "documentation",
+          "paths": [
+            "/docs",
+            "/docs/:path*",
+            "/api-reference",
+            "/api-reference/:path*"
+          ]
+        }
+      ]
+    },
+    "blog": {
+      "development": {
+        "local": 3002
+      },
+      "routing": [
+        {
+          "group": "content",
+          "paths": [
+            "/blog",
+            "/blog/:slug",
+            "/blog/category/:category",
+            "/authors/:author"
+          ]
+        }
+      ]
+    },
+    "shop": {
+      "development": {
+        "local": 3003
+      },
+      "routing": [
+        {
+          "group": "commerce",
+          "paths": [
+            "/products",
+            "/products/:id",
+            "/cart",
+            "/checkout",
+            "/orders/:orderId"
+          ]
+        }
+      ]
+    }
+  }
+}
+```
+
+With this configuration:
+
+- The `web` app handles the homepage and any unmatched routes
+- The `docs` app handles all documentation
+- The `blog` app handles blog posts and author pages
+- The `shop` app handles e-commerce functionality

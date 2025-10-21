@@ -254,11 +254,12 @@ This `styles.css` contains component-level styles for the shared UI library.
 
 ```css title="./packages/ui/src/styles.css"
 /* Component-level styles for the UI package */
-@import "tailwindcss" prefix(ui);
+@import 'tailwindcss' prefix(ui);
 ```
 
 <Callout type="info">
-  Tailwind classes used in this package should be prefixed with `ui:` to avoid style specificity issues.
+  Tailwind classes used in this package should be prefixed with `ui:` to avoid
+  style specificity issues.
 </Callout>
 
 </Tab>
@@ -324,8 +325,8 @@ Then, configure the files in your application so the styles from the UI package 
 <Tab value="layout.tsx">
 
 ```tsx title="./apps/web/app/layout.tsx"
-import "@repo/ui/styles.css";
-import "./globals.css";
+import '@repo/ui/styles.css';
+import './globals.css';
 ```
 
 </Tab>

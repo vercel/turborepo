@@ -1,0 +1,19 @@
+{
+  "applications": {
+    "web": {
+      "development": {
+        "local": 3000
+      }
+    },
+    "docs": {
+      "development": {
+        "local": 3001
+      },
+      "routing": [
+        {
+          "paths": ["/docs", "/docs/:path*"]
+        }
+      ]
+    }
+  }
+}

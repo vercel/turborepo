@@ -1,0 +1,81 @@
+{
+  // Vercel extended schema
+  // Supersets the Turborepo strict schema with additional Vercel-specific fields
+  "version": "1",
+
+  "options": {
+    "localProxyPort": 3024,
+    "disableOverrides": false
+  },
+
+  "applications": {
+    "main-site": {
+      "packageName": "web",
+      "development": {
+        "local": 3331,
+        "fallback": "https://main-preview.vercel.app",
+        "task": "dev"
+      },
+      "production": {
+        "protocol": "https",
+        "host": "main.com"
+      },
+      "vercel": {
+        "projectId": "prj_abc123"
+      }
+    },
+
+    "marketing": {
+      "packageName": "marketing-site",
+      "routing": [
+        {
+          "group": "blog",
+          "paths": [
+            "/blog",
+            "/blog/:slug*",
+            "/press",
+            "/changelog",
+            "/changelog/:slug*"
+          ],
+          "flag": "enable_blog"
+        },
+        {
+          "group": "marketing-pages",
+          "paths": ["/contact", "/pricing", "/enterprise"]
+        }
+      ],
+      "development": {
+        "local": 3332,
+        "task": "dev",
+        "fallback": "https://marketing-preview.vercel.app"
+      },
+      "production": {
+        "protocol": "https",
+        "host": "marketing.main.com"
+      },
+      "vercel": {
+        "projectId": "prj_def456"
+      },
+      "assetPrefix": "mkt-assets"
+    },
+
+    "docs": {
+      "routing": [
+        {
+          "paths": ["/docs", "/docs/:path*"]
+        }
+      ],
+      "development": {
+        "local": 3333,
+        "task": "dev"
+      },
+      "production": {
+        "protocol": "https",
+        "host": "docs.main.com"
+      },
+      "vercel": {
+        "projectId": "prj_ghi789"
+      }
+    }
+  }
+}
