@@ -79,9 +79,29 @@ bunx create-turbo@latest
 
 ## Microfrontends
 
-Vertical microfrontends are an architecture where multiple applications are served on one production domain, split up by paths. Each path for the domain is handled by exactly one application.
+Vertical microfrontends are an architecture where multiple applications are served on one production domain, split into "zones". Each path for the domain is handled by one of the applications.
 
-TODO: IMG
+<ThemeAwareImage
+  className="my-4 flex justify-center"
+  light={{
+    alt: '',
+    src: '/images/blog/turbo-2-6/microfrontends-light.png',
+    props: {
+      width: 1600,
+      height: 750,
+      className: 'dark:hidden block rounded-xl',
+    },
+  }}
+  dark={{
+    alt: '',
+    src: '/images/blog/turbo-2-6/microfrontends-dark.png',
+    props: {
+      width: 1600,
+      height: 750,
+      className: 'hidden dark:block rounded-xl',
+    },
+  }}
+/>
 
 This strategy gives teams at scale the ability to ship more independently. Release cycles become decoupled, build times can be brought down, and CI pipelines can get more focused, among other benefits.
 
