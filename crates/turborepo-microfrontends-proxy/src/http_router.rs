@@ -143,8 +143,14 @@ impl Router {
     }
 
     pub fn match_route(&self, path: &str) -> RouteMatch {
-        // Normalize path: strip leading slash and trailing slash
-        let path = path.trim_matches('/');
+        // Normalize path: strip leading and trailing slashes
+        let mut path = path;
+        while let Some(stripped) = path.strip_prefix('/') {
+            path = stripped;
+        }
+        while let Some(stripped) = path.strip_suffix('/') {
+            path = stripped;
+        }
 
         let app_idx = if path.is_empty() {
             self.trie.lookup(&[])
@@ -345,66 +351,72 @@ impl PathPattern {
 
         Ok(Self { segments })
     }
+
+    #[cfg(test)]
+    fn matches(&self, path: &str) -> bool {
+        let mut path = path;
+        while let Some(stripped) = path.strip_prefix('/') {
+            path = stripped;
+        }
+        while let Some(stripped) = path.strip_suffix('/') {
+            path = stripped;
+        }
+
+        if path.is_empty() && self.segments.is_empty() {
+            return true;
+        }
+
+        let path_segments: Vec<&str> = if path.is_empty() {
+            vec![]
+        } else {
+            path.split('/').collect()
+        };
+
+        self.matches_segments(&path_segments)
+    }
+
+    #[cfg(test)]
+    fn matches_segments(&self, path_segments: &[&str]) -> bool {
+        let mut pattern_idx = 0;
+        let mut path_idx = 0;
+
+        while pattern_idx < self.segments.len() && path_idx < path_segments.len() {
+            match &self.segments[pattern_idx] {
+                Segment::Exact(expected) => {
+                    if path_segments[path_idx] != expected.as_ref() {
+                        return false;
+                    }
+                    pattern_idx += 1;
+                    path_idx += 1;
+                }
+                Segment::Param => {
+                    pattern_idx += 1;
+                    path_idx += 1;
+                }
+                Segment::Wildcard => {
+                    // * matches zero or more segments
+                    return true;
+                }
+                Segment::WildcardPlus => {
+                    // + matches one or more segments
+                    // We already consumed at least one segment by being in this loop
+                    return true;
+                }
+            }
+        }
+
+        if pattern_idx < self.segments.len() {
+            // Only * can match zero remaining segments
+            matches!(self.segments[pattern_idx], Segment::Wildcard)
+        } else {
+            path_idx == path_segments.len()
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    impl PathPattern {
-        fn matches(&self, path: &str) -> bool {
-            let path = path.trim_matches('/');
-
-            if path.is_empty() && self.segments.is_empty() {
-                return true;
-            }
-
-            let path_segments: Vec<&str> = if path.is_empty() {
-                vec![]
-            } else {
-                path.split('/').collect()
-            };
-
-            self.matches_segments(&path_segments)
-        }
-
-        fn matches_segments(&self, path_segments: &[&str]) -> bool {
-            let mut pattern_idx = 0;
-            let mut path_idx = 0;
-
-            while pattern_idx < self.segments.len() && path_idx < path_segments.len() {
-                match &self.segments[pattern_idx] {
-                    Segment::Exact(expected) => {
-                        if path_segments[path_idx] != expected.as_ref() {
-                            return false;
-                        }
-                        pattern_idx += 1;
-                        path_idx += 1;
-                    }
-                    Segment::Param => {
-                        pattern_idx += 1;
-                        path_idx += 1;
-                    }
-                    Segment::Wildcard => {
-                        // * matches zero or more segments
-                        return true;
-                    }
-                    Segment::WildcardPlus => {
-                        // + matches one or more segments
-                        // We already consumed at least one segment by being in this loop
-                        return true;
-                    }
-                }
-            }
-
-            if pattern_idx < self.segments.len() {
-                // Only * can match zero remaining segments
-                matches!(self.segments[pattern_idx], Segment::Wildcard)
-            } else {
-                path_idx == path_segments.len()
-            }
-        }
-    }
 
     #[test]
     fn test_exact_match() {
