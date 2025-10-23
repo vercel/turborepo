@@ -214,11 +214,7 @@ impl TrieNode {
         }
 
         // Both * and + match one or more segments
-        if let Some(app_idx) = self.wildcard_match {
-            return Some(app_idx);
-        }
-
-        if let Some(app_idx) = self.wildcard_plus_match {
+        if let Some(app_idx) = self.wildcard_match.or(self.wildcard_plus_match) {
             return Some(app_idx);
         }
 
@@ -241,7 +237,7 @@ fn validate_path_expression(path: &str) -> Result<(), String> {
             let preceded_by_backslash = i > 0 && chars[i - 1] == '\\';
             let preceded_by_paren = i > 0 && chars[i - 1] == '(';
             if !preceded_by_backslash && !preceded_by_paren {
-                return Err(format!("Optional paths like are not supported: {path}"));
+                return Err(format!("Optional paths are not supported: {path}"));
             }
         }
     }
@@ -249,10 +245,9 @@ fn validate_path_expression(path: &str) -> Result<(), String> {
     // Check for multiple wildcards per path segment
     // Split by / and check each segment for multiple unescaped :
     for segment in path.split('/') {
-        let colon_count = 0;
+        let mut colon_count = 0;
         let mut i = 0;
         let seg_chars: Vec<char> = segment.chars().collect();
-        let mut colon_count = colon_count;
         while i < seg_chars.len() {
             if seg_chars[i] == ':' {
                 // Check if it's escaped
