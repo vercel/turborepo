@@ -153,12 +153,12 @@ By default, the new application will use the tasks defined in the root `turbo.js
 
 ### Microfrontends
 
-When using Svelte with [Turborepo's microfrontends](/docs/guides/microfrontends), make sure to set the `basePath` property for child applications. This ensures the assets like images and CSS will be routed to the correct application.
+When using Svelte with [Turborepo's microfrontends](/docs/guides/microfrontends), make sure to set the `base` property for child applications. This ensures the assets like images and CSS will be routed to the correct application.
 
 ```ts title="./apps/my-app/vite.config.ts"
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/thing',
+  base: '/admin',
 });
 ```
