@@ -231,32 +231,32 @@ fn validate_path_expression(path: &str) -> Result<(), String> {
 
     // Check for unescaped ? (optional modifier, not supported)
     // We need to detect ? that's not preceded by \ or (
-    let chars: Vec<char> = path.chars().collect();
-    for i in 0..chars.len() {
-        if chars[i] == '?' {
-            let preceded_by_backslash = i > 0 && chars[i - 1] == '\\';
-            let preceded_by_paren = i > 0 && chars[i - 1] == '(';
+    let mut prev_char: Option<char> = None;
+    for ch in path.chars() {
+        if ch == '?' {
+            let preceded_by_backslash = prev_char == Some('\\');
+            let preceded_by_paren = prev_char == Some('(');
             if !preceded_by_backslash && !preceded_by_paren {
                 return Err(format!("Optional paths are not supported: {path}"));
             }
         }
+        prev_char = Some(ch);
     }
 
     // Check for multiple wildcards per path segment
     // Split by / and check each segment for multiple unescaped :
     for segment in path.split('/') {
         let mut colon_count = 0;
-        let mut i = 0;
-        let seg_chars: Vec<char> = segment.chars().collect();
-        while i < seg_chars.len() {
-            if seg_chars[i] == ':' {
+        let mut prev_char: Option<char> = None;
+        for ch in segment.chars() {
+            if ch == ':' {
                 // Check if it's escaped
-                let escaped = i > 0 && seg_chars[i - 1] == '\\';
+                let escaped = prev_char == Some('\\');
                 if !escaped {
                     colon_count += 1;
                 }
             }
-            i += 1;
+            prev_char = Some(ch);
         }
         if colon_count > 1 {
             return Err(format!(
