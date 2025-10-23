@@ -368,7 +368,7 @@ mod test {
         let config = TurborepoConfig::from_str(input, "somewhere");
         assert!(
             config.is_err(),
-            "Strict parser should reject Vercel-specific fields like task"
+            "Strict parser should reject Vercel-specific fields like \"task\" and \"flag\""
         );
     }
 
