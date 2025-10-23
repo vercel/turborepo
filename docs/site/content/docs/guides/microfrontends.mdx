@@ -58,6 +58,7 @@ Create a `microfrontends.json` file in your parent application. This application
 
 ```json title="./apps/web/microfrontends.json"
 {
+  "$schema": "https://turborepo.com/microfrontends/schema.json",
   "applications": {
     "web": {
       "development": {
@@ -248,6 +249,7 @@ Organize routes into logical groups for better maintainability:
 
 ```json title="./apps/web/microfrontends.json"
 {
+  "$schema": "https://turborepo.com/microfrontends/schema.json",
   "applications": {
     "marketing": {
       "development": {
@@ -377,6 +379,7 @@ Here's a full example of a microfrontends configuration for an e-commerce platfo
 
 ```json title="./apps/web/microfrontends.json"
 {
+  "$schema": "https://turborepo.com/microfrontends/schema.json",
   "options": {
     "localProxyPort": 3024
   },

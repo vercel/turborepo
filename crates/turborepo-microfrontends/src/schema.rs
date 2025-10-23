@@ -19,6 +19,8 @@ use crate::Error;
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 pub struct TurborepoConfig {
+    #[serde(rename = "$schema", skip)]
+    schema: Option<String>,
     version: Option<String>,
     applications: BTreeMap<String, TurborepoApplication>,
     options: Option<TurborepoOptions>,
@@ -323,9 +325,36 @@ mod test {
     }
 
     #[test]
-    fn test_vercel_specific_fields_accepted() {
+    fn test_schema_field_accepted() {
         let input = r#"{
-        "$schema": "https://example.com/schema.json",
+        "$schema": "https://turborepo.com/microfrontends/schema.json",
+        "version": "1",
+        "applications": {
+          "web": {
+            "development": {
+              "local": 3000
+            }
+          },
+          "docs": {
+            "routing": [
+              {
+                "paths": ["/docs"],
+                "group": "docs"
+              }
+            ],
+            "development": {
+              "local": 3001
+            }
+          }
+        }
+    }"#;
+        let config = TurborepoConfig::from_str(input, "somewhere");
+        assert!(config.is_ok(), "Parser should accept $schema field");
+    }
+
+    #[test]
+    fn test_vercel_specific_fields_rejected() {
+        let input = r#"{
         "version": "1",
         "applications": {
           "web": {
@@ -333,12 +362,24 @@ mod test {
               "local": 3000,
               "task": "dev"
             }
-          },
+          }
+        }
+    }"#;
+        let config = TurborepoConfig::from_str(input, "somewhere");
+        assert!(
+            config.is_err(),
+            "Strict parser should reject Vercel-specific fields like task"
+        );
+    }
+
+    #[test]
+    fn test_flag_field_rejected() {
+        let input = r#"{
+        "applications": {
           "docs": {
             "routing": [
               {
                 "paths": ["/docs"],
-                "group": "docs",
                 "flag": "enable_docs"
               }
             ],
@@ -351,7 +392,7 @@ mod test {
         let config = TurborepoConfig::from_str(input, "somewhere");
         assert!(
             config.is_err(),
-            "Strict parser should reject Vercel-specific fields like $schema, task, and flag"
+            "Strict parser should reject Vercel-specific fields like flag"
         );
     }
 }
