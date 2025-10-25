@@ -137,19 +137,34 @@ impl LanguageServer for Backend {
 
             let mut lock = pidlock::Pidlock::new(paths.lsp_pid_file.as_std_path().to_owned());
 
-            if let Err(e) = lock.acquire() {
-                self.client
-                    .log_message(
-                        MessageType::ERROR,
-                        format!(
-                            "failed to acquire pidlock, is another lsp instance running? - {e}"
-                        ),
-                    )
-                    .await;
-                return Err(Error::internal_error());
+            match lock.acquire() {
+                Ok(()) => {
+                    *self.pidlock.lock().expect("only fails if poisoned") = Some(lock);
+                }
+                Err(pidlock::PidlockError::AlreadyOwned) => {
+                    // Another LSP instance (e.g., another VSCode window) already holds the lock.
+                    // This lock is only used for exclusive optimize features, so proceed without
+                    // it.
+                    self.client
+                        .log_message(
+                            MessageType::INFO,
+                            "another LSP instance holds lock; continuing without exclusive \
+                             optimize features.",
+                        )
+                        .await;
+                }
+                Err(e) => {
+                    self.client
+                        .log_message(
+                            MessageType::ERROR,
+                            format!(
+                                "failed to acquire pidlock, is another lsp instance running? - {e}"
+                            ),
+                        )
+                        .await;
+                    return Err(Error::internal_error());
+                }
             }
-
-            *self.pidlock.lock().expect("only fails if poisoned") = Some(lock);
         }
 
         Ok(InitializeResult {
