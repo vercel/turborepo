@@ -60,6 +60,7 @@ pub struct WatchClient {
 struct RunHandle {
     stopper: run::RunStopper,
     run_task: JoinHandle<Result<i32, run::Error>>,
+    persistent_exit: Option<tokio::sync::oneshot::Receiver<()>>,
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -107,6 +108,8 @@ pub enum Error {
     Config(#[from] crate::config::Error),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
+    #[error("persistent tasks exited unexpectedly")]
+    PersistentExit,
 }
 
 impl WatchClient {
@@ -185,8 +188,24 @@ impl WatchClient {
         let notify_event = notify_run.clone();
 
         let event_fut = async {
+            let mut first_rediscover = true;
             while let Some(event) = events.next().await {
                 let event = event?;
+
+                // Skip the first RediscoverPackages event which is sent immediately by the
+                // daemon when we connect. The file watcher will send the real
+                // one.
+                if first_rediscover {
+                    if matches!(
+                        event.event,
+                        Some(proto::package_change_event::Event::RediscoverPackages(_))
+                    ) {
+                        first_rediscover = false;
+                        continue;
+                    }
+                    first_rediscover = false;
+                }
+
                 Self::handle_change_event(&changed_packages, event.event.unwrap())?;
                 notify_event.notify_one();
             }
@@ -196,8 +215,23 @@ impl WatchClient {
 
         let run_fut = async {
             let mut run_handle: Option<RunHandle> = None;
+            let mut persistent_exit = None;
             loop {
-                notify_run.notified().await;
+                if let Some(persistent) = &mut persistent_exit {
+                    // here we watch both notify *and* persistent task
+                    // if notify exits, then continue per usual
+                    // if persist exits, then we break out of loop with a
+                    select! {
+                        biased;
+                        _ = persistent => {
+                            break;
+                        }
+                        _ = notify_run.notified() => {},
+                    }
+                } else {
+                    notify_run.notified().await;
+                }
+
                 let some_changed_packages = {
                     let mut changed_packages_guard =
                         changed_packages.lock().expect("poisoned lock");
@@ -207,16 +241,27 @@ impl WatchClient {
 
                 if let Some(changed_packages) = some_changed_packages {
                     // Clean up currently running tasks
-                    if let Some(RunHandle { stopper, run_task }) = run_handle.take() {
+                    if let Some(RunHandle {
+                        stopper,
+                        run_task,
+                        persistent_exit,
+                    }) = run_handle.take()
+                    {
                         // Shut down the tasks for the run
                         stopper.stop().await;
                         // Run should exit shortly after we stop all child tasks, wait for it to
                         // finish to ensure all messages are flushed.
                         let _ = run_task.await;
+                        if let Some(persistent_exit) = persistent_exit {
+                            let _ = persistent_exit.await;
+                        }
                     }
-                    run_handle = Some(self.execute_run(changed_packages).await?);
+                    let mut raw_run_handle = self.execute_run(changed_packages).await?;
+                    persistent_exit = raw_run_handle.persistent_exit.take();
+                    run_handle = Some(raw_run_handle);
                 }
             }
+            Err(Error::PersistentExit)
         };
 
         select! {
@@ -271,7 +316,10 @@ impl WatchClient {
         if let Some(sender) = &self.ui_sender {
             sender.stop().await;
         }
-        if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
+        if let Some(RunHandle {
+            stopper, run_task, ..
+        }) = self.persistent_tasks_handle.take()
+        {
             // Shut down the tasks for the run
             stopper.stop().await;
             // Run should exit shortly after we stop all child tasks, wait for it to finish
@@ -333,6 +381,7 @@ impl WatchClient {
                 Ok(RunHandle {
                     stopper: run.stopper(),
                     run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
+                    persistent_exit: None,
                 })
             }
             ChangedPackages::All => {
@@ -359,12 +408,20 @@ impl WatchClient {
                 self.watched_packages = self.run.get_relevant_packages();
 
                 // Clean up currently running persistent tasks
-                if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
+                if let Some(RunHandle {
+                    stopper,
+                    run_task,
+                    persistent_exit,
+                }) = self.persistent_tasks_handle.take()
+                {
                     // Shut down the tasks for the run
                     stopper.stop().await;
                     // Run should exit shortly after we stop all child tasks, wait for it to finish
                     // to ensure all messages are flushed.
                     let _ = run_task.await;
+                    if let Some(persistent_exit) = persistent_exit {
+                        let _ = persistent_exit.await;
+                    }
                 }
                 if let Some(sender) = &self.ui_sender {
                     let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
@@ -382,11 +439,16 @@ impl WatchClient {
                     let ui_sender = self.ui_sender.clone();
                     // If we have persistent tasks, we run them on a separate thread
                     // since persistent tasks don't finish
+                    let (persist_guard, persist_exit) = tokio::sync::oneshot::channel::<()>();
                     self.persistent_tasks_handle = Some(RunHandle {
                         stopper: persistent_run.stopper(),
-                        run_task: tokio::spawn(
-                            async move { persistent_run.run(ui_sender, true).await },
-                        ),
+                        run_task: tokio::spawn(async move {
+                            // We move the guard in here so we can determine if the persist tasks
+                            // exit as it'll go out of scope and drop.
+                            let _guard = persist_guard;
+                            persistent_run.run(ui_sender, true).await
+                        }),
+                        persistent_exit: None,
                     });
 
                     let non_persistent_run = self.run.create_run_for_interruptible_tasks();
@@ -396,6 +458,7 @@ impl WatchClient {
                         run_task: tokio::spawn(async move {
                             non_persistent_run.run(ui_sender, true).await
                         }),
+                        persistent_exit: Some(persist_exit),
                     })
                 } else {
                     let ui_sender = self.ui_sender.clone();
@@ -403,6 +466,7 @@ impl WatchClient {
                     Ok(RunHandle {
                         stopper: run.stopper(),
                         run_task: tokio::spawn(async move { run.run(ui_sender, true).await }),
+                        persistent_exit: None,
                     })
                 }
             }
