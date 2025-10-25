@@ -11,7 +11,17 @@
       },
       "routing": [
         {
-          "paths": ["/docs", "/docs/:path*"]
+          "paths": ["/docs/:path*"]
+        }
+      ]
+    },
+    "admin": {
+      "development": {
+        "local": 3002
+      },
+      "routing": [
+        {
+          "paths": ["/admin/:path*"]
         }
       ]
     }
