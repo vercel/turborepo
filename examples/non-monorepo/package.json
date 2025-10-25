@@ -2,27 +2,27 @@
   "name": "non-monorepo",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@8.14.0",
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "check-types": "tsc --noEmit",
-    "lint": "next lint"
+    "lint": "eslint",
+    "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "next": "15.4.6",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "turbo": "^2.5.4"
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "next": "16.0.0"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.1",
-    "@types/node": "^22.15.30",
-    "@types/react": "^19.1.6",
-    "@types/react-dom": "^19.1.6",
-    "eslint": "^9.33.0",
-    "eslint-config-next": "15.4.2",
-    "typescript": "^5.9.2"
-  }
+    "typescript": "^5",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@tailwindcss/postcss": "^4",
+    "tailwindcss": "^4",
+    "eslint": "^9",
+    "eslint-config-next": "16.0.0"
+  },
+  "packageManager": "pnpm@10.19.0"
 }
