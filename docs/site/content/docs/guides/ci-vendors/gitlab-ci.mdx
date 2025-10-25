@@ -104,7 +104,7 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
 
     </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
     ```yaml title=".gitlab-ci.yml"
     default:
       image: oven/bun:1.2
@@ -149,6 +149,6 @@ Copy the value to a safe place. You'll need it in a moment.
 ![GitLab CI Variables](/images/docs/gitlab-ci-variables.png)
 ![GitLab CI Create Variable](/images/docs/gitlab-ci-create-variable.png)
 
-3. Make a second secret called `TURBO_TEAM` and set it to your team slug - the part after `vercel.com/` in [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). For example, the slug for `vercel.com/acme` is `acme`. 
+3. Make a second secret called `TURBO_TEAM` and set it to your team slug - the part after `vercel.com/` in [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). For example, the slug for `vercel.com/acme` is `acme`.
 
 Remote Caching will now be operational in your GitLab workflows.

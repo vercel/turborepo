@@ -22,7 +22,7 @@ export function Tabs({
   );
 }
 
-const packageManagers = ["pnpm", "yarn", "npm", "bun (Beta)"];
+const packageManagers = ["pnpm", "yarn", "npm", "bun"];
 
 const checkPackageManagerIndex = (index: number, provided: string) => {
   if (provided !== packageManagers[index]) {
