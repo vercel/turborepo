@@ -550,10 +550,13 @@ This flag can be helpful for debugging to determine things like:
 - How task timings changed over time
 
 <Callout type="info" title="Summaries viewer">
-  While there is not a Turborepo-native Run Summaries UI viewer, we encourage
-  you to use the community-built
-  [https://turbo.nullvoxpopuli.com](https://turbo.nullvoxpopuli.com) if you
-  would like to view your Run Summaries as a web view.
+  While there is not a Turborepo-native Run Summaries UI viewer, there are
+  several community-built tools available:
+
+- [https://turbo.nullvoxpopuli.com](https://turbo.nullvoxpopuli.com) - Web-based UI viewer for Run Summaries
+- [`turborepo-summary`](https://github.com/charpeni/turborepo-summary) - Generate human-readable reports from Turborepo run summary JSON output
+- [`turborepo-summary-action`](https://github.com/charpeni/turborepo-summary-action) - GitHub Action wrapping `turborepo-summary` to append them to GitHub Actions Job Summary
+
 </Callout>
 
 ### `--token`

@@ -169,7 +169,7 @@ Under the hood, Turborepo creates two hashes: a global hash and a task hash. If 
 | [`globalDependencies`](/docs/reference/configuration#globaldependencies) file contents | Changing `./.env` when it is listed in `globalDependencies` will cause **all** tasks to miss cache                                                         |
 | Values of variables listed in [`globalEnv`](/docs/reference/configuration#globalenv)   | Changing the value of `GITHUB_TOKEN` when it is listed in `globalEnv`                                                                                      |
 | Flag values that affect task runtime                                                   | Using behavior-changing flags like `--cache-dir`, `--framework-inference`, or `--env-mode`                                                                 |
-| Arbitrary passthrough arguments                                                        | `turbo build -- --arg=value` will miss cache when compared to either `turbo build` or `turbo build -- --arg=diff`                                                      |
+| Arbitrary passthrough arguments                                                        | `turbo build -- --arg=value` will miss cache when compared to either `turbo build` or `turbo build -- --arg=diff`                                          |
 
 ### Package hash inputs
 
@@ -196,10 +196,13 @@ Turborepo has a [`--summarize` flag](/docs/reference/run#--summarize) that can b
 - Debugging outputs: If cache hits aren't restoring the files you're expecting, a Run Summary can help you understand what outputs are being restored from cache.
 
 <Callout type="info" title="Summaries viewer">
-  While there is not a Turborepo-native Run Summaries UI viewer, we encourage
-  you to use the community-built
-  [https://turbo.nullvoxpopuli.com](https://turbo.nullvoxpopuli.com) if you
-  would like to view your Run Summaries as a web view.
+  While there is not a Turborepo-native Run Summaries UI viewer, there are
+  several community-built tools available:
+
+- [https://turbo.nullvoxpopuli.com](https://turbo.nullvoxpopuli.com) - Web-based UI viewer for Run Summaries
+- [`turborepo-summary`](https://github.com/charpeni/turborepo-summary) - Generate human-readable reports from Turborepo run summary JSON output
+- [`turborepo-summary-action`](https://github.com/charpeni/turborepo-summary-action) - GitHub Action wrapping `turborepo-summary` to append them to GitHub Actions Job Summary
+
 </Callout>
 
 ### Turning off caching
