@@ -41,8 +41,24 @@ use turbopath::{
 /// This is subject to change at any time.
 pub const DEFAULT_MICROFRONTENDS_CONFIG_V1: &str = "microfrontends.json";
 pub const DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT: &str = "microfrontends.jsonc";
+pub const DEFAULT_MICROFRONTENDS_CONFIG_V1_CUSTOM: &str = get_default_microfrontends_config_v1_custom().unwrap_or_default();
 pub const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
 pub const SUPPORTED_VERSIONS: &[&str] = ["1"].as_slice();
+
+pub fn get_default_microfrontends_config_v1_custom() -> Result<Option<String>, Error> {
+    match std::env::var("VC_MICROFRONTENDS_CONFIG_FILE_NAME") {
+        Ok(config_filename) => {
+            let lower = config_filename.to_ascii_lowercase();
+            if lower.ends_with(".json") || lower.ends_with(".jsonc") {
+                Ok(Some(config_filename))
+            } else {
+                Err(Error::InvalidConfigFileName(config_filename))
+            }
+        }
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(e) => Err(Error::EnvVarError(e)),
+    }
+}
 
 /// Strict Turborepo-only configuration for the microfrontends proxy.
 /// This configuration parser only accepts fields that Turborepo's native proxy
@@ -209,6 +225,7 @@ impl TurborepoMfeConfig {
             };
         load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
             .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
+            .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_CUSTOM))
     }
 
     pub fn set_path(&mut self, dir: &AnchoredSystemPath) {
@@ -399,6 +416,7 @@ impl Config {
             };
         load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
             .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
+            .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_CUSTOM))
     }
 
     /// Sets the path the configuration was loaded from
@@ -459,6 +477,12 @@ mod test {
 
     fn add_v1_alt_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
         let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT);
+        path.ensure_dir()?;
+        path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
+    }
+
+    fn add_v1_custom_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
+        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1_CUSTOM);
         path.ensure_dir()?;
         path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
@@ -534,6 +558,11 @@ mod test {
         .expects_v1()
         .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT);
 
+    const LOAD_V1_CUSTOM: LoadDirTest = LoadDirTest::new("web")
+        .has_v1_custom()
+        .expects_v1()
+        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V1_CUSTOM);
+
     const LOAD_NONE: LoadDirTest = LoadDirTest::new("web");
 
     const LOAD_VERSIONLESS: LoadDirTest = LoadDirTest::new("web")
@@ -543,6 +572,7 @@ mod test {
 
     #[test_case(LOAD_V1)]
     #[test_case(LOAD_V1_ALT)]
+    #[test_case(LOAD_V1_CUSTOM)]
     #[test_case(LOAD_NONE)]
     #[test_case(LOAD_VERSIONLESS)]
     fn test_load_dir(case: LoadDirTest) {
@@ -555,6 +585,9 @@ mod test {
         }
         if case.has_alt_v1 {
             add_v1_alt_config(&pkg_path).unwrap();
+        }
+        if case.has_v1_custom {
+            add_v1_custom_config(&pkg_path).unwrap();
         }
         if case.has_versionless {
             add_no_version_config(&pkg_path).unwrap();
