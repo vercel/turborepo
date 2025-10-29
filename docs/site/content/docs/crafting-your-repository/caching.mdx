@@ -169,7 +169,7 @@ Under the hood, Turborepo creates two hashes: a global hash and a task hash. If 
 | [`globalDependencies`](/docs/reference/configuration#globaldependencies) file contents | Changing `./.env` when it is listed in `globalDependencies` will cause **all** tasks to miss cache                                                         |
 | Values of variables listed in [`globalEnv`](/docs/reference/configuration#globalenv)   | Changing the value of `GITHUB_TOKEN` when it is listed in `globalEnv`                                                                                      |
 | Flag values that affect task runtime                                                   | Using behavior-changing flags like `--cache-dir`, `--framework-inference`, or `--env-mode`                                                                 |
-| Arbitrary passthrough arguments                                                        | `turbo build -- --arg=value` will miss cache when compared to either `turbo build` or `turbo build -- --arg=diff`                                                      |
+| Arbitrary passthrough arguments                                                        | `turbo build -- --arg=value` will cause **all** tasks to miss cache when compared to either `turbo build` or `turbo build -- --arg=diff` (including dependencies of `build` that did not receive `--arg=value`)                                                     |
 
 ### Package hash inputs
 
