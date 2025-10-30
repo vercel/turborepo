@@ -677,14 +677,10 @@ mod test {
             let msg = e.to_string();
             assert!(
                 msg.contains("Multiple microfrontends configuration files found"),
-                "Error message should mention multiple files, got: {}",
-                msg
+                "Error message should mention multiple files, got: {msg}"
             );
         } else {
-            panic!(
-                "Expected Io error with multiple files message, got: {:?}",
-                result
-            );
+            panic!("Expected Io error with multiple files message, got: {result:?}");
         }
     }
 
