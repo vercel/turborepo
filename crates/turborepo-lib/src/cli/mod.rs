@@ -48,9 +48,10 @@ const DEFAULT_NUM_WORKERS: u32 = 10;
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum, Deserializable, Serialize)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Deserializable, Serialize)]
 pub enum OutputLogsMode {
     #[serde(rename = "full")]
+    #[default]
     Full,
     #[serde(rename = "none")]
     None,
@@ -60,12 +61,6 @@ pub enum OutputLogsMode {
     NewOnly,
     #[serde(rename = "errors-only")]
     ErrorsOnly,
-}
-
-impl Default for OutputLogsMode {
-    fn default() -> Self {
-        Self::Full
-    }
 }
 
 impl Display for OutputLogsMode {
@@ -92,20 +87,15 @@ impl From<OutputLogsMode> for turborepo_ui::tui::event::OutputLogs {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
 pub enum LogOrder {
     #[serde(rename = "auto")]
+    #[default]
     Auto,
     #[serde(rename = "stream")]
     Stream,
     #[serde(rename = "grouped")]
     Grouped,
-}
-
-impl Default for LogOrder {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl Display for LogOrder {
@@ -1162,20 +1152,15 @@ impl RunArgs {
     }
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug, PartialEq, Serialize)]
+#[derive(ValueEnum, Clone, Copy, Debug, Default, PartialEq, Serialize)]
 pub enum LogPrefix {
     #[serde(rename = "auto")]
+    #[default]
     Auto,
     #[serde(rename = "none")]
     None,
     #[serde(rename = "task")]
     Task,
-}
-
-impl Default for LogPrefix {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl Display for LogPrefix {
