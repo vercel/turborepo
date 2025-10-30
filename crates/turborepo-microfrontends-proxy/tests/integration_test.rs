@@ -497,3 +497,176 @@ async fn test_port_validation_blocks_invalid_ports() {
         assert!(err.contains("blocked for security reasons") || err.contains("Invalid port 3306"));
     }
 }
+
+#[tokio::test]
+async fn test_invalid_path_patterns() {
+    // Test optional path syntax
+    let config_json = r#"{
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 3000 }
+                }
+            },
+            "api": {
+                "development": {
+                    "local": { "port": 3001 }
+                },
+                "routing": [
+                    { "paths": ["/api{test}"] }
+                ]
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let result = Router::new(&config);
+    assert!(result.is_err(), "Should reject optional path syntax");
+    if let Err(err) = result {
+        assert!(err.contains("Optional paths are not supported"));
+    }
+
+    // Test multiple wildcards per segment
+    let config_json = r#"{
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 3000 }
+                }
+            },
+            "api": {
+                "development": {
+                    "local": { "port": 3001 }
+                },
+                "routing": [
+                    { "paths": ["/api/:a:b"] }
+                ]
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let result = Router::new(&config);
+    assert!(
+        result.is_err(),
+        "Should reject multiple wildcards per segment"
+    );
+    if let Err(err) = result {
+        assert!(err.contains("Only one wildcard is allowed per path segment"));
+    }
+
+    // Test regex patterns
+    let config_json = r#"{
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 3000 }
+                }
+            },
+            "api": {
+                "development": {
+                    "local": { "port": 3001 }
+                },
+                "routing": [
+                    { "paths": ["/:lang(en|es|de)/blog"] }
+                ]
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let result = Router::new(&config);
+    assert!(result.is_err(), "Should reject regex patterns");
+    if let Err(err) = result {
+        assert!(err.contains("regular expression"));
+    }
+
+    // Test modifiers in non-terminal positions
+    let config_json = r#"{
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 3000 }
+                }
+            },
+            "api": {
+                "development": {
+                    "local": { "port": 3001 }
+                },
+                "routing": [
+                    { "paths": ["/:path*/foo"] }
+                ]
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let result = Router::new(&config);
+    assert!(
+        result.is_err(),
+        "Should reject modifiers in non-terminal positions"
+    );
+    if let Err(err) = result {
+        assert!(err.contains("Modifiers are only allowed in the last path component"));
+    }
+}
+
+#[tokio::test]
+async fn test_valid_path_patterns_with_plus_modifier() {
+    let config_json = r#"{
+        "applications": {
+            "main": {
+                "development": {
+                    "local": { "port": 3000 }
+                }
+            },
+            "api": {
+                "development": {
+                    "local": { "port": 3001 }
+                },
+                "routing": [
+                    { "paths": ["/api/:path+"] }
+                ]
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let router = Router::new(&config).unwrap();
+
+    // + requires at least one segment
+    assert_eq!(router.match_route("/api").app_name.as_ref(), "main");
+    assert_eq!(router.match_route("/api/users").app_name.as_ref(), "api");
+    assert_eq!(
+        router.match_route("/api/users/123").app_name.as_ref(),
+        "api"
+    );
+}
+
+#[tokio::test]
+async fn test_trailing_slash_normalization() {
+    let config_json = r#"{
+        "applications": {
+            "web": {
+                "development": {
+                    "local": { "port": 3000 }
+                }
+            },
+            "blog": {
+                "development": {
+                    "local": { "port": 3001 }
+                },
+                "routing": [
+                    { "paths": ["/blog/:slug"] }
+                ]
+            }
+        }
+    }"#;
+
+    let config = Config::from_str(config_json, "test.json").unwrap();
+    let router = Router::new(&config).unwrap();
+
+    // Both with and without trailing slash should match the same route
+    assert_eq!(router.match_route("/blog/post").app_name.as_ref(), "blog");
+    assert_eq!(router.match_route("/blog/post/").app_name.as_ref(), "blog");
+}
