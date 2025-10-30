@@ -58,6 +58,7 @@ Create a `microfrontends.json` file in your parent application. This application
 
 ```json title="./apps/web/microfrontends.json"
 {
+  "$schema": "https://turborepo.com/microfrontends/schema.json",
   "applications": {
     "web": {
       "development": {
@@ -136,7 +137,7 @@ export default nextConfig;
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/thing',
+  base: '/admin',
 });
 ```
 
@@ -212,6 +213,9 @@ Only one application can have no `routing` configuration. This is your "root" ap
 }
 ```
 
+- Paths are **case-sensitive**: `/Blog` and `/blog` are different routes
+- Trailing slashes are normalized: `/home` and `/home/` match the same route
+
 #### Exact matches
 
 ```json title="./apps/web/microfrontends.json"
@@ -242,12 +246,41 @@ Segments starting with `:` match any single path segment. For example, `/blog/:s
 
 Parameters ending with `*` match zero or more path segments. For example, `/docs/:path*` matches `/docs`, `/docs/intro`, and `/docs/api/reference`.
 
+You can also use the `+` modifier to match one or more segments (excluding the empty path):
+
+```json title="./apps/web/microfrontends.json"
+{
+  "paths": ["/api/:path+"]
+}
+```
+
+This matches `/api/users` and `/api/users/123`, but not `/api` or `/api/`.
+
+#### Complex routing patterns
+
+You can define sophisticated routing with nested parameters:
+
+```json title="./apps/web/microfrontends.json"
+{
+  "routing": [
+    {
+      "paths": [
+        "/api/:version/users",
+        "/api/:version/users/:id",
+        "/api/:version/posts/:postId/comments/:commentId"
+      ]
+    }
+  ]
+}
+```
+
 #### Group labels
 
 Organize routes into logical groups for better maintainability:
 
 ```json title="./apps/web/microfrontends.json"
 {
+  "$schema": "https://turborepo.com/microfrontends/schema.json",
   "applications": {
     "marketing": {
       "development": {
@@ -269,24 +302,6 @@ Organize routes into logical groups for better maintainability:
 ```
 
 The `group` field is for organizational purposes and doesn't affect routing behavior.
-
-#### Complex routing patterns
-
-You can define sophisticated routing with nested parameters:
-
-```json title="./apps/web/microfrontends.json"
-{
-  "routing": [
-    {
-      "paths": [
-        "/api/:version/users",
-        "/api/:version/users/:id",
-        "/api/:version/posts/:postId/comments/:commentId"
-      ]
-    }
-  ]
-}
-```
 
 ### `packageName`
 
@@ -377,6 +392,7 @@ Here's a full example of a microfrontends configuration for an e-commerce platfo
 
 ```json title="./apps/web/microfrontends.json"
 {
+  "$schema": "https://turborepo.com/microfrontends/schema.json",
   "options": {
     "localProxyPort": 3024
   },
