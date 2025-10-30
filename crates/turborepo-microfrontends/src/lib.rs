@@ -26,8 +26,6 @@ mod configv1;
 mod error;
 mod schema;
 
-use std::io;
-
 use configv1::ConfigV1;
 pub use configv1::PathGroup;
 pub use error::Error;
@@ -200,7 +198,7 @@ impl TurborepoMfeConfig {
 
     fn load_v1_dir(
         dir: &AbsoluteSystemPath,
-    ) -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+    ) -> Option<(Result<String, Error>, AbsoluteSystemPathBuf)> {
         // Collect all matching files
         let mut matching_files = Vec::new();
 
@@ -220,13 +218,9 @@ impl TurborepoMfeConfig {
         if matching_files.len() > 1 {
             matching_files.sort();
             return Some((
-                Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!(
-                        "Multiple microfrontends configuration files found: {matching_files:?}. \
-                         Only one configuration file is allowed."
-                    ),
-                )),
+                Err(Error::MultipleConfigFiles {
+                    files: matching_files,
+                }),
                 dir.to_owned(),
             ));
         }
@@ -234,7 +228,10 @@ impl TurborepoMfeConfig {
         // Load the single matching file if found
         if let Some(filename) = matching_files.first() {
             let path = dir.join_component(filename);
-            let contents = path.read_existing_to_string().transpose()?;
+            let contents = path
+                .read_existing_to_string()
+                .map_err(Error::from)
+                .transpose()?;
             return Some((contents, path));
         }
 
@@ -420,7 +417,7 @@ impl Config {
 
     fn load_v1_dir(
         dir: &AbsoluteSystemPath,
-    ) -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+    ) -> Option<(Result<String, Error>, AbsoluteSystemPathBuf)> {
         // Collect all matching files
         let mut matching_files = Vec::new();
 
@@ -440,13 +437,9 @@ impl Config {
         if matching_files.len() > 1 {
             matching_files.sort();
             return Some((
-                Err(io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!(
-                        "Multiple microfrontends configuration files found: {matching_files:?}. \
-                         Only one configuration file is allowed."
-                    ),
-                )),
+                Err(Error::MultipleConfigFiles {
+                    files: matching_files,
+                }),
                 dir.to_owned(),
             ));
         }
@@ -454,7 +447,10 @@ impl Config {
         // Load the single matching file if found
         if let Some(filename) = matching_files.first() {
             let path = dir.join_component(filename);
-            let contents = path.read_existing_to_string().transpose()?;
+            let contents = path
+                .read_existing_to_string()
+                .map_err(Error::from)
+                .transpose()?;
             return Some((contents, path));
         }
 
@@ -673,14 +669,14 @@ mod test {
             result.is_err(),
             "Multiple config files should result in error"
         );
-        if let Err(Error::Io(e)) = result {
-            let msg = e.to_string();
-            assert!(
-                msg.contains("Multiple microfrontends configuration files found"),
-                "Error message should mention multiple files, got: {msg}"
+        if let Err(Error::MultipleConfigFiles { files }) = result {
+            assert_eq!(
+                files,
+                vec!["microfrontends-custom.json", "microfrontends.json"],
+                "Should contain both config files"
             );
         } else {
-            panic!("Expected Io error with multiple files message, got: {result:?}");
+            panic!("Expected MultipleConfigFiles error, got: {result:?}");
         }
     }
 
