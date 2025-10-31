@@ -107,7 +107,7 @@ This strategy gives teams at scale the ability to ship more independently. Relea
 
 While this does help production deployments, it can create difficulty for local development since you’ll have to run many applications instead of just one. Each application ends up needing its own development command and port to use.
 
-Today, we’re releasing a microfrontend proxy for local development, so that all of your applications can run on one port, with one command. Add a `microfrontends.json` file to your parent application and Turborepo will automatically proxy [`localhost:3024`](http://localhost:3024) to the ports for your other applications.
+Today, we’re releasing a microfrontend proxy for local development, so that all of your applications can run on one port, with one command. Add a `microfrontends.json` file to your parent application and Turborepo will automatically proxy `localhost:3024` to the ports for your other applications.
 
 ```json title="./apps/web/microfrontends.json"
 {
