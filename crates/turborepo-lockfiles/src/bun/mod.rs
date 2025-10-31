@@ -100,6 +100,7 @@ use id::PossibleKeyIter;
 use itertools::Itertools as _;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
+use turbopath::RelativeUnixPathBuf;
 use turborepo_errors::ParseDiagnostic;
 
 use crate::Lockfile;
@@ -495,6 +496,17 @@ impl Lockfile for BunLockfile {
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
         Ok(serde_json::to_vec_pretty(&self.data)?)
+    }
+
+    fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, crate::Error> {
+        let mut patches = self
+            .data
+            .patched_dependencies
+            .iter()
+            .map(|(_, patch_file)| RelativeUnixPathBuf::new(patch_file))
+            .collect::<Result<Vec<_>, turbopath::PathError>>()?;
+        patches.sort();
+        Ok(patches)
     }
 
     fn global_change(&self, other: &dyn Lockfile) -> bool {
