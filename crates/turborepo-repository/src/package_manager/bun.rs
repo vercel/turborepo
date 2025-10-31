@@ -1,6 +1,11 @@
-use turbopath::AbsoluteSystemPath;
+use std::collections::HashSet;
 
-use crate::package_manager::{Error, PackageManager};
+use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
+
+use crate::{
+    package_json::PackageJson,
+    package_manager::{Error, PackageManager},
+};
 
 pub const LOCKFILE: &str = "bun.lock";
 pub const LOCKFILE_BINARY: &str = "bun.lockb";
@@ -40,13 +45,28 @@ impl Iterator for BunDetector<'_> {
     }
 }
 
+pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
+    package_json: &PackageJson,
+    patches: &[R],
+) -> PackageJson {
+    let mut pruned_json = package_json.clone();
+    let patches_set = patches.iter().map(|r| r.as_ref()).collect::<HashSet<_>>();
+
+    if let Some(existing_patches) = pruned_json.patched_dependencies.as_mut() {
+        existing_patches.retain(|_, patch_path| patches_set.contains(patch_path.as_ref()));
+    }
+
+    pruned_json
+}
+
 #[cfg(test)]
 mod tests {
-    use std::assert_matches::assert_matches;
+    use std::{assert_matches::assert_matches, collections::BTreeMap};
 
     use anyhow::Result;
+    use serde_json::json;
     use tempfile::tempdir;
-    use turbopath::AbsoluteSystemPathBuf;
+    use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
 
@@ -83,5 +103,29 @@ mod tests {
         let package_manager = PackageManager::detect_package_manager(&repo_root_path)?;
         assert_eq!(package_manager, PackageManager::Bun);
         Ok(())
+    }
+
+    #[test]
+    fn test_patch_pruning() {
+        let package_json: PackageJson = PackageJson::from_value(json!({
+            "name": "bun-patches",
+            "patchedDependencies": {
+                "foo@1.0.0": "patches/foo@1.0.0.patch",
+                "bar@1.2.3": "patches/bar@1.2.3.patch",
+            }
+        }))
+        .unwrap();
+        let patches = vec![RelativeUnixPathBuf::new("patches/foo@1.0.0.patch").unwrap()];
+        let pruned = prune_patches(&package_json, &patches);
+        assert_eq!(
+            pruned.patched_dependencies.as_ref(),
+            Some(
+                [("foo@1.0.0", "patches/foo@1.0.0.patch")]
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), RelativeUnixPathBuf::new(*v).unwrap()))
+                    .collect::<BTreeMap<_, _>>()
+            )
+            .as_ref()
+        );
     }
 }
