@@ -208,6 +208,7 @@ impl TurborepoMfeConfig {
                 if let Some(name) = entry.file_name().to_str()
                     && name.starts_with("microfrontends")
                     && (name.ends_with(".json") || name.ends_with(".jsonc"))
+                    && entry.metadata().ok().map_or(false, |m| m.is_file())
                 {
                     matching_files.push(name.to_string());
                 }
@@ -427,6 +428,7 @@ impl Config {
                 if let Some(name) = entry.file_name().to_str()
                     && name.starts_with("microfrontends")
                     && (name.ends_with(".json") || name.ends_with(".jsonc"))
+                    && entry.metadata().ok().map_or(false, |m| m.is_file())
                 {
                     matching_files.push(name.to_string());
                 }
