@@ -34,11 +34,6 @@ pub enum Error {
     },
     #[error("Invalid package path: {0}. Path traversal outside repository root is not allowed.")]
     PathTraversal(String),
-    #[error(
-        "Multiple microfrontends configuration files found: {files:?}. Only one configuration \
-         file is allowed."
-    )]
-    MultipleConfigFiles { files: Vec<String> },
 }
 
 impl Error {

@@ -26,6 +26,8 @@ mod configv1;
 mod error;
 mod schema;
 
+use std::io;
+
 use configv1::ConfigV1;
 pub use configv1::PathGroup;
 pub use error::Error;
@@ -198,45 +200,15 @@ impl TurborepoMfeConfig {
 
     fn load_v1_dir(
         dir: &AbsoluteSystemPath,
-    ) -> Option<(Result<String, Error>, AbsoluteSystemPathBuf)> {
-        // Collect all matching files
-        let mut matching_files = Vec::new();
-
-        // Check for microfrontends*.json(c) files
-        if let Ok(entries) = std::fs::read_dir(dir.as_path()) {
-            for entry in entries.flatten() {
-                if let Some(name) = entry.file_name().to_str()
-                    && name.starts_with("microfrontends")
-                    && (name.ends_with(".json") || name.ends_with(".jsonc"))
-                    && entry.metadata().ok().is_some_and(|m| m.is_file())
-                {
-                    matching_files.push(name.to_string());
-                }
-            }
-        }
-
-        // Error if multiple files found
-        if matching_files.len() > 1 {
-            matching_files.sort();
-            return Some((
-                Err(Error::MultipleConfigFiles {
-                    files: matching_files,
-                }),
-                dir.to_owned(),
-            ));
-        }
-
-        // Load the single matching file if found
-        if let Some(filename) = matching_files.first() {
-            let path = dir.join_component(filename);
-            let contents = path
-                .read_existing_to_string()
-                .map_err(Error::from)
-                .transpose()?;
-            return Some((contents, path));
-        }
-
-        None
+    ) -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+        let load_config =
+            |filename: &str| -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+                let path = dir.join_component(filename);
+                let contents = path.read_existing_to_string().transpose()?;
+                Some((contents, path))
+            };
+        load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
+            .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
     }
 
     pub fn set_path(&mut self, dir: &AnchoredSystemPath) {
@@ -418,45 +390,15 @@ impl Config {
 
     fn load_v1_dir(
         dir: &AbsoluteSystemPath,
-    ) -> Option<(Result<String, Error>, AbsoluteSystemPathBuf)> {
-        // Collect all matching files
-        let mut matching_files = Vec::new();
-
-        // Check for microfrontends*.json(c) files
-        if let Ok(entries) = std::fs::read_dir(dir.as_path()) {
-            for entry in entries.flatten() {
-                if let Some(name) = entry.file_name().to_str()
-                    && name.starts_with("microfrontends")
-                    && (name.ends_with(".json") || name.ends_with(".jsonc"))
-                    && entry.metadata().ok().is_some_and(|m| m.is_file())
-                {
-                    matching_files.push(name.to_string());
-                }
-            }
-        }
-
-        // Error if multiple files found
-        if matching_files.len() > 1 {
-            matching_files.sort();
-            return Some((
-                Err(Error::MultipleConfigFiles {
-                    files: matching_files,
-                }),
-                dir.to_owned(),
-            ));
-        }
-
-        // Load the single matching file if found
-        if let Some(filename) = matching_files.first() {
-            let path = dir.join_component(filename);
-            let contents = path
-                .read_existing_to_string()
-                .map_err(Error::from)
-                .transpose()?;
-            return Some((contents, path));
-        }
-
-        None
+    ) -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+        let load_config =
+            |filename: &str| -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+                let path = dir.join_component(filename);
+                let contents = path.read_existing_to_string().transpose()?;
+                Some((contents, path))
+            };
+        load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
+            .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
     }
 
     /// Sets the path the configuration was loaded from
@@ -468,6 +410,7 @@ impl Config {
 #[cfg(test)]
 mod test {
     use tempfile::TempDir;
+    use test_case::test_case;
 
     use super::*;
 
@@ -500,6 +443,14 @@ mod test {
         path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
+    fn add_no_version_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
+        let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1);
+        path.ensure_dir()?;
+        path.create_with_contents(
+            r#"{"applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#,
+        )
+    }
+
     fn add_v2_config(dir: &AbsoluteSystemPath) -> Result<(), std::io::Error> {
         let path = dir.join_component(DEFAULT_MICROFRONTENDS_CONFIG_V1);
         path.ensure_dir()?;
@@ -512,70 +463,110 @@ mod test {
         path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
     }
 
-    fn add_config_with_name(
-        dir: &AbsoluteSystemPath,
-        filename: &str,
-    ) -> Result<(), std::io::Error> {
-        let path = dir.join_component(filename);
-        path.ensure_dir()?;
-        path.create_with_contents(r#"{"version": "1", "applications": {"web": {"development": {"task": "serve"}}, "docs": {}}}"#)
+    struct LoadDirTest {
+        has_v1: bool,
+        has_alt_v1: bool,
+        has_versionless: bool,
+        pkg_dir: &'static str,
+        expected_version: Option<FoundConfig>,
+        expected_filename: Option<&'static str>,
     }
 
-    #[test]
-    fn test_load_v1() {
-        let dir = TempDir::new().unwrap();
-        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        let pkg_dir = AnchoredSystemPath::new("web").unwrap();
-        let pkg_path = repo_root.resolve(pkg_dir);
-        add_v1_config(&pkg_path).unwrap();
-
-        let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
-        assert!(config.is_some());
-        let cfg = config.unwrap();
-        assert_eq!(cfg.filename(), DEFAULT_MICROFRONTENDS_CONFIG_V1);
-        assert_eq!(cfg.version(), "1");
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    enum FoundConfig {
+        V1,
     }
 
-    #[test]
-    fn test_load_v1_alt() {
-        let dir = TempDir::new().unwrap();
-        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        let pkg_dir = AnchoredSystemPath::new("web").unwrap();
-        let pkg_path = repo_root.resolve(pkg_dir);
-        add_v1_alt_config(&pkg_path).unwrap();
+    impl LoadDirTest {
+        pub const fn new(pkg_dir: &'static str) -> Self {
+            Self {
+                pkg_dir,
+                has_v1: false,
+                has_alt_v1: false,
+                has_versionless: false,
+                expected_version: None,
+                expected_filename: None,
+            }
+        }
 
-        let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
-        assert!(config.is_some());
-        let cfg = config.unwrap();
-        assert_eq!(cfg.filename(), DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT);
-        assert_eq!(cfg.version(), "1");
+        pub const fn has_v1(mut self) -> Self {
+            self.has_v1 = true;
+            self
+        }
+
+        pub const fn has_alt_v1(mut self) -> Self {
+            self.has_alt_v1 = true;
+            self
+        }
+
+        pub const fn has_versionless(mut self) -> Self {
+            self.has_versionless = true;
+            self
+        }
+
+        pub const fn expects_v1(mut self) -> Self {
+            self.expected_version = Some(FoundConfig::V1);
+            self
+        }
+
+        pub const fn with_filename(mut self, filename: &'static str) -> Self {
+            self.expected_filename = Some(filename);
+            self
+        }
+
+        pub fn expected_path(&self) -> Option<AnchoredSystemPathBuf> {
+            let filename = self.expected_filename?;
+            Some(
+                AnchoredSystemPath::new(self.pkg_dir)
+                    .unwrap()
+                    .join_component(filename),
+            )
+        }
     }
 
-    #[test]
-    fn test_load_v1_custom_path() {
+    const LOAD_V1: LoadDirTest = LoadDirTest::new("web")
+        .has_v1()
+        .expects_v1()
+        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V1);
+
+    const LOAD_V1_ALT: LoadDirTest = LoadDirTest::new("web")
+        .has_alt_v1()
+        .expects_v1()
+        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT);
+
+    const LOAD_NONE: LoadDirTest = LoadDirTest::new("web");
+
+    const LOAD_VERSIONLESS: LoadDirTest = LoadDirTest::new("web")
+        .has_versionless()
+        .expects_v1()
+        .with_filename(DEFAULT_MICROFRONTENDS_CONFIG_V1);
+
+    #[test_case(LOAD_V1)]
+    #[test_case(LOAD_V1_ALT)]
+    #[test_case(LOAD_NONE)]
+    #[test_case(LOAD_VERSIONLESS)]
+    fn test_load_dir(case: LoadDirTest) {
         let dir = TempDir::new().unwrap();
         let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        let pkg_dir = AnchoredSystemPath::new("web").unwrap();
+        let pkg_dir = AnchoredSystemPath::new(case.pkg_dir).unwrap();
         let pkg_path = repo_root.resolve(pkg_dir);
-        add_config_with_name(&pkg_path, "microfrontends-custom.json").unwrap();
+        if case.has_v1 {
+            add_v1_config(&pkg_path).unwrap();
+        }
+        if case.has_alt_v1 {
+            add_v1_alt_config(&pkg_path).unwrap();
+        }
+        if case.has_versionless {
+            add_no_version_config(&pkg_path).unwrap();
+        }
 
         let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
-        assert!(config.is_some());
-        let cfg = config.unwrap();
-        assert_eq!(cfg.filename(), "microfrontends-custom.json");
-        assert_eq!(cfg.version(), "1");
-    }
-
-    #[test]
-    fn test_load_none() {
-        let dir = TempDir::new().unwrap();
-        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        let pkg_dir = AnchoredSystemPath::new("web").unwrap();
-        let pkg_path = repo_root.resolve(pkg_dir);
-        pkg_path.ensure_dir().unwrap();
-
-        let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
-        assert!(config.is_none());
+        let actual_version = config.as_ref().map(|config| match &config.inner {
+            ConfigInner::V1(_) => FoundConfig::V1,
+        });
+        let actual_path = config.as_ref().and_then(|config| config.path());
+        assert_eq!(actual_version, case.expected_version);
+        assert_eq!(actual_path, case.expected_path().as_deref());
     }
 
     #[test]
@@ -652,96 +643,5 @@ mod test {
 
         assert!(result.is_ok(), "Valid path within repo should be accepted");
         assert!(result.unwrap().is_some(), "Config should be loaded");
-    }
-
-    #[test]
-    fn test_multiple_config_files_error() {
-        let dir = TempDir::new().unwrap();
-        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        let pkg_dir = AnchoredSystemPath::new("web").unwrap();
-        let pkg_path = repo_root.resolve(pkg_dir);
-
-        // Add multiple config files
-        add_v1_config(&pkg_path).unwrap();
-        add_config_with_name(&pkg_path, "microfrontends-custom.json").unwrap();
-
-        let result = Config::load_from_dir(repo_root, pkg_dir);
-
-        assert!(
-            result.is_err(),
-            "Multiple config files should result in error"
-        );
-        if let Err(Error::MultipleConfigFiles { files }) = result {
-            assert_eq!(
-                files,
-                vec!["microfrontends-custom.json", "microfrontends.json"],
-                "Should contain both config files"
-            );
-        } else {
-            panic!("Expected MultipleConfigFiles error, got: {result:?}");
-        }
-    }
-
-    #[test]
-    fn test_custom_named_config() {
-        let dir = TempDir::new().unwrap();
-        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        let pkg_dir = AnchoredSystemPath::new("web").unwrap();
-        let pkg_path = repo_root.resolve(pkg_dir);
-
-        // Add a custom named config file
-        add_config_with_name(&pkg_path, "microfrontends-staging.jsonc").unwrap();
-
-        let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
-
-        assert!(config.is_some(), "Custom named config should be loaded");
-        let cfg = config.unwrap();
-        assert_eq!(cfg.filename(), "microfrontends-staging.jsonc");
-    }
-
-    #[test]
-    fn test_file_without_hyphen_matched() {
-        let dir = TempDir::new().unwrap();
-        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        let pkg_dir = AnchoredSystemPath::new("web").unwrap();
-        let pkg_path = repo_root.resolve(pkg_dir);
-
-        // Add a file that starts with "microfrontends" but has no hyphen
-        add_config_with_name(&pkg_path, "microfrontendsconfig.json").unwrap();
-
-        let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
-
-        assert!(config.is_some(), "Files without hyphen should be matched");
-        assert_eq!(config.unwrap().filename(), "microfrontendsconfig.json");
-    }
-
-    #[test]
-    fn test_exact_names_still_work() {
-        let dir = TempDir::new().unwrap();
-        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        let pkg_dir = AnchoredSystemPath::new("web").unwrap();
-        let pkg_path = repo_root.resolve(pkg_dir);
-
-        // Verify microfrontends.json still works
-        add_v1_config(&pkg_path).unwrap();
-        let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
-        assert!(config.is_some());
-        assert_eq!(config.unwrap().filename(), "microfrontends.json");
-    }
-
-    #[test]
-    fn test_nested_config_not_found() {
-        let dir = TempDir::new().unwrap();
-        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
-        let pkg_dir = AnchoredSystemPath::new("web").unwrap();
-        let pkg_path = repo_root.resolve(pkg_dir);
-
-        // Create a nested directory with a config file
-        let nested_path = pkg_path.join_component("config");
-        add_v1_config(&nested_path).unwrap();
-
-        // Should not find the nested config
-        let config = Config::load_from_dir(repo_root, pkg_dir).unwrap();
-        assert!(config.is_none(), "Nested config files should not be found");
     }
 }
