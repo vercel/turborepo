@@ -6,9 +6,6 @@ description: Learn how to use Turborepo's built-in microfrontends proxy for loca
 import { Callout } from '#components/callout';
 import { File, Folder, Files } from '#components/files';
 import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
-import { PrereleaseBadge } from '#components/prerelease-badge';
-
-<PrereleaseBadge />
 
 Microfrontends are an architectural pattern where a web application is decomposed into smaller, independently developed and deployed applications that work together.
 
@@ -183,8 +180,6 @@ The port where the application runs locally. Can be specified as:
 ### `development.fallback`
 
 Optionally provide a target to proxy to when an application is not running locally. This is most frequently used to route to production to make commands like `turbo dev --filter=web` that only run a subset of applications a seamless experience.
-
-Must be a fully qualified URL.
 
 ```json title="./apps/web/microfrontends.json"
 {
