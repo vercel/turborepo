@@ -26,8 +26,6 @@ mod configv1;
 mod error;
 mod schema;
 
-use std::io;
-
 use configv1::ConfigV1;
 pub use configv1::PathGroup;
 pub use error::Error;
@@ -43,6 +41,7 @@ pub const DEFAULT_MICROFRONTENDS_CONFIG_V1: &str = "microfrontends.json";
 pub const DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT: &str = "microfrontends.jsonc";
 pub const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
 pub const SUPPORTED_VERSIONS: &[&str] = ["1"].as_slice();
+pub const CUSTOM_CONFIG_ENV_VAR: &str = "VC_MICROFRONTENDS_CONFIG_FILE_NAME";
 
 /// Strict Turborepo-only configuration for the microfrontends proxy.
 /// This configuration parser only accepts fields that Turborepo's native proxy
@@ -57,6 +56,64 @@ pub struct TurborepoMfeConfig {
 }
 
 impl TurborepoMfeConfig {
+    /// Validates a custom config filename from environment variable.
+    /// Returns error if:
+    /// - Path contains ".." (attempting to traverse up)
+    /// - Path does not end with ".json" or ".jsonc"
+    /// - Path starts with "/" (must be relative)
+    /// - Path contains "/" or "\" (no subdirectories allowed)
+    fn validate_custom_config_name(filename: &str) -> Result<(), Error> {
+        // Must end with .json or .jsonc
+        if !filename.ends_with(".json") && !filename.ends_with(".jsonc") {
+            return Err(Error::InvalidCustomConfigPath(format!(
+                "{}: must be a JSON file ending with .json or .jsonc",
+                filename
+            )));
+        }
+
+        // Must not contain directory separators (no subdirectories)
+        if filename.contains('/') || filename.contains('\\') {
+            return Err(Error::InvalidCustomConfigPath(format!(
+                "{}: subdirectories not allowed, file must be in package root",
+                filename
+            )));
+        }
+
+        // Must not contain path traversal
+        if filename.contains("..") {
+            return Err(Error::InvalidCustomConfigPath(format!(
+                "{}: path traversal not allowed",
+                filename
+            )));
+        }
+
+        // Must be relative (not start with /)
+        if filename.starts_with('/') {
+            return Err(Error::InvalidCustomConfigPath(format!(
+                "{}: must be relative to package root",
+                filename
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Gets the custom config filename from environment variable if set.
+    /// Returns None if not set, or Error if invalid.
+    fn get_custom_config_name() -> Result<Option<String>, Error> {
+        match std::env::var(CUSTOM_CONFIG_ENV_VAR) {
+            Ok(filename) if !filename.is_empty() => {
+                Self::validate_custom_config_name(&filename)?;
+                Ok(Some(filename))
+            }
+            Ok(_) => Ok(None), // Empty string means not set
+            Err(std::env::VarError::NotPresent) => Ok(None),
+            Err(std::env::VarError::NotUnicode(_)) => Err(Error::InvalidCustomConfigPath(
+                "environment variable contains invalid UTF-8".to_string(),
+            )),
+        }
+    }
+
     /// Reads config from given path using strict Turborepo schema.
     /// Returns `Ok(None)` if the file does not exist
     pub fn load(config_path: &AbsoluteSystemPath) -> Result<Option<Self>, Error> {
@@ -89,10 +146,9 @@ impl TurborepoMfeConfig {
 
         Config::validate_package_path(repo_root, &absolute_dir)?;
 
-        let Some((contents, path)) = Self::load_v1_dir(&absolute_dir) else {
+        let Some((contents, path)) = Self::load_v1_dir(&absolute_dir)? else {
             return Ok(None);
         };
-        let contents = contents?;
         let mut config = Self::from_str_with_mfe_dep(&contents, path.as_str(), has_mfe_dependency)?;
         config.filename = path
             .file_name()
@@ -200,15 +256,36 @@ impl TurborepoMfeConfig {
 
     fn load_v1_dir(
         dir: &AbsoluteSystemPath,
-    ) -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+    ) -> Result<Option<(String, AbsoluteSystemPathBuf)>, Error> {
         let load_config =
-            |filename: &str| -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+            |filename: &str| -> Option<(Result<String, Error>, AbsoluteSystemPathBuf)> {
                 let path = dir.join_component(filename);
-                let contents = path.read_existing_to_string().transpose()?;
+                let contents = path
+                    .read_existing_to_string()
+                    .transpose()?
+                    .map_err(Error::from);
                 Some((contents, path))
             };
-        load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
-            .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
+
+        // First check if custom config is specified via environment variable
+        match Self::get_custom_config_name()? {
+            Some(custom_name) => {
+                // If environment variable is set, only try that path
+                let Some((contents, path)) = load_config(&custom_name) else {
+                    return Ok(None);
+                };
+                Ok(Some((contents?, path)))
+            }
+            None => {
+                // Otherwise use default config file names
+                let Some((contents, path)) = load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
+                    .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
+                else {
+                    return Ok(None);
+                };
+                Ok(Some((contents?, path)))
+            }
+        }
     }
 
     pub fn set_path(&mut self, dir: &AnchoredSystemPath) {
@@ -300,10 +377,9 @@ impl Config {
         Self::validate_package_path(repo_root, &absolute_dir)?;
 
         // we want to try different paths and then do `from_str`
-        let Some((contents, path)) = Self::load_v1_dir(&absolute_dir) else {
+        let Some((contents, path)) = Self::load_v1_dir(&absolute_dir)? else {
             return Ok(None);
         };
-        let contents = contents?;
         let mut config = Config::from_str(&contents, path.as_str())?;
         config.filename = path
             .file_name()
@@ -390,15 +466,36 @@ impl Config {
 
     fn load_v1_dir(
         dir: &AbsoluteSystemPath,
-    ) -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+    ) -> Result<Option<(String, AbsoluteSystemPathBuf)>, Error> {
         let load_config =
-            |filename: &str| -> Option<(Result<String, io::Error>, AbsoluteSystemPathBuf)> {
+            |filename: &str| -> Option<(Result<String, Error>, AbsoluteSystemPathBuf)> {
                 let path = dir.join_component(filename);
-                let contents = path.read_existing_to_string().transpose()?;
+                let contents = path
+                    .read_existing_to_string()
+                    .transpose()?
+                    .map_err(Error::from);
                 Some((contents, path))
             };
-        load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
-            .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
+
+        // First check if custom config is specified via environment variable
+        match TurborepoMfeConfig::get_custom_config_name()? {
+            Some(custom_name) => {
+                // If environment variable is set, only try that path
+                let Some((contents, path)) = load_config(&custom_name) else {
+                    return Ok(None);
+                };
+                Ok(Some((contents?, path)))
+            }
+            None => {
+                // Otherwise use default config file names
+                let Some((contents, path)) = load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1)
+                    .or_else(|| load_config(DEFAULT_MICROFRONTENDS_CONFIG_V1_ALT))
+                else {
+                    return Ok(None);
+                };
+                Ok(Some((contents?, path)))
+            }
+        }
     }
 
     /// Sets the path the configuration was loaded from
