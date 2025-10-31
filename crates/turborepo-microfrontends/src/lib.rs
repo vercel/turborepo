@@ -66,32 +66,28 @@ impl TurborepoMfeConfig {
         // Must end with .json or .jsonc
         if !filename.ends_with(".json") && !filename.ends_with(".jsonc") {
             return Err(Error::InvalidCustomConfigPath(format!(
-                "{}: must be a JSON file ending with .json or .jsonc",
-                filename
+                "{filename}: must be a JSON file ending with .json or .jsonc"
             )));
         }
 
         // Must not contain directory separators (no subdirectories)
         if filename.contains('/') || filename.contains('\\') {
             return Err(Error::InvalidCustomConfigPath(format!(
-                "{}: subdirectories not allowed, file must be in package root",
-                filename
+                "{filename}: subdirectories not allowed, file must be in package root"
             )));
         }
 
         // Must not contain path traversal
         if filename.contains("..") {
             return Err(Error::InvalidCustomConfigPath(format!(
-                "{}: path traversal not allowed",
-                filename
+                "{filename}: path traversal not allowed"
             )));
         }
 
         // Must be relative (not start with /)
         if filename.starts_with('/') {
             return Err(Error::InvalidCustomConfigPath(format!(
-                "{}: must be relative to package root",
-                filename
+                "{filename}: must be relative to package root"
             )));
         }
 
