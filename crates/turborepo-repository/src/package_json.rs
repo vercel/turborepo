@@ -37,6 +37,8 @@ pub struct PackageJson {
     pub resolutions: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pnpm: Option<PnpmConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
     // Unstructured fields kept for round trip capabilities
     #[serde(flatten)]
     pub other: BTreeMap<String, serde_json::Value>,
@@ -64,6 +66,7 @@ pub struct RawPackageJson {
     pub scripts: BTreeMap<String, Spanned<UnescapedString>>,
     pub resolutions: Option<BTreeMap<String, UnescapedString>>,
     pub pnpm: Option<RawPnpmConfig>,
+    pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
     // Unstructured fields kept for round trip capabilities
     #[deserializable(rest)]
     pub other: BTreeMap<Text, serde_json::Value>,
@@ -135,6 +138,9 @@ impl From<RawPackageJson> for PackageJson {
                 .resolutions
                 .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
             pnpm: raw.pnpm.map(|p| p.into()),
+            patched_dependencies: raw
+                .patched_dependencies
+                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
             other: raw
                 .other
                 .into_iter()
