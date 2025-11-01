@@ -48,29 +48,39 @@ pub struct RawRootTurboJson {
 
     #[deserializable(rename = "$schema")]
     pub(crate) schema: Option<UnescapedString>,
+    #[deserializable(rename = "experimentalSpaces")]
     pub(crate) experimental_spaces: Option<SpacesJson>,
 
     // Global root filesystem dependencies
+    #[deserializable(rename = "globalDependencies")]
     pub(crate) global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
+    #[deserializable(rename = "globalEnv")]
     pub(crate) global_env: Option<Vec<Spanned<UnescapedString>>>,
+    #[deserializable(rename = "globalPassThroughEnv")]
     pub(crate) global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
     // Tasks is a map of task entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     pub(crate) tasks: Option<Pipeline>,
     pub(crate) pipeline: Option<Spanned<Pipeline>>,
     // Configuration options when interfacing with the remote cache
+    #[deserializable(rename = "remoteCache")]
     pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
     pub(crate) ui: Option<Spanned<UIMode>>,
     #[deserializable(rename = "dangerouslyDisablePackageManagerCheck")]
     pub(crate) allow_no_package_manager: Option<Spanned<bool>>,
     pub(crate) daemon: Option<Spanned<bool>>,
+    #[deserializable(rename = "envMode")]
     pub(crate) env_mode: Option<Spanned<EnvMode>>,
+    #[deserializable(rename = "noUpdateNotifier")]
     pub(crate) no_update_notifier: Option<Spanned<bool>>,
+    #[deserializable(rename = "cacheDir")]
     pub(crate) cache_dir: Option<Spanned<UnescapedString>>,
     pub(crate) concurrency: Option<Spanned<String>>,
+    #[deserializable(rename = "tags")]
     pub(crate) tags: Option<Spanned<Vec<Spanned<String>>>>,
     pub(crate) boundaries: Option<Spanned<BoundariesConfig>>,
 
+    #[deserializable(rename = "futureFlags")]
     pub(crate) future_flags: Option<Spanned<FutureFlags>>,
     #[deserializable(rename = "//")]
     pub(crate) _comment: Option<String>,
@@ -85,6 +95,7 @@ pub struct RawPackageTurboJson {
     pub(crate) extends: Option<Spanned<Vec<UnescapedString>>>,
     pub(crate) tasks: Option<Pipeline>,
     pub(crate) pipeline: Option<Spanned<Pipeline>>,
+    #[deserializable(rename = "tags")]
     pub(crate) tags: Option<Spanned<Vec<Spanned<String>>>>,
     pub(crate) boundaries: Option<Spanned<BoundariesConfig>>,
     #[deserializable(rename = "//")]
