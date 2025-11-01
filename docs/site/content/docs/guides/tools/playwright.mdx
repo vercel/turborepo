@@ -80,7 +80,7 @@ This relationship can be expressed in `turbo.json` and the end-to-end suite's `p
 
 ```json title="./tooling/playwright-web/package.json"
 {
-  "name": "@repo/playwright-web"
+  "name": "@repo/playwright-web",
   "dependencies": {
     "web": "workspace:*" // [!code highlight]
   }
@@ -124,22 +124,22 @@ You can also create a common package for shared utilities that you need in your 
 <Tab value="npm">
 ```json title="./packages/playwright-utilities/package.json"
 {
- "name": "@repo/playwright-utilities",
- "peerDependencies": {
-   "playwright": "*"
-}
+  "name": "@repo/playwright-utilities",
+  "peerDependencies": {
+    "playwright": "*"
+  }
 }
 ```
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 ```json title="./packages/playwright-utilities/package.json"
 {
   "name": "@repo/playwright-utilities",
   "peerDependencies": {
     "playwright": "workspace:*"
-}
+  }
 }
 ```
 </Tab>

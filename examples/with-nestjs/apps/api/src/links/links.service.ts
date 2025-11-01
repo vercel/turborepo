@@ -1,44 +1,33 @@
 import { Injectable } from '@nestjs/common';
 
-import { Link } from '@repo/api/links/entities/link.entity';
-
-import { CreateLinkDto } from '@repo/api/links/dto/create-link.dto';
-import { UpdateLinkDto } from '@repo/api/links/dto/update-link.dto';
+import { Link, CreateLinkDto, UpdateLinkDto } from '@repo/api';
 
 @Injectable()
 export class LinksService {
   private readonly _links: Link[] = [
     {
       id: 0,
-      title: 'Docs',
-      url: 'https://turborepo.com/docs',
-      description:
-        'Find in-depth information about Turborepo features and API.',
+      title: 'Installation',
+      url: 'https://turborepo.com/docs/getting-started/installation',
+      description: 'Get started with Turborepo in a few moments using',
     },
     {
       id: 1,
-      title: 'Learn',
-      url: 'https://turborepo.com/docs/handbook',
-      description: 'Learn more about monorepos with our handbook.',
+      title: 'Crafting',
+      url: 'https://turborepo.com/docs/crafting-your-repository',
+      description: 'Architecting a monorepo is a careful process.',
     },
     {
       id: 2,
-      title: 'Templates',
-      url: 'https://turborepo.com/docs/getting-started/from-example',
+      title: 'Add Repositories',
+      url: 'https://turborepo.com/docs/getting-started/add-to-existing-repository',
       description:
-        'Choose from over 15 examples and deploy with a single click.',
-    },
-    {
-      id: 3,
-      title: 'Deploy',
-      url: 'https://vercel.com/new',
-      description:
-        'Instantly deploy your Turborepo to a shareable URL with Vercel.',
+        'Turborepo can be incrementally adopted in any repository, single or multi-package, to speed up the developer and CI workflows of the repository.',
     },
   ];
 
   create(createLinkDto: CreateLinkDto) {
-    return `This action adds a new link ${createLinkDto}`;
+    return `TODO: This action should add a new link '${createLinkDto.title}'`;
   }
 
   findAll() {
@@ -46,14 +35,14 @@ export class LinksService {
   }
 
   findOne(id: number) {
-    return `This action returns a #${id} link`;
+    return `TODO: This action should return a Link with id #${id}`;
   }
 
   update(id: number, updateLinkDto: UpdateLinkDto) {
-    return `This action updates a #${id} link ${updateLinkDto}`;
+    return `TODO: This action should update a #${id} link ${updateLinkDto.title}`;
   }
 
   remove(id: number) {
-    return `This action removes a #${id} link`;
+    return `TODO: This action should remove a #${id} link`;
   }
 }

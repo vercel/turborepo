@@ -27,6 +27,22 @@ pub const VERCEL_TOKEN_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_DIR: &str = "turborepo";
 pub const TURBO_TOKEN_FILE: &str = "config.json";
 
+const VERCEL_OAUTH_CLIENT_ID: &str = "cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp";
+const VERCEL_OAUTH_TOKEN_URL: &str = "https://vercel.com/api/login/oauth/token";
+
+#[derive(Debug, Clone)]
+pub struct AuthTokens {
+    pub token: Option<String>,
+    pub refresh_token: Option<String>,
+    pub expires_at: Option<u64>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct OAuthTokenResponse {
+    access_token: String,
+    refresh_token: String,
+}
+
 /// Token.
 ///
 /// It's the result of a successful login or an existing token. This acts as
@@ -75,6 +91,38 @@ impl Token {
                 }
             }
             None => Err(Error::TokenNotFound),
+        }
+    }
+
+    /// Reads token, refresh token, and expiration from auth.json
+    pub fn from_auth_file(path: &AbsoluteSystemPath) -> Result<AuthTokens, Error> {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "camelCase")]
+        struct AuthWrapper {
+            token: Option<String>,
+            refresh_token: Option<String>,
+            expires_at: Option<u64>,
+        }
+
+        match path.read_existing_to_string()? {
+            Some(content) => {
+                let wrapper = serde_json::from_str::<AuthWrapper>(&content).map_err(|err| {
+                    Error::InvalidTokenFileFormat {
+                        path: path.to_string(),
+                        source: err,
+                    }
+                })?;
+                Ok(AuthTokens {
+                    token: wrapper.token,
+                    refresh_token: wrapper.refresh_token,
+                    expires_at: wrapper.expires_at,
+                })
+            }
+            None => Ok(AuthTokens {
+                token: None,
+                refresh_token: None,
+                expires_at: None,
+            }),
         }
     }
 
@@ -286,6 +334,14 @@ fn current_unix_time() -> u128 {
         .as_millis()
 }
 
+fn current_unix_time_secs() -> u64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs()
+}
+
 // As of the time of writing, this should always be true, since a token that
 // isn't active returns an error when fetching metadata for the token.
 fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool {
@@ -303,6 +359,73 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
     let all_scopes_active = earliest_expiration.is_none_or(|expiration| current_time < expiration);
 
     all_scopes_active && (active_at <= current_time)
+}
+
+impl AuthTokens {
+    /// Checks if the access token has expired based on expiresAt field
+    pub fn is_expired(&self) -> bool {
+        if let Some(expires_at) = self.expires_at {
+            let current_time = current_unix_time_secs();
+            current_time >= expires_at
+        } else {
+            false
+        }
+    }
+
+    /// Attempts to refresh the access token using the refresh token
+    pub async fn refresh_token(&self) -> Result<AuthTokens, Error> {
+        let refresh_token = self
+            .refresh_token
+            .as_ref()
+            .ok_or_else(|| Error::TokenNotFound)?;
+
+        let client = reqwest::Client::new();
+        let params = [
+            ("refresh_token", refresh_token.as_str()),
+            ("grant_type", "refresh_token"),
+            ("client_id", VERCEL_OAUTH_CLIENT_ID),
+        ];
+
+        let response = client
+            .post(VERCEL_OAUTH_TOKEN_URL)
+            .form(&params)
+            .send()
+            .await?;
+
+        let status = response.status();
+
+        if !status.is_success() {
+            return Err(Error::FailedToGetToken);
+        }
+
+        let response_text = response.text().await?;
+
+        let oauth_response: OAuthTokenResponse = serde_json::from_str(&response_text)?;
+
+        Ok(AuthTokens {
+            token: Some(oauth_response.access_token),
+            refresh_token: Some(oauth_response.refresh_token),
+            expires_at: Some(current_unix_time_secs() + 8 * 60 * 60), // 8 hours from now
+        })
+    }
+
+    /// Writes the auth tokens to the auth.json file
+    pub fn write_to_auth_file(&self, path: &AbsoluteSystemPath) -> Result<(), Error> {
+        use serde_json::json;
+
+        let content = json!({
+            "// Note": "This is your Vercel credentials file. DO NOT SHARE!",
+            "// Docs": "https://vercel.com/docs/projects/project-configuration/global-configuration#auth.json",
+            "token": self.token,
+            "refreshToken": self.refresh_token,
+            "expiresAt": self.expires_at,
+        });
+
+        let json_string = serde_json::to_string_pretty(&content)?;
+        path.ensure_dir()?;
+        path.create_with_contents(json_string)?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -395,7 +518,6 @@ mod tests {
         let quick_scope = |expiry| Scope {
             expires_at: expiry,
             scope_type: "".to_string(),
-            origin: "".to_string(),
             created_at: 0,
             team_id: None,
         };
@@ -406,7 +528,6 @@ mod tests {
             id: "".to_string(),
             name: "".to_string(),
             token_type: "".to_string(),
-            origin: "".to_string(),
             created_at: 0,
         };
 
@@ -496,6 +617,169 @@ mod tests {
         let result = Token::from_file(&file_path);
 
         assert!(matches!(result, Err(Error::TokenNotFound)));
+    }
+
+    #[test]
+    fn test_auth_tokens_is_expired() {
+        let current_time = current_unix_time_secs();
+
+        // Test with no expiry (should not be expired)
+        let tokens_no_expiry = AuthTokens {
+            token: Some("test_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            expires_at: None,
+        };
+        assert!(!tokens_no_expiry.is_expired());
+
+        // Test with future expiry (should not be expired)
+        let tokens_future_expiry = AuthTokens {
+            token: Some("test_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            expires_at: Some(current_time + 3600), // 1 hour in the future
+        };
+        assert!(!tokens_future_expiry.is_expired());
+
+        // Test with past expiry (should be expired)
+        let tokens_past_expiry = AuthTokens {
+            token: Some("test_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            expires_at: Some(current_time - 3600), // 1 hour in the past
+        };
+        assert!(tokens_past_expiry.is_expired());
+
+        // Test edge case: exactly at expiry time (should be expired)
+        let tokens_exact_expiry = AuthTokens {
+            token: Some("test_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            expires_at: Some(current_time),
+        };
+        assert!(tokens_exact_expiry.is_expired());
+    }
+
+    #[test]
+    fn test_from_auth_file_with_valid_data() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let auth_content = r#"{
+            "token": "vca_test_token_123",
+            "refreshToken": "refresh_token_456",
+            "expiresAt": 1234567890
+        }"#;
+        file_path.create_with_contents(auth_content).unwrap();
+
+        let result = Token::from_auth_file(&file_path).expect("Failed to read auth from file");
+
+        assert_eq!(result.token, Some("vca_test_token_123".to_string()));
+        assert_eq!(result.refresh_token, Some("refresh_token_456".to_string()));
+        assert_eq!(result.expires_at, Some(1234567890));
+    }
+
+    #[test]
+    fn test_from_auth_file_with_missing_fields() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        // Test with only token field
+        let auth_content = r#"{"token": "legacy_token_123"}"#;
+        file_path.create_with_contents(auth_content).unwrap();
+
+        let result = Token::from_auth_file(&file_path).expect("Failed to read auth from file");
+
+        assert_eq!(result.token, Some("legacy_token_123".to_string()));
+        assert_eq!(result.refresh_token, None);
+        assert_eq!(result.expires_at, None);
+    }
+
+    #[test]
+    fn test_from_auth_file_empty_file() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("nonexistent_auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let result = Token::from_auth_file(&file_path).expect("Should return empty AuthTokens");
+
+        assert_eq!(result.token, None);
+        assert_eq!(result.refresh_token, None);
+        assert_eq!(result.expires_at, None);
+    }
+
+    #[test]
+    fn test_write_to_auth_file() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("test_auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let tokens = AuthTokens {
+            token: Some("vca_test_token".to_string()),
+            refresh_token: Some("test_refresh_token".to_string()),
+            expires_at: Some(1234567890),
+        };
+
+        tokens
+            .write_to_auth_file(&file_path)
+            .expect("Failed to write auth file");
+
+        // Read back and verify
+        let content = file_path
+            .read_to_string()
+            .expect("Failed to read auth file");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("Invalid JSON");
+
+        assert_eq!(parsed["token"], "vca_test_token");
+        assert_eq!(parsed["refreshToken"], "test_refresh_token");
+        assert_eq!(parsed["expiresAt"], 1234567890);
+
+        // Verify the JSON structure includes the expected comments
+        assert!(content.contains("This is your Vercel credentials file"));
+        assert!(content.contains(
+            "https://vercel.com/docs/projects/project-configuration/global-configuration#auth.json"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_refresh_token_missing_refresh_token() {
+        let tokens = AuthTokens {
+            token: Some("vca_test_token".to_string()),
+            refresh_token: None, // No refresh token
+            expires_at: Some(current_unix_time_secs() - 3600),
+        };
+
+        let result = tokens.refresh_token().await;
+        assert!(matches!(result, Err(Error::TokenNotFound)));
+    }
+
+    #[test]
+    fn test_auth_tokens_roundtrip() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("roundtrip_auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let original_tokens = AuthTokens {
+            token: Some("vca_roundtrip_token".to_string()),
+            refresh_token: Some("roundtrip_refresh_token".to_string()),
+            expires_at: Some(1234567890),
+        };
+
+        // Write tokens to file
+        original_tokens
+            .write_to_auth_file(&file_path)
+            .expect("Failed to write auth file");
+
+        // Read tokens back from file
+        let read_tokens = Token::from_auth_file(&file_path).expect("Failed to read auth file");
+
+        // Verify they match
+        assert_eq!(original_tokens.token, read_tokens.token);
+        assert_eq!(original_tokens.refresh_token, read_tokens.refresh_token);
+        assert_eq!(original_tokens.expires_at, read_tokens.expires_at);
     }
 
     enum MockErrorType {
@@ -678,7 +962,6 @@ mod tests {
                     id: "test".to_string(),
                     name: "test".to_string(),
                     token_type: "test".to_string(),
-                    origin: "test".to_string(),
                     scopes: vec![],
                     active_at: current_unix_time() - 100,
                     created_at: 0,
@@ -728,7 +1011,6 @@ mod tests {
                 id: "test".to_string(),
                 name: "test".to_string(),
                 token_type: "test".to_string(),
-                origin: "test".to_string(),
                 scopes: vec![],
                 active_at: current_time - 100,
                 created_at: 0,
@@ -745,7 +1027,6 @@ mod tests {
                     id: "test".to_string(),
                     name: "test".to_string(),
                     token_type: "test".to_string(),
-                    origin: "test".to_string(),
                     scopes: vec![],
                     created_at: 0,
                     active_at: 0,
@@ -806,7 +1087,6 @@ mod tests {
                     id: "test".to_string(),
                     name: "test".to_string(),
                     token_type: "".to_string(),
-                    origin: "test".to_string(),
                     scopes: vec![],
                     active_at: current_unix_time() - 100,
                     created_at: 0,
@@ -827,7 +1107,6 @@ mod tests {
                 id: "test".to_string(),
                 name: "test".to_string(),
                 token_type: "sso".to_string(),
-                origin: "test".to_string(),
                 scopes: vec![],
                 active_at: current_unix_time() - 100,
                 created_at: 0,
@@ -860,7 +1139,6 @@ mod tests {
                 id: "test".to_string(),
                 name: "test".to_string(),
                 token_type: "".to_string(),
-                origin: "test".to_string(),
                 scopes: vec![],
                 active_at: current_unix_time() - 100,
                 created_at: 0,

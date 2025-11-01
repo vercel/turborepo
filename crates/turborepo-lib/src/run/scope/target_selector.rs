@@ -101,7 +101,7 @@ impl FromStr for TargetSelector {
                         raw: raw_selector.to_string(),
                         ..Default::default()
                     })
-                }
+                };
             }
         };
 

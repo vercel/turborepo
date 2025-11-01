@@ -11,6 +11,8 @@ pub enum Error {
     SerdeError(#[from] serde_json::Error),
     #[error(transparent)]
     APIError(#[from] turborepo_api_client::Error),
+    #[error(transparent)]
+    ReqwestError(#[from] reqwest::Error),
 
     #[error(
         "`loginUrl` is configured to \"{value}\", but cannot be a base URL. This happens in \

@@ -450,6 +450,8 @@ impl<'a> TaskHasher<'a> {
                     "LD_LIBRARY_PATH",
                     "DYLD_FALLBACK_LIBRARY_PATH",
                     "LIBPATH",
+                    "LD_PRELOAD",
+                    "DYLD_INSERT_LIBRARIES",
                     "COLORTERM",
                     "TERM",
                     "TERM_PROGRAM",
@@ -476,6 +478,7 @@ impl<'a> TaskHasher<'a> {
                     "NEXT_*",
                     "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
                     "NOW_BUILDER",
+                    "VC_MICROFRONTENDS_CONFIG_FILE_NAME",
                     // Command Prompt casing of env variables
                     "APPDATA",
                     "PATH",

@@ -153,14 +153,24 @@ pub async fn link(
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
-    let token = base
-        .opts()
-        .api_client_opts
-        .token
-        .as_deref()
-        .ok_or_else(|| Error::TokenNotFound {
-            command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
-        })?;
+
+    // Always try to get a valid token with automatic refresh if expired
+    let token = match turborepo_auth::get_token_with_refresh().await {
+        Ok(Some(refreshed_token)) => {
+            // Store the refreshed token temporarily for this command
+            Box::leak(refreshed_token.into_boxed_str())
+        }
+        Ok(None) | Err(_) => {
+            // Fall back to the token from config/CLI if refresh logic didn't work
+            base.opts()
+                .api_client_opts
+                .token
+                .as_deref()
+                .ok_or_else(|| Error::TokenNotFound {
+                    command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
+                })?
+        }
+    };
 
     println!(
         "\n{}\n\n{}\n\nFor more information, visit: {}\n",
