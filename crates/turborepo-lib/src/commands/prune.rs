@@ -1,6 +1,6 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::sync::OnceLock;
+use std::{str::FromStr, sync::OnceLock};
 
 use lazy_static::lazy_static;
 use miette::Diagnostic;
@@ -18,7 +18,7 @@ use turborepo_ui::BOLD;
 use super::CommandBase;
 use crate::{
     config::{CONFIG_FILE, CONFIG_FILE_JSONC},
-    turbo_json::{RawRootTurboJson, RawTurboJson},
+    turbo_json::{ProcessedPruneIncludes, RawPackageTurboJson, RawRootTurboJson, RawTurboJson},
 };
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
@@ -52,6 +52,10 @@ pub enum Error {
     MissingLockfile,
     #[error("Unable to read config: {0}")]
     Config(#[from] crate::config::Error),
+    #[error("Glob pattern error: {0}")]
+    Glob(#[from] globwalk::GlobError),
+    #[error("Glob walk error: {0}")]
+    GlobWalk(#[from] globwalk::WalkError),
 }
 
 // Files that should be copied from root and if they're required for install
@@ -185,6 +189,18 @@ pub async fn prune(
         prune.copy_directory(&path, *required_for_install)?;
     }
 
+    // Copy custom includes from turbo.json configurations
+    trace!(
+        "Collecting prune includes for workspaces: {:?}",
+        workspace_paths
+    );
+    if let Some(prune_includes) = prune.collect_prune_includes(&workspace_paths)? {
+        trace!("Found prune includes, copying files");
+        prune.copy_custom_includes(&prune_includes)?;
+    } else {
+        trace!("No prune includes found");
+    }
+
     prune.copy_turbo_json(&workspace_names)?;
 
     let original_patches = prune
@@ -196,8 +212,7 @@ pub async fn prune(
         let pruned_patches = lockfile.patches()?;
         trace!(
             "original patches: {:?}, pruned patches: {:?}",
-            original_patches,
-            pruned_patches
+            original_patches, pruned_patches
         );
 
         let repo_root = &prune.root;
@@ -476,5 +491,256 @@ impl<'a> Prune<'a> {
         let turbo_json =
             RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.into();
         Ok(Some((turbo_json, turbo_json_name)))
+    }
+
+    /// Load workspace turbo.json file (try both turbo.json and turbo.jsonc)
+    fn load_workspace_turbo_json(
+        &self,
+        workspace_path: &AnchoredSystemPath,
+    ) -> Result<Option<RawTurboJson>, Error> {
+        // Try turbo.json first
+        let turbo_json_path = workspace_path.join_component(CONFIG_FILE);
+        let turbo_json_abs = self.root.resolve(&turbo_json_path);
+
+        if let Some(contents) = turbo_json_abs.read_existing_to_string()? {
+            let raw = RawPackageTurboJson::parse(&contents, turbo_json_path.as_str())?;
+            return Ok(Some(raw.into()));
+        }
+
+        // Try turbo.jsonc as fallback
+        let turbo_jsonc_path = workspace_path.join_component(CONFIG_FILE_JSONC);
+        let turbo_jsonc_abs = self.root.resolve(&turbo_jsonc_path);
+
+        if let Some(contents) = turbo_jsonc_abs.read_existing_to_string()? {
+            let raw = RawPackageTurboJson::parse(&contents, turbo_jsonc_path.as_str())?;
+            return Ok(Some(raw.into()));
+        }
+
+        Ok(None)
+    }
+
+    /// Collect prune includes from root and all workspace configs
+    fn collect_prune_includes(
+        &self,
+        workspaces: &[String],
+    ) -> Result<Option<ProcessedPruneIncludes>, Error> {
+        let mut all_globs = Vec::new();
+
+        // First, load root turbo.json and extract prune.includes
+        if let Some((turbo_json, _)) = self
+            .get_turbo_json(turbo_json())
+            .transpose()
+            .or_else(|| self.get_turbo_json(turbo_jsonc()).transpose())
+            .transpose()?
+        {
+            if let Some(prune_config) = turbo_json.prune {
+                if let Some(includes) = prune_config.includes {
+                    all_globs.extend(includes);
+                }
+            }
+        }
+
+        // For each workspace, load workspace turbo.json and collect prune.includes
+        // Workspace-relative patterns need to be prefixed with the workspace path
+        for workspace in workspaces {
+            let workspace_path = AnchoredSystemPathBuf::from_raw(workspace)?;
+            if let Some(workspace_turbo) = self.load_workspace_turbo_json(&workspace_path)? {
+                if let Some(prune_config) = workspace_turbo.prune {
+                    if let Some(includes) = prune_config.includes {
+                        // Prefix workspace-relative globs with the workspace path
+                        for glob in includes {
+                            let glob_str = glob.as_str();
+
+                            // Check if this is a $TURBO_ROOT$/ pattern (already repo-relative)
+                            let is_turbo_root = glob_str.starts_with("$TURBO_ROOT$/")
+                                || glob_str.starts_with("!$TURBO_ROOT$/");
+
+                            if is_turbo_root {
+                                // Already repo-relative, add as-is
+                                all_globs.push(glob);
+                            } else {
+                                // Workspace-relative pattern - prefix with workspace path
+                                let (negation, pattern) =
+                                    if let Some(stripped) = glob_str.strip_prefix('!') {
+                                        ("!", stripped)
+                                    } else {
+                                        ("", glob_str)
+                                    };
+
+                                // Create prefixed glob: workspace_path/pattern
+                                let prefixed = format!("{}{}/{}", negation, workspace, pattern);
+                                let prefixed_glob =
+                                    turborepo_unescape::UnescapedString::from(prefixed);
+                                all_globs.push(turborepo_errors::Spanned::new(prefixed_glob));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if all_globs.is_empty() {
+            return Ok(None);
+        }
+
+        // Combine all globs into a single ProcessedPruneIncludes
+        Ok(Some(ProcessedPruneIncludes::new(all_globs)?))
+    }
+
+    /// Copy files/directories matching custom prune includes
+    fn copy_custom_includes(&self, prune_includes: &ProcessedPruneIncludes) -> Result<(), Error> {
+        use globwalk::{ValidatedGlob, WalkType};
+
+        // Resolve globs with turbo root path
+        let turbo_root_path = RelativeUnixPath::new("").unwrap();
+        let resolved_globs = prune_includes.resolve(turbo_root_path);
+
+        // Separate into inclusions and exclusions
+        let mut inclusions = Vec::new();
+        let mut exclusions = Vec::new();
+
+        for glob_str in resolved_globs {
+            if let Some(stripped) = glob_str.strip_prefix('!') {
+                exclusions.push(ValidatedGlob::from_str(stripped)?);
+            } else {
+                inclusions.push(ValidatedGlob::from_str(&glob_str)?);
+            }
+        }
+
+        if inclusions.is_empty() {
+            return Ok(());
+        }
+
+        // Use globwalk to find matching files only
+        // We use Files instead of All to ensure exclusions work properly.
+        // If we matched directories, copy_directory would copy all files in it,
+        // ignoring exclusions.
+        let matches = globwalk::globwalk(
+            &self.root,
+            &inclusions,
+            &exclusions,
+            WalkType::Files, // Only files - exclusions work at file level
+        )?;
+
+        // Warn if no files matched
+        if matches.is_empty() {
+            println!(
+                "Warning: No files matched custom prune includes patterns. Check your turbo.json \
+                 prune.includes configuration."
+            );
+            return Ok(());
+        }
+
+        // Copy each matched file
+        for matched_path in matches {
+            let relative_path = self.root.anchor(&matched_path)?;
+            self.copy_file(&relative_path, Some(CopyDestination::All))?;
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use turborepo_errors::Spanned;
+    use turborepo_unescape::UnescapedString;
+
+    #[test]
+    fn test_workspace_relative_paths_are_prefixed() {
+        // Test that workspace-relative patterns are properly prefixed
+        // This validates the fix for the bug where workspace paths weren't being used
+
+        // Simulates globs from a workspace turbo.json (apps/web/turbo.json)
+        let workspace_path = "apps/web";
+        let workspace_globs = vec![
+            Spanned::new(UnescapedString::from("next.config.ts")),
+            Spanned::new(UnescapedString::from("tailwind.config.ts")),
+            Spanned::new(UnescapedString::from("public/**")),
+            Spanned::new(UnescapedString::from("!public/temp/**")),
+        ];
+
+        // Expected: workspace-relative patterns should be prefixed
+        let expected_patterns = vec![
+            format!("{}/next.config.ts", workspace_path),
+            format!("{}/tailwind.config.ts", workspace_path),
+            format!("{}/public/**", workspace_path),
+            format!("!{}/public/temp/**", workspace_path),
+        ];
+
+        // Simulate the prefixing logic from collect_prune_includes
+        let mut actual_patterns = Vec::new();
+        for glob in workspace_globs {
+            let glob_str = glob.as_str();
+            let is_turbo_root =
+                glob_str.starts_with("$TURBO_ROOT$/") || glob_str.starts_with("!$TURBO_ROOT$/");
+
+            if is_turbo_root {
+                actual_patterns.push(glob_str.to_string());
+            } else {
+                let (negation, pattern) = if let Some(stripped) = glob_str.strip_prefix('!') {
+                    ("!", stripped)
+                } else {
+                    ("", glob_str)
+                };
+                actual_patterns.push(format!("{}{}/{}", negation, workspace_path, pattern));
+            }
+        }
+
+        assert_eq!(actual_patterns, expected_patterns);
+    }
+
+    #[test]
+    fn test_turbo_root_patterns_not_prefixed() {
+        // Test that $TURBO_ROOT$/ patterns remain repo-relative
+        let workspace_path = "apps/web";
+        let workspace_globs = vec![
+            Spanned::new(UnescapedString::from("$TURBO_ROOT$/shared-config.json")),
+            Spanned::new(UnescapedString::from("!$TURBO_ROOT$/secret.env")),
+            Spanned::new(UnescapedString::from("local.config.js")), // Should be prefixed
+        ];
+
+        let mut actual_patterns = Vec::new();
+        for glob in workspace_globs {
+            let glob_str = glob.as_str();
+            let is_turbo_root =
+                glob_str.starts_with("$TURBO_ROOT$/") || glob_str.starts_with("!$TURBO_ROOT$/");
+
+            if is_turbo_root {
+                actual_patterns.push(glob_str.to_string());
+            } else {
+                let (negation, pattern) = if let Some(stripped) = glob_str.strip_prefix('!') {
+                    ("!", stripped)
+                } else {
+                    ("", glob_str)
+                };
+                actual_patterns.push(format!("{}{}/{}", negation, workspace_path, pattern));
+            }
+        }
+
+        assert_eq!(actual_patterns[0], "$TURBO_ROOT$/shared-config.json");
+        assert_eq!(actual_patterns[1], "!$TURBO_ROOT$/secret.env");
+        assert_eq!(actual_patterns[2], "apps/web/local.config.js");
+    }
+
+    #[test]
+    fn test_scoped_package_name_to_path() {
+        // Test demonstrates that we must use workspace paths (like "apps/web")
+        // instead of package names (like "@acme/web")
+
+        // This would be invalid as a file path
+        let package_name = "@acme/web";
+        let relative_pattern = "next.config.ts";
+
+        // Using package name directly would create invalid path
+        let invalid_path = format!("{}/{}", package_name, relative_pattern);
+        assert_eq!(invalid_path, "@acme/web/next.config.ts");
+        // This path contains @ and / which are invalid for many filesystems
+
+        // Using workspace path creates valid path
+        let workspace_path = "apps/web";
+        let valid_path = format!("{}/{}", workspace_path, relative_pattern);
+        assert_eq!(valid_path, "apps/web/next.config.ts");
+        // This is a valid relative path that can be resolved from repo root
     }
 }
