@@ -1,51 +1,59 @@
 //! Package indexing for efficient lockfile lookups.
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use super::{PackageEntry, types::PackageKey};
+
+type StringRef = Arc<str>;
 
 #[derive(Debug, Clone)]
 pub struct PackageIndex {
     /// Direct lookup by lockfile key (e.g., "lodash", "parent/dep")
-    by_key: HashMap<String, PackageEntry>,
+    by_key: HashMap<StringRef, PackageEntry>,
 
     /// Lookup by ident (e.g., "lodash@4.17.21")
     /// Maps ident -> lockfile key
     /// Multiple keys may map to the same ident (nested versions)
-    by_ident: HashMap<String, Vec<String>>,
+    by_ident: HashMap<StringRef, Vec<StringRef>>,
 
     /// Workspace-scoped lookup for quick resolution
     /// Maps (workspace_name, package_name) -> lockfile key
-    workspace_scoped: HashMap<(String, String), String>,
+    workspace_scoped: HashMap<(StringRef, StringRef), StringRef>,
 
     /// Bundled dependency lookup
     /// Maps (parent_key, dep_name) -> lockfile key
-    bundled_deps: HashMap<(String, String), String>,
+    bundled_deps: HashMap<(StringRef, StringRef), StringRef>,
 }
 
 impl PackageIndex {
     /// Create a new package index from a packages map.
     pub fn new(packages: &super::Map<String, PackageEntry>) -> Self {
         let mut by_key = HashMap::with_capacity(packages.len());
-        let mut by_ident: HashMap<String, Vec<String>> = HashMap::new();
+        let mut by_ident: HashMap<StringRef, Vec<StringRef>> = HashMap::new();
         let mut workspace_scoped = HashMap::new();
         let mut bundled_deps = HashMap::new();
 
         // First pass: populate by_key and by_ident
         for (key, entry) in packages {
-            by_key.insert(key.clone(), entry.clone());
+            // Convert key to Arc<str> once
+            let key_ref: StringRef = Arc::from(key.as_str());
 
-            // Index by ident
+            by_key.insert(Arc::clone(&key_ref), entry.clone());
+
+            // Index by ident - convert ident to Arc<str>
+            let ident_ref: StringRef = Arc::from(entry.ident.as_str());
             by_ident
-                .entry(entry.ident.clone())
+                .entry(ident_ref)
                 .or_default()
-                .push(key.clone());
+                .push(Arc::clone(&key_ref));
 
             // Index workspace-scoped packages
             // Example: "workspace/package" -> ("workspace", "package")
             let parsed_key = PackageKey::parse(key);
             if let Some(parent) = parsed_key.parent() {
-                workspace_scoped.insert((parent, parsed_key.name().to_string()), key.clone());
+                let parent_ref: StringRef = Arc::from(parent);
+                let name_ref: StringRef = Arc::from(parsed_key.name());
+                workspace_scoped.insert((parent_ref, name_ref), Arc::clone(&key_ref));
             }
 
             // Index bundled dependencies
@@ -59,8 +67,9 @@ impl PackageIndex {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false)
                 {
-                    bundled_deps
-                        .insert((parent.clone(), parsed_key.name().to_string()), key.clone());
+                    let parent_ref: StringRef = Arc::from(parent);
+                    let name_ref: StringRef = Arc::from(parsed_key.name());
+                    bundled_deps.insert((parent_ref, name_ref), Arc::clone(&key_ref));
                 }
             }
         }
@@ -98,14 +107,14 @@ impl PackageIndex {
         let keys = self.by_ident.get(ident)?;
         let key = keys.first()?;
         let entry = self.by_key.get(key)?;
-        Some((key, entry))
+        Some((key.as_ref(), entry))
     }
 
     /// Get all lockfile keys that map to a given ident.
     ///
     /// This is useful when you need to find all aliases for a package.
     #[cfg(test)]
-    pub fn get_all_keys_for_ident(&self, ident: &str) -> Option<&[String]> {
+    pub fn get_all_keys_for_ident(&self, ident: &str) -> Option<&[StringRef]> {
         self.by_ident.get(ident).map(|v| v.as_slice())
     }
 
@@ -114,9 +123,9 @@ impl PackageIndex {
     /// For example, get_workspace_scoped("web", "lodash") looks up
     /// "web/lodash".
     pub fn get_workspace_scoped(&self, workspace: &str, package: &str) -> Option<&PackageEntry> {
-        let key = self
-            .workspace_scoped
-            .get(&(workspace.to_string(), package.to_string()))?;
+        // Use a temporary Arc for the lookup key
+        let lookup_key = (Arc::from(workspace), Arc::from(package));
+        let key = self.workspace_scoped.get(&lookup_key)?;
         self.by_key.get(key)
     }
 
@@ -126,9 +135,9 @@ impl PackageIndex {
     /// bundled.
     #[cfg(test)]
     pub fn get_bundled(&self, parent: &str, dep: &str) -> Option<&PackageEntry> {
-        let key = self
-            .bundled_deps
-            .get(&(parent.to_string(), dep.to_string()))?;
+        // Use a temporary Arc for the lookup key
+        let lookup_key = (Arc::from(parent), Arc::from(dep));
+        let key = self.bundled_deps.get(&lookup_key)?;
         self.by_key.get(key)
     }
 
@@ -142,13 +151,13 @@ impl PackageIndex {
         name: &'a str,
     ) -> Option<(&'a str, &'a PackageEntry)> {
         // Try workspace-scoped first
-        if let Some(ws) = workspace
-            && let Some(key) = self
-                .workspace_scoped
-                .get(&(ws.to_string(), name.to_string()))
-            && let Some(entry) = self.by_key.get(key)
-        {
-            return Some((key.as_str(), entry));
+        if let Some(ws) = workspace {
+            let lookup_key = (Arc::from(ws), Arc::from(name));
+            if let Some(key) = self.workspace_scoped.get(&lookup_key)
+                && let Some(entry) = self.by_key.get(key)
+            {
+                return Some((key.as_ref(), entry));
+            }
         }
 
         // Try top-level
@@ -158,10 +167,10 @@ impl PackageIndex {
 
         // Try bundled (search all parents)
         for ((_parent, dep_name), key) in &self.bundled_deps {
-            if dep_name == name
+            if dep_name.as_ref() == name
                 && let Some(entry) = self.by_key.get(key)
             {
-                return Some((key.as_str(), entry));
+                return Some((key.as_ref(), entry));
             }
         }
 
@@ -230,8 +239,8 @@ mod tests {
         // Should have both keys indexed
         let all_keys = index.get_all_keys_for_ident("lodash@4.17.21").unwrap();
         assert_eq!(all_keys.len(), 2);
-        assert!(all_keys.contains(&"lodash".to_string()));
-        assert!(all_keys.contains(&"web/lodash".to_string()));
+        assert!(all_keys.iter().any(|k| k.as_ref() == "lodash"));
+        assert!(all_keys.iter().any(|k| k.as_ref() == "web/lodash"));
     }
 
     #[test]

@@ -348,6 +348,53 @@ struct RootInfo {
     bin_dir: Option<String>,
 }
 
+impl BunLockfile {
+    /// Process a package entry, handling workspace filtering, overrides, and
+    /// patches
+    fn process_package_entry(
+        &self,
+        entry: &PackageEntry,
+        name: &str,
+        override_version: &str,
+        resolved_version: &str,
+    ) -> Result<Option<crate::Package>, crate::Error> {
+        let ident = PackageIdent::parse(&entry.ident);
+
+        // Filter out workspace mapping entries
+        if ident.is_workspace() {
+            return Ok(None);
+        }
+
+        // Check for overrides
+        if override_version != resolved_version {
+            let override_ident = format!("{name}@{override_version}");
+            if let Some((_override_key, override_entry)) = self.index.get_by_ident(&override_ident)
+            {
+                let mut pkg_version = override_entry.version().to_string();
+                if let Some(patch) = self.data.patched_dependencies.get(&override_entry.ident) {
+                    pkg_version.push('+');
+                    pkg_version.push_str(patch);
+                }
+                return Ok(Some(crate::Package {
+                    key: override_entry.ident.to_string(),
+                    version: pkg_version,
+                }));
+            }
+        }
+
+        // Return the package with its version (and patch if applicable)
+        let mut version = entry.version().to_string();
+        if let Some(patch) = self.data.patched_dependencies.get(&entry.ident) {
+            version.push('+');
+            version.push_str(patch);
+        }
+        Ok(Some(crate::Package {
+            key: entry.ident.to_string(),
+            version,
+        }))
+    }
+}
+
 impl Lockfile for BunLockfile {
     #[tracing::instrument(skip(self, workspace_path))]
     fn resolve_package(
@@ -399,79 +446,19 @@ impl Lockfile for BunLockfile {
         }
 
         // Try workspace-scoped lookup first
-        if let Some(entry) = self.index.get_workspace_scoped(workspace_name, name) {
-            let ident = PackageIdent::parse(&entry.ident);
-
-            // Filter out workspace mapping entries
-            if !ident.is_workspace() {
-                // Check for overrides
-                if override_version != resolved_version {
-                    let override_ident = format!("{name}@{override_version}");
-                    if let Some((_override_key, override_entry)) =
-                        self.index.get_by_ident(&override_ident)
-                    {
-                        let mut pkg_version = override_entry.version().to_string();
-                        if let Some(patch) =
-                            self.data.patched_dependencies.get(&override_entry.ident)
-                        {
-                            pkg_version.push('+');
-                            pkg_version.push_str(patch);
-                        }
-                        return Ok(Some(crate::Package {
-                            key: override_entry.ident.to_string(),
-                            version: pkg_version,
-                        }));
-                    }
-                }
-
-                let mut version = entry.version().to_string();
-                if let Some(patch) = self.data.patched_dependencies.get(&entry.ident) {
-                    version.push('+');
-                    version.push_str(patch);
-                }
-                return Ok(Some(crate::Package {
-                    key: entry.ident.to_string(),
-                    version,
-                }));
-            }
+        if let Some(entry) = self.index.get_workspace_scoped(workspace_name, name)
+            && let Some(pkg) =
+                self.process_package_entry(entry, name, override_version, resolved_version)?
+        {
+            return Ok(Some(pkg));
         }
 
         // Try finding via the general find_package method (includes bundled)
-        if let Some((_key, entry)) = self.index.find_package(Some(workspace_name), name) {
-            let ident = PackageIdent::parse(&entry.ident);
-
-            // Filter out workspace mapping entries
-            if !ident.is_workspace() {
-                // Check for overrides
-                if override_version != resolved_version {
-                    let override_ident = format!("{name}@{override_version}");
-                    if let Some((_override_key, override_entry)) =
-                        self.index.get_by_ident(&override_ident)
-                    {
-                        let mut pkg_version = override_entry.version().to_string();
-                        if let Some(patch) =
-                            self.data.patched_dependencies.get(&override_entry.ident)
-                        {
-                            pkg_version.push('+');
-                            pkg_version.push_str(patch);
-                        }
-                        return Ok(Some(crate::Package {
-                            key: override_entry.ident.to_string(),
-                            version: pkg_version,
-                        }));
-                    }
-                }
-
-                let mut version = entry.version().to_string();
-                if let Some(patch) = self.data.patched_dependencies.get(&entry.ident) {
-                    version.push('+');
-                    version.push_str(patch);
-                }
-                return Ok(Some(crate::Package {
-                    key: entry.ident.to_string(),
-                    version,
-                }));
-            }
+        if let Some((_key, entry)) = self.index.find_package(Some(workspace_name), name)
+            && let Some(pkg) =
+                self.process_package_entry(entry, name, override_version, resolved_version)?
+        {
+            return Ok(Some(pkg));
         }
 
         Ok(None)
@@ -581,13 +568,48 @@ impl Lockfile for BunLockfile {
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
         let mut output = String::new();
+        self.write_header(&mut output);
+        self.write_workspaces(&mut output)?;
+        self.write_packages(&mut output)?;
+        output.push_str("}\n");
+        Ok(output.into_bytes())
+    }
 
+    fn global_change(&self, other: &dyn Lockfile) -> bool {
+        let any_other = other as &dyn Any;
+        let Some(other_bun) = any_other.downcast_ref::<Self>() else {
+            return true;
+        };
+
+        self.data.lockfile_version != other_bun.data.lockfile_version
+    }
+
+    fn turbo_version(&self) -> Option<String> {
+        let (_, entry) = self.package_entry("turbo")?;
+        Some(entry.version().to_owned())
+    }
+
+    fn human_name(&self, package: &crate::Package) -> Option<String> {
+        let entry = self.data.packages.get(&package.key)?;
+        Some(entry.ident.clone())
+    }
+}
+
+impl BunLockfile {
+    pub fn from_bytes(input: &[u8]) -> Result<Self, super::Error> {
+        let s = std::str::from_utf8(input).map_err(Error::from)?;
+        Self::from_str(s)
+    }
+
+    fn write_header(&self, output: &mut String) {
         output.push_str("{\n");
         output.push_str(&format!(
             "  \"lockfileVersion\": {},\n",
             self.data.lockfile_version
         ));
+    }
 
+    fn write_workspaces(&self, output: &mut String) -> Result<(), crate::Error> {
         // serde_json uses 2-space indentation, but Bun uses 4-space
         output.push_str("  \"workspaces\": ");
         let workspaces_json = serde_json::to_string_pretty(&self.data.workspaces)?;
@@ -621,39 +643,13 @@ impl Lockfile for BunLockfile {
         output.push_str(&workspaces_with_commas);
         output.push_str(",\n");
 
+        Ok(())
+    }
+
+    fn write_packages(&self, output: &mut String) -> Result<(), crate::Error> {
         output.push_str("  \"packages\": {\n");
 
-        // Bun sorts packages by structure: regular packages, then scoped hoisted,
-        // then non-scoped hoisted, then deeply nested
-        let mut package_keys: Vec<_> = self.data.packages.keys().collect();
-        package_keys.sort_by(|a, b| {
-            let category = |key_str: &str| -> u8 {
-                let key = PackageKey::parse(key_str);
-                match key {
-                    PackageKey::Simple(_) => 1,
-                    PackageKey::Scoped { .. } => 1,
-                    PackageKey::Nested { .. } => 3,
-                    PackageKey::ScopedNested { .. } => {
-                        // Count slashes to determine nesting depth
-                        let slash_count = key_str.matches('/').count();
-                        if slash_count == 2 {
-                            2 // @scope/parent/dep
-                        } else {
-                            4 // deeper nesting
-                        }
-                    }
-                }
-            };
-
-            let a_cat = category(a);
-            let b_cat = category(b);
-
-            if a_cat != b_cat {
-                a_cat.cmp(&b_cat)
-            } else {
-                a.cmp(b)
-            }
-        });
+        let package_keys = self.sort_package_keys();
         for (i, key) in package_keys.iter().enumerate() {
             let entry = &self.data.packages[*key];
 
@@ -670,169 +666,7 @@ impl Lockfile for BunLockfile {
 
                 // Bun's format differs from serde_json: objects need padding spaces,
                 // 3-element arrays get expanded with trailing commas, others stay compact
-                let info_json_spaced = if info_json == "{}" {
-                    info_json
-                } else {
-                    let mut result = String::with_capacity(info_json.len() + 100);
-                    let chars: Vec<char> = info_json.chars().collect();
-                    let mut i = 0;
-                    let mut in_string = false;
-                    let mut escape_next = false;
-
-                    while i < chars.len() {
-                        let c = chars[i];
-
-                        if !escape_next {
-                            if c == '"' {
-                                in_string = !in_string;
-                            } else if c == '\\' && in_string {
-                                escape_next = true;
-                            }
-                        } else {
-                            escape_next = false;
-                        }
-
-                        if !in_string {
-                            match c {
-                                '{' => {
-                                    result.push_str("{ ");
-                                    i += 1;
-                                    continue;
-                                }
-                                '}' => {
-                                    result.push_str(" }");
-                                    i += 1;
-                                    continue;
-                                }
-                                ':' => {
-                                    result.push_str(": ");
-                                    i += 1;
-                                    continue;
-                                }
-                                '[' => {
-                                    let mut array_depth = 1;
-                                    let mut array_content = String::new();
-                                    let mut comma_count = 0;
-                                    let mut in_array_string = false;
-                                    let mut array_escape_next = false;
-                                    i += 1;
-
-                                    while i < chars.len() && array_depth > 0 {
-                                        let array_char = chars[i];
-
-                                        if !array_escape_next {
-                                            if array_char == '"' {
-                                                in_array_string = !in_array_string;
-                                            } else if array_char == '\\' && in_array_string {
-                                                array_escape_next = true;
-                                            } else if !in_array_string {
-                                                if array_char == '[' {
-                                                    array_depth += 1;
-                                                } else if array_char == ']' {
-                                                    array_depth -= 1;
-                                                    if array_depth == 0 {
-                                                        break;
-                                                    }
-                                                } else if array_char == ',' && array_depth == 1 {
-                                                    comma_count += 1;
-                                                }
-                                            }
-                                        } else {
-                                            array_escape_next = false;
-                                        }
-
-                                        array_content.push(array_char);
-                                        i += 1;
-                                    }
-
-                                    let trimmed_content = array_content
-                                        .trim_matches(|c: char| c == ',' || c.is_whitespace());
-
-                                    if comma_count == 0 {
-                                        result.push('[');
-                                        result.push_str(trimmed_content);
-                                        result.push(']');
-                                    } else if comma_count == 2 {
-                                        result.push_str("[ ");
-                                        let mut formatted = String::with_capacity(
-                                            trimmed_content.len() + comma_count * 2,
-                                        );
-                                        let mut depth = 0;
-                                        let mut in_str = false;
-                                        let mut esc = false;
-                                        for ch in trimmed_content.chars() {
-                                            if !esc {
-                                                if ch == '"' {
-                                                    in_str = !in_str;
-                                                } else if ch == '\\' && in_str {
-                                                    esc = true;
-                                                } else if !in_str {
-                                                    if ch == '[' || ch == '{' {
-                                                        depth += 1;
-                                                    } else if ch == ']' || ch == '}' {
-                                                        depth -= 1;
-                                                    } else if ch == ',' && depth == 0 {
-                                                        formatted.push_str(", ");
-                                                        continue;
-                                                    }
-                                                }
-                                            } else {
-                                                esc = false;
-                                            }
-                                            formatted.push(ch);
-                                        }
-                                        result.push_str(&formatted);
-                                        result.push_str(", ]");
-                                    } else {
-                                        result.push('[');
-                                        let mut formatted = String::with_capacity(
-                                            trimmed_content.len() + comma_count * 2,
-                                        );
-                                        let mut depth = 0;
-                                        let mut in_str = false;
-                                        let mut esc = false;
-                                        for ch in trimmed_content.chars() {
-                                            if !esc {
-                                                if ch == '"' {
-                                                    in_str = !in_str;
-                                                } else if ch == '\\' && in_str {
-                                                    esc = true;
-                                                } else if !in_str {
-                                                    if ch == '[' || ch == '{' {
-                                                        depth += 1;
-                                                    } else if ch == ']' || ch == '}' {
-                                                        depth -= 1;
-                                                    } else if ch == ',' && depth == 0 {
-                                                        formatted.push_str(", ");
-                                                        continue;
-                                                    }
-                                                }
-                                            } else {
-                                                esc = false;
-                                            }
-                                            formatted.push(ch);
-                                        }
-                                        result.push_str(&formatted);
-                                        result.push(']');
-                                    }
-                                    i += 1; // skip closing ]
-                                    continue;
-                                }
-                                ',' => {
-                                    result.push_str(", ");
-                                    i += 1;
-                                    continue;
-                                }
-                                _ => {}
-                            }
-                        }
-
-                        result.push(c);
-                        i += 1;
-                    }
-
-                    result
-                };
+                let info_json_spaced = self.format_info_json(&info_json);
 
                 output.push_str(&format!(
                     "    \"{key}\": [{ident_json}, {registry_json}, {info_json_spaced}, \
@@ -848,35 +682,198 @@ impl Lockfile for BunLockfile {
         }
         output.push_str("  }\n");
 
-        output.push_str("}\n");
-
-        Ok(output.into_bytes())
+        Ok(())
     }
 
-    fn global_change(&self, other: &dyn Lockfile) -> bool {
-        let any_other = other as &dyn Any;
-        let Some(other_bun) = any_other.downcast_ref::<Self>() else {
-            return true;
-        };
+    /// Bun sorts packages by structure: regular packages, then scoped hoisted,
+    /// then non-scoped hoisted, then deeply nested
+    fn sort_package_keys(&self) -> Vec<&String> {
+        // Sort priorities for package keys
+        const SORT_PRIORITY_TOP_LEVEL: u8 = 1;
+        const SORT_PRIORITY_SHALLOW_NESTED: u8 = 2;
+        const SORT_PRIORITY_DEEP_NESTED: u8 = 3;
+        const SORT_PRIORITY_VERY_DEEP_NESTED: u8 = 4;
 
-        self.data.lockfile_version != other_bun.data.lockfile_version
+        let mut package_keys: Vec<_> = self.data.packages.keys().collect();
+        package_keys.sort_by(|a, b| {
+            let category = |key_str: &str| -> u8 {
+                let key = PackageKey::parse(key_str);
+                match key {
+                    PackageKey::Simple(_) => SORT_PRIORITY_TOP_LEVEL,
+                    PackageKey::Scoped { .. } => SORT_PRIORITY_TOP_LEVEL,
+                    PackageKey::Nested { .. } => SORT_PRIORITY_DEEP_NESTED,
+                    PackageKey::ScopedNested { .. } => {
+                        // Count slashes to determine nesting depth
+                        let slash_count = key_str.matches('/').count();
+                        if slash_count == 2 {
+                            SORT_PRIORITY_SHALLOW_NESTED // @scope/parent/dep
+                        } else {
+                            SORT_PRIORITY_VERY_DEEP_NESTED // deeper nesting
+                        }
+                    }
+                }
+            };
+
+            let a_cat = category(a);
+            let b_cat = category(b);
+
+            if a_cat != b_cat {
+                a_cat.cmp(&b_cat)
+            } else {
+                a.cmp(b)
+            }
+        });
+        package_keys
     }
 
-    fn turbo_version(&self) -> Option<String> {
-        let (_, entry) = self.package_entry("turbo")?;
-        Some(entry.version().to_owned())
+    /// Formats JSON to match Bun's specific formatting requirements:
+    /// - Objects need padding spaces: `{ "key": "value" }`
+    /// - 3-element arrays get expanded with trailing commas: `[ item1, item2,
+    ///   item3, ]`
+    /// - Other arrays stay compact: `[item1, item2]`
+    fn format_info_json(&self, info_json: &str) -> String {
+        if info_json == "{}" {
+            return info_json.to_string();
+        }
+
+        let mut result = String::with_capacity(info_json.len() + 100);
+        let chars: Vec<char> = info_json.chars().collect();
+        let mut i = 0;
+        let mut in_string = false;
+        let mut escape_next = false;
+
+        while i < chars.len() {
+            let c = chars[i];
+
+            if !escape_next {
+                if c == '"' {
+                    in_string = !in_string;
+                } else if c == '\\' && in_string {
+                    escape_next = true;
+                }
+            } else {
+                escape_next = false;
+            }
+
+            if !in_string {
+                match c {
+                    '{' => {
+                        result.push_str("{ ");
+                        i += 1;
+                        continue;
+                    }
+                    '}' => {
+                        result.push_str(" }");
+                        i += 1;
+                        continue;
+                    }
+                    ':' => {
+                        result.push_str(": ");
+                        i += 1;
+                        continue;
+                    }
+                    '[' => {
+                        let array_result = self.format_array(&chars, &mut i);
+                        result.push_str(&array_result);
+                        i += 1; // skip closing ]
+                        continue;
+                    }
+                    ',' => {
+                        result.push_str(", ");
+                        i += 1;
+                        continue;
+                    }
+                    _ => {}
+                }
+            }
+
+            result.push(c);
+            i += 1;
+        }
+
+        result
     }
 
-    fn human_name(&self, package: &crate::Package) -> Option<String> {
-        let entry = self.data.packages.get(&package.key)?;
-        Some(entry.ident.clone())
-    }
-}
+    /// Formats arrays according to Bun's requirements.
+    /// Returns the formatted array string and updates the index.
+    fn format_array(&self, chars: &[char], i: &mut usize) -> String {
+        let mut array_depth = 1;
+        let mut array_content = String::new();
+        let mut comma_count = 0;
+        let mut in_array_string = false;
+        let mut array_escape_next = false;
+        *i += 1;
 
-impl BunLockfile {
-    pub fn from_bytes(input: &[u8]) -> Result<Self, super::Error> {
-        let s = std::str::from_utf8(input).map_err(Error::from)?;
-        Self::from_str(s)
+        while *i < chars.len() && array_depth > 0 {
+            let array_char = chars[*i];
+
+            if !array_escape_next {
+                if array_char == '"' {
+                    in_array_string = !in_array_string;
+                } else if array_char == '\\' && in_array_string {
+                    array_escape_next = true;
+                } else if !in_array_string {
+                    if array_char == '[' {
+                        array_depth += 1;
+                    } else if array_char == ']' {
+                        array_depth -= 1;
+                        if array_depth == 0 {
+                            break;
+                        }
+                    } else if array_char == ',' && array_depth == 1 {
+                        comma_count += 1;
+                    }
+                }
+            } else {
+                array_escape_next = false;
+            }
+
+            array_content.push(array_char);
+            *i += 1;
+        }
+
+        let trimmed_content = array_content.trim_matches(|c: char| c == ',' || c.is_whitespace());
+
+        if comma_count == 0 {
+            format!("[{}]", trimmed_content)
+        } else if comma_count == 2 {
+            format!("[ {}, ]", self.format_array_content(trimmed_content))
+        } else {
+            format!("[{}]", self.format_array_content(trimmed_content))
+        }
+    }
+
+    /// Formats the content inside an array by adding proper spacing after
+    /// commas.
+    fn format_array_content(&self, content: &str) -> String {
+        let mut formatted = String::with_capacity(content.len() + 20);
+        let mut depth = 0;
+        let mut in_str = false;
+        let mut esc = false;
+
+        for ch in content.chars() {
+            if !esc {
+                if ch == '"' {
+                    in_str = !in_str;
+                } else if ch == '\\' && in_str {
+                    esc = true;
+                } else if !in_str {
+                    if ch == '[' || ch == '{' {
+                        depth += 1;
+                    } else if ch == ']' || ch == '}' {
+                        depth -= 1;
+                    } else if ch == ',' && depth == 0 {
+                        formatted.push_str(", ");
+                        continue;
+                    }
+                }
+            } else {
+                esc = false;
+            }
+            formatted.push(ch);
+        }
+
+        formatted
     }
 
     /// Returns the version override if there's an override for a package name
@@ -1458,9 +1455,6 @@ impl FromStr for BunLockfile {
             } else {
                 // First time seeing this ident
                 key_to_entry.insert(info.ident.clone(), path.clone());
-
-                // Debug esbuild mappings
-                if info.ident.starts_with("esbuild@0.17") {}
             }
         }
         // Build package index
