@@ -38,7 +38,7 @@ npx create-turbo@latest -e with-vite
 
 </Tab>
 
-<Tab value="bun">
+<Tab value="bun (Beta)">
 
 ```bash title="Terminal"
 bunx create-turbo@latest -e with-vite
@@ -77,7 +77,7 @@ npm create vite@latest apps/my-app
 
 </Tab>
 
-<Tab value="bun">
+<Tab value="bun (Beta)">
 
 ```bash title="Terminal"
 bun create vite@latest apps/my-app
@@ -131,7 +131,7 @@ To add [Internal Packages](/docs/core-concepts/internal-packages) to your new ap
 
 </Tab>
 
-<Tab value="bun">
+<Tab value="bun (Beta)">
 
 ```diff title="./apps/my-app/package.json"
 {
@@ -153,12 +153,12 @@ By default, the new application will use the tasks defined in the root `turbo.js
 
 ### Microfrontends
 
-When using Vite with [Turborepo's microfrontends](/docs/guides/microfrontends), make sure to set the `base` property for child applications. This ensures the assets like images and CSS will be routed to the correct application.
+When using Vite with [Turborepo's microfrontends](/docs/guides/microfrontends), make sure to set the `basePath` property for child applications. This ensures the assets like images and CSS will be routed to the correct application.
 
 ```ts title="./apps/my-app/vite.config.ts"
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/admin',
+  base: '/thing',
 });
 ```

@@ -34,11 +34,6 @@ pub enum Error {
     },
     #[error("Invalid package path: {0}. Path traversal outside repository root is not allowed.")]
     PathTraversal(String),
-    #[error(
-        "Invalid custom config file name: {0}. Must be a .json or .jsonc file directly in the \
-         package root (no subdirectories or path traversal)."
-    )]
-    InvalidCustomConfigPath(String),
 }
 
 impl Error {

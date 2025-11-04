@@ -1,5 +1,4 @@
 {
-  "$schema": "https://turborepo.com/microfrontends/schema.json",
   "applications": {
     "web": {
       "development": {
@@ -12,17 +11,7 @@
       },
       "routing": [
         {
-          "paths": ["/docs/:path*"]
-        }
-      ]
-    },
-    "admin": {
-      "development": {
-        "local": 3002
-      },
-      "routing": [
-        {
-          "paths": ["/admin/:path*"]
+          "paths": ["/docs", "/docs/:path*"]
         }
       ]
     }

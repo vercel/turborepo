@@ -47,7 +47,7 @@ Next, create the `package.json` for the package. By adding this file, you'll ful
 <Callout type="warn">
   The `name` field in your `package.json` determines how your package can be
   imported throughout your workspace. The name you choose here (e.g.
-  `@repo/math`) is exactly how other packages will import it (e.g. `import {add}
+  `@repo/math`) is exactly how other packages will import it (e.g. `import {add}{' '}
   from '@repo/math/add'`).
 </Callout>
 
@@ -135,7 +135,7 @@ Next, create the `package.json` for the package. By adding this file, you'll ful
 
 </Tab>
 
-<Tab value="bun">
+<Tab value="bun (Beta)">
 ```json title="./packages/math/package.json"
 {
   "name": "@repo/math",
@@ -274,7 +274,7 @@ You're ready to use your new package in an application. Let's add it to the `web
 ```
 </Tab>
 
-<Tab value="bun">
+<Tab value="bun (Beta)">
 ```diff title="apps/web/package.json"
   "dependencies": {
 +   "@repo/math": "workspace:*",
