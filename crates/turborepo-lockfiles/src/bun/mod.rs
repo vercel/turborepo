@@ -2828,14 +2828,17 @@ mod test {
         );
     }
 
-    /// Simple helper to prune a lockfile for a target workspace
-    /// Returns a pruned BunLockfile ready for snapshot testing
+    /// Test helper to prune a lockfile for a single target workspace.
+    /// Uses the same approach as production code: compute transitive closure
+    /// via all_transitive_closures, then call subgraph with the results.
     fn prune_for_workspace(lockfile: &BunLockfile, target_workspace: &str) -> BunLockfile {
-        use crate::{Package, all_transitive_closures};
+        use crate::all_transitive_closures;
 
-        // Collect workspace dependencies (including optional dependencies for
-        // platform-specific packages)
-        let get_workspace_deps = |ws_path: &str| -> std::collections::HashMap<String, String> {
+        // Helper to extract all dependencies from a workspace entry
+        fn get_workspace_deps(
+            lockfile: &BunLockfile,
+            ws_path: &str,
+        ) -> std::collections::HashMap<String, String> {
             lockfile
                 .data
                 .workspaces
@@ -2851,39 +2854,32 @@ mod test {
                     if let Some(od) = &entry.optional_dependencies {
                         deps.extend(od.clone());
                     }
-                    // NOTE: Peer dependencies are NOT collected here because they require
-                    // special handling. They are added explicitly later if they exist as
-                    // installed packages.
                     deps
                 })
                 .unwrap_or_default()
-        };
+        }
 
-        let mut all_workspace_deps = std::collections::HashMap::new();
-        all_workspace_deps.insert("".to_string(), get_workspace_deps(""));
-        all_workspace_deps.insert(
+        // Start with root and target workspace
+        let mut workspace_deps = std::collections::HashMap::new();
+        workspace_deps.insert("".to_string(), get_workspace_deps(lockfile, ""));
+        workspace_deps.insert(
             target_workspace.to_string(),
-            get_workspace_deps(target_workspace),
+            get_workspace_deps(lockfile, target_workspace),
         );
 
-        // Collect all transitively referenced internal workspaces
-        // Look for workspace dependencies in the format "workspace:*" or
-        // "workspace:path"
+        // Discover transitive workspace dependencies (workspace:* protocol)
         loop {
             let mut added_new = false;
-            let current_workspaces: Vec<_> = all_workspace_deps.keys().cloned().collect();
+            let current_workspaces: Vec<_> = workspace_deps.keys().cloned().collect();
 
             for (ws_path, ws_entry) in &lockfile.data.workspaces {
                 if current_workspaces.contains(ws_path) {
                     continue;
                 }
 
-                // Check if any current workspace depends on this workspace
-                // Dependency values can be "workspace:*" or specific workspace references
                 let workspace_name = &ws_entry.name;
-                let is_referenced = all_workspace_deps.iter().any(|(_ws, deps)| {
+                let is_referenced = workspace_deps.iter().any(|(_ws, deps)| {
                     deps.iter().any(|(dep_name, dep_value)| {
-                        // Check if this dependency is a workspace reference to our target
                         (dep_name == workspace_name
                             || dep_name.starts_with(&format!("{}/", workspace_name)))
                             && dep_value.starts_with("workspace:")
@@ -2891,7 +2887,7 @@ mod test {
                 });
 
                 if is_referenced {
-                    all_workspace_deps.insert(ws_path.clone(), get_workspace_deps(ws_path));
+                    workspace_deps.insert(ws_path.clone(), get_workspace_deps(lockfile, ws_path));
                     added_new = true;
                 }
             }
@@ -2901,18 +2897,14 @@ mod test {
             }
         }
 
-        // Use generic all_transitive_closures
-        let mut closures = all_transitive_closures(lockfile, all_workspace_deps, false).unwrap();
+        // Compute transitive external dependencies for all workspaces
+        let mut closures = all_transitive_closures(lockfile, workspace_deps.clone(), false)
+            .expect("Failed to compute transitive closures");
 
-        // Collect any additional workspaces referenced via @workspace: in the packages
+        // Discover additional workspaces referenced via @workspace: in package idents
         loop {
             let mut added_new = false;
             let current_workspaces: Vec<_> = closures.keys().cloned().collect();
-
-            let all_packages: Vec<_> = closures
-                .values()
-                .flat_map(|closure| closure.iter().map(|p: &Package| p.key.clone()))
-                .collect();
 
             for (ws_path, _) in &lockfile.data.workspaces {
                 if current_workspaces.contains(ws_path) {
@@ -2920,121 +2912,25 @@ mod test {
                 }
 
                 let workspace_marker = format!("@workspace:{}", ws_path);
-                // Check if any package's ident (not key) contains the workspace marker
-                // Only check non-nested packages (those without peer dependency resolution
-                // paths) to avoid including workspaces that are only referenced
-                // through nested peer dependency resolution artifacts like
-                // "parent/peer/package"
-                //
-                // Also skip top-level workspace mapping entries (packages that are just
-                // pointers to workspaces, like "storybook":
-                // ["storybook@workspace:apps/storybook"])
-                let matching_packages: Vec<_> = all_packages
-                    .iter()
-                    .filter(|pkg_key| {
-                        // Skip nested peer dependency artifacts - these have keys like
-                        // "package/nested" where the part before the first slash is itself
-                        // a package. However, if the prefix is a workspace mapping entry,
-                        // then this is a legitimate workspace dependency and should be
-                        // included.
-                        if let Some(slash_pos) = pkg_key.find('/') {
-                            let prefix = &pkg_key[..slash_pos];
-                            // Check if prefix exists as a package entry
-                            if let Some(prefix_entry) = lockfile.data.packages.get(prefix) {
-                                // If it's a workspace mapping, this is a workspace dependency
-                                // - INCLUDE IT Example: "storybook/storybook" where
-                                // "storybook" maps to "storybook@workspace:apps/storybook"
-                                if prefix_entry
-                                    .ident
-                                    .starts_with(&format!("{}@workspace:", prefix))
-                                {
-                                    return true;
-                                }
-                                // Otherwise, it's a nested peer dependency artifact - SKIP
-                                // IT
-                                return false;
-                            }
-                            // No prefix entry found - include by default
-                            return true;
-                        }
 
-                        // Skip top-level workspace mapping entries
-                        // These have keys like "storybook" and idents like
-                        // "storybook@workspace:path" They're just pointers
-                        // and shouldn't trigger workspace inclusion
-                        if let Some(entry) = lockfile.data.packages.get(*pkg_key) {
-                            if entry.ident.starts_with(&format!("{}@workspace:", pkg_key)) {
-                                return false;
-                            }
-                        }
-
-                        true
+                // Check if any resolved package references this workspace
+                let is_referenced = closures.values().any(|closure| {
+                    closure.iter().any(|pkg| {
+                        // Look up the actual lockfile entry to check its ident
+                        lockfile
+                            .key_to_entry
+                            .get(&pkg.key)
+                            .and_then(|lockfile_key| lockfile.data.packages.get(lockfile_key))
+                            .map(|entry| entry.ident.contains(&workspace_marker))
+                            .unwrap_or(false)
                     })
-                    .filter(|pkg_key| {
-                        // Check if this package references the workspace
-                        // pkg_key here is actually an ident (like "recharts@2.15.4"), not a
-                        // lockfile key We need to use key_to_entry to find
-                        // the actual lockfile key
-                        if let Some(lockfile_key) = lockfile.key_to_entry.get(*pkg_key) {
-                            if let Some(entry) = lockfile.data.packages.get(lockfile_key) {
-                                // Skip workspace mapping entries - they're just pointers and
-                                // shouldn't trigger workspace
-                                // inclusion
-                                if entry.ident.contains("@workspace:") {
-                                    return false;
-                                }
-                                return entry.ident.contains(&workspace_marker);
-                            }
-                        }
-
-                        // Fallback: check if this looks like a synthetic workspace key
-                        if let Some(at_pos) = pkg_key.rfind('@') {
-                            let name = &pkg_key[..at_pos];
-                            if let Some(entry) = lockfile.data.packages.get(name) {
-                                // Skip workspace mapping entries
-                                if entry.ident.contains("@workspace:") {
-                                    return false;
-                                }
-                                return entry.ident.contains(&workspace_marker);
-                            }
-                        }
-
-                        false
-                    })
-                    .collect();
-                let is_referenced = !matching_packages.is_empty();
+                });
 
                 if is_referenced {
-                    let deps = get_workspace_deps(ws_path);
-                    let mut new_workspace_deps = closures
-                        .iter()
-                        .map(|(k, _v)| {
-                            let deps: std::collections::HashMap<_, _> = lockfile
-                                .data
-                                .workspaces
-                                .get(k.as_str())
-                                .map(|e| {
-                                    let mut d = std::collections::HashMap::new();
-                                    if let Some(deps) = &e.dependencies {
-                                        d.extend(deps.clone());
-                                    }
-                                    if let Some(dev_deps) = &e.dev_dependencies {
-                                        d.extend(dev_deps.clone());
-                                    }
-                                    if let Some(opt_deps) = &e.optional_dependencies {
-                                        d.extend(opt_deps.clone());
-                                    }
-                                    // NOTE: Peer dependencies are NOT collected here - see comment
-                                    // above
-                                    d
-                                })
-                                .unwrap_or_default();
-                            (k.clone(), deps)
-                        })
-                        .collect::<std::collections::HashMap<_, _>>();
-                    new_workspace_deps.insert(ws_path.to_string(), deps);
-                    closures =
-                        all_transitive_closures(lockfile, new_workspace_deps, false).unwrap();
+                    workspace_deps
+                        .insert(ws_path.to_string(), get_workspace_deps(lockfile, ws_path));
+                    closures = all_transitive_closures(lockfile, workspace_deps.clone(), false)
+                        .expect("Failed to recompute transitive closures");
                     added_new = true;
                     break;
                 }
@@ -3045,39 +2941,28 @@ mod test {
             }
         }
 
-        // Collect all packages from all workspace closures
+        // Collect all packages and workspace paths
         let mut packages: std::collections::HashSet<String> = closures
             .values()
-            .flat_map(|closure| closure.iter().map(|p: &Package| p.key.clone()))
+            .flat_map(|closure| closure.iter().map(|p| p.key.clone()))
             .collect();
-
         let workspace_paths: Vec<String> = closures.keys().cloned().collect();
 
-        // Add workspace package entries for included workspaces
-        // These are entries in the packages section that map workspace names to their
-        // locations e.g., "@repo/ui": ["@repo/ui@workspace:packages/ui"]
+        // Add workspace names to packages list so subgraph creates mapping entries
         for ws_path in &workspace_paths {
-            // Skip the root workspace - it doesn't get a package mapping entry
-            if ws_path.is_empty() {
-                continue;
-            }
-            if let Some(workspace_entry) = lockfile.data.workspaces.get(ws_path.as_str()) {
-                let workspace_name = &workspace_entry.name;
-                // Always add the workspace package entry - these are required in the pruned
-                // lockfile even if they don't exist in the original
-                packages.insert(workspace_name.clone());
+            if !ws_path.is_empty() {
+                if let Some(workspace_entry) = lockfile.data.workspaces.get(ws_path.as_str()) {
+                    packages.insert(workspace_entry.name.clone());
+                }
             }
         }
 
         // Add workspace peer dependencies that are actually installed
-        // Peer dependencies declared at workspace level are requirements, not automatic
-        // dependencies, but if they're installed (exist in packages section), they
-        // should be included in the pruned lockfile
+        // (mimics the logic in the Lockfile trait's subgraph method)
         for ws_path in &workspace_paths {
             if let Some(workspace_entry) = lockfile.data.workspaces.get(ws_path.as_str()) {
                 if let Some(peer_deps) = &workspace_entry.peer_dependencies {
                     for (peer_name, _peer_version) in peer_deps {
-                        // Check if this peer dependency exists as an installed package
                         if lockfile.data.packages.contains_key(peer_name) {
                             packages.insert(peer_name.clone());
                         }
@@ -3088,7 +2973,10 @@ mod test {
 
         let packages: Vec<String> = packages.into_iter().collect();
 
-        lockfile.subgraph(&workspace_paths, &packages).unwrap()
+        // Call internal subgraph method
+        lockfile
+            .subgraph(&workspace_paths, &packages)
+            .expect("Failed to create subgraph")
     }
 
     #[test]
