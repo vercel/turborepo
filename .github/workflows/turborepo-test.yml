@@ -116,7 +116,7 @@ jobs:
       matrix:
         os:
           - runner: ubuntu-latest
-          - runner: macos-13
+          - runner: macos-latest
           - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
@@ -264,7 +264,7 @@ jobs:
           - name: ubuntu
             runner: ubuntu-latest
           - name: macos
-            runner: macos-13
+            runner: macos-latest
           - name: windows
             runner: windows-latest
     runs-on: ${{ matrix.os.runner }}
