@@ -835,7 +835,7 @@ impl BunLockfile {
         let trimmed_content = array_content.trim_matches(|c: char| c == ',' || c.is_whitespace());
 
         if comma_count == 0 {
-            format!("[{}]", trimmed_content)
+            format!("[{trimmed_content}]")
         } else if comma_count == 2 {
             format!("[ {}, ]", self.format_array_content(trimmed_content))
         } else {
