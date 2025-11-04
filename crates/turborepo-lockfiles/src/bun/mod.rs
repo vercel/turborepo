@@ -550,25 +550,25 @@ impl Lockfile for BunLockfile {
         // dependencies, but if they're installed (exist in packages section), they
         // should be included in the pruned lockfile
         for ws_path in workspace_packages {
-            if let Some(workspace_entry) = self.data.workspaces.get(ws_path.as_str()) {
-                if let Some(peer_deps) = &workspace_entry.peer_dependencies {
-                    for (peer_name, _peer_version) in peer_deps {
-                        // Check if this peer dependency exists as an installed package
-                        if self.data.packages.contains_key(peer_name) {
-                            packages_with_workspaces.insert(peer_name.clone());
-                        }
+            if let Some(workspace_entry) = self.data.workspaces.get(ws_path.as_str())
+                && let Some(peer_deps) = &workspace_entry.peer_dependencies
+            {
+                for peer_name in peer_deps.keys() {
+                    // Check if this peer dependency exists as an installed package
+                    if self.data.packages.contains_key(peer_name) {
+                        packages_with_workspaces.insert(peer_name.clone());
                     }
                 }
             }
         }
 
         // Also check root workspace peer dependencies
-        if let Some(root_workspace) = self.data.workspaces.get("") {
-            if let Some(peer_deps) = &root_workspace.peer_dependencies {
-                for (peer_name, _peer_version) in peer_deps {
-                    if self.data.packages.contains_key(peer_name) {
-                        packages_with_workspaces.insert(peer_name.clone());
-                    }
+        if let Some(root_workspace) = self.data.workspaces.get("")
+            && let Some(peer_deps) = &root_workspace.peer_dependencies
+        {
+            for peer_name in peer_deps.keys() {
+                if self.data.packages.contains_key(peer_name) {
+                    packages_with_workspaces.insert(peer_name.clone());
                 }
             }
         }
