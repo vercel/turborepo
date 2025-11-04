@@ -386,15 +386,15 @@ impl Lockfile for BunLockfile {
         // directly from the workspaces section without requiring a packages entry
         if self.data.lockfile_version >= 1 {
             let override_spec = VersionSpec::parse(override_version);
-            if let Some(workspace_target_path) = override_spec.workspace_path() {
-                if let Some(target_workspace) = self.data.workspaces.get(workspace_target_path) {
-                    // This is a workspace dependency, create a synthetic package entry
-                    let workspace_version = target_workspace.version.as_deref().unwrap_or("0.0.0");
-                    return Ok(Some(crate::Package {
-                        key: format!("{name}@{workspace_version}"),
-                        version: workspace_version.to_string(),
-                    }));
-                }
+            if let Some(workspace_target_path) = override_spec.workspace_path()
+                && let Some(target_workspace) = self.data.workspaces.get(workspace_target_path)
+            {
+                // This is a workspace dependency, create a synthetic package entry
+                let workspace_version = target_workspace.version.as_deref().unwrap_or("0.0.0");
+                return Ok(Some(crate::Package {
+                    key: format!("{name}@{workspace_version}"),
+                    version: workspace_version.to_string(),
+                }));
             }
         }
 
@@ -508,7 +508,7 @@ impl Lockfile for BunLockfile {
                 // optionalDependencies (platform-specific binaries) should include hoisted
                 // versions when no nested version exists.
                 let parent_key = format!("{entry_key}/{dependency}");
-                let has_nested = self.data.packages.get(&parent_key).is_some();
+                let has_nested = self.data.packages.contains_key(&parent_key);
 
                 if !has_nested {
                     let is_optional_peer_only =
@@ -631,7 +631,7 @@ impl Lockfile for BunLockfile {
             let ident = PackageIdent::parse(&entry.ident);
             if ident.is_workspace() {
                 let ident_json = serde_json::to_string(&entry.ident)?;
-                output.push_str(&format!("    \"{}\": [{}],", key, ident_json));
+                output.push_str(&format!("    \"{key}\": [{ident_json}],"));
             } else {
                 let ident_json = serde_json::to_string(&entry.ident)?;
                 let registry_json = serde_json::to_string(entry.registry.as_deref().unwrap_or(""))?;
@@ -806,15 +806,14 @@ impl Lockfile for BunLockfile {
                 };
 
                 output.push_str(&format!(
-                    "    \"{}\": [{}, {}, {}, {}],",
-                    key, ident_json, registry_json, info_json_spaced, checksum_json
+                    "    \"{key}\": [{ident_json}, {registry_json}, {info_json_spaced}, {checksum_json}],",
                 ));
             }
 
             if i < package_keys.len() - 1 {
                 output.push_str("\n\n");
             } else {
-                output.push_str("\n");
+                output.push('\n');
             }
         }
         output.push_str("  }\n");
@@ -951,20 +950,20 @@ impl BunLockfile {
         // entries for target workspaces to avoid pulling in unrelated workspace
         // versions
         for pkg in packages {
-            if self.data.packages.contains_key(pkg) {
-                keys_to_include.insert(pkg.clone());
-            } else if pruned_data.workspaces.values().any(|ws| &ws.name == pkg) {
+            if self.data.packages.contains_key(pkg)
+                || pruned_data.workspaces.values().any(|ws| &ws.name == pkg)
+            {
                 keys_to_include.insert(pkg.clone());
             } else if let Some(at_pos) = pkg.rfind('@') {
                 let name = &pkg[..at_pos];
 
-                if let Some(entry) = self.data.packages.get(name) {
-                    if entry.ident.contains("@workspace:") {
-                        keys_to_include.insert(name.to_string());
-                        // Continue to also find package entries with this ident
-                        // (e.g., both "storybook" workspace mapping and
-                        // "storybook/storybook")
-                    }
+                if let Some(entry) = self.data.packages.get(name)
+                    && entry.ident.contains("@workspace:")
+                {
+                    keys_to_include.insert(name.to_string());
+                    // Continue to also find package entries with this ident
+                    // (e.g., both "storybook" workspace mapping and
+                    // "storybook/storybook")
                 }
 
                 for (lockfile_key, entry) in &self.data.packages {
@@ -1133,11 +1132,11 @@ impl BunLockfile {
                         // Try to find the actual npm package entry instead
                         // Get the workspace name (last component of path)
                         let workspace_name =
-                            workspace_path.split('/').last().unwrap_or(workspace_path);
+                            workspace_path.split('/').next_back().unwrap_or(workspace_path);
 
                         // Look for the actual package entry stored with workspace-scoped key
                         // e.g., "storybook/storybook" for workspace "storybook"
-                        let scoped_key = format!("{}/{}", workspace_name, key);
+                        let scoped_key = format!("{workspace_name}/{key}");
 
                         if let Some(actual_package) = self.data.packages.get(&scoped_key) {
                             // Include the actual package entry with the unscoped key
@@ -1160,12 +1159,12 @@ impl BunLockfile {
                 let package_ident = PackageIdent::parse(&entry.ident);
                 if let Some(workspace_path) = package_ident.workspace_path() {
                     // Add this workspace if not already included
-                    if !pruned_data.workspaces.contains_key(workspace_path) {
-                        if let Some(ws_entry) = self.data.workspaces.get(workspace_path) {
-                            pruned_data
-                                .workspaces
-                                .insert(workspace_path.to_string(), ws_entry.clone());
-                        }
+                    if !pruned_data.workspaces.contains_key(workspace_path)
+                        && let Some(ws_entry) = self.data.workspaces.get(workspace_path)
+                    {
+                        pruned_data
+                            .workspaces
+                            .insert(workspace_path.to_string(), ws_entry.clone());
                     }
                 }
 
@@ -1175,31 +1174,29 @@ impl BunLockfile {
                 // Note: We search using the original key from the source lockfile
                 let bundled_prefix = format!("{key}/");
                 for (lockfile_key, bundled_entry) in &self.data.packages {
-                    if lockfile_key.starts_with(&bundled_prefix) {
-                        if let Some(bundled_info) = &bundled_entry.info {
-                            // Check if this is a bundled dependency
-                            // In Bun's format, bundled is indicated by the "bundled" field
-                            if bundled_info
-                                .other
-                                .get("bundled")
-                                .and_then(|v| v.as_bool())
-                                .unwrap_or(false)
-                            {
-                                // Bundled deps are always nested under their parent,
-                                // so we need to adjust the key if we dealiased the parent
-                                let bundled_pruned_key = if should_dealias
-                                    && lockfile_key.starts_with(&bundled_prefix)
-                                {
-                                    // Replace the parent prefix with the dealiased version
-                                    format!("{}{}", pruned_key, &lockfile_key[key.len()..])
-                                } else {
-                                    lockfile_key.clone()
-                                };
-                                pruned_data
-                                    .packages
-                                    .insert(bundled_pruned_key, bundled_entry.clone());
-                            }
-                        }
+                    if lockfile_key.starts_with(&bundled_prefix)
+                        && let Some(bundled_info) = &bundled_entry.info
+                        && bundled_info
+                            .other
+                            .get("bundled")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false)
+                    {
+                        // Check if this is a bundled dependency
+                        // In Bun's format, bundled is indicated by the "bundled" field
+                        // Bundled deps are always nested under their parent,
+                        // so we need to adjust the key if we dealiased the parent
+                        let bundled_pruned_key = if should_dealias
+                            && lockfile_key.starts_with(&bundled_prefix)
+                        {
+                            // Replace the parent prefix with the dealiased version
+                            format!("{}{}", pruned_key, &lockfile_key[key.len()..])
+                        } else {
+                            lockfile_key.clone()
+                        };
+                        pruned_data
+                            .packages
+                            .insert(bundled_pruned_key, bundled_entry.clone());
                     }
                 }
             } else {
@@ -1212,7 +1209,7 @@ impl BunLockfile {
                 {
                     // Skip root workspace
                     if !ws_path.is_empty() {
-                        let ident = format!("{}@workspace:{}", key, ws_path);
+                        let ident = format!("{key}@workspace:{ws_path}");
                         let entry = PackageEntry {
                             ident,
                             registry: None,
@@ -1347,8 +1344,7 @@ impl BunLockfile {
                         ident: entry.ident.clone(),
                         sha1: prev_entry.checksum.clone().unwrap_or_default(),
                         sha2: entry.checksum.clone().unwrap_or_default(),
-                    }
-                    .into());
+                    });
                 }
             }
         }

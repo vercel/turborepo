@@ -4,11 +4,6 @@ use std::collections::HashMap;
 
 use super::{PackageEntry, types::PackageKey};
 
-/// A multi-index structure for efficient package lookups in Bun lockfiles.
-///
-/// This replaces the simple `HashMap<String, String>` (`key_to_entry`) with
-/// a more sophisticated indexing structure that supports multiple lookup
-/// strategies without string parsing.
 #[derive(Debug, Clone)]
 pub struct PackageIndex {
     /// Direct lookup by lockfile key (e.g., "lodash", "parent/dep")
@@ -56,20 +51,18 @@ impl PackageIndex {
             // Index bundled dependencies
             if key.contains('/') {
                 let parsed_key = PackageKey::parse(key);
-                if let Some(parent) = parsed_key.parent() {
-                    if let Some(info) = &entry.info {
-                        if info
-                            .other
-                            .get("bundled")
-                            .and_then(|v| v.as_bool())
-                            .unwrap_or(false)
-                        {
-                            bundled_deps.insert(
-                                (parent.clone(), parsed_key.name().to_string()),
-                                key.clone(),
-                            );
-                        }
-                    }
+                if let Some(parent) = parsed_key.parent()
+                    && let Some(info) = &entry.info
+                    && info
+                        .other
+                        .get("bundled")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false)
+                {
+                    bundled_deps.insert(
+                        (parent.clone(), parsed_key.name().to_string()),
+                        key.clone(),
+                    );
                 }
             }
         }
@@ -151,15 +144,13 @@ impl PackageIndex {
         name: &'a str,
     ) -> Option<(&'a str, &'a PackageEntry)> {
         // Try workspace-scoped first
-        if let Some(ws) = workspace {
-            if let Some(key) = self
+        if let Some(ws) = workspace
+            && let Some(key) = self
                 .workspace_scoped
                 .get(&(ws.to_string(), name.to_string()))
-            {
-                if let Some(entry) = self.by_key.get(key) {
-                    return Some((key.as_str(), entry));
-                }
-            }
+            && let Some(entry) = self.by_key.get(key)
+        {
+            return Some((key.as_str(), entry));
         }
 
         // Try top-level
@@ -169,10 +160,10 @@ impl PackageIndex {
 
         // Try bundled (search all parents)
         for ((_parent, dep_name), key) in &self.bundled_deps {
-            if dep_name == name {
-                if let Some(entry) = self.by_key.get(key) {
-                    return Some((key.as_str(), entry));
-                }
+            if dep_name == name
+                && let Some(entry) = self.by_key.get(key)
+            {
+                return Some((key.as_str(), entry));
             }
         }
 

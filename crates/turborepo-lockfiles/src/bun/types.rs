@@ -114,29 +114,24 @@ impl PackageKey {
     pub fn parent(&self) -> Option<String> {
         match self {
             Self::Nested { parent, .. } => Some(parent.clone()),
-            Self::ScopedNested { scope, parent, .. } => Some(format!("@{}/{}", scope, parent)),
+            Self::ScopedNested { scope, parent, .. } => Some(format!("@{scope}/{parent}")),
             _ => None,
-        }
-    }
-
-    /// Convert to the string representation used in lockfile keys.
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::Simple(name) => name.clone(),
-            Self::Scoped { scope, name } => format!("@{}/{}", scope, name),
-            Self::Nested { parent, name } => format!("{}/{}", parent, name),
-            Self::ScopedNested {
-                scope,
-                parent,
-                name,
-            } => format!("@{}/{}/{}", scope, parent, name),
         }
     }
 }
 
 impl fmt::Display for PackageKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        match self {
+            Self::Simple(name) => write!(f, "{name}"),
+            Self::Scoped { scope, name } => write!(f, "@{scope}/{name}"),
+            Self::Nested { parent, name } => write!(f, "{parent}/{name}"),
+            Self::ScopedNested {
+                scope,
+                parent,
+                name,
+            } => write!(f, "@{scope}/{parent}/{name}"),
+        }
     }
 }
 
@@ -281,24 +276,19 @@ impl PackageIdent {
     pub fn is_workspace(&self) -> bool {
         matches!(self, Self::Workspace { .. })
     }
-
-    /// Convert to string representation.
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::Registry { name, version } => format!("{}@{}", name, version),
-            Self::Workspace { name, path } => format!("{}@workspace:{}", name, path),
-            Self::Git { name, url, .. } => format!("{}@{}", name, url),
-            Self::Link { name, path } => format!("{}@link:{}", name, path),
-            Self::File { name, path } => format!("{}@file:{}", name, path),
-            Self::Tarball { name } => format!("{}@tarball", name),
-            Self::Root { name } => format!("{}@root:", name),
-        }
-    }
 }
 
 impl fmt::Display for PackageIdent {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        match self {
+            Self::Registry { name, version } => write!(f, "{name}@{version}"),
+            Self::Workspace { name, path } => write!(f, "{name}@workspace:{path}"),
+            Self::Git { name, url, .. } => write!(f, "{name}@{url}"),
+            Self::Link { name, path } => write!(f, "{name}@link:{path}"),
+            Self::File { name, path } => write!(f, "{name}@file:{path}"),
+            Self::Tarball { name } => write!(f, "{name}@tarball"),
+            Self::Root { name } => write!(f, "{name}@root:"),
+        }
     }
 }
 
@@ -353,7 +343,7 @@ impl VersionSpec {
             || s.starts_with('=')
             || s.starts_with('>')
             || s.starts_with('<')
-            || s.chars().next().map_or(false, |c| c.is_ascii_digit())
+            || s.chars().next().is_some_and(|c| c.is_ascii_digit())
         {
             return Self::Semver(s.to_string());
         }
@@ -399,24 +389,19 @@ impl VersionSpec {
     pub fn is_workspace(&self) -> bool {
         matches!(self, Self::Workspace(_))
     }
-
-    /// Convert to string representation.
-    pub fn to_string(&self) -> String {
-        match self {
-            Self::Semver(v) => v.clone(),
-            Self::Catalog { catalog: None } => "catalog:".to_string(),
-            Self::Catalog {
-                catalog: Some(name),
-            } => format!("catalog:{}", name),
-            Self::Workspace(path) => path.clone(),
-            Self::Tag(tag) => tag.clone(),
-        }
-    }
 }
 
 impl fmt::Display for VersionSpec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        match self {
+            Self::Semver(v) => write!(f, "{v}"),
+            Self::Catalog { catalog: None } => write!(f, "catalog:"),
+            Self::Catalog {
+                catalog: Some(name),
+            } => write!(f, "catalog:{name}"),
+            Self::Workspace(path) => write!(f, "{path}"),
+            Self::Tag(tag) => write!(f, "{tag}"),
+        }
     }
 }
 
