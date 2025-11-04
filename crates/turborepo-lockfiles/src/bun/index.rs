@@ -59,10 +59,8 @@ impl PackageIndex {
                         .and_then(|v| v.as_bool())
                         .unwrap_or(false)
                 {
-                    bundled_deps.insert(
-                        (parent.clone(), parsed_key.name().to_string()),
-                        key.clone(),
-                    );
+                    bundled_deps
+                        .insert((parent.clone(), parsed_key.name().to_string()), key.clone());
                 }
             }
         }

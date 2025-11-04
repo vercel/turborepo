@@ -544,6 +544,35 @@ impl Lockfile for BunLockfile {
                 packages_with_workspaces.insert(workspace_entry.name.clone());
             }
         }
+
+        // Add workspace peer dependencies that are actually installed
+        // Peer dependencies declared at workspace level are requirements, not automatic
+        // dependencies, but if they're installed (exist in packages section), they
+        // should be included in the pruned lockfile
+        for ws_path in workspace_packages {
+            if let Some(workspace_entry) = self.data.workspaces.get(ws_path.as_str()) {
+                if let Some(peer_deps) = &workspace_entry.peer_dependencies {
+                    for (peer_name, _peer_version) in peer_deps {
+                        // Check if this peer dependency exists as an installed package
+                        if self.data.packages.contains_key(peer_name) {
+                            packages_with_workspaces.insert(peer_name.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        // Also check root workspace peer dependencies
+        if let Some(root_workspace) = self.data.workspaces.get("") {
+            if let Some(peer_deps) = &root_workspace.peer_dependencies {
+                for (peer_name, _peer_version) in peer_deps {
+                    if self.data.packages.contains_key(peer_name) {
+                        packages_with_workspaces.insert(peer_name.clone());
+                    }
+                }
+            }
+        }
+
         let packages_vec: Vec<String> = packages_with_workspaces.into_iter().collect();
 
         let subgraph = self.subgraph(workspace_packages, &packages_vec)?;
@@ -806,7 +835,8 @@ impl Lockfile for BunLockfile {
                 };
 
                 output.push_str(&format!(
-                    "    \"{key}\": [{ident_json}, {registry_json}, {info_json_spaced}, {checksum_json}],",
+                    "    \"{key}\": [{ident_json}, {registry_json}, {info_json_spaced}, \
+                     {checksum_json}],",
                 ));
             }
 
@@ -1131,8 +1161,10 @@ impl BunLockfile {
                         // This workspace is NOT in the pruned set
                         // Try to find the actual npm package entry instead
                         // Get the workspace name (last component of path)
-                        let workspace_name =
-                            workspace_path.split('/').next_back().unwrap_or(workspace_path);
+                        let workspace_name = workspace_path
+                            .split('/')
+                            .next_back()
+                            .unwrap_or(workspace_path);
 
                         // Look for the actual package entry stored with workspace-scoped key
                         // e.g., "storybook/storybook" for workspace "storybook"
@@ -1186,14 +1218,13 @@ impl BunLockfile {
                         // In Bun's format, bundled is indicated by the "bundled" field
                         // Bundled deps are always nested under their parent,
                         // so we need to adjust the key if we dealiased the parent
-                        let bundled_pruned_key = if should_dealias
-                            && lockfile_key.starts_with(&bundled_prefix)
-                        {
-                            // Replace the parent prefix with the dealiased version
-                            format!("{}{}", pruned_key, &lockfile_key[key.len()..])
-                        } else {
-                            lockfile_key.clone()
-                        };
+                        let bundled_pruned_key =
+                            if should_dealias && lockfile_key.starts_with(&bundled_prefix) {
+                                // Replace the parent prefix with the dealiased version
+                                format!("{}{}", pruned_key, &lockfile_key[key.len()..])
+                            } else {
+                                lockfile_key.clone()
+                            };
                         pruned_data
                             .packages
                             .insert(bundled_pruned_key, bundled_entry.clone());
@@ -1307,6 +1338,12 @@ impl BunLockfile {
                 }
                 if let Some(od) = &ws_entry.optional_dependencies {
                     deps.extend(od.clone());
+                }
+                // Include peer dependencies for orphan removal computation
+                // Peer dependencies that are actually installed should not be considered
+                // orphans
+                if let Some(pd) = &ws_entry.peer_dependencies {
+                    deps.extend(pd.clone());
                 }
                 (ws_path.clone(), deps)
             })
@@ -1454,6 +1491,8 @@ mod test {
         include_str!("./snapshots/original-kitchen-sink.lock");
     const PRUNE_ISSUE_11007_ORIGINAL_1: &str =
         include_str!("./snapshots/original-issue-11007-1.lock");
+    const PRUNE_ISSUE_11007_ORIGINAL_2: &str =
+        include_str!("./snapshots/original-issue-11007-2.lock");
 
     #[test_case("", "turbo", "^2.3.3", "turbo@2.3.3" ; "root")]
     #[test_case("apps/docs", "is-odd", "3.0.1", "is-odd@3.0.1" ; "docs is odd")]
@@ -2812,6 +2851,9 @@ mod test {
                     if let Some(od) = &entry.optional_dependencies {
                         deps.extend(od.clone());
                     }
+                    // NOTE: Peer dependencies are NOT collected here because they require
+                    // special handling. They are added explicitly later if they exist as
+                    // installed packages.
                     deps
                 })
                 .unwrap_or_default()
@@ -2982,6 +3024,8 @@ mod test {
                                     if let Some(opt_deps) = &e.optional_dependencies {
                                         d.extend(opt_deps.clone());
                                     }
+                                    // NOTE: Peer dependencies are NOT collected here - see comment
+                                    // above
                                     d
                                 })
                                 .unwrap_or_default();
@@ -3022,6 +3066,23 @@ mod test {
                 // Always add the workspace package entry - these are required in the pruned
                 // lockfile even if they don't exist in the original
                 packages.insert(workspace_name.clone());
+            }
+        }
+
+        // Add workspace peer dependencies that are actually installed
+        // Peer dependencies declared at workspace level are requirements, not automatic
+        // dependencies, but if they're installed (exist in packages section), they
+        // should be included in the pruned lockfile
+        for ws_path in &workspace_paths {
+            if let Some(workspace_entry) = lockfile.data.workspaces.get(ws_path.as_str()) {
+                if let Some(peer_deps) = &workspace_entry.peer_dependencies {
+                    for (peer_name, _peer_version) in peer_deps {
+                        // Check if this peer dependency exists as an installed package
+                        if lockfile.data.packages.contains_key(peer_name) {
+                            packages.insert(peer_name.clone());
+                        }
+                    }
+                }
             }
         }
 
@@ -3132,6 +3193,14 @@ mod test {
     fn test_prune_issue_11007_1_storybook() {
         let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_1).unwrap();
         let pruned = prune_for_workspace(&lockfile, "apps/storybook");
+        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
+        insta::assert_snapshot!(pruned_str);
+    }
+
+    #[test]
+    fn test_prune_issue_11007_2() {
+        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_2).unwrap();
+        let pruned = prune_for_workspace(&lockfile, "apps/api");
         let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
         insta::assert_snapshot!(pruned_str);
     }
