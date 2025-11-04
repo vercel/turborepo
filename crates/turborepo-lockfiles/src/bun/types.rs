@@ -88,7 +88,7 @@ impl PackageKey {
         match self {
             Self::Nested { parent, .. } => workspace_names.contains(parent),
             Self::ScopedNested { scope, parent, .. } => {
-                workspace_names.contains(&format!("@{}/{}", scope, parent))
+                workspace_names.contains(&format!("@{scope}/{parent}"))
             }
             _ => false,
         }

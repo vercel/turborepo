@@ -1474,6 +1474,38 @@ impl FromStr for BunLockfile {
     }
 }
 
+impl PackageEntry {
+    // Extracts version from key
+    fn version(&self) -> &str {
+        self.ident
+            .rsplit_once('@')
+            .map(|(_, version)| version)
+            .unwrap_or(&self.ident)
+    }
+}
+
+impl PackageInfo {
+    pub fn all_dependencies(&self) -> impl Iterator<Item = (&str, &str)> {
+        [
+            self.dependencies.iter(),
+            self.dev_dependencies.iter(),
+            self.optional_dependencies.iter(),
+            self.peer_dependencies.iter(),
+        ]
+        .into_iter()
+        .flatten()
+        .map(|(k, v)| (k.as_str(), v.as_str()))
+    }
+}
+
+/// Check if there are any global changes between two bun lockfiles
+pub fn bun_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, super::Error> {
+    let prev = BunLockfile::from_bytes(prev_contents)?;
+    let curr = BunLockfile::from_bytes(curr_contents)?;
+
+    Ok(prev.global_change(&curr as &dyn Lockfile))
+}
+
 #[cfg(test)]
 mod test {
     use pretty_assertions::assert_eq;
@@ -2881,7 +2913,7 @@ mod test {
                 let is_referenced = workspace_deps.iter().any(|(_ws, deps)| {
                     deps.iter().any(|(dep_name, dep_value)| {
                         (dep_name == workspace_name
-                            || dep_name.starts_with(&format!("{}/", workspace_name)))
+                            || dep_name.starts_with(&format!("{workspace_name}/")))
                             && dep_value.starts_with("workspace:")
                     })
                 });
@@ -2906,12 +2938,12 @@ mod test {
             let mut added_new = false;
             let current_workspaces: Vec<_> = closures.keys().cloned().collect();
 
-            for (ws_path, _) in &lockfile.data.workspaces {
+            for ws_path in lockfile.data.workspaces.keys() {
                 if current_workspaces.contains(ws_path) {
                     continue;
                 }
 
-                let workspace_marker = format!("@workspace:{}", ws_path);
+                let workspace_marker = format!("@workspace:{ws_path}");
 
                 // Check if any resolved package references this workspace
                 let is_referenced = closures.values().any(|closure| {
@@ -2950,22 +2982,22 @@ mod test {
 
         // Add workspace names to packages list so subgraph creates mapping entries
         for ws_path in &workspace_paths {
-            if !ws_path.is_empty() {
-                if let Some(workspace_entry) = lockfile.data.workspaces.get(ws_path.as_str()) {
-                    packages.insert(workspace_entry.name.clone());
-                }
+            if !ws_path.is_empty()
+                && let Some(workspace_entry) = lockfile.data.workspaces.get(ws_path.as_str())
+            {
+                packages.insert(workspace_entry.name.clone());
             }
         }
 
         // Add workspace peer dependencies that are actually installed
         // (mimics the logic in the Lockfile trait's subgraph method)
         for ws_path in &workspace_paths {
-            if let Some(workspace_entry) = lockfile.data.workspaces.get(ws_path.as_str()) {
-                if let Some(peer_deps) = &workspace_entry.peer_dependencies {
-                    for (peer_name, _peer_version) in peer_deps {
-                        if lockfile.data.packages.contains_key(peer_name) {
-                            packages.insert(peer_name.clone());
-                        }
+            if let Some(workspace_entry) = lockfile.data.workspaces.get(ws_path.as_str())
+                && let Some(peer_deps) = &workspace_entry.peer_dependencies
+            {
+                for peer_name in peer_deps.keys() {
+                    if lockfile.data.packages.contains_key(peer_name) {
+                        packages.insert(peer_name.clone());
                     }
                 }
             }
@@ -3092,36 +3124,4 @@ mod test {
         let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
         insta::assert_snapshot!(pruned_str);
     }
-}
-
-impl PackageEntry {
-    // Extracts version from key
-    fn version(&self) -> &str {
-        self.ident
-            .rsplit_once('@')
-            .map(|(_, version)| version)
-            .unwrap_or(&self.ident)
-    }
-}
-
-impl PackageInfo {
-    pub fn all_dependencies(&self) -> impl Iterator<Item = (&str, &str)> {
-        [
-            self.dependencies.iter(),
-            self.dev_dependencies.iter(),
-            self.optional_dependencies.iter(),
-            self.peer_dependencies.iter(),
-        ]
-        .into_iter()
-        .flatten()
-        .map(|(k, v)| (k.as_str(), v.as_str()))
-    }
-}
-
-/// Check if there are any global changes between two bun lockfiles
-pub fn bun_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<bool, super::Error> {
-    let prev = BunLockfile::from_bytes(prev_contents)?;
-    let curr = BunLockfile::from_bytes(curr_contents)?;
-
-    Ok(prev.global_change(&curr as &dyn Lockfile))
 }
