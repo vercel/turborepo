@@ -502,8 +502,8 @@ impl Lockfile for BunLockfile {
         let mut patches = self
             .data
             .patched_dependencies
-            .iter()
-            .map(|(_, patch_file)| RelativeUnixPathBuf::new(patch_file))
+            .values()
+            .map(|patch_file| RelativeUnixPathBuf::new(patch_file))
             .collect::<Result<Vec<_>, turbopath::PathError>>()?;
         patches.sort();
         Ok(patches)
