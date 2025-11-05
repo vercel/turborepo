@@ -140,7 +140,7 @@ impl From<RawPackageJson> for PackageJson {
             pnpm: raw.pnpm.map(|p| p.into()),
             patched_dependencies: raw
                 .patched_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
+                .map(|m| m.into_iter().map(|(k, v)| (k, v)).collect()),
             other: raw
                 .other
                 .into_iter()
