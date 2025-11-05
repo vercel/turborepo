@@ -1,4 +1,8 @@
 FROM node:18-alpine AS base
+
+# This Dockerfile is copy-pasted into our main docs at /docs/handbook/deploying-with-docker.
+# Make sure you update both files!
+
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
 RUN apk update
 RUN apk add --no-cache libc6-compat
@@ -6,7 +10,7 @@ RUN apk add --no-cache libc6-compat
 WORKDIR /app
 
 # ---
-FROM base AS initiator
+FROM base AS prepare
 RUN yarn global add turbo
 COPY . .
 # Add lockfile and package.json's of isolated subworkspace
@@ -15,10 +19,10 @@ RUN turbo prune web --docker
 # ---
 FROM base AS builder
 # First install the dependencies (as they change less often)
-COPY --from=initiator /app/out/json/ .
+COPY --from=prepare /app/out/json/ .
 RUN yarn install
 # Build the project
-COPY --from=initiator /app/out/full/ .
+COPY --from=prepare /app/out/full/ .
 
 # Uncomment and use build args to enable remote caching
 # ARG TURBO_TEAM
