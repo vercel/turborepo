@@ -4,9 +4,9 @@ Setup
 Ignore all errors
   $ ${TURBO} boundaries --ignore=all
   Checking packages...
-  patching apps/my-app/import-attributes.js
-  patching apps(\\|/)my-app(\\|/)(index|types).ts (re)
-  patching apps/my-app/types.ts
+  patching apps(\\|/)my-app(\\|/)(import-attributes\.js|index\.ts|types\.ts) (re)
+  patching apps(\\|/)my-app(\\|/)(import-attributes\.js|index\.ts|types\.ts) (re)
+  patching apps(\\|/)my-app(\\|/)(import-attributes\.js|index\.ts|types\.ts) (re)
   [1]
 
   $ git diff
@@ -19,7 +19,7 @@ Ignore all errors
    import pkg from './package.json' with { type: 'json' };
   +// @boundaries-ignore automatically added by `turbo boundaries --ignore=all`
    import data from '../../packages/utils/data.json' with { type: 'json' };
-
+  +* (glob)
    console.log(pkg.name);
   diff --git a/apps/my-app/index.ts b/apps/my-app/index.ts
   index 6baec29..d4c7af6 100644
@@ -48,6 +48,6 @@ Ignore all errors
    import { blackbeard } from "@/../../packages/another/index.jsx";
   +// @boundaries-ignore automatically added by `turbo boundaries --ignore=all`
    import { blackbead } from "!";
-   
-   export interface Pirate {
 
+   export interface Pirate {
+  +* (glob)
