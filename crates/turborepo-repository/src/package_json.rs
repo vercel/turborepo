@@ -138,9 +138,7 @@ impl From<RawPackageJson> for PackageJson {
                 .resolutions
                 .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
             pnpm: raw.pnpm.map(|p| p.into()),
-            patched_dependencies: raw
-                .patched_dependencies
-                .map(|m| m.into_iter().map(|(k, v)| (k, v)).collect()),
+            patched_dependencies: raw.patched_dependencies.map(|m| m.into_iter().collect()),
             other: raw
                 .other
                 .into_iter()
