@@ -503,7 +503,7 @@ impl Lockfile for BunLockfile {
             .data
             .patched_dependencies
             .values()
-            .map(|patch_file| RelativeUnixPathBuf::new(patch_file))
+            .map(RelativeUnixPathBuf::new)
             .collect::<Result<Vec<_>, turbopath::PathError>>()?;
         patches.sort();
         Ok(patches)
