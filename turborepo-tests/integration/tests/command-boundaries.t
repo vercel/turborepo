@@ -4,11 +4,23 @@ Setup
 Ignore all errors
   $ ${TURBO} boundaries --ignore=all
   Checking packages...
+  patching apps/my-app/import-attributes.js
   patching apps(\\|/)my-app(\\|/)(index|types).ts (re)
-  patching apps(\\|/)my-app(\\|/)(index|types).ts (re)
+  patching apps/my-app/types.ts
   [1]
 
   $ git diff
+  diff --git a/apps/my-app/import-attributes.js b/apps/my-app/import-attributes.js
+  index cb53488..560af09 100644
+  --- a/apps/my-app/import-attributes.js
+  +++ b/apps/my-app/import-attributes.js
+  @@ -1,5 +1,6 @@
+   // Test import attributes parsing
+   import pkg from './package.json' with { type: 'json' };
+  +// @boundaries-ignore automatically added by `turbo boundaries --ignore=all`
+   import data from '../../packages/utils/data.json' with { type: 'json' };
+
+   console.log(pkg.name);
   diff --git a/apps/my-app/index.ts b/apps/my-app/index.ts
   index 6baec29..d4c7af6 100644
   --- a/apps/my-app/index.ts
