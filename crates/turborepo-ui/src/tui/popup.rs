@@ -8,8 +8,8 @@ use ratatui::{
 
 const BIND_LIST: &[&str] = [
     "m       - Toggle this help popup",
-    "↑ or j  - Select previous task",
-    "↓ or k  - Select next task",
+    "↑ or k  - Select previous task",
+    "↓ or j  - Select next task",
     "h       - Toggle task list",
     "p       - Toggle pinned task selection",
     "/       - Filter tasks to search term",
