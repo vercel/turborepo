@@ -116,7 +116,7 @@ jobs:
         os:
           - runner: ubuntu-latest
           - runner: macos-latest
-          - runner: windows-latest-8-cores
+          - runner: windows-latest
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
       # the fixtures retain their line endings and don't get updated to CRLF.
