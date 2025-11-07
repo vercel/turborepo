@@ -234,7 +234,13 @@ mod tests {
     #[tokio::test]
     async fn test_async_cache() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
 
         try_join_all(get_test_cases().into_iter().map(|test_case| async move {
             round_trip_test_with_both_caches(&test_case, port).await?;
