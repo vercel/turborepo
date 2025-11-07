@@ -156,9 +156,6 @@ jobs:
           path: cli/.cram_env
           key: prysk-venv-${{ matrix.os.runner }}
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.6
-
       - name: Enable Rust verbose logging
         run: |
           echo "RUST_BACKTRACE=1" >> $GITHUB_ENV
@@ -171,36 +168,12 @@ jobs:
           rustc --version --verbose
           cargo --version --verbose
           rustup show
-          echo "=== sccache stats (before) ==="
-          sccache --show-stats || echo "sccache not available or failed"
         shell: bash
 
       - name: Integration Tests
         timeout-minutes: 45
         run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
           turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
-        shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
-
-      - name: Show sccache stats
-        if: always()
-        run: |
-          echo "=== sccache stats (after) ==="
-          sccache --show-stats || echo "sccache not available or failed"
         shell: bash
 
       - name: Capture state on timeout
@@ -386,9 +359,6 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.6
-
       - name: Enable Rust verbose logging
         run: |
           echo "RUST_BACKTRACE=1" >> $GITHUB_ENV
@@ -417,41 +387,16 @@ jobs:
             powershell "Get-CimInstance Win32_OperatingSystem | Select-Object FreePhysicalMemory,TotalVisibleMemorySize | Format-List"
             powershell "Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID,Size,FreeSpace | Format-Table -AutoSize"
           fi
-          echo "=== sccache stats (before) ==="
-          sccache --show-stats || echo "sccache not available or failed"
         shell: bash
 
       - name: Run tests
         timeout-minutes: 120
-        # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
         run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
           if [ "$RUNNER_OS" == "Windows" ]; then
               cargo test --workspace --exclude turborepo-napi
           else
               cargo test --workspace
           fi
-        shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
-
-      - name: Show sccache stats
-        if: always()
-        run: |
-          echo "=== sccache stats (after) ==="
-          sccache --show-stats || echo "sccache not available or failed"
         shell: bash
 
       - name: Capture state on timeout
