@@ -448,6 +448,7 @@ impl Child {
                 shutdown_initiated: false,
             };
             tokio::select! {
+                biased;
                 command = command_rx.recv() => {
                     manager.shutdown_initiated = true;
                     manager.handle_child_command(command, &mut child, controller).await;
