@@ -64,12 +64,9 @@ runs:
         # the cache is huge and we only get 10gb max, so we only save on master
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
 
-    - name: "Install cargo-sweep"
+    - name: "Install cargo-groups"
       uses: taiki-e/install-action@v2
       env:
         GITHUB_TOKEN: ${{ inputs.github-token }}
       with:
-        tool: cargo-sweep@0.6.2,cargo-groups@0.1.9
-
-    - name: "Run cargo-sweep"
-      uses: ./.github/actions/cargo-sweep
+        tool: cargo-groups@0.1.9
