@@ -48,8 +48,8 @@ CACHE_KEY="${FIXTURE_NAME}-${PACKAGE_MANAGER//\//_}" # Replace / with _ for file
 FIXTURE_CACHE="${CACHE_BASE_DIR}/${CACHE_KEY}"
 
 if $INSTALL_DEPS; then
-  # Check if we need to create cache
-  if [ ! -d "$FIXTURE_CACHE" ]; then
+  # Check if cache is ready (both directory and .ready marker exist)
+  if [ ! -f "${FIXTURE_CACHE}/.ready" ]; then
     # Try to atomically create the cache directory (handles parallel test races)
     if mkdir "$FIXTURE_CACHE" 2>/dev/null; then
       # We won the race - build the cache
@@ -66,12 +66,32 @@ if $INSTALL_DEPS; then
 
       # Remove .git from cache since each test needs its own git repo
       rm -rf "${FIXTURE_CACHE}/.git"
+
+      # Mark cache as ready - this must be the LAST step
+      touch "${FIXTURE_CACHE}/.ready"
     else
-      # Someone else is building the cache - wait for it to be ready
-      # Poll until cache has node_modules (indicates completion)
-      while [ ! -d "${FIXTURE_CACHE}/node_modules" ]; do
+      # Someone else is building the cache - wait for .ready marker
+      # Timeout after 60 seconds to prevent infinite waits
+      WAIT_COUNT=0
+      MAX_WAIT=600 # 60 seconds (600 * 0.1s)
+      while [ ! -f "${FIXTURE_CACHE}/.ready" ] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
         sleep 0.1
+        WAIT_COUNT=$((WAIT_COUNT + 1))
       done
+
+      # If timeout, assume first builder failed - clean up and retry
+      if [ ! -f "${FIXTURE_CACHE}/.ready" ]; then
+        rm -rf "${FIXTURE_CACHE}"
+        # Retry cache creation ourselves
+        if mkdir "$FIXTURE_CACHE" 2>/dev/null; then
+          "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${FIXTURE_CACHE}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
+          "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${FIXTURE_CACHE}"
+          "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${FIXTURE_CACHE}" "$PACKAGE_MANAGER"
+          (cd "${FIXTURE_CACHE}" && "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER")
+          rm -rf "${FIXTURE_CACHE}/.git"
+          touch "${FIXTURE_CACHE}/.ready"
+        fi
+      fi
     fi
   fi
 
