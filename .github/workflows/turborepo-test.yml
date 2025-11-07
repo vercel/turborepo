@@ -397,8 +397,8 @@ jobs:
             df -h
           elif [ "$RUNNER_OS" == "Windows" ]; then
             echo "CPUs: $NUMBER_OF_PROCESSORS"
-            wmic OS get FreePhysicalMemory,TotalVisibleMemorySize /Value
-            wmic logicaldisk get size,freespace,caption
+            wmic.exe OS get FreePhysicalMemory,TotalVisibleMemorySize /Value
+            wmic.exe logicaldisk get size,freespace,caption
           fi
         shell: bash
 
@@ -515,8 +515,8 @@ jobs:
             echo "Top processes by CPU:"
             ps aux -r | head -10 || true
           elif [ "$RUNNER_OS" == "Windows" ]; then
-            wmic OS get FreePhysicalMemory,TotalVisibleMemorySize /Value
-            wmic logicaldisk get size,freespace,caption
+            wmic.exe OS get FreePhysicalMemory,TotalVisibleMemorySize /Value
+            wmic.exe logicaldisk get size,freespace,caption
           fi
         shell: bash
 
