@@ -27,6 +27,10 @@ expression: query_output
           "import": "../../packages/another/index.jsx"
         },
         {
+          "message": "import `../../packages/utils/data.json` leaves the package",
+          "import": "../../packages/utils/data.json"
+        },
+        {
           "message": "import `@/../../packages/another/index.jsx` leaves the package",
           "import": "@/../../packages/another/index.jsx"
         },

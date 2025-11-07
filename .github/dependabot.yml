@@ -10,14 +10,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       basic:
         patterns:
@@ -31,14 +32,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       kitchen-sink:
         patterns:
@@ -69,14 +71,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       non-monorepo:
         patterns:
@@ -90,14 +93,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       with-shell-commands:
         patterns:
@@ -111,14 +115,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       with-svelte:
         patterns:
@@ -132,14 +137,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       with-tailwind:
         patterns:
