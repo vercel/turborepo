@@ -25,13 +25,6 @@ too_many_arguments = "allow"
 
 [profile.dev]
 debug = 0
-
-# Set the options for dependencies (not crates in the workspace), this mostly impacts cold builds
-[profile.dev.package."*"]
-opt-level = 0
-
-# Set the settings for build scripts and proc-macros.
-[profile.dev.build-override]
 opt-level = 0
 
 [profile.release]
