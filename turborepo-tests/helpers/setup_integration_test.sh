@@ -47,27 +47,34 @@ CACHE_BASE_DIR="${TMPDIR:-/tmp}/turbo-fixture-cache"
 CACHE_KEY="${FIXTURE_NAME}-${PACKAGE_MANAGER//\//_}" # Replace / with _ for filesystem safety
 FIXTURE_CACHE="${CACHE_BASE_DIR}/${CACHE_KEY}"
 
-if $INSTALL_DEPS && [ ! -d "$FIXTURE_CACHE" ]; then
-  # First test using this fixture+package_manager combo: create cache
-  mkdir -p "$FIXTURE_CACHE"
+if $INSTALL_DEPS; then
+  # Check if we need to create cache
+  if [ ! -d "$FIXTURE_CACHE" ]; then
+    # Try to atomically create the cache directory (handles parallel test races)
+    if mkdir "$FIXTURE_CACHE" 2>/dev/null; then
+      # We won the race - build the cache
+      # Copy fixture to cache location
+      "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${FIXTURE_CACHE}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
 
-  # Copy fixture to cache location
-  "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${FIXTURE_CACHE}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
+      # Setup git in cache (needed for install_deps.sh to commit)
+      "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${FIXTURE_CACHE}"
 
-  # Setup git in cache (needed for install_deps.sh to commit)
-  "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${FIXTURE_CACHE}"
+      # Setup package manager and install deps in cache
+      # Use subshell to avoid changing caller's working directory
+      "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${FIXTURE_CACHE}" "$PACKAGE_MANAGER"
+      (cd "${FIXTURE_CACHE}" && "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER")
 
-  # Setup package manager and install deps in cache
-  "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${FIXTURE_CACHE}" "$PACKAGE_MANAGER"
-  cd "${FIXTURE_CACHE}"
-  "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER"
-  cd - > /dev/null
+      # Remove .git from cache since each test needs its own git repo
+      rm -rf "${FIXTURE_CACHE}/.git"
+    else
+      # Someone else is building the cache - wait for it to be ready
+      # Poll until cache has node_modules (indicates completion)
+      while [ ! -d "${FIXTURE_CACHE}/node_modules" ]; do
+        sleep 0.1
+      done
+    fi
+  fi
 
-  # Remove .git from cache since each test needs its own git repo
-  rm -rf "${FIXTURE_CACHE}/.git"
-fi
-
-if $INSTALL_DEPS && [ -d "$FIXTURE_CACHE" ]; then
   # Use cached fixture with pre-installed dependencies
   cp -a "${FIXTURE_CACHE}/." "${TARGET_DIR}/"
 
@@ -75,12 +82,8 @@ if $INSTALL_DEPS && [ -d "$FIXTURE_CACHE" ]; then
   "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
 
   # Commit the already-installed dependencies
-  cd "${TARGET_DIR}"
-  git add .
-  if [[ $(git status --porcelain) ]]; then
-    git commit -am "Install dependencies" --quiet > /dev/null 2>&1 || true
-  fi
-  cd - > /dev/null
+  # Use subshell to avoid changing caller's working directory
+  (cd "${TARGET_DIR}" && git add . && if [[ $(git status --porcelain) ]]; then git commit -am "Install dependencies" --quiet > /dev/null 2>&1 || true; fi)
 else
   # No caching: use original flow
   "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
