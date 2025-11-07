@@ -40,12 +40,55 @@ if [[ "$OSTYPE" == darwin* ]]; then
   export TMPDIR=/tmp
 fi
 
+# Shared fixture cache to avoid redundant npm installs
+# Cache key includes both fixture name and package manager version
+# Use TMPDIR for cross-platform compatibility (works on macOS, Linux, Windows/MSYS)
+CACHE_BASE_DIR="${TMPDIR:-/tmp}/turbo-fixture-cache"
+CACHE_KEY="${FIXTURE_NAME}-${PACKAGE_MANAGER//\//_}" # Replace / with _ for filesystem safety
+FIXTURE_CACHE="${CACHE_BASE_DIR}/${CACHE_KEY}"
 
-"${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
-"${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
-"${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
-if $INSTALL_DEPS; then
+if $INSTALL_DEPS && [ ! -d "$FIXTURE_CACHE" ]; then
+  # First test using this fixture+package_manager combo: create cache
+  mkdir -p "$FIXTURE_CACHE"
+
+  # Copy fixture to cache location
+  "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${FIXTURE_CACHE}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
+
+  # Setup git in cache (needed for install_deps.sh to commit)
+  "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${FIXTURE_CACHE}"
+
+  # Setup package manager and install deps in cache
+  "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${FIXTURE_CACHE}" "$PACKAGE_MANAGER"
+  cd "${FIXTURE_CACHE}"
   "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER"
+  cd - > /dev/null
+
+  # Remove .git from cache since each test needs its own git repo
+  rm -rf "${FIXTURE_CACHE}/.git"
+fi
+
+if $INSTALL_DEPS && [ -d "$FIXTURE_CACHE" ]; then
+  # Use cached fixture with pre-installed dependencies
+  cp -a "${FIXTURE_CACHE}/." "${TARGET_DIR}/"
+
+  # Setup fresh git repo for this test
+  "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
+
+  # Commit the already-installed dependencies
+  cd "${TARGET_DIR}"
+  git add .
+  if [[ $(git status --porcelain) ]]; then
+    git commit -am "Install dependencies" --quiet > /dev/null 2>&1 || true
+  fi
+  cd - > /dev/null
+else
+  # No caching: use original flow
+  "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
+  "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
+  "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
+  if $INSTALL_DEPS; then
+    "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER"
+  fi
 fi
 
 # Set TURBO env var, it is used by tests to run the binary
