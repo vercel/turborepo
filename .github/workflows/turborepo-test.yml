@@ -109,7 +109,6 @@ jobs:
     needs:
       - find-changes
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 45
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     strategy:
       fail-fast: false
@@ -160,7 +159,21 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
+      - name: Enable Rust verbose logging
+        run: |
+          echo "RUST_BACKTRACE=1" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Log Rust environment info
+        run: |
+          echo "=== Rust Toolchain Information ==="
+          rustc --version --verbose
+          cargo --version --verbose
+          rustup show
+        shell: bash
+
       - name: Integration Tests
+        timeout-minutes: 45
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
@@ -175,6 +188,78 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Capture state on timeout
+        if: cancelled()
+        run: |
+          echo "=========================================="
+          echo "INTEGRATION TEST STEP TIMED OUT"
+          echo "=========================================="
+          echo "Time: $(date)"
+          echo ""
+          echo "=== Active Rust/Cargo Processes (likely hung) ==="
+          ps aux | grep -E "[r]ustc|[c]argo" || echo "No rustc/cargo processes found"
+          echo ""
+          echo "=== Top CPU Consumers ==="
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            ps aux --sort=-%cpu | head -15
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            ps aux -r | head -15
+          fi
+          echo ""
+          echo "(ICE files will be checked in next step)"
+        shell: bash
+
+      - name: Check for and display ICE files
+        if: always()
+        run: |
+          echo "=== Searching for Rust ICE (Internal Compiler Error) files ==="
+          ICE_FOUND=0
+
+          # Search in common locations
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            # Windows paths
+            SEARCH_PATHS=(
+              "."
+              "$TEMP"
+              "$TMP"
+              "$USERPROFILE/.rustup/tmp"
+            )
+          else
+            # Unix paths
+            SEARCH_PATHS=(
+              "."
+              "/tmp"
+              "$HOME/.rustup/tmp"
+              "./target"
+            )
+          fi
+
+          for search_path in "${SEARCH_PATHS[@]}"; do
+            if [ -d "$search_path" ]; then
+              echo "Searching in: $search_path"
+              while IFS= read -r ice_file; do
+                if [ -f "$ice_file" ]; then
+                  ICE_FOUND=1
+                  echo ""
+                  echo "========================================"
+                  echo "ICE FILE FOUND: $ice_file"
+                  echo "========================================"
+                  cat "$ice_file"
+                  echo ""
+                  echo "========================================"
+                  echo ""
+                fi
+              done < <(find "$search_path" -maxdepth 3 -name "rustc-ice-*.txt" -type f 2>/dev/null || true)
+            fi
+          done
+
+          if [ $ICE_FOUND -eq 0 ]; then
+            echo "No ICE files found."
+          else
+            echo "WARNING: Rust Internal Compiler Errors detected! See above for details."
+          fi
+        shell: bash
 
   rust_lint:
     name: Rust lints
@@ -290,6 +375,33 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
+      - name: Enable Rust verbose logging
+        run: |
+          echo "RUST_BACKTRACE=1" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Log Rust environment info
+        run: |
+          echo "=== Rust Toolchain Information ==="
+          rustc --version --verbose
+          cargo --version --verbose
+          rustup show
+          echo "=== System Resources ==="
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            echo "CPUs: $(nproc)"
+            free -h
+            df -h
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            echo "CPUs: $(sysctl -n hw.ncpu)"
+            vm_stat
+            df -h
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            echo "CPUs: $NUMBER_OF_PROCESSORS"
+            wmic OS get FreePhysicalMemory,TotalVisibleMemorySize /Value
+            wmic logicaldisk get size,freespace,caption
+          fi
+        shell: bash
+
       - name: Run tests
         timeout-minutes: 120
         # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
@@ -311,6 +423,102 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+      - name: Capture state on timeout
+        if: cancelled()
+        run: |
+          echo "=========================================="
+          echo "RUST TEST STEP TIMED OUT"
+          echo "=========================================="
+          echo "Time: $(date)"
+          echo ""
+          echo "=== Active Rust/Cargo Processes (likely hung) ==="
+          ps aux | grep -E "[r]ustc|[c]argo" || echo "No rustc/cargo processes found"
+          echo ""
+          echo "=== Top CPU Consumers ==="
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            ps aux --sort=-%cpu | head -15
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            ps aux -r | head -15
+          fi
+          echo ""
+          echo "(ICE files will be checked in next step)"
+        shell: bash
+
+      - name: Check for and display ICE files
+        if: always()
+        run: |
+          echo "=== Searching for Rust ICE (Internal Compiler Error) files ==="
+          ICE_FOUND=0
+
+          # Search in common locations
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            # Windows paths
+            SEARCH_PATHS=(
+              "."
+              "$TEMP"
+              "$TMP"
+              "$USERPROFILE/.rustup/tmp"
+            )
+          else
+            # Unix paths
+            SEARCH_PATHS=(
+              "."
+              "/tmp"
+              "$HOME/.rustup/tmp"
+              "./target"
+            )
+          fi
+
+          for search_path in "${SEARCH_PATHS[@]}"; do
+            if [ -d "$search_path" ]; then
+              echo "Searching in: $search_path"
+              while IFS= read -r ice_file; do
+                if [ -f "$ice_file" ]; then
+                  ICE_FOUND=1
+                  echo ""
+                  echo "========================================"
+                  echo "ICE FILE FOUND: $ice_file"
+                  echo "========================================"
+                  cat "$ice_file"
+                  echo ""
+                  echo "========================================"
+                  echo ""
+                fi
+              done < <(find "$search_path" -maxdepth 3 -name "rustc-ice-*.txt" -type f 2>/dev/null || true)
+            fi
+          done
+
+          if [ $ICE_FOUND -eq 0 ]; then
+            echo "No ICE files found."
+          else
+            echo "WARNING: Rust Internal Compiler Errors detected! See above for details."
+          fi
+        shell: bash
+
+      - name: Display final system state
+        if: always()
+        run: |
+          echo "=== Final System State ==="
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            echo "Memory:"
+            free -h
+            echo "Disk:"
+            df -h
+            echo "Top processes by CPU:"
+            ps aux --sort=-%cpu | head -10 || true
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            echo "Memory:"
+            vm_stat
+            echo "Disk:"
+            df -h
+            echo "Top processes by CPU:"
+            ps aux -r | head -10 || true
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            wmic OS get FreePhysicalMemory,TotalVisibleMemorySize /Value
+            wmic logicaldisk get size,freespace,caption
+          fi
+        shell: bash
 
   basic-example:
     name: "`basic` example"
