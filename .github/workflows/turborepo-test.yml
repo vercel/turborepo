@@ -109,7 +109,6 @@ jobs:
     needs:
       - find-changes
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 45
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     strategy:
       fail-fast: false
@@ -177,6 +176,7 @@ jobs:
         shell: bash
 
       - name: Integration Tests
+        timeout-minutes: 45
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
