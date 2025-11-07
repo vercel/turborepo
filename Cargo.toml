@@ -23,13 +23,9 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(debug_assert)'] }
 [workspace.lints.clippy]
 too_many_arguments = "allow"
 
-# Set the options for dependencies (not crates in the workspace), this mostly impacts cold builds
-[profile.dev.package."*"]
-opt-level = 1
-
-# Set the settings for build scripts and proc-macros.
-[profile.dev.build-override]
-opt-level = 3
+[profile.dev]
+debug = 0
+opt-level = 0
 
 [profile.release]
 lto = "off"
