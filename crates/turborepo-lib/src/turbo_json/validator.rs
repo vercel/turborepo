@@ -98,28 +98,27 @@ pub fn validate_extends(validator: &Validator, turbo_json: &TurboJson) -> Vec<Er
             text: NamedSource::new(path, text),
         }];
     }
-    if let Some(package_name) = turbo_json.extends.first()
-        && package_name != ROOT_PKG_NAME
-        && validator.non_root_extends
-    {
-        let path = turbo_json
-            .path
-            .as_ref()
-            .map_or("turbo.json", |p| p.as_ref());
+    if let Some(package_name) = turbo_json.extends.first() {
+        if package_name != ROOT_PKG_NAME && validator.non_root_extends {
+            let path = turbo_json
+                .path
+                .as_ref()
+                .map_or("turbo.json", |p| p.as_ref());
 
-        let (span, text) = match turbo_json.text {
-            Some(ref text) => {
-                let len = text.len();
-                let span: SourceSpan = (0, len - 1).into();
-                (Some(span), text.to_string())
-            }
-            None => (None, String::new()),
-        };
-        // Root needs to be first
-        return vec![Error::ExtendsRootFirst {
-            span,
-            text: NamedSource::new(path, text),
-        }];
+            let (span, text) = match turbo_json.text {
+                Some(ref text) => {
+                    let len = text.len();
+                    let span: SourceSpan = (0, len - 1).into();
+                    (Some(span), text.to_string())
+                }
+                None => (None, String::new()),
+            };
+            // Root needs to be first
+            return vec![Error::ExtendsRootFirst {
+                span,
+                text: NamedSource::new(path, text),
+            }];
+        }
     }
     // If we allow for non-root extends we don't need to perform this check
     (!validator.non_root_extends

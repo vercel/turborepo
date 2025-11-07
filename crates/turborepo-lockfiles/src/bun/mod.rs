@@ -115,9 +115,10 @@ type BTreeSet<T> = std::collections::BTreeSet<T>;
 
 /// Represents a platform constraint that can be either inclusive or exclusive.
 /// This matches Bun's Negatable type for os/cpu/libc fields.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub enum Negatable {
     /// No constraint - package works on all platforms
+    #[default]
     None,
     /// Single platform constraint
     Single(String),
@@ -125,12 +126,6 @@ pub enum Negatable {
     Multiple(Vec<String>),
     /// Negated constraints - package works on all platforms except these
     Negated(Vec<String>),
-}
-
-impl Default for Negatable {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl Serialize for Negatable {
