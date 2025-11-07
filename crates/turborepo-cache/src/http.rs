@@ -395,7 +395,14 @@ mod test {
     #[tokio::test]
     async fn test_http_cache() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for the server to be ready (with timeout)
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start within timeout"))??;
+
         let test_cases = get_test_cases();
 
         try_join_all(
