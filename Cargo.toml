@@ -23,7 +23,6 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(debug_assert)'] }
 [workspace.lints.clippy]
 too_many_arguments = "allow"
 
-# Disable debug symbols and incremental compilation to avoid LLVM hangs
 [profile.dev]
 debug = 0
 
