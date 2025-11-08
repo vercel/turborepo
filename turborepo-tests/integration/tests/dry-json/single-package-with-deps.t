@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package --no-install
 
   $ ${TURBO} run test --dry=json
   {

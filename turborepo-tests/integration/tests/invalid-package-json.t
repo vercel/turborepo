@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh --no-install
 Clear name field
   $ jq '.name = ""' apps/my-app/package.json > package.json.new
   $ mv apps/my-app/package.json apps/my-app/package.json.old
