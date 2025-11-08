@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package --no-install
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package
   $ rm turbo.json
   $ git commit -am "Delete turbo config" --quiet
 
