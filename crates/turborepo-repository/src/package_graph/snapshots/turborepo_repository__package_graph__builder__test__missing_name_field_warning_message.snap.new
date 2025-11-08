@@ -1,0 +1,8 @@
+---
+source: crates/turborepo-repository/src/package_graph/builder.rs
+assertion_line: 697
+expression: warning_message
+---
+An issue occurred while attempting to parse /my-project/packages/app/package.json. Turborepo will still function, but some features may not be available:
+   [31m×[0m package.json must have a name field:
+  [31m│[0m /my-project/packages/app/package.json
