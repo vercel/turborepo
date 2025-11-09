@@ -105,7 +105,7 @@ jobs:
           fi
 
   integration:
-    name: Turborepo Integration
+    name: Turborepo Integration (${{ matrix.test-group }} on ${{ matrix.os.runner }})
     needs:
       - find-changes
     runs-on: ${{ matrix.os.runner }}
@@ -117,6 +117,15 @@ jobs:
           - runner: ubuntu-latest
           - runner: macos-latest
           - runner: windows-latest
+        test-group:
+          - basic
+          - run
+          - prune
+          - caching
+          - logging
+          - env-vars
+          - configs
+          - advanced
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
       # the fixtures retain their line endings and don't get updated to CRLF.
@@ -180,13 +189,13 @@ jobs:
         with:
           tool: nextest
 
-      - name: Integration Tests
+      - name: Integration Tests (${{ matrix.test-group }})
         timeout-minutes: 45
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+          turbo run test:${{ matrix.test-group }} --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
