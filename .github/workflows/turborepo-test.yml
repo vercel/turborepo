@@ -162,8 +162,8 @@ jobs:
         id: cache-prysk
         uses: actions/cache@v4
         with:
-          path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.runner }}
+          path: turborepo-tests/integration/.cram_env
+          key: prysk-venv-${{ matrix.os.runner }}-v2
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -188,6 +188,15 @@ jobs:
         uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
         with:
           tool: nextest
+
+      - name: Setup Python virtual environment for pytest
+        if: steps.cache-prysk.outputs.cache-hit != 'true'
+        run: |
+          cd turborepo-tests/integration
+          python3 -m venv .cram_env
+          .cram_env/bin/pip3 install --upgrade pip
+          .cram_env/bin/pip3 install --quiet pytest "prysk[pytest-plugin]" pytest-xdist
+        shell: bash
 
       - name: Integration Tests (${{ matrix.test-group }})
         timeout-minutes: 45
