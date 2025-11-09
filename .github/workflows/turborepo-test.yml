@@ -466,6 +466,18 @@ jobs:
               cargo nextest run --workspace
           fi
         shell: bash
+        env:
+          SCCACHE_BUCKET: turborepo-sccache
+          SCCACHE_REGION: us-east-2
+          # Only use sccache if we're in the Vercel repo.
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # sccache timeout configuration to prevent hangs
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
 
       - name: Show sccache stats
         if: always()
