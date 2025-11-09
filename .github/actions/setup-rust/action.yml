@@ -54,8 +54,6 @@ runs:
       shell: bash
       run: echo "::add-matcher::${{ github.action_path }}/matchers.json"
 
-    - uses: rui314/setup-mold@v1
-
     - name: "Setup Rust Cache"
       uses: Swatinem/rust-cache@v2
       with:
@@ -63,10 +61,3 @@ runs:
         key: ${{ inputs.cache-key }}
         # the cache is huge and we only get 10gb max, so we only save on master
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
-
-    - name: "Install cargo-groups"
-      uses: taiki-e/install-action@v2
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-      with:
-        tool: cargo-groups@0.1.9
