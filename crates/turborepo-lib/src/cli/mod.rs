@@ -347,6 +347,46 @@ pub enum LinkTarget {
     Spaces,
 }
 
+/// Formats clap error messages to improve readability of pipe-separated options
+fn format_error_message(mut err_str: String) -> String {
+    // Replace pipe separators in usage line with newlines for better readability
+    // The usage line typically looks like: "Usage: turbo <--opt1|--opt2|--opt3>"
+    if let Some(usage_start) = err_str.find("Usage: ") {
+        if let Some(usage_end) = err_str[usage_start..].find('\n') {
+            let usage_end = usage_start + usage_end;
+            let usage_line = &err_str[usage_start..usage_end];
+
+            // Check if this usage line contains the pipe-separated options pattern
+            if usage_line.contains('<') && usage_line.contains('>') && usage_line.contains('|') {
+                // Find the angle bracket enclosed section
+                if let Some(bracket_start) = usage_line.find('<') {
+                    if let Some(bracket_end) = usage_line.rfind('>') {
+                        let prefix = &usage_line[..bracket_start];
+                        let options_str = &usage_line[bracket_start + 1..bracket_end];
+
+                        // Split the options by pipe and format them as a list
+                        let formatted_options: Vec<String> = options_str
+                            .split('|')
+                            .map(|opt| format!("    {}", opt))
+                            .collect();
+
+                        // Build the new usage string
+                        let new_usage = format!(
+                            "{} [OPTIONS] [TASKS]... [-- <PASS_THROUGH_ARGS>...]\n\nOptions:\n{}",
+                            prefix.trim_end(),
+                            formatted_options.join("\n")
+                        );
+
+                        // Replace the old usage line with the new formatted one
+                        err_str.replace_range(usage_start..usage_end, &new_usage);
+                    }
+                }
+            }
+        }
+    }
+    err_str
+}
+
 impl Args {
     pub fn new(os_args: Vec<OsString>) -> Self {
         let clap_args = match Args::parse(os_args) {
@@ -362,7 +402,7 @@ impl Args {
                 process::exit(1);
             }
             Err(e) if e.use_stderr() => {
-                let err_str = e.to_string();
+                let err_str = format_error_message(e.to_string());
                 // A cleaner solution would be to implement our own clap::error::ErrorFormatter
                 // but that would require copying the default formatter just to remove this
                 // line: https://docs.rs/clap/latest/src/clap/error/format.rs.html#100
