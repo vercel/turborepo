@@ -34,6 +34,54 @@
       "dependsOn": ["^build"]
     },
 
+    "test:basic": {
+      "outputs": ["coverage/**/*"],
+      "env": ["NODE_VERSION"],
+      "dependsOn": ["^build"]
+    },
+
+    "test:run": {
+      "outputs": ["coverage/**/*"],
+      "env": ["NODE_VERSION"],
+      "dependsOn": ["^build"]
+    },
+
+    "test:prune": {
+      "outputs": ["coverage/**/*"],
+      "env": ["NODE_VERSION"],
+      "dependsOn": ["^build"]
+    },
+
+    "test:caching": {
+      "outputs": ["coverage/**/*"],
+      "env": ["NODE_VERSION"],
+      "dependsOn": ["^build"]
+    },
+
+    "test:logging": {
+      "outputs": ["coverage/**/*"],
+      "env": ["NODE_VERSION"],
+      "dependsOn": ["^build"]
+    },
+
+    "test:env-vars": {
+      "outputs": ["coverage/**/*"],
+      "env": ["NODE_VERSION"],
+      "dependsOn": ["^build"]
+    },
+
+    "test:configs": {
+      "outputs": ["coverage/**/*"],
+      "env": ["NODE_VERSION"],
+      "dependsOn": ["^build"]
+    },
+
+    "test:advanced": {
+      "outputs": ["coverage/**/*"],
+      "env": ["NODE_VERSION"],
+      "dependsOn": ["^build"]
+    },
+
     // run prettier check before eslint
     "lint": {
       "dependsOn": ["lint:prettier", "^build"]
