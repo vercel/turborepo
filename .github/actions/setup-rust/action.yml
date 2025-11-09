@@ -30,11 +30,6 @@ runs:
         # we want more specific settings
         cache: false
 
-    - name: "Install LLD (LLVM Linker) for Linux"
-      if: runner.os == 'Linux'
-      shell: bash
-      run: sudo apt-get -y update && sudo apt-get install -y lld
-
     - name: Set Up Protoc
       id: set-up-protoc
       continue-on-error: true
