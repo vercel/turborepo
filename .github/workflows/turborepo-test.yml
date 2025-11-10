@@ -104,10 +104,38 @@ jobs:
             echo "No changes outside examples/ and docs/ directories"
           fi
 
+  generate-integration-test-matrix:
+    name: Generate integration test matrix
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      test-paths: ${{ steps.generate-matrix.outputs.test-paths }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate test path matrix
+        id: generate-matrix
+        run: |
+          TEST_PATHS=$(command ls -1A turborepo-tests/integration/tests | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "test-paths=$TEST_PATHS" >> $GITHUB_OUTPUT
+          echo "Generated test paths: $TEST_PATHS"
+
+          # Check for .t files directly in turborepo-tests/integration/tests (not in subdirectories)
+          if find turborepo-tests/integration/tests -maxdepth 1 -name "*.t" -type f | grep -q .; then
+            echo "::error::Found .t files directly in turborepo-tests/integration/tests/ which would be excluded from the test matrix"
+            echo "::error::Test files must be placed in subdirectories under turborepo-tests/integration/tests/"
+            find turborepo-tests/integration/tests -maxdepth 1 -name "*.t" -type f
+            exit 1
+          fi
+
   integration:
     name: Turborepo Integration (${{ matrix.os.runner }}, ${{ matrix.test-path }})
     needs:
       - find-changes
+      - generate-integration-test-matrix
     runs-on: ${{ matrix.os.runner }}
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     strategy:
@@ -117,26 +145,7 @@ jobs:
           - runner: ubuntu-latest
           - runner: macos-latest
           - runner: windows-latest
-        test-path:
-          - clone
-          - daemon
-          - dry-json
-          - edit-turbo-json
-          - find-turbo
-          - inference
-          - jsonc
-          - lockfile-aware-caching
-          - persistent-dependencies
-          - prune
-          - query
-          - run
-          - run-caching
-          - run-logging
-          - run-summary
-          - strict-env-vars
-          - task-dependencies
-          - workspace-configs
-          - other
+        test-path: ${{ fromJson(needs.generate-integration-test-matrix.outputs.test-paths) }}
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
       # the fixtures retain their line endings and don't get updated to CRLF.
