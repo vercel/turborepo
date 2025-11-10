@@ -2,19 +2,15 @@
   "name": "my-turborepo",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
     "dev": "turbo run dev",
+    "build": "turbo run build",
     "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
+    "check-types": "turbo run check-types",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "prettier": "^3.6.2",
-    "turbo": "2.5.9-canary.9",
-    "typescript": "5.9.2"
-  },
-  "engines": {
-    "node": ">=18"
+    "turbo": "^2.6.0",
+    "cross-env": "^7.0.3"
   },
   "packageManager": "pnpm@10.16.1"
 }

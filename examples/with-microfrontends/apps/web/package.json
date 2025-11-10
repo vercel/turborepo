@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port $TURBO_MFE_PORT",
+    "dev": "cross-env TURBO_MFE_PORT=3002 next dev --port $TURBO_MFE_PORT",
     "build": "next build",
     "start": "next start",
     "lint": "next lint --max-warnings 0",
