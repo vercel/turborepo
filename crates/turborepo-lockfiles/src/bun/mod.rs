@@ -434,25 +434,21 @@ impl BunLockfile {
         resolved_version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
         // Try workspace-scoped first
-        if let Some(entry) = self.index.get_workspace_scoped(workspace_name, name) {
-            if let Some(pkg) =
+        if let Some(entry) = self.index.get_workspace_scoped(workspace_name, name)
+            && let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
-            {
-                if self.version_satisfies_spec(&pkg.version, version_spec) {
-                    return Ok(Some(pkg));
-                }
-            }
+            && self.version_satisfies_spec(&pkg.version, version_spec)
+        {
+            return Ok(Some(pkg));
         }
 
         // Try hoisted/top-level
-        if let Some((_key, entry)) = self.index.find_package(Some(workspace_name), name) {
-            if let Some(pkg) =
+        if let Some((_key, entry)) = self.index.find_package(Some(workspace_name), name)
+            && let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
-            {
-                if self.version_satisfies_spec(&pkg.version, version_spec) {
-                    return Ok(Some(pkg));
-                }
-            }
+            && self.version_satisfies_spec(&pkg.version, version_spec)
+        {
+            return Ok(Some(pkg));
         }
 
         // Search for nested/aliased versions that match
@@ -464,15 +460,14 @@ impl BunLockfile {
             }
 
             // Skip bundled dependencies
-            if let Some(info) = &entry.info {
-                if info
+            if let Some(info) = &entry.info
+                && info
                     .other
                     .get("bundled")
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false)
-                {
-                    continue;
-                }
+            {
+                continue;
             }
 
             let ident = PackageIdent::parse(&entry.ident);
@@ -490,17 +485,16 @@ impl BunLockfile {
             // Check if this version satisfies the spec
             if let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
+                && self.version_satisfies_spec(&pkg.version, version_spec)
             {
-                if self.version_satisfies_spec(&pkg.version, version_spec) {
-                    tracing::debug!(
-                        "Found matching version {} for {} (spec: {}) in nested entry {}",
-                        pkg.version,
-                        name,
-                        version_spec,
-                        lockfile_key
-                    );
-                    return Ok(Some(pkg));
-                }
+                tracing::debug!(
+                    "Found matching version {} for {} (spec: {}) in nested entry {}",
+                    pkg.version,
+                    name,
+                    version_spec,
+                    lockfile_key
+                );
+                return Ok(Some(pkg));
             }
         }
 
