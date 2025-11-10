@@ -116,7 +116,7 @@ jobs:
         os:
           - runner: ubuntu-latest
           - runner: macos-latest
-          - runner: windows-latest
+          - runner: windows-latest-8-cores
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
       # the fixtures retain their line endings and don't get updated to CRLF.
@@ -125,7 +125,7 @@ jobs:
       # the line endings on checkout, the file hashes will change.
       # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
       - name: set crlf
-        if: matrix.os.runner == 'windows-latest'
+        if: matrix.os.runner == 'windows-latest-8-cores'
         shell: bash
         run: git config --global core.autocrlf input
       - uses: actions/checkout@v4
@@ -370,7 +370,7 @@ jobs:
           - name: macos
             runner: macos-latest
           - name: windows
-            runner: windows-latest
+            runner: windows-latest-8-cores
     runs-on: ${{ matrix.os.runner }}
     needs:
       - find-changes
