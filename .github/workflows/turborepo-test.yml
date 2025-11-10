@@ -175,6 +175,11 @@ jobs:
           sccache --show-stats || echo "sccache not available or failed"
         shell: bash
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
       - name: Integration Tests
         timeout-minutes: 45
         run: |
@@ -421,17 +426,44 @@ jobs:
           sccache --show-stats || echo "sccache not available or failed"
         shell: bash
 
-      - name: Run tests
-        timeout-minutes: 120
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Build tests
+        timeout-minutes: 15
         # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
           if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo test --workspace --exclude turborepo-napi
+              cargo nextest run --workspace --exclude turborepo-napi --no-run
           else
-              cargo test --workspace
+              cargo nextest run --workspace --no-run
+          fi
+        shell: bash
+        env:
+          SCCACHE_BUCKET: turborepo-sccache
+          SCCACHE_REGION: us-east-2
+          # Only use sccache if we're in the Vercel repo.
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # sccache timeout configuration to prevent hangs
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
+
+      - name: Run tests
+        timeout-minutes: 30
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+              cargo nextest run --workspace --exclude turborepo-napi
+          else
+              cargo nextest run --workspace
           fi
         shell: bash
         env:
