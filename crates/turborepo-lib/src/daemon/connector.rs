@@ -15,7 +15,7 @@ use tonic::transport::Endpoint;
 use tracing::debug;
 use turbopath::AbsoluteSystemPath;
 
-use super::{proto::turbod_client::TurbodClient, DaemonClient, Paths};
+use super::{DaemonClient, Paths, proto::turbod_client::TurbodClient};
 use crate::daemon::DaemonError;
 
 #[derive(Error, Debug)]
@@ -128,7 +128,7 @@ impl DaemonConnector {
                     return {
                         debug!("connected in {}µs", time.elapsed().as_micros());
                         Ok(client.with_connect_settings(self))
-                    }
+                    };
                 }
                 Err(DaemonError::VersionMismatch(_)) if self.can_kill_server => {
                     self.kill_live_server(client, pid).await?
@@ -425,7 +425,7 @@ mod test {
 
     use tokio::{
         select,
-        sync::{oneshot::Sender, Mutex},
+        sync::{Mutex, oneshot::Sender},
     };
     use tokio_stream::wrappers::ReceiverStream;
     use tonic::{Request, Response, Status};
@@ -524,6 +524,7 @@ mod test {
             .stderr(Stdio::null())
             .arg("-e")
             .arg("setInterval(() => {}, 1000)")
+            .kill_on_drop(true)
             .spawn()
             .unwrap();
 
