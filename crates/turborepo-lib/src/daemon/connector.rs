@@ -562,6 +562,7 @@ mod test {
             .stderr(Stdio::null())
             .arg("-e")
             .arg("setInterval(() => {}, 1000)")
+            .kill_on_drop(true)
             .spawn()
             .unwrap();
 
