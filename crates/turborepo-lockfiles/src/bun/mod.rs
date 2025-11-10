@@ -3169,9 +3169,17 @@ mod test {
     }
 
     #[test]
-    fn test_prune_issue_11007_2() {
+    fn test_prune_issue_11007_2_api() {
         let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_2).unwrap();
         let pruned = prune_for_workspace(&lockfile, "apps/api");
+        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
+        insta::assert_snapshot!(pruned_str);
+    }
+
+    #[test]
+    fn test_prune_issue_11007_2_web() {
+        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_2).unwrap();
+        let pruned = prune_for_workspace(&lockfile, "apps/web");
         let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
         insta::assert_snapshot!(pruned_str);
     }
