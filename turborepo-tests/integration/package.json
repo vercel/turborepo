@@ -6,14 +6,14 @@
     "test:interactive": "PRYSK_INTERACTIVE=true prysk tests",
     "test:parallel": ".cram_env/bin/pytest -n auto tests --prysk-shell=`which bash`",
     "pretest:parallel": ".cram_env/bin/pip3 install --quiet pytest \"prysk[pytest-plugin]\" pytest-xdist",
-    "test:basic": ".cram_env/bin/pytest -n 4 tests/*.t tests/clone tests/daemon tests/edit-turbo-json tests/jsonc tests/query --prysk-shell=`which bash`",
+    "test:basic": ".cram_env/bin/pytest -n 4 tests/*.t tests/daemon tests/edit-turbo-json tests/jsonc tests/query --prysk-shell=`which bash` && .cram_env/bin/pytest tests/clone --prysk-shell=`which bash`",
     "test:run": ".cram_env/bin/pytest -n 4 tests/run --prysk-shell=`which bash`",
     "test:prune": ".cram_env/bin/pytest -n 4 tests/prune --prysk-shell=`which bash`",
     "test:caching": ".cram_env/bin/pytest -n 4 tests/run-caching tests/lockfile-aware-caching --prysk-shell=`which bash`",
     "test:logging": ".cram_env/bin/pytest -n 4 tests/run-logging tests/run-summary --prysk-shell=`which bash`",
     "test:env-vars": ".cram_env/bin/pytest -n 4 tests/strict-env-vars tests/dry-json --prysk-shell=`which bash`",
     "test:configs": ".cram_env/bin/pytest -n 4 tests/workspace-configs tests/task-dependencies --prysk-shell=`which bash`",
-    "test:advanced": ".cram_env/bin/pytest -n 4 tests/persistent-dependencies tests/find-turbo tests/inference --prysk-shell=`which bash`"
+    "test:advanced": ".cram_env/bin/pytest -n 4 tests/persistent-dependencies tests/inference --prysk-shell=`which bash` && .cram_env/bin/pytest tests/find-turbo --prysk-shell=`which bash`"
   },
   "dependencies": {
     "turborepo-tests-helpers": "workspace:*",
