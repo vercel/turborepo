@@ -123,6 +123,14 @@ jobs:
           echo "test-paths=$TEST_PATHS" >> $GITHUB_OUTPUT
           echo "Generated test paths: $TEST_PATHS"
 
+          # Check for .t files directly in turborepo-tests/integration/tests (not in subdirectories)
+          if find turborepo-tests/integration/tests -maxdepth 1 -name "*.t" -type f | grep -q .; then
+            echo "::error::Found .t files directly in turborepo-tests/integration/tests/ which would be excluded from the test matrix"
+            echo "::error::Test files must be placed in subdirectories under turborepo-tests/integration/tests/"
+            find turborepo-tests/integration/tests -maxdepth 1 -name "*.t" -type f
+            exit 1
+          fi
+
   integration:
     name: Turborepo Integration (${{ matrix.os.runner }}, ${{ matrix.test-path }})
     needs:
