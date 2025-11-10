@@ -37,49 +37,49 @@
     "test:basic": {
       "outputs": ["coverage/**/*"],
       "env": ["NODE_VERSION"],
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "cli#build"]
     },
 
     "test:run": {
       "outputs": ["coverage/**/*"],
       "env": ["NODE_VERSION"],
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "cli#build"]
     },
 
     "test:prune": {
       "outputs": ["coverage/**/*"],
       "env": ["NODE_VERSION"],
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "cli#build"]
     },
 
     "test:caching": {
       "outputs": ["coverage/**/*"],
       "env": ["NODE_VERSION"],
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "cli#build"]
     },
 
     "test:logging": {
       "outputs": ["coverage/**/*"],
       "env": ["NODE_VERSION"],
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "cli#build"]
     },
 
     "test:env-vars": {
       "outputs": ["coverage/**/*"],
       "env": ["NODE_VERSION"],
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "cli#build"]
     },
 
     "test:configs": {
       "outputs": ["coverage/**/*"],
       "env": ["NODE_VERSION"],
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "cli#build"]
     },
 
     "test:advanced": {
       "outputs": ["coverage/**/*"],
       "env": ["NODE_VERSION"],
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "cli#build"]
     },
 
     // run prettier check before eslint
