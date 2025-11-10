@@ -196,10 +196,9 @@ impl TaskCache {
     pub fn output_writer<W: Write>(&self, writer: W) -> Result<LogWriter<W>, Error> {
         let mut log_writer = LogWriter::default();
 
-        // We always write a log file even if we do not cache it. This would
-        // allow users to "stream" specific logs from a single task if the TUI
-        // was being used.
-        log_writer.with_log_file(&self.log_file_path)?;
+        if !self.caching_disabled && !self.run_cache.writes_disabled {
+            log_writer.with_log_file(&self.log_file_path)?;
+        }
 
         match self.task_output_logs {
             OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly => {}
