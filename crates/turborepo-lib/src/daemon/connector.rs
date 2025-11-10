@@ -15,7 +15,7 @@ use tonic::transport::Endpoint;
 use tracing::debug;
 use turbopath::AbsoluteSystemPath;
 
-use super::{DaemonClient, Paths, proto::turbod_client::TurbodClient};
+use super::{proto::turbod_client::TurbodClient, DaemonClient, Paths};
 use crate::daemon::DaemonError;
 
 #[derive(Error, Debug)]
@@ -425,7 +425,7 @@ mod test {
 
     use tokio::{
         select,
-        sync::{Mutex, oneshot::Sender},
+        sync::{oneshot::Sender, Mutex},
     };
     use tokio_stream::wrappers::ReceiverStream;
     use tonic::{Request, Response, Status};
