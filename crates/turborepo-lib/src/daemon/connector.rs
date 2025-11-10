@@ -128,7 +128,7 @@ impl DaemonConnector {
                     return {
                         debug!("connected in {}µs", time.elapsed().as_micros());
                         Ok(client.with_connect_settings(self))
-                    }
+                    };
                 }
                 Err(DaemonError::VersionMismatch(_)) if self.can_kill_server => {
                     self.kill_live_server(client, pid).await?
@@ -524,6 +524,7 @@ mod test {
             .stderr(Stdio::null())
             .arg("-e")
             .arg("setInterval(() => {}, 1000)")
+            .kill_on_drop(true)
             .spawn()
             .unwrap();
 
@@ -561,6 +562,7 @@ mod test {
             .stderr(Stdio::null())
             .arg("-e")
             .arg("setInterval(() => {}, 1000)")
+            .kill_on_drop(true)
             .spawn()
             .unwrap();
 
