@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh --no-install
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 Run info
   $ ${TURBO} ls

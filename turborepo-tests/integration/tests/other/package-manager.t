@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh basic_monorepo "npm@8.19.4" --no-install
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh basic_monorepo "npm@8.19.4" --no-install
 
 Run test run
   $ TURBO_LOG_VERBOSITY=off ${TURBO} config | jq .packageManager

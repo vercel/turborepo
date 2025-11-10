@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
 
 Should error if `--cwd` flag doesn't have path passed along with it
   $ ${TURBO} foo bar --cwd

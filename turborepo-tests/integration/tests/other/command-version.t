@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
   $ VERSION=${MONOREPO_ROOT_DIR}/version.txt
 
 Test version matches that of version.txt

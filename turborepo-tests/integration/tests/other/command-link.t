@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/../../helpers/mock_turbo_config.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/mock_turbo_config.sh
 
 Link Test Run
   $ ${TURBO} link --__test-run

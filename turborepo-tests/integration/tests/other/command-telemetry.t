@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/../../helpers/mock_telemetry_config.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/mock_telemetry_config.sh
 
 Run status (with first run message)
   $ TURBO_TELEMETRY_MESSAGE_DISABLED=0 ${TURBO} telemetry status

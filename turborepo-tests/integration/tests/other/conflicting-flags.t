@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh --no-install
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
   $ ${TURBO} run build --daemon --no-daemon
    ERROR  the argument '--daemon' cannot be used with '--no-daemon'
   

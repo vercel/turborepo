@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
 
 Test help flag
   $ ${TURBO} -h

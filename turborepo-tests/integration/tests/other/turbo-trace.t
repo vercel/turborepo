@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh turbo_trace
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh turbo_trace
 
   $ ${TURBO} query "query { file(path: \"main.ts\") { path } }"
    WARNING  query command is experimental and may change in the future

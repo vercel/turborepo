@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh passthrough
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh passthrough
 
   $ ${TURBO} -F my-app echo -- hello
   \xe2\x80\xa2 Packages in scope: my-app (esc)

@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
 # Run as if called by global turbo
   $ TURBO_INVOCATION_DIR=$(pwd)/packages/util ${TURBO} build --skip-infer

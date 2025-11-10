@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
 
 Unlink Test Run
   $ ${TURBO} unlink --__test-run

@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh global_deps
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh global_deps
 
 Run a build
   $ ${TURBO} build -F my-app --output-logs=hash-only

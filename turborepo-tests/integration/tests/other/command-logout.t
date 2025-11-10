@@ -1,6 +1,6 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup.sh
-  $ . ${TESTDIR}/../../helpers/mock_turbo_config.sh
+  $ . ${TESTDIR}/../../../helpers/setup.sh
+  $ . ${TESTDIR}/../../../helpers/mock_turbo_config.sh
 
 Logout while logged in
   $ ${TURBO} logout

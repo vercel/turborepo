@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../helpers/setup_integration_test.sh --no-install
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 Run test run
   $ ${TURBO} config
@@ -44,7 +44,7 @@ Run test run with remote cache timeout from both env and flag (flag should take 
   456
 
 Use our custom turbo config with an invalid env var
-  $ . ${TESTDIR}/../../helpers/replace_turbo_json.sh $(pwd) "invalid-env-var.json"
+  $ . ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd) "invalid-env-var.json"
 
 Run build with invalid env var
   $ ${TURBO} build
