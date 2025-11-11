@@ -3,12 +3,16 @@
   "applications": {
     "web": {
       "development": {
-        "local": 3000
+        "local": {
+          "port": 3000
+        }
       }
     },
     "docs": {
       "development": {
-        "local": 3001
+        "local": {
+          "port": 3001
+        }
       },
       "routing": [
         {
@@ -17,8 +21,11 @@
       ]
     },
     "admin": {
+      "packageName": "vite",
       "development": {
-        "local": 3002
+        "local": {
+          "port": 3002
+        }
       },
       "routing": [
         {

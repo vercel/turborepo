@@ -7,13 +7,12 @@ use turborepo_dirs::config_dir;
 use turborepo_ui::ColorConfig;
 
 use crate::{
-    cli,
+    Args, cli,
     config::{
-        resolve_turbo_config_path, ConfigurationOptions, Error as ConfigError,
-        TurborepoConfigBuilder,
+        ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder,
+        resolve_turbo_config_path,
     },
     opts::Opts,
-    Args,
 };
 
 pub(crate) mod bin;
@@ -22,6 +21,7 @@ pub(crate) mod clone;
 pub(crate) mod config;
 pub(crate) mod daemon;
 pub(crate) mod generate;
+pub(crate) mod get_mfe_port;
 pub(crate) mod info;
 pub(crate) mod link;
 pub(crate) mod login;

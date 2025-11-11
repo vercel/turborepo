@@ -9,10 +9,10 @@ use std::{
 use biome_deserialize_macros::Deserializable;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
-    builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
-    ValueEnum,
+    ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum,
+    builder::NonEmptyStringValueParser,
 };
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 pub use error::Error;
 use serde::{Deserialize, Serialize};
 use tracing::{debug, error, log::warn};
@@ -20,16 +20,17 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
-    init_telemetry, track_usage, TelemetryHandle,
+    TelemetryHandle,
+    events::{EventBuilder, EventType, command::CommandEventBuilder, generic::GenericEventBuilder},
+    init_telemetry, track_usage,
 };
 use turborepo_ui::{ColorConfig, GREY};
 
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, clone, config, daemon, generate, info, link, login, logout, ls, prune,
-        query, run, scan, telemetry, unlink, CommandBase,
+        CommandBase, bin, boundaries, clone, config, daemon, generate, get_mfe_port, info, link,
+        login, logout, ls, prune, query, run, scan, telemetry, unlink,
     },
     get_version,
     run::watch::WatchClient,
@@ -574,6 +575,9 @@ impl Args {
 pub enum Command {
     /// Get the path to the Turbo binary
     Bin,
+    /// Get the port assigned to the current microfrontend
+    #[clap(name = "get-mfe-port")]
+    GetMfePort,
     #[clap(hide = true)]
     Boundaries {
         #[clap(short = 'F', long, group = "scope-filter-group")]
@@ -1393,6 +1397,15 @@ pub async fn run(
 
             Ok(0)
         }
+        Command::GetMfePort => {
+            let event = CommandEventBuilder::new("get-mfe-port").with_parent(&root_telemetry);
+            event.track_call();
+
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            get_mfe_port::run(&base).await?;
+
+            Ok(0)
+        }
         Command::Boundaries { ignore, reason, .. } => {
             let event = CommandEventBuilder::new("boundaries").with_parent(&root_telemetry);
             let ignore = *ignore;
@@ -1482,11 +1495,7 @@ pub async fn run(
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
-            if scan::run(base).await {
-                Ok(0)
-            } else {
-                Ok(1)
-            }
+            if scan::run(base).await { Ok(0) } else { Ok(1) }
         }
         Command::Config => {
             CommandEventBuilder::new("config")
@@ -3142,15 +3151,17 @@ mod test {
         assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", ""]).is_err());
         assert!(Args::try_parse_from(["turbo", "build", "--profile", "foo.json"]).is_ok());
         assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", "foo.json"]).is_ok());
-        assert!(Args::try_parse_from([
-            "turbo",
-            "build",
-            "--profile",
-            "foo.json",
-            "--anon-profile",
-            "bar.json"
-        ])
-        .is_err());
+        assert!(
+            Args::try_parse_from([
+                "turbo",
+                "build",
+                "--profile",
+                "foo.json",
+                "--anon-profile",
+                "bar.json"
+            ])
+            .is_err()
+        );
     }
 
     #[test]
@@ -3291,19 +3302,23 @@ mod test {
                 .collect(),
         )
         .unwrap();
-        assert!(inferred_run
-            .execution_args
-            .as_ref()
-            .is_some_and(|e| e.single_package));
-        assert!(explicit_run
-            .command
-            .as_ref()
-            .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
-                Some(execution_args.single_package)
-            } else {
-                None
-            })
-            .unwrap_or(false));
+        assert!(
+            inferred_run
+                .execution_args
+                .as_ref()
+                .is_some_and(|e| e.single_package)
+        );
+        assert!(
+            explicit_run
+                .command
+                .as_ref()
+                .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                    Some(execution_args.single_package)
+                } else {
+                    None
+                })
+                .unwrap_or(false)
+        );
     }
 
     #[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]
