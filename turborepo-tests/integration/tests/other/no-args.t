@@ -9,6 +9,7 @@ Make sure exit code is 2 when no args are passed
   
   Commands:
     bin         Get the path to the Turbo binary
+    get-mfe-port  Get the port assigned to the current microfrontend
     completion  Generate the autocompletion script for the specified shell
     daemon      Runs the Turborepo background daemon
     generate    Generate a new app / package
