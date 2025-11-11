@@ -7,12 +7,13 @@ use turborepo_dirs::config_dir;
 use turborepo_ui::ColorConfig;
 
 use crate::{
-    Args, cli,
+    cli,
     config::{
-        ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder,
-        resolve_turbo_config_path,
+        resolve_turbo_config_path, ConfigurationOptions, Error as ConfigError,
+        TurborepoConfigBuilder,
     },
     opts::Opts,
+    Args,
 };
 
 pub(crate) mod bin;
