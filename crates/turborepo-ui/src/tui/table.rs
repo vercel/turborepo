@@ -44,8 +44,8 @@ impl<'b> TaskTable<'b> {
             .max()
             .unwrap_or_default()
             .clamp(min_width, 40) as u16;
-        // Add space for status emoji and space
-        task_name_width + 2
+        // Add space for leading space, status emoji, trailing space, and space before task name
+        task_name_width + 4
     }
 
     /// Update the current time of the table
