@@ -4,12 +4,12 @@ use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_repository::package_graph;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{color, BOLD, GREY};
+use turborepo_ui::{BOLD, GREY, color};
 
 use crate::{
-    commands::{bin, generate, link, login, ls, prune, CommandBase},
+    commands::{CommandBase, bin, generate, get_mfe_port, link, login, ls, prune},
     daemon::DaemonError,
     query,
     rewrite_json::RewriteError,
@@ -45,6 +45,8 @@ pub enum Error {
     Daemon(#[from] DaemonError),
     #[error(transparent)]
     Generate(#[from] generate::Error),
+    #[error(transparent)]
+    GetMfePort(#[from] get_mfe_port::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Ls(#[from] ls::Error),
@@ -124,4 +126,59 @@ pub async fn print_potential_tasks(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_mfe_port_error_conversion() {
+        // Test NoPackageJson error
+        let err = get_mfe_port::Error::NoPackageJson;
+        let cli_err: Error = err.into();
+        assert!(matches!(cli_err, Error::GetMfePort(_)));
+        assert_eq!(
+            cli_err.to_string(),
+            "No package.json found in current directory"
+        );
+
+        // Test NoPackageName error
+        let err = get_mfe_port::Error::NoPackageName;
+        let cli_err: Error = err.into();
+        assert!(matches!(cli_err, Error::GetMfePort(_)));
+        assert_eq!(
+            cli_err.to_string(),
+            "package.json is missing the 'name' field"
+        );
+
+        // Test NoMicrofrontendsConfig error
+        let err = get_mfe_port::Error::NoMicrofrontendsConfig;
+        let cli_err: Error = err.into();
+        assert!(matches!(cli_err, Error::GetMfePort(_)));
+        assert_eq!(cli_err.to_string(), "No microfrontends configuration found");
+
+        // Test PackageNotInConfig error
+        let err = get_mfe_port::Error::PackageNotInConfig("my-app".to_string());
+        let cli_err: Error = err.into();
+        assert!(matches!(cli_err, Error::GetMfePort(_)));
+        assert_eq!(
+            cli_err.to_string(),
+            "Package 'my-app' not found in microfrontends configuration"
+        );
+    }
+
+    #[test]
+    fn test_get_mfe_port_error_source() {
+        // Test that error source chain works properly
+        let err = get_mfe_port::Error::NoPackageJson;
+        let cli_err: Error = err.into();
+
+        match cli_err {
+            Error::GetMfePort(inner) => {
+                assert!(matches!(inner, get_mfe_port::Error::NoPackageJson));
+            }
+            _ => panic!("Expected GetMfePort error variant"),
+        }
+    }
 }
