@@ -8,22 +8,23 @@ Make sure exit code is 2 when no args are passed
   Usage: turbo(\.exe)? \[OPTIONS\] \[COMMAND\] (re)
   
   Commands:
-    bin         Get the path to the Turbo binary
-    completion  Generate the autocompletion script for the specified shell
-    daemon      Runs the Turborepo background daemon
-    generate    Generate a new app / package
-    telemetry   Enable or disable anonymous telemetry
-    scan        Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
-    ls          EXPERIMENTAL: List packages in your monorepo
-    link        Link your local directory to a Vercel organization and enable remote caching
-    login       Login to your Vercel account
-    logout      Logout to your Vercel account
-    info        Print debugging information
-    prune       Prepare a subset of your monorepo
-    run         Run tasks across projects in your monorepo
-    query       Query your monorepo using GraphQL. If no query is provided, spins up a GraphQL server with GraphiQL
-    watch       Arguments used in run and watch
-    unlink      Unlink the current directory from your Vercel organization and disable Remote Caching
+    bin           Get the path to the Turbo binary
+    get-mfe-port  Get the port assigned to the current microfrontend
+    completion    Generate the autocompletion script for the specified shell
+    daemon        Runs the Turborepo background daemon
+    generate      Generate a new app / package
+    telemetry     Enable or disable anonymous telemetry
+    scan          Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
+    ls            EXPERIMENTAL: List packages in your monorepo
+    link          Link your local directory to a Vercel organization and enable remote caching
+    login         Login to your Vercel account
+    logout        Logout to your Vercel account
+    info          Print debugging information
+    prune         Prepare a subset of your monorepo
+    run           Run tasks across projects in your monorepo
+    query         Query your monorepo using GraphQL. If no query is provided, spins up a GraphQL server with GraphiQL
+    watch         Arguments used in run and watch
+    unlink        Unlink the current directory from your Vercel organization and disable Remote Caching
   
   Options:
         --version
