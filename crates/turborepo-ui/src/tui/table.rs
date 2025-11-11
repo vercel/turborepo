@@ -147,7 +147,7 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
                 .chain(self.finished_rows()),
             [Constraint::Min(15)],
         )
-        .highlight_style(Style::default().fg(Color::Yellow))
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .column_spacing(0)
         .block(Block::new().borders(Borders::RIGHT))
         .header(
