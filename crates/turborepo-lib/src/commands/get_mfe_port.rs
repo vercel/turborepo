@@ -91,7 +91,7 @@ mod tests {
     use turborepo_ui::ColorConfig;
 
     use super::*;
-    use crate::{config::TurborepoConfigBuilder, opts::Opts, Args};
+    use crate::{Args, config::TurborepoConfigBuilder, opts::Opts};
 
     fn setup_test_repo(tmp: &TempDir) -> AbsoluteSystemPathBuf {
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path().to_path_buf()).unwrap();
@@ -204,7 +204,7 @@ mod tests {
 
         // Port should be deterministically generated from "web"
         // Based on the hash function in the microfrontends crate
-        assert!(port >= 3000 && port <= 8000);
+        assert!((3000..=8000).contains(&port));
 
         // Verify it's deterministic - calling again should return same port
         let port2 = get_port_for_package(&base, "web").await.unwrap();
