@@ -1,6 +1,9 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    process,
+};
 
-use tracing::{debug, warn};
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
@@ -140,28 +143,24 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     .collect());
             }
             Err(ScmError::Path(err, _)) => {
-                warn!(
-                    "Could not process some file paths from SCM: {}. Defaulting to all packages \
-                     changed.",
+                // Hard fail: path anchoring errors should be visible in CI logs.
+                eprintln!(
+                    "error: failed to process file paths from SCM: {}.\nThis repository has file \
+                     paths that could not be anchored to the turbo root.\nPlease remove/rename \
+                     the problematic file(s) or fix repository layout and try again.",
                     err
                 );
-                return self.all_packages_changed_due_to_error(
-                    from_ref,
-                    to_ref,
-                    &format!("path error: {}", err),
-                );
+                process::exit(1);
             }
             Err(err) => {
-                warn!(
-                    "Unexpected SCM error while detecting changed files: {}. Defaulting to all \
-                     packages changed.",
+                // Any other SCM error should also fail hard so users see a clear error instead
+                // of a silent fallback that runs full CI.
+                eprintln!(
+                    "error: unexpected SCM error while detecting changed files: {}.\nAborting to \
+                     avoid running all CI tasks silently. See the error above for details.",
                     err
                 );
-                return self.all_packages_changed_due_to_error(
-                    from_ref,
-                    to_ref,
-                    &format!("unexpected scm error: {}", err),
-                );
+                process::exit(1);
             }
         };
 
