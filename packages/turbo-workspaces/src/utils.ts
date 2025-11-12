@@ -276,6 +276,8 @@ async function bunLockToYarnLock({
       const { stdout } = await execa("bun", ["bun.lockb"], {
         stdin: "ignore",
         cwd: project.paths.root,
+        preferLocal: true,
+        shell: process.platform === "win32",
       });
       // write the yarn lockfile
       await writeFile(path.join(project.paths.root, "yarn.lock"), stdout);
