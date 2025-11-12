@@ -12,5 +12,3 @@ This information is used to shape the Turborepo roadmap and prioritize features.
 ## Events
 
 All recorded events can be found by browsing the [events](./src/events) directory.
-
-test
