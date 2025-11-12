@@ -2,7 +2,7 @@ use std::{
     backtrace::Backtrace,
     collections::HashSet,
     env::{self, VarError},
-    fs::{self},
+    fs,
     path::PathBuf,
     process::Command,
 };
@@ -201,10 +201,10 @@ impl GitRepo {
          *
          * So environment variable is empty in a regular commit
          */
-        if let Ok(pr) = base_ref_env.github_base_ref
-            && !pr.is_empty()
-        {
-            return Some(pr);
+        if let Ok(pr) = base_ref_env.github_base_ref {
+            if !pr.is_empty() {
+                return Some(pr);
+            }
         }
 
         // we must be in a push event
@@ -303,7 +303,7 @@ impl GitRepo {
         }
 
         let output = self.execute_git_command(&args, pathspec)?;
-        self.add_files_from_stdout(&mut files, turbo_root, output);
+        self.add_files_from_stdout(&mut files, turbo_root, output)?;
 
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
@@ -314,11 +314,11 @@ impl GitRepo {
                 &["ls-files", "--others", "--modified", "--exclude-standard"],
                 pathspec,
             )?;
-            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output);
+            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output)?;
             // Include any files that have been staged, but not committed
             let diff_output =
                 self.execute_git_command(&["diff", "--name-only", "--cached"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, diff_output);
+            self.add_files_from_stdout(&mut files, turbo_root, diff_output)?;
         }
 
         Ok(files)
@@ -345,20 +345,23 @@ impl GitRepo {
         }
     }
 
+    /// Parse git stdout (lines of paths) and insert anchored paths into
+    /// `files`. Returns an Error if stdout is not valid UTF-8 or any path
+    /// cannot be anchored.
     fn add_files_from_stdout(
         &self,
         files: &mut HashSet<AnchoredSystemPathBuf>,
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
-    ) {
-        let stdout = String::from_utf8(stdout).unwrap();
+    ) -> Result<(), Error> {
+        let stdout = String::from_utf8(stdout)?;
         for line in stdout.lines() {
             let path = RelativeUnixPath::new(line).unwrap();
-            let anchored_to_turbo_root_file_path = self
-                .reanchor_path_from_git_root_to_turbo_root(turbo_root, path)
-                .unwrap();
+            let anchored_to_turbo_root_file_path =
+                self.reanchor_path_from_git_root_to_turbo_root(turbo_root, path)?;
             files.insert(anchored_to_turbo_root_file_path);
         }
+        Ok(())
     }
 
     fn reanchor_path_from_git_root_to_turbo_root(

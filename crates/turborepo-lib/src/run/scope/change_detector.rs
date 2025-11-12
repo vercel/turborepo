@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use tracing::debug;
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
     change_mapper::{
@@ -9,7 +9,7 @@ use turborepo_repository::{
     },
     package_graph::{PackageGraph, PackageName},
 };
-use turborepo_scm::{git::InvalidRange, SCM};
+use turborepo_scm::{Error as ScmError, SCM, git::InvalidRange};
 
 use crate::run::scope::ResolutionError;
 
@@ -80,6 +80,28 @@ impl<'a> ScopeChangeDetector<'a> {
         debug!("lockfile changed, have the previous content");
         LockfileContents::Changed(content)
     }
+
+    fn all_packages_changed_due_to_error(
+        &self,
+        from_ref: Option<&str>,
+        to_ref: Option<&str>,
+        error_message: &str,
+    ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
+        debug!("{}, defaulting to all packages changed", error_message);
+        Ok(self
+            .pkg_graph
+            .packages()
+            .map(|(name, _)| {
+                (
+                    name.to_owned(),
+                    PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
+                        from_ref: from_ref.map(String::from),
+                        to_ref: to_ref.map(String::from),
+                    }),
+                )
+            })
+            .collect())
+    }
 }
 
 impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
@@ -99,8 +121,9 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             include_uncommitted,
             allow_unknown_objects,
             merge_base,
-        )? {
-            Err(InvalidRange { from_ref, to_ref }) => {
+        ) {
+            Ok(Ok(changed_files)) => changed_files,
+            Ok(Err(InvalidRange { from_ref, to_ref })) => {
                 debug!("invalid ref range, defaulting to all packages changed");
                 return Ok(self
                     .pkg_graph
@@ -116,17 +139,37 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     })
                     .collect());
             }
-            Ok(changed_files) => changed_files,
+            Err(ScmError::Path(err, _)) => {
+                warn!(
+                    "Could not process some file paths from SCM: {}. Defaulting to all packages \
+                     changed.",
+                    err
+                );
+                return self.all_packages_changed_due_to_error(
+                    from_ref,
+                    to_ref,
+                    &format!("path error: {}", err),
+                );
+            }
+            Err(err) => {
+                warn!(
+                    "Unexpected SCM error while detecting changed files: {}. Defaulting to all \
+                     packages changed.",
+                    err
+                );
+                return self.all_packages_changed_due_to_error(
+                    from_ref,
+                    to_ref,
+                    &format!("unexpected scm error: {}", err),
+                );
+            }
         };
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
 
         debug!(
             "changed files: {:?}",
-            &changed_files
-                .iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<String>>()
+            changed_files.iter().map(|x| x.as_str()).collect::<Vec<_>>()
         );
 
         match self
