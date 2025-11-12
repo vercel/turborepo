@@ -400,11 +400,12 @@ jobs:
             runner: macos-latest
           - name: windows
             runner: windows-latest
+        partition: [1, 2]
     runs-on: ${{ matrix.os.runner }}
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
-    name: Turborepo Rust testing on ${{ matrix.os.name }}
+    name: Turborepo Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/2)
     steps:
       - name: Set git to use LF line endings
         run: |
@@ -490,9 +491,9 @@ jobs:
         timeout-minutes: 30
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo nextest run --workspace --exclude turborepo-napi
+              cargo nextest run --workspace --exclude turborepo-napi --partition hash:${{ matrix.partition }}/2
           else
-              cargo nextest run --workspace
+              cargo nextest run --workspace --partition hash:${{ matrix.partition }}/2
           fi
         shell: bash
         env:
