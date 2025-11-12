@@ -143,7 +143,6 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                     .collect());
             }
             Err(ScmError::Path(err, _)) => {
-                // Hard fail: path anchoring errors should be visible in CI logs.
                 eprintln!(
                     "error: failed to process file paths from SCM: {}.\nThis repository has file \
                      paths that could not be anchored to the turbo root.\nPlease remove/rename \
@@ -153,11 +152,8 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
                 process::exit(1);
             }
             Err(err) => {
-                // Any other SCM error should also fail hard so users see a clear error instead
-                // of a silent fallback that runs full CI.
                 eprintln!(
-                    "error: unexpected SCM error while detecting changed files: {}.\nAborting to \
-                     avoid running all CI tasks silently. See the error above for details.",
+                    "error: unexpected SCM error while detecting changed files: {}.\n
                     err
                 );
                 process::exit(1);
