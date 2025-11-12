@@ -49,7 +49,7 @@ In general, there are two major areas in the repository:
 
 - The `crates` directory with the Rust code for the `turbo` binary
 - The `packages` directory with JavaScript packages
-- the `examples` directory with examples of how to use Turborepo with other tools and frameworks
+- The `examples` directory with examples of how to use Turborepo with other tools and frameworks
 - The `docs` directory with the documentation for Turborepo
 
 ## Building Turborepo
@@ -109,7 +109,7 @@ cargo test -p <module>
   pnpm test -- --filter=turborepo-tests-integration
   ```
 - A single integration test
-  e.g to run everything in `turborepo-tests/integration/tests/run-summary`:
+  e.g., to run everything in `turborepo-tests/integration/tests/run-summary`:
 
   ```bash
   # Build `turbo` first because the next command doesn't run through `turbo`
@@ -148,7 +148,7 @@ A non-exhaustive list of things to check on:
 - Test with and without daemon
 - Installation scenarios
   - Global only. `turbo` is installed as global binary without a local `turbo` in repository.
-  - Local only. `turbo` is installed as local binary without global `turbo` in PATH. turbo` is invoked via a root package
+  - Local only. `turbo` is installed as local binary without global `turbo` in PATH. `turbo` is invoked via a root package
     script.
   - Global and local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to
     local `turbo`
@@ -177,7 +177,7 @@ TURBO_SITE="http://localhost:3000" cargo build
 
 ### Verbose logging
 
-Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for.
+Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for:
 
 ```bash
 turbo build --vvv

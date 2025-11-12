@@ -44,8 +44,9 @@ impl<'b> TaskTable<'b> {
             .max()
             .unwrap_or_default()
             .clamp(min_width, 40) as u16;
-        // Add space for status emoji and space
-        task_name_width + 2
+        // Add space for leading space, status emoji, trailing space, and space before
+        // task name
+        task_name_width + 4
     }
 
     /// Update the current time of the table
@@ -83,7 +84,7 @@ impl<'b> TaskTable<'b> {
                     } else {
                         Style::default().green().bold()
                     };
-                    Span::styled("✓ ", style)
+                    Span::styled(" ✓ ", style)
                 }
                 TaskResult::CacheHit => {
                     let style = if self.should_dim_task(task.name()) {
@@ -91,7 +92,7 @@ impl<'b> TaskTable<'b> {
                     } else {
                         Style::default().magenta()
                     };
-                    Span::styled("⊙ ", style)
+                    Span::styled(" ⊙ ", style)
                 }
                 TaskResult::Failure => {
                     let style = if self.should_dim_task(task.name()) {
@@ -99,7 +100,7 @@ impl<'b> TaskTable<'b> {
                     } else {
                         Style::default().red().bold()
                     };
-                    Span::styled("⨯ ", style)
+                    Span::styled(" ⨯ ", style)
                 }
             };
 
@@ -110,7 +111,7 @@ impl<'b> TaskTable<'b> {
             };
 
             let mut content = vec![icon];
-            content.push(Span::styled(task.name(), name_style));
+            content.push(Span::styled(format!(" {}", task.name()), name_style));
 
             Row::new(vec![Cell::new(Line::from(content))])
         })
@@ -121,8 +122,8 @@ impl<'b> TaskTable<'b> {
         self.tasks_by_type.running.iter().map(move |task| {
             let style = self.task_style(task.name());
             let content = vec![
-                Span::styled(format!("{} ", spinner), style),
-                Span::styled(task.name(), style),
+                Span::styled(format!(" {} ", spinner), style),
+                Span::styled(format!(" {}", task.name()), style),
             ];
             Row::new(vec![Cell::new(Line::from(content))])
         })
@@ -131,7 +132,10 @@ impl<'b> TaskTable<'b> {
     fn planned_rows(&self) -> impl Iterator<Item = Row<'_>> + '_ {
         self.tasks_by_type.planned.iter().map(move |task| {
             let style = self.task_style(task.name());
-            let content = vec![Span::raw("  "), Span::styled(task.name(), style)];
+            let content = vec![
+                Span::raw("   "),
+                Span::styled(format!(" {}", task.name()), style),
+            ];
             Row::new(vec![Cell::new(Line::from(content))])
         })
     }
@@ -145,7 +149,7 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
             self.running_rows()
                 .chain(self.planned_rows())
                 .chain(self.finished_rows()),
-            [Constraint::Min(15)],
+            [Constraint::Min(18)],
         )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .column_spacing(0)
