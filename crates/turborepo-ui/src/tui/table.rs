@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Constraint, Rect},
     style::{Color, Modifier, Style, Stylize},
-    text::Text,
+    text::{Line, Span, Text},
     widgets::{Block, Borders, Cell, Row, StatefulWidget, Table, TableState},
 };
 
@@ -44,8 +44,9 @@ impl<'b> TaskTable<'b> {
             .max()
             .unwrap_or_default()
             .clamp(min_width, 40) as u16;
-        // Add space for column divider and status emoji
-        task_name_width + 1
+        // Add space for leading space, status emoji, trailing space, and space before
+        // task name
+        task_name_width + 4
     }
 
     /// Update the current time of the table
@@ -72,48 +73,47 @@ impl<'b> TaskTable<'b> {
         }
     }
 
-    /// Get styled status icon for a finished task
-    fn status_icon(&self, task_name: &str, result: TaskResult) -> Cell<'static> {
-        let should_dim = self.should_dim_task(task_name);
-        match result {
-            // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
-            TaskResult::Success => {
-                let style = if should_dim {
-                    Style::default().green().add_modifier(Modifier::DIM)
-                } else {
-                    Style::default().green().bold()
-                };
-                Cell::new(Text::styled("✓", style))
-            }
-            TaskResult::CacheHit => {
-                let style = if should_dim {
-                    Style::default().magenta().add_modifier(Modifier::DIM)
-                } else {
-                    Style::default().magenta()
-                };
-                Cell::new(Text::styled("⊙", style))
-            }
-            TaskResult::Failure => {
-                let style = if should_dim {
-                    Style::default().red().add_modifier(Modifier::DIM)
-                } else {
-                    Style::default().red().bold()
-                };
-                Cell::new(Text::styled("⨯", style))
-            }
-        }
-    }
-
     fn finished_rows(&self) -> impl Iterator<Item = Row<'_>> + '_ {
         self.tasks_by_type.finished.iter().map(move |task| {
             let base_style = self.task_style(task.name());
-            let name = if matches!(task.result(), TaskResult::CacheHit) {
-                Cell::new(Text::styled(task.name(), base_style.italic()))
-            } else {
-                Cell::new(Text::styled(task.name(), base_style))
+            let icon = match task.result() {
+                // matches Next.js (and many other CLI tools) https://github.com/vercel/next.js/blob/1a04d94aaec943d3cce93487fea3b8c8f8898f31/packages/next/src/build/output/log.ts
+                TaskResult::Success => {
+                    let style = if self.should_dim_task(task.name()) {
+                        Style::default().green().add_modifier(Modifier::DIM)
+                    } else {
+                        Style::default().green().bold()
+                    };
+                    Span::styled(" ✓ ", style)
+                }
+                TaskResult::CacheHit => {
+                    let style = if self.should_dim_task(task.name()) {
+                        Style::default().magenta().add_modifier(Modifier::DIM)
+                    } else {
+                        Style::default().magenta()
+                    };
+                    Span::styled(" ⊙ ", style)
+                }
+                TaskResult::Failure => {
+                    let style = if self.should_dim_task(task.name()) {
+                        Style::default().red().add_modifier(Modifier::DIM)
+                    } else {
+                        Style::default().red().bold()
+                    };
+                    Span::styled(" ⨯ ", style)
+                }
             };
 
-            Row::new(vec![name, self.status_icon(task.name(), task.result())])
+            let name_style = if matches!(task.result(), TaskResult::CacheHit) {
+                base_style.italic()
+            } else {
+                base_style
+            };
+
+            let mut content = vec![icon];
+            content.push(Span::styled(format!(" {}", task.name()), name_style));
+
+            Row::new(vec![Cell::new(Line::from(content))])
         })
     }
 
@@ -121,20 +121,22 @@ impl<'b> TaskTable<'b> {
         let spinner = self.spinner.current();
         self.tasks_by_type.running.iter().map(move |task| {
             let style = self.task_style(task.name());
-            Row::new(vec![
-                Cell::new(Text::styled(task.name(), style)),
-                Cell::new(Text::styled(spinner, style)),
-            ])
+            let content = vec![
+                Span::styled(format!(" {} ", spinner), style),
+                Span::styled(format!(" {}", task.name()), style),
+            ];
+            Row::new(vec![Cell::new(Line::from(content))])
         })
     }
 
     fn planned_rows(&self) -> impl Iterator<Item = Row<'_>> + '_ {
         self.tasks_by_type.planned.iter().map(move |task| {
             let style = self.task_style(task.name());
-            Row::new(vec![
-                Cell::new(Text::styled(task.name(), style)),
-                Cell::new(" "),
-            ])
+            let content = vec![
+                Span::raw("   "),
+                Span::styled(format!(" {}", task.name()), style),
+            ];
+            Row::new(vec![Cell::new(Line::from(content))])
         })
     }
 }
@@ -147,17 +149,13 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
             self.running_rows()
                 .chain(self.planned_rows())
                 .chain(self.finished_rows()),
-            [
-                Constraint::Min(15),
-                // Status takes one cell to render
-                Constraint::Length(1),
-            ],
+            [Constraint::Min(18)],
         )
-        .highlight_style(Style::default().fg(Color::Yellow))
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .column_spacing(0)
         .block(Block::new().borders(Borders::RIGHT))
         .header(
-            vec![Text::styled(
+            Row::new(vec![Cell::from(Text::styled(
                 match self.section {
                     LayoutSections::Search { results, .. }
                     | LayoutSections::SearchLocked { results, .. } => {
@@ -166,20 +164,14 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
                     _ => TASK_HEADER.to_string(),
                 },
                 Style::default().add_modifier(Modifier::DIM),
-            )]
-            .into_iter()
-            .map(Cell::from)
-            .collect::<Row>()
+            ))])
             .height(1),
         )
         .footer(
-            vec![Text::styled(
+            Row::new(vec![Cell::from(Text::styled(
                 format!("{TASK_NAVIGATE_INSTRUCTIONS}\n{MORE_BINDS_INSTRUCTIONS}"),
                 Style::default().add_modifier(Modifier::DIM),
-            )]
-            .into_iter()
-            .map(Cell::from)
-            .collect::<Row>()
+            ))])
             .height(2),
         );
         StatefulWidget::render(table, area, buf, state);

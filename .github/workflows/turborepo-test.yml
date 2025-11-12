@@ -104,20 +104,48 @@ jobs:
             echo "No changes outside examples/ and docs/ directories"
           fi
 
-  integration:
-    name: Turborepo Integration
+  generate-integration-test-matrix:
+    name: Generate integration test matrix
     needs:
       - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      test-paths: ${{ steps.generate-matrix.outputs.test-paths }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate test path matrix
+        id: generate-matrix
+        run: |
+          TEST_PATHS=$(command ls -1A turborepo-tests/integration/tests | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "test-paths=$TEST_PATHS" >> $GITHUB_OUTPUT
+          echo "Generated test paths: $TEST_PATHS"
+
+          # Check for .t files directly in turborepo-tests/integration/tests (not in subdirectories)
+          if find turborepo-tests/integration/tests -maxdepth 1 -name "*.t" -type f | grep -q .; then
+            echo "::error::Found .t files directly in turborepo-tests/integration/tests/ which would be excluded from the test matrix"
+            echo "::error::Test files must be placed in subdirectories under turborepo-tests/integration/tests/"
+            find turborepo-tests/integration/tests -maxdepth 1 -name "*.t" -type f
+            exit 1
+          fi
+
+  integration:
+    name: Turborepo Integration (${{ matrix.os.runner }}, ${{ matrix.test-path }})
+    needs:
+      - find-changes
+      - generate-integration-test-matrix
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 45
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     strategy:
       fail-fast: false
       matrix:
         os:
           - runner: ubuntu-latest
-          - runner: macos-13
+          - runner: macos-latest
           - runner: windows-latest
+        test-path: ${{ fromJson(needs.generate-integration-test-matrix.outputs.test-paths) }}
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
       # the fixtures retain their line endings and don't get updated to CRLF.
@@ -160,12 +188,34 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
+      - name: Enable Rust verbose logging
+        run: |
+          echo "RUST_BACKTRACE=1" >> $GITHUB_ENV
+          echo "RUST_LOG=info" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Log Rust environment info
+        run: |
+          echo "=== Rust Toolchain Information ==="
+          rustc --version --verbose
+          cargo --version --verbose
+          rustup show
+          echo "=== sccache stats (before) ==="
+          sccache --show-stats || echo "sccache not available or failed"
+        shell: bash
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
       - name: Integration Tests
+        timeout-minutes: 45
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+          turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} -- "tests/${{ matrix.test-path }}"
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
@@ -175,6 +225,89 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # sccache timeout configuration to prevent hangs
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
+
+      - name: Show sccache stats
+        if: always()
+        run: |
+          echo "=== sccache stats (after) ==="
+          sccache --show-stats || echo "sccache not available or failed"
+        shell: bash
+
+      - name: Capture state on timeout
+        if: cancelled()
+        run: |
+          echo "=========================================="
+          echo "INTEGRATION TEST STEP TIMED OUT"
+          echo "=========================================="
+          echo "Time: $(date)"
+          echo ""
+          echo "=== Active Rust/Cargo Processes (likely hung) ==="
+          ps aux | grep -E "[r]ustc|[c]argo" || echo "No rustc/cargo processes found"
+          echo ""
+          echo "=== Top CPU Consumers ==="
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            ps aux --sort=-%cpu | head -15
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            ps aux -r | head -15
+          fi
+          echo ""
+          echo "(ICE files will be checked in next step)"
+        shell: bash
+
+      - name: Check for and display ICE files
+        if: always()
+        run: |
+          echo "=== Searching for Rust ICE (Internal Compiler Error) files ==="
+          ICE_FOUND=0
+
+          # Search in common locations
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            # Windows paths
+            SEARCH_PATHS=(
+              "."
+              "$TEMP"
+              "$TMP"
+              "$USERPROFILE/.rustup/tmp"
+            )
+          else
+            # Unix paths
+            SEARCH_PATHS=(
+              "."
+              "/tmp"
+              "$HOME/.rustup/tmp"
+              "./target"
+            )
+          fi
+
+          for search_path in "${SEARCH_PATHS[@]}"; do
+            if [ -d "$search_path" ]; then
+              echo "Searching in: $search_path"
+              while IFS= read -r ice_file; do
+                if [ -f "$ice_file" ]; then
+                  ICE_FOUND=1
+                  echo ""
+                  echo "========================================"
+                  echo "ICE FILE FOUND: $ice_file"
+                  echo "========================================"
+                  cat "$ice_file"
+                  echo ""
+                  echo "========================================"
+                  echo ""
+                fi
+              done < <(find "$search_path" -maxdepth 3 -name "rustc-ice-*.txt" -type f 2>/dev/null || true)
+            fi
+          done
+
+          if [ $ICE_FOUND -eq 0 ]; then
+            echo "No ICE files found."
+          else
+            echo "WARNING: Rust Internal Compiler Errors detected! See above for details."
+          fi
+        shell: bash
 
   rust_lint:
     name: Rust lints
@@ -264,14 +397,15 @@ jobs:
           - name: ubuntu
             runner: ubuntu-latest
           - name: macos
-            runner: macos-13
+            runner: macos-latest
           - name: windows
             runner: windows-latest
+        partition: [1, 2]
     runs-on: ${{ matrix.os.runner }}
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
-    name: Turborepo Rust testing on ${{ matrix.os.name }}
+    name: Turborepo Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/2)
     steps:
       - name: Set git to use LF line endings
         run: |
@@ -290,17 +424,54 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
-      - name: Run tests
-        timeout-minutes: 120
+      - name: Enable Rust verbose logging
+        run: |
+          echo "RUST_BACKTRACE=1" >> $GITHUB_ENV
+          echo "RUST_LOG=info" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Log Rust environment info
+        run: |
+          echo "=== Rust Toolchain Information ==="
+          rustc --version --verbose
+          cargo --version --verbose
+          rustup show
+          echo "=== System Resources ==="
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            echo "CPUs: $(nproc)"
+            free -h
+            df -h
+            echo "File descriptors: $(ulimit -n)"
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            echo "CPUs: $(sysctl -n hw.ncpu)"
+            vm_stat
+            df -h
+            echo "File descriptors: $(ulimit -n)"
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            echo "CPUs: $NUMBER_OF_PROCESSORS"
+            powershell "Get-CimInstance Win32_OperatingSystem | Select-Object FreePhysicalMemory,TotalVisibleMemorySize | Format-List"
+            powershell "Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID,Size,FreeSpace | Format-Table -AutoSize"
+          fi
+          echo "=== sccache stats (before) ==="
+          sccache --show-stats || echo "sccache not available or failed"
+        shell: bash
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Build tests
+        timeout-minutes: 15
         # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
           if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo test --workspace --exclude turborepo-napi
+              cargo nextest run --workspace --exclude turborepo-napi --no-run
           else
-              cargo test --workspace
+              cargo nextest run --workspace --no-run
           fi
         shell: bash
         env:
@@ -311,6 +482,135 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # sccache timeout configuration to prevent hangs
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
+
+      - name: Run tests
+        timeout-minutes: 30
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+              cargo nextest run --workspace --exclude turborepo-napi --partition hash:${{ matrix.partition }}/2
+          else
+              cargo nextest run --workspace --partition hash:${{ matrix.partition }}/2
+          fi
+        shell: bash
+        env:
+          SCCACHE_BUCKET: turborepo-sccache
+          SCCACHE_REGION: us-east-2
+          # Only use sccache if we're in the Vercel repo.
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # sccache timeout configuration to prevent hangs
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
+
+      - name: Show sccache stats
+        if: always()
+        run: |
+          echo "=== sccache stats (after) ==="
+          sccache --show-stats || echo "sccache not available or failed"
+        shell: bash
+
+      - name: Capture state on timeout
+        if: cancelled()
+        run: |
+          echo "=========================================="
+          echo "RUST TEST STEP TIMED OUT"
+          echo "=========================================="
+          echo "Time: $(date)"
+          echo ""
+          echo "=== Active Rust/Cargo Processes (likely hung) ==="
+          ps aux | grep -E "[r]ustc|[c]argo" || echo "No rustc/cargo processes found"
+          echo ""
+          echo "=== Top CPU Consumers ==="
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            ps aux --sort=-%cpu | head -15
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            ps aux -r | head -15
+          fi
+          echo ""
+          echo "(ICE files will be checked in next step)"
+        shell: bash
+
+      - name: Check for and display ICE files
+        if: always()
+        run: |
+          echo "=== Searching for Rust ICE (Internal Compiler Error) files ==="
+          ICE_FOUND=0
+
+          # Search in common locations
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            # Windows paths
+            SEARCH_PATHS=(
+              "."
+              "$TEMP"
+              "$TMP"
+              "$USERPROFILE/.rustup/tmp"
+            )
+          else
+            # Unix paths
+            SEARCH_PATHS=(
+              "."
+              "/tmp"
+              "$HOME/.rustup/tmp"
+              "./target"
+            )
+          fi
+
+          for search_path in "${SEARCH_PATHS[@]}"; do
+            if [ -d "$search_path" ]; then
+              echo "Searching in: $search_path"
+              while IFS= read -r ice_file; do
+                if [ -f "$ice_file" ]; then
+                  ICE_FOUND=1
+                  echo ""
+                  echo "========================================"
+                  echo "ICE FILE FOUND: $ice_file"
+                  echo "========================================"
+                  cat "$ice_file"
+                  echo ""
+                  echo "========================================"
+                  echo ""
+                fi
+              done < <(find "$search_path" -maxdepth 3 -name "rustc-ice-*.txt" -type f 2>/dev/null || true)
+            fi
+          done
+
+          if [ $ICE_FOUND -eq 0 ]; then
+            echo "No ICE files found."
+          else
+            echo "WARNING: Rust Internal Compiler Errors detected! See above for details."
+          fi
+        shell: bash
+
+      - name: Display final system state
+        if: always()
+        run: |
+          echo "=== Final System State ==="
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            echo "Memory:"
+            free -h
+            echo "Disk:"
+            df -h
+            echo "Top processes by CPU:"
+            ps aux --sort=-%cpu | head -10 || true
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            echo "Memory:"
+            vm_stat
+            echo "Disk:"
+            df -h
+            echo "Top processes by CPU:"
+            ps aux -r | head -10 || true
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            powershell "Get-CimInstance Win32_OperatingSystem | Select-Object FreePhysicalMemory,TotalVisibleMemorySize | Format-List"
+            powershell "Get-CimInstance Win32_LogicalDisk | Select-Object DeviceID,Size,FreeSpace | Format-Table -AutoSize"
+          fi
+        shell: bash
 
   basic-example:
     name: "`basic` example"

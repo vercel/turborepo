@@ -386,7 +386,7 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<(), io::Error> {
 
 #[cfg(test)]
 mod test {
-    use std::fs;
+    use std::{fs, time::Duration};
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
@@ -427,7 +427,14 @@ mod test {
             .unwrap();
 
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
         let override_global_config_path =
             AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf())?;
 

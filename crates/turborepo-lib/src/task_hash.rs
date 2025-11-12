@@ -444,6 +444,9 @@ impl<'a> TaskHasher<'a> {
                     "LANG",
                     "SHELL",
                     "PWD",
+                    "XDG_RUNTIME_DIR",
+                    "XAUTHORITY",
+                    "DBUS_SESSION_BUS_ADDRESS",
                     "CI",
                     "NODE_OPTIONS",
                     "COREPACK_HOME",
@@ -478,6 +481,7 @@ impl<'a> TaskHasher<'a> {
                     "NEXT_*",
                     "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
                     "NOW_BUILDER",
+                    "VC_MICROFRONTENDS_CONFIG_FILE_NAME",
                     // Command Prompt casing of env variables
                     "APPDATA",
                     "PATH",

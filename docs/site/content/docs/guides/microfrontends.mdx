@@ -6,9 +6,6 @@ description: Learn how to use Turborepo's built-in microfrontends proxy for loca
 import { Callout } from '#components/callout';
 import { File, Folder, Files } from '#components/files';
 import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
-import { PrereleaseBadge } from '#components/prerelease-badge';
-
-<PrereleaseBadge />
 
 Microfrontends are an architectural pattern where a web application is decomposed into smaller, independently developed and deployed applications that work together.
 
@@ -58,15 +55,20 @@ Create a `microfrontends.json` file in your parent application. This application
 
 ```json title="./apps/web/microfrontends.json"
 {
+  "$schema": "https://turborepo.com/microfrontends/schema.json",
   "applications": {
     "web": {
       "development": {
-        "local": 3000
+        "local": {
+          "port": 3000
+        }
       }
     },
     "docs": {
       "development": {
-        "local": 3001
+        "local": {
+          "port": 3001
+        }
       },
       "routing": [
         {
@@ -80,7 +82,7 @@ Create a `microfrontends.json` file in your parent application. This application
 
 ### Set application ports
 
-Next, use the `TURBO_MFE_PORT` environment variable to set the ports in your application's development scripts. For example:
+Next, use the `turbo get-mfe-port` command to set the ports in your application's development scripts. This command injects the port number when running `turbo dev`:
 
 <Tabs items={['Next.js', 'Vite']} storageKey="framework-preference">
 
@@ -89,7 +91,7 @@ Next, use the `TURBO_MFE_PORT` environment variable to set the ports in your app
 ```json title="./apps/web/package.json"
 {
   "scripts": {
-    "dev": "next dev --port $TURBO_MFE_PORT"
+    "dev": "next dev --port $(turbo get-mfe-port)"
   }
 }
 ```
@@ -136,7 +138,7 @@ export default nextConfig;
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/thing',
+  base: '/admin',
 });
 ```
 
@@ -165,25 +167,23 @@ If not provided, the application key is used to match the name in `package.json.
 
 ### `development.local`
 
-The port where the application runs locally. Can be specified as:
-
-- A number: `3000`
-- A hostname with port: `"localhost:3000"`
-- A URL: `"http://localhost:3000"`
+The port where the application runs locally.
 
 ```json title="./apps/web/microfrontends.json"
 {
   "development": {
-    "local": 3000
+    "local": {
+      "port": 3000
+    }
   }
 }
 ```
 
+If you omit the port, Turborepo will generate a deterministic port based on the application name (between 3000-8000).
+
 ### `development.fallback`
 
 Optionally provide a target to proxy to when an application is not running locally. This is most frequently used to route to production to make commands like `turbo dev --filter=web` that only run a subset of applications a seamless experience.
-
-Must be a fully qualified URL.
 
 ```json title="./apps/web/microfrontends.json"
 {
@@ -211,6 +211,9 @@ Only one application can have no `routing` configuration. This is your "root" ap
   ]
 }
 ```
+
+- Paths are **case-sensitive**: `/Blog` and `/blog` are different routes
+- Trailing slashes are normalized: `/home` and `/home/` match the same route
 
 #### Exact matches
 
@@ -242,12 +245,41 @@ Segments starting with `:` match any single path segment. For example, `/blog/:s
 
 Parameters ending with `*` match zero or more path segments. For example, `/docs/:path*` matches `/docs`, `/docs/intro`, and `/docs/api/reference`.
 
+You can also use the `+` modifier to match one or more segments (excluding the empty path):
+
+```json title="./apps/web/microfrontends.json"
+{
+  "paths": ["/api/:path+"]
+}
+```
+
+This matches `/api/users` and `/api/users/123`, but not `/api` or `/api/`.
+
+#### Complex routing patterns
+
+You can define sophisticated routing with nested parameters:
+
+```json title="./apps/web/microfrontends.json"
+{
+  "routing": [
+    {
+      "paths": [
+        "/api/:version/users",
+        "/api/:version/users/:id",
+        "/api/:version/posts/:postId/comments/:commentId"
+      ]
+    }
+  ]
+}
+```
+
 #### Group labels
 
 Organize routes into logical groups for better maintainability:
 
 ```json title="./apps/web/microfrontends.json"
 {
+  "$schema": "https://turborepo.com/microfrontends/schema.json",
   "applications": {
     "marketing": {
       "development": {
@@ -269,24 +301,6 @@ Organize routes into logical groups for better maintainability:
 ```
 
 The `group` field is for organizational purposes and doesn't affect routing behavior.
-
-#### Complex routing patterns
-
-You can define sophisticated routing with nested parameters:
-
-```json title="./apps/web/microfrontends.json"
-{
-  "routing": [
-    {
-      "paths": [
-        "/api/:version/users",
-        "/api/:version/users/:id",
-        "/api/:version/posts/:postId/comments/:commentId"
-      ]
-    }
-  ]
-}
-```
 
 ### `packageName`
 
@@ -371,12 +385,27 @@ Verify that:
 3. Each application's port is available
 4. All dependencies are installed
 
+### `turbo get-mfe-port` not working
+
+If you're getting an error when running `turbo get-mfe-port`, ensure that:
+
+1. You're running the command from a package directory (not the repository root)
+2. The package has a `name` field in its `package.json`
+3. A `microfrontends.json` file exists in one of the packages
+4. The current package is listed in the `applications` section of `microfrontends.json`
+5. If using `--skip-infer`, you must also specify `--cwd` pointing to your repository root:
+
+```bash title="Terminal"
+turbo --skip-infer --cwd ../.. get-mfe-port
+```
+
 ## Complete example
 
 Here's a full example of a microfrontends configuration for an e-commerce platform:
 
 ```json title="./apps/web/microfrontends.json"
 {
+  "$schema": "https://turborepo.com/microfrontends/schema.json",
   "options": {
     "localProxyPort": 3024
   },
@@ -384,13 +413,17 @@ Here's a full example of a microfrontends configuration for an e-commerce platfo
     "web": {
       "packageName": "web",
       "development": {
-        "local": 3000
+        "local": {
+          "port": 3000
+        }
       }
     },
     "docs": {
       "packageName": "documentation",
       "development": {
-        "local": 3001
+        "local": {
+          "port": 3001
+        }
       },
       "routing": [
         {
@@ -406,7 +439,9 @@ Here's a full example of a microfrontends configuration for an e-commerce platfo
     },
     "blog": {
       "development": {
-        "local": 3002
+        "local": {
+          "port": 3002
+        }
       },
       "routing": [
         {
@@ -422,7 +457,9 @@ Here's a full example of a microfrontends configuration for an e-commerce platfo
     },
     "shop": {
       "development": {
-        "local": 3003
+        "local": {
+          "port": 3003
+        }
       },
       "routing": [
         {

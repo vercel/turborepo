@@ -99,21 +99,18 @@ impl DerefMut for Pipeline {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
+#[derive(
+    Serialize, Deserialize, Debug, Default, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum,
+)]
 #[serde(rename_all = "camelCase")]
 pub enum UIMode {
     /// Use the terminal user interface
+    #[default]
     Tui,
     /// Use the standard output stream
     Stream,
     /// Use the web user interface (experimental)
     Web,
-}
-
-impl Default for UIMode {
-    fn default() -> Self {
-        Self::Tui
-    }
 }
 
 impl Display for UIMode {

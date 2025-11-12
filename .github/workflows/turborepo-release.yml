@@ -92,6 +92,11 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
+      - name: Install cargo-groups
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-groups@0.1.9
+
       - name: Run Rust Unit Tests
         run: cargo groups test turborepo
 

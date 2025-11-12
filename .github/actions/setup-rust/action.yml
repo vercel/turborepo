@@ -30,11 +30,6 @@ runs:
         # we want more specific settings
         cache: false
 
-    - name: "Install LLD (LLVM Linker) for Linux"
-      if: runner.os == 'Linux'
-      shell: bash
-      run: sudo apt-get -y update && sudo apt-get install -y lld
-
     - name: Set Up Protoc
       id: set-up-protoc
       continue-on-error: true
@@ -54,8 +49,6 @@ runs:
       shell: bash
       run: echo "::add-matcher::${{ github.action_path }}/matchers.json"
 
-    - uses: rui314/setup-mold@v1
-
     - name: "Setup Rust Cache"
       uses: Swatinem/rust-cache@v2
       with:
@@ -63,13 +56,3 @@ runs:
         key: ${{ inputs.cache-key }}
         # the cache is huge and we only get 10gb max, so we only save on master
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
-
-    - name: "Install cargo-sweep"
-      uses: taiki-e/install-action@v2
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-      with:
-        tool: cargo-sweep@0.6.2,cargo-groups@0.1.9
-
-    - name: "Run cargo-sweep"
-      uses: ./.github/actions/cargo-sweep

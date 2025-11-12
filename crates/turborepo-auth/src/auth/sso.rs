@@ -148,7 +148,7 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, sync::atomic::AtomicUsize};
+    use std::{assert_matches::assert_matches, sync::atomic::AtomicUsize, time::Duration};
 
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
@@ -375,7 +375,15 @@ mod tests {
     #[tokio::test]
     async fn test_sso_login() {
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .expect("Test server failed to start")
+            .expect("Server setup failed");
+
         let url = format!("http://localhost:{port}");
         let color_config = ColorConfig::new(false);
         let team = "something";

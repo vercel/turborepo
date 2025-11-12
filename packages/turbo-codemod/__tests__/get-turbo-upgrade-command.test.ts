@@ -1,7 +1,7 @@
 import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures } from "@turbo/test-utils";
-import { describe, it, expect, jest } from "@jest/globals";
+import { describe, it, expect, jest, afterEach } from "@jest/globals";
 import { getTurboUpgradeCommand } from "../src/commands/migrate/steps/getTurboUpgradeCommand";
 import * as utils from "../src/commands/migrate/utils";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
@@ -429,6 +429,10 @@ describe("get-turbo-upgrade-command", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "get-turbo-upgrade-command",
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it.each(LOCAL_INSTALL_COMMANDS)(

@@ -240,6 +240,8 @@ async function convertLock(args: ConvertArgs): Promise<void> {
         await execa(PACKAGE_MANAGER_DETAILS.name, ["import"], {
           stdio: "ignore",
           cwd: project.paths.root,
+          preferLocal: true,
+          shell: process.platform === "win32",
         });
       } catch (err) {
         // do nothing

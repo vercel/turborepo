@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --port $TURBO_MFE_PORT",
+    "dev": "next dev --port $(turbo get-mfe-port)",
     "build": "next build",
     "start": "next start",
     "lint": "next lint --max-warnings 0",
@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@repo/ui": "workspace:*",
-    "next": "^15.5.0",
+    "next": "^16.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
