@@ -345,9 +345,6 @@ impl GitRepo {
         }
     }
 
-    /// Parse git stdout (lines of paths) and insert anchored paths into
-    /// `files`. Returns an Error if stdout is not valid UTF-8 or any path
-    /// cannot be anchored.
     fn add_files_from_stdout(
         &self,
         files: &mut HashSet<AnchoredSystemPathBuf>,
