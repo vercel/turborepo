@@ -153,7 +153,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             }
             Err(err) => {
                 eprintln!(
-                    "error: unexpected SCM error while detecting changed files: {}.\n
+                    "error: unexpected SCM error while detecting changed files: {}.",
                     err
                 );
                 process::exit(1);
