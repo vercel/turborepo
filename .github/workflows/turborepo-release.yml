@@ -97,6 +97,7 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node: "false"
 
       - name: Install cargo-groups
         uses: taiki-e/install-action@v2
@@ -120,6 +121,8 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          rust: "false"
+          capnproto: "false"
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
@@ -157,10 +160,10 @@ jobs:
           ref: "${{ needs.stage.outputs.stage-branch }}"
 
       - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
+        uses: ./.github/actions/setup-protoc
         with:
           version: "26.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto
