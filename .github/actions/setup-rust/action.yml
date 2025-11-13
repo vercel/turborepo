@@ -31,25 +31,17 @@ runs:
         cache: false
 
     - name: Set Up Protoc
-      id: set-up-protoc
-      continue-on-error: true
-      uses: arduino/setup-protoc@v3
+      uses: ./.github/actions/setup-protoc
       with:
         version: "26.x"
-        repo-token: ${{ inputs.github-token }}
-
-    - name: Set Up Protoc (second try)
-      if: steps.set-up-protoc.outcome == 'failure'
-      uses: arduino/setup-protoc@v3
-      with:
-        version: "26.x"
-        repo-token: ${{ inputs.github-token }}
+        github-token: ${{ inputs.github-token }}
 
     - name: "Add cargo problem matchers"
       shell: bash
       run: echo "::add-matcher::${{ github.action_path }}/matchers.json"
 
     - name: "Setup Rust Cache"
+      if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
       uses: Swatinem/rust-cache@v2
       with:
         shared-key: ${{ inputs.shared-cache-key }}
