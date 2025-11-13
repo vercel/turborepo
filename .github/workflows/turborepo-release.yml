@@ -52,12 +52,18 @@ on:
         required: false
         type: string
         default: ""
-
+      sha:
+        description: "Override the SHA to use for the release. Should rarely be used, usually only for debugging."
+        required: false
+        type: string
+        default: ""
 jobs:
   stage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
