@@ -5,7 +5,7 @@ runs:
   using: "composite"
   steps:
     - name: "Cache capnproto (Linux)"
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       uses: actions/cache@v4
       id: cache-capnp-linux
       with:
@@ -15,7 +15,7 @@ runs:
         key: ${{ runner.os }}-capnproto-0.11
 
     - name: "Cache capnproto (macOS)"
-      if: runner.os == 'macOS'
+      if: runner.os == 'macOS' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       uses: actions/cache@v4
       id: cache-capnp-macos
       with:
@@ -27,7 +27,7 @@ runs:
         key: ${{ runner.os }}-capnproto-0.11
 
     - name: "Cache capnproto (Windows)"
-      if: runner.os == 'Windows'
+      if: runner.os == 'Windows' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       uses: actions/cache@v4
       id: cache-capnp-windows
       with:
