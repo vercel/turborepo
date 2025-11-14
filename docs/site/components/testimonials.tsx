@@ -96,7 +96,7 @@ export const Testimonials = () => {
           name="Jono Alford"
           alias="@jonoalford"
           avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/jonoalford.jpg"
-          url="https://x.com/pontusab/status/1827264818765799931"
+          url="https://x.com/jonoalford/status/1989274609192169943?s=20"
         >
           <p>
             The second we started using this for monorepos is the second we
