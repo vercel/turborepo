@@ -24,6 +24,8 @@ use super::Lockfile;
 pub enum Error {
     #[error("Unable to parse yaml: {0}")]
     Parse(#[from] serde_yaml::Error),
+    #[error("Unable to parse json: {0}")]
+    JsonParse(#[from] serde_json::Error),
     #[error("Unable to parse identifier: {0}")]
     Identifiers(#[from] identifiers::Error),
     #[error("Unable to find original package in patch locator {0}")]
@@ -34,6 +36,11 @@ pub enum Error {
     MissingPackageForLocator(Locator<'static>),
     #[error("Unable to find any locator for {0}")]
     MissingLocator(Descriptor<'static>),
+    #[error(
+        "Unable to find catalog definition for {package} in catalog '{catalog}'. Ensure your \
+         catalogs are defined in .yarnrc.yml or package.json"
+    )]
+    MissingCatalog { package: String, catalog: String },
     #[error("Descriptor collision {descriptor} and {other}")]
     DescriptorCollision {
         descriptor: Descriptor<'static>,
@@ -61,6 +68,10 @@ pub struct BerryLockfile {
     overrides: Map<Resolution, String>,
     // Map from workspace paths to package locators
     workspace_path_to_locator: HashMap<String, Locator<'static>>,
+    // Default catalog mappings (package name -> version)
+    catalog: Map<String, String>,
+    // Named catalog mappings (catalog name -> package name -> version)
+    catalogs: Map<String, Map<String, String>>,
 }
 
 // This is the direct representation of the lockfile as it appears on disk.
@@ -104,6 +115,8 @@ struct DependencyMeta {
 #[derive(Debug, Clone, Deserialize)]
 pub struct BerryManifest {
     resolutions: Option<Map<String, String>>,
+    catalog: Option<Map<String, String>>,
+    catalogs: Option<Map<String, Map<String, String>>>,
 }
 
 impl BerryLockfile {
@@ -147,10 +160,26 @@ impl BerryLockfile {
             }
         }
 
-        let overrides = manifest
-            .and_then(|manifest| manifest.resolutions())
-            .transpose()?
-            .unwrap_or_default();
+        let (overrides, catalog, catalogs) = if let Some(manifest) = manifest {
+            let catalog = manifest.catalog.unwrap_or_default();
+            let catalogs = manifest.catalogs.unwrap_or_default();
+            let overrides = manifest
+                .resolutions
+                .map(|resolutions| {
+                    resolutions
+                        .into_iter()
+                        .map(|(resolution, reference)| {
+                            let res = parse_resolution(&resolution)?;
+                            Ok::<(Resolution, String), Error>((res, reference))
+                        })
+                        .collect()
+                })
+                .transpose()?
+                .unwrap_or_default();
+            (overrides, catalog, catalogs)
+        } else {
+            (Map::new(), Map::new(), Map::new())
+        };
 
         let mut this = Self {
             data: lockfile,
@@ -161,6 +190,8 @@ impl BerryLockfile {
             overrides,
             extensions: Default::default(),
             workspace_path_to_locator,
+            catalog,
+            catalogs,
         };
 
         this.populate_extensions()?;
@@ -177,10 +208,10 @@ impl BerryLockfile {
         for (locator, package) in &self.locator_package {
             for (name, range) in package.dependencies.iter().flatten() {
                 let mut descriptor = self.resolve_dependency(locator, name, range.as_ref())?;
-                if descriptor.protocol().is_none()
-                    && let Some(range) = self.resolver.get(&descriptor)
-                {
-                    descriptor.range = range.into();
+                if descriptor.protocol().is_none() {
+                    if let Some(range) = self.resolver.get(&descriptor) {
+                        descriptor.range = range.into();
+                    }
                 }
                 possible_extensions.remove(&descriptor);
             }
@@ -280,11 +311,22 @@ impl BerryLockfile {
             {
                 //  We need to track all of the descriptors coming out the workspace
                 for (name, range) in package.dependencies.iter().flatten() {
-                    let dependency = self.resolve_dependency(locator, name, range.as_ref())?;
-                    let dep_locator = self
-                        .resolutions
-                        .get(&dependency)
-                        .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
+                    let dependency = self.resolve_dependency(locator, name, range)?;
+                    let dep_locator = self.resolutions.get(&dependency).ok_or_else(|| {
+                        // If this was a catalog reference, provide helpful error
+                        if range.starts_with("catalog:") {
+                            let catalog_name = range
+                                .strip_prefix("catalog:")
+                                .and_then(|s| s.strip_suffix(':'))
+                                .unwrap_or("default");
+                            Error::MissingCatalog {
+                                package: name.clone(),
+                                catalog: catalog_name.to_string(),
+                            }
+                        } else {
+                            Error::MissingLocator(dependency.clone().into_owned())
+                        }
+                    })?;
                     resolutions.insert(dependency, dep_locator.clone());
                 }
 
@@ -305,11 +347,22 @@ impl BerryLockfile {
                 .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))?;
 
             for (name, range) in package.dependencies.iter().flatten() {
-                let dependency = self.resolve_dependency(&locator, name, range.as_ref())?;
-                let dep_locator = self
-                    .resolutions
-                    .get(&dependency)
-                    .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
+                let dependency = self.resolve_dependency(&locator, name, range)?;
+                let dep_locator = self.resolutions.get(&dependency).ok_or_else(|| {
+                    // If this was a catalog reference, provide helpful error
+                    if range.starts_with("catalog:") {
+                        let catalog_name = range
+                            .strip_prefix("catalog:")
+                            .and_then(|s| s.strip_suffix(':'))
+                            .unwrap_or("default");
+                        Error::MissingCatalog {
+                            package: name.clone(),
+                            catalog: catalog_name.to_string(),
+                        }
+                    } else {
+                        Error::MissingLocator(dependency.clone().into_owned())
+                    }
+                })?;
                 resolutions.insert(dependency, dep_locator.clone());
             }
 
@@ -321,20 +374,21 @@ impl BerryLockfile {
             // Yarn 4 allows workspaces to depend directly on patched dependencies instead
             // of using resolutions. This results in the patched dependency appearing in the
             // closure instead of the original.
-            if locator.patch_file().is_some()
-                && let Some((original, _)) =
+            if locator.patch_file().is_some() {
+                if let Some((original, _)) =
                     self.patches.iter().find(|(_, patch)| patch == &&locator)
-            {
-                patches.insert(original.as_owned(), locator.as_owned());
-                // We include the patched dependency resolution
-                let Locator { ident, reference } = original.as_owned();
-                resolutions.insert(
-                    Descriptor {
-                        ident,
-                        range: reference,
-                    },
-                    original.as_owned(),
-                );
+                {
+                    patches.insert(original.as_owned(), locator.as_owned());
+                    // We include the patched dependency resolution
+                    let Locator { ident, reference } = original.as_owned();
+                    resolutions.insert(
+                        Descriptor {
+                            ident,
+                            range: reference,
+                        },
+                        original.as_owned(),
+                    );
+                }
             }
         }
 
@@ -379,7 +433,29 @@ impl BerryLockfile {
             extensions: self.extensions.clone(),
             overrides: self.overrides.clone(),
             workspace_path_to_locator: self.workspace_path_to_locator.clone(),
+            catalog: self.catalog.clone(),
+            catalogs: self.catalogs.clone(),
         })
+    }
+
+    /// Resolves a catalog reference to the actual version
+    /// Supports both default catalog ("catalog:") and named catalogs
+    /// ("catalog:name:")
+    fn resolve_catalog_version(&self, name: &str, catalog_ref: &str) -> Option<&str> {
+        if let Some(stripped) = catalog_ref.strip_prefix("catalog:") {
+            if stripped.is_empty() {
+                // Default catalog reference: "catalog:"
+                self.catalog.get(name).map(|s| s.as_str())
+            } else {
+                // Named catalog reference: "catalog:name:" - strip trailing colon if present
+                let catalog_name = stripped.strip_suffix(':').unwrap_or(stripped);
+                self.catalogs
+                    .get(catalog_name)
+                    .and_then(|catalog| catalog.get(name).map(|s| s.as_str()))
+            }
+        } else {
+            None
+        }
     }
 
     fn resolve_dependency(
@@ -388,12 +464,21 @@ impl BerryLockfile {
         name: &str,
         range: &str,
     ) -> Result<Descriptor<'static>, Error> {
-        let mut dependency = Descriptor::new(name, range)?;
+        // Check if this is a catalog reference and resolve it
+        let resolved_range = if range.starts_with("catalog:") {
+            self.resolve_catalog_version(name, range)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| range.to_string())
+        } else {
+            range.to_string()
+        };
+
+        let mut dependency = Descriptor::new(name, &resolved_range)?;
         // If there's no protocol we attempt to find a known one
-        if dependency.protocol().is_none()
-            && let Some(range) = self.resolver.get(&dependency)
-        {
-            dependency.range = range.to_string().into();
+        if dependency.protocol().is_none() {
+            if let Some(range) = self.resolver.get(&dependency) {
+                dependency.range = range.to_string().into();
+            }
         }
 
         for (resolution, reference) in &self.overrides {
@@ -442,6 +527,18 @@ impl Lockfile for BerryLockfile {
         let dependency = self.resolve_dependency(workspace_locator, name, version)?;
 
         let Some(locator) = self.resolutions.get(&dependency) else {
+            // If this was a catalog reference that couldn't be resolved, provide helpful
+            // error
+            if version.starts_with("catalog:") {
+                let catalog_name = version
+                    .strip_prefix("catalog:")
+                    .and_then(|s| s.strip_suffix(':'))
+                    .unwrap_or("default");
+                return Err(crate::Error::Berry(Error::MissingCatalog {
+                    package: name.to_string(),
+                    catalog: catalog_name.to_string(),
+                }));
+            }
             return Ok(None);
         };
 
@@ -550,7 +647,28 @@ impl BerryManifest {
         I: IntoIterator<Item = (String, String)>,
     {
         let resolutions = Some(resolutions.into_iter().collect());
-        Self { resolutions }
+        Self {
+            resolutions,
+            catalog: None,
+            catalogs: None,
+        }
+    }
+
+    pub fn with_resolutions_and_catalogs<I, J, K>(
+        resolutions: Option<I>,
+        catalog: Option<J>,
+        catalogs: Option<K>,
+    ) -> Self
+    where
+        I: IntoIterator<Item = (String, String)>,
+        J: IntoIterator<Item = (String, String)>,
+        K: IntoIterator<Item = (String, Map<String, String>)>,
+    {
+        Self {
+            resolutions: resolutions.map(|r| r.into_iter().collect()),
+            catalog: catalog.map(|c| c.into_iter().collect()),
+            catalogs: catalogs.map(|c| c.into_iter().collect()),
+        }
     }
 
     pub fn resolutions(self) -> Option<Result<Map<Resolution, String>, Error>> {
@@ -564,6 +682,92 @@ impl BerryManifest {
                 .collect()
         })
     }
+
+    pub fn into_catalogs(self) -> (Map<String, String>, Map<String, Map<String, String>>) {
+        (
+            self.catalog.unwrap_or_default(),
+            self.catalogs.unwrap_or_default(),
+        )
+    }
+
+    /// Load catalog definitions from package.json contents
+    ///
+    /// Expects a structure like:
+    /// ```json
+    /// {
+    ///   "catalogs": {
+    ///     "react18": {
+    ///       "react": "^18.0.0",
+    ///       "react-dom": "^18.0.0"
+    ///     }
+    ///   }
+    /// }
+    /// ```
+    pub fn load_catalogs_from_package_json(contents: &[u8]) -> Result<Self, Error> {
+        #[derive(Deserialize)]
+        struct PackageJson {
+            #[serde(default)]
+            catalogs: Option<Map<String, Map<String, String>>>,
+        }
+
+        let package_json: PackageJson = serde_json::from_slice(contents)?;
+
+        Ok(Self {
+            resolutions: None,
+            catalog: None,
+            catalogs: package_json.catalogs,
+        })
+    }
+
+    /// Load catalog definitions from .yarnrc.yml contents
+    ///
+    /// Expects a structure like:
+    /// ```yaml
+    /// catalogs:
+    ///   react18:
+    ///     react: ^18.0.0
+    ///     react-dom: ^18.0.0
+    /// ```
+    pub fn load_catalogs_from_yarnrc_yml(contents: &[u8]) -> Result<Self, Error> {
+        #[derive(Deserialize)]
+        struct YarnrcYml {
+            #[serde(default)]
+            catalogs: Option<Map<String, Map<String, String>>>,
+        }
+
+        let yarnrc: YarnrcYml = serde_yaml::from_slice(contents)?;
+
+        Ok(Self {
+            resolutions: None,
+            catalog: None,
+            catalogs: yarnrc.catalogs,
+        })
+    }
+
+    /// Merge catalog definitions from multiple sources
+    ///
+    /// This allows combining catalogs from package.json and .yarnrc.yml.
+    /// Later entries take precedence over earlier ones.
+    pub fn merge(self, other: Self) -> Self {
+        let mut merged_catalogs = self.catalogs.unwrap_or_default();
+
+        // Merge named catalogs from other
+        if let Some(other_catalogs) = other.catalogs {
+            for (name, catalog) in other_catalogs {
+                merged_catalogs.insert(name, catalog);
+            }
+        }
+
+        Self {
+            resolutions: other.resolutions.or(self.resolutions),
+            catalog: other.catalog.or(self.catalog),
+            catalogs: if merged_catalogs.is_empty() {
+                None
+            } else {
+                Some(merged_catalogs)
+            },
+        }
+    }
 }
 
 pub fn berry_subgraph(
@@ -571,8 +775,24 @@ pub fn berry_subgraph(
     workspace_packages: &[String],
     packages: &[String],
     resolutions: Option<HashMap<String, String>>,
+    catalog: Option<HashMap<String, String>>,
+    catalogs: Option<HashMap<String, HashMap<String, String>>>,
 ) -> Result<Vec<u8>, crate::Error> {
-    let manifest = resolutions.map(BerryManifest::with_resolutions);
+    let manifest = if resolutions.is_some() || catalog.is_some() || catalogs.is_some() {
+        // Convert HashMaps to the format expected by BerryManifest
+        let catalogs_converted = catalogs.map(|c| {
+            c.into_iter()
+                .map(|(k, v)| (k, v.into_iter().collect::<Map<String, String>>()))
+                .collect::<HashMap<_, _>>()
+        });
+        Some(BerryManifest::with_resolutions_and_catalogs(
+            resolutions,
+            catalog,
+            catalogs_converted,
+        ))
+    } else {
+        None
+    };
     let data = LockfileData::from_bytes(contents)?;
     let lockfile = BerryLockfile::new(data, manifest)?;
     let pruned_lockfile = lockfile.subgraph(workspace_packages, packages)?;
@@ -813,6 +1033,8 @@ mod test {
                     .cloned()
                     .collect(),
             ),
+            catalog: None,
+            catalogs: None,
         };
         let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
 
@@ -846,6 +1068,8 @@ mod test {
                 .cloned()
                 .collect(),
             ),
+            catalog: None,
+            catalogs: None,
         };
         let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
 
@@ -886,6 +1110,8 @@ mod test {
                     .cloned()
                     .collect(),
             ),
+            catalog: None,
+            catalogs: None,
         };
         let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
 
@@ -923,6 +1149,8 @@ mod test {
                     .cloned()
                     .collect(),
             ),
+            catalog: None,
+            catalogs: None,
         };
         let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
 
@@ -1168,5 +1396,370 @@ mod test {
         let data = LockfileData::from_bytes(include_bytes!("../../fixtures/berry.lock")).unwrap();
         let lockfile = BerryLockfile::new(data, None).unwrap();
         assert_eq!(lockfile.turbo_version().as_deref(), Some("1.4.6"));
+    }
+
+    #[test]
+    fn test_catalog_resolution() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/berry-catalogs.lock")).unwrap();
+
+        // Create a manifest with default catalog that maps lodash to ^4.17.21
+        let mut catalog = Map::new();
+        catalog.insert("lodash".to_string(), "^4.17.21".to_string());
+
+        let manifest = BerryManifest {
+            resolutions: None,
+            catalog: Some(catalog),
+            catalogs: None,
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Test that app-a can resolve lodash via catalog:
+        let package = lockfile
+            .resolve_package("apps/app-a", "lodash", "catalog:")
+            .unwrap();
+
+        assert_eq!(
+            package,
+            Some(Package {
+                key: "lodash@npm:4.17.21".into(),
+                version: "4.17.21".into()
+            })
+        );
+    }
+
+    #[test]
+    fn test_named_catalog_resolution() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/berry-catalogs.lock")).unwrap();
+
+        // Create a manifest with named catalog
+        let mut production_catalog = Map::new();
+        production_catalog.insert("lodash".to_string(), "^4.17.21".to_string());
+
+        let mut catalogs = Map::new();
+        catalogs.insert("production".to_string(), production_catalog);
+
+        let manifest = BerryManifest {
+            resolutions: None,
+            catalog: None,
+            catalogs: Some(catalogs),
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Test that we can resolve lodash via catalog:production:
+        let package = lockfile
+            .resolve_package("apps/app-a", "lodash", "catalog:production:")
+            .unwrap();
+
+        assert_eq!(
+            package,
+            Some(Package {
+                key: "lodash@npm:4.17.21".into(),
+                version: "4.17.21".into()
+            })
+        );
+    }
+
+    #[test]
+    fn test_catalog_subgraph() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/berry-catalogs.lock")).unwrap();
+
+        // Create a manifest with default catalog
+        let mut catalog = Map::new();
+        catalog.insert("lodash".to_string(), "^4.17.21".to_string());
+
+        let manifest = BerryManifest {
+            resolutions: None,
+            catalog: Some(catalog.clone()),
+            catalogs: None,
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Create a subgraph that includes app-a
+        let subgraph = lockfile
+            .subgraph(&["apps/app-a".into()], &["lodash@npm:4.17.21".into()])
+            .unwrap();
+
+        // Verify that the subgraph preserves catalog data
+        assert_eq!(subgraph.catalog, catalog);
+
+        // Verify that the subgraph can still resolve catalog references
+        let package = subgraph
+            .resolve_package("apps/app-a", "lodash", "catalog:")
+            .unwrap();
+
+        assert_eq!(
+            package,
+            Some(Package {
+                key: "lodash@npm:4.17.21".into(),
+                version: "4.17.21".into()
+            })
+        );
+    }
+
+    #[test]
+    fn test_catalog_without_manifest() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/berry-catalogs.lock")).unwrap();
+
+        // Create lockfile without manifest (no catalog data)
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        // When resolving catalog: without catalog data, it should error with
+        // MissingCatalog
+        let result = lockfile.resolve_package("apps/app-a", "lodash", "catalog:");
+
+        assert!(result.is_err());
+        match result {
+            Err(crate::Error::Berry(Error::MissingCatalog { package, catalog })) => {
+                assert_eq!(package, "lodash");
+                assert_eq!(catalog, "default");
+            }
+            other => panic!("Expected MissingCatalog error, got: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_resolve_catalog_version_method() {
+        let data =
+            LockfileData::from_bytes(include_bytes!("../../fixtures/berry-catalogs.lock")).unwrap();
+
+        // Create manifest with both default and named catalogs
+        let mut default_catalog = Map::new();
+        default_catalog.insert("lodash".to_string(), "^4.17.21".to_string());
+        default_catalog.insert("react".to_string(), "^18.0.0".to_string());
+
+        let mut dev_catalog = Map::new();
+        dev_catalog.insert("lodash".to_string(), "^4.17.20".to_string());
+
+        let mut catalogs = Map::new();
+        catalogs.insert("dev".to_string(), dev_catalog);
+
+        let manifest = BerryManifest {
+            resolutions: None,
+            catalog: Some(default_catalog),
+            catalogs: Some(catalogs),
+        };
+
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Test default catalog resolution
+        assert_eq!(
+            lockfile.resolve_catalog_version("lodash", "catalog:"),
+            Some("^4.17.21")
+        );
+        assert_eq!(
+            lockfile.resolve_catalog_version("react", "catalog:"),
+            Some("^18.0.0")
+        );
+
+        // Test named catalog resolution
+        assert_eq!(
+            lockfile.resolve_catalog_version("lodash", "catalog:dev:"),
+            Some("^4.17.20")
+        );
+
+        // Test non-existent package in catalog
+        assert_eq!(
+            lockfile.resolve_catalog_version("nonexistent", "catalog:"),
+            None
+        );
+
+        // Test non-existent named catalog
+        assert_eq!(
+            lockfile.resolve_catalog_version("lodash", "catalog:prod:"),
+            None
+        );
+
+        // Test non-catalog reference
+        assert_eq!(lockfile.resolve_catalog_version("lodash", "^4.17.21"), None);
+    }
+
+    #[test]
+    fn test_catalog_without_manifest_fails() {
+        // This reproduces the user's error: trying to prune without catalog data
+        let contents = include_bytes!("../../fixtures/berry-catalogs.lock");
+        let data = LockfileData::from_bytes(contents).unwrap();
+
+        // Create lockfile WITHOUT catalog data (this is what causes the error)
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        // Try to resolve lodash via catalog: - this should fail with helpful error
+        let result = lockfile.resolve_package("apps/app-a", "lodash", "catalog:");
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        let err_msg = format!("{}", err);
+        assert!(
+            err_msg.contains("catalog")
+                && err_msg.contains("lodash")
+                && err_msg.contains(".yarnrc.yml"),
+            "Error message should mention catalog, package name, and .yarnrc.yml. Got: {}",
+            err_msg
+        );
+    }
+
+    #[test]
+    fn test_subgraph_with_catalog_without_manifest_errors() {
+        // This reproduces the ACTUAL user error: trying to call subgraph without
+        // catalog data
+        let contents = include_bytes!("../../fixtures/berry-catalogs.lock");
+        let data = LockfileData::from_bytes(contents).unwrap();
+
+        // Create lockfile WITHOUT catalog data
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        // Try to create a subgraph - this will fail because app-a depends on lodash via
+        // catalog:
+        let result = lockfile.subgraph(
+            &["apps/app-a".to_string()],
+            &["lodash@npm:4.17.21".to_string()],
+        );
+
+        // This should error with "Unable to find any locator for lodash@catalog:"
+        assert!(result.is_err());
+        let err_msg = format!("{}", result.unwrap_err());
+        assert!(err_msg.contains("lodash") || err_msg.contains("catalog"));
+    }
+
+    #[test]
+    fn test_catalog_pruning_with_berry_subgraph() {
+        let contents = include_bytes!("../../fixtures/berry-catalogs.lock");
+
+        // Create catalog data that would come from the manifest
+        let mut catalog = HashMap::new();
+        catalog.insert("lodash".to_string(), "^4.17.21".to_string());
+
+        // Test pruning for app-a which depends on lodash via catalog:
+        let pruned = berry_subgraph(
+            contents,
+            &["apps/app-a".to_string()],
+            &["lodash@npm:4.17.21".to_string()],
+            None,
+            Some(catalog.clone()),
+            None,
+        )
+        .unwrap();
+
+        // Verify the pruned lockfile can be parsed and contains the expected packages
+        let pruned_data = LockfileData::from_bytes(&pruned).unwrap();
+        let manifest = BerryManifest {
+            resolutions: None,
+            catalog: Some(catalog.into_iter().collect()),
+            catalogs: None,
+        };
+        let pruned_lockfile = BerryLockfile::new(pruned_data, Some(manifest)).unwrap();
+
+        // Verify that app-a can still resolve lodash via catalog:
+        let package = pruned_lockfile
+            .resolve_package("apps/app-a", "lodash", "catalog:")
+            .unwrap();
+
+        assert_eq!(
+            package,
+            Some(Package {
+                key: "lodash@npm:4.17.21".into(),
+                version: "4.17.21".into()
+            })
+        );
+    }
+
+    #[test]
+    fn test_load_catalogs_from_package_json() {
+        let contents = include_bytes!("../../fixtures/package-with-catalogs.json");
+        let manifest = BerryManifest::load_catalogs_from_package_json(contents).unwrap();
+
+        // Verify named catalogs were loaded
+        let (default_catalog, catalogs) = manifest.into_catalogs();
+        assert!(default_catalog.is_empty(), "Should have no default catalog");
+
+        assert_eq!(catalogs.len(), 2);
+
+        // Check react18 catalog
+        let react18 = catalogs.get("react18").unwrap();
+        assert_eq!(react18.get("react"), Some(&"^18.0.0".to_string()));
+        assert_eq!(react18.get("react-dom"), Some(&"^18.0.0".to_string()));
+
+        // Check testing catalog
+        let testing = catalogs.get("testing").unwrap();
+        assert_eq!(testing.get("jest"), Some(&"^29.0.0".to_string()));
+        assert_eq!(testing.get("vitest"), Some(&"^1.0.0".to_string()));
+    }
+
+    #[test]
+    fn test_load_catalogs_from_yarnrc_yml() {
+        let contents = include_bytes!("../../fixtures/yarnrc-with-catalogs.yml");
+        let manifest = BerryManifest::load_catalogs_from_yarnrc_yml(contents).unwrap();
+
+        // Verify named catalogs were loaded
+        let (default_catalog, catalogs) = manifest.into_catalogs();
+        assert!(default_catalog.is_empty(), "Should have no default catalog");
+
+        assert_eq!(catalogs.len(), 2);
+
+        // Check react18 catalog
+        let react18 = catalogs.get("react18").unwrap();
+        assert_eq!(react18.get("react"), Some(&"^18.0.0".to_string()));
+        assert_eq!(react18.get("react-dom"), Some(&"^18.0.0".to_string()));
+
+        // Check nextjs catalog
+        let nextjs = catalogs.get("nextjs").unwrap();
+        assert_eq!(nextjs.get("next"), Some(&"^14.0.0".to_string()));
+    }
+
+    #[test]
+    fn test_merge_catalogs() {
+        let contents1 = include_bytes!("../../fixtures/package-with-catalogs.json");
+        let contents2 = include_bytes!("../../fixtures/yarnrc-with-catalogs.yml");
+
+        let manifest1 = BerryManifest::load_catalogs_from_package_json(contents1).unwrap();
+        let manifest2 = BerryManifest::load_catalogs_from_yarnrc_yml(contents2).unwrap();
+
+        // Merge the two manifests
+        let merged = manifest1.merge(manifest2);
+
+        let (_, catalogs) = merged.into_catalogs();
+
+        // Should have catalogs from both sources
+        assert_eq!(catalogs.len(), 3);
+        assert!(catalogs.contains_key("react18"));
+        assert!(catalogs.contains_key("testing"));
+        assert!(catalogs.contains_key("nextjs"));
+    }
+
+    #[test]
+    fn test_catalog_loading_with_lockfile() {
+        // Load catalog definitions from package.json
+        let catalog_contents = include_bytes!("../../fixtures/package-with-catalogs.json");
+        let mut manifest =
+            BerryManifest::load_catalogs_from_package_json(catalog_contents).unwrap();
+
+        // Manually add a default catalog for lodash (since it's not in a named catalog)
+        let mut default_catalog = Map::new();
+        default_catalog.insert("lodash".to_string(), "^4.17.21".to_string());
+        manifest.catalog = Some(default_catalog);
+
+        // Load the lockfile with catalog data
+        let lockfile_contents = include_bytes!("../../fixtures/berry-catalogs.lock");
+        let data = LockfileData::from_bytes(lockfile_contents).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        // Test resolution with default catalog
+        let package = lockfile
+            .resolve_package("apps/app-a", "lodash", "catalog:")
+            .unwrap();
+
+        assert_eq!(
+            package,
+            Some(Package {
+                key: "lodash@npm:4.17.21".into(),
+                version: "4.17.21".into()
+            })
+        );
     }
 }

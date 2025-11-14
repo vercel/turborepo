@@ -116,10 +116,10 @@ impl Resolution {
             // Since we have already checked the ident portion of the locator for equality
             // we can avoid an allocation caused by constructing a locator by just checking
             // the reference portion.
-            if let Some(desc) = &from.description
-                && !Self::eq_with_protocol(&locator.reference, desc, "npm:")
-            {
-                return None;
+            if let Some(desc) = &from.description {
+                if !Self::eq_with_protocol(&locator.reference, desc, "npm:") {
+                    return None;
+                }
             }
         }
 
@@ -129,13 +129,14 @@ impl Resolution {
             return None;
         }
 
-        if let Some(resolution_range) = &self.descriptor.description
-            && resolution_range != &dependency.range
+        if let Some(resolution_range) = &self.descriptor.description {
+            if resolution_range != &dependency.range
                 // Yarn4 encodes the default npm protocol in yarn.lock, but not in resolutions field of package.json
                 // We check if the ranges match when we add `npm:` to range coming from resolutions.
                 && !Self::eq_with_protocol(&dependency.range, resolution_range, "npm:")
-        {
-            return None;
+            {
+                return None;
+            }
         }
 
         // We have a match an we now override the dependency

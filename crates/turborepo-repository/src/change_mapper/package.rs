@@ -65,18 +65,18 @@ impl PackageChangeMapper for DefaultPackageChangeMapper<'_> {
             if name == &PackageName::Root {
                 continue;
             }
-            if let Some(package_path) = entry.package_json_path.parent()
-                && Self::is_file_in_package(file, package_path)
-            {
-                return PackageMapping::Package((
-                    WorkspacePackage {
-                        name: name.clone(),
-                        path: package_path.to_owned(),
-                    },
-                    PackageInclusionReason::FileChanged {
-                        file: file.to_owned(),
-                    },
-                ));
+            if let Some(package_path) = entry.package_json_path.parent() {
+                if Self::is_file_in_package(file, package_path) {
+                    return PackageMapping::Package((
+                        WorkspacePackage {
+                            name: name.clone(),
+                            path: package_path.to_owned(),
+                        },
+                        PackageInclusionReason::FileChanged {
+                            file: file.to_owned(),
+                        },
+                    ));
+                }
             }
         }
 
