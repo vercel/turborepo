@@ -96,11 +96,11 @@ export const Testimonials = () => {
           name="Jono Alford"
           alias="@jonoalford"
           avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/jonoalford.jpg"
-          url="https://x.com/pontusab/status/1827264818765799931"
+          url="https://x.com/jonoalford/status/1989274609192169943?s=20"
         >
           <p>
-            I love a monorepo setup, having everything in one place powered by
-            Turborepo 🔥
+            The second we started using this for monorepos is the second we
+            stopped having to worry about using monorepos.
           </p>
         </Card>
       </div>
