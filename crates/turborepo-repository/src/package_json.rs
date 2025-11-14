@@ -36,6 +36,10 @@ pub struct PackageJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub resolutions: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub catalogs: Option<BTreeMap<String, BTreeMap<String, String>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub pnpm: Option<PnpmConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
@@ -65,6 +69,8 @@ pub struct RawPackageJson {
     pub peer_dependencies: Option<BTreeMap<String, UnescapedString>>,
     pub scripts: BTreeMap<String, Spanned<UnescapedString>>,
     pub resolutions: Option<BTreeMap<String, UnescapedString>>,
+    pub catalog: Option<BTreeMap<String, UnescapedString>>,
+    pub catalogs: Option<BTreeMap<String, BTreeMap<String, UnescapedString>>>,
     pub pnpm: Option<RawPnpmConfig>,
     pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
     // Unstructured fields kept for round trip capabilities
@@ -137,6 +143,20 @@ impl From<RawPackageJson> for PackageJson {
             resolutions: raw
                 .resolutions
                 .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
+            catalog: raw
+                .catalog
+                .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
+            catalogs: raw.catalogs.map(|catalogs| {
+                catalogs
+                    .into_iter()
+                    .map(|(catalog_name, catalog)| {
+                        (
+                            catalog_name,
+                            catalog.into_iter().map(|(k, v)| (k, v.into())).collect(),
+                        )
+                    })
+                    .collect()
+            }),
             pnpm: raw.pnpm.map(|p| p.into()),
             patched_dependencies: raw.patched_dependencies.map(|m| m.into_iter().collect()),
             other: raw

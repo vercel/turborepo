@@ -200,6 +200,10 @@ impl PackageGraph {
         &self.package_manager
     }
 
+    pub fn repo_root(&self) -> &AbsoluteSystemPath {
+        &self.repo_root
+    }
+
     pub fn lockfile(&self) -> Option<&dyn Lockfile> {
         self.lockfile.as_deref()
     }
