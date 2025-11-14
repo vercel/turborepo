@@ -131,8 +131,8 @@ export const Testimonials = () => {
           url="https://x.com/pontusab/status/1827264818765799931"
         >
           <p>
-            I love a monorepo setup, having everything in one place powered by
-            Turborepo 🔥
+            The second we started using this for monorepos is the second we
+            stopped having to worry about using monorepos.
           </p>
         </Card>
       </div>
