@@ -13,7 +13,20 @@ use turbopath::{AbsoluteSystemPathBuf, PathError};
 /// is set, it will return that path instead of `dirs_next::config_dir`.
 pub fn config_dir() -> Result<Option<AbsoluteSystemPathBuf>, PathError> {
     if let Ok(dir) = std::env::var("TURBO_CONFIG_DIR_PATH") {
-        return AbsoluteSystemPathBuf::new(dir).map(Some);
+        let raw = std::path::PathBuf::from(&dir);
+
+        // Resolve to absolute path if necessary
+        let abs = if raw.is_absolute() {
+            raw
+        } else {
+            std::env::current_dir()?.join(raw)
+        };
+
+        let abs_str = abs
+            .to_str()
+            .ok_or_else(|| PathError::InvalidUnicode(dir.clone()))?;
+
+        return AbsoluteSystemPathBuf::new(abs_str).map(Some);
     }
 
     dirs_config_dir()
