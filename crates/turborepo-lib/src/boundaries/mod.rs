@@ -463,6 +463,7 @@ impl Run {
             let mut finder = ImportFinder::default();
             module.visit_with(&mut finder);
             let dependency_locations = DependencyLocations {
+                package: package_name,
                 internal_dependencies: &internal_dependencies,
                 package_json: &package_info.package_json,
                 implicit_dependencies: &implicit_dependencies,
