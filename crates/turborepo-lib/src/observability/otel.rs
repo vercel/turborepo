@@ -164,8 +164,10 @@ mod tests {
 
     #[test]
     fn test_config_from_options_enabled_false() {
-        let mut options = ExperimentalOtelOptions::default();
-        options.enabled = Some(false);
+        let options = ExperimentalOtelOptions {
+            enabled: Some(false),
+            ..Default::default()
+        };
         let result = config_from_options(&options);
         assert!(result.is_none());
     }
@@ -179,31 +181,37 @@ mod tests {
 
     #[test]
     fn test_config_from_options_empty_endpoint() {
-        let mut options = ExperimentalOtelOptions::default();
-        options.endpoint = Some("   ".to_string());
+        let options = ExperimentalOtelOptions {
+            endpoint: Some("   ".to_string()),
+            ..Default::default()
+        };
         let result = config_from_options(&options);
         assert!(result.is_none());
     }
 
     #[test]
     fn test_config_from_options_defaults() {
-        let mut options = ExperimentalOtelOptions::default();
-        options.endpoint = Some("https://example.com/otel".to_string());
+        let options = ExperimentalOtelOptions {
+            endpoint: Some("https://example.com/otel".to_string()),
+            ..Default::default()
+        };
         let result = config_from_options(&options);
         assert!(result.is_some());
         let config = result.unwrap();
         assert_eq!(config.endpoint, "https://example.com/otel");
         assert_eq!(config.protocol, turborepo_otel::Protocol::Grpc);
         assert_eq!(config.timeout.as_millis(), 10_000);
-        assert_eq!(config.metrics.run_summary, true);
-        assert_eq!(config.metrics.task_details, false);
+        assert!(config.metrics.run_summary);
+        assert!(!config.metrics.task_details);
     }
 
     #[test]
     fn test_config_from_options_http_protobuf() {
-        let mut options = ExperimentalOtelOptions::default();
-        options.endpoint = Some("https://example.com/otel".to_string());
-        options.protocol = Some(ExperimentalOtelProtocol::HttpProtobuf);
+        let options = ExperimentalOtelOptions {
+            endpoint: Some("https://example.com/otel".to_string()),
+            protocol: Some(ExperimentalOtelProtocol::HttpProtobuf),
+            ..Default::default()
+        };
         let result = config_from_options(&options);
         assert!(result.is_some());
         assert_eq!(
@@ -214,9 +222,11 @@ mod tests {
 
     #[test]
     fn test_config_from_options_custom_timeout() {
-        let mut options = ExperimentalOtelOptions::default();
-        options.endpoint = Some("https://example.com/otel".to_string());
-        options.timeout_ms = Some(15000);
+        let options = ExperimentalOtelOptions {
+            endpoint: Some("https://example.com/otel".to_string()),
+            timeout_ms: Some(15000),
+            ..Default::default()
+        };
         let result = config_from_options(&options);
         assert!(result.is_some());
         assert_eq!(result.unwrap().timeout.as_millis(), 15_000);
@@ -224,11 +234,13 @@ mod tests {
 
     #[test]
     fn test_config_from_options_headers() {
-        let mut options = ExperimentalOtelOptions::default();
-        options.endpoint = Some("https://example.com/otel".to_string());
         let mut headers = BTreeMap::new();
         headers.insert("auth".to_string(), "token123".to_string());
-        options.headers = Some(headers);
+        let options = ExperimentalOtelOptions {
+            endpoint: Some("https://example.com/otel".to_string()),
+            headers: Some(headers),
+            ..Default::default()
+        };
         let result = config_from_options(&options);
         assert!(result.is_some());
         let config = result.unwrap();
@@ -237,12 +249,14 @@ mod tests {
 
     #[test]
     fn test_config_from_options_resource() {
-        let mut options = ExperimentalOtelOptions::default();
-        options.endpoint = Some("https://example.com/otel".to_string());
         let mut resource = BTreeMap::new();
         resource.insert("service.name".to_string(), "my-service".to_string());
         resource.insert("env".to_string(), "production".to_string());
-        options.resource = Some(resource);
+        let options = ExperimentalOtelOptions {
+            endpoint: Some("https://example.com/otel".to_string()),
+            resource: Some(resource),
+            ..Default::default()
+        };
         let result = config_from_options(&options);
         assert!(result.is_some());
         let config = result.unwrap();
@@ -259,25 +273,29 @@ mod tests {
     #[test]
     fn test_metrics_config_defaults() {
         let result = metrics_config(None);
-        assert_eq!(result.run_summary, true);
-        assert_eq!(result.task_details, false);
+        assert!(result.run_summary);
+        assert!(!result.task_details);
     }
 
     #[test]
     fn test_metrics_config_run_summary_override() {
-        let mut metrics = ExperimentalOtelMetricsOptions::default();
-        metrics.run_summary = Some(false);
+        let metrics = ExperimentalOtelMetricsOptions {
+            run_summary: Some(false),
+            ..Default::default()
+        };
         let result = metrics_config(Some(&metrics));
-        assert_eq!(result.run_summary, false);
-        assert_eq!(result.task_details, false);
+        assert!(!result.run_summary);
+        assert!(!result.task_details);
     }
 
     #[test]
     fn test_metrics_config_task_details_override() {
-        let mut metrics = ExperimentalOtelMetricsOptions::default();
-        metrics.task_details = Some(true);
+        let metrics = ExperimentalOtelMetricsOptions {
+            task_details: Some(true),
+            ..Default::default()
+        };
         let result = metrics_config(Some(&metrics));
-        assert_eq!(result.run_summary, true);
-        assert_eq!(result.task_details, true);
+        assert!(result.run_summary);
+        assert!(result.task_details);
     }
 }
