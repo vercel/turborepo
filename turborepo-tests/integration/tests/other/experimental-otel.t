@@ -1,7 +1,13 @@
+# Smoke tests for experimental OTEL configuration.
+# These tests verify that enabling/disabling OTEL via environment variables and CLI flags
+# does not break normal turbo run behavior. Exporter correctness is primarily covered
+# by Rust unit tests in crates/turborepo-lib/src/config/experimental_otel.rs and
+# crates/turborepo-lib/src/observability/otel.rs.
+
 Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
 
-Test that OTEL exporter can be enabled via environment variables
+Smoke test: OTEL enabled via environment variables does not break turbo run
   $ export TURBO_EXPERIMENTAL_OTEL_ENABLED=1
   $ export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=http://localhost:4318
   $ ${TURBO} run build --filter=my-app
@@ -15,7 +21,6 @@ Test that OTEL exporter can be enabled via environment variables
   my-app:build: 
   my-app:build: building
   
-  
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
@@ -24,7 +29,7 @@ Test that OTEL exporter can be enabled via environment variables
  
   [0]
 
-Test that OTEL exporter can be enabled via CLI flags
+Smoke test: OTEL enabled via CLI flags does not break turbo run
   $ unset TURBO_EXPERIMENTAL_OTEL_ENABLED
   $ unset TURBO_EXPERIMENTAL_OTEL_ENDPOINT
   $ ${TURBO} run build --filter=my-app --experimental-otel-enabled --experimental-otel-endpoint=http://localhost:4318
@@ -38,14 +43,13 @@ Test that OTEL exporter can be enabled via CLI flags
   my-app:build: 
   my-app:build: building
   
-  
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
   
   [0]
 
-Test that OTEL exporter works with http/protobuf protocol
+Smoke test: http/protobuf protocol flag is accepted without error
   $ ${TURBO} run build --filter=my-app --experimental-otel-enabled --experimental-otel-endpoint=http://localhost:4318 --experimental-otel-protocol=http-protobuf
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -57,14 +61,13 @@ Test that OTEL exporter works with http/protobuf protocol
   my-app:build: 
   my-app:build: building
   
-  
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
   
   [0]
 
-Test that OTEL exporter can be disabled via environment variable
+Smoke test: OTEL disabled via environment variable does not break turbo run
   $ export TURBO_EXPERIMENTAL_OTEL_ENABLED=0
   $ export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=http://localhost:4318
   $ ${TURBO} run build --filter=my-app
@@ -78,14 +81,13 @@ Test that OTEL exporter can be disabled via environment variable
   my-app:build: 
   my-app:build: building
   
-  
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
   
   [0]
 
-Test that OTEL exporter requires endpoint when enabled
+Smoke test: enabled via env without endpoint is a no-op (exporter not configured)
   $ export TURBO_EXPERIMENTAL_OTEL_ENABLED=1
   $ unset TURBO_EXPERIMENTAL_OTEL_ENDPOINT
   $ ${TURBO} run build --filter=my-app
@@ -98,7 +100,6 @@ Test that OTEL exporter requires endpoint when enabled
   my-app:build: > echo building
   my-app:build: 
   my-app:build: building
-  
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total

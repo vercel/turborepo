@@ -173,6 +173,17 @@ mod tests {
     }
 
     #[test]
+    fn test_config_from_options_enabled_false_with_endpoint() {
+        let options = ExperimentalOtelOptions {
+            enabled: Some(false),
+            endpoint: Some("https://example.com/otel".to_string()),
+            ..Default::default()
+        };
+        let result = config_from_options(&options);
+        assert!(result.is_none());
+    }
+
+    #[test]
     fn test_config_from_options_no_endpoint() {
         let options = ExperimentalOtelOptions::default();
         let result = config_from_options(&options);
@@ -203,6 +214,44 @@ mod tests {
         assert_eq!(config.timeout.as_millis(), 10_000);
         assert!(config.metrics.run_summary);
         assert!(!config.metrics.task_details);
+    }
+
+    #[test]
+    fn test_config_from_options_enabled_none_with_endpoint() {
+        let options = ExperimentalOtelOptions {
+            enabled: None,
+            endpoint: Some("https://example.com/otel".to_string()),
+            ..Default::default()
+        };
+        let result = config_from_options(&options);
+        assert!(result.is_some());
+        let config = result.unwrap();
+        assert_eq!(config.endpoint, "https://example.com/otel");
+        assert_eq!(config.protocol, turborepo_otel::Protocol::Grpc);
+        assert!(config.metrics.run_summary);
+        assert!(!config.metrics.task_details);
+    }
+
+    #[test]
+    fn test_config_from_options_enabled_true_no_endpoint() {
+        let options = ExperimentalOtelOptions {
+            enabled: Some(true),
+            endpoint: None,
+            ..Default::default()
+        };
+        let result = config_from_options(&options);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_config_from_options_enabled_true_whitespace_endpoint() {
+        let options = ExperimentalOtelOptions {
+            enabled: Some(true),
+            endpoint: Some("   ".to_string()),
+            ..Default::default()
+        };
+        let result = config_from_options(&options);
+        assert!(result.is_none());
     }
 
     #[test]
@@ -297,5 +346,55 @@ mod tests {
         let result = metrics_config(Some(&metrics));
         assert!(result.run_summary);
         assert!(result.task_details);
+    }
+
+    #[test]
+    fn test_config_from_options_metrics_toggles() {
+        let options = ExperimentalOtelOptions {
+            endpoint: Some("https://example.com/otel".to_string()),
+            metrics: Some(ExperimentalOtelMetricsOptions {
+                run_summary: Some(false),
+                task_details: Some(true),
+            }),
+            ..Default::default()
+        };
+        let result = config_from_options(&options);
+        assert!(result.is_some());
+        let config = result.unwrap();
+        assert!(!config.metrics.run_summary);
+        assert!(config.metrics.task_details);
+    }
+
+    #[test]
+    fn test_try_init_otel_swallows_initialization_errors() {
+        let options = ExperimentalOtelOptions {
+            enabled: Some(true),
+            endpoint: Some("invalid://endpoint".to_string()),
+            ..Default::default()
+        };
+        let result = try_init_otel(&options);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_try_init_otel_returns_none_for_disabled() {
+        let options = ExperimentalOtelOptions {
+            enabled: Some(false),
+            endpoint: Some("https://example.com/otel".to_string()),
+            ..Default::default()
+        };
+        let result = try_init_otel(&options);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_try_init_otel_returns_none_for_no_endpoint() {
+        let options = ExperimentalOtelOptions {
+            enabled: Some(true),
+            endpoint: None,
+            ..Default::default()
+        };
+        let result = try_init_otel(&options);
+        assert!(result.is_none());
     }
 }
