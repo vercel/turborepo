@@ -8,7 +8,7 @@ use std::{
 use chrono::Local;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
+use turborepo_analytics::{AnalyticsHandle, AnalyticsSender, start_analytics};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
@@ -24,10 +24,10 @@ use turborepo_scm::SCM;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::TaskName;
 use turborepo_telemetry::events::{
+    EventBuilder, TrackedErrors,
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
-    EventBuilder, TrackedErrors,
 };
 use turborepo_types::{DryRunMode, UIMode};
 use turborepo_ui::ColorConfig;
@@ -45,9 +45,9 @@ use crate::{
     config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
-    observability::Handle as ObservabilityHandle,
+    observability,
     opts::Opts,
-    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
+    run::{Error, Run, RunCache, scope, task_access::TaskAccess},
     shim::TurboState,
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
     DaemonConnector,
@@ -486,7 +486,7 @@ impl RunBuilder {
             .unwrap_or_else(|| self.will_execute_tasks());
 
         let observability_handle = match self.opts.experimental_observability.as_ref() {
-            Some(opts) => ObservabilityHandle::try_init(opts),
+            Some(opts) => observability::Handle::try_init(opts),
             None => None,
         };
 
