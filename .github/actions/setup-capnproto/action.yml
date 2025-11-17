@@ -14,18 +14,6 @@ runs:
           /usr/bin/capnpc
         key: ${{ runner.os }}-capnproto-0.11.2
 
-    - name: "Cache capnproto (macOS)"
-      if: runner.os == 'macOS' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-      uses: actions/cache@v4
-      id: cache-capnp-macos
-      with:
-        path: |
-          /usr/local/bin/capnp
-          /usr/local/bin/capnpc
-          /opt/homebrew/bin/capnp
-          /opt/homebrew/bin/capnpc
-        key: ${{ runner.os }}-capnproto-0.11.2
-
     - name: "Cache capnproto (Windows)"
       if: runner.os == 'Windows' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       uses: actions/cache@v4
@@ -42,7 +30,7 @@ runs:
       run: sudo apt-get -y update && sudo apt-get install -y capnproto
 
     - name: "Setup capnproto for macos"
-      if: runner.os == 'macOS' && (steps.cache-capnp-macos.outcome == 'skipped' || steps.cache-capnp-macos.outputs.cache-hit != 'true')
+      if: runner.os == 'macOS'
       shell: bash
       run: brew install capnp
 
