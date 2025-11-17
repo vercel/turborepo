@@ -865,6 +865,13 @@ Default: `false`
 
 When enabled, Turborepo will honor the `experimentalObservability.otel` configuration block (if present) to send run summaries to an OpenTelemetry Protocol (OTLP) collector.
 
+<Callout type="info">
+  Invalid or incomplete OTEL configuration (e.g., missing endpoint, invalid
+  protocol) results in metrics being disabled rather than causing runs to fail.
+  Turborepo will continue executing tasks normally even if the exporter cannot
+  be initialized.
+</Callout>
+
 ## Experimental observability
 
 <ExperimentalBadge>Experimental</ExperimentalBadge>
@@ -924,6 +931,8 @@ The OTLP collector endpoint URL. For example:
 
 - Datadog: `"https://api.datadoghq.com/api/v2/otlp"`
 - Custom collector: `"http://localhost:4317"` (gRPC) or `"http://localhost:4318"` (HTTP)
+
+If the endpoint is missing or empty when OTEL is enabled, the exporter will not be initialized and metrics will be disabled. The run will continue normally.
 
 #### `experimentalObservability.otel.headers`
 
@@ -995,7 +1004,9 @@ Export per-task metrics:
 <Callout type="info">
   Exporter failures are logged but do not cause the run to fail. If the
   collector is unavailable or misconfigured, Turborepo will continue executing
-  tasks normally.
+  tasks normally. Invalid or incomplete configuration (e.g., missing endpoint
+  when enabled) results in the exporter not being initialized, and metrics will
+  be disabled for that run.
 </Callout>
 
 ### Environment variables

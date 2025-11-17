@@ -147,6 +147,17 @@ mod tests {
     }
 
     #[test]
+    fn test_experimental_otel_cli_args_disabled() {
+        let args = ExperimentalOtelCliArgs {
+            enabled: Some(false),
+            ..Default::default()
+        };
+        let result = args.to_config();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().enabled, Some(false));
+    }
+
+    #[test]
     fn test_experimental_otel_cli_args_protocol() {
         let args = ExperimentalOtelCliArgs {
             protocol: Some(ExperimentalOtelProtocol::Grpc),
@@ -306,6 +317,30 @@ mod tests {
         assert!(result.is_some());
         let metrics = result.unwrap().metrics.unwrap();
         assert_eq!(metrics.run_summary, Some(true));
+        assert_eq!(metrics.task_details, Some(false));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_metrics_run_summary_disabled() {
+        let args = ExperimentalOtelCliArgs {
+            metrics_run_summary: Some(false),
+            ..Default::default()
+        };
+        let result = args.to_config();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        assert_eq!(metrics.run_summary, Some(false));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_metrics_task_details_disabled() {
+        let args = ExperimentalOtelCliArgs {
+            metrics_task_details: Some(false),
+            ..Default::default()
+        };
+        let result = args.to_config();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
         assert_eq!(metrics.task_details, Some(false));
     }
 

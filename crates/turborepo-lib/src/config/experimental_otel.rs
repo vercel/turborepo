@@ -459,6 +459,50 @@ mod tests {
     }
 
     #[test]
+    fn test_from_env_map_enabled_with_endpoint() {
+        let map = build_env_map(&[
+            ("experimental_otel_enabled", "1"),
+            ("experimental_otel_endpoint", "https://example.com/otel"),
+        ]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let opts = result.unwrap();
+        assert_eq!(opts.enabled, Some(true));
+        assert_eq!(opts.endpoint, Some("https://example.com/otel".to_string()));
+    }
+
+    #[test]
+    fn test_from_env_map_disabled_with_endpoint() {
+        let map = build_env_map(&[
+            ("experimental_otel_enabled", "0"),
+            ("experimental_otel_endpoint", "https://example.com/otel"),
+        ]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let opts = result.unwrap();
+        assert_eq!(opts.enabled, Some(false));
+        assert_eq!(opts.endpoint, Some("https://example.com/otel".to_string()));
+    }
+
+    #[test]
+    fn test_from_env_map_metrics_run_summary_disabled() {
+        let map = build_env_map(&[("experimental_otel_metrics_run_summary", "0")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        assert_eq!(metrics.run_summary, Some(false));
+    }
+
+    #[test]
+    fn test_from_env_map_metrics_task_details_disabled() {
+        let map = build_env_map(&[("experimental_otel_metrics_task_details", "0")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        assert_eq!(metrics.task_details, Some(false));
+    }
+
+    #[test]
     fn test_from_env_map_combined() {
         let map = build_env_map(&[
             ("experimental_otel_enabled", "1"),
