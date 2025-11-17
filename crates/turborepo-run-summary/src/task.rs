@@ -47,6 +47,7 @@ pub struct TaskCacheSummary {
 
 #[derive(Debug, Serialize, Copy, Clone)]
 #[serde(rename_all = "UPPERCASE")]
+// Used in observability/otel.rs to map to TaskCacheStatus
 pub(crate) enum CacheStatus {
     Hit,
     Miss,
@@ -146,14 +147,18 @@ pub struct TaskEnvVarSummary {
 }
 
 impl TaskCacheSummary {
+    // Used in observability/otel.rs to populate TaskMetricsPayload.cache_status
     pub(crate) fn status(&self) -> CacheStatus {
         self.status
     }
 
+    // Used in observability/otel.rs to populate
+    // TaskMetricsPayload.cache_time_saved_ms
     pub(crate) fn time_saved(&self) -> u64 {
         self.time_saved
     }
 
+    // Used in observability/otel.rs to populate TaskMetricsPayload.cache_source
     pub(crate) fn cache_source_label(&self) -> Option<&'static str> {
         self.source.map(|source| match source {
             CacheSource::Local => "LOCAL",
