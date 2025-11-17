@@ -22,8 +22,18 @@ runs:
         path: |
           /usr/local/bin/capnp
           /usr/local/bin/capnpc
+          /usr/local/lib/libcapnp*
+          /usr/local/lib/libkj*
+          /usr/local/include/capnp
+          /usr/local/include/kj
+          /usr/local/lib/pkgconfig/capnp.pc
           /opt/homebrew/bin/capnp
           /opt/homebrew/bin/capnpc
+          /opt/homebrew/lib/libcapnp*
+          /opt/homebrew/lib/libkj*
+          /opt/homebrew/include/capnp
+          /opt/homebrew/include/kj
+          /opt/homebrew/lib/pkgconfig/capnp.pc
         key: ${{ runner.os }}-capnproto-0.11.2
 
     - name: "Cache capnproto (Windows)"
