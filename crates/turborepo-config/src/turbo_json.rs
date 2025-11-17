@@ -96,13 +96,9 @@ impl<'a> TurboJsonReader<'a> {
             .map(|f| f.experimental_observability)
             .unwrap_or(false)
         {
-            let raw_otel = turbo_json
-                .experimental_observability
-                .and_then(|obs| obs.otel);
-            if let Some(raw_otel) = raw_otel {
-                opts.experimental_observability = Some(ExperimentalObservabilityOptions {
-                    otel: Some(convert_raw_observability_otel(raw_otel)?),
-                });
+            if let Some(raw_observability) = turbo_json.experimental_observability {
+                opts.experimental_observability =
+                    Some(convert_raw_observability(raw_observability)?);
             }
         }
         Ok(opts)
@@ -138,6 +134,14 @@ fn convert_key_values(entries: Vec<RawKeyValue>) -> BTreeMap<String, String> {
         );
     }
     map
+}
+
+fn convert_raw_observability(
+    raw: RawExperimentalObservability,
+) -> Result<ExperimentalObservabilityOptions, Error> {
+    Ok(ExperimentalObservabilityOptions {
+        otel: raw.otel.map(convert_raw_observability_otel).transpose()?,
+    })
 }
 
 fn convert_raw_observability_otel(
