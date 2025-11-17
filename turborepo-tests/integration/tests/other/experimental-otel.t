@@ -27,7 +27,6 @@ Smoke test: OTEL enabled via environment variables does not break turbo run
   
    WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
  
-  [0]
 
 Smoke test: OTEL enabled via CLI flags does not break turbo run
   $ unset TURBO_EXPERIMENTAL_OTEL_ENABLED
@@ -47,7 +46,6 @@ Smoke test: OTEL enabled via CLI flags does not break turbo run
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
   
-  [0]
 
 Smoke test: http/protobuf protocol flag is accepted without error
   $ ${TURBO} run build --filter=my-app --experimental-otel-enabled --experimental-otel-endpoint=http://localhost:4318 --experimental-otel-protocol=http-protobuf
@@ -65,7 +63,6 @@ Smoke test: http/protobuf protocol flag is accepted without error
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
   
-  [0]
 
 Smoke test: OTEL disabled via environment variable does not break turbo run
   $ export TURBO_EXPERIMENTAL_OTEL_ENABLED=0
@@ -85,7 +82,6 @@ Smoke test: OTEL disabled via environment variable does not break turbo run
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
   
-  [0]
 
 Smoke test: enabled via env without endpoint is a no-op (exporter not configured)
   $ export TURBO_EXPERIMENTAL_OTEL_ENABLED=1
@@ -105,5 +101,4 @@ Smoke test: enabled via env without endpoint is a no-op (exporter not configured
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
   
-  [0]
 
