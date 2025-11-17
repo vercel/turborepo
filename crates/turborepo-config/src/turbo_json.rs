@@ -5,8 +5,8 @@ use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_turbo_json::{RawRemoteCacheOptions, RawRootTurboJson, RawTurboJson};
 
 use crate::{
-    ConfigurationOptions, Error, ExperimentalOtelMetricsOptions, ExperimentalOtelOptions,
-    ExperimentalOtelProtocol, ResolvedConfigurationOptions,
+    ConfigurationOptions, Error, ExperimentalObservabilityOptions, ExperimentalOtelMetricsOptions,
+    ExperimentalOtelOptions, ExperimentalOtelProtocol, ResolvedConfigurationOptions,
 };
 
 pub struct TurboJsonReader<'a> {
@@ -100,7 +100,9 @@ impl<'a> TurboJsonReader<'a> {
                 .experimental_observability
                 .and_then(|obs| obs.otel);
             if let Some(raw_otel) = raw_otel {
-                opts.experimental_otel = Some(convert_raw_observability_otel(raw_otel)?);
+                opts.experimental_observability = Some(ExperimentalObservabilityOptions {
+                    otel: Some(convert_raw_observability_otel(raw_otel)?),
+                });
             }
         }
         Ok(opts)
@@ -333,7 +335,7 @@ mod test {
         .into();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         // Should be None because future flag is disabled
-        assert_eq!(config.experimental_otel(), None);
+        assert_eq!(config.experimental_observability(), None);
     }
 
     #[test]
@@ -359,9 +361,9 @@ mod test {
         .unwrap()
         .into();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
-        let otel_config = config.experimental_otel();
-        assert!(otel_config.is_some());
-        let otel_config = otel_config.unwrap();
+        let observability_config = config.experimental_observability();
+        assert!(observability_config.is_some());
+        let otel_config = observability_config.unwrap().otel.as_ref().unwrap();
         assert_eq!(otel_config.enabled, Some(true));
         assert_eq!(otel_config.endpoint.as_ref(), Some(&endpoint.to_string()));
         assert_eq!(otel_config.protocol, Some(ExperimentalOtelProtocol::Grpc));
@@ -386,6 +388,6 @@ mod test {
         .into();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         // Should be None because future flag is not set (defaults to false)
-        assert_eq!(config.experimental_otel(), None);
+        assert_eq!(config.experimental_observability(), None);
     }
 }
