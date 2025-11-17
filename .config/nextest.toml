@@ -6,7 +6,17 @@
 # and timing issues, especially on macOS where PTY devices are limited
 turborepo-process-serial = { max-threads = 1 }
 
+# Integration tests that spawn turbo binaries should run serially to avoid
+# race conditions with binary detection and stdout/stderr capture
+turborepo-integration-serial = { max-threads = 1 }
+
 [[profile.default.overrides]]
 # Run all tests in the turborepo-process crate serially
 filter = 'package(turborepo-process)'
 test-group = 'turborepo-process-serial'
+
+[[profile.default.overrides]]
+# Run integration tests that use check_json_output! serially
+# These tests spawn turbo processes and parse JSON from stdout
+filter = 'package(turbo) and (test(boundaries) or test(query) or test(ls))'
+test-group = 'turborepo-integration-serial'
