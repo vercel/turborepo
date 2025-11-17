@@ -912,6 +912,7 @@ Enable or disable the OpenTelemetry metrics exporter.
 Default: `"grpc"`
 
 The OTLP protocol to use. Supported values:
+
 - `"grpc"` - OTLP over gRPC
 - `"http/protobuf"` - OTLP over HTTP with protobuf encoding
 
@@ -920,6 +921,7 @@ The OTLP protocol to use. Supported values:
 **Required** when using file-based configuration.
 
 The OTLP collector endpoint URL. For example:
+
 - Datadog: `"https://api.datadoghq.com/api/v2/otlp"`
 - Custom collector: `"http://localhost:4317"` (gRPC) or `"http://localhost:4318"` (HTTP)
 
@@ -927,7 +929,7 @@ The OTLP collector endpoint URL. For example:
 
 Optional HTTP headers to include with export requests. Useful for authentication (e.g., API keys) or custom metadata.
 
-```jsonc
+```jsonc title="./turbo.json"
 {
   "experimentalObservability": {
     "otel": {
@@ -950,7 +952,7 @@ Timeout in milliseconds for export requests to the collector.
 
 Optional resource attributes to attach to all exported metrics. These help identify the source of metrics in your observability platform.
 
-```jsonc
+```jsonc title="./turbo.json"
 {
   "experimentalObservability": {
     "otel": {
@@ -973,6 +975,7 @@ Control which metric groups are exported.
 Default: `true`
 
 Export run-level metrics:
+
 - Run duration
 - Tasks attempted, failed, and cached
 - Exit code
@@ -983,14 +986,16 @@ Export run-level metrics:
 Default: `false`
 
 Export per-task metrics:
+
 - Task execution duration
 - Cache hit/miss status and source
 - Cache time saved
 - Task identifiers (task ID, package, hash)
 
 <Callout type="info">
-  Exporter failures are logged but do not cause the run to fail. If the collector
-  is unavailable or misconfigured, Turborepo will continue executing tasks normally.
+  Exporter failures are logged but do not cause the run to fail. If the
+  collector is unavailable or misconfigured, Turborepo will continue executing
+  tasks normally.
 </Callout>
 
 ### Environment variables
