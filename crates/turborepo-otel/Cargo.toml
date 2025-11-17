@@ -1,0 +1,20 @@
+[package]
+name = "turborepo-otel"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+opentelemetry = { version = "0.23", features = ["metrics"] }
+opentelemetry-otlp = { version = "0.16", features = ["grpc-tonic", "http-proto", "metrics"] }
+opentelemetry_sdk = { version = "0.23", features = ["rt-tokio", "metrics"] }
+opentelemetry-semantic-conventions = "0.15"
+thiserror = "1.0"
+tracing = "0.1"
+tokio = { version = "1", features = ["rt", "macros", "sync"] }
+tonic = "0.11"
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+
+[features]
+default = []
+serde = ["dep:serde", "dep:serde_json"]

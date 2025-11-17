@@ -47,7 +47,7 @@ pub struct TaskCacheSummary {
 
 #[derive(Debug, Serialize, Copy, Clone)]
 #[serde(rename_all = "UPPERCASE")]
-enum CacheStatus {
+pub(crate) enum CacheStatus {
     Hit,
     Miss,
 }
@@ -146,6 +146,21 @@ pub struct TaskEnvVarSummary {
 }
 
 impl TaskCacheSummary {
+    pub(crate) fn status(&self) -> CacheStatus {
+        self.status
+    }
+
+    pub(crate) fn time_saved(&self) -> u64 {
+        self.time_saved
+    }
+
+    pub(crate) fn cache_source_label(&self) -> Option<&'static str> {
+        self.source.map(|source| match source {
+            CacheSource::Local => "LOCAL",
+            CacheSource::Remote => "REMOTE",
+        })
+    }
+
     pub fn cache_miss() -> Self {
         Self {
             local: false,

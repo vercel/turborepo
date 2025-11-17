@@ -50,4 +50,12 @@ impl SCMState {
 
         state
     }
+
+    pub(crate) fn branch(&self) -> Option<&str> {
+        self.branch.as_deref()
+    }
+
+    pub(crate) fn sha(&self) -> Option<&str> {
+        self.sha.as_deref()
+    }
 }

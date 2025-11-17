@@ -79,6 +79,7 @@ pub struct Run {
     daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
+    observability_handle: Option<crate::observability::Handle>,
 }
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
@@ -663,6 +664,7 @@ impl Run {
             self.version,
             Vendor::get_user(),
             &self.scm,
+            self.observability_handle.clone(),
         );
 
         let mut visitor = Visitor::new(
