@@ -13,7 +13,7 @@ pub struct ExperimentalOtelCliArgs {
         long = "experimental-otel-enabled",
         global = true,
         num_args = 0..=1,
-        default_missing_value = "true"
+        default_missing_value = "false"
     )]
     pub enabled: Option<bool>,
     #[clap(
