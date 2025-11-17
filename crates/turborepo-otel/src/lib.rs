@@ -371,3 +371,189 @@ fn build_run_attributes(payload: &RunMetricsPayload) -> Vec<KeyValue> {
     }
     attrs
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    #[test]
+    fn test_handle_try_new_empty_endpoint() {
+        let config = Config {
+            endpoint: "".to_string(),
+            protocol: Protocol::Grpc,
+            headers: BTreeMap::new(),
+            timeout: Duration::from_secs(10),
+            resource_attributes: BTreeMap::new(),
+            metrics: MetricsConfig::default(),
+        };
+        let result = Handle::try_new(config);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::MissingEndpoint => {}
+            _ => panic!("Expected MissingEndpoint error"),
+        }
+    }
+
+    #[test]
+    fn test_handle_try_new_whitespace_endpoint() {
+        let config = Config {
+            endpoint: "   ".to_string(),
+            protocol: Protocol::Grpc,
+            headers: BTreeMap::new(),
+            timeout: Duration::from_secs(10),
+            resource_attributes: BTreeMap::new(),
+            metrics: MetricsConfig::default(),
+        };
+        let result = Handle::try_new(config);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::MissingEndpoint => {}
+            _ => panic!("Expected MissingEndpoint error"),
+        }
+    }
+
+    #[test]
+    fn test_build_metadata_valid() {
+        let mut headers = BTreeMap::new();
+        headers.insert("authorization".to_string(), "Bearer token123".to_string());
+        headers.insert("x-custom-header".to_string(), "value".to_string());
+
+        let result = build_metadata(&headers);
+        assert!(result.is_ok());
+        let metadata = result.unwrap();
+        assert_eq!(metadata.len(), 2);
+    }
+
+    #[test]
+    fn test_build_metadata_invalid_key() {
+        let mut headers = BTreeMap::new();
+        headers.insert("\0invalid".to_string(), "value".to_string());
+
+        let result = build_metadata(&headers);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InvalidHeader(key) => {
+                assert_eq!(key, "\0invalid");
+            }
+            _ => panic!("Expected InvalidHeader error"),
+        }
+    }
+
+    #[test]
+    fn test_build_metadata_invalid_value() {
+        let mut headers = BTreeMap::new();
+        headers.insert("valid-key".to_string(), "\0invalid-value".to_string());
+
+        let result = build_metadata(&headers);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InvalidHeader(key) => {
+                assert_eq!(key, "valid-key");
+            }
+            _ => panic!("Expected InvalidHeader error"),
+        }
+    }
+
+    #[test]
+    fn test_build_resource_default_service_name() {
+        let config = Config {
+            endpoint: "https://example.com".to_string(),
+            protocol: Protocol::Grpc,
+            headers: BTreeMap::new(),
+            timeout: Duration::from_secs(10),
+            resource_attributes: BTreeMap::new(),
+            metrics: MetricsConfig::default(),
+        };
+        let resource = build_resource(&config);
+        let attrs: Vec<_> = resource
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        assert!(
+            attrs
+                .iter()
+                .any(|(k, v)| *k == SERVICE_NAME && *v == "turborepo")
+        );
+    }
+
+    #[test]
+    fn test_build_resource_custom_service_name() {
+        let mut resource_attrs = BTreeMap::new();
+        resource_attrs.insert("service.name".to_string(), "my-service".to_string());
+        let config = Config {
+            endpoint: "https://example.com".to_string(),
+            protocol: Protocol::Grpc,
+            headers: BTreeMap::new(),
+            timeout: Duration::from_secs(10),
+            resource_attributes: resource_attrs,
+            metrics: MetricsConfig::default(),
+        };
+        let resource = build_resource(&config);
+        let attrs: Vec<_> = resource
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        assert!(
+            attrs
+                .iter()
+                .any(|(k, v)| *k == SERVICE_NAME && *v == "my-service")
+        );
+    }
+
+    #[test]
+    fn test_build_resource_additional_attributes() {
+        let mut resource_attrs = BTreeMap::new();
+        resource_attrs.insert("env".to_string(), "production".to_string());
+        resource_attrs.insert("version".to_string(), "1.0.0".to_string());
+        let config = Config {
+            endpoint: "https://example.com".to_string(),
+            protocol: Protocol::Grpc,
+            headers: BTreeMap::new(),
+            timeout: Duration::from_secs(10),
+            resource_attributes: resource_attrs,
+            metrics: MetricsConfig::default(),
+        };
+        let resource = build_resource(&config);
+        let attrs: Vec<_> = resource
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        assert_eq!(attrs.len(), 3);
+        assert!(
+            attrs
+                .iter()
+                .any(|(k, v)| *k == SERVICE_NAME && *v == "turborepo")
+        );
+        assert!(attrs.iter().any(|(k, v)| *k == "env" && *v == "production"));
+        assert!(attrs.iter().any(|(k, v)| *k == "version" && *v == "1.0.0"));
+    }
+
+    #[test]
+    fn test_build_resource_no_duplicate_service_name() {
+        let mut resource_attrs = BTreeMap::new();
+        resource_attrs.insert("service.name".to_string(), "custom".to_string());
+        resource_attrs.insert("env".to_string(), "production".to_string());
+        let config = Config {
+            endpoint: "https://example.com".to_string(),
+            protocol: Protocol::Grpc,
+            headers: BTreeMap::new(),
+            timeout: Duration::from_secs(10),
+            resource_attributes: resource_attrs,
+            metrics: MetricsConfig::default(),
+        };
+        let resource = build_resource(&config);
+        let attrs: Vec<_> = resource
+            .iter()
+            .map(|(k, v)| (k.as_str(), v.as_str()))
+            .collect();
+        let service_name_count = attrs.iter().filter(|(k, _)| *k == SERVICE_NAME).count();
+        assert_eq!(service_name_count, 1);
+        assert!(
+            attrs
+                .iter()
+                .any(|(k, v)| *k == SERVICE_NAME && *v == "custom")
+        );
+    }
+}

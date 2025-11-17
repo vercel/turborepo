@@ -8,7 +8,10 @@ use std::{
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
+use clap::{
+    builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
+    ValueEnum,
+};
 use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::Serialize;
@@ -17,8 +20,9 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
-    init_telemetry, track_usage, TelemetryHandle,
+    TelemetryHandle,
+    events::{EventBuilder, EventType, command::CommandEventBuilder, generic::GenericEventBuilder},
+    init_telemetry, track_usage,
 };
 use turborepo_types::{
     ContinueMode, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, UIMode,
@@ -1584,11 +1588,7 @@ pub async fn run(
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
-            if scan::run(base).await {
-                Ok(0)
-            } else {
-                Ok(1)
-            }
+            if scan::run(base).await { Ok(0) } else { Ok(1) }
         }
         Command::Config => {
             CommandEventBuilder::new("config")
@@ -1842,7 +1842,11 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ContinueMode, ExecutionArgs, LinkTarget, RunArgs};
+    use super::{ExperimentalOtelCliArgs, ExperimentalOtelProtocol};
+    use crate::{
+        cli::{ContinueMode, ExecutionArgs, LinkTarget, RunArgs},
+        config::ExperimentalOtelOptions,
+    };
 
     struct CommandTestCase {
         command: &'static str,
@@ -3504,19 +3508,23 @@ mod test {
                 .collect(),
         )
         .unwrap();
-        assert!(inferred_run
-            .execution_args
-            .as_ref()
-            .is_some_and(|e| e.single_package));
-        assert!(explicit_run
-            .command
-            .as_ref()
-            .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
-                Some(execution_args.single_package)
-            } else {
-                None
-            })
-            .unwrap_or(false));
+        assert!(
+            inferred_run
+                .execution_args
+                .as_ref()
+                .is_some_and(|e| e.single_package)
+        );
+        assert!(
+            explicit_run
+                .command
+                .as_ref()
+                .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                    Some(execution_args.single_package)
+                } else {
+                    None
+                })
+                .unwrap_or(false)
+        );
     }
 
     #[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]
@@ -3569,5 +3577,192 @@ mod test {
             let err = cli.unwrap_err();
             assert_snapshot!(args.join("-").as_str(), err);
         }
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_empty() {
+        let args = ExperimentalOtelCliArgs::default();
+        let result = args.to_config();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_enabled() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.enabled = Some(true);
+        let result = args.to_config();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().enabled, Some(true));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_protocol() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.protocol = Some(ExperimentalOtelProtocol::Grpc);
+        let result = args.to_config();
+        assert!(result.is_some());
+        assert_eq!(
+            result.unwrap().protocol,
+            Some(ExperimentalOtelProtocol::Grpc)
+        );
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_protocol_http_protobuf() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.protocol = Some(ExperimentalOtelProtocol::HttpProtobuf);
+        let result = args.to_config();
+        assert!(result.is_some());
+        assert_eq!(
+            result.unwrap().protocol,
+            Some(ExperimentalOtelProtocol::HttpProtobuf)
+        );
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_endpoint() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.endpoint = Some("https://example.com/otel".to_string());
+        let result = args.to_config();
+        assert!(result.is_some());
+        assert_eq!(
+            result.unwrap().endpoint,
+            Some("https://example.com/otel".to_string())
+        );
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_timeout_ms() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.timeout_ms = Some(5000);
+        let result = args.to_config();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().timeout_ms, Some(5000));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_headers_single() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.headers = vec![("key1".to_string(), "value1".to_string())];
+        let result = args.to_config();
+        assert!(result.is_some());
+        let headers = result.unwrap().headers.unwrap();
+        assert_eq!(headers.get("key1"), Some(&"value1".to_string()));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_headers_multiple() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.headers = vec![
+            ("key1".to_string(), "value1".to_string()),
+            ("key2".to_string(), "value2".to_string()),
+        ];
+        let result = args.to_config();
+        assert!(result.is_some());
+        let headers = result.unwrap().headers.unwrap();
+        assert_eq!(headers.get("key1"), Some(&"value1".to_string()));
+        assert_eq!(headers.get("key2"), Some(&"value2".to_string()));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_headers_empty() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.headers = vec![];
+        let result = args.to_config();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_resource_single() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.resource_attributes = vec![("service.name".to_string(), "my-service".to_string())];
+        let result = args.to_config();
+        assert!(result.is_some());
+        let resource = result.unwrap().resource.unwrap();
+        assert_eq!(
+            resource.get("service.name"),
+            Some(&"my-service".to_string())
+        );
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_resource_multiple() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.resource_attributes = vec![
+            ("service.name".to_string(), "my-service".to_string()),
+            ("env".to_string(), "production".to_string()),
+        ];
+        let result = args.to_config();
+        assert!(result.is_some());
+        let resource = result.unwrap().resource.unwrap();
+        assert_eq!(
+            resource.get("service.name"),
+            Some(&"my-service".to_string())
+        );
+        assert_eq!(resource.get("env"), Some(&"production".to_string()));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_metrics_run_summary() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.metrics_run_summary = Some(true);
+        let result = args.to_config();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        assert_eq!(metrics.run_summary, Some(true));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_metrics_task_details() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.metrics_task_details = Some(true);
+        let result = args.to_config();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        assert_eq!(metrics.task_details, Some(true));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_metrics_both() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.metrics_run_summary = Some(true);
+        args.metrics_task_details = Some(false);
+        let result = args.to_config();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        assert_eq!(metrics.run_summary, Some(true));
+        assert_eq!(metrics.task_details, Some(false));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_combined() {
+        let mut args = ExperimentalOtelCliArgs::default();
+        args.enabled = Some(true);
+        args.protocol = Some(ExperimentalOtelProtocol::Grpc);
+        args.endpoint = Some("https://example.com/otel".to_string());
+        args.timeout_ms = Some(15000);
+        args.headers = vec![("auth".to_string(), "token123".to_string())];
+        args.resource_attributes = vec![("service.name".to_string(), "test".to_string())];
+        args.metrics_run_summary = Some(true);
+        args.metrics_task_details = Some(false);
+
+        let result = args.to_config();
+        assert!(result.is_some());
+        let opts = result.unwrap();
+        assert_eq!(opts.enabled, Some(true));
+        assert_eq!(opts.protocol, Some(ExperimentalOtelProtocol::Grpc));
+        assert_eq!(opts.endpoint, Some("https://example.com/otel".to_string()));
+        assert_eq!(opts.timeout_ms, Some(15000));
+        assert_eq!(
+            opts.headers.unwrap().get("auth"),
+            Some(&"token123".to_string())
+        );
+        assert_eq!(
+            opts.resource.unwrap().get("service.name"),
+            Some(&"test".to_string())
+        );
+        let metrics = opts.metrics.unwrap();
+        assert_eq!(metrics.run_summary, Some(true));
+        assert_eq!(metrics.task_details, Some(false));
     }
 }
