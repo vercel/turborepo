@@ -13,9 +13,10 @@ pub struct ExperimentalOtelCliArgs {
         long = "experimental-otel-enabled",
         global = true,
         num_args = 0..=1,
-        default_missing_value = "false"
+        default_missing_value = "true"
     )]
     pub enabled: Option<bool>,
+
     #[clap(
         long = "experimental-otel-protocol",
         value_enum,
@@ -23,14 +24,17 @@ pub struct ExperimentalOtelCliArgs {
         value_name = "PROTOCOL"
     )]
     pub protocol: Option<ExperimentalOtelProtocol>,
+
     #[clap(long = "experimental-otel-endpoint", global = true, value_name = "URL")]
     pub endpoint: Option<String>,
+
     #[clap(
         long = "experimental-otel-timeout-ms",
         global = true,
         value_name = "MILLISECONDS"
     )]
     pub timeout_ms: Option<u64>,
+
     #[clap(
         long = "experimental-otel-header",
         global = true,
@@ -38,6 +42,7 @@ pub struct ExperimentalOtelCliArgs {
         value_name = "KEY=VALUE"
     )]
     pub headers: Vec<(String, String)>,
+
     #[clap(
         long = "experimental-otel-resource",
         global = true,
@@ -45,6 +50,7 @@ pub struct ExperimentalOtelCliArgs {
         value_name = "KEY=VALUE"
     )]
     pub resource_attributes: Vec<(String, String)>,
+
     #[clap(
         long = "experimental-otel-metrics-run-summary",
         global = true,
@@ -52,6 +58,7 @@ pub struct ExperimentalOtelCliArgs {
         default_missing_value = "true"
     )]
     pub metrics_run_summary: Option<bool>,
+
     #[clap(
         long = "experimental-otel-metrics-task-details",
         global = true,
