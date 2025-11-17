@@ -211,3 +211,279 @@ fn set_metric_flag(
     }
     Ok(false)
 }
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+
+    fn build_env_map(entries: &[(&'static str, &str)]) -> HashMap<&'static str, String> {
+        entries.iter().map(|(k, v)| (*k, v.to_string())).collect()
+    }
+
+    #[test]
+    fn test_from_env_map_empty() {
+        let map = HashMap::new();
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_from_env_map_enabled_true() {
+        let map = build_env_map(&[("experimental_otel_enabled", "1")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().enabled, Some(true));
+    }
+
+    #[test]
+    fn test_from_env_map_enabled_false() {
+        let map = build_env_map(&[("experimental_otel_enabled", "0")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().enabled, Some(false));
+    }
+
+    #[test]
+    fn test_from_env_map_enabled_true_string() {
+        let map = build_env_map(&[("experimental_otel_enabled", "true")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().enabled, Some(true));
+    }
+
+    #[test]
+    fn test_from_env_map_enabled_invalid() {
+        let map = build_env_map(&[("experimental_otel_enabled", "invalid")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InvalidExperimentalOtelConfig { message } => {
+                assert!(message.contains("TURBO_EXPERIMENTAL_OTEL_ENABLED"));
+            }
+            _ => panic!("Expected InvalidExperimentalOtelConfig"),
+        }
+    }
+
+    #[test]
+    fn test_from_env_map_protocol_grpc() {
+        let map = build_env_map(&[("experimental_otel_protocol", "grpc")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        assert_eq!(
+            result.unwrap().protocol,
+            Some(ExperimentalOtelProtocol::Grpc)
+        );
+    }
+
+    #[test]
+    fn test_from_env_map_protocol_http_protobuf() {
+        for protocol_str in ["http/protobuf", "http", "http_protobuf"] {
+            let map = build_env_map(&[("experimental_otel_protocol", protocol_str)]);
+            let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+            assert!(result.is_some());
+            assert_eq!(
+                result.unwrap().protocol,
+                Some(ExperimentalOtelProtocol::HttpProtobuf)
+            );
+        }
+    }
+
+    #[test]
+    fn test_from_env_map_protocol_invalid() {
+        let map = build_env_map(&[("experimental_otel_protocol", "invalid")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InvalidExperimentalOtelConfig { message } => {
+                assert!(message.contains("Unsupported experimentalObservability.otel protocol"));
+                assert!(message.contains("invalid"));
+            }
+            _ => panic!("Expected InvalidExperimentalOtelConfig"),
+        }
+    }
+
+    #[test]
+    fn test_from_env_map_endpoint() {
+        let endpoint = "https://example.com/otel";
+        let map = build_env_map(&[("experimental_otel_endpoint", endpoint)]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().endpoint, Some(endpoint.to_string()));
+    }
+
+    #[test]
+    fn test_from_env_map_endpoint_empty_ignored() {
+        let map = build_env_map(&[("experimental_otel_endpoint", "")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_from_env_map_timeout_ms() {
+        let map = build_env_map(&[("experimental_otel_timeout_ms", "5000")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().timeout_ms, Some(5000));
+    }
+
+    #[test]
+    fn test_from_env_map_timeout_ms_invalid() {
+        let map = build_env_map(&[("experimental_otel_timeout_ms", "not-a-number")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InvalidExperimentalOtelConfig { message } => {
+                assert!(message.contains("TURBO_EXPERIMENTAL_OTEL_TIMEOUT_MS must be a number"));
+            }
+            _ => panic!("Expected InvalidExperimentalOtelConfig"),
+        }
+    }
+
+    #[test]
+    fn test_from_env_map_headers_single() {
+        let map = build_env_map(&[("experimental_otel_headers", "key1=value1")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let headers = result.unwrap().headers.unwrap();
+        assert_eq!(headers.get("key1"), Some(&"value1".to_string()));
+    }
+
+    #[test]
+    fn test_from_env_map_headers_multiple() {
+        let map = build_env_map(&[("experimental_otel_headers", "key1=value1,key2=value2")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let headers = result.unwrap().headers.unwrap();
+        assert_eq!(headers.get("key1"), Some(&"value1".to_string()));
+        assert_eq!(headers.get("key2"), Some(&"value2".to_string()));
+    }
+
+    #[test]
+    fn test_from_env_map_headers_with_spaces() {
+        let map = build_env_map(&[(
+            "experimental_otel_headers",
+            " key1 = value1 , key2 = value2 ",
+        )]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let headers = result.unwrap().headers.unwrap();
+        assert_eq!(headers.get("key1"), Some(&"value1".to_string()));
+        assert_eq!(headers.get("key2"), Some(&"value2".to_string()));
+    }
+
+    #[test]
+    fn test_from_env_map_headers_missing_equals() {
+        let map = build_env_map(&[("experimental_otel_headers", "key1value1")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InvalidExperimentalOtelConfig { message } => {
+                assert!(message.contains("key=value format"));
+            }
+            _ => panic!("Expected InvalidExperimentalOtelConfig"),
+        }
+    }
+
+    #[test]
+    fn test_from_env_map_headers_empty_key() {
+        let map = build_env_map(&[("experimental_otel_headers", "=value1")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InvalidExperimentalOtelConfig { message } => {
+                assert!(message.contains("keys cannot be empty"));
+            }
+            _ => panic!("Expected InvalidExperimentalOtelConfig"),
+        }
+    }
+
+    #[test]
+    fn test_from_env_map_resource_single() {
+        let map = build_env_map(&[("experimental_otel_resource", "service.name=my-service")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let resource = result.unwrap().resource.unwrap();
+        assert_eq!(
+            resource.get("service.name"),
+            Some(&"my-service".to_string())
+        );
+    }
+
+    #[test]
+    fn test_from_env_map_resource_multiple() {
+        let map = build_env_map(&[(
+            "experimental_otel_resource",
+            "service.name=my-service,env=production",
+        )]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let resource = result.unwrap().resource.unwrap();
+        assert_eq!(
+            resource.get("service.name"),
+            Some(&"my-service".to_string())
+        );
+        assert_eq!(resource.get("env"), Some(&"production".to_string()));
+    }
+
+    #[test]
+    fn test_from_env_map_metrics_run_summary() {
+        let map = build_env_map(&[("experimental_otel_metrics_run_summary", "1")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        assert_eq!(metrics.run_summary, Some(true));
+    }
+
+    #[test]
+    fn test_from_env_map_metrics_task_details() {
+        let map = build_env_map(&[("experimental_otel_metrics_task_details", "1")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        assert_eq!(metrics.task_details, Some(true));
+    }
+
+    #[test]
+    fn test_from_env_map_metrics_both() {
+        let map = build_env_map(&[
+            ("experimental_otel_metrics_run_summary", "1"),
+            ("experimental_otel_metrics_task_details", "0"),
+        ]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        assert_eq!(metrics.run_summary, Some(true));
+        assert_eq!(metrics.task_details, Some(false));
+    }
+
+    #[test]
+    fn test_from_env_map_combined() {
+        let map = build_env_map(&[
+            ("experimental_otel_enabled", "1"),
+            ("experimental_otel_protocol", "grpc"),
+            ("experimental_otel_endpoint", "https://example.com/otel"),
+            ("experimental_otel_timeout_ms", "15000"),
+            ("experimental_otel_headers", "auth=token123"),
+            ("experimental_otel_resource", "service.name=test"),
+            ("experimental_otel_metrics_run_summary", "1"),
+        ]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let opts = result.unwrap();
+        assert_eq!(opts.enabled, Some(true));
+        assert_eq!(opts.protocol, Some(ExperimentalOtelProtocol::Grpc));
+        assert_eq!(opts.endpoint, Some("https://example.com/otel".to_string()));
+        assert_eq!(opts.timeout_ms, Some(15000));
+        assert_eq!(
+            opts.headers.unwrap().get("auth"),
+            Some(&"token123".to_string())
+        );
+        assert_eq!(
+            opts.resource.unwrap().get("service.name"),
+            Some(&"test".to_string())
+        );
+        assert_eq!(opts.metrics.unwrap().run_summary, Some(true));
+    }
+}
