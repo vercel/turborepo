@@ -8,10 +8,10 @@ use std::{
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
-    builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
-    ValueEnum,
+    ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum,
+    builder::NonEmptyStringValueParser,
 };
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 pub use error::Error;
 use serde::Serialize;
 use tracing::{debug, error, log::warn};
@@ -19,8 +19,9 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
-    events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
-    init_telemetry, track_usage, TelemetryHandle,
+    TelemetryHandle,
+    events::{EventBuilder, EventType, command::CommandEventBuilder, generic::GenericEventBuilder},
+    init_telemetry, track_usage,
 };
 use turborepo_types::{
     ContinueMode, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, UIMode,
@@ -1477,11 +1478,7 @@ pub async fn run(
             event.track_call();
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
-            if scan::run(base).await {
-                Ok(0)
-            } else {
-                Ok(1)
-            }
+            if scan::run(base).await { Ok(0) } else { Ok(1) }
         }
         Command::Config => {
             CommandEventBuilder::new("config")
@@ -3397,19 +3394,23 @@ mod test {
                 .collect(),
         )
         .unwrap();
-        assert!(inferred_run
-            .execution_args
-            .as_ref()
-            .is_some_and(|e| e.single_package));
-        assert!(explicit_run
-            .command
-            .as_ref()
-            .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
-                Some(execution_args.single_package)
-            } else {
-                None
-            })
-            .unwrap_or(false));
+        assert!(
+            inferred_run
+                .execution_args
+                .as_ref()
+                .is_some_and(|e| e.single_package)
+        );
+        assert!(
+            explicit_run
+                .command
+                .as_ref()
+                .and_then(|cmd| if let Command::Run { execution_args, .. } = cmd {
+                    Some(execution_args.single_package)
+                } else {
+                    None
+                })
+                .unwrap_or(false)
+        );
     }
 
     #[test_case::test_case(&["turbo", "watch", "build", "--no-daemon"]; "after watch")]
@@ -3462,5 +3463,53 @@ mod test {
             let err = cli.unwrap_err();
             assert_snapshot!(args.join("-").as_str(), err);
         }
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_valid() {
+        let result = super::parse_key_val_pair("key=value");
+        assert_eq!(result.unwrap(), ("key".to_string(), "value".to_string()));
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_with_whitespace() {
+        let result = super::parse_key_val_pair("  key  =  value  ");
+        assert_eq!(result.unwrap(), ("key".to_string(), "value".to_string()));
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_multiple_equals() {
+        let result = super::parse_key_val_pair("key=value=more");
+        assert_eq!(
+            result.unwrap(),
+            ("key".to_string(), "value=more".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_empty_value() {
+        let result = super::parse_key_val_pair("key=");
+        assert_eq!(result.unwrap(), ("key".to_string(), "".to_string()));
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_no_equals() {
+        let result = super::parse_key_val_pair("keyvalue");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "must be in key=value format");
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_empty_key() {
+        let result = super::parse_key_val_pair("=value");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "key cannot be empty");
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_whitespace_only_key() {
+        let result = super::parse_key_val_pair("   =value");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "key cannot be empty");
     }
 }
