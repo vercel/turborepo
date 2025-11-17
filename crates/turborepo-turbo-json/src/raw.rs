@@ -203,6 +203,50 @@ pub struct RawRemoteCacheOptions {
     pub upload_timeout: Option<Spanned<u64>>,
 }
 
+/// OpenTelemetry exporter configuration
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawObservabilityOtel {
+    pub enabled: Option<Spanned<bool>>,
+    pub protocol: Option<Spanned<UnescapedString>>,
+    pub endpoint: Option<Spanned<UnescapedString>>,
+    pub headers: Option<Vec<RawKeyValue>>,
+    pub timeout_ms: Option<Spanned<u64>>,
+    pub resource: Option<Vec<RawKeyValue>>,
+    pub metrics: Option<RawObservabilityOtelMetrics>,
+}
+
+/// Experimental observability configuration
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawExperimentalObservability {
+    pub otel: Option<RawObservabilityOtel>,
+}
+
+/// A key-value pair for OTel configuration
+#[derive(Serialize, Debug, Clone, Iterable, Deserializable)]
+pub struct RawKeyValue {
+    pub key: Spanned<UnescapedString>,
+    pub value: Spanned<UnescapedString>,
+}
+
+/// OTel metrics configuration
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawObservabilityOtelMetrics {
+    pub run_summary: Option<Spanned<bool>>,
+    pub task_details: Option<Spanned<bool>>,
+}
+
+impl Default for RawKeyValue {
+    fn default() -> Self {
+        Self {
+            key: Spanned::new(UnescapedString::from(String::new())),
+            value: Spanned::new(UnescapedString::from(String::new())),
+        }
+    }
+}
+
 // Root turbo.json
 #[derive(Default, Debug, Clone, Iterable, Deserializable)]
 pub struct RawRootTurboJson {
@@ -234,6 +278,8 @@ pub struct RawRootTurboJson {
     pub boundaries: Option<Spanned<BoundariesConfig>>,
 
     pub future_flags: Option<Spanned<FutureFlags>>,
+    #[deserializable(rename = "experimentalObservability")]
+    pub experimental_observability: Option<RawExperimentalObservability>,
     #[deserializable(rename = "//")]
     pub _comment: Option<String>,
 }
@@ -433,6 +479,13 @@ pub struct RawTurboJson {
     #[ts(optional)]
     pub future_flags: Option<Spanned<FutureFlags>>,
 
+    /// Experimental observability configuration for OpenTelemetry export.
+    #[serde(rename = "experimentalObservability")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub experimental_observability: Option<RawExperimentalObservability>,
+
     // Internal field - excluded from schema
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -630,6 +683,7 @@ impl From<RawRootTurboJson> for RawTurboJson {
             boundaries: root.boundaries,
             concurrency: root.concurrency,
             future_flags: root.future_flags,
+            experimental_observability: root.experimental_observability,
             _comment: root._comment,
             extends: None, // Root configs never have extends
         }

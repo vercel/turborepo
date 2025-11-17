@@ -1,4 +1,11 @@
-use std::{backtrace::Backtrace, env, ffi::OsString, fmt, io, mem, process};
+use std::{
+    backtrace::Backtrace,
+    collections::BTreeMap,
+    env,
+    ffi::OsString,
+    fmt::{self, Display},
+    io, mem, process,
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -24,6 +31,7 @@ use crate::{
         bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link, login, logout,
         ls, prune, query, run, scan, telemetry, unlink, CommandBase,
     },
+    config::{ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol},
     get_version,
     run::watch::WatchClient,
     shim::TurboState,
@@ -99,6 +107,8 @@ pub struct Args {
     /// verbosity
     #[clap(flatten)]
     pub verbosity: Verbosity,
+    #[clap(flatten)]
+    pub experimental_otel_args: ExperimentalOtelCliArgs,
     /// Force a check for a new version of turbo
     #[clap(long, global = true, hide = true)]
     pub check_for_update: bool,
@@ -155,6 +165,127 @@ impl From<Verbosity> for u8 {
     fn from(val: Verbosity) -> Self {
         let Verbosity { verbosity, v } = val;
         verbosity.unwrap_or(v)
+    }
+}
+
+fn parse_key_val_pair(s: &str) -> Result<(String, String), String> {
+    let (key, value) = s
+        .split_once('=')
+        .ok_or_else(|| "must be in key=value format".to_string())?;
+    let key = key.trim();
+    if key.is_empty() {
+        return Err("key cannot be empty".to_string());
+    }
+    Ok((key.to_string(), value.trim().to_string()))
+}
+
+#[derive(Parser, Clone, Debug, Default, PartialEq)]
+pub struct ExperimentalOtelCliArgs {
+    #[clap(
+        long = "experimental-otel-enabled",
+        global = true,
+        num_args = 0..=1,
+        default_missing_value = "true"
+    )]
+    pub enabled: Option<bool>,
+    #[clap(
+        long = "experimental-otel-protocol",
+        value_enum,
+        global = true,
+        value_name = "PROTOCOL"
+    )]
+    pub protocol: Option<ExperimentalOtelProtocol>,
+    #[clap(long = "experimental-otel-endpoint", global = true, value_name = "URL")]
+    pub endpoint: Option<String>,
+    #[clap(
+        long = "experimental-otel-timeout-ms",
+        global = true,
+        value_name = "MILLISECONDS"
+    )]
+    pub timeout_ms: Option<u64>,
+    #[clap(
+        long = "experimental-otel-header",
+        global = true,
+        value_parser = parse_key_val_pair,
+        value_name = "KEY=VALUE"
+    )]
+    pub headers: Vec<(String, String)>,
+    #[clap(
+        long = "experimental-otel-resource",
+        global = true,
+        value_parser = parse_key_val_pair,
+        value_name = "KEY=VALUE"
+    )]
+    pub resource_attributes: Vec<(String, String)>,
+    #[clap(
+        long = "experimental-otel-metrics-run-summary",
+        global = true,
+        num_args = 0..=1,
+        default_missing_value = "true"
+    )]
+    pub metrics_run_summary: Option<bool>,
+    #[clap(
+        long = "experimental-otel-metrics-task-details",
+        global = true,
+        num_args = 0..=1,
+        default_missing_value = "true"
+    )]
+    pub metrics_task_details: Option<bool>,
+}
+
+impl ExperimentalOtelCliArgs {
+    pub fn to_config(&self) -> Option<ExperimentalOtelOptions> {
+        let mut options = ExperimentalOtelOptions::default();
+        let mut touched = false;
+
+        if let Some(enabled) = self.enabled {
+            options.enabled = Some(enabled);
+            touched = true;
+        }
+        if let Some(protocol) = self.protocol {
+            options.protocol = Some(protocol);
+            touched = true;
+        }
+        if let Some(endpoint) = &self.endpoint {
+            options.endpoint = Some(endpoint.clone());
+            touched = true;
+        }
+        if let Some(timeout) = self.timeout_ms {
+            options.timeout_ms = Some(timeout);
+            touched = true;
+        }
+        if !self.headers.is_empty() {
+            let mut map = BTreeMap::new();
+            for (key, value) in &self.headers {
+                map.insert(key.clone(), value.clone());
+            }
+            options.headers = Some(map);
+            touched = true;
+        }
+        if !self.resource_attributes.is_empty() {
+            let mut map = BTreeMap::new();
+            for (key, value) in &self.resource_attributes {
+                map.insert(key.clone(), value.clone());
+            }
+            options.resource = Some(map);
+            touched = true;
+        }
+        if let Some(value) = self.metrics_run_summary {
+            options
+                .metrics
+                .get_or_insert_with(ExperimentalOtelMetricsOptions::default)
+                .run_summary = Some(value);
+            touched = true;
+        }
+        if let Some(value) = self.metrics_task_details {
+            options
+                .metrics
+                .get_or_insert_with(ExperimentalOtelMetricsOptions::default)
+                .task_details = Some(value);
+            touched = true;
+        }
+
+        touched.then_some(options)
     }
 }
 
