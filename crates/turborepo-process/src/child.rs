@@ -770,7 +770,7 @@ mod test {
         child::{ChildExit, ShutdownStyle},
     };
 
-    const STARTUP_DELAY: Duration = Duration::from_millis(500);
+    const STARTUP_DELAY: Duration = Duration::from_millis(1000);
     // We skip testing PTY usage on Windows
     const TEST_PTY: bool = !cfg!(windows);
     const EOT: char = '\u{4}';
