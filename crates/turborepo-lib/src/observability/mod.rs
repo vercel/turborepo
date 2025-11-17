@@ -20,7 +20,7 @@
 
 use std::sync::Arc;
 
-use crate::{config::ExperimentalOtelOptions, run::summary::RunSummary};
+use crate::{config::ExperimentalObservabilityOptions, run::summary::RunSummary};
 
 mod otel;
 
@@ -68,11 +68,15 @@ impl Handle {
     /// Returns `None` if observability is disabled or misconfigured.
     ///
     /// Currently, this only supports OpenTelemetry backends configured via
-    /// `ExperimentalOtelOptions` (from `experimentalObservability.otel` in
-    /// turbo.json or via environment variables/CLI flags). In the future, this
-    /// may dispatch to different backends based on the configuration
-    /// provided.
-    pub(crate) fn try_init(options: &ExperimentalOtelOptions) -> Option<Self> {
-        otel::try_init_otel(options)
+    /// `ExperimentalObservabilityOptions` (from
+    /// `experimentalObservability.otel` in turbo.json or via environment
+    /// variables/CLI flags). In the future, this may dispatch to different
+    /// backends based on the configuration provided.
+    pub(crate) fn try_init(options: &ExperimentalObservabilityOptions) -> Option<Self> {
+        if let Some(otel_options) = options.otel.as_ref() {
+            otel::try_init_otel(otel_options)
+        } else {
+            None
+        }
     }
 }

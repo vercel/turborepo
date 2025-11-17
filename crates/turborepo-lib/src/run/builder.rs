@@ -490,7 +490,7 @@ impl RunBuilder {
             .should_print_prelude_override
             .unwrap_or_else(|| self.will_execute_tasks());
 
-        let observability_handle = match self.opts.experimental_otel.as_ref() {
+        let observability_handle = match self.opts.experimental_observability.as_ref() {
             Some(opts) => ObservabilityHandle::try_init(opts),
             None => None,
         };

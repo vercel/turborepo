@@ -10,7 +10,10 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::CacheConfig;
 use turborepo_types::{EnvMode, LogOrder, UIMode};
 
-use crate::{ConfigurationOptions, Error, ExperimentalOtelOptions, ResolvedConfigurationOptions};
+use crate::{
+    ConfigurationOptions, Error, ExperimentalObservabilityOptions, ExperimentalOtelOptions,
+    ResolvedConfigurationOptions,
+};
 
 const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_api", "api_url"),
@@ -251,6 +254,8 @@ impl ResolvedConfigurationOptions for EnvVars {
             .map_err(Error::InvalidSsoLoginCallbackPort)?;
 
         let experimental_otel = ExperimentalOtelOptions::from_env_map(&self.output_map)?;
+        let experimental_observability =
+            experimental_otel.map(|otel| ExperimentalObservabilityOptions { otel: Some(otel) });
 
         let output = ConfigurationOptions {
             api_url: self.output_map.get("api_url").cloned(),
@@ -288,7 +293,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             sso_login_callback_port,
             // Do not allow future flags to be set by env var
             future_flags: None,
-            experimental_otel,
+            experimental_observability,
         };
 
         Ok(output)
