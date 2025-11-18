@@ -13,6 +13,11 @@ use turbopath::{AbsoluteSystemPathBuf, PathError};
 /// is set, it will return that path instead of `dirs_next::config_dir`.
 pub fn config_dir() -> Result<Option<AbsoluteSystemPathBuf>, PathError> {
     if let Ok(dir) = std::env::var("TURBO_CONFIG_DIR_PATH") {
+        // Reject empty strings per Unix convention
+        if dir.is_empty() {
+            return Err(PathError::InvalidUnicode(dir));
+        }
+
         let raw = std::path::PathBuf::from(&dir);
 
         // Resolve to absolute path if necessary
@@ -22,9 +27,7 @@ pub fn config_dir() -> Result<Option<AbsoluteSystemPathBuf>, PathError> {
             std::env::current_dir()?.join(raw)
         };
 
-        let abs_str = abs
-            .to_str()
-            .ok_or_else(|| PathError::InvalidUnicode(dir.clone()))?;
+        let abs_str = abs.to_str().ok_or_else(|| PathError::InvalidUnicode(dir))?;
 
         return AbsoluteSystemPathBuf::new(abs_str).map(Some);
     }
@@ -41,6 +44,11 @@ pub fn config_dir() -> Result<Option<AbsoluteSystemPathBuf>, PathError> {
 /// is set, it will return that path instead of `dirs_next::config_dir`.
 pub fn vercel_config_dir() -> Result<Option<AbsoluteSystemPathBuf>, PathError> {
     if let Ok(dir) = std::env::var("VERCEL_CONFIG_DIR_PATH") {
+        // Reject empty strings per Unix convention.
+        if dir.is_empty() {
+            return Err(PathError::InvalidUnicode(dir));
+        }
+
         return AbsoluteSystemPathBuf::new(dir).map(Some);
     }
 
@@ -86,14 +94,18 @@ mod tests {
     }
 
     #[test]
-    fn test_config_dir_with_invalid_env_var() {
-        // Set TURBO_CONFIG_DIR_PATH to a relative path (invalid)
+    fn test_config_dir_with_relative_path() {
+        // Set TURBO_CONFIG_DIR_PATH to a relative path (should be resolved to absolute)
         unsafe {
             env::set_var("TURBO_CONFIG_DIR_PATH", "relative/path");
         }
 
         let result = config_dir();
-        assert!(result.is_err());
+        assert!(result.is_ok());
+        let path = result.unwrap();
+        assert!(path.is_some());
+        // Verify it was resolved to an absolute path
+        assert!(path.unwrap().as_path().is_absolute());
 
         unsafe {
             env::remove_var("TURBO_CONFIG_DIR_PATH");
