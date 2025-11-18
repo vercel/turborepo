@@ -83,7 +83,11 @@ fn get_tag_from_version(pre: &semver::Prerelease) -> VersionTag {
     }
 }
 
-fn should_skip_notification() -> bool {
+fn should_skip_notification(config_no_update: bool) -> bool {
+    if config_no_update {
+        return true;
+    }
+
     NOTIFIER_DISABLE_VARS
         .iter()
         .chain(ENVIRONMENTAL_DISABLE_VARS.iter())
@@ -99,11 +103,12 @@ pub fn display_update_check(
     timeout: Option<Duration>,
     interval: Option<Duration>,
     package_manager: &PackageManager,
+    config_no_update: bool,
 ) -> Result<(), UpdateNotifierError> {
     // bail early if the user has disabled update notifications
-    if should_skip_notification() {
-        return Ok(());
-    }
+    if should_skip_notification(config_no_update) {
+    return Ok(());
+}
 
     let version = check_for_updates(package_name, current_version, timeout, interval);
 
