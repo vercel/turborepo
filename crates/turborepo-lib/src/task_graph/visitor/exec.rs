@@ -185,6 +185,8 @@ enum ExecOutcome {
     },
     // Task didn't execute normally due to a shutdown being initiated by another task
     Shutdown,
+    // Task was stopped to be restarted
+    Restarted,
 }
 
 enum SuccessOutcome {
@@ -258,6 +260,12 @@ impl ExecContext {
                 // Probably overkill here, but we should make sure the process manager is
                 // stopped if we think we're shutting down.
                 self.manager.stop().await;
+            }
+            Ok(ExecOutcome::Restarted) => {
+                tracker.cancel();
+                // We need to stop dependent tasks because this task will be restarted
+                // in a new run.
+                callback.send(Err(StopExecution::DependentTasks)).ok();
             }
             Err(e) => {
                 tracker.cancel();
@@ -455,7 +463,17 @@ impl ExecContext {
             // Something else killed the child
             ChildExit::KilledExternal => Err(InternalError::ExternalKill),
             // The child was killed by turbo indicating a shutdown
-            ChildExit::Killed | ChildExit::Interrupted => Ok(ExecOutcome::Shutdown),
+            ChildExit::Killed | ChildExit::Interrupted => {
+                // We distinguish between a full shutdown and a restart based on whether the
+                // process manager is closing. If it is closing, it means we are shutting down
+                // the entire run. If it is not closing, it means we are restarting specific
+                // tasks.
+                if self.manager.is_closing() {
+                    Ok(ExecOutcome::Shutdown)
+                } else {
+                    Ok(ExecOutcome::Restarted)
+                }
+            }
         }
     }
 }

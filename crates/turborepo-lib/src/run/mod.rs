@@ -753,4 +753,8 @@ impl RunStopper {
     pub async fn stop(&self) {
         self.manager.stop().await;
     }
+
+    pub async fn stop_tasks_matching(&self, predicate: impl Fn(&turborepo_process::Child) -> bool) {
+        self.manager.stop_children_matching(predicate).await;
+    }
 }

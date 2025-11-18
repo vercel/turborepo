@@ -6,6 +6,7 @@ use std::{
 
 use itertools::Itertools;
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_task_id::TaskId;
 
 /// A command builder that can be used to build both regular
 /// child processes and ones spawned hooked up to a PTY
@@ -17,6 +18,7 @@ pub struct Command {
     env: BTreeMap<OsString, OsString>,
     open_stdin: bool,
     env_clear: bool,
+    task_id: Option<TaskId<'static>>,
 }
 
 impl Command {
@@ -29,6 +31,7 @@ impl Command {
             env: BTreeMap::new(),
             open_stdin: false,
             env_clear: false,
+            task_id: None,
         }
     }
 
@@ -106,6 +109,15 @@ impl Command {
     pub fn program(&self) -> &OsStr {
         &self.program
     }
+
+    pub fn task_id(&mut self, task_id: TaskId<'static>) -> &mut Self {
+        self.task_id = Some(task_id);
+        self
+    }
+
+    pub fn get_task_id(&self) -> Option<&TaskId<'static>> {
+        self.task_id.as_ref()
+    }
 }
 
 impl From<Command> for tokio::process::Command {
@@ -117,6 +129,7 @@ impl From<Command> for tokio::process::Command {
             env,
             open_stdin,
             env_clear,
+            task_id: _,
         } = value;
 
         let mut cmd = tokio::process::Command::new(program);
@@ -149,6 +162,7 @@ impl From<Command> for portable_pty::CommandBuilder {
             cwd,
             env,
             env_clear,
+            task_id: _,
             ..
         } = value;
         let mut cmd = portable_pty::CommandBuilder::new(program);

@@ -134,6 +134,7 @@ impl<'a> CommandProvider for PackageGraphCommandProvider<'a> {
         // We clear the env before populating it with variables we expect
         cmd.env_clear();
         cmd.envs(environment.iter());
+        cmd.task_id(task_id.clone().into_owned());
 
         // If the task has an associated proxy, then we indicate this to the underlying
         // task via an env var
@@ -277,6 +278,7 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
             let program = which::which(package_manager.command())?;
             let mut cmd = Command::new(&program);
             cmd.current_dir(package_dir).args(args).open_stdin();
+            cmd.task_id(task_id.clone().into_owned());
             Some(cmd)
         } else if has_mfe_dependency {
             tracing::debug!(
@@ -297,6 +299,7 @@ impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<
             let program = package_dir.join_components(&["node_modules", ".bin", bin_name]);
             let mut cmd = Command::new(program.as_std_path());
             cmd.current_dir(package_dir).args(args).open_stdin();
+            cmd.task_id(task_id.clone().into_owned());
             Some(cmd)
         } else {
             tracing::debug!("MicroFrontendProxyProvider::command - using Turborepo built-in proxy");

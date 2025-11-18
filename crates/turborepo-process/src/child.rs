@@ -31,6 +31,7 @@ use tokio::{
     sync::{mpsc, watch},
 };
 use tracing::{debug, trace};
+use turborepo_task_id::TaskId;
 
 use super::{Command, PtySize};
 
@@ -384,20 +385,33 @@ pub struct Child {
 }
 
 #[derive(Clone, Debug)]
-pub struct ChildCommandChannel(mpsc::Sender<ChildCommand>);
+pub struct ChildCommandChannel {
+    sender: mpsc::Sender<ChildCommand>,
+    task_id: Option<TaskId<'static>>,
+}
 
 impl ChildCommandChannel {
-    pub fn new() -> (Self, mpsc::Receiver<ChildCommand>) {
+    pub fn new(task_id: Option<TaskId<'static>>) -> (Self, mpsc::Receiver<ChildCommand>) {
         let (tx, rx) = mpsc::channel(1);
-        (ChildCommandChannel(tx), rx)
+        (
+            ChildCommandChannel {
+                sender: tx,
+                task_id,
+            },
+            rx,
+        )
     }
 
     pub async fn kill(&self) -> Result<(), mpsc::error::SendError<ChildCommand>> {
-        self.0.send(ChildCommand::Kill).await
+        self.sender.send(ChildCommand::Kill).await
     }
 
     pub async fn stop(&self) -> Result<(), mpsc::error::SendError<ChildCommand>> {
-        self.0.send(ChildCommand::Stop).await
+        self.sender.send(ChildCommand::Stop).await
+    }
+
+    pub fn get_task_id(&self) -> Option<&TaskId<'static>> {
+        self.task_id.as_ref()
     }
 }
 
@@ -416,6 +430,7 @@ impl Child {
         pty_size: Option<PtySize>,
     ) -> io::Result<Self> {
         let label = command.label();
+        let task_id = command.get_task_id().cloned();
         let SpawnResult {
             handle: mut child,
             io: ChildIO { stdin, output },
@@ -428,7 +443,7 @@ impl Child {
 
         let pid = child.pid();
 
-        let (command_tx, mut command_rx) = ChildCommandChannel::new();
+        let (command_tx, mut command_rx) = ChildCommandChannel::new(task_id);
 
         // we use a watch channel to communicate the exit code back to the
         // caller. we are interested in three cases:
@@ -680,6 +695,11 @@ impl Child {
     pub fn label(&self) -> &str {
         &self.label
     }
+
+    pub fn task_id(&self) -> Option<&TaskId<'static>> {
+        self.command_channel
+            .get_task_id()
+    }
 }
 
 // Adds a trailing newline if necessary to the buffer
@@ -750,7 +770,7 @@ impl ChildStateManager {
 impl Child {
     // Helper method for checking if child is running
     fn is_running(&self) -> bool {
-        !self.command_channel.0.is_closed()
+        !self.command_channel.sender.is_closed()
     }
 }
 

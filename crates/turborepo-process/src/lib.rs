@@ -130,6 +130,12 @@ impl ProcessManager {
         self.close(|mut c| async move { c.stop().await }).await
     }
 
+    /// Stop children that match the given predicate
+    pub async fn stop_children_matching(&self, predicate: impl Fn(&Child) -> bool) {
+        self.close_matching(|mut c| async move { c.stop().await }, predicate)
+            .await
+    }
+
     /// Stop the process manager, waiting for all child processes to exit.
     ///
     /// If you want to set a timeout, use `tokio::time::timeout` and
@@ -174,8 +180,46 @@ impl ProcessManager {
         }
     }
 
+    async fn close_matching<F, C, P>(&self, callback: F, predicate: P)
+    where
+        F: Fn(Child) -> C + Sync + Send + Copy + 'static,
+        C: Future<Output = Option<ChildExit>> + Sync + Send + 'static,
+        P: Fn(&Child) -> bool,
+    {
+        let mut set = JoinSet::new();
+
+        {
+            let mut lock = self.state.lock().expect("not poisoned");
+            // We don't set is_closing = true here because we want to allow new spawns
+
+            let matching: Vec<_> = lock
+                .children
+                .iter()
+                .filter(|c| predicate(c))
+                .cloned()
+                .collect();
+
+            lock.children.retain(|c| !predicate(c));
+
+            for child in matching {
+                let child = child.clone();
+                set.spawn(async move { callback(child).await });
+            }
+        }
+
+        debug!("waiting for {} processes to exit", set.len());
+
+        while let Some(out) = set.join_next().await {
+            trace!("process exited: {:?}", out);
+        }
+    }
+
     pub fn set_pty_size(&self, rows: u16, cols: u16) {
         self.state.lock().expect("not poisoned").size = Some(PtySize { rows, cols });
+    }
+
+    pub fn is_closing(&self) -> bool {
+        self.state.lock().expect("not poisoned").is_closing
     }
 }
 
