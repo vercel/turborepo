@@ -107,8 +107,8 @@ pub fn display_update_check(
 ) -> Result<(), UpdateNotifierError> {
     // bail early if the user has disabled update notifications
     if should_skip_notification(config_no_update) {
-    return Ok(());
-}
+        return Ok(());
+    }
 
     let version = check_for_updates(package_name, current_version, timeout, interval);
 
