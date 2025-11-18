@@ -12,41 +12,19 @@ runs:
         path: |
           /usr/bin/capnp
           /usr/bin/capnpc
-        key: ${{ runner.os }}-capnproto-0.11
-
-    - name: "Cache capnproto (macOS)"
-      if: runner.os == 'macOS' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-      uses: actions/cache@v4
-      id: cache-capnp-macos
-      with:
-        path: |
-          /usr/local/bin/capnp
-          /usr/local/bin/capnpc
-          /opt/homebrew/bin/capnp
-          /opt/homebrew/bin/capnpc
-        key: ${{ runner.os }}-capnproto-0.11
-
-    - name: "Cache capnproto (Windows)"
-      if: runner.os == 'Windows' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-      uses: actions/cache@v4
-      id: cache-capnp-windows
-      with:
-        path: |
-          C:\ProgramData\chocolatey\bin\capnp.exe
-          C:\ProgramData\chocolatey\bin\capnpc.exe
-        key: ${{ runner.os }}-capnproto-0.11
+        key: ${{ runner.os }}-capnproto-0.11.2
 
     - name: "Setup capnproto for Linux"
-      if: runner.os == 'Linux' && steps.cache-capnp-linux.outputs.cache-hit != 'true'
+      if: runner.os == 'Linux' && (steps.cache-capnp-linux.outcome == 'skipped' || steps.cache-capnp-linux.outputs.cache-hit != 'true')
       shell: bash
       run: sudo apt-get -y update && sudo apt-get install -y capnproto
 
     - name: "Setup capnproto for macos"
-      if: runner.os == 'macOS' && steps.cache-capnp-macos.outputs.cache-hit != 'true'
+      if: runner.os == 'macOS'
       shell: bash
       run: brew install capnp
 
     - name: "Setup capnproto for Windows"
-      if: runner.os == 'Windows' && steps.cache-capnp-windows.outputs.cache-hit != 'true'
+      if: runner.os == 'Windows'
       shell: bash
       run: choco install capnproto
