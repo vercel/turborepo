@@ -27,7 +27,7 @@ impl LocalTurboConfig {
     }
 
     // Used for testing when we want to manually set the controlling env var
-    fn infer_internal(repo_state: &RepoState, _is_enabled: Option<bool>) -> Option<Self> {
+    fn infer_internal(repo_state: &RepoState, is_enabled: Option<bool>) -> Option<Self> {
         // TODO: once we have properly communicated this functionality we should make
         // this opt-out.
         debug!("FORCING local turbo binary. Download disabled.");
