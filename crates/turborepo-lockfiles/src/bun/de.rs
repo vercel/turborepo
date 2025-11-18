@@ -108,7 +108,7 @@ mod test {
     use test_case::test_case;
 
     use super::*;
-    use crate::{BunLockfile, bun::WorkspaceEntry};
+    use crate::{BunLockfile, Lockfile, bun::WorkspaceEntry};
 
     macro_rules! fixture {
         ($name:ident, $kind:ty, $cons:expr) => {
@@ -216,15 +216,96 @@ mod test {
 
     #[test]
     fn test_full_parse() {
-        let contents = include_str!("../../fixtures/basic-bun.lock");
+        let contents = include_str!("../../fixtures/basic-bun-v0.lock");
         let result = BunLockfile::from_str(contents);
         assert!(result.is_ok(), "{}", result.unwrap_err());
     }
 
     #[test]
     fn test_patch() {
-        let contents = include_str!("../../fixtures/bun-patch.lock");
+        let contents = include_str!("../../fixtures/bun-patch-v0.lock");
         let result = BunLockfile::from_str(contents);
         assert!(result.is_ok(), "{}", result.unwrap_err());
+    }
+
+    #[test]
+    fn test_v1_create_turbo() {
+        let contents = include_str!("../../fixtures/bun-v1-create-turbo.lock");
+        let result = BunLockfile::from_str(contents);
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+
+        let lockfile = result.unwrap();
+
+        // Test transitive closure calculation to ensure all dependencies can be
+        // resolved
+        for (workspace_path, workspace_entry) in &lockfile.data.workspaces {
+            let mut unresolved_deps = std::collections::HashMap::new();
+
+            if let Some(deps) = &workspace_entry.dependencies {
+                unresolved_deps.extend(deps.clone());
+            }
+            if let Some(dev_deps) = &workspace_entry.dev_dependencies {
+                unresolved_deps.extend(dev_deps.clone());
+            }
+
+            if !unresolved_deps.is_empty() {
+                let closure =
+                    crate::transitive_closure(&lockfile, workspace_path, unresolved_deps, false);
+                assert!(
+                    closure.is_ok(),
+                    "Transitive closure failed for workspace '{}': {}",
+                    workspace_path,
+                    closure.unwrap_err()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_v1_issue_10410() {
+        let contents = include_str!("../../fixtures/bun-v1-issue-10410.lock");
+        let result = BunLockfile::from_str(contents);
+        assert!(result.is_ok(), "{}", result.unwrap_err());
+
+        let lockfile = result.unwrap();
+
+        let result = lockfile.all_dependencies("@tailwindcss/oxide-wasm32-wasi@4.1.13");
+        assert!(
+            result.is_ok(),
+            "Failed to get dependencies for @tailwindcss/oxide-wasm32-wasi: {}",
+            result.unwrap_err()
+        );
+
+        // Test full transitive closure for each workspace
+        for (workspace_path, workspace_entry) in &lockfile.data.workspaces {
+            let mut unresolved_deps = std::collections::HashMap::new();
+
+            if let Some(deps) = &workspace_entry.dependencies {
+                unresolved_deps.extend(deps.clone());
+            }
+            if let Some(dev_deps) = &workspace_entry.dev_dependencies {
+                unresolved_deps.extend(dev_deps.clone());
+            }
+
+            if !unresolved_deps.is_empty() {
+                let closure =
+                    crate::transitive_closure(&lockfile, workspace_path, unresolved_deps, false);
+                assert!(
+                    closure.is_ok(),
+                    "Transitive closure failed for workspace '{}': {}. This likely means a \
+                     package entry is missing or bundled dependencies are not being resolved \
+                     correctly.",
+                    workspace_path,
+                    closure.unwrap_err()
+                );
+
+                // Verify we got some packages in the closure
+                let closure = closure.unwrap();
+                assert!(
+                    !closure.is_empty(),
+                    "Expected non-empty transitive closure for workspace '{workspace_path}'"
+                );
+            }
+        }
     }
 }

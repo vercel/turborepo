@@ -1,6 +1,6 @@
 name: Turborepo bug report
 description: Create a bug report
-labels: ["kind: bug", "needs: triage"]
+labels: ["kind: bug"]
 
 body:
   - type: markdown
@@ -15,7 +15,7 @@ body:
   - type: checkboxes
     attributes:
       label: Verify canary release
-      description: "Please install the canary version of `turbo` (e.g. `npm install turbo@canary`) to try the canary version of Turborepo. It includes all features and fixes that have not been released to the stable version yet. Some issues may already be fixed in the canary version, so please verify that your issue reproduces before opening a new issue."
+      description: "Please install the canary version of `turbo` using your package manager (e.g. `npm install turbo@canary`) to try the canary version of Turborepo. It includes all features and fixes that have not been released to the stable version yet. Some issues may already be fixed in the canary version, so please verify that your issue reproduces before opening a new issue."
       options:
         - label: I verified that the issue exists in the latest Turborepo canary release.
           required: true
@@ -70,7 +70,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Another way you can help the maintainers is to pinpoint the `canary` version of `turbo` that introduced the issue. Check out our [releases](https://github.com/vercel/turborepo/releases), and try to find the first `canary` release that introduced the issue. While not required, this will help us narrow down the scope of the issue, and possibly point to the PR/code change that introduced it. You can install a specific version of `turbo` by running `npm install turbo@<version>`.
+        Another way you can help the maintainers is to pinpoint the `canary` version of `turbo` that introduced the issue. Check out our [releases](https://github.com/vercel/turborepo/releases), and try to find the first `canary` release that introduced the issue. While not required, this will help us narrow down the scope of the issue, and possibly point to the PR/code change that introduced it. You can install a specific version of `turbo` by running `npm install turbo@<version>` or the equivalent for your package manager.
   - type: textarea
     attributes:
       label: Additional context

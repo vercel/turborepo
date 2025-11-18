@@ -45,7 +45,7 @@ npx create-turbo@latest
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 ```bash title="Terminal"
 bunx create-turbo@latest
 ```
@@ -128,7 +128,7 @@ Below, the structural elements of `create-turbo` that make it a valid workspace 
   </Files>
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
   <Files>
     <File name="package.json" green />
     <File name="bun.lock" green />
@@ -206,7 +206,7 @@ First, your package manager needs to describe the locations of your packages. We
   <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces">npm workspace documentation</LinkToDocumentation>
   </Tab>
 
-  <Tab value="bun (Beta)">
+  <Tab value="bun">
   ```json title="./package.json"
   {
     "workspaces": [
@@ -305,7 +305,7 @@ The root `package.json` is the base for your workspace. Below is a common exampl
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 
 ```json title="./package.json"
 {
@@ -410,7 +410,7 @@ You may be more familiar with TypeScript's `compilerOptions#paths` option, which
 
 ### Source code
 
-Of course, you'll want some source code in your package. Packages commonly use an `src` directory to store their source code and compile to a `dist` directory (that should also be located within the package), although this is not a requirement.
+Of course, you'll want some source code in your package. Packages commonly use a `src` directory to store their source code and compile to a `dist` directory (that should also be located within the package), although this is not a requirement.
 
 ## Common pitfalls
 

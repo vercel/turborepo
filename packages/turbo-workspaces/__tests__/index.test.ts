@@ -2,8 +2,8 @@ import path from "node:path";
 import execa from "execa";
 import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures } from "@turbo/test-utils";
-import { describe, it, expect, jest } from "@jest/globals";
-import { getWorkspaceDetails, convert } from "../src";
+import { describe, it, expect, jest, beforeEach } from "@jest/globals";
+import { getWorkspaceDetails, convert, install } from "../src";
 import { generateConvertMatrix } from "./test-utils";
 
 jest.mock("execa", () => jest.fn());
@@ -11,6 +11,108 @@ jest.mock("execa", () => jest.fn());
 describe("Node entrypoint", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    (execa as jest.MockedFunction<typeof execa>).mockResolvedValue({
+      stdout: "",
+      stderr: "",
+      exitCode: 0,
+      command: "",
+      failed: false,
+      timedOut: false,
+      isCanceled: false,
+      killed: false,
+    } as any);
+  });
+
+  describe("install", () => {
+    it("should use shell option on Windows for all package managers", async () => {
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, "platform", {
+        value: "win32",
+      });
+
+      const { root } = useFixture({
+        fixture: `./bun/monorepo`,
+      });
+
+      const mockProject = {
+        name: "test-project",
+        description: undefined,
+        packageManager: "bun" as const,
+        paths: {
+          root,
+          packageJson: path.join(root, "package.json"),
+          lockfile: path.join(root, "bun.lockb"),
+          nodeModules: path.join(root, "node_modules"),
+        },
+        workspaceData: {
+          globs: ["apps/*", "packages/*"],
+          workspaces: [],
+        },
+      };
+
+      await install({
+        project: mockProject,
+        to: { name: "bun", version: "1.0.1" },
+        options: { dry: false },
+      });
+
+      expect(execa).toHaveBeenCalledWith("bun", ["install"], {
+        cwd: root,
+        preferLocal: true,
+        shell: true,
+      });
+
+      Object.defineProperty(process, "platform", {
+        value: originalPlatform,
+      });
+    });
+
+    it("should not use shell option on non-Windows platforms", async () => {
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, "platform", {
+        value: "darwin",
+      });
+
+      const { root } = useFixture({
+        fixture: `./bun/monorepo`,
+      });
+
+      const mockProject = {
+        name: "test-project",
+        description: undefined,
+        packageManager: "bun" as const,
+        paths: {
+          root,
+          packageJson: path.join(root, "package.json"),
+          lockfile: path.join(root, "bun.lockb"),
+          nodeModules: path.join(root, "node_modules"),
+        },
+        workspaceData: {
+          globs: ["apps/*", "packages/*"],
+          workspaces: [],
+        },
+      };
+
+      await install({
+        project: mockProject,
+        to: { name: "bun", version: "1.0.1" },
+        options: { dry: false },
+      });
+
+      expect(execa).toHaveBeenCalledWith("bun", ["install"], {
+        cwd: root,
+        preferLocal: true,
+        shell: false,
+      });
+
+      Object.defineProperty(process, "platform", {
+        value: originalPlatform,
+      });
+    });
   });
 
   describe("convert", () => {

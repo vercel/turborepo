@@ -127,6 +127,8 @@ export async function install(args: InstallArgs) {
     try {
       await execa(packageManager.command, packageManager.installArgs, {
         cwd: args.project.paths.root,
+        preferLocal: true,
+        shell: process.platform === "win32",
       });
       if (spinner) {
         spinner.stop();

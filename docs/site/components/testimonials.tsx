@@ -41,7 +41,7 @@ export const Testimonials = () => {
         <Card
           name="Matt Pocock"
           alias="@mattpocockuk"
-          avatar="https://pbs.twimg.com/profile_images/1666460461884211204/SmBm505D_400x400.jpg"
+          avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/mattpocockuk.jpg"
           url="https://x.com/mattpocockuk/status/1498696992943452168"
         >
           <p className="mb-4">
@@ -52,7 +52,7 @@ export const Testimonials = () => {
         <Card
           name="Lewis ⚡"
           alias="@lewisbuildsai"
-          avatar="https://pbs.twimg.com/profile_images/1873766582855282688/OXiFZXAY_400x400.jpg"
+          avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/lewisbuildsai.jpg"
           url="https://x.com/lewisbuildsai/status/1906014322926420104"
         >
           <p className="mb-4">
@@ -69,7 +69,7 @@ export const Testimonials = () => {
         <Card
           name="Cory House"
           alias="@housecor"
-          avatar="https://pbs.twimg.com/profile_images/1869130199045906432/PUA1SYIL_400x400.jpg"
+          avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/housecor.jpg"
           url="https://x.com/housecor/status/1580923528596946944"
         >
           <p className="mb-4">
@@ -87,17 +87,28 @@ export const Testimonials = () => {
         <Card
           name="Shrey Gupta"
           alias="@shreygups"
-          avatar="https://pbs.twimg.com/profile_images/1783636965306585088/DIgF_W5I_400x400.jpg"
+          avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/shreygups.jpg"
           url="https://x.com/shreygups/status/1900284978367520817"
         >
           <p>wait i kinda love turborepo</p>
+        </Card>
+        <Card
+          name="Jono Alford"
+          alias="@jonoalford"
+          avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/jonoalford.jpg"
+          url="https://x.com/jonoalford/status/1989274609192169943?s=20"
+        >
+          <p>
+            The second we started using this for monorepos is the second we
+            stopped having to worry about using monorepos.
+          </p>
         </Card>
       </div>
       <div className="grid gap-4">
         <Card
           name="ALIAS"
           alias="LoadingALIAS"
-          avatar="https://pbs.twimg.com/profile_images/1675186185000431619/0NWH60bL_400x400.jpg"
+          avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/loadingalias.jpg"
           url="https://x.com/LoadingALIAS/status/1903228609021477283"
         >
           <p>Turborepo is the best.</p>
@@ -105,7 +116,7 @@ export const Testimonials = () => {
         <Card
           name="Andrew Lisowski"
           alias="@HipsterSmoothie"
-          avatar="https://pbs.twimg.com/profile_images/1685360377754947584/PhKnYmq-_400x400.jpg"
+          avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/hipstersmoothie.jpg"
           url="https://x.com/HipsterSmoothie/status/1829245704386269515"
         >
           <p>
@@ -116,7 +127,7 @@ export const Testimonials = () => {
         <Card
           name="Pontus Abrahamsson"
           alias="@pontusab"
-          avatar="https://pbs.twimg.com/profile_images/1755611130368770048/JwLEqyeo_400x400.jpg"
+          avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/pontusab.jpg"
           url="https://x.com/pontusab/status/1827264818765799931"
         >
           <p>

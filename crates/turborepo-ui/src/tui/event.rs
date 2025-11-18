@@ -63,6 +63,7 @@ pub enum Event {
     SearchExit {
         restore_scroll: bool,
     },
+    SearchLock,
     SearchScroll {
         direction: Direction,
     },

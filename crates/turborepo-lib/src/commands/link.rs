@@ -153,14 +153,24 @@ pub async fn link(
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
-    let token = base
-        .opts()
-        .api_client_opts
-        .token
-        .as_deref()
-        .ok_or_else(|| Error::TokenNotFound {
-            command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
-        })?;
+
+    // Always try to get a valid token with automatic refresh if expired
+    let token = match turborepo_auth::get_token_with_refresh().await {
+        Ok(Some(refreshed_token)) => {
+            // Store the refreshed token temporarily for this command
+            Box::leak(refreshed_token.into_boxed_str())
+        }
+        Ok(None) | Err(_) => {
+            // Fall back to the token from config/CLI if refresh logic didn't work
+            base.opts()
+                .api_client_opts
+                .token
+                .as_deref()
+                .ok_or_else(|| Error::TokenNotFound {
+                    command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
+                })?
+        }
+    };
 
     println!(
         "\n{}\n\n{}\n\nFor more information, visit: {}\n",
@@ -376,7 +386,7 @@ fn add_turbo_to_gitignore(base: &CommandBase) -> Result<(), io::Error> {
 
 #[cfg(test)]
 mod test {
-    use std::fs;
+    use std::{fs, time::Duration};
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
@@ -417,7 +427,14 @@ mod test {
             .unwrap();
 
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
         let override_global_config_path =
             AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf())?;
 

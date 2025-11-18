@@ -105,7 +105,7 @@ You now have the build order you would expect, building _dependencies_ before _d
 
 #### Depending on tasks in dependencies with `^`
 
-The `^` microsyntax tells Turborepo to run the task starting at the bottom of the dependency graph. If your application depends on a library named `ui` and the library has a `build` task, the `build` script in `ui` will run **first**. Once it has successfully completed, the `build` task in your application will run.
+The `^` microsyntax tells Turborepo to run the task in direct dependencies before the target package. If your application depends on a library named `ui` and the library has a `build` task, the `build` script in `ui` will run **first**. Once it has successfully completed, the `build` task in your application will run.
 
 This is an important pattern as it ensures that your application's `build` task will have all of the necessary dependencies that it needs to compile. This concept also applies as your dependency graph grows to a more complex structure with many levels of task dependencies.
 
@@ -344,7 +344,7 @@ Some tasks should always be run no matter what, like a deployment script after a
 
 ### Dependent tasks that can be run in parallel
 
-Some tasks can be run in parallel despite being dependent on other packages. An example of tasks that fit this description are linters, since a linter doesn't need to wait for outputs in dependencies to run successfully.
+Some tasks can be run in parallel despite being dependent on other packages. An example of tasks that fit this description are type checkers, since a type checker doesn't need to wait for outputs in dependencies to run successfully.
 
 Because of this, you may be tempted to define your `check-types` task like this:
 
