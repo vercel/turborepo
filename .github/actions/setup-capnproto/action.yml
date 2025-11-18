@@ -14,16 +14,6 @@ runs:
           /usr/bin/capnpc
         key: ${{ runner.os }}-capnproto-0.11.2
 
-    - name: "Cache capnproto (Windows)"
-      if: runner.os == 'Windows' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-      uses: actions/cache@v4
-      id: cache-capnp-windows
-      with:
-        path: |
-          C:\ProgramData\chocolatey\bin\capnp.exe
-          C:\ProgramData\chocolatey\bin\capnpc.exe
-        key: ${{ runner.os }}-capnproto-0.11.2
-
     - name: "Setup capnproto for Linux"
       if: runner.os == 'Linux' && (steps.cache-capnp-linux.outcome == 'skipped' || steps.cache-capnp-linux.outputs.cache-hit != 'true')
       shell: bash
