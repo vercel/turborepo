@@ -18,6 +18,7 @@ use crate::{
     commands::CommandBase,
     config::resolve_turbo_config_path,
     daemon::{proto, DaemonConnectorError, DaemonError},
+    engine::TaskNode,
     get_version, opts,
     run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
     DaemonConnector, DaemonPaths,
@@ -48,6 +49,7 @@ pub struct WatchClient {
     run: Arc<Run>,
     watched_packages: HashSet<PackageName>,
     persistent_tasks_handle: Option<RunHandle>,
+    active_runs: Vec<RunHandle>,
     connector: DaemonConnector,
     base: CommandBase,
     telemetry: CommandEventBuilder,
@@ -164,6 +166,7 @@ impl WatchClient {
             telemetry,
             experimental_write_cache,
             persistent_tasks_handle: None,
+            active_runs: Vec::new(),
             ui_sender,
             ui_handle,
         })
@@ -195,7 +198,6 @@ impl WatchClient {
         };
 
         let run_fut = async {
-            let mut run_handle: Option<RunHandle> = None;
             loop {
                 notify_run.notified().await;
                 let some_changed_packages = {
@@ -205,16 +207,23 @@ impl WatchClient {
                         .then(|| std::mem::take(changed_packages_guard.deref_mut()))
                 };
 
-                if let Some(changed_packages) = some_changed_packages {
+                if let Some(mut changed_packages) = some_changed_packages {
                     // Clean up currently running tasks
-                    if let Some(RunHandle { stopper, run_task }) = run_handle.take() {
-                        // Shut down the tasks for the run
-                        stopper.stop().await;
-                        // Run should exit shortly after we stop all child tasks, wait for it to
-                        // finish to ensure all messages are flushed.
-                        let _ = run_task.await;
+                    self.active_runs.retain(|h| !h.run_task.is_finished());
+
+                    match &mut changed_packages {
+                        ChangedPackages::Some(pkgs) => {
+                            self.stop_impacted_tasks(pkgs).await;
+                        }
+                        ChangedPackages::All => {
+                            for handle in self.active_runs.drain(..) {
+                                handle.stopper.stop().await;
+                                let _ = handle.run_task.await;
+                            }
+                        }
                     }
-                    run_handle = Some(self.execute_run(changed_packages).await?);
+                    let new_run = self.execute_run(changed_packages).await?;
+                    self.active_runs.push(new_run);
                 }
             }
         };
@@ -266,10 +275,45 @@ impl WatchClient {
         Ok(())
     }
 
+    async fn stop_impacted_tasks(&self, pkgs: &mut HashSet<PackageName>) {
+        let engine = self.run.engine();
+        let mut tasks_to_stop = HashSet::new();
+
+        for node in engine.tasks() {
+            if let TaskNode::Task(task_id) = node {
+                if pkgs.contains(&PackageName::from(task_id.package())) {
+                    tasks_to_stop.insert(task_id.clone());
+
+                    for dependent_node in engine.transitive_dependents(task_id) {
+                        if let TaskNode::Task(dependent_id) = dependent_node {
+                            tasks_to_stop.insert(dependent_id.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut impacted_packages = HashSet::new();
+        for task_id in &tasks_to_stop {
+            impacted_packages.insert(PackageName::from(task_id.package()));
+        }
+
+        *pkgs = impacted_packages;
+
+        let task_ids: Vec<_> = tasks_to_stop.into_iter().collect();
+        for handle in &self.active_runs {
+            handle.stopper.stop_tasks(&task_ids).await;
+        }
+    }
+
     /// Shut down any resources that run as part of watch.
     pub async fn shutdown(&mut self) {
         if let Some(sender) = &self.ui_sender {
             sender.stop().await;
+        }
+        for handle in self.active_runs.drain(..) {
+            handle.stopper.stop().await;
+            let _ = handle.run_task.await;
         }
         if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
             // Shut down the tasks for the run
