@@ -27,7 +27,7 @@ pub fn config_dir() -> Result<Option<AbsoluteSystemPathBuf>, PathError> {
             std::env::current_dir()?.join(raw)
         };
 
-        let abs_str = abs.to_str().ok_or_else(|| PathError::InvalidUnicode(dir))?;
+        let abs_str = abs.to_str().ok_or(PathError::InvalidUnicode(dir))?;
 
         return AbsoluteSystemPathBuf::new(abs_str).map(Some);
     }
