@@ -10,6 +10,10 @@ turborepo-process-serial = { max-threads = 1 }
 # race conditions with binary detection and stdout/stderr capture
 turborepo-integration-serial = { max-threads = 1 }
 
+# turborepo-dirs tests should run serially to avoid race conditions
+# with environment variable manipulation
+turborepo-dirs-serial = { max-threads = 1 }
+
 [[profile.default.overrides]]
 # Run all tests in the turborepo-process crate serially
 filter = 'package(turborepo-process)'
@@ -20,3 +24,9 @@ test-group = 'turborepo-process-serial'
 # These tests spawn turbo processes and parse JSON from stdout
 filter = 'package(turbo) and (test(boundaries) or test(query) or test(ls))'
 test-group = 'turborepo-integration-serial'
+
+[[profile.default.overrides]]
+# Run all tests in the turborepo-dirs crate serially
+# These tests manipulate environment variables
+filter = 'package(turborepo-dirs)'
+test-group = 'turborepo-dirs-serial'
