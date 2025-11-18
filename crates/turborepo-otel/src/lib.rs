@@ -8,17 +8,10 @@ use opentelemetry::{
     KeyValue,
     metrics::{Counter, Histogram, Meter, MeterProvider as _},
 };
-use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
 use opentelemetry_sdk::{
     Resource,
-    metrics::{
-        PeriodicReader, SdkMeterProvider,
-        reader::{
-            AggregationSelector, DefaultAggregationSelector, DefaultTemporalitySelector,
-            TemporalitySelector,
-        },
-    },
-    runtime::Tokio,
+    metrics::{PeriodicReader, SdkMeterProvider, Temporality},
 };
 use opentelemetry_semantic_conventions::resource::SERVICE_NAME;
 use thiserror::Error;
@@ -103,11 +96,9 @@ pub enum Error {
     #[error("experimentalOtel requires an endpoint")]
     MissingEndpoint,
     #[error("failed to build OTLP exporter: {0}")]
-    Exporter(opentelemetry_otlp::Error),
+    Exporter(opentelemetry_otlp::ExporterBuildError),
     #[error("invalid OTLP header `{0}`")]
     InvalidHeader(String),
-    #[error("metrics SDK error: {0}")]
-    Metrics(#[from] opentelemetry::metrics::MetricsError),
 }
 
 struct Instruments {
@@ -230,46 +221,44 @@ impl Instruments {
 fn build_provider(config: &Config) -> Result<SdkMeterProvider, Error> {
     let resource = build_resource(config);
 
+    let temporality = default_temporality();
     let exporter = match config.protocol {
         Protocol::Grpc => {
             let export_config = opentelemetry_otlp::ExportConfig {
-                endpoint: config.endpoint.clone(),
-                timeout: config.timeout,
-                ..Default::default()
+                endpoint: Some(config.endpoint.clone()),
+                protocol: opentelemetry_otlp::Protocol::Grpc,
+                timeout: Some(config.timeout),
             };
-            let mut builder = opentelemetry_otlp::new_exporter()
-                .tonic()
+            let mut builder = opentelemetry_otlp::MetricExporter::builder()
+                .with_tonic()
+                .with_temporality(temporality)
                 .with_export_config(export_config);
             if !config.headers.is_empty() {
                 builder = builder.with_metadata(build_metadata(&config.headers)?);
             }
-            let (aggregation, temporality) = default_selectors();
-            builder
-                .build_metrics_exporter(aggregation, temporality)
-                .map_err(Error::Metrics)?
+            builder.build().map_err(Error::Exporter)?
         }
         Protocol::HttpProtobuf => {
             let export_config = opentelemetry_otlp::ExportConfig {
-                endpoint: config.endpoint.clone(),
-                timeout: config.timeout,
-                ..Default::default()
+                endpoint: Some(config.endpoint.clone()),
+                protocol: opentelemetry_otlp::Protocol::HttpBinary,
+                timeout: Some(config.timeout),
             };
-            let mut builder = opentelemetry_otlp::new_exporter()
-                .http()
+            let mut builder = opentelemetry_otlp::MetricExporter::builder()
+                .with_http()
+                .with_temporality(temporality)
                 .with_export_config(export_config);
             if !config.headers.is_empty() {
                 let headers: HashMap<_, _> = config.headers.clone().into_iter().collect();
                 builder = builder.with_headers(headers);
             }
-            let (aggregation, temporality) = default_selectors();
-            builder
-                .build_metrics_exporter(aggregation, temporality)
-                .map_err(Error::Metrics)?
+            builder.build().map_err(Error::Exporter)?
         }
     };
 
-    let reader = PeriodicReader::builder(exporter, Tokio).with_interval(Duration::from_secs(15));
-    let reader = reader.build();
+    let reader = PeriodicReader::builder(exporter)
+        .with_interval(Duration::from_secs(15))
+        .build();
 
     Ok(SdkMeterProvider::builder()
         .with_resource(resource)
@@ -303,44 +292,38 @@ fn build_resource(config: &Config) -> Resource {
         }
         attrs.push(KeyValue::new(key.clone(), value.clone()));
     }
-    Resource::new(attrs)
+    Resource::builder_empty().with_attributes(attrs).build()
 }
 
-fn default_selectors() -> (
-    Box<dyn AggregationSelector + Send + Sync>,
-    Box<dyn TemporalitySelector + Send + Sync>,
-) {
-    (
-        Box::new(DefaultAggregationSelector::new()),
-        Box::new(DefaultTemporalitySelector::new()),
-    )
+fn default_temporality() -> Temporality {
+    Temporality::Cumulative
 }
 
 fn create_instruments(meter: &Meter) -> Instruments {
     let run_duration = meter
         .f64_histogram("turbo.run.duration_ms")
         .with_description("Turborepo run duration in milliseconds")
-        .init();
+        .build();
     let run_attempted = meter
         .u64_counter("turbo.run.tasks.attempted")
         .with_description("Tasks attempted per run")
-        .init();
+        .build();
     let run_failed = meter
         .u64_counter("turbo.run.tasks.failed")
         .with_description("Tasks failed per run")
-        .init();
+        .build();
     let run_cached = meter
         .u64_counter("turbo.run.tasks.cached")
         .with_description("Tasks served from cache per run")
-        .init();
+        .build();
     let task_duration = meter
         .f64_histogram("turbo.task.duration_ms")
         .with_description("Task execution duration in milliseconds")
-        .init();
+        .build();
     let task_cache = meter
         .u64_counter("turbo.task.cache.events")
         .with_description("Cache hit/miss events")
-        .init();
+        .build();
 
     Instruments {
         run_duration,
