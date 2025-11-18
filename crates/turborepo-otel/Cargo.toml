@@ -12,7 +12,12 @@ opentelemetry-otlp = { version = "0.31", features = [
   "metrics",
 ] }
 opentelemetry-semantic-conventions = "0.31"
-opentelemetry_sdk = { version = "0.31", features = ["rt-tokio", "metrics"] }
+opentelemetry_sdk = { version = "0.31", features = [
+  "metrics",
+  "rt-tokio",
+  "experimental_async_runtime",
+  "experimental_metrics_periodicreader_with_async_runtime",
+] }
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 thiserror = { workspace = true }

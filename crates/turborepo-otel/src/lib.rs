@@ -11,7 +11,8 @@ use opentelemetry::{
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig, WithTonicConfig};
 use opentelemetry_sdk::{
     Resource,
-    metrics::{PeriodicReader, SdkMeterProvider, Temporality},
+    metrics::{SdkMeterProvider, Temporality, periodic_reader_with_async_runtime},
+    runtime::Tokio,
 };
 use opentelemetry_semantic_conventions::resource::SERVICE_NAME;
 use thiserror::Error;
@@ -138,6 +139,15 @@ impl Handle {
         let meter = provider.meter("turborepo");
         let instruments = Arc::new(create_instruments(&meter));
 
+        tracing::debug!(
+            target: "turborepo_otel",
+            "initialized otel exporter: endpoint={} protocol={:?} run_summary={} task_details={}",
+            config.endpoint,
+            config.protocol,
+            config.metrics.run_summary,
+            config.metrics.task_details
+        );
+
         Ok(Self {
             inner: Arc::new(HandleInner {
                 provider,
@@ -148,6 +158,14 @@ impl Handle {
     }
 
     pub fn record_run(&self, payload: &RunMetricsPayload) {
+        tracing::debug!(
+            target: "turborepo_otel",
+            "record_run payload: run_id={} attempted={} failed={} cached={}",
+            payload.run_id,
+            payload.attempted_tasks,
+            payload.failed_tasks,
+            payload.cached_tasks
+        );
         if self.inner.metrics.run_summary {
             self.inner.instruments.record_run_summary(payload);
         }
@@ -157,6 +175,7 @@ impl Handle {
     }
 
     pub fn shutdown(self) {
+        tracing::debug!(target = "turborepo_otel", "shutting down otel exporter");
         match Arc::try_unwrap(self.inner) {
             Ok(inner) => {
                 if let Err(err) = inner.provider.shutdown() {
@@ -174,6 +193,13 @@ impl Handle {
 
 impl Instruments {
     fn record_run_summary(&self, payload: &RunMetricsPayload) {
+        tracing::debug!(
+            target: "turborepo_otel",
+            "record_run_summary run_id={} duration_ms={} attempted={}",
+            payload.run_id,
+            payload.duration_ms,
+            payload.attempted_tasks
+        );
         let attrs = build_run_attributes(payload);
         self.run_duration.record(payload.duration_ms, &attrs);
         self.run_attempted.add(payload.attempted_tasks, &attrs);
@@ -182,6 +208,12 @@ impl Instruments {
     }
 
     fn record_task_details(&self, payload: &RunMetricsPayload) {
+        tracing::debug!(
+            target: "turborepo_otel",
+            "record_task_details run_id={} task_count={}",
+            payload.run_id,
+            payload.tasks.len()
+        );
         let base_attrs = build_run_attributes(payload);
         for task in payload.tasks.iter() {
             let mut attrs = base_attrs.clone();
@@ -256,7 +288,7 @@ fn build_provider(config: &Config) -> Result<SdkMeterProvider, Error> {
         }
     };
 
-    let reader = PeriodicReader::builder(exporter)
+    let reader = periodic_reader_with_async_runtime::PeriodicReader::builder(exporter, Tokio)
         .with_interval(Duration::from_secs(15))
         .build();
 
