@@ -1168,7 +1168,7 @@ mod tests {
         // Create and commit all Unicode files
         for filename in &test_files {
             let file_path = root.join_component(filename);
-            file_path.create_with_contents(&format!("content for {}", filename))?;
+            file_path.create_with_contents(format!("content for {}", filename))?;
         }
 
         // Get changed files with uncommitted Unicode files
