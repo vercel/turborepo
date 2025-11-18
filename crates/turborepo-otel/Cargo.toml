@@ -13,12 +13,12 @@ opentelemetry-otlp = { version = "0.31", features = [
 ] }
 opentelemetry-semantic-conventions = "0.31"
 opentelemetry_sdk = { version = "0.31", features = ["rt-tokio", "metrics"] }
-serde = { workspace = true }
-serde_json = { workspace = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
-tonic = { workspace = true }
+tonic = "0.14"
 tracing = { workspace = true }
-turborepo-errors = { workspace = true }
 
 [features]
 default = []
