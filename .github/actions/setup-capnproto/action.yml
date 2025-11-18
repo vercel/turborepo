@@ -25,6 +25,6 @@ runs:
       run: brew install capnp
 
     - name: "Setup capnproto for Windows"
-      if: runner.os == 'Windows' && (steps.cache-capnp-windows.outcome == 'skipped' || steps.cache-capnp-windows.outputs.cache-hit != 'true')
+      if: runner.os == 'Windows'
       shell: bash
       run: choco install capnproto
