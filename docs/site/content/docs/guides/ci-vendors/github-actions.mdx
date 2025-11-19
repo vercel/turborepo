@@ -182,7 +182,7 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
 
   </Tab>
 
-  <Tab value="bun (Beta)">
+  <Tab value="bun">
     ```yaml title=".github/workflows/ci.yml"
     name: CI
 
@@ -257,7 +257,7 @@ Go to your GitHub repository settings and click on the **Secrets** and then **Ac
 </Step>
 
 <Step>
-Create a new repository variable (click the **Variables** tab) called `TURBO_TEAM` and set it to your team slug - the part after `vercel.com/` in [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). For example, the slug for `vercel.com/acme` is `acme`. 
+Create a new repository variable (click the **Variables** tab) called `TURBO_TEAM` and set it to your team slug - the part after `vercel.com/` in [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). For example, the slug for `vercel.com/acme` is `acme`.
 
 <Callout type="good-to-know">
   Using a repository variable rather than a secret will keep GitHub Actions from
@@ -293,6 +293,10 @@ jobs:
 
 </Step>
 </Steps>
+
+## Using Remote Caching with Reusable Workflows
+
+For information on passing secrets to reusable workflows, see [GitHub's documentation on passing secrets to nested workflows](https://docs.github.com/en/actions/how-tos/reuse-automations/reuse-workflows#passing-secrets-to-nested-workflows).
 
 ## Remote Caching with GitHub actions/cache
 

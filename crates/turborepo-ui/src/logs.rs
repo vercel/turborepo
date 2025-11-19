@@ -38,9 +38,7 @@ impl<W: Write> LogWriter<W> {
             Error::CannotWriteLogs(err)
         })?;
 
-        // We keep the buffer smaller to ensure the log file does not too far behind the
-        // displayed logs.
-        self.log_file = Some(BufWriter::with_capacity(512, log_file));
+        self.log_file = Some(BufWriter::new(log_file));
 
         Ok(())
     }

@@ -23,13 +23,9 @@ unexpected_cfgs = { level = "warn", check-cfg = ['cfg(debug_assert)'] }
 [workspace.lints.clippy]
 too_many_arguments = "allow"
 
-# Set the options for dependencies (not crates in the workspace), this mostly impacts cold builds
-[profile.dev.package."*"]
-opt-level = 1
-
-# Set the settings for build scripts and proc-macros.
-[profile.dev.build-override]
-opt-level = 3
+[profile.dev]
+debug = 0
+opt-level = 0
 
 [profile.release]
 lto = "off"
@@ -56,6 +52,7 @@ turbopath = { path = "crates/turborepo-paths" }
 turborepo = { path = "crates/turborepo" }
 turborepo-analytics = { path = "crates/turborepo-analytics" }
 turborepo-api-client = { path = "crates/turborepo-api-client" }
+turborepo-auth = { path = "crates/turborepo-auth" }
 turborepo-cache = { path = "crates/turborepo-cache" }
 turborepo-ci = { path = "crates/turborepo-ci" }
 turborepo-env = { path = "crates/turborepo-env" }
@@ -66,6 +63,7 @@ turborepo-fs = { path = "crates/turborepo-fs" }
 turborepo-lib = { path = "crates/turborepo-lib", default-features = false }
 turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-microfrontends = { path = "crates/turborepo-microfrontends" }
+turborepo-microfrontends-proxy = { path = "crates/turborepo-microfrontends-proxy" }
 turborepo-process = { path = "crates/turborepo-process" }
 turborepo-repository = { path = "crates/turborepo-repository" }
 turborepo-task-id = { path = "crates/turborepo-task-id" }

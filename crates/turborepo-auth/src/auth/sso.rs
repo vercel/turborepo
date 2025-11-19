@@ -6,7 +6,7 @@ use tracing::warn;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 
-use crate::{Error, LoginOptions, Token, auth::extract_vercel_token, error, ui};
+use crate::{Error, LoginOptions, Token, error, ui};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -70,23 +70,27 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
                 return Ok(token);
             }
         // No existing turbo token found. If the user is logging into Vercel,
-        // check for an existing `vc` token with correct scope.
-        } else if login_url_configuration.contains("vercel.com")
-            && let Ok(Some(token)) = extract_vercel_token()
-        {
-            let token = Token::existing(token);
-            if token
-                .is_valid_sso(
-                    api_client,
-                    sso_team,
-                    Some(valid_token_callback(
-                        &format!("Existing Vercel token for {sso_team} found!"),
-                        color_config,
-                    )),
-                )
-                .await?
-            {
-                return Ok(token);
+        // check for an existing token with automatic refresh if expired.
+        } else if login_url_configuration.contains("vercel.com") {
+            match crate::auth::get_token_with_refresh().await {
+                Ok(Some(token_str)) => {
+                    let token = Token::existing(token_str);
+                    if token
+                        .is_valid_sso(
+                            api_client,
+                            sso_team,
+                            Some(valid_token_callback(
+                                &format!("Existing Vercel token for {sso_team} found!"),
+                                color_config,
+                            )),
+                        )
+                        .await?
+                    {
+                        return Ok(token);
+                    }
+                }
+                Ok(None) => {}
+                Err(_) => {}
             }
         }
     }
@@ -144,7 +148,7 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, sync::atomic::AtomicUsize};
+    use std::{assert_matches::assert_matches, sync::atomic::AtomicUsize, time::Duration};
 
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
@@ -274,10 +278,8 @@ mod tests {
                 id: "test".to_string(),
                 name: "test".to_string(),
                 token_type: "test".to_string(),
-                origin: "test".to_string(),
                 scopes: vec![Scope {
                     scope_type: "team".to_string(),
-                    origin: "saml".to_string(),
                     team_id: Some("my-team".to_string()),
                     created_at: 0,
                     expires_at: None,
@@ -373,7 +375,15 @@ mod tests {
     #[tokio::test]
     async fn test_sso_login() {
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .expect("Test server failed to start")
+            .expect("Server setup failed");
+
         let url = format!("http://localhost:{port}");
         let color_config = ColorConfig::new(false);
         let team = "something";

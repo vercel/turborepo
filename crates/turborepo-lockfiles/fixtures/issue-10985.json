@@ -1,0 +1,79 @@
+{
+  "name": "monorepo",
+  "version": "1.0.0",
+  "lockfileVersion": 3,
+  "requires": true,
+  "packages": {
+    "": {
+      "name": "monorepo",
+      "version": "1.0.0",
+      "workspaces": ["apps/*", "packages/*"]
+    },
+    "node_modules/next": {
+      "version": "14.2.5",
+      "resolved": "https://registry.npmjs.org/next/-/next-14.2.5.tgz",
+      "integrity": "sha512-test"
+    },
+    "node_modules/next-15": {
+      "version": "15.0.0",
+      "resolved": "https://registry.npmjs.org/next/-/next-15.0.0.tgz",
+      "integrity": "sha512-test"
+    },
+    "node_modules/@repo/components": {
+      "resolved": "packages/components",
+      "link": true
+    },
+    "apps/app-one": {
+      "name": "app-one",
+      "version": "1.0.0",
+      "dependencies": {
+        "@repo/components": "*",
+        "next": "^14.0.0"
+      }
+    },
+    "apps/app-one/node_modules/next": {
+      "version": "14.2.5",
+      "resolved": "https://registry.npmjs.org/next/-/next-14.2.5.tgz",
+      "integrity": "sha512-test"
+    },
+    "apps/app-two": {
+      "name": "app-two",
+      "version": "1.0.0",
+      "dependencies": {
+        "@repo/components": "*",
+        "next": "^15.0.0"
+      }
+    },
+    "apps/app-two/node_modules/next": {
+      "version": "15.0.0",
+      "resolved": "https://registry.npmjs.org/next/-/next-15.0.0.tgz",
+      "integrity": "sha512-test"
+    },
+    "packages/components": {
+      "name": "@repo/components",
+      "version": "1.0.0",
+      "peerDependencies": {
+        "next": "^14 || ^15"
+      }
+    }
+  },
+  "dependencies": {
+    "app-one": {
+      "version": "file:apps/app-one",
+      "requires": {
+        "@repo/components": "*",
+        "next": "^14.0.0"
+      }
+    },
+    "app-two": {
+      "version": "file:apps/app-two",
+      "requires": {
+        "@repo/components": "*",
+        "next": "^15.0.0"
+      }
+    },
+    "@repo/components": {
+      "version": "file:packages/components"
+    }
+  }
+}

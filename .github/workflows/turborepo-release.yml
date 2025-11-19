@@ -52,12 +52,18 @@ on:
         required: false
         type: string
         default: ""
-
+      sha:
+        description: "Override the SHA to use for the release. Should rarely be used, usually only for debugging."
+        required: false
+        type: string
+        default: ""
 jobs:
   stage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -91,6 +97,12 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node: "false"
+
+      - name: Install cargo-groups
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-groups@0.1.9
 
       - name: Run Rust Unit Tests
         run: cargo groups test turborepo
@@ -109,6 +121,8 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          rust: "false"
+          capnproto: "false"
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
@@ -146,10 +160,10 @@ jobs:
           ref: "${{ needs.stage.outputs.stage-branch }}"
 
       - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
+        uses: ./.github/actions/setup-protoc
         with:
           version: "26.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto

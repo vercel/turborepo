@@ -47,6 +47,9 @@ pub enum LayoutSections {
         previous_selection: String,
         results: SearchResults,
     },
+    SearchLocked {
+        results: SearchResults,
+    },
 }
 
 pub struct App<W> {
@@ -125,7 +128,9 @@ impl<W> App<W> {
     fn is_focusing_pane(&self) -> bool {
         match self.section_focus {
             LayoutSections::Pane => true,
-            LayoutSections::TaskList | LayoutSections::Search { .. } => false,
+            LayoutSections::TaskList
+            | LayoutSections::Search { .. }
+            | LayoutSections::SearchLocked { .. } => false,
         }
     }
 
@@ -181,29 +186,87 @@ impl<W> App<W> {
         Ok(())
     }
 
+    /// Navigate to the next matching task in locked search mode, with
+    /// wrap-around
+    fn next_matching_task(&mut self, results: SearchResults) {
+        let next_task = results
+            .first_match(
+                self.tasks_by_status
+                    .task_names_in_displayed_order()
+                    .skip(self.selected_task_index + 1),
+            )
+            .or_else(|| {
+                // Wrap around to first match
+                results.first_match(self.tasks_by_status.task_names_in_displayed_order())
+            })
+            .map(str::to_owned);
+
+        if let Some(task) = next_task {
+            // Safe to ignore error as we're in a navigation flow
+            let _ = self.select_task(&task);
+        }
+    }
+
+    /// Navigate to the previous matching task in locked search mode, with
+    /// wrap-around
+    fn previous_matching_task(&mut self, results: SearchResults) {
+        let num_rows = self.tasks_by_status.count_all();
+        let prev_task = results
+            .first_match(
+                self.tasks_by_status
+                    .task_names_in_displayed_order()
+                    .rev()
+                    .skip(num_rows - self.selected_task_index),
+            )
+            .or_else(|| {
+                // Wrap around to last match
+                results.first_match(self.tasks_by_status.task_names_in_displayed_order().rev())
+            })
+            .map(str::to_owned);
+
+        if let Some(task) = prev_task {
+            // Safe to ignore error as we're in a navigation flow
+            let _ = self.select_task(&task);
+        }
+    }
+
     #[tracing::instrument(skip(self))]
     pub fn next(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
-        if num_rows > 0 {
+        if num_rows == 0 {
+            return;
+        }
+
+        if let LayoutSections::SearchLocked { results } = &self.section_focus {
+            self.next_matching_task(results.clone());
+        } else {
             self.selected_task_index = (self.selected_task_index + 1) % num_rows;
             self.task_list_scroll.select(Some(self.selected_task_index));
-            self.is_task_selection_pinned = true;
-            self.persist_active_task().ok();
         }
+
+        self.is_task_selection_pinned = true;
+        self.persist_active_task().ok();
     }
 
     #[tracing::instrument(skip(self))]
     pub fn previous(&mut self) {
         let num_rows = self.tasks_by_status.count_all();
-        if num_rows > 0 {
+        if num_rows == 0 {
+            return;
+        }
+
+        if let LayoutSections::SearchLocked { results } = &self.section_focus {
+            self.previous_matching_task(results.clone());
+        } else {
             self.selected_task_index = self
                 .selected_task_index
                 .checked_sub(1)
                 .unwrap_or(num_rows - 1);
             self.task_list_scroll.select(Some(self.selected_task_index));
-            self.is_task_selection_pinned = true;
-            self.persist_active_task().ok();
         }
+
+        self.is_task_selection_pinned = true;
+        self.persist_active_task().ok();
     }
 
     #[tracing::instrument(skip_all)]
@@ -235,6 +298,11 @@ impl<W> App<W> {
     }
 
     pub fn enter_search(&mut self) -> Result<(), Error> {
+        // Ensure task list is visible when searching
+        if !self.preferences.is_task_list_visible() {
+            self.preferences.set_is_task_list_visible(Some(true));
+        }
+
         self.section_focus = LayoutSections::Search {
             previous_selection: self.active_task()?.to_string(),
             results: SearchResults::new(&self.tasks_by_status),
@@ -247,15 +315,25 @@ impl<W> App<W> {
     pub fn exit_search(&mut self, restore_scroll: bool) {
         let mut prev_focus = LayoutSections::TaskList;
         mem::swap(&mut self.section_focus, &mut prev_focus);
-        if let LayoutSections::Search {
-            previous_selection, ..
-        } = prev_focus
-            && restore_scroll
-            && self.select_task(&previous_selection).is_err()
-        {
-            // If the task that was selected is no longer in the task list we reset
-            // scrolling.
-            self.reset_scroll();
+        match prev_focus {
+            LayoutSections::Search {
+                previous_selection, ..
+            } if restore_scroll => {
+                if self.select_task(&previous_selection).is_err() {
+                    // If the task that was selected is no longer in the task list we reset
+                    // scrolling.
+                    self.reset_scroll();
+                }
+            }
+            _ => {}
+        }
+    }
+
+    pub fn lock_search(&mut self) {
+        if let LayoutSections::Search { results, .. } = &self.section_focus {
+            self.section_focus = LayoutSections::SearchLocked {
+                results: results.clone(),
+            };
         }
     }
 
@@ -264,24 +342,13 @@ impl<W> App<W> {
             debug!("scrolling search while not searching");
             return Ok(());
         };
-        let new_selection = match direction {
-            Direction::Up => results.first_match(
-                self.tasks_by_status
-                    .task_names_in_displayed_order()
-                    .rev()
-                    // We skip all of the tasks that are at or after the current selection
-                    .skip(self.tasks_by_status.count_all() - self.selected_task_index),
-            ),
-            Direction::Down => results.first_match(
-                self.tasks_by_status
-                    .task_names_in_displayed_order()
-                    .skip(self.selected_task_index + 1),
-            ),
-        };
-        if let Some(new_selection) = new_selection {
-            let new_selection = new_selection.to_owned();
-            self.select_task(&new_selection)?;
+        let results = results.clone();
+
+        match direction {
+            Direction::Down => self.next_matching_task(results),
+            Direction::Up => self.previous_matching_task(results),
         }
+
         Ok(())
     }
 
@@ -463,8 +530,12 @@ impl<W> App<W> {
             self.reset_scroll();
         }
 
-        if let LayoutSections::Search { results, .. } = &mut self.section_focus {
-            results.update_tasks(&self.tasks_by_status);
+        match &mut self.section_focus {
+            LayoutSections::Search { results, .. }
+            | LayoutSections::SearchLocked { results, .. } => {
+                results.update_tasks(&self.tasks_by_status);
+            }
+            _ => {}
         }
         self.update_search_results();
 
@@ -490,8 +561,12 @@ impl<W> App<W> {
         self.tasks_by_status
             .restart_tasks(tasks.iter().map(|s| s.as_str()));
 
-        if let LayoutSections::Search { results, .. } = &mut self.section_focus {
-            results.update_tasks(&self.tasks_by_status);
+        match &mut self.section_focus {
+            LayoutSections::Search { results, .. }
+            | LayoutSections::SearchLocked { results, .. } => {
+                results.update_tasks(&self.tasks_by_status);
+            }
+            _ => {}
         }
 
         if self.select_task(&highlighted_task).is_err() {
@@ -952,6 +1027,9 @@ fn update(
         Event::SearchExit { restore_scroll } => {
             app.exit_search(restore_scroll);
         }
+        Event::SearchLock => {
+            app.lock_search();
+        }
         Event::SearchScroll { direction } => {
             app.search_scroll(direction)?;
         }
@@ -993,7 +1071,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
         app.preferences.is_task_list_visible(),
     );
 
-    let table_to_render = TaskTable::new(&app.tasks_by_status);
+    let table_to_render = TaskTable::new(&app.tasks_by_status, &app.section_focus);
 
     f.render_stateful_widget(&table_to_render, table, &mut app.task_list_scroll);
     f.render_widget(&pane_to_render, pane);
@@ -1553,9 +1631,9 @@ mod test {
         app.search_scroll(Direction::Down)?;
         assert_eq!(app.active_task()?, "abc");
         app.search_scroll(Direction::Down)?;
-        assert_eq!(app.active_task()?, "abc");
+        assert_eq!(app.active_task()?, "ab", "wraps around to first match");
         app.search_scroll(Direction::Up)?;
-        assert_eq!(app.active_task()?, "ab");
+        assert_eq!(app.active_task()?, "abc", "wraps around to last match");
         app.search_scroll(Direction::Up)?;
         assert_eq!(app.active_task()?, "ab");
         Ok(())
@@ -1654,6 +1732,344 @@ mod test {
         // Restart ab
         app.restart_tasks(vec!["ab".into()])?;
         assert_eq!(app.active_task()?, "ab");
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_lock() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec![
+                "app-a".to_string(),
+                "app-b".to_string(),
+                "pkg-a".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Enter search mode and type query
+        app.enter_search()?;
+        assert!(matches!(app.section_focus, LayoutSections::Search { .. }));
+        app.search_enter_char('a')?;
+        app.search_enter_char('p')?;
+        app.search_enter_char('p')?;
+        assert_eq!(app.active_task()?, "app-a");
+
+        // Lock the search
+        app.lock_search();
+        assert!(
+            matches!(app.section_focus, LayoutSections::SearchLocked { .. }),
+            "search should be locked"
+        );
+
+        // Verify we're still on the same task
+        assert_eq!(app.active_task()?, "app-a");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_locked_search_navigation() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec![
+                "app-a".to_string(),
+                "app-b".to_string(),
+                "pkg-a".to_string(),
+                "pkg-b".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Enter search and lock with "app" query
+        app.enter_search()?;
+        app.search_enter_char('a')?;
+        app.search_enter_char('p')?;
+        app.search_enter_char('p')?;
+        assert_eq!(app.active_task()?, "app-a");
+        app.lock_search();
+
+        // Navigate down should only go to next matching task (app-b)
+        app.next();
+        assert_eq!(
+            app.active_task()?,
+            "app-b",
+            "should skip to next matching task"
+        );
+
+        // Navigate down again should wrap to first match
+        app.next();
+        assert_eq!(
+            app.active_task()?,
+            "app-a",
+            "should wrap around to first matching task"
+        );
+
+        // Navigate up should wrap to last match
+        app.previous();
+        assert_eq!(
+            app.active_task()?,
+            "app-b",
+            "should wrap to last matching task"
+        );
+
+        // Navigate up should go to previous match
+        app.previous();
+        assert_eq!(app.active_task()?, "app-a");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_locked_search_only_shows_matches() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec![
+                "build-web".to_string(),
+                "build-api".to_string(),
+                "test-web".to_string(),
+                "test-api".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Search for "build" - tasks are sorted alphabetically so build-api comes first
+        app.enter_search()?;
+        app.search_enter_char('b')?;
+        app.search_enter_char('u')?;
+        app.search_enter_char('i')?;
+        app.search_enter_char('l')?;
+        app.search_enter_char('d')?;
+        assert_eq!(app.active_task()?, "build-api");
+        app.lock_search();
+
+        // Navigate through all tasks - should only hit "build" tasks
+        let mut visited = vec![app.active_task()?.to_string()];
+        app.next();
+        visited.push(app.active_task()?.to_string());
+        app.next();
+        visited.push(app.active_task()?.to_string());
+
+        assert_eq!(visited, vec!["build-api", "build-web", "build-api"]);
+        assert!(
+            !visited.contains(&"test-web".to_string()),
+            "should not visit non-matching tasks"
+        );
+        assert!(
+            !visited.contains(&"test-api".to_string()),
+            "should not visit non-matching tasks"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_exit_locked_search() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec![
+                "app-a".to_string(),
+                "app-b".to_string(),
+                "pkg-a".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Enter search, lock it
+        app.enter_search()?;
+        app.search_enter_char('a')?;
+        app.search_enter_char('p')?;
+        app.search_enter_char('p')?;
+        app.lock_search();
+        assert!(matches!(
+            app.section_focus,
+            LayoutSections::SearchLocked { .. }
+        ));
+
+        // Exit should go back to normal task list
+        app.exit_search(false);
+        assert!(
+            matches!(app.section_focus, LayoutSections::TaskList),
+            "should exit to task list"
+        );
+
+        // Navigation should now go through all tasks
+        app.next();
+        app.next();
+        app.next();
+        // Starting from app-a, should cycle through app-b, pkg-a, back to app-a
+        assert_eq!(app.active_task()?, "app-a");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_locked_search_with_single_match() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec![
+                "app-a".to_string(),
+                "app-b".to_string(),
+                "unique".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Search for unique string
+        app.enter_search()?;
+        app.search_enter_char('u')?;
+        app.search_enter_char('n')?;
+        app.search_enter_char('i')?;
+        app.search_enter_char('q')?;
+        app.search_enter_char('u')?;
+        app.search_enter_char('e')?;
+        assert_eq!(app.active_task()?, "unique");
+        app.lock_search();
+
+        // Navigate should stay on the same task
+        app.next();
+        assert_eq!(app.active_task()?, "unique", "should stay on single match");
+        app.previous();
+        assert_eq!(app.active_task()?, "unique", "should stay on single match");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_locked_search_maintains_filter_after_task_changes() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec![
+                "app-a".to_string(),
+                "app-b".to_string(),
+                "pkg-a".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Lock search for "app"
+        app.enter_search()?;
+        app.search_enter_char('a')?;
+        app.search_enter_char('p')?;
+        app.search_enter_char('p')?;
+        app.lock_search();
+        assert_eq!(app.active_task()?, "app-a");
+
+        // Start a task
+        app.start_task("app-a", OutputLogs::Full)?;
+
+        // Navigation should still only show "app" tasks
+        app.next();
+        assert_eq!(
+            app.active_task()?,
+            "app-b",
+            "filter should persist after task changes"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_wrap_around_empty_results() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec![
+                "app-a".to_string(),
+                "app-b".to_string(),
+                "pkg-a".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Search for something that doesn't match anything
+        app.enter_search()?;
+        app.search_enter_char('x')?;
+        app.search_enter_char('y')?;
+        app.search_enter_char('z')?;
+
+        // Try to scroll - should not panic or change selection
+        let initial_task = app.active_task()?.to_string();
+        app.search_scroll(Direction::Down)?;
+        assert_eq!(app.active_task()?, initial_task);
+        app.search_scroll(Direction::Up)?;
+        assert_eq!(app.active_task()?, initial_task);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_shows_hidden_task_list() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec![
+                "app-a".to_string(),
+                "app-b".to_string(),
+                "pkg-a".to_string(),
+            ],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Hide the task list
+        app.preferences.set_is_task_list_visible(Some(false));
+        assert!(!app.preferences.is_task_list_visible());
+
+        // Enter search mode
+        app.enter_search()?;
+
+        // Task list should now be visible
+        assert!(
+            app.preferences.is_task_list_visible(),
+            "task list should be visible after entering search"
+        );
+
         Ok(())
     }
 }

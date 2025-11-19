@@ -1,6 +1,6 @@
 {
   "name": "eslint-config-turbo",
-  "version": "2.5.8",
+  "version": "2.6.1",
   "type": "commonjs",
   "description": "ESLint config for Turborepo",
   "license": "MIT",
@@ -32,7 +32,6 @@
   ],
   "main": "./dist/cjs/index.js",
   "types": "./dist/cjs/index.d.ts",
-  "module": "./dist/es/index.mjs",
   "exports": {
     "./flat": {
       "import": {
@@ -46,8 +45,8 @@
     },
     ".": {
       "import": {
-        "types": "./dist/es/index.d.mts",
-        "default": "./dist/es/index.mjs"
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
       },
       "require": {
         "types": "./dist/cjs/index.d.ts",

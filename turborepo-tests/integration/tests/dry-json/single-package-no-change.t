@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh single_package --no-install
 
 # Save JSON to tmp file so we don't need to keep re-running the build
   $ ${TURBO} run build --dry=json --filter='[main]' > tmpjson.log
