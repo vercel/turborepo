@@ -74,14 +74,12 @@ Before triggering a release, ensure:
 
 #### Version Storage
 
-The single source of truth for the Turborepo version is **`version.txt`** at the repository root:
+The single source of truth for the Turborepo version is **`version.txt`** at the repository root. This file contains two lines:
 
-```
-Line 1: Version number (e.g., 2.6.1)
-Line 2: NPM dist-tag (e.g., latest, canary)
-```
+- Line 1: Version number (e.g., 2.6.1)
+- Line 2: NPM dist-tag (e.g., latest, canary)
 
-**Current version**: `2.6.1`
+See: `version.txt`
 
 #### Version Calculation
 
@@ -108,22 +106,11 @@ When a release is triggered, the `scripts/version.js` script:
 
 #### Version Synchronization
 
-Once the version is calculated, the `cli/Makefile` (target: `stage-release`) updates all package.json files:
-
-```makefile
-# Updates all package.json versions to match TURBO_VERSION
-cd packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-cd packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-cd packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version
-cd packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version
-cd packages/turbo-workspaces && pnpm version "$(TURBO_VERSION)" --allow-same-version
-cd packages/turbo-gen && pnpm version "$(TURBO_VERSION)" --allow-same-version
-cd packages/eslint-plugin-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-cd packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-cd packages/turbo-types && pnpm version "$(TURBO_VERSION)" --allow-same-version
-```
+Once the version is calculated, the `cli/Makefile` (target: `stage-release`) updates all package.json files by running `pnpm version` for each package to match `TURBO_VERSION`.
 
 Additionally, the `packages/turbo/bump-version.js` postversion hook updates the `optionalDependencies` in `packages/turbo/package.json` to reference the correct versions of platform-specific packages.
+
+See: `cli/Makefile` (stage-release target) and `packages/turbo/bump-version.js`
 
 ---
 
@@ -197,15 +184,9 @@ The release workflow consists of 6 sequential and parallel stages:
 
 **Output**: `stage-branch` (e.g., `staging-2.6.2`)
 
-**Safety Checks**:
+**Safety Checks**: The Makefile includes safety checks to verify no unpushed commits exist and that `version.txt` was properly updated before proceeding.
 
-```bash
-# Fail if unpushed commits exist
-test "" = "`git cherry`" || (echo "Refusing to publish with unpushed commits" && false)
-
-# Fail if version.txt wasn't updated
-test "" != "`git diff -- ../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
-```
+See: `cli/Makefile` (stage-release target)
 
 #### Stage 2: Rust Smoke Test
 
@@ -253,17 +234,9 @@ This runs TypeScript type checking and all Jest/Vitest tests for JavaScript pack
 
 **Build Configuration**:
 
-The Rust binaries are built using the `release-turborepo` profile defined in `Cargo.toml`:
+The Rust binaries are built using the `release-turborepo` profile (inherits from release profile with stripping enabled) and Link-time optimization (LTO) enabled via the `CARGO_PROFILE_RELEASE_LTO=true` environment variable.
 
-```toml
-[profile.release-turborepo]
-inherits = "release"
-strip = true  # Remove debug symbols for smaller binaries
-```
-
-Additional build flags:
-
-- `CARGO_PROFILE_RELEASE_LTO=true` - Link-time optimization for better performance and smaller size
+See: `Cargo.toml` (release-turborepo profile) and `.github/workflows/turborepo-release.yml`
 
 **Build Steps**:
 
@@ -292,21 +265,9 @@ This is the most complex stage with multiple sub-steps:
 
 ##### 5b. Build JavaScript Packages
 
-Execute `make -C cli build`:
+Execute `make -C cli build` which runs `turbo build copy-schema` with filters for all JavaScript/TypeScript packages. This builds all TypeScript packages and copies the JSON schema to the appropriate locations.
 
-```bash
-turbo build copy-schema \
-  --filter=create-turbo \
-  --filter=@turbo/codemod \
-  --filter=turbo-ignore \
-  --filter=@turbo/workspaces \
-  --filter=@turbo/gen \
-  --filter=eslint-plugin-turbo \
-  --filter=eslint-config-turbo \
-  --filter=@turbo/types
-```
-
-This builds all TypeScript packages and copies the JSON schema to the appropriate locations.
+See: `cli/Makefile` (build target)
 
 ##### 5c. Pack and Publish Native Packages
 
@@ -316,26 +277,15 @@ Execute `turbo release-native` which invokes the `@turbo/releaser` tool.
 
 1. **Reads version and tag** from `version.txt`
 2. **For each platform** (6 total):
-   - Generates a native package structure:
-     - `package.json` with platform-specific metadata:
-       ```json
-       {
-         "name": "turbo-darwin-64",
-         "version": "2.6.2",
-         "os": ["darwin"],
-         "cpu": ["x64"],
-         "description": "The darwin-x64 binary for turbo",
-         "license": "MIT",
-         "repository": "https://github.com/vercel/turborepo",
-         "preferUnplugged": true
-       }
-       ```
-     - Copies `LICENSE` and `README.md` from template
-     - For Windows: includes a `bin/turbo` Node.js wrapper script (to work around npm `.exe` stripping)
+   - Generates a native package structure with platform-specific metadata (name, os, cpu, etc.)
+   - Copies `LICENSE` and `README.md` from template
+   - For Windows: includes a `bin/turbo` Node.js wrapper script (to work around npm `.exe` stripping)
    - Copies the prebuilt binary from `cli/dist-<os>-<arch>/`
    - Makes the binary executable (`chmod +x` on Unix)
    - Creates a `.tar.gz` archive
    - Publishes to npm: `npm publish turbo-<os>-<arch>.tar.gz --tag <npm-tag>`
+
+See: `packages/turbo-releaser/` for native package generation logic
 
 **Published native packages**:
 
@@ -350,26 +300,10 @@ Execute `turbo release-native` which invokes the `@turbo/releaser` tool.
 
 Execute `make -C cli publish-turbo` which:
 
-1. **Packs all packages** to tarballs:
+1. **Packs all packages** to tarballs using `pnpm pack`
+2. **Publishes in fixed order** to npm with the appropriate dist-tag (if not `--skip-publish`)
 
-   ```bash
-   cd packages/turbo && pnpm pack --pack-destination=../
-   cd packages/create-turbo && pnpm pack --pack-destination=../
-   # ... and so on for all 9 packages
-   ```
-
-2. **Publishes in fixed order** (if not `--skip-publish`):
-   ```bash
-   npm publish --tag $(TURBO_TAG) turbo-$(TURBO_VERSION).tgz
-   npm publish --tag $(TURBO_TAG) create-turbo-$(TURBO_VERSION).tgz
-   npm publish --tag $(TURBO_TAG) turbo-codemod-$(TURBO_VERSION).tgz
-   npm publish --tag $(TURBO_TAG) turbo-ignore-$(TURBO_VERSION).tgz
-   npm publish --tag $(TURBO_TAG) turbo-workspaces-$(TURBO_VERSION).tgz
-   npm publish --tag $(TURBO_TAG) turbo-gen-$(TURBO_VERSION).tgz
-   npm publish --tag $(TURBO_TAG) eslint-plugin-turbo-$(TURBO_VERSION).tgz
-   npm publish --tag $(TURBO_TAG) eslint-config-turbo-$(TURBO_VERSION).tgz
-   npm publish --tag $(TURBO_TAG) turbo-types-$(TURBO_VERSION).tgz
-   ```
+See: `cli/Makefile` (publish-turbo target)
 
 **Why fixed order?**
 
@@ -440,22 +374,11 @@ The `turbo` package is unique:
    - Falls back to x64 on ARM64 for macOS/Windows (Rosetta/emulation support)
    - Provides just-in-time installation if the platform package is missing
 
-2. **Declares platform packages as optional dependencies** in `package.json`:
-
-   ```json
-   {
-     "optionalDependencies": {
-       "turbo-darwin-64": "2.6.2",
-       "turbo-darwin-arm64": "2.6.2",
-       "turbo-linux-64": "2.6.2",
-       "turbo-linux-arm64": "2.6.2",
-       "turbo-windows-64": "2.6.2",
-       "turbo-windows-arm64": "2.6.2"
-     }
-   }
-   ```
+2. **Declares platform packages as optional dependencies** - all six platform-specific packages are listed as `optionalDependencies` in the package.json, allowing npm to install only the relevant one for the current platform.
 
 3. **Entry point**: `packages/turbo/bin/turbo` (Node.js script)
+
+See: `packages/turbo/package.json` and `packages/turbo/bin/turbo`
 
 ---
 
@@ -467,21 +390,13 @@ When a user runs `turbo`, the `packages/turbo/bin/turbo` script:
 
 1. **Checks `TURBO_BINARY_PATH`** environment variable (for local development)
 2. **Detects platform**: `process.platform` and `process.arch`
-3. **Maps to package name**:
-   ```javascript
-   const PLATFORM_PACKAGE_MAP = {
-     "darwin-x64": "turbo-darwin-64",
-     "darwin-arm64": "turbo-darwin-arm64",
-     "linux-x64": "turbo-linux-64",
-     "linux-arm64": "turbo-linux-arm64",
-     "win32-x64": "turbo-windows-64",
-     "win32-arm64": "turbo-windows-arm64",
-   };
-   ```
+3. **Maps to package name** using a platform-to-package mapping
 4. **Attempts to require the correct platform package**
 5. **Falls back** to x64 on ARM64 for macOS and Windows (Rosetta 2 / emulation support)
 6. **Just-in-time install**: If the package is missing, attempts `npm install` for that specific platform
 7. **Errors with diagnostics** if all attempts fail
+
+See: `packages/turbo/bin/turbo` for the complete platform detection logic
 
 #### Windows Special Handling
 
@@ -489,20 +404,9 @@ Windows has special considerations:
 
 1. **Binary name**: `turbo.exe`
 2. **npm `.exe` stripping issue**: npm strips `.exe` files from the `bin/` directory
-3. **Solution**: Native Windows packages include a `bin/turbo` Node.js wrapper script that:
+3. **Solution**: Native Windows packages include a `bin/turbo` Node.js wrapper script that spawns `turbo.exe` and forwards all arguments and stdio
 
-   ```javascript
-   // bin/turbo (Windows native package)
-   #!/usr/bin/env node
-   const { spawn } = require("child_process");
-   const path = require("path");
-
-   const binPath = path.resolve(__dirname, "../turbo.exe");
-   const result = spawn(binPath, process.argv.slice(2), { stdio: "inherit" });
-   result.on("exit", (code) => process.exit(code));
-   ```
-
-4. This wrapper spawns `turbo.exe` and forwards all arguments and stdio
+See: `packages/turbo-releaser/` for the Windows wrapper generation
 
 ---
 
@@ -644,16 +548,9 @@ Windows has special considerations:
 
 #### Rust Build Profile
 
-```toml
-# Cargo.toml
-[profile.release-turborepo]
-inherits = "release"
-strip = true  # Remove debug symbols
-```
+The `release-turborepo` profile inherits from the release profile with debug symbol stripping enabled. Link-time optimization is enabled via the `CARGO_PROFILE_RELEASE_LTO=true` environment variable during the build.
 
-Additional flags set during build:
-
-- `CARGO_PROFILE_RELEASE_LTO=true` - Link-time optimization
+See: `Cargo.toml` (release-turborepo profile)
 
 #### Workflow Inputs Reference
 
