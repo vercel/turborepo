@@ -5,9 +5,10 @@ mod turbo_state;
 
 use std::{backtrace::Backtrace, env, process, process::Stdio, time::Duration};
 
+use camino::Utf8PathBuf;
 use dunce::canonicalize as fs_canonicalize;
 use local_turbo_config::LocalTurboConfig;
-use local_turbo_state::{turbo_version_has_shim, LocalTurboState};
+use local_turbo_state::{LocalTurboState, turbo_version_has_shim};
 use miette::{Diagnostic, SourceSpan};
 use parser::{MultipleCwd, ShimArgs};
 use thiserror::Error;
@@ -308,6 +309,32 @@ fn is_turbo_binary_path_set() -> bool {
     env::var("TURBO_BINARY_PATH").is_ok()
 }
 
+fn normalize_config_dir_env_vars() {
+    // Normalize relative config dir env vars to absolute paths early in CLI startup
+    for var in ["TURBO_CONFIG_DIR_PATH", "VERCEL_CONFIG_DIR_PATH"] {
+        if let Ok(val) = env::var(var) {
+            match turbopath::AbsoluteSystemPathBuf::new(val.as_str()) {
+                Ok(_) => {
+                    // already absolute, nothing to do
+                }
+                Err(turbopath::PathError::NotAbsolute(_)) => {
+                    match turbopath::AbsoluteSystemPathBuf::from_cwd(Utf8PathBuf::from(val)) {
+                        Ok(abs) => env::set_var(var, abs.as_str()),
+                        Err(_) => {
+                            // invalid value; leave as-is so downstream error
+                            // handling can report it
+                        }
+                    }
+                }
+                Err(_) => {
+                    // invalid value; leave as-is so downstream error handling
+                    // can report it
+                }
+            }
+        }
+    }
+}
+
 fn try_check_for_updates(
     args: &ShimArgs,
     current_version: &str,
@@ -346,6 +373,7 @@ fn try_check_for_updates(
 }
 
 pub fn run() -> Result<i32, Error> {
+    normalize_config_dir_env_vars();
     let args = ShimArgs::parse()?;
     let color_config = args.color_config();
     if color_config.should_strip_ansi {
