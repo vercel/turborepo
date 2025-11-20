@@ -10,18 +10,18 @@ use thiserror::Error;
 use tokio::{select, sync::Notify, task::JoinHandle};
 use tracing::{instrument, trace, warn};
 use turborepo_repository::package_graph::PackageName;
-use turborepo_signals::{listeners::get_signal, SignalHandler};
+use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
 
 use crate::{
+    DaemonConnector, DaemonPaths,
     commands::CommandBase,
     config::resolve_turbo_config_path,
-    daemon::{proto, DaemonConnectorError, DaemonError},
+    daemon::{DaemonConnectorError, DaemonError, proto},
     engine::TaskNode,
     get_version, opts,
-    run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
-    DaemonConnector, DaemonPaths,
+    run::{self, Run, builder::RunBuilder, scope::target_selector::InvalidSelectorError},
 };
 
 #[derive(Debug)]
@@ -207,21 +207,22 @@ impl WatchClient {
                         .then(|| std::mem::take(changed_packages_guard.deref_mut()))
                 };
 
-                if let Some(mut changed_packages) = some_changed_packages {
+                if let Some(changed_packages) = some_changed_packages {
                     // Clean up currently running tasks
                     self.active_runs.retain(|h| !h.run_task.is_finished());
 
-                    match &mut changed_packages {
+                    let changed_packages = match changed_packages {
                         ChangedPackages::Some(pkgs) => {
-                            self.stop_impacted_tasks(pkgs).await;
+                            ChangedPackages::Some(self.stop_impacted_tasks(pkgs).await)
                         }
                         ChangedPackages::All => {
                             for handle in self.active_runs.drain(..) {
                                 handle.stopper.stop().await;
                                 let _ = handle.run_task.await;
                             }
+                            ChangedPackages::All
                         }
-                    }
+                    };
                     let new_run = self.execute_run(changed_packages).await?;
                     self.active_runs.push(new_run);
                 }
@@ -275,7 +276,7 @@ impl WatchClient {
         Ok(())
     }
 
-    async fn stop_impacted_tasks(&self, pkgs: &mut HashSet<PackageName>) {
+    async fn stop_impacted_tasks(&self, pkgs: HashSet<PackageName>) -> HashSet<PackageName> {
         let engine = self.run.engine();
         let mut tasks_to_stop = HashSet::new();
 
@@ -298,8 +299,6 @@ impl WatchClient {
             impacted_packages.insert(PackageName::from(task_id.package()));
         }
 
-        *pkgs = impacted_packages;
-
         for handle in &self.active_runs {
             let tasks = tasks_to_stop.clone();
             handle
@@ -309,6 +308,8 @@ impl WatchClient {
                 })
                 .await;
         }
+
+        impacted_packages
     }
 
     /// Shut down any resources that run as part of watch.
