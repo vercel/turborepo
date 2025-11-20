@@ -7,12 +7,11 @@
 1. Create a release by triggering the [Turborepo Release][1] workflow
 
    - Specify the semver increment using the SemVer Increment field (start with `prerelease`)
-   - Check the "Dry Run" box to run the full release workflow without publishing any packages.
+   - Check the "Dry Run" box to run the full release workflow without publishing any packages. Artifacts will be created that you can test with locally.
 
 2. A PR is automatically opened to merge the release branch created in step 1 back into `main`
 
-   - ⚠️ Merge this in! You don't need to wait for tests to pass. It's important to merge this branch soon after the
-     publish is successful
+   - ⚠️ Merge this in! You don't need to wait for tests to pass (because they won't pass until after this PR is merged in). It's important to merge this branch soon after the publish is successful.
 
 ### Release `@turbo/repository`
 
@@ -53,20 +52,9 @@ The Turborepo release process is a multi-stage pipeline that:
 2. **Builds Rust binaries** for 6 different platforms (macOS, Linux, Windows on x64 and ARM64)
 3. **Packages native binaries** as separate npm packages (e.g., `turbo-darwin-64`, `turbo-linux-arm64`)
 4. **Publishes JavaScript packages** (main `turbo` package, `create-turbo`, codemods, ESLint plugins, etc.)
-5. **Creates a staging branch** with version bumps and automatically opens a PR to merge back to `main`
+5. **Creates a release branch** with version bumps and automatically opens a PR to merge back to `main`
 
 The entire process is orchestrated through a GitHub Actions workflow located at `.github/workflows/turborepo-release.yml`.
-
----
-
-### Prerequisites
-
-Before triggering a release, ensure:
-
-1. **npm Access**: You have publishing rights to the `vercel` npm organization
-2. **GitHub Permissions**: You can trigger GitHub Actions workflows on the `vercel/turborepo` repository
-3. **Clean Working Directory**: No unpushed commits on `main` (the workflow will verify this)
-4. **Passing CI**: All tests should be passing on `main` before releasing
 
 ---
 
@@ -308,27 +296,13 @@ See: `cli/Makefile` (publish-turbo target)
 **Why fixed order?**
 
 - Prevents race conditions where dependent packages are published before their dependencies
-- Ensures `turbo` is published first so other packages can reference it
+- Ensures `turbo` is published last so the platform specific binaries that it depends on are available.
 
 **Dry Run**: If the workflow was triggered with `dry_run: true` or the Makefile is called with `--skip-publish`, the publish commands are skipped, allowing you to test the entire pipeline without publishing.
 
-#### Stage 6: Create Release PR
+#### Stage 6: Merge Release PR
 
-**Job**: `create-release-pr` (depends on `stage` and `npm-publish`)
-
-**Steps**:
-
-1. Checkout the staging branch
-2. Extract version from `version.txt` (first line)
-3. Create pull request using `thomaseizinger/create-pull-request@master`:
-   - **Head**: `staging-$(VERSION)` (e.g., `staging-2.6.2`)
-   - **Base**: `main`
-   - **Title**: `"release(turborepo): $(VERSION)"`
-   - **Body**: Auto-generated with commit details
-
-**Only runs if**: `dry_run` is `false`
-
-**Important**: Merge this PR soon after the publish succeeds. This brings the version bump commits back into `main` so the next release starts from the correct version.
+A release PR is automatically generated. Merge it as soon as possible after publishing has completed.
 
 ---
 
@@ -410,117 +384,6 @@ See: `packages/turbo-releaser/` for the Windows wrapper generation
 
 ---
 
-### Troubleshooting
-
-#### Release Failed During Smoke Tests
-
-**Symptom**: `rust-smoke-test` or `js-smoke-test` job failed
-
-**Solution**:
-
-1. Check the test logs to identify which test failed
-2. Fix the issue on `main` branch
-3. Wait for CI to pass
-4. Trigger a new release (the version will be incremented from the failed version)
-
-#### Release Failed During Build
-
-**Symptom**: `build-rust` job failed for a specific platform
-
-**Possible Causes**:
-
-- Cross-compilation dependencies missing (e.g., musl-tools)
-- Rust compiler error on specific platform
-- Protoc/Cap'n Proto codegen issue
-
-**Solution**:
-
-1. Check the build logs for the specific platform
-2. If it's a platform-specific issue, you may need to update the build scripts or CI configuration
-3. If it's a code issue, fix it on `main` and re-trigger the release
-
-#### Release Failed During Publish
-
-**Symptom**: `npm-publish` job failed
-
-**Possible Causes**:
-
-- npm authentication issue (expired `NPM_TOKEN`)
-- Package already exists with that version (you may have manually published)
-- npm registry timeout or outage
-
-**Solution**:
-
-1. **If authentication**: Regenerate the `NPM_TOKEN` in GitHub Secrets
-2. **If already published**:
-   - Check npm to see which packages were published
-   - If partial publish, you may need to manually publish the remaining packages
-   - For canary releases, you can increment and try again
-3. **If registry issue**: Wait and re-trigger
-
-#### Version.txt Not Updated
-
-**Symptom**: Error message "Refusing to publish with unupdated version.txt"
-
-**Cause**: The `scripts/version.js` didn't modify `version.txt`
-
-**Solution**:
-
-- This is a safety check. If you see this, it means something is wrong with the version calculation
-- Check the `scripts/version.js` logs to see why it didn't update the file
-- This should never happen in normal operation; file a bug if it does
-
-#### Unpushed Commits Detected
-
-**Symptom**: Error message "Refusing to publish with unpushed commits"
-
-**Cause**: There are commits on your local `main` that aren't on origin
-
-**Solution**:
-
-- This should never happen in the GitHub Actions workflow since it always checks out from origin
-- If testing locally, push your commits or use a clean checkout
-
-#### Platform Package Not Found
-
-**Symptom**: Users report "Could not resolve turbo binary for platform ..."
-
-**Cause**:
-
-- The platform package wasn't published
-- User is on an unsupported platform
-- npm has propagation delay (rare)
-
-**Solution**:
-
-1. **Check npm**: Verify the platform package exists: `npm view turbo-<platform>-<arch>`
-2. **If missing**: Manually publish the platform package
-3. **If unsupported platform**: File an issue to add support for that platform
-4. **If propagation delay**: Wait 5-10 minutes and try again
-
-#### Release PR Not Created
-
-**Symptom**: No PR was opened after successful release
-
-**Cause**:
-
-- `dry_run` was set to `true`
-- `create-release-pr` job failed
-
-**Solution**:
-
-1. Check if `dry_run` was enabled in the workflow inputs
-2. Check the `create-release-pr` job logs for errors
-3. Manually create the PR if needed:
-   ```bash
-   gh pr create \
-     --head staging-<version> \
-     --base main \
-     --title "release(turborepo): <version>"
-   ```
-
----
-
 ### Technical Reference
 
 #### Key Scripts and Commands
@@ -554,19 +417,11 @@ See: `Cargo.toml` (release-turborepo profile)
 
 #### Workflow Inputs Reference
 
-| Input             | Type    | Required | Default      | Description                                                                                        |
-| ----------------- | ------- | -------- | ------------ | -------------------------------------------------------------------------------------------------- |
-| `increment`       | choice  | Yes      | `prerelease` | SemVer increment type: `prerelease`, `prepatch`, `preminor`, `premajor`, `patch`, `minor`, `major` |
-| `dry_run`         | boolean | No       | `false`      | Skip npm publish and PR creation (test mode)                                                       |
-| `tag-override`    | string  | No       | -            | Override npm dist-tag (e.g., for backports)                                                        |
-| `ci-tag-override` | string  | No       | -            | Override npm dist-tag for running tests                                                            |
-| `sha`             | string  | No       | -            | Override SHA to build from (rarely used)                                                           |
-
-#### Workflow Outputs Reference
-
-| Output         | Source Job | Description                                        |
-| -------------- | ---------- | -------------------------------------------------- |
-| `stage-branch` | `stage`    | Name of the staging branch (e.g., `staging-2.6.2`) |
+| Input          | Type    | Required | Default      | Description                                                                                        |
+| -------------- | ------- | -------- | ------------ | -------------------------------------------------------------------------------------------------- |
+| `increment`    | choice  | Yes      | `prerelease` | SemVer increment type: `prerelease`, `prepatch`, `preminor`, `premajor`, `patch`, `minor`, `major` |
+| `dry_run`      | boolean | No       | `false`      | Skip npm publish and PR creation (test mode)                                                       |
+| `tag-override` | string  | No       | -            | Override npm dist-tag (e.g., for backports)                                                        |
 
 #### Common npm Dist-tags
 
