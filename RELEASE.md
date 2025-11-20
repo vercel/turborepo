@@ -34,13 +34,12 @@ This section provides comprehensive documentation on how the Turborepo CLI is re
 ### Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Prerequisites](#prerequisites)
-3. [Version Management](#version-management)
-4. [Release Workflow Stages](#release-workflow-stages)
-5. [Packages Released](#packages-released)
-6. [Platform-Specific Binaries](#platform-specific-binaries)
-7. [Troubleshooting](#troubleshooting)
-8. [Technical Reference](#technical-reference)
+2. [Version Management](#version-management)
+3. [Release Workflow Stages](#release-workflow-stages)
+4. [Packages Released](#packages-released)
+5. [Platform-Specific Binaries](#platform-specific-binaries)
+6. [Technical Reference](#technical-reference)
+7. [Best Practices](#best-practices)
 
 ---
 
