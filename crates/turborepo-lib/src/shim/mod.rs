@@ -8,7 +8,7 @@ use std::{backtrace::Backtrace, env, process, process::Stdio, time::Duration};
 use camino::Utf8PathBuf;
 use dunce::canonicalize as fs_canonicalize;
 use local_turbo_config::LocalTurboConfig;
-use local_turbo_state::{LocalTurboState, turbo_version_has_shim};
+use local_turbo_state::{turbo_version_has_shim, LocalTurboState};
 use miette::{Diagnostic, SourceSpan};
 use parser::{MultipleCwd, ShimArgs};
 use thiserror::Error;
