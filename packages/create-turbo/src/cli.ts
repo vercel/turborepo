@@ -99,21 +99,11 @@ withTelemetryCommand(createTurboCli);
 
 createTurboCli
   .parseAsync()
-  .then(async () => {
-    try {
-      await notifyUpdate();
-    } catch {
-      process.exit(0);
-    }
-  })
+  .then(() => notifyUpdate())
   .catch(async (reason) => {
     logger.log();
     logger.error("Unexpected error. Please report it as a bug:");
     logger.log(reason);
     logger.log();
-    try {
-      await notifyUpdate(1);
-    } catch {
-      process.exit(1);
-    }
+    await notifyUpdate(1);
   });
