@@ -21,6 +21,6 @@ export async function notifyUpdate(exitCode: number = 0): Promise<void> {
     }
     process.exit(exitCode);
   } catch (_) {
-    // ignore error
+    process.exit(exitCode);
   }
 }
