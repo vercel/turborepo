@@ -116,7 +116,13 @@ turboGenCli
 
 turboGenCli
   .parseAsync()
-  .then(notifyUpdate)
+  .then(async () => {
+    try {
+      await notifyUpdate();
+    } catch {
+      process.exit(0);
+    }
+  })
   .catch(async (error) => {
     logger.log();
     if (error instanceof GeneratorError) {
@@ -126,5 +132,9 @@ turboGenCli
       logger.log(error);
     }
     logger.log();
-    await notifyUpdate(1);
+    try {
+      await notifyUpdate(1);
+    } catch {
+      process.exit(1);
+    }
   });

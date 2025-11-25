@@ -66,12 +66,22 @@ codemodCli
 
 codemodCli
   .parseAsync()
-  .then(notifyUpdate)
+  .then(async () => {
+    try {
+      await notifyUpdate();
+    } catch {
+      process.exit(0);
+    }
+  })
   .catch(async (reason) => {
     logger.log();
     logger.log(picocolors.red("Unexpected error. Please report it as a bug:"));
     logger.log(reason);
 
     logger.log();
-    await notifyUpdate(1);
+    try {
+      await notifyUpdate(1);
+    } catch {
+      process.exit(1);
+    }
   });
