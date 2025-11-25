@@ -1,5 +1,6 @@
 // eslint-disable-next-line camelcase -- This is a test file
 import child_process from "node:child_process";
+import { existsSync, unlinkSync } from "node:fs";
 import {
   describe,
   it,
@@ -15,53 +16,57 @@ describe("Security: Command Injection Prevention", () => {
   mockEnv();
 
   describe("validateSHAExists()", () => {
-    let mockExecFileSync: ReturnType<typeof jest.spyOn>;
-
-    beforeEach(() => {
-      mockExecFileSync = jest.spyOn(child_process, "execFileSync");
+    it("uses real execFileSync to validate HEAD ref", () => {
+      const result = validateSHAExists("HEAD");
+      expect(result).toBe(true); // HEAD should exist in any git repository
     });
 
-    afterEach(() => {
-      mockExecFileSync.mockRestore();
+    it("returns false for invalid ref using real execFileSync", () => {
+      const result = validateSHAExists(
+        "this-ref-definitely-does-not-exist-12345"
+      );
+      expect(result).toBe(false);
     });
 
-    it("uses execFileSync with array arguments to prevent command injection", () => {
+    it("safely handles malicious ref with command injection attempt", () => {
+      const execFileSyncSpy = jest.spyOn(child_process, "execFileSync");
       const maliciousRef = "HEAD]; touch /tmp/pwned; echo [";
-      mockExecFileSync.mockReturnValue("commit");
+      const testFile = "/tmp/pwned";
 
+      // Clean up any existing test file
+      if (existsSync(testFile)) {
+        unlinkSync(testFile);
+      }
+
+      // Call the function with malicious input
       const result = validateSHAExists(maliciousRef);
 
-      expect(result).toBe(true);
-      expect(mockExecFileSync).toHaveBeenCalledWith(
+      // Behavior check: Verify no arbitrary commands were executed
+      // If command injection occurred, /tmp/pwned would exist
+      expect(existsSync(testFile)).toBe(false);
+
+      // Pattern check: Verify execFileSync was called with array arguments
+      expect(execFileSyncSpy).toHaveBeenCalledWith(
         "git",
         ["cat-file", "-t", maliciousRef],
         expect.objectContaining({ stdio: "ignore" })
       );
-    });
 
-    it("handles normal refs correctly", () => {
-      const normalRef = "HEAD^";
-      mockExecFileSync.mockReturnValue("commit");
+      // Verify the malicious string was passed as-is (not shell-expanded)
+      const callArgs = execFileSyncSpy.mock.calls[0];
+      const argsArray = callArgs[1];
+      expect(argsArray).toEqual(["cat-file", "-t", maliciousRef]);
+      expect(argsArray![2]).toBe(maliciousRef);
 
-      const result = validateSHAExists(normalRef);
-
-      expect(result).toBe(true);
-      expect(mockExecFileSync).toHaveBeenCalledWith(
-        "git",
-        ["cat-file", "-t", normalRef],
-        expect.anything()
-      );
-    });
-
-    it("returns false when git command fails", () => {
-      const ref = "invalid-ref";
-      mockExecFileSync.mockImplementation(() => {
-        throw new Error("fatal: Not a valid object name");
-      });
-
-      const result = validateSHAExists(ref);
-
+      // Verify the function returns false (invalid ref handled safely)
       expect(result).toBe(false);
+
+      execFileSyncSpy.mockRestore();
+
+      // Clean up just in case
+      if (existsSync(testFile)) {
+        unlinkSync(testFile);
+      }
     });
   });
 });
