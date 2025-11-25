@@ -5,7 +5,7 @@ import cliPkgJson from "../../package.json";
 
 const update = checkForUpdate(cliPkgJson).catch(() => null);
 
-export async function notifyUpdate(): Promise<void> {
+export async function notifyUpdate(exitCode: number = 0): Promise<void> {
   try {
     const res = await update;
     if (res?.latest) {
@@ -19,7 +19,7 @@ export async function notifyUpdate(): Promise<void> {
       );
       logger.log();
     }
-    process.exit();
+    process.exit(exitCode);
   } catch (_) {
     // ignore error
   }

@@ -126,6 +126,5 @@ turboGenCli
       logger.log(error);
     }
     logger.log();
-    await notifyUpdate();
-    process.exit(1);
+    await notifyUpdate(1);
   });

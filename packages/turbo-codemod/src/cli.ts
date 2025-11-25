@@ -73,6 +73,5 @@ codemodCli
     logger.log(reason);
 
     logger.log();
-    await notifyUpdate();
-    process.exit(1);
+    await notifyUpdate(1);
   });
