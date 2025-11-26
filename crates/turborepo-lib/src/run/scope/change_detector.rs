@@ -92,7 +92,7 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
         allow_unknown_objects: bool,
         merge_base: bool,
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
-        let changed_files = match self.scm.changed_files(
+        let mut changed_files = match self.scm.changed_files(
             self.turbo_root,
             from_ref,
             to_ref,
@@ -118,6 +118,48 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             }
             Ok(changed_files) => changed_files,
         };
+
+        // Filter out root package.json if it's a false positive (not actually changed)
+        // This fixes the issue where git diff-tree reports package.json as changed
+        // even though git diff shows it wasn't actually modified.
+        // This can happen when only workspace dependencies change and the lockfile is updated,
+        // but git diff-tree incorrectly includes package.json in the changed files.
+        let root_package_json = AnchoredSystemPathBuf::from_raw("package.json").unwrap();
+        if changed_files.contains(&root_package_json) {
+            let root_package_json_abs = self.turbo_root.resolve(&root_package_json);
+            // Verify the file actually changed by comparing content between the two refs
+            // If we have a from_ref, compare from_ref to to_ref (or HEAD)
+            // If we don't have a from_ref but have uncommitted changes, we can't verify, so keep it
+            if let Some(from_ref) = from_ref {
+                let to_ref_for_comparison = to_ref.unwrap_or("HEAD");
+                // Get content at from_ref
+                if let Ok(previous_content) =
+                    self.scm.previous_content(Some(from_ref), &root_package_json_abs)
+                {
+                    // Get content at to_ref (or current working directory if checking uncommitted)
+                    let current_content = if include_uncommitted {
+                        // When checking uncommitted, read from filesystem
+                        std::fs::read(&root_package_json_abs).ok()
+                    } else {
+                        // When not checking uncommitted, get content from to_ref
+                        self.scm
+                            .previous_content(Some(to_ref_for_comparison), &root_package_json_abs)
+                            .ok()
+                    };
+
+                    if let Some(current_content) = current_content {
+                        if current_content == previous_content {
+                            debug!(
+                                "root package.json detected as changed but content is identical \
+                                 between {} and {}, removing from changed files",
+                                from_ref, to_ref_for_comparison
+                            );
+                            changed_files.remove(&root_package_json);
+                        }
+                    }
+                }
+            }
+        }
 
         let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
 
