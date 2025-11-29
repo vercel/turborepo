@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import { defineConfig, globalIgnores } from "eslint/config";
 import eslintConfigPrettier from "eslint-config-prettier";
 import turboPlugin from "eslint-plugin-turbo";
 import tseslint from "typescript-eslint";
@@ -6,13 +7,12 @@ import onlyWarn from "eslint-plugin-only-warn";
 
 /**
  * A shared ESLint configuration for the repository.
- *
- * @type {import("eslint").Linter.Config}
- * */
-export const config = [
+ */
+export const config = defineConfig(
+  globalIgnores(["dist/**"]),
   js.configs.recommended,
   eslintConfigPrettier,
-  ...tseslint.configs.recommended,
+  tseslint.configs.recommended,
   {
     plugins: {
       turbo: turboPlugin,
@@ -25,8 +25,5 @@ export const config = [
     plugins: {
       onlyWarn,
     },
-  },
-  {
-    ignores: ["dist/**"],
-  },
-];
+  }
+);
