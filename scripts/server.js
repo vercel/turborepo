@@ -6,6 +6,19 @@ const { platform } = require("process");
 const path = process.argv[2];
 
 async function main() {
+  // Validate that a path argument was provided
+  if (!path) {
+    console.error("Error: Missing required path argument.");
+    console.error("");
+    console.error("Usage: node scripts/server.js <path-to-project>");
+    console.error("");
+    console.error("Example: node scripts/server.js ./test-codemod");
+    console.error("");
+    console.error("The path should point to a directory containing a package.json");
+    console.error("with a 'start' script that can be run via 'pnpm run start'.");
+    process.exit(1);
+  }
+
   let errored = false;
 
   await new Promise((resolve) => {
