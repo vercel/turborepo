@@ -65,6 +65,8 @@ pub enum Role {
     Contributor,
     Billing,
     Viewer,
+    #[serde(rename = "VIEWER_FOR_PLUS")]
+    ViewerForPlus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
