@@ -9,13 +9,13 @@ use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 use turborepo_task_id::{TaskId, TaskName};
 
 use crate::{
+    Args,
     cli::{
         Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
         OutputLogsMode, RunArgs,
     },
-    config::{ConfigurationOptions, CONFIG_FILE},
+    config::{CONFIG_FILE, ConfigurationOptions},
     turbo_json::{FutureFlags, UIMode},
-    Args,
 };
 
 #[derive(Debug, Error)]
@@ -339,11 +339,27 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             ),
 
             // Streaming is the default behavior except when running on GitHub Actions
-            LogOrder::Auto | LogOrder::Stream => (
-                false,
-                ResolvedLogOrder::Stream,
-                inputs.execution_args.log_prefix.into(),
-            ),
+            LogOrder::Auto | LogOrder::Stream => {
+                let mut log_prefix = inputs.execution_args.log_prefix.into();
+                // If we're running in a context where we need to output json, we should
+                // disable the log prefix.
+                // This is specifically for the VS Code Jest extension.
+                if inputs
+                    .execution_args
+                    .pass_through_args
+                    .iter()
+                    .any(|arg| arg == "--listTests")
+                    && inputs
+                        .execution_args
+                        .pass_through_args
+                        .iter()
+                        .any(|arg| arg == "--json")
+                {
+                    log_prefix = ResolvedLogPrefix::None;
+                }
+
+                (false, ResolvedLogOrder::Stream, log_prefix)
+            }
             LogOrder::Grouped => (
                 false,
                 ResolvedLogOrder::Grouped,
@@ -575,12 +591,12 @@ mod test {
 
     use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
     use crate::{
+        Args,
         cli::{Command, ContinueMode, DryRunMode, RunArgs},
         commands::CommandBase,
-        config::{ConfigurationOptions, CONFIG_FILE},
+        config::{CONFIG_FILE, ConfigurationOptions},
         opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
         turbo_json::UIMode,
-        Args,
     };
 
     #[derive(Default)]
