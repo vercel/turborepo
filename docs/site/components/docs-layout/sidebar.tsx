@@ -143,6 +143,9 @@ export function SidebarViewport(props: ScrollAreaProps) {
             "linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent 100%)",
           WebkitMaskImage:
             "linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent 100%)",
+          // Prevent scroll anchoring from affecting sidebar scroll position
+          // when main content height changes (e.g., switching code block tabs)
+          overflowAnchor: "none",
         }}
       >
         {props.children}
