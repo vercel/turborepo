@@ -87,12 +87,12 @@ impl<'a> TurboJsonReader<'a> {
         opts.cache_dir = cache_dir;
         opts.concurrency = turbo_json.concurrency.map(|c| c.as_inner().clone());
 
-        // Only read observability config if futureFlags.experimentalObservability is
-        // enabled
-        let future_flags = turbo_json.future_flags.as_ref().map(|f| *f.as_inner());
         opts.future_flags = turbo_json.future_flags.map(|f| *f.as_inner());
 
-        if future_flags
+        // Only read observability config if futureFlags.experimentalObservability is
+        // enabled
+        if opts
+            .future_flags
             .map(|f| f.experimental_observability)
             .unwrap_or(false)
         {
