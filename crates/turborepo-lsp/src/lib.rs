@@ -157,9 +157,7 @@ impl LanguageServer for Backend {
                     self.client
                         .log_message(
                             MessageType::ERROR,
-                            format!(
-                                "Failed to acquire pidlock: {e}"
-                            ),
+                            format!("Failed to acquire pidlock: {e}"),
                         )
                         .await;
                     return Err(Error::internal_error());
