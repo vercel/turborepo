@@ -158,7 +158,7 @@ impl LanguageServer for Backend {
                         .log_message(
                             MessageType::ERROR,
                             format!(
-                                "failed to acquire pidlock, is another lsp instance running? - {e}"
+                                "Failed to acquire pidlock: {e}"
                             ),
                         )
                         .await;
