@@ -68,6 +68,7 @@ publish-turbo: build
 ifneq ($(SKIP_PUBLISH),--skip-publish)
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../
+	npm --version
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz
