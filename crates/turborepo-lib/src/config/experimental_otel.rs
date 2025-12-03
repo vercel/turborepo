@@ -39,14 +39,27 @@ impl fmt::Display for ExperimentalOtelProtocol {
     }
 }
 
+#[derive(Debug)]
+pub struct ParseProtocolError(pub String);
+
+impl fmt::Display for ParseProtocolError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "Unsupported protocol `{}`. Use `grpc` or `http/protobuf`.",
+            self.0
+        )
+    }
+}
+
 impl FromStr for ExperimentalOtelProtocol {
-    type Err = ();
+    type Err = ParseProtocolError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "grpc" => Ok(Self::Grpc),
             "http" | "http/protobuf" | "http_protobuf" => Ok(Self::HttpProtobuf),
-            _ => Err(()),
+            _ => Err(ParseProtocolError(s.to_string())),
         }
     }
 }
@@ -97,12 +110,9 @@ impl ExperimentalOtelOptions {
         }
 
         if let Some(raw) = get_non_empty(map, "experimental_otel_protocol") {
-            let protocol = <ExperimentalOtelProtocol as FromStr>::from_str(raw).map_err(|_| {
+            let protocol = <ExperimentalOtelProtocol as FromStr>::from_str(raw).map_err(|e| {
                 Error::InvalidExperimentalOtelConfig {
-                    message: format!(
-                        "Unsupported experimentalObservability.otel protocol `{raw}`. Use `grpc` \
-                         or `http/protobuf`."
-                    ),
+                    message: e.to_string(),
                 }
             })?;
             options.protocol = Some(protocol);
@@ -297,8 +307,8 @@ mod tests {
         assert!(result.is_err());
         match result.unwrap_err() {
             Error::InvalidExperimentalOtelConfig { message } => {
-                assert!(message.contains("Unsupported experimentalObservability.otel protocol"));
-                assert!(message.contains("invalid"));
+                assert!(message.contains("Unsupported protocol"));
+                assert!(message.contains("`invalid`"));
             }
             _ => panic!("Expected InvalidExperimentalOtelConfig"),
         }
