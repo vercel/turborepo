@@ -17,6 +17,9 @@ env:
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
   RELEASE_TURBO_CLI: true # TODO: do we need this?
 
+permissions:
+  id-token: write # Required for npm Trusted Publishing using OIDC
+
 on:
   workflow_dispatch:
     inputs:
@@ -57,6 +60,7 @@ on:
         required: false
         type: string
         default: ""
+
 jobs:
   stage:
     runs-on: ubuntu-latest
@@ -232,8 +236,6 @@ jobs:
 
       - name: Perform Release
         run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts

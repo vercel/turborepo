@@ -51,8 +51,6 @@ publish-turbo: build
 	# Include the patch in the log.
 	git format-patch HEAD~1 --stdout | cat
 
-	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
-
 	# Publishes the native npm modules.
 	turbo release-native -- $(SKIP_PUBLISH)
 
