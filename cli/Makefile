@@ -52,7 +52,7 @@ publish-turbo: build
 	git format-patch HEAD~1 --stdout | cat
 
 	# Publishes the native npm modules.
-	turbo release-native -- $(SKIP_PUBLISH)
+	turbo release-native --env-mode=loose -- $(SKIP_PUBLISH)
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
 	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
