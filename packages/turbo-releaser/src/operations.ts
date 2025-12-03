@@ -62,6 +62,8 @@ async function packPlatform({
 
 function publishArtifacts(artifacts: Array<string>, npmTag: string) {
   for (const artifact of artifacts) {
+    const npmVersion = execSync("npm --version").toString().trim();
+    console.log(`npm version: ${npmVersion}`);
     const publishCommand = `npm publish "${artifact}" --tag ${npmTag}`;
     console.log(`Executing: ${publishCommand}`);
     execSync(publishCommand, { stdio: "inherit" });
