@@ -2,10 +2,20 @@ use std::collections::BTreeMap;
 
 use clap::Parser;
 
-use crate::{
-    cli::parse_key_val_pair,
-    config::{ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol},
+use crate::config::{
+    ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
 };
+
+fn parse_key_val_pair(s: &str) -> Result<(String, String), String> {
+    let (key, value) = s
+        .split_once('=')
+        .ok_or_else(|| "must be in key=value format".to_string())?;
+    let key = key.trim();
+    if key.is_empty() {
+        return Err("key cannot be empty".to_string());
+    }
+    Ok((key.to_string(), value.trim().to_string()))
+}
 
 #[derive(Parser, Clone, Debug, Default, PartialEq)]
 pub struct ExperimentalOtelCliArgs {
@@ -374,5 +384,53 @@ mod tests {
         let metrics = opts.metrics.unwrap();
         assert_eq!(metrics.run_summary, Some(true));
         assert_eq!(metrics.task_details, Some(false));
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_valid() {
+        let result = super::parse_key_val_pair("key=value");
+        assert_eq!(result.unwrap(), ("key".to_string(), "value".to_string()));
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_with_whitespace() {
+        let result = super::parse_key_val_pair("  key  =  value  ");
+        assert_eq!(result.unwrap(), ("key".to_string(), "value".to_string()));
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_multiple_equals() {
+        let result = super::parse_key_val_pair("key=value=more");
+        assert_eq!(
+            result.unwrap(),
+            ("key".to_string(), "value=more".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_empty_value() {
+        let result = super::parse_key_val_pair("key=");
+        assert_eq!(result.unwrap(), ("key".to_string(), "".to_string()));
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_no_equals() {
+        let result = super::parse_key_val_pair("keyvalue");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "must be in key=value format");
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_empty_key() {
+        let result = super::parse_key_val_pair("=value");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "key cannot be empty");
+    }
+
+    #[test]
+    fn test_parse_key_val_pair_whitespace_only_key() {
+        let result = super::parse_key_val_pair("   =value");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "key cannot be empty");
     }
 }
