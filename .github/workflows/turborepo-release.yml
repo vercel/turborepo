@@ -19,7 +19,7 @@ env:
 
 permissions:
   id-token: write # Required for npm Trusted Publishing using OIDC
-  contents: read
+  contents: write
 
 on:
   workflow_dispatch:
