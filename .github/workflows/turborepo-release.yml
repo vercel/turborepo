@@ -104,13 +104,16 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node: "false"
 
-      - name: Install cargo-groups
-        uses: taiki-e/install-action@v2
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
         with:
-          tool: cargo-groups@0.1.9
+          tool: nextest
 
-      - name: Run Rust Unit Tests
-        run: cargo groups test turborepo
+      - name: Run tests
+        timeout-minutes: 30
+        run: |
+          cargo nextest run --workspace
+        shell: bash
 
   js-smoke-test:
     name: JS Package Tests
@@ -234,6 +237,9 @@ jobs:
           mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-x64
           mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-x64
           mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-x64
+
+      - name: Ensure npm version
+        run: npm install -g npm@11.5.1
 
       - name: Perform Release
         run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
