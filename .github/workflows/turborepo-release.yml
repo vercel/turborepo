@@ -17,6 +17,11 @@ env:
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
   RELEASE_TURBO_CLI: true # TODO: do we need this?
 
+permissions:
+  id-token: write # Required for npm Trusted Publishing using OIDC
+  contents: write # Allow workflow to checkout code from the repository
+  pull-requests: write # Allows the PR for post-release to be created
+
 on:
   workflow_dispatch:
     inputs:
@@ -57,6 +62,7 @@ on:
         required: false
         type: string
         default: ""
+
 jobs:
   stage:
     runs-on: ubuntu-latest
@@ -99,13 +105,16 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node: "false"
 
-      - name: Install cargo-groups
-        uses: taiki-e/install-action@v2
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
         with:
-          tool: cargo-groups@0.1.9
+          tool: nextest
 
-      - name: Run Rust Unit Tests
-        run: cargo groups test turborepo
+      - name: Run tests
+        timeout-minutes: 30
+        run: |
+          cargo nextest run --workspace
+        shell: bash
 
   js-smoke-test:
     name: JS Package Tests
@@ -230,10 +239,11 @@ jobs:
           mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-x64
           mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-x64
 
+      - name: Ensure npm version
+        run: npm install -g npm@11.5.1
+
       - name: Perform Release
         run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts

@@ -400,13 +400,12 @@ See: `packages/turbo-releaser/` for the Windows wrapper generation
 
 #### Environment Variables
 
-| Variable                    | Purpose                                        | Example              |
-| --------------------------- | ---------------------------------------------- | -------------------- |
-| `TURBO_VERSION`             | Version to release (read from version.txt)     | `2.6.2`              |
-| `TURBO_TAG`                 | npm dist-tag (read from version.txt)           | `latest` or `canary` |
-| `NPM_TOKEN`                 | npm authentication token (from GitHub Secrets) | `npm_xxx...`         |
-| `CARGO_PROFILE_RELEASE_LTO` | Enable link-time optimization for Rust         | `true`               |
-| `TURBO_BINARY_PATH`         | Override binary path (development only)        | `/path/to/turbo`     |
+| Variable                    | Purpose                                    | Example              |
+| --------------------------- | ------------------------------------------ | -------------------- |
+| `TURBO_VERSION`             | Version to release (read from version.txt) | `2.6.2`              |
+| `TURBO_TAG`                 | npm dist-tag (read from version.txt)       | `latest` or `canary` |
+| `CARGO_PROFILE_RELEASE_LTO` | Enable link-time optimization for Rust     | `true`               |
+| `TURBO_BINARY_PATH`         | Override binary path (development only)    | `/path/to/turbo`     |
 
 #### Rust Build Profile
 

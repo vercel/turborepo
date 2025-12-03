@@ -483,6 +483,9 @@ impl<'a> TaskHasher<'a> {
                     "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
                     "NOW_BUILDER",
                     "VC_MICROFRONTENDS_CONFIG_FILE_NAME",
+                    // GitHub Actions - https://docs.github.com/en/actions/reference/workflows-and-actions/variables
+                    "GITHUB_*",
+                    "RUNNER_*",
                     // Command Prompt casing of env variables
                     "APPDATA",
                     "PATH",
