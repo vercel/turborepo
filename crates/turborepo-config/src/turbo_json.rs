@@ -149,12 +149,9 @@ fn convert_raw_observability_otel(
 ) -> Result<ExperimentalOtelOptions, Error> {
     let protocol = if let Some(protocol) = raw.protocol {
         let proto_str = protocol.as_inner().as_str();
-        Some(ExperimentalOtelProtocol::from_str(proto_str).map_err(|_| {
+        Some(ExperimentalOtelProtocol::from_str(proto_str).map_err(|e| {
             Error::InvalidExperimentalOtelConfig {
-                message: format!(
-                    "Unsupported experimentalObservability.otel protocol `{proto_str}`. Use \
-                     `grpc` or `http/protobuf`."
-                ),
+                message: e.to_string(),
             }
         })?)
     } else {
