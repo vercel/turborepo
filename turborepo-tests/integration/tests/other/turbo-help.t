@@ -140,11 +140,6 @@ Test help flag
         --log-prefix <LOG_PREFIX>
             Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
 
-
-
-
-
-
   $ ${TURBO} --help
   The build system that makes ship happen
   
@@ -374,13 +369,6 @@ Test help flag
             
             [default: auto]
             [possible values: auto, none, task]
-
-
-
-
-
-
-
 
 Test help flag for link command
   $ ${TURBO} link -h
