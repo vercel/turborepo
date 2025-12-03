@@ -29,7 +29,8 @@ export async function packAndPublish({
 
   if (!skipPublish) {
     console.log("Publishing artifacts...");
-    execSync("npm --version");
+    const npmVersion = execSync("npm --version").toString().trim();
+    console.log(`npm version: ${npmVersion}`);
     operations.publishArtifacts(artifacts, npmTag);
   } else {
     console.log("Skipping publish step.");
