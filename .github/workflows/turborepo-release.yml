@@ -20,7 +20,7 @@ env:
 permissions:
   id-token: write # Required for npm Trusted Publishing using OIDC
   contents: write # Allow workflow to checkout code from the repository
-  pull-requests: write
+  pull-requests: write # Allows the PR for post-release to be created
 
 on:
   workflow_dispatch:
