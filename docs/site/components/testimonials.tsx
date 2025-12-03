@@ -92,6 +92,17 @@ export const Testimonials = () => {
         >
           <p>wait i kinda love turborepo</p>
         </Card>
+        <Card
+          name="Jono Alford"
+          alias="@jonoalford"
+          avatar="https://ufa25dqjajkmio0q.public.blob.vercel-storage.com/user-avatars/jonoalford.jpg"
+          url="https://x.com/jonoalford/status/1989274609192169943?s=20"
+        >
+          <p>
+            The second we started using this for monorepos is the second we
+            stopped having to worry about using monorepos.
+          </p>
+        </Card>
       </div>
       <div className="grid gap-4">
         <Card

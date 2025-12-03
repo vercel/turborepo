@@ -30,46 +30,21 @@ runs:
         # we want more specific settings
         cache: false
 
-    - name: "Install LLD (LLVM Linker) for Linux"
-      if: runner.os == 'Linux'
-      shell: bash
-      run: sudo apt-get -y update && sudo apt-get install -y lld
-
     - name: Set Up Protoc
-      id: set-up-protoc
-      continue-on-error: true
-      uses: arduino/setup-protoc@v3
+      uses: ./.github/actions/setup-protoc
       with:
         version: "26.x"
-        repo-token: ${{ inputs.github-token }}
-
-    - name: Set Up Protoc (second try)
-      if: steps.set-up-protoc.outcome == 'failure'
-      uses: arduino/setup-protoc@v3
-      with:
-        version: "26.x"
-        repo-token: ${{ inputs.github-token }}
+        github-token: ${{ inputs.github-token }}
 
     - name: "Add cargo problem matchers"
       shell: bash
       run: echo "::add-matcher::${{ github.action_path }}/matchers.json"
 
-    - uses: rui314/setup-mold@v1
-
     - name: "Setup Rust Cache"
+      if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
       uses: Swatinem/rust-cache@v2
       with:
         shared-key: ${{ inputs.shared-cache-key }}
         key: ${{ inputs.cache-key }}
         # the cache is huge and we only get 10gb max, so we only save on master
         save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
-
-    - name: "Install cargo-sweep"
-      uses: taiki-e/install-action@v2
-      env:
-        GITHUB_TOKEN: ${{ inputs.github-token }}
-      with:
-        tool: cargo-sweep@0.6.2,cargo-groups@0.1.9
-
-    - name: "Run cargo-sweep"
-      uses: ./.github/actions/cargo-sweep

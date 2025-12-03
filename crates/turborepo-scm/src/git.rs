@@ -294,6 +294,7 @@ impl GitRepo {
             "-r",
             "--name-only",
             "--no-commit-id",
+            "-z",
             &valid_from,
             to_commit,
         ];
@@ -311,13 +312,19 @@ impl GitRepo {
             // Add untracked files or unstaged changes, i.e. files that are not in git at
             // all
             let ls_files_output = self.execute_git_command(
-                &["ls-files", "--others", "--modified", "--exclude-standard"],
+                &[
+                    "ls-files",
+                    "--others",
+                    "--modified",
+                    "--exclude-standard",
+                    "-z",
+                ],
                 pathspec,
             )?;
             self.add_files_from_stdout(&mut files, turbo_root, ls_files_output);
             // Include any files that have been staged, but not committed
             let diff_output =
-                self.execute_git_command(&["diff", "--name-only", "--cached"], pathspec)?;
+                self.execute_git_command(&["diff", "--name-only", "--cached", "-z"], pathspec)?;
             self.add_files_from_stdout(&mut files, turbo_root, diff_output);
         }
 
@@ -351,8 +358,11 @@ impl GitRepo {
         turbo_root: &AbsoluteSystemPath,
         stdout: Vec<u8>,
     ) {
-        let stdout = String::from_utf8(stdout).unwrap();
-        for line in stdout.lines() {
+        let stdout = String::from_utf8_lossy(&stdout);
+        for line in stdout.split('\0') {
+            if line.is_empty() {
+                continue;
+            }
             let path = RelativeUnixPath::new(line).unwrap();
             let anchored_to_turbo_root_file_path = self
                 .reanchor_path_from_git_root_to_turbo_root(turbo_root, path)
@@ -1128,6 +1138,106 @@ mod tests {
                 from_ref: None,
                 to_ref: Some("HEAD".to_string()),
             })
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_unicode_filenames_in_changed_files() -> Result<(), Error> {
+        let (repo_root, repo) = setup_repository(None)?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        // Test various Unicode filenames that should be properly handled with -z flag
+        let test_files = vec![
+            "测试文件.txt",      // Chinese
+            "テストファイル.js", // Japanese
+            "файл.rs",           // Cyrillic
+            "file with spaces.txt",
+            "emoji_🚀.md",
+            "café.ts",  // Latin with diacritics
+            "ñoño.jsx", // Spanish with tildes
+            "αβγ.py",   // Greek
+        ];
+
+        // Create initial commit with a base file
+        let base_file = root.join_component("base.txt");
+        base_file.create_with_contents("base content")?;
+        let first_commit_oid = commit_file(&repo, Path::new("base.txt"), None);
+
+        // Create and commit all Unicode files
+        for filename in &test_files {
+            let file_path = root.join_component(filename);
+            file_path.create_with_contents(format!("content for {}", filename))?;
+        }
+
+        // Get changed files with uncommitted Unicode files
+        let scm = SCM::new(&root);
+        let files = scm
+            .changed_files(&root, Some("HEAD"), None, true, false, false)?
+            .unwrap();
+
+        // Verify all Unicode files are detected in uncommitted changes
+        for filename in &test_files {
+            assert!(
+                files.iter().any(|f| f.to_string().contains(filename)),
+                "Failed to detect uncommitted Unicode file: {}",
+                filename
+            );
+        }
+
+        // Commit all Unicode files
+        let mut last_commit = first_commit_oid;
+        for filename in &test_files {
+            last_commit = commit_file(&repo, Path::new(filename), Some(last_commit));
+        }
+
+        // Test committed Unicode files in range
+        let files = changed_files(
+            repo_root.path().to_path_buf(),
+            repo_root.path().to_path_buf(),
+            Some(first_commit_oid.to_string().as_str()),
+            Some("HEAD"),
+            false,
+        )?;
+
+        // Verify all Unicode files are detected in commit range
+        for filename in &test_files {
+            assert!(
+                files.iter().any(|f| f.contains(filename)),
+                "Failed to detect committed Unicode file: {}",
+                filename
+            );
+        }
+
+        // Test modification of Unicode files
+        let modified_file = "测试文件.txt";
+        let file_path = root.join_component(modified_file);
+        file_path.create_with_contents("modified content")?;
+
+        let files = scm
+            .changed_files(&root, Some("HEAD"), None, true, false, false)?
+            .unwrap();
+
+        assert!(
+            files.iter().any(|f| f.to_string().contains(modified_file)),
+            "Failed to detect modified Unicode file: {}",
+            modified_file
+        );
+
+        // Test deletion of Unicode files
+        let delete_file = "emoji_🚀.md";
+        let file_path = root.join_component(delete_file);
+        std::fs::remove_file(file_path.as_std_path())?;
+
+        let files = scm
+            .changed_files(&root, Some("HEAD"), None, true, false, false)?
+            .unwrap();
+
+        assert!(
+            files.iter().any(|f| f.to_string().contains(delete_file)),
+            "Failed to detect deleted Unicode file: {}",
+            delete_file
         );
 
         Ok(())

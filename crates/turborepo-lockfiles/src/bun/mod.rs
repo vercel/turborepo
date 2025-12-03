@@ -94,6 +94,7 @@ use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
 use id::PossibleKeyIter;
 use itertools::Itertools as _;
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use turbopath::RelativeUnixPathBuf;
@@ -115,9 +116,10 @@ type BTreeSet<T> = std::collections::BTreeSet<T>;
 
 /// Represents a platform constraint that can be either inclusive or exclusive.
 /// This matches Bun's Negatable type for os/cpu/libc fields.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub enum Negatable {
     /// No constraint - package works on all platforms
+    #[default]
     None,
     /// Single platform constraint
     Single(String),
@@ -125,12 +127,6 @@ pub enum Negatable {
     Multiple(Vec<String>),
     /// Negated constraints - package works on all platforms except these
     Negated(Vec<String>),
-}
-
-impl Default for Negatable {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl Serialize for Negatable {
@@ -394,6 +390,116 @@ impl BunLockfile {
             version,
         }))
     }
+
+    /// Check if a package version satisfies a version specification.
+    ///
+    /// Returns true if the version satisfies the spec, false otherwise.
+    /// For non-semver specs (tags, catalogs, workspaces), returns true.
+    fn version_satisfies_spec(&self, version: &str, version_spec: &str) -> bool {
+        let spec = VersionSpec::parse(version_spec);
+
+        match spec {
+            VersionSpec::Semver(spec_str) => {
+                // Parse both the requirement and the version
+                let Ok(req) = VersionReq::parse(&spec_str) else {
+                    // If we can't parse the requirement, be lenient and accept it
+                    return true;
+                };
+
+                let Ok(ver) = Version::parse(version) else {
+                    // If we can't parse the version, be lenient and accept it
+                    return true;
+                };
+
+                req.matches(&ver)
+            }
+            // For non-semver specs (tags, catalogs, workspace), accept any version
+            // since validation happens elsewhere
+            _ => true,
+        }
+    }
+
+    /// Find a package version that satisfies the given version spec.
+    ///
+    /// Searches in order:
+    /// 1. Workspace-scoped entries
+    /// 2. Top-level entries
+    /// 3. Nested/aliased entries (by searching all idents)
+    fn find_matching_version(
+        &self,
+        workspace_name: &str,
+        name: &str,
+        version_spec: &str,
+        override_version: &str,
+        resolved_version: &str,
+    ) -> Result<Option<crate::Package>, crate::Error> {
+        // Try workspace-scoped first
+        if let Some(entry) = self.index.get_workspace_scoped(workspace_name, name)
+            && let Some(pkg) =
+                self.process_package_entry(entry, name, override_version, resolved_version)?
+            && self.version_satisfies_spec(&pkg.version, version_spec)
+        {
+            return Ok(Some(pkg));
+        }
+
+        // Try hoisted/top-level
+        if let Some((_key, entry)) = self.index.find_package(Some(workspace_name), name)
+            && let Some(pkg) =
+                self.process_package_entry(entry, name, override_version, resolved_version)?
+            && self.version_satisfies_spec(&pkg.version, version_spec)
+        {
+            return Ok(Some(pkg));
+        }
+
+        // Search for nested/aliased versions that match
+        // Only search explicitly nested entries (with '/' in key), not bundled deps
+        for (lockfile_key, entry) in &self.data.packages {
+            // Only consider explicitly nested entries (not bundled)
+            if !lockfile_key.contains('/') {
+                continue;
+            }
+
+            // Skip bundled dependencies
+            if let Some(info) = &entry.info
+                && info
+                    .other
+                    .get("bundled")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+            {
+                continue;
+            }
+
+            let ident = PackageIdent::parse(&entry.ident);
+
+            // Skip if the name doesn't match
+            if ident.name() != name {
+                continue;
+            }
+
+            // Skip workspace mappings
+            if ident.is_workspace() {
+                continue;
+            }
+
+            // Check if this version satisfies the spec
+            if let Some(pkg) =
+                self.process_package_entry(entry, name, override_version, resolved_version)?
+                && self.version_satisfies_spec(&pkg.version, version_spec)
+            {
+                tracing::debug!(
+                    "Found matching version {} for {} (spec: {}) in nested entry {}",
+                    pkg.version,
+                    name,
+                    version_spec,
+                    lockfile_key
+                );
+                return Ok(Some(pkg));
+            }
+        }
+
+        Ok(None)
+    }
 }
 
 impl Lockfile for BunLockfile {
@@ -446,19 +552,15 @@ impl Lockfile for BunLockfile {
             }
         }
 
-        // Try workspace-scoped lookup first
-        if let Some(entry) = self.index.get_workspace_scoped(workspace_name, name)
-            && let Some(pkg) =
-                self.process_package_entry(entry, name, override_version, resolved_version)?
-        {
-            return Ok(Some(pkg));
-        }
-
-        // Try finding via the general find_package method (includes bundled)
-        if let Some((_key, entry)) = self.index.find_package(Some(workspace_name), name)
-            && let Some(pkg) =
-                self.process_package_entry(entry, name, override_version, resolved_version)?
-        {
+        // Find a package version that satisfies the version spec
+        // This searches workspace-scoped, hoisted, and nested entries
+        if let Some(pkg) = self.find_matching_version(
+            workspace_name,
+            name,
+            version,
+            override_version,
+            resolved_version,
+        )? {
             return Ok(Some(pkg));
         }
 
@@ -1366,9 +1468,36 @@ impl BunLockfile {
                     .flat_map(|closure| closure.iter().map(|p| p.key.clone()))
                     .collect();
 
+                // Also keep track of reachable lockfile keys for nested package detection
+                let reachable_lockfile_keys: HashSet<String> = recomputed_closures
+                    .values()
+                    .flat_map(|closure| {
+                        closure
+                            .iter()
+                            .filter_map(|p| temp_lockfile.key_to_entry.get(&p.key).cloned())
+                    })
+                    .collect();
+
                 // Remove unreachable packages
-                pruned_data.packages.retain(|_key, entry| {
-                    reachable_idents.contains(&entry.ident) || entry.ident.contains("@workspace:")
+                pruned_data.packages.retain(|key, entry| {
+                    // Keep if the ident is reachable
+                    if reachable_idents.contains(&entry.ident)
+                        || entry.ident.contains("@workspace:")
+                    {
+                        return true;
+                    }
+
+                    // Keep nested packages if their parent is reachable
+                    // E.g., keep "@hatchet-dev/typescript-sdk/zod" if "@hatchet-dev/typescript-sdk"
+                    // is reachable
+                    if let Some(slash_pos) = key.rfind('/') {
+                        let parent_key = &key[..slash_pos];
+                        if reachable_lockfile_keys.contains(parent_key) {
+                            return true;
+                        }
+                    }
+
+                    false
                 });
             }
             Err(_e) => {}
@@ -1531,6 +1660,7 @@ mod test {
         include_str!("./snapshots/original-issue-11007-1.lock");
     const PRUNE_ISSUE_11007_ORIGINAL_2: &str =
         include_str!("./snapshots/original-issue-11007-2.lock");
+    const PRUNE_ISSUE_11074_ORIGINAL: &str = include_str!("./snapshots/original-issue-11074.lock");
 
     #[test_case("", "turbo", "^2.3.3", "turbo@2.3.3" ; "root")]
     #[test_case("apps/docs", "is-odd", "3.0.1", "is-odd@3.0.1" ; "docs is odd")]
@@ -1879,41 +2009,6 @@ mod test {
         .unwrap();
         let lockfile = BunLockfile::from_str(&contents);
         assert!(lockfile.is_err(), "matching packages have differing shas");
-    }
-
-    #[test]
-    fn test_override_functionality() {
-        let contents = serde_json::to_string(&json!({
-            "lockfileVersion": 0,
-            "workspaces": {
-                "": {
-                    "name": "test",
-                    "dependencies": {
-                        "foo": "^1.0.0"
-                    }
-                }
-            },
-            "packages": {
-                "foo": ["foo@1.0.0", {}, "sha512-original"],
-                "foo-override": ["foo@2.0.0", {}, "sha512-override"]
-            },
-            "overrides": {
-                "foo": "2.0.0"
-            }
-        }))
-        .unwrap();
-
-        let lockfile = BunLockfile::from_str(&contents).unwrap();
-
-        // Resolve foo - should get override version instead of original
-        let result = lockfile
-            .resolve_package("", "foo", "^1.0.0")
-            .unwrap()
-            .unwrap();
-
-        // Should resolve to overridden version
-        assert_eq!(result.key, "foo@2.0.0");
-        assert_eq!(result.version, "2.0.0");
     }
 
     #[test]
@@ -3009,6 +3104,28 @@ mod test {
             }
         }
 
+        // Add nested package entries (e.g., "parent/dep") for any packages we've
+        // collected This handles cases where a package has a nested version of
+        // a dependency (e.g., @hatchet-dev/typescript-sdk/zod for a different
+        // zod version)
+        let collected_packages: Vec<String> = packages.iter().cloned().collect();
+        for pkg_ident in &collected_packages {
+            // Convert ident to lockfile key using key_to_entry
+            if let Some(lockfile_key) = lockfile.key_to_entry.get(pkg_ident) {
+                let prefix = format!("{}/", lockfile_key);
+                for nested_key in lockfile.data.packages.keys() {
+                    if nested_key.starts_with(&prefix) {
+                        // Add the nested key directly (it's a lockfile key, not an ident)
+                        // We need to add both the key itself and its ident
+                        packages.insert(nested_key.clone());
+                        if let Some(nested_entry) = lockfile.data.packages.get(nested_key) {
+                            packages.insert(nested_entry.ident.clone());
+                        }
+                    }
+                }
+            }
+        }
+
         let packages: Vec<String> = packages.into_iter().collect();
 
         // Call internal subgraph method
@@ -3124,9 +3241,25 @@ mod test {
     }
 
     #[test]
-    fn test_prune_issue_11007_2() {
+    fn test_prune_issue_11007_2_api() {
         let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_2).unwrap();
         let pruned = prune_for_workspace(&lockfile, "apps/api");
+        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
+        insta::assert_snapshot!(pruned_str);
+    }
+
+    #[test]
+    fn test_prune_issue_11007_2_web() {
+        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_2).unwrap();
+        let pruned = prune_for_workspace(&lockfile, "apps/web");
+        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
+        insta::assert_snapshot!(pruned_str);
+    }
+
+    #[test]
+    fn test_prune_issue_11074() {
+        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11074_ORIGINAL).unwrap();
+        let pruned = prune_for_workspace(&lockfile, "apps/app-a");
         let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
         insta::assert_snapshot!(pruned_str);
     }

@@ -17,6 +17,11 @@ env:
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
   RELEASE_TURBO_CLI: true # TODO: do we need this?
 
+permissions:
+  id-token: write # Required for npm Trusted Publishing using OIDC
+  contents: write # Allow workflow to checkout code from the repository
+  pull-requests: write # Allows the PR for post-release to be created
+
 on:
   workflow_dispatch:
     inputs:
@@ -52,12 +57,19 @@ on:
         required: false
         type: string
         default: ""
+      sha:
+        description: "Override the SHA to use for the release. Should rarely be used, usually only for debugging."
+        required: false
+        type: string
+        default: ""
 
 jobs:
   stage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -91,9 +103,18 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node: "false"
 
-      - name: Run Rust Unit Tests
-        run: cargo groups test turborepo
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Run tests
+        timeout-minutes: 30
+        run: |
+          cargo nextest run --workspace
+        shell: bash
 
   js-smoke-test:
     name: JS Package Tests
@@ -109,6 +130,8 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          rust: "false"
+          capnproto: "false"
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
@@ -146,10 +169,10 @@ jobs:
           ref: "${{ needs.stage.outputs.stage-branch }}"
 
       - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
+        uses: ./.github/actions/setup-protoc
         with:
           version: "26.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto
@@ -216,10 +239,11 @@ jobs:
           mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-x64
           mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-x64
 
+      - name: Ensure npm version
+        run: npm install -g npm@11.5.1
+
       - name: Perform Release
         run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts

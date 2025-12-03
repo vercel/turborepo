@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import type { Platform } from "./types";
 import operations from "./operations";
 
@@ -28,6 +29,8 @@ export async function packAndPublish({
 
   if (!skipPublish) {
     console.log("Publishing artifacts...");
+    const npmVersion = execSync("npm --version").toString().trim();
+    console.log(`npm version: ${npmVersion}`);
     operations.publishArtifacts(artifacts, npmTag);
   } else {
     console.log("Skipping publish step.");
