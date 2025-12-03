@@ -6,17 +6,6 @@ use crate::config::{
     ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
 };
 
-fn parse_key_val_pair(s: &str) -> Result<(String, String), String> {
-    let (key, value) = s
-        .split_once('=')
-        .ok_or_else(|| "must be in key=value format".to_string())?;
-    let key = key.trim();
-    if key.is_empty() {
-        return Err("key cannot be empty".to_string());
-    }
-    Ok((key.to_string(), value.trim().to_string()))
-}
-
 #[derive(Parser, Clone, Debug, Default, PartialEq)]
 pub struct ExperimentalOtelCliArgs {
     #[clap(
@@ -132,6 +121,17 @@ impl ExperimentalOtelCliArgs {
 
         touched.then_some(options)
     }
+}
+
+fn parse_key_val_pair(s: &str) -> Result<(String, String), String> {
+    let (key, value) = s
+        .split_once('=')
+        .ok_or_else(|| "must be in key=value format".to_string())?;
+    let key = key.trim();
+    if key.is_empty() {
+        return Err("key cannot be empty".to_string());
+    }
+    Ok((key.to_string(), value.trim().to_string()))
 }
 
 #[cfg(test)]
