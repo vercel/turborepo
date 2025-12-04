@@ -4,7 +4,7 @@ import http from "node:http";
 import https from "node:https";
 import picocolors from "picocolors";
 import { Command, Option } from "commander";
-import { logger } from "@turbo/utils";
+import { logger, createNotifyUpdate } from "@turbo/utils";
 import {
   type CreateTurboTelemetry,
   initTelemetry,
@@ -12,8 +12,9 @@ import {
 } from "@turbo/telemetry";
 import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
-import { notifyUpdate } from "./utils/notifyUpdate";
 import { create } from "./commands";
+
+const notifyUpdate = createNotifyUpdate({ packageInfo: cliPkg });
 
 // Global telemetry client
 let telemetryClient: CreateTurboTelemetry | undefined;
@@ -99,12 +100,11 @@ withTelemetryCommand(createTurboCli);
 
 createTurboCli
   .parseAsync()
-  .then(notifyUpdate)
+  .then(() => notifyUpdate())
   .catch(async (reason) => {
     logger.log();
     logger.error("Unexpected error. Please report it as a bug:");
     logger.log(reason);
     logger.log();
-    await notifyUpdate();
-    process.exit(1);
+    await notifyUpdate(1);
   });
