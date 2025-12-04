@@ -170,7 +170,7 @@ Turborepo tasks to accomplish will look like:
     "test": {
       "dependsOn": ["^test", "@repo/vitest-config#build"],
       "outputs": ["coverage.json"]
-    }
+    },
     "merge-json-reports": {
       "inputs": ["coverage/raw/**"],
       "outputs": ["coverage/merged/**"]
