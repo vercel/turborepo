@@ -45,7 +45,10 @@ export function createNotifyUpdate(options: NotifyUpdateOptions) {
         logger.log();
       }
       process.exit(exitCode);
-    } catch (_) {
+    } catch (error) {
+      if (process.env.DEBUG) {
+        logger.error("Update check failed:", error);
+      }
       process.exit(exitCode);
     }
   };
