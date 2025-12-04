@@ -109,7 +109,7 @@ export function turboIgnore(
 
   // If we can't find a turbo version in package.json, don't specify a version
   const turbo = turboVersion ? `turbo@${turboVersion}` : "turbo";
-  // Build, and execute the command safely using execFile to prevent command injection
+  // Build and execute the command
   const filterArg = `${workspace}...[${comparison.ref}]`;
   const args = [
     "-y",
