@@ -1,11 +1,30 @@
 #!/usr/bin/env node
 
 import picocolors from "picocolors";
-import { logger } from "@turbo/utils";
+import { logger, createNotifyUpdate } from "@turbo/utils";
+import { getWorkspaceDetails } from "@turbo/workspaces";
 import { Command } from "commander";
 import cliPkg from "../package.json";
 import { transform, migrate } from "./commands";
-import { notifyUpdate } from "./utils/notifyUpdate";
+
+const notifyUpdate = createNotifyUpdate({
+  packageInfo: cliPkg,
+  upgradeCommand: async () => {
+    try {
+      const { packageManager } = await getWorkspaceDetails({
+        root: process.cwd(),
+      });
+      if (packageManager === "yarn") {
+        return "yarn global add @turbo/codemod";
+      } else if (packageManager === "pnpm") {
+        return "pnpm i -g @turbo/codemod";
+      }
+      return "npm i -g @turbo/codemod";
+    } catch {
+      return "npm i -g @turbo/codemod";
+    }
+  },
+});
 
 const codemodCli = new Command();
 
