@@ -23,7 +23,7 @@ Visit https://turborepo.com to get started with Turborepo.
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for more information.
+See [CONTRIBUTING.md](https://github.com/vercel/turborepo/blob/main/CONTRIBUTING.md) for more information.
 
 ## Community
 
@@ -40,12 +40,6 @@ Turborepo is used by the world's leading companies. Check out the [Turborepo Sho
 ## Updates
 
 Follow [@turborepo](https://x.com/turborepo) on X for project updates.
-
-## Authors
-
-**Turborepo**
-
-- Jared Palmer ([@jaredpalmer](https://x.com/jaredpalmer))
 
 ## Security
 

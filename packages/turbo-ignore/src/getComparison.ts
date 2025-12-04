@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { info } from "./logger";
 import type { TurboIgnoreOptions } from "./types";
 
@@ -11,7 +11,7 @@ export interface GetComparisonArgs extends TurboIgnoreOptions {
 
 export function validateSHAExists(ref: string): boolean {
   try {
-    execSync(`git cat-file -t ${ref}`, { stdio: "ignore" });
+    execFileSync("git", ["cat-file", "-t", ref], { stdio: "ignore" });
     return true;
   } catch (e) {
     return false;
