@@ -1,4 +1,4 @@
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
 import path from "node:path";
 import { existsSync } from "node:fs";
 import { getTurboRoot } from "@turbo/utils";
@@ -109,8 +109,18 @@ export function turboIgnore(
 
   // If we can't find a turbo version in package.json, don't specify a version
   const turbo = turboVersion ? `turbo@${turboVersion}` : "turbo";
-  // Build, and execute the command
-  const command = `npx -y ${turbo} run ${task} --filter="${workspace}...[${comparison.ref}]" --dry=json`;
+  // Build and execute the command
+  const filterArg = `${workspace}...[${comparison.ref}]`;
+  const args = [
+    "-y",
+    turbo,
+    "run",
+    task,
+    `--filter=${filterArg}`,
+    "--dry=json",
+  ];
+  // For logging, format with quotes around filter value to match expected format
+  const command = `npx -y ${turbo} run ${task} --filter="${filterArg}" --dry=json`;
   info(`Analyzing results of \`${command}\``);
 
   const execOptions: { cwd: string; maxBuffer?: number } = {
@@ -121,7 +131,7 @@ export function turboIgnore(
     execOptions.maxBuffer = opts.maxBuffer;
   }
 
-  exec(command, execOptions, (err, stdout) => {
+  execFile("npx", args, execOptions, (err, stdout) => {
     if (err) {
       const { level, code, message } = shouldWarn({ err: err.message });
       if (level === "warn") {
