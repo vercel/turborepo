@@ -45,8 +45,8 @@ describe("turboIgnore()", () => {
 
   it("throws error and allows build when exec fails", () => {
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             { message: "error details" } as unknown as ExecException,
@@ -60,15 +60,7 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", { telemetry });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx",
-      [
-        "-y",
-        "turbo@^2",
-        "run",
-        "build",
-        "--filter=test-workspace...[HEAD^]",
-        "--dry=json",
-      ],
+      `npx -y turbo@^2 run build --filter="test-workspace...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
@@ -85,8 +77,8 @@ describe("turboIgnore()", () => {
 
   it("throws pretty error and allows build when exec fails", () => {
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             {
@@ -103,15 +95,7 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", {});
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx",
-      [
-        "-y",
-        "turbo@^2",
-        "run",
-        "build",
-        "--filter=test-workspace...[HEAD^]",
-        "--dry=json",
-      ],
+      `npx -y turbo@^2 run build --filter="test-workspace...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
@@ -132,12 +116,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execFileSync")
+      .spyOn(child_process, "execSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             {
@@ -154,15 +138,7 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", { telemetry });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx",
-      [
-        "-y",
-        "turbo@^2",
-        "run",
-        "build",
-        "--filter=test-workspace...[too-far-back]",
-        "--dry=json",
-      ],
+      `npx -y turbo@^2 run build --filter="test-workspace...[too-far-back]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
@@ -180,8 +156,8 @@ describe("turboIgnore()", () => {
 
   it("throws pretty error and allows build when fallback fails", () => {
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             {
@@ -198,15 +174,7 @@ describe("turboIgnore()", () => {
     turboIgnore("test-workspace", { fallback: "HEAD^" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx",
-      [
-        "-y",
-        "turbo@^2",
-        "run",
-        "build",
-        "--filter=test-workspace...[HEAD^]",
-        "--dry=json",
-      ],
+      `npx -y turbo@^2 run build --filter="test-workspace...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
@@ -284,12 +252,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execFileSync")
+      .spyOn(child_process, "execSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -331,12 +299,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execFileSync")
+      .spyOn(child_process, "execSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -381,12 +349,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execFileSync")
+      .spyOn(child_process, "execSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -428,12 +396,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execFileSync")
+      .spyOn(child_process, "execSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -478,17 +446,17 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execFileSync")
-      .mockImplementation((file: string, args?: ReadonlyArray<string>) => {
-        if (file === "git" && args && args[0] === "cat-file") {
+      .spyOn(child_process, "execSync")
+      .mockImplementation((cmd: string) => {
+        if (cmd.includes("git cat-file")) {
           throw new Error("fatal: Not a valid object name last-deployed-sha");
         }
         return "";
       });
 
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -531,8 +499,8 @@ describe("turboIgnore()", () => {
 
   it("throws error and allows build when json cannot be parsed", () => {
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(null, "stdout", "stderr") as unknown as ChildProcess;
         }
@@ -542,15 +510,7 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx",
-      [
-        "-y",
-        "turbo@^2",
-        "run",
-        "build",
-        "--filter=test-app...[HEAD^]",
-        "--dry=json",
-      ],
+      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
@@ -567,8 +527,8 @@ describe("turboIgnore()", () => {
 
   it("throws error and allows build when stdout is null", () => {
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -582,15 +542,7 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx",
-      [
-        "-y",
-        "turbo@^2",
-        "run",
-        "build",
-        "--filter=test-app...[HEAD^]",
-        "--dry=json",
-      ],
+      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
@@ -654,12 +606,12 @@ describe("turboIgnore()", () => {
     process.env.VERCEL_GIT_COMMIT_REF = "my-branch";
 
     const mockExecSync = jest
-      .spyOn(child_process, "execFileSync")
+      .spyOn(child_process, "execSync")
       .mockReturnValue("commit");
 
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -703,8 +655,8 @@ describe("turboIgnore()", () => {
 
   it("passes max buffer to turbo execution", () => {
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -718,15 +670,7 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/app", maxBuffer: 1024 });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx",
-      [
-        "-y",
-        "turbo@^2",
-        "run",
-        "build",
-        "--filter=test-app...[HEAD^]",
-        "--dry=json",
-      ],
+      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
       expect.objectContaining({ maxBuffer: 1024 }),
       expect.anything()
     );
@@ -736,8 +680,8 @@ describe("turboIgnore()", () => {
 
   it("runs with telemetry", () => {
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -755,15 +699,7 @@ describe("turboIgnore()", () => {
     });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx",
-      [
-        "-y",
-        "turbo@^2",
-        "run",
-        "build",
-        "--filter=test-app...[HEAD^]",
-        "--dry=json",
-      ],
+      `npx -y turbo@^2 run build --filter="test-app...[HEAD^]" --dry=json`,
       expect.objectContaining({ maxBuffer: 1024 }),
       expect.anything()
     );
@@ -773,8 +709,8 @@ describe("turboIgnore()", () => {
 
   it("allows build if packages is missing", () => {
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -795,8 +731,8 @@ describe("turboIgnore()", () => {
 
   it("defaults to latest turbo if no hints for version", () => {
     const mockExec = jest
-      .spyOn(child_process, "execFile")
-      .mockImplementation((file, args, options, callback) => {
+      .spyOn(child_process, "exec")
+      .mockImplementation((command, options, callback) => {
         if (callback) {
           return callback(
             null,
@@ -810,15 +746,7 @@ describe("turboIgnore()", () => {
     turboIgnore(undefined, { directory: "__fixtures__/invalid_turbo_json" });
 
     expect(mockExec).toHaveBeenCalledWith(
-      "npx",
-      [
-        "-y",
-        "turbo",
-        "run",
-        "build",
-        "--filter=test-app...[HEAD^]",
-        "--dry=json",
-      ],
+      `npx -y turbo run build --filter="test-app...[HEAD^]" --dry=json`,
       expect.anything(),
       expect.anything()
     );
