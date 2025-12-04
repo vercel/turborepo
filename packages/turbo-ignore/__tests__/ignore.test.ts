@@ -61,14 +61,14 @@ describe("turboIgnore()", () => {
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx",
-      expect.arrayContaining([
+      [
         "-y",
-        expect.stringContaining("turbo"),
+        "turbo@^2",
         "run",
         "build",
-        expect.stringContaining("--filter="),
+        "--filter=test-workspace...[HEAD^]",
         "--dry=json",
-      ]),
+      ],
       expect.anything(),
       expect.anything()
     );
@@ -104,14 +104,14 @@ describe("turboIgnore()", () => {
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx",
-      expect.arrayContaining([
+      [
         "-y",
-        expect.stringContaining("turbo"),
+        "turbo@^2",
         "run",
         "build",
-        expect.stringContaining("--filter="),
+        "--filter=test-workspace...[HEAD^]",
         "--dry=json",
-      ]),
+      ],
       expect.anything(),
       expect.anything()
     );
@@ -155,15 +155,14 @@ describe("turboIgnore()", () => {
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx",
-      expect.arrayContaining([
+      [
         "-y",
-        expect.stringContaining("turbo"),
+        "turbo@^2",
         "run",
         "build",
-        expect.stringContaining("--filter="),
-        expect.stringContaining("too-far-back"),
+        "--filter=test-workspace...[too-far-back]",
         "--dry=json",
-      ]),
+      ],
       expect.anything(),
       expect.anything()
     );
@@ -200,15 +199,14 @@ describe("turboIgnore()", () => {
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx",
-      expect.arrayContaining([
+      [
         "-y",
-        expect.stringContaining("turbo"),
+        "turbo@^2",
         "run",
         "build",
-        expect.stringContaining("--filter="),
-        expect.stringContaining("HEAD^"),
+        "--filter=test-workspace...[HEAD^]",
         "--dry=json",
-      ]),
+      ],
       expect.anything(),
       expect.anything()
     );
@@ -481,7 +479,7 @@ describe("turboIgnore()", () => {
 
     const mockExecSync = jest
       .spyOn(child_process, "execFileSync")
-      .mockImplementation((file: string, args?: readonly string[]) => {
+      .mockImplementation((file: string, args?: ReadonlyArray<string>) => {
         if (file === "git" && args && args[0] === "cat-file") {
           throw new Error("fatal: Not a valid object name last-deployed-sha");
         }
@@ -545,15 +543,14 @@ describe("turboIgnore()", () => {
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx",
-      expect.arrayContaining([
+      [
         "-y",
-        expect.stringContaining("turbo"),
+        "turbo@^2",
         "run",
         "build",
-        expect.stringContaining("--filter="),
-        expect.stringContaining("HEAD^"),
+        "--filter=test-app...[HEAD^]",
         "--dry=json",
-      ]),
+      ],
       expect.anything(),
       expect.anything()
     );
@@ -586,15 +583,14 @@ describe("turboIgnore()", () => {
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx",
-      expect.arrayContaining([
+      [
         "-y",
-        expect.stringContaining("turbo"),
+        "turbo@^2",
         "run",
         "build",
-        expect.stringContaining("--filter="),
-        expect.stringContaining("HEAD^"),
+        "--filter=test-app...[HEAD^]",
         "--dry=json",
-      ]),
+      ],
       expect.anything(),
       expect.anything()
     );
@@ -723,15 +719,14 @@ describe("turboIgnore()", () => {
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx",
-      expect.arrayContaining([
+      [
         "-y",
-        expect.stringContaining("turbo"),
+        "turbo@^2",
         "run",
         "build",
-        expect.stringContaining("--filter="),
-        expect.stringContaining("HEAD^"),
+        "--filter=test-app...[HEAD^]",
         "--dry=json",
-      ]),
+      ],
       expect.objectContaining({ maxBuffer: 1024 }),
       expect.anything()
     );
@@ -761,15 +756,14 @@ describe("turboIgnore()", () => {
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx",
-      expect.arrayContaining([
+      [
         "-y",
-        expect.stringContaining("turbo"),
+        "turbo@^2",
         "run",
         "build",
-        expect.stringContaining("--filter="),
-        expect.stringContaining("HEAD^"),
+        "--filter=test-app...[HEAD^]",
         "--dry=json",
-      ]),
+      ],
       expect.objectContaining({ maxBuffer: 1024 }),
       expect.anything()
     );
@@ -817,15 +811,14 @@ describe("turboIgnore()", () => {
 
     expect(mockExec).toHaveBeenCalledWith(
       "npx",
-      expect.arrayContaining([
+      [
         "-y",
         "turbo",
         "run",
         "build",
-        expect.stringContaining("--filter="),
-        expect.stringContaining("HEAD^"),
+        "--filter=test-app...[HEAD^]",
         "--dry=json",
-      ]),
+      ],
       expect.anything(),
       expect.anything()
     );
