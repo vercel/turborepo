@@ -112,10 +112,3 @@ export function pruneRemovedPages(
 
   return removed;
 }
-
-/**
- * Get all page states sorted by URL
- */
-export function getPagesSorted(state: SitemapState): Array<PageState> {
-  return Object.values(state.pages).sort((a, b) => a.url.localeCompare(b.url));
-}

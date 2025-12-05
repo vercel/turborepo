@@ -9,9 +9,16 @@ export async function crawlPage(
   url: string,
   contentOptions: ContentExtractionOptions = DEFAULT_CONTENT_OPTIONS
 ): Promise<CrawlResult> {
-  const fullUrl = url.startsWith("http")
-    ? url
-    : `${SITEMAP_CONFIG.baseUrl}${url}`;
+  const fullUrl = `${SITEMAP_CONFIG.baseUrl}${
+    url.startsWith("/") ? url : `/${url}`
+  }`;
+
+  // Validate host to prevent SSRF attacks
+  const parsedUrl = new URL(fullUrl);
+  const allowedHost = new URL(SITEMAP_CONFIG.baseUrl).host;
+  if (parsedUrl.host !== allowedHost) {
+    return { url, success: false, error: "Invalid host" };
+  }
 
   try {
     const response = await fetch(fullUrl, {
@@ -57,36 +64,60 @@ export async function crawlPage(
 }
 
 /**
+ * Creates a concurrency limiter that allows up to `limit` concurrent executions
+ */
+function createLimiter(limit: number) {
+  let activeCount = 0;
+  const queue: Array<() => void> = [];
+
+  const next = () => {
+    if (queue.length > 0 && activeCount < limit) {
+      activeCount++;
+      const resolve = queue.shift()!;
+      resolve();
+    }
+  };
+
+  return async <T>(fn: () => Promise<T>): Promise<T> => {
+    await new Promise<void>((resolve) => {
+      queue.push(resolve);
+      next();
+    });
+
+    try {
+      return await fn();
+    } finally {
+      activeCount--;
+      next();
+    }
+  };
+}
+
+/**
  * Crawl multiple pages with concurrency limit
+ * Uses a semaphore-based pattern to maximize throughput - slow requests don't block slots
  */
 export async function crawlPages(
   urls: Array<string>,
   onProgress?: (completed: number, total: number) => void
 ): Promise<Map<string, CrawlResult>> {
   const results = new Map<string, CrawlResult>();
-  const { concurrency } = SITEMAP_CONFIG;
+  const limit = createLimiter(SITEMAP_CONFIG.concurrency);
+  let completed = 0;
 
-  // Process in batches using Promise.all for each batch
-  const batches: Array<Array<string>> = [];
-  for (let i = 0; i < urls.length; i += concurrency) {
-    batches.push(urls.slice(i, i + concurrency));
-  }
-
-  for (const [batchIndex, batch] of batches.entries()) {
-    // eslint-disable-next-line no-await-in-loop -- Intentional batching for rate limiting
-    const batchResults = await Promise.all(
-      batch.map(async (url) => {
+  const crawlResults = await Promise.all(
+    urls.map((url) =>
+      limit(async () => {
         const result = await crawlPage(url);
+        completed++;
+        onProgress?.(completed, urls.length);
         return { url, result };
       })
-    );
+    )
+  );
 
-    for (const { url, result } of batchResults) {
-      results.set(url, result);
-    }
-
-    const completed = Math.min((batchIndex + 1) * concurrency, urls.length);
-    onProgress?.(completed, urls.length);
+  for (const { url, result } of crawlResults) {
+    results.set(url, result);
   }
 
   return results;

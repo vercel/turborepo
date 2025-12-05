@@ -56,10 +56,13 @@ export const maxDuration = 300; // 5 minutes max for crawling
 export async function GET(request: Request): Promise<Response> {
   // Verify cron secret in production
   const authHeader = request.headers.get("authorization");
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
+  const cronSecret = process.env.CRON_SECRET;
+
+  if (!cronSecret && process.env.NODE_ENV === "production") {
+    return new NextResponse("Server configuration error", { status: 500 });
+  }
+
+  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 

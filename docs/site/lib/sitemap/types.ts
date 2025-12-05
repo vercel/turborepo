@@ -1,3 +1,5 @@
+import { PRODUCT_DOMAIN } from "#lib/constants.ts";
+
 /**
  * State for a single page tracked in the sitemap
  */
@@ -67,17 +69,19 @@ export const DEFAULT_CONTENT_OPTIONS: ContentExtractionOptions = {
   stripNumbers: true,
 };
 
+const vercelEnv = process.env.VERCEL_ENV || "development";
+
 export const SITEMAP_CONFIG = {
   /** Base URL for the sitemap */
-  baseUrl: "https://turborepo.com",
+  baseUrl: `https://${PRODUCT_DOMAIN}`,
   /** Request timeout in milliseconds */
   timeout: 30000,
   /** User agent string */
   userAgent: "TurborepoSitemapCrawler/1.0",
   /** Maximum concurrent requests */
   concurrency: 5,
-  /** Redis key for sitemap state */
-  redisKey: "sitemap:state",
+  /** Redis key for sitemap state (namespaced by environment) */
+  redisKey: `sitemap:state:${vercelEnv}`,
   /** Current state version */
   stateVersion: 1,
 } as const;
