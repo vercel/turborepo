@@ -457,12 +457,13 @@ impl PackageManager {
         let contents = lockfile_path
             .read()
             .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?;
-        self.parse_lockfile(root_package_json, &contents)
+        self.parse_lockfile(root_path, root_package_json, &contents)
     }
 
     #[tracing::instrument(skip(self, root_package_json, contents))]
     pub fn parse_lockfile(
         &self,
+        root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
         contents: &[u8],
     ) -> Result<Box<dyn Lockfile>, Error> {
@@ -477,16 +478,65 @@ impl PackageManager {
             PackageManager::Bun => {
                 Box::new(turborepo_lockfiles::BunLockfile::from_bytes(contents)?)
             }
-            PackageManager::Berry => Box::new(turborepo_lockfiles::BerryLockfile::load(
-                contents,
-                Some(turborepo_lockfiles::BerryManifest::with_resolutions(
-                    root_package_json
-                        .resolutions
-                        .iter()
-                        .flatten()
-                        .map(|(k, v)| (k.clone(), v.clone())),
-                )),
-            )?),
+            PackageManager::Berry => {
+                // Load .yarnrc.yml to get catalogs (Yarn 4.11.0+)
+                let yarnrc = yarnrc::YarnRc::from_file(root_path)
+                    .inspect_err(|e| tracing::debug!("unable to read yarnrc: {e}"))
+                    .unwrap_or_default();
+
+                // Merge default catalogs from both package.json and .yarnrc.yml
+                // .yarnrc.yml takes precedence as that's the standard location
+                let default_catalog = yarnrc.catalog.or_else(|| root_package_json.catalog.clone());
+
+                // Merge named catalogs from both package.json and .yarnrc.yml
+                // .yarnrc.yml catalogs take precedence as that's the standard location
+                let mut all_catalogs = std::collections::BTreeMap::new();
+
+                // First add named catalogs from package.json (if any)
+                if let Some(pkg_catalogs) = &root_package_json.catalogs {
+                    for (name, catalog) in pkg_catalogs {
+                        all_catalogs.insert(name.clone(), catalog.clone());
+                    }
+                }
+
+                // Then add/override with named catalogs from .yarnrc.yml
+                if let Some(yarnrc_catalogs) = yarnrc.catalogs {
+                    for (name, catalog) in yarnrc_catalogs {
+                        all_catalogs.insert(name, catalog);
+                    }
+                }
+
+                let catalogs_to_pass = if all_catalogs.is_empty() {
+                    None
+                } else {
+                    Some(
+                        all_catalogs
+                            .iter()
+                            .map(|(k, v)| (k.clone(), v.clone()))
+                            .collect::<Vec<_>>(),
+                    )
+                };
+
+                let default_catalog_to_pass = default_catalog.map(|c| {
+                    c.iter()
+                        .map(|(k, v)| (k.clone(), v.clone()))
+                        .collect::<Vec<_>>()
+                });
+
+                Box::new(turborepo_lockfiles::BerryLockfile::load(
+                    contents,
+                    Some(
+                        turborepo_lockfiles::BerryManifest::with_resolutions_and_catalogs(
+                            root_package_json
+                                .resolutions
+                                .as_ref()
+                                .map(|r| r.iter().map(|(k, v)| (k.clone(), v.clone()))),
+                            default_catalog_to_pass,
+                            catalogs_to_pass,
+                        ),
+                    ),
+                )?)
+            }
         })
     }
 

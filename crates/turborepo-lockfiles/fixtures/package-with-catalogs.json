@@ -1,0 +1,19 @@
+{
+  "name": "my-app",
+  "version": "1.0.0",
+  "packageManager": "yarn@4.11.0",
+  "catalogs": {
+    "react18": {
+      "react": "^18.0.0",
+      "react-dom": "^18.0.0"
+    },
+    "testing": {
+      "jest": "^29.0.0",
+      "vitest": "^1.0.0"
+    }
+  },
+  "dependencies": {
+    "react": "catalog:react18",
+    "lodash": "^4.17.21"
+  }
+}

@@ -263,10 +263,11 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         &self,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
-        let previous_lockfile = self
-            .pkg_graph
-            .package_manager()
-            .parse_lockfile(self.pkg_graph.root_package_json(), lockfile_content)?;
+        let previous_lockfile = self.pkg_graph.package_manager().parse_lockfile(
+            self.pkg_graph.repo_root(),
+            self.pkg_graph.root_package_json(),
+            lockfile_content,
+        )?;
 
         let additional_packages = self
             .pkg_graph
