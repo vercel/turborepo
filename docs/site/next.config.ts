@@ -41,11 +41,6 @@ const config: NextConfig = {
         process.env.VERCEL_ENV === "production"
           ? [
               {
-                source: "/sitemap.xml",
-                destination:
-                  "https://crawled-sitemap.vercel.sh/turbobuild-sitemap.xml",
-              },
-              {
                 source: "/api/feedback",
                 destination: "https://vercel.com/api/feedback",
               },
