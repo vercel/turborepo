@@ -185,6 +185,8 @@ enum ExecOutcome {
     },
     // Task didn't execute normally due to a shutdown being initiated by another task
     Shutdown,
+    // Task was stopped to be restarted
+    Restarted,
 }
 
 enum SuccessOutcome {
@@ -258,6 +260,12 @@ impl ExecContext {
                 // Probably overkill here, but we should make sure the process manager is
                 // stopped if we think we're shutting down.
                 self.manager.stop().await;
+            }
+            Ok(ExecOutcome::Restarted) => {
+                tracker.cancel();
+                // We need to stop dependent tasks because this task will be restarted
+                // in a new run.
+                callback.send(Err(StopExecution::DependentTasks)).ok();
             }
             Err(e) => {
                 tracker.cancel();
@@ -336,27 +344,31 @@ impl ExecContext {
 
         let cmd = self.cmd.clone();
 
-        let mut process = match self.manager.spawn(cmd, Duration::from_millis(500)) {
-            Some(Ok(child)) => child,
-            // Turbo was unable to spawn a process
-            Some(Err(e)) => {
-                // Note: we actually failed to spawn, but this matches the Go output
-                prefixed_ui.error(&format!("command finished with error: {e}"));
-                let error_string = e.to_string();
-                self.errors
-                    .lock()
-                    .expect("lock poisoned")
-                    .push(TaskError::from_spawn(self.task_id_for_display.clone(), e));
-                return Ok(ExecOutcome::Task {
-                    exit_code: None,
-                    message: error_string,
-                });
-            }
-            // Turbo is shutting down
-            None => {
-                return Ok(ExecOutcome::Shutdown);
-            }
-        };
+        let mut process =
+            match self
+                .manager
+                .spawn(cmd, Duration::from_millis(500), self.task_id.clone())
+            {
+                Some(Ok(child)) => child,
+                // Turbo was unable to spawn a process
+                Some(Err(e)) => {
+                    // Note: we actually failed to spawn, but this matches the Go output
+                    prefixed_ui.error(&format!("command finished with error: {e}"));
+                    let error_string = e.to_string();
+                    self.errors
+                        .lock()
+                        .expect("lock poisoned")
+                        .push(TaskError::from_spawn(self.task_id_for_display.clone(), e));
+                    return Ok(ExecOutcome::Task {
+                        exit_code: None,
+                        message: error_string,
+                    });
+                }
+                // Turbo is shutting down
+                None => {
+                    return Ok(ExecOutcome::Shutdown);
+                }
+            };
 
         if self.ui_mode.has_sender() && self.takes_input {
             if let TaskOutput::UI(task) = output_client {
@@ -454,8 +466,14 @@ impl ExecContext {
             ChildExit::Finished(None) | ChildExit::Failed => Err(InternalError::UnknownChildExit),
             // Something else killed the child
             ChildExit::KilledExternal => Err(InternalError::ExternalKill),
-            // The child was killed by turbo indicating a shutdown
-            ChildExit::Killed | ChildExit::Interrupted => Ok(ExecOutcome::Shutdown),
+            // The child was killed by turbo indicating a shutdown or restart
+            ChildExit::Killed | ChildExit::Interrupted => {
+                if process.is_closing() {
+                    Ok(ExecOutcome::Shutdown)
+                } else {
+                    Ok(ExecOutcome::Restarted)
+                }
+            }
         }
     }
 }
