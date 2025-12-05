@@ -37,7 +37,7 @@ function isDynamicSegment(segment: string): boolean {
 /**
  * Recursively find all page.tsx files in a directory
  */
-function findPageFiles(dir: string, basePath: string = ""): Array<string> {
+function findPageFiles(dir: string, basePath = ""): Array<string> {
   const pages: Array<string> = [];
 
   let entries: Array<string>;
@@ -81,11 +81,14 @@ function findPageFiles(dir: string, basePath: string = ""): Array<string> {
         urlSegment = entry;
       }
 
-      const newBasePath = urlSegment
-        ? basePath
-          ? `${basePath}/${urlSegment}`
-          : urlSegment
-        : basePath;
+      let newBasePath: string;
+      if (!urlSegment) {
+        newBasePath = basePath;
+      } else if (basePath) {
+        newBasePath = `${basePath}/${urlSegment}`;
+      } else {
+        newBasePath = urlSegment;
+      }
 
       pages.push(...findPageFiles(fullPath, newBasePath));
     } else if (entry === "page.tsx" || entry === "page.ts") {
