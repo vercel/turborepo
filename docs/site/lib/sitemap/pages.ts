@@ -1,37 +1,48 @@
 import { repoDocsPages, blog, extraPages } from "#app/source.ts";
 import { openapiPages } from "#app/(openapi)/docs/openapi/source.ts";
+import { discoverStaticRoutes, getAppDirectory } from "./route-discovery.ts";
 
 /**
- * Collect all page URLs from fumadocs loaders
+ * Collect all page URLs from both automatic route discovery and fumadocs loaders.
+ *
+ * This ensures the sitemap is always exhaustive by:
+ * 1. Scanning the app directory for all static page.tsx files
+ * 2. Getting all dynamic routes from fumadocs loaders (docs, blog, etc.)
+ *
+ * The results are deduplicated to handle any overlap.
  */
 export function getAllPageUrls(): Array<string> {
-  const urls: Array<string> = [];
+  const urlSet = new Set<string>();
 
-  // Add homepage
-  urls.push("/");
+  // 1. Discover static routes from app directory
+  // This catches standalone pages like /blog, /showcase, etc.
+  const staticRoutes = discoverStaticRoutes(getAppDirectory());
+  for (const route of staticRoutes) {
+    urlSet.add(route);
+  }
+
+  // 2. Add dynamic routes from fumadocs loaders
+  // These handle content-driven pages with [...slug] patterns
 
   // Docs pages
   for (const page of repoDocsPages.getPages()) {
-    urls.push(page.url);
+    urlSet.add(page.url);
   }
 
-  // Blog pages (exclude external blog posts)
+  // Blog pages (exclude external blog posts - they link off-site)
   for (const page of blog.getPages()) {
-    urls.push(page.url);
+    urlSet.add(page.url);
   }
 
   // Extra pages (governance, terms, etc.)
   for (const page of extraPages.getPages()) {
-    urls.push(page.url);
+    urlSet.add(page.url);
   }
 
   // OpenAPI pages
   for (const page of openapiPages.getPages()) {
-    urls.push(page.url);
+    urlSet.add(page.url);
   }
 
-  // Add showcase page
-  urls.push("/showcase");
-
-  return urls;
+  return [...urlSet].sort();
 }

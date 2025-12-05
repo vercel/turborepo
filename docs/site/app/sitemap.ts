@@ -1,42 +1,9 @@
 import type { MetadataRoute } from "next";
-import { repoDocsPages, blog, extraPages } from "#app/source.ts";
-import { openapiPages } from "#app/(openapi)/docs/openapi/source.ts";
-import { loadState, SITEMAP_CONFIG } from "#lib/sitemap/index.ts";
-
-/**
- * Collect all page URLs from fumadocs loaders
- */
-function getAllPageUrls(): Array<string> {
-  const urls: Array<string> = [];
-
-  // Add homepage
-  urls.push("/");
-
-  // Docs pages
-  for (const page of repoDocsPages.getPages()) {
-    urls.push(page.url);
-  }
-
-  // Blog pages (exclude external blog posts)
-  for (const page of blog.getPages()) {
-    urls.push(page.url);
-  }
-
-  // Extra pages (governance, terms, etc.)
-  for (const page of extraPages.getPages()) {
-    urls.push(page.url);
-  }
-
-  // OpenAPI pages
-  for (const page of openapiPages.getPages()) {
-    urls.push(page.url);
-  }
-
-  // Add showcase page
-  urls.push("/showcase");
-
-  return urls;
-}
+import {
+  loadState,
+  getAllPageUrls,
+  SITEMAP_CONFIG,
+} from "#lib/sitemap/index.ts";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 3600; // Revalidate every hour
