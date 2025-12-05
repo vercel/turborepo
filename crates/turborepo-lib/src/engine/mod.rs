@@ -159,6 +159,44 @@ impl Engine<Built> {
     /// Creates an instance of `Engine` that only contains tasks that depend on
     /// tasks from a given package. This is useful for watch mode, where we
     /// need to re-run only a portion of the task graph.
+    pub fn filter_tasks(&self, tasks_to_run: &HashSet<(PackageName, String)>) -> Engine<Built> {
+        let new_graph = self.task_graph.filter_map(
+            |node_idx, node| {
+                if let TaskNode::Task(task) = &self.task_graph[node_idx] {
+                    if tasks_to_run.contains(&(task.package().into(), task.task().to_string())) {
+                        return Some(node.clone());
+                    }
+                }
+                None
+            },
+            |_, _| Some(()),
+        );
+
+        let task_lookup: HashMap<_, _> = new_graph
+            .node_indices()
+            .filter_map(|index| {
+                let task = new_graph
+                    .node_weight(index)
+                    .expect("node index should be present");
+                match task {
+                    TaskNode::Root => None,
+                    TaskNode::Task(task) => Some((task.clone(), index)),
+                }
+            })
+            .collect();
+
+        Engine {
+            marker: std::marker::PhantomData,
+            root_index: self.root_index,
+            task_graph: new_graph,
+            task_lookup,
+            task_definitions: self.task_definitions.clone(),
+            task_locations: self.task_locations.clone(),
+            package_tasks: self.package_tasks.clone(),
+            has_non_interruptible_tasks: self.has_non_interruptible_tasks,
+        }
+    }
+
     pub fn create_engine_for_subgraph(
         &self,
         changed_packages: &HashSet<PackageName>,
