@@ -73,8 +73,10 @@ function createLimiter(limit: number) {
   const next = () => {
     if (queue.length > 0 && activeCount < limit) {
       activeCount++;
-      const resolve = queue.shift()!;
-      resolve();
+      const resolve = queue.shift();
+      if (resolve) {
+        resolve();
+      }
     }
   };
 
