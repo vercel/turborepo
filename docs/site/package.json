@@ -9,7 +9,6 @@
   },
   "scripts": {
     "build": "next build --turbopack",
-    "check-spelling": "spellchecker --files '**/*.mdx' --files '!content/blog/*.mdx' --files '!content/docs/acknowledgments.mdx' --files '!node_modules/**' --files '!content/extra/terms.mdx' --files '!content/extra/governance.mdx' --files '!content/extra/privacy.mdx' --dictionaries 'dictionary.txt' --no-suggestions --quiet",
     "dev": "next dev --turbopack",
     "lint": "fumadocs-mdx && next lint",
     "lint:fix": "fumadocs-mdx && next lint --fix",
@@ -82,7 +81,6 @@
     "gray-matter": "^4.0.3",
     "postcss": "^8.4.35",
     "rss": "^1.2.2",
-    "spellchecker-cli": "^6.2.0",
     "tailwindcss": "^3.4.1",
     "typescript": "5.6.3"
   }
