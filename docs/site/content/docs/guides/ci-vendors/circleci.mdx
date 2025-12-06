@@ -3,7 +3,7 @@ title: CircleCI
 description: Learn how to use CircleCI with Turborepo.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Callout } from '#components/callout';
 
 The following example shows how to use Turborepo with [CircleCI](https://circleci.com/).
@@ -49,7 +49,7 @@ And a `turbo.json`:
 
 Create a file called `.circleci/config.yml` in your repository with the following contents:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
 
@@ -175,7 +175,7 @@ Create a file called `.circleci/config.yml` in your repository with the followin
     ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Remote Caching
 

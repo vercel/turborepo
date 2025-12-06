@@ -3,7 +3,7 @@ title: Upgrading
 description: Learn how to upgrade `turbo` to get the latest improvements to your repository.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Steps, Step } from '#components/steps';
 import { Callout } from '#components/callout';
 
@@ -16,7 +16,7 @@ import { Callout } from '#components/callout';
 
 Get started upgrading from 1.x to 2.0 by running:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -50,7 +50,7 @@ bunx @turbo/codemod migrate
 
 </Tab>
 
-</PackageManagerTabs>
+</Tabs>
 
 This will update your `turbo.json`(s) for many of the breaking changes from 1.x to 2.0.
 
@@ -71,7 +71,7 @@ Additionally, a `name` field will be added to any `package.json` in the Workspac
 
 Turborepo 2.0 requires that your Workspace define this field as a way to improve the stability and behavioral predictability of your codebase. If you do not have one already, add this field to your root `package.json`:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -112,7 +112,7 @@ Turborepo 2.0 requires that your Workspace define this field as a way to improve
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 </Step>
 <Step>
