@@ -18,7 +18,7 @@ export const maxDuration = 300; // 5 minutes max for crawling
  * Crawls all pages and updates sitemap state in Redis
  */
 export async function GET(request: Request): Promise<Response> {
-  // Verify cron secret in production
+  // Verify cron secret
   const authHeader = request.headers.get("authorization");
   const cronSecret = process.env.CRON_SECRET;
 
@@ -26,7 +26,7 @@ export async function GET(request: Request): Promise<Response> {
     return new NextResponse("Server configuration error", { status: 500 });
   }
 
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (authHeader !== `Bearer ${cronSecret}`) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
 

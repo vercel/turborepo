@@ -155,7 +155,8 @@ function normalizeImageSrc(src: string): string {
     url.searchParams.delete("_");
     url.searchParams.delete("t");
     url.searchParams.delete("cb");
-    return url.pathname; // Just use the path for consistency
+    // Return origin + pathname to preserve the image source while removing query params
+    return url.origin + url.pathname;
   } catch {
     return src.split("?")[0];
   }
