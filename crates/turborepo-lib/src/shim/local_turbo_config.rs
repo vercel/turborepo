@@ -30,7 +30,10 @@ impl LocalTurboConfig {
     fn infer_internal(repo_state: &RepoState, is_enabled: Option<bool>) -> Option<Self> {
         // TODO: once we have properly communicated this functionality we should make
         // this opt-out.
-        debug!("FORCING local turbo binary. Download disabled.");
+        if !is_enabled.unwrap_or(false) {
+            debug!("downloading correct local version not enabled");
+            return None;
+        }
         let turbo_version = Self::turbo_version_from_lockfile(repo_state)?;
         Some(Self { turbo_version })
     }
