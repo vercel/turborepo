@@ -25,6 +25,7 @@ mod boundaries;
 mod gitignore;
 mod hash;
 mod microfrontends;
+mod observability;
 mod opts;
 mod package_changes_watcher;
 mod panic_handler;

@@ -9,7 +9,10 @@ use tracing::warn;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::CacheConfig;
 
-use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
+use super::{
+    ConfigurationOptions, Error, ExperimentalObservabilityOptions, ExperimentalOtelOptions,
+    ResolvedConfigurationOptions,
+};
 use crate::{
     cli::{EnvMode, LogOrder},
     turbo_json::UIMode,
@@ -46,6 +49,38 @@ const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_concurrency", "concurrency"),
     ("turbo_no_update_notifier", "no_update_notifier"),
     ("turbo_sso_login_callback_port", "sso_login_callback_port"),
+    (
+        "turbo_experimental_otel_enabled",
+        "experimental_otel_enabled",
+    ),
+    (
+        "turbo_experimental_otel_protocol",
+        "experimental_otel_protocol",
+    ),
+    (
+        "turbo_experimental_otel_endpoint",
+        "experimental_otel_endpoint",
+    ),
+    (
+        "turbo_experimental_otel_timeout_ms",
+        "experimental_otel_timeout_ms",
+    ),
+    (
+        "turbo_experimental_otel_headers",
+        "experimental_otel_headers",
+    ),
+    (
+        "turbo_experimental_otel_resource",
+        "experimental_otel_resource",
+    ),
+    (
+        "turbo_experimental_otel_metrics_run_summary",
+        "experimental_otel_metrics_run_summary",
+    ),
+    (
+        "turbo_experimental_otel_metrics_task_details",
+        "experimental_otel_metrics_task_details",
+    ),
 ]
 .as_slice();
 
@@ -221,6 +256,10 @@ impl ResolvedConfigurationOptions for EnvVars {
             .transpose()
             .map_err(Error::InvalidSsoLoginCallbackPort)?;
 
+        let experimental_otel = ExperimentalOtelOptions::from_env_map(&self.output_map)?;
+        let experimental_observability =
+            experimental_otel.map(|otel| ExperimentalObservabilityOptions { otel: Some(otel) });
+
         let output = ConfigurationOptions {
             api_url: self.output_map.get("api_url").cloned(),
             login_url: self.output_map.get("login_url").cloned(),
@@ -257,6 +296,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             sso_login_callback_port,
             // Do not allow future flags to be set by env var
             future_flags: None,
+            experimental_observability,
         };
 
         Ok(output)

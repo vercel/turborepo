@@ -45,6 +45,7 @@ use crate::{
     config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder},
     microfrontends::MicrofrontendsConfigs,
+    observability,
     opts::Opts,
     run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,
@@ -483,6 +484,11 @@ impl RunBuilder {
             .should_print_prelude_override
             .unwrap_or_else(|| self.will_execute_tasks());
 
+        let observability_handle = match self.opts.experimental_observability.as_ref() {
+            Some(opts) => observability::Handle::try_init(opts),
+            None => None,
+        };
+
         Ok(Run {
             version: self.version,
             color_config: self.color_config,
@@ -506,6 +512,7 @@ impl RunBuilder {
             daemon,
             should_print_prelude,
             micro_frontend_configs,
+            observability_handle,
         })
     }
 

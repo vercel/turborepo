@@ -1,7 +1,7 @@
 Thank you for your interest in contributing to Turborepo!
 
 - [General dependencies](#general-dependencies)
- - [Optional dependencies](#optional-dependencies)
+- [Optional dependencies](#optional-dependencies)
 - [Structure of the repository](#structure-of-the-repository)
 - [Building Turborepo](#building-turborepo)
   - [TLS Implementation](#tls-implementation)
@@ -68,6 +68,16 @@ and `rustls-tls` features.
 
 By default, the `rustls-tls` feature is selected so that `cargo build` works
 out of the box. If you wish to select `native-tls`, you may do so by running `cargo build --no-default-features --features native-tls`.
+
+### OpenTelemetry Observability
+
+Turborepo includes optional OpenTelemetry (OTel) support for exporting metrics. OTel is an experimental feature and is **not** included in default builds. If you wish to build `turbo` with OTel support, you can enable it by running:
+
+```bash
+cargo build -p turbo --features otel
+```
+
+Note that when OTel is disabled at compile time (the default), the `experimentalObservability` configuration in `turbo.json` and related CLI flags will be ignored (they will not error, but no metrics will be exported). IDEs using the devcontainer configuration will have OTel enabled automatically for development purposes.
 
 ## Running tests
 

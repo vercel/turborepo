@@ -408,6 +408,7 @@ mod tests {
             &FutureFlags {
                 turbo_extends_keyword: true,
                 non_root_extends: false,
+                experimental_observability: false,
             },
         );
 
@@ -430,6 +431,7 @@ mod tests {
             &FutureFlags {
                 turbo_extends_keyword: false,
                 non_root_extends: false,
+                experimental_observability: false,
             },
         );
 
@@ -450,6 +452,7 @@ mod tests {
             &FutureFlags {
                 turbo_extends_keyword: true,
                 non_root_extends: false,
+                experimental_observability: false,
             },
         );
 
@@ -596,6 +599,7 @@ mod tests {
             &FutureFlags {
                 turbo_extends_keyword: true,
                 non_root_extends: false,
+                experimental_observability: false,
             },
         )
         .unwrap();
@@ -620,6 +624,7 @@ mod tests {
             &FutureFlags {
                 turbo_extends_keyword: false,
                 non_root_extends: false,
+                experimental_observability: false,
             },
         );
         assert!(result.is_err());
@@ -640,6 +645,7 @@ mod tests {
             &FutureFlags {
                 turbo_extends_keyword: false,
                 non_root_extends: false,
+                experimental_observability: false,
             },
         );
         assert!(result.is_err());
