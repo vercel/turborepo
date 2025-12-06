@@ -4,7 +4,7 @@ description: Share cache artifacts across machines for even faster builds.
 ---
 
 import { Callout } from '#components/callout';
-import { PlatformTabs, PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { ThemeAwareImage } from '#components/theme-aware-image';
 
 Turborepo's [task cache](/docs/crafting-your-repository/caching) saves time by never doing the same work twice.
@@ -88,7 +88,7 @@ turbo login
 
 You can also use your package manager if you do not have [global `turbo`](/docs/getting-started/installation#global-installation) installed:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -121,7 +121,7 @@ bunx turbo login
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 <Callout>
   If your Remote Cache is configured to use single-sign-on you will need to run
@@ -140,22 +140,22 @@ Your cache artifacts will now be stored locally _and_ in your Remote Cache.
 
 To verify, delete your local Turborepo cache with:
 
-<PlatformTabs>
-  <Tab>
+<Tabs groupId="platform-tabs" items={['UNIX', 'Windows']} persist>
+  <Tab value="UNIX">
 
     ```bash title="Terminal"
     rm -rf ./.turbo/cache
     ```
 
   </Tab>
-  <Tab>
+  <Tab value="Windows">
 
     ```bash title="Terminal"
     rd /s /q "./.turbo/cache"
     ```
 
   </Tab>
-</PlatformTabs>
+</Tabs>
 
 Then, run the same build again. If things are working properly, `turbo` should not execute tasks locally. Instead, it will download the logs and artifacts from your Remote Cache and replay them back to you.
 

@@ -6,14 +6,17 @@ description: Learn how to use Vitest in a monorepo.
 import { Callout } from '#components/callout';
 import { File, Folder, Files } from '#components/files';
 import { CreateTurboCallout } from './create-turbo-callout.tsx';
-import { Tab, Tabs } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 [Vitest](https://vitest.dev/) is a test runner from the Vite ecosystem. Integrating it with Turborepo will lead to enormous speed-ups.
 
 [The Vitest documentation](https://vitest.dev/guide/workspace) shows how to create a "Vitest Projects" configuration that runs all tests in the monorepo from one root command, enabling behavior like merged coverage reports out-of-the-box. This feature doesn't follow modern best practices for monorepos, since its designed for compatibility with Jest (whose Workspace feature was built before [package manager Workspaces](/docs/crafting-your-repository/structuring-a-repository)).
 
 <Callout type="warning">
-  Vitest has deprecated workspaces in favor of projects. When using projects, individual project vitest configs can't extend the root config anymore since they would inherit the projects configuration. Instead, a separate shared file like `vitest.shared.ts` is needed.
+  Vitest has deprecated workspaces in favor of projects. When using projects,
+  individual project vitest configs can't extend the root config anymore since
+  they would inherit the projects configuration. Instead, a separate shared file
+  like `vitest.shared.ts` is needed.
 </Callout>
 
 Because of this you have two options, each with their own tradeoffs:
@@ -179,7 +182,7 @@ Turborepo tasks to accomplish will look like:
       "dependsOn": ["merge-json-reports"],
       "inputs": ["coverage/merge"],
       "outputs": ["coverage/report/**"]
-    },
+    }
   }
 }
 ```
@@ -262,7 +265,7 @@ export const sharedConfig = {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     // Other shared configuration
-  }
+  },
 };
 ```
 
@@ -281,9 +284,9 @@ export default defineConfig({
       test: {
         ...sharedConfig.test,
         // Project-specific configuration
-      }
-    }
-  ]
+      },
+    },
+  ],
 });
 ```
 
@@ -313,7 +316,7 @@ export default defineConfig({
   test: {
     ...sharedConfig.test,
     // Package-specific overrides if needed
-  }
+  },
 });
 ```
 
