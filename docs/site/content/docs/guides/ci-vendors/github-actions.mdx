@@ -3,7 +3,7 @@ title: GitHub Actions
 description: Learn how to use GitHub Actions with Turborepo.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Steps, Step } from '#components/steps';
 import { Callout } from '#components/callout';
 
@@ -43,7 +43,7 @@ And a `turbo.json`:
 
 Create a file called `.github/workflows/ci.yml` in your repository with the following contents:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
   <Tab value="pnpm">
     ```yaml title=".github/workflows/ci.yml"
     name: CI
@@ -227,7 +227,7 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
 
   </Tab>
 
-</PackageManagerTabs>
+</Tabs>
 
 ## Remote Caching with Vercel Remote Cache
 

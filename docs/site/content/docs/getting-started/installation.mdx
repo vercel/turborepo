@@ -4,11 +4,11 @@ description: Learn how to get started with Turborepo.
 ---
 
 import { Callout } from '#components/callout';
-import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 Get started with Turborepo in a few moments using:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 ```bash title="Terminal"
@@ -38,7 +38,7 @@ bunx create-turbo@latest
 
 </Tab>
 
-</PackageManagerTabs>
+</Tabs>
 
 The starter repository will have:
 
@@ -55,7 +55,7 @@ For more details on the starter, [visit the README for the basic starter on GitH
 
 A global install of `turbo` brings flexibility and speed to your local workflows.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
   ```bash title="Terminal"
@@ -85,7 +85,7 @@ A global install of `turbo` brings flexibility and speed to your local workflows
 
   </Tab>
 
-</PackageManagerTabs>
+</Tabs>
 
 Once installed globally, you can run your scripts through `turbo` from your terminal, quickly running one-off commands to use within your repository. For example:
 
@@ -114,7 +114,7 @@ You can also take advantage of global `turbo` when creating your CI pipelines. V
 
 When collaborating with other developers in a repository, it's a good idea to pin versions of dependencies. You can do this with `turbo` by adding it as a `devDependency` in the root of your repository:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
     ```bash title="Terminal"
@@ -144,7 +144,7 @@ When collaborating with other developers in a repository, it's a good idea to pi
 
   </Tab>
 
-  </PackageManagerTabs>
+  </Tabs>
 
 You can continue to use your global installation of `turbo` to run commands. Global `turbo` will defer to the local version of your repository if it exists.
 
