@@ -320,7 +320,6 @@ pub struct ConfigurationOptions {
     pub(crate) allow_no_turbo_json: Option<bool>,
     pub(crate) tui_scrollback_length: Option<u64>,
     pub(crate) concurrency: Option<String>,
-    #[serde(rename = "noUpdateNotifier")]
     pub(crate) no_update_notifier: Option<bool>,
     pub(crate) sso_login_callback_port: Option<u16>,
     #[serde(skip)]
