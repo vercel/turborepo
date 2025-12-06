@@ -3,7 +3,7 @@ title: GitLab CI
 description: Learn how to use GitLab CI with Turborepo.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 The following example shows how to use Turborepo with [GitLab CI](https://docs.gitlab.com/ee/ci/).
 
@@ -41,7 +41,7 @@ And a `turbo.json`:
 
 Create a file called `.gitlab-ci.yml` in your repository with the following contents:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
     <Tab value="pnpm">
 
         ```yaml title=".gitlab-ci.yml"
@@ -127,7 +127,7 @@ Create a file called `.gitlab-ci.yml` in your repository with the following cont
 
 </Tab>
 
-</PackageManagerTabs>
+</Tabs>
 
 ## Remote Caching
 

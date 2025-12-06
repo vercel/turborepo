@@ -3,7 +3,7 @@ title: ESLint
 description: Learn how to use ESLint in a monorepo.
 ---
 
-import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Callout } from '#components/callout';
 import { Files, Folder, File } from '#components/files';
 import { CreateTurboCallout } from './create-turbo-callout.tsx';
@@ -70,7 +70,7 @@ Notably, the `next.js` and `react-internal.js` configurations use the `base.js` 
 
 In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
 ```jsonc title="./apps/web/package.json"
@@ -111,7 +111,7 @@ In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
 }
 ```
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 We can then import the configuration like this:
 
@@ -215,7 +215,7 @@ Note that the ESLint dependencies are all listed here. This is useful, since it 
 
 In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
 ```jsonc title="./apps/web/package.json"
@@ -255,7 +255,7 @@ In our `web` app, we first need to add `@repo/eslint-config` as a dependency.
 }
 ```
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 We can then import the config like this:
 

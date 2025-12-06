@@ -3,7 +3,7 @@ title: eslint-config-turbo
 description: Learn more about eslint-config-turbo.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 [The `eslint-config-turbo` package](https://www.npmjs.com/package/eslint-config-turbo) helps you find environment variables that are used in your code that are not a part of Turborepo's hashing. Environment variables used in your source code that are not accounted for in `turbo.json` will be highlighted in your editor and errors will show as ESLint output.
 
@@ -11,7 +11,7 @@ import { PackageManagerTabs, Tab } from '#components/tabs';
 
 Install `eslint-config-turbo` into the location where your ESLint configuration is held:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
 
@@ -44,7 +44,7 @@ Install `eslint-config-turbo` into the location where your ESLint configuration 
     ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Usage (Flat Config `eslint.config.js`)
 

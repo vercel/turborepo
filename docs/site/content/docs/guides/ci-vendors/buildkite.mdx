@@ -3,7 +3,7 @@ title: Buildkite
 description: Learn how to use Buildkite with Turborepo.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 The following example shows how to use Turborepo with [Buildkite](https://buildkite.com/).
 
@@ -41,7 +41,7 @@ And a `turbo.json`:
 
 Create a file called `.buildkite/pipeline.yml` in your repository with the following contents:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
 
@@ -109,7 +109,7 @@ Create a file called `.buildkite/pipeline.yml` in your repository with the follo
     ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Create a Pipeline
 

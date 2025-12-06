@@ -3,14 +3,14 @@ title: Multi-language support
 description: Learn how to use multiple languages with Turborepo.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { LinkToDocumentation } from '#components/link-to-documentation';
 
 Turborepo is built on the conventions of the JavaScript ecosystem to find scripts and tasks to execute - but it doesn't care what those scripts do. Following [the guidance for specifying a package in a JavaScript workspace](/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), you can add any other language or toolchain to Turborepo.
 
 As an example, you may have a Rust project in the `./cli` directory in your repository. To add this directory as a package to your JavaScript package manager's workspace, add the directory to the workspace definition:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
   ```json title="pnpm-workspace.yaml"
@@ -64,7 +64,7 @@ As an example, you may have a Rust project in the `./cli` directory in your repo
 
   <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">Bun workspace documentation</LinkToDocumentation>
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 Then, add a `package.json` to the directory:
 
@@ -99,7 +99,7 @@ Because the directory is now a part of the package manager's workspace, you can 
 
 For instance, if you wanted to make sure that the `rust-cli` "package" from above is built before your `web` application, install it into the dependencies for the `web` application:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
   <Tab value="pnpm">
 
 ```diff title="./web/package.json"
@@ -147,7 +147,7 @@ For instance, if you wanted to make sure that the `rust-cli` "package" from abov
 ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 Given a `turbo.json` with a `build` task like:
 
