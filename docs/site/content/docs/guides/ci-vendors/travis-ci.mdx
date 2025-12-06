@@ -3,7 +3,7 @@ title: Travis CI
 description: How to use Travis CI with Turborepo to optimize your CI workflow
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 The following example shows how to use Turborepo with [Travis CI](https://www.travis-ci.com/).
 
@@ -41,7 +41,7 @@ And a `turbo.json`:
 
 Create a file called `.travis.yml` in your repository with the following contents:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
     <Tab value="pnpm">
 
       ```yaml title=".travis.yml"
@@ -120,7 +120,7 @@ Create a file called `.travis.yml` in your repository with the following content
       ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Remote Caching
 

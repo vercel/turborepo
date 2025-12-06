@@ -4,7 +4,7 @@ description: Learn about caching in Turborepo.
 ---
 
 import { Step, Steps } from '#components/steps';
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Callout } from '#components/callout';
 
 Turborepo uses caching to speed up builds, ensuring you **never do the same work twice**. When your task is cacheable, Turborepo will restore the results of your task from cache using a fingerprint from the first time the task ran.
@@ -48,7 +48,7 @@ If you have [`turbo` installed globally](/docs/getting-started/installation#glob
 
 Alternatively, you can run the `build` script in `package.json` using your package manager.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 ```bash title="Terminal"
@@ -79,7 +79,7 @@ bun run build
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 This will result in a cache miss, since you've never ran `turbo` before with this [set of inputs](/docs/crafting-your-repository/caching#task-inputs) in this repository. The inputs are turned into a hash to check for in your local filesystem cache or in [the Remote Cache](/docs/core-concepts/remote-caching).
 
@@ -162,14 +162,14 @@ Under the hood, Turborepo creates two hashes: a global hash and a task hash. If 
 
 ### Global hash inputs
 
-| Input                                                                                  | Example                                                                                                                                                    |
-| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resolved task definition from root `turbo.json`<br /> and package `turbo.json`         | Changing [`outputs`](/docs/reference/configuration#outputs) in either root `turbo.json` or [Package Configuration](/docs/reference/package-configurations) |
-| Lockfile changes that affect the Workspace root                                        | Updating dependencies in root `package.json` will cause **all** tasks to miss cache                                                                        |
-| [`globalDependencies`](/docs/reference/configuration#globaldependencies) file contents | Changing `./.env` when it is listed in `globalDependencies` will cause **all** tasks to miss cache                                                         |
-| Values of variables listed in [`globalEnv`](/docs/reference/configuration#globalenv)   | Changing the value of `GITHUB_TOKEN` when it is listed in `globalEnv`                                                                                      |
-| Flag values that affect task runtime                                                   | Using behavior-changing flags like `--cache-dir`, `--framework-inference`, or `--env-mode`                                                                 |
-| Arbitrary passthrough arguments                                                        | `turbo build -- --arg=value` will cause **all** tasks to miss cache when compared to either `turbo build` or `turbo build -- --arg=diff` (including dependencies of `build` that did not receive `--arg=value`)                                                     |
+| Input                                                                                  | Example                                                                                                                                                                                                         |
+| -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Resolved task definition from root `turbo.json`<br /> and package `turbo.json`         | Changing [`outputs`](/docs/reference/configuration#outputs) in either root `turbo.json` or [Package Configuration](/docs/reference/package-configurations)                                                      |
+| Lockfile changes that affect the Workspace root                                        | Updating dependencies in root `package.json` will cause **all** tasks to miss cache                                                                                                                             |
+| [`globalDependencies`](/docs/reference/configuration#globaldependencies) file contents | Changing `./.env` when it is listed in `globalDependencies` will cause **all** tasks to miss cache                                                                                                              |
+| Values of variables listed in [`globalEnv`](/docs/reference/configuration#globalenv)   | Changing the value of `GITHUB_TOKEN` when it is listed in `globalEnv`                                                                                                                                           |
+| Flag values that affect task runtime                                                   | Using behavior-changing flags like `--cache-dir`, `--framework-inference`, or `--env-mode`                                                                                                                      |
+| Arbitrary passthrough arguments                                                        | `turbo build -- --arg=value` will cause **all** tasks to miss cache when compared to either `turbo build` or `turbo build -- --arg=diff` (including dependencies of `build` that did not receive `--arg=value`) |
 
 ### Package hash inputs
 

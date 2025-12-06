@@ -24,6 +24,7 @@ export {
 export { isWriteable } from "./isWriteable";
 export { createProject, DownloadError } from "./createProject";
 export { convertCase } from "./convertCase";
+export { createNotifyUpdate } from "./notifyUpdate";
 
 export * as logger from "./logger";
 

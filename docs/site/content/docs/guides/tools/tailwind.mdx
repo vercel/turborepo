@@ -3,7 +3,7 @@ title: Tailwind CSS
 description: Learn how to use Tailwind CSS in a Turborepo.
 ---
 
-import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Callout } from '#components/callout';
 import { Steps, Step } from '#components/steps';
 
@@ -13,7 +13,7 @@ import { Steps, Step } from '#components/steps';
 
 If you'd rather use a template, this guide is walking through how to build [this Tailwind CSS + Turborepo template](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind).
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -46,7 +46,7 @@ bunx create-turbo@latest -e with-tailwind
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Guide
 
@@ -59,7 +59,7 @@ bunx create-turbo@latest -e with-tailwind
 
 If you don't have an existing project, use [create-turbo](/docs/getting-started/installation) to create a new monorepo:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -92,7 +92,7 @@ bunx create-turbo@latest
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 </Step>
 
@@ -273,7 +273,7 @@ This `styles.css` contains component-level styles for the shared UI library.
 
 Install the packages you've created into your application.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -307,7 +307,7 @@ bun install @repo/ui @repo/tailwind-config --dev --filter=@repo/ui --filter=web
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 Then, configure the files in your application so the styles from the UI package are reflected in the application.
 

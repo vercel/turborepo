@@ -3,7 +3,7 @@ title: Storybook
 description: Learn how to use Storybook in a Turborepo.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Callout } from '#components/callout';
 import { Steps, Step } from '#components/steps';
 
@@ -13,7 +13,7 @@ import { Steps, Step } from '#components/steps';
 
 If you'd rather use a template, this guide is walking through how to build [this Storybook/Turborepo template](https://vercel.com/templates/react/turborepo-design-system) on Vercel.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -46,7 +46,7 @@ bunx create-turbo@latest -e design-system
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Guide
 
@@ -57,7 +57,7 @@ bunx create-turbo@latest -e design-system
 
 If you don't have an existing project, use [create-turbo](/docs/getting-started/installation) to create a new monorepo:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -90,7 +90,7 @@ bunx create-turbo@latest
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 </Step>
 
@@ -111,7 +111,7 @@ cd apps/storybook
 
 In the `apps/storybook` directory, initialize a new Storybook application:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
 
@@ -143,7 +143,7 @@ bun create storybook@latest
 ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 Follow the prompts to create an application. For the rest of this guide, we'll assume React and TypeScript.
 
@@ -159,7 +159,7 @@ Follow the prompts to create an application. For the rest of this guide, we'll a
 
 Now, install your UI package into Storybook.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -192,7 +192,7 @@ bun install @repo/ui --filter=storybook
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 </Step>
 
@@ -325,7 +325,7 @@ Update components imports so that they reference the now co-located modules. For
 
 You'll also need to install any Storybook packages required for writing stories. For example, moving the story from above would require that you install `@storybook/react` into your `@repo/ui` package.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -358,7 +358,7 @@ bun install @storybook/react --filter=@repo/ui --save-dev
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 </Step>
 

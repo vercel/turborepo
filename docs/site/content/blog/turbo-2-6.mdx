@@ -6,7 +6,7 @@ tag: 'web development'
 ---
 
 import { Authors } from '#components/authors';
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Date } from '#components/blog/date';
 import { Accordion, Accordions } from '#components/accordion';
 import { ThemeAwareImage } from '#components/theme-aware-image';
@@ -25,7 +25,7 @@ Turborepo 2.6 includes a number of improvements to developer experience for your
 
 Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -75,7 +75,7 @@ bunx create-turbo@latest
 
 </Tab>
 
-</PackageManagerTabs>
+</Tabs>
 
 ## Microfrontends
 
