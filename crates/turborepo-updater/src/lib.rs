@@ -84,6 +84,7 @@ fn get_tag_from_version(pre: &semver::Prerelease) -> VersionTag {
 }
 
 fn should_skip_notification() -> bool {
+
     NOTIFIER_DISABLE_VARS
         .iter()
         .chain(ENVIRONMENTAL_DISABLE_VARS.iter())

@@ -367,7 +367,7 @@ fn try_check_for_updates(
             // use default for timeout (800ms)
             None,
             interval,
-            package_manager,
+            package_manager
         );
     }
 }
