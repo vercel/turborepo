@@ -341,7 +341,7 @@ fn try_check_for_updates(
             None,
             interval,
             package_manager,
-            config.no_update_notifier.unwrap_or(false)
+            config.no_update_notifier()
         );
     }
 }
