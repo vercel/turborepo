@@ -343,7 +343,7 @@ fn try_check_for_updates(
 ) {
     let package_manager = package_manager.unwrap_or(&PackageManager::Npm);
 
-    if args.should_check_for_update() && !config.no_update_notifier() {
+    if args.should_check_for_update(){
         // custom footer for update message
         let footer = format!(
             "Follow {username} for updates: {url}",
@@ -367,7 +367,8 @@ fn try_check_for_updates(
             // use default for timeout (800ms)
             None,
             interval,
-            package_manager
+            package_manager,
+            config.no_update_notifier()
         );
     }
 }

@@ -83,13 +83,24 @@ fn get_tag_from_version(pre: &semver::Prerelease) -> VersionTag {
     }
 }
 
-fn should_skip_notification() -> bool {
+fn should_skip_notification(config_no_update: bool) -> bool {
+    if config_no_update {
+        return true;
+    }
 
-    NOTIFIER_DISABLE_VARS
+    if NOTIFIER_DISABLE_VARS
         .iter()
         .chain(ENVIRONMENTAL_DISABLE_VARS.iter())
         .any(|var| std::env::var(var).is_ok())
-        || !atty::is(atty::Stream::Stdout)
+    {
+        return true;
+    }
+
+    if !atty::is(atty::Stream::Stdout) {
+        return true;
+    }
+
+    false
 }
 
 pub fn display_update_check(
@@ -100,9 +111,10 @@ pub fn display_update_check(
     timeout: Option<Duration>,
     interval: Option<Duration>,
     package_manager: &PackageManager,
+    config_no_update: bool,
 ) -> Result<(), UpdateNotifierError> {
     // bail early if the user has disabled update notifications
-    if should_skip_notification() {
+    if should_skip_notification(config_no_update) {
         return Ok(());
     }
 
