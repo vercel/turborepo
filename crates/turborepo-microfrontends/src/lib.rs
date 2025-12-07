@@ -140,11 +140,11 @@ impl TurborepoMfeConfig {
     ) -> Result<Option<Self>, Error> {
         let absolute_dir = repo_root.resolve(package_dir);
 
-        Config::validate_package_path(repo_root, &absolute_dir)?;
-
         let Some((contents, path)) = Self::load_v1_dir(&absolute_dir)? else {
             return Ok(None);
         };
+
+        Config::validate_package_path(repo_root, &absolute_dir)?;
         let mut config = Self::from_str_with_mfe_dep(&contents, path.as_str(), has_mfe_dependency)?;
         config.filename = path
             .file_name()
@@ -370,12 +370,12 @@ impl Config {
     ) -> Result<Option<Self>, Error> {
         let absolute_dir = repo_root.resolve(package_dir);
 
-        Self::validate_package_path(repo_root, &absolute_dir)?;
-
         // we want to try different paths and then do `from_str`
         let Some((contents, path)) = Self::load_v1_dir(&absolute_dir)? else {
             return Ok(None);
         };
+
+        Self::validate_package_path(repo_root, &absolute_dir)?;
         let mut config = Config::from_str(&contents, path.as_str())?;
         config.filename = path
             .file_name()
@@ -736,5 +736,96 @@ mod test {
 
         assert!(result.is_ok(), "Valid path within repo should be accepted");
         assert!(result.unwrap().is_some(), "Config should be loaded");
+    }
+
+    #[test]
+    fn test_valid_internal_package_via_traversal() {
+        // Reproducing the path structure: root/application/../configuration/some-config
+        // This path logically resolves to root/configuration/some-config which IS
+        // inside root.
+        let dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::new(dir.path().to_str().unwrap()).unwrap();
+
+        // mimic: /my-turborepo/configuration/some-config
+        let config_dir = repo_root
+            .join_component("configuration")
+            .join_component("some-config");
+        add_v1_config(&config_dir).unwrap();
+
+        // Construct the problematic absolute path: root +
+        // "application/../configuration/some-config"
+        let weird_path_str =
+            repo_root.as_str().to_string() + "/application/../configuration/some-config";
+        let weird_path = AbsoluteSystemPath::new(&weird_path_str).unwrap();
+
+        // Ensure "application" exists so we aren't tripping on IO errors if realpath is
+        // used
+        repo_root
+            .join_component("application")
+            .create_dir_all()
+            .unwrap();
+
+        // Direct call to validate
+        let result = Config::validate_package_path(repo_root, weird_path);
+
+        // If this FAILS, we have reproduced the issue where a technically valid
+        // internal path is rejected.
+        assert!(
+            result.is_ok(),
+            "Path resolving to inside repo should be accepted: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
+    fn test_config_outside_root_rejected() {
+        // User said: "referencing a package that lives in a folder that's a sibling of
+        // the folder that holds the pnpm-workspace.yaml" Structure:
+        // /tmp/sibling-pkg (package)
+        // /tmp/repo (root, turbo.json)
+
+        let outside_dir = TempDir::new().unwrap();
+        let sibling_pkg = outside_dir.path().join("sibling-pkg");
+        std::fs::create_dir_all(&sibling_pkg).unwrap();
+
+        let repo_dir = outside_dir.path().join("repo");
+        std::fs::create_dir_all(&repo_dir).unwrap();
+
+        let repo_root = AbsoluteSystemPath::new(repo_dir.to_str().unwrap()).unwrap();
+        let pkg_path = AbsoluteSystemPath::new(sibling_pkg.to_str().unwrap()).unwrap();
+
+        add_v1_config(pkg_path).unwrap();
+
+        let result = Config::validate_package_path(repo_root, pkg_path);
+
+        // Current behavior is likely Error.
+        assert!(
+            result.is_err(),
+            "Path outside repo should be rejected currently"
+        );
+    }
+    #[test]
+    fn test_package_outside_root_no_config_ignored() {
+        let dir = TempDir::new().unwrap();
+        let repo_root_path = dir.path().join("repo");
+        let outside_path = dir.path().join("outside");
+        std::fs::create_dir_all(&repo_root_path).unwrap();
+        std::fs::create_dir_all(&outside_path).unwrap();
+
+        // Symlink repo/link -> outside
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&outside_path, repo_root_path.join("link")).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_dir(&outside_path, repo_root_path.join("link")).unwrap();
+
+        let repo_root = AbsoluteSystemPath::new(repo_root_path.to_str().unwrap()).unwrap();
+        let pkg_dir = AnchoredSystemPath::new("link").unwrap();
+
+        // This should NO LONGER fail because we check for config existence first
+        let result = Config::load_from_dir(repo_root, pkg_dir);
+
+        // We expect Ok(None) now
+        assert!(result.is_ok(), "Should NOT fail if no config exists");
+        assert!(result.unwrap().is_none(), "Should return None for config");
     }
 }
