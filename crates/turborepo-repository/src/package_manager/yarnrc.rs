@@ -110,10 +110,9 @@ mod test {
 
     #[test]
     fn test_parses_catalog() {
-        let yarnrc = YarnRc::from_reader(
-            b"catalog:\n  lodash: ^4.17.21\n  react: ^18.2.0".as_slice(),
-        )
-        .unwrap();
+        let yarnrc =
+            YarnRc::from_reader(b"catalog:\n  lodash: ^4.17.21\n  react: ^18.2.0".as_slice())
+                .unwrap();
         let mut expected_catalog = Map::new();
         expected_catalog.insert("lodash".to_string(), "^4.17.21".to_string());
         expected_catalog.insert("react".to_string(), "^18.2.0".to_string());
@@ -130,8 +129,7 @@ mod test {
     #[test]
     fn test_parses_named_catalogs() {
         let yarnrc = YarnRc::from_reader(
-            b"catalogs:\n  react18:\n    react: ^18.2.0\n  react17:\n    react: ^17.0.2"
-                .as_slice(),
+            b"catalogs:\n  react18:\n    react: ^18.2.0\n  react17:\n    react: ^17.0.2".as_slice(),
         )
         .unwrap();
         let mut react18 = Map::new();
