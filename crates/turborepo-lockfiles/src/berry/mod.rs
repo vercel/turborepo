@@ -49,7 +49,6 @@ pub enum Error {
 // We depend on BTree iteration being sorted for correct serialization
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
-// Type alias for catalog storage - uses BTreeMap to match existing Map type
 type CatalogMap = Map<String, Map<String, String>>;
 
 #[derive(Debug)]
@@ -67,7 +66,7 @@ pub struct BerryLockfile {
     overrides: Map<Resolution, String>,
     // Map from workspace paths to package locators
     workspace_path_to_locator: HashMap<String, Locator<'static>>,
-    // Yarn 4+ catalog support - Arc for O(1) cloning in subgraph()
+    // Yarn 4+ catalog support
     catalogs: Arc<CatalogMap>,
 }
 
@@ -160,7 +159,6 @@ impl BerryLockfile {
         }
 
         let (overrides, catalogs) = if let Some(manifest) = manifest {
-            // Use into_parts() to take ownership and avoid cloning
             manifest.into_parts()?
         } else {
             (Map::new(), Map::new())
@@ -394,7 +392,6 @@ impl BerryLockfile {
             extensions: self.extensions.clone(),
             overrides: self.overrides.clone(),
             workspace_path_to_locator: self.workspace_path_to_locator.clone(),
-            // Arc::clone is O(1) - just increments reference count
             catalogs: Arc::clone(&self.catalogs),
         })
     }
@@ -406,7 +403,6 @@ impl BerryLockfile {
         range: &str,
     ) -> Result<Descriptor<'static>, Error> {
         // Handle catalog: protocol (Yarn 4+)
-        // Fast path: skip catalog logic if no catalogs exist or not a catalog reference
         let resolved_range = if !self.catalogs.is_empty() && range.starts_with("catalog:") {
             let catalog_spec = &range["catalog:".len()..];
             // catalog: with no name uses the default catalog
@@ -609,8 +605,6 @@ impl BerryManifest {
         Self::new(resolutions, None, None)
     }
 
-    /// Consumes the manifest and returns (overrides, catalogs).
-    /// This avoids cloning catalog data by taking ownership.
     pub fn into_parts(self) -> Result<(Map<Resolution, String>, CatalogMap), Error> {
         let overrides = self
             .resolutions
@@ -1284,7 +1278,8 @@ mod test {
             LockfileData::from_bytes(include_bytes!("../../fixtures/yarn4-catalog.lock")).unwrap();
 
         // Create a manifest with both default and named catalogs
-        // The fixture has `lodash: "catalog:"` so we need the default catalog for construction
+        // The fixture has `lodash: "catalog:"` so we need the default catalog for
+        // construction
         let mut default_catalog = Map::new();
         default_catalog.insert("lodash".to_string(), "^4.17.21".to_string());
 
@@ -1317,7 +1312,8 @@ mod test {
         let data =
             LockfileData::from_bytes(include_bytes!("../../fixtures/yarn4-catalog.lock")).unwrap();
 
-        // Empty catalog - lodash is not defined but the fixture has catalog: dependencies
+        // Empty catalog - lodash is not defined but the fixture has catalog:
+        // dependencies
         let catalog = Map::new();
 
         let manifest = BerryManifest {
@@ -1326,8 +1322,8 @@ mod test {
             catalogs: None,
         };
 
-        // The lockfile construction should fail because the fixture has a catalog: dependency
-        // but the catalog doesn't have the entry for lodash
+        // The lockfile construction should fail because the fixture has a catalog:
+        // dependency but the catalog doesn't have the entry for lodash
         let result = BerryLockfile::new(data, Some(manifest));
 
         assert!(result.is_err());
@@ -1360,7 +1356,10 @@ mod test {
 
         assert!(result.is_err());
         let err = result.unwrap_err();
-        assert!(err.to_string().contains("not found in catalog 'nonexistent'"));
+        assert!(
+            err.to_string()
+                .contains("not found in catalog 'nonexistent'")
+        );
     }
 
     #[test]
