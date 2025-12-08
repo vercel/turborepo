@@ -117,9 +117,6 @@ importers:
       '@vercel/speed-insights':
         specifier: 1.2.0
         version: 1.2.0(next@15.5.7)(react@19.0.0)
-      algoliasearch:
-        specifier: ^4.23.3
-        version: 4.24.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -137,13 +134,13 @@ importers:
         version: 12.2.0(react-dom@19.0.0)(react@19.0.0)
       fumadocs-core:
         specifier: ^14
-        version: 14.7.7(@types/react@18.3.1)(algoliasearch@4.24.0)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)
+        version: 14.7.7(@types/react@18.3.1)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)
       fumadocs-mdx:
         specifier: ^11
         version: 11.5.8(acorn@8.14.1)(fumadocs-core@14.7.7)(next@15.5.7)
       fumadocs-openapi:
         specifier: ^7
-        version: 7.0.1(@types/react-dom@18.3.0)(@types/react@18.3.1)(algoliasearch@4.24.0)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)(tailwindcss@3.4.17)
+        version: 7.0.1(@types/react-dom@18.3.0)(@types/react@18.3.1)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)(tailwindcss@3.4.17)
       fumadocs-ui:
         specifier: ^14
         version: 14.7.7(@types/react-dom@18.3.0)(@types/react@18.3.1)(fumadocs-core@14.7.7)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)(tailwindcss@3.4.17)
@@ -1289,112 +1286,6 @@ packages:
     dependencies:
       tunnel: 0.0.6
       undici: 5.28.3
-    dev: false
-
-  /@algolia/cache-browser-local-storage@4.24.0:
-    resolution: {integrity: sha512-t63W9BnoXVrGy9iYHBgObNXqYXM3tYXCjDSHeNwnsc324r4o5UiVKUiAB4THQ5z9U5hTj6qUvwg/Ez43ZD85ww==}
-    dependencies:
-      '@algolia/cache-common': 4.24.0
-    dev: false
-
-  /@algolia/cache-common@4.24.0:
-    resolution: {integrity: sha512-emi+v+DmVLpMGhp0V9q9h5CdkURsNmFC+cOS6uK9ndeJm9J4TiqSvPYVu+THUP8P/S08rxf5x2P+p3CfID0Y4g==}
-    dev: false
-
-  /@algolia/cache-in-memory@4.24.0:
-    resolution: {integrity: sha512-gDrt2so19jW26jY3/MkFg5mEypFIPbPoXsQGQWAi6TrCPsNOSEYepBMPlucqWigsmEy/prp5ug2jy/N3PVG/8w==}
-    dependencies:
-      '@algolia/cache-common': 4.24.0
-    dev: false
-
-  /@algolia/client-account@4.24.0:
-    resolution: {integrity: sha512-adcvyJ3KjPZFDybxlqnf+5KgxJtBjwTPTeyG2aOyoJvx0Y8dUQAEOEVOJ/GBxX0WWNbmaSrhDURMhc+QeevDsA==}
-    dependencies:
-      '@algolia/client-common': 4.24.0
-      '@algolia/client-search': 4.24.0
-      '@algolia/transporter': 4.24.0
-    dev: false
-
-  /@algolia/client-analytics@4.24.0:
-    resolution: {integrity: sha512-y8jOZt1OjwWU4N2qr8G4AxXAzaa8DBvyHTWlHzX/7Me1LX8OayfgHexqrsL4vSBcoMmVw2XnVW9MhL+Y2ZDJXg==}
-    dependencies:
-      '@algolia/client-common': 4.24.0
-      '@algolia/client-search': 4.24.0
-      '@algolia/requester-common': 4.24.0
-      '@algolia/transporter': 4.24.0
-    dev: false
-
-  /@algolia/client-common@4.24.0:
-    resolution: {integrity: sha512-bc2ROsNL6w6rqpl5jj/UywlIYC21TwSSoFHKl01lYirGMW+9Eek6r02Tocg4gZ8HAw3iBvu6XQiM3BEbmEMoiA==}
-    dependencies:
-      '@algolia/requester-common': 4.24.0
-      '@algolia/transporter': 4.24.0
-    dev: false
-
-  /@algolia/client-personalization@4.24.0:
-    resolution: {integrity: sha512-l5FRFm/yngztweU0HdUzz1rC4yoWCFo3IF+dVIVTfEPg906eZg5BOd1k0K6rZx5JzyyoP4LdmOikfkfGsKVE9w==}
-    dependencies:
-      '@algolia/client-common': 4.24.0
-      '@algolia/requester-common': 4.24.0
-      '@algolia/transporter': 4.24.0
-    dev: false
-
-  /@algolia/client-search@4.24.0:
-    resolution: {integrity: sha512-uRW6EpNapmLAD0mW47OXqTP8eiIx5F6qN9/x/7HHO6owL3N1IXqydGwW5nhDFBrV+ldouro2W1VX3XlcUXEFCA==}
-    dependencies:
-      '@algolia/client-common': 4.24.0
-      '@algolia/requester-common': 4.24.0
-      '@algolia/transporter': 4.24.0
-    dev: false
-
-  /@algolia/logger-common@4.24.0:
-    resolution: {integrity: sha512-LLUNjkahj9KtKYrQhFKCzMx0BY3RnNP4FEtO+sBybCjJ73E8jNdaKJ/Dd8A/VA4imVHP5tADZ8pn5B8Ga/wTMA==}
-    dev: false
-
-  /@algolia/logger-console@4.24.0:
-    resolution: {integrity: sha512-X4C8IoHgHfiUROfoRCV+lzSy+LHMgkoEEU1BbKcsfnV0i0S20zyy0NLww9dwVHUWNfPPxdMU+/wKmLGYf96yTg==}
-    dependencies:
-      '@algolia/logger-common': 4.24.0
-    dev: false
-
-  /@algolia/recommend@4.24.0:
-    resolution: {integrity: sha512-P9kcgerfVBpfYHDfVZDvvdJv0lEoCvzNlOy2nykyt5bK8TyieYyiD0lguIJdRZZYGre03WIAFf14pgE+V+IBlw==}
-    dependencies:
-      '@algolia/cache-browser-local-storage': 4.24.0
-      '@algolia/cache-common': 4.24.0
-      '@algolia/cache-in-memory': 4.24.0
-      '@algolia/client-common': 4.24.0
-      '@algolia/client-search': 4.24.0
-      '@algolia/logger-common': 4.24.0
-      '@algolia/logger-console': 4.24.0
-      '@algolia/requester-browser-xhr': 4.24.0
-      '@algolia/requester-common': 4.24.0
-      '@algolia/requester-node-http': 4.24.0
-      '@algolia/transporter': 4.24.0
-    dev: false
-
-  /@algolia/requester-browser-xhr@4.24.0:
-    resolution: {integrity: sha512-Z2NxZMb6+nVXSjF13YpjYTdvV3032YTBSGm2vnYvYPA6mMxzM3v5rsCiSspndn9rzIW4Qp1lPHBvuoKJV6jnAA==}
-    dependencies:
-      '@algolia/requester-common': 4.24.0
-    dev: false
-
-  /@algolia/requester-common@4.24.0:
-    resolution: {integrity: sha512-k3CXJ2OVnvgE3HMwcojpvY6d9kgKMPRxs/kVohrwF5WMr2fnqojnycZkxPoEg+bXm8fi5BBfFmOqgYztRtHsQA==}
-    dev: false
-
-  /@algolia/requester-node-http@4.24.0:
-    resolution: {integrity: sha512-JF18yTjNOVYvU/L3UosRcvbPMGT9B+/GQWNWnenIImglzNVGpyzChkXLnrSf6uxwVNO6ESGu6oN8MqcGQcjQJw==}
-    dependencies:
-      '@algolia/requester-common': 4.24.0
-    dev: false
-
-  /@algolia/transporter@4.24.0:
-    resolution: {integrity: sha512-86nI7w6NzWxd1Zp9q3413dRshDqAzSbsQjhcDhPIatEFiZrL1/TjnHL8S7jVKFePlIMzDsZWXAXwXzcok9c5oA==}
-    dependencies:
-      '@algolia/cache-common': 4.24.0
-      '@algolia/logger-common': 4.24.0
-      '@algolia/requester-common': 4.24.0
     dev: false
 
   /@alloc/quick-lru@5.2.0:
@@ -6382,26 +6273,6 @@ packages:
       require-from-string: 2.0.2
     dev: false
 
-  /algoliasearch@4.24.0:
-    resolution: {integrity: sha512-bf0QV/9jVejssFBmz2HQLxUadxk574t4iwjCKp5E7NBzwKkrDEhKPISIIjAU/p6K5qDx3qoeh4+26zWN1jmw3g==}
-    dependencies:
-      '@algolia/cache-browser-local-storage': 4.24.0
-      '@algolia/cache-common': 4.24.0
-      '@algolia/cache-in-memory': 4.24.0
-      '@algolia/client-account': 4.24.0
-      '@algolia/client-analytics': 4.24.0
-      '@algolia/client-common': 4.24.0
-      '@algolia/client-personalization': 4.24.0
-      '@algolia/client-search': 4.24.0
-      '@algolia/logger-common': 4.24.0
-      '@algolia/logger-console': 4.24.0
-      '@algolia/recommend': 4.24.0
-      '@algolia/requester-browser-xhr': 4.24.0
-      '@algolia/requester-common': 4.24.0
-      '@algolia/requester-node-http': 4.24.0
-      '@algolia/transporter': 4.24.0
-    dev: false
-
   /ansi-escapes@4.3.2:
     resolution: {integrity: sha512-gKXj5ALrKWQLsYG9jlTRmR/xKluxHV+Z9QEwNIgCfM1/uwPMCuzVVnh5mwTd+OuBZcwSIMbqssNWRm1lE51QaQ==}
     engines: {node: '>=8'}
@@ -9873,7 +9744,7 @@ packages:
     requiresBuild: true
     optional: true
 
-  /fumadocs-core@14.7.7(@types/react@18.3.1)(algoliasearch@4.24.0)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0):
+  /fumadocs-core@14.7.7(@types/react@18.3.1)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0):
     resolution: {integrity: sha512-ZP2sFZki291se9R6/K959a6CDNqM+oQKejEygViSTQnkCQ8UWApRQHUZQS670sub8ysBFE8aGlgsnAs+n9HlyA==}
     peerDependencies:
       '@orama/tokenizers': 2.x.x
@@ -9900,7 +9771,6 @@ packages:
       '@orama/orama': 2.1.1
       '@shikijs/rehype': 2.5.0
       '@shikijs/transformers': 2.5.0
-      algoliasearch: 4.24.0
       github-slugger: 2.0.0
       hast-util-to-estree: 3.1.3
       hast-util-to-jsx-runtime: 2.3.6
@@ -9920,7 +9790,7 @@ packages:
       - supports-color
     dev: false
 
-  /fumadocs-core@15.0.17(@types/react@18.3.1)(algoliasearch@4.24.0)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0):
+  /fumadocs-core@15.0.17(@types/react@18.3.1)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0):
     resolution: {integrity: sha512-bj9nVvQKK59bcS7L/x06Kg0W6zRqE8ZzztFf4h8DtQeeppco86E5uWkSD5FPy4jBXRJATNu1cZ3rPsNXV08psw==}
     peerDependencies:
       '@oramacloud/client': 1.x.x || 2.x.x
@@ -9944,7 +9814,6 @@ packages:
       '@orama/orama': 3.1.4
       '@shikijs/rehype': 3.2.1
       '@shikijs/transformers': 3.2.1
-      algoliasearch: 4.24.0
       github-slugger: 2.0.0
       hast-util-to-estree: 3.1.3
       hast-util-to-jsx-runtime: 2.3.6
@@ -9982,7 +9851,7 @@ packages:
       esbuild: 0.25.2
       estree-util-value-to-estree: 3.3.2
       fast-glob: 3.3.3
-      fumadocs-core: 14.7.7(@types/react@18.3.1)(algoliasearch@4.24.0)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)
+      fumadocs-core: 14.7.7(@types/react@18.3.1)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)
       gray-matter: 4.0.3
       lru-cache: 11.1.0
       next: 15.5.7(react-dom@19.0.0)(react@19.0.0)
@@ -9993,7 +9862,7 @@ packages:
       - supports-color
     dev: false
 
-  /fumadocs-openapi@7.0.1(@types/react-dom@18.3.0)(@types/react@18.3.1)(algoliasearch@4.24.0)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)(tailwindcss@3.4.17):
+  /fumadocs-openapi@7.0.1(@types/react-dom@18.3.0)(@types/react@18.3.1)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)(tailwindcss@3.4.17):
     resolution: {integrity: sha512-LDwOwPclEvtSnjfcDlA4etMme5raA8oJwuh8SU98GEbCNvu+keIzz5o1gJXW9j5nR6UdJCydBjZmwV5UWrkaJQ==}
     peerDependencies:
       '@scalar/api-client-react': '*'
@@ -10012,7 +9881,7 @@ packages:
       ajv-draft-04: 1.0.0(ajv@8.17.1)
       class-variance-authority: 0.7.1
       fast-glob: 3.3.3
-      fumadocs-core: 15.0.17(@types/react@18.3.1)(algoliasearch@4.24.0)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)
+      fumadocs-core: 15.0.17(@types/react@18.3.1)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)
       fumadocs-ui: 15.0.17(@types/react-dom@18.3.0)(@types/react@18.3.1)(fumadocs-core@15.0.17)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)(tailwindcss@3.4.17)
       github-slugger: 2.0.0
       hast-util-to-jsx-runtime: 2.3.6
@@ -10060,7 +9929,7 @@ packages:
       '@radix-ui/react-slot': 1.1.2(@types/react@18.3.1)(react@19.0.0)
       '@radix-ui/react-tabs': 1.1.3(@types/react-dom@18.3.0)(@types/react@18.3.1)(react-dom@19.0.0)(react@19.0.0)
       class-variance-authority: 0.7.1
-      fumadocs-core: 14.7.7(@types/react@18.3.1)(algoliasearch@4.24.0)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)
+      fumadocs-core: 14.7.7(@types/react@18.3.1)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)
       lodash.merge: 4.6.2
       lucide-react: 0.473.0(react@19.0.0)
       next: 15.5.7(react-dom@19.0.0)(react@19.0.0)
@@ -10098,7 +9967,7 @@ packages:
       '@radix-ui/react-slot': 1.1.2(@types/react@18.3.1)(react@19.0.0)
       '@radix-ui/react-tabs': 1.1.3(@types/react-dom@18.3.0)(@types/react@18.3.1)(react-dom@19.0.0)(react@19.0.0)
       class-variance-authority: 0.7.1
-      fumadocs-core: 15.0.17(@types/react@18.3.1)(algoliasearch@4.24.0)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)
+      fumadocs-core: 15.0.17(@types/react@18.3.1)(next@15.5.7)(react-dom@19.0.0)(react@19.0.0)
       lodash.merge: 4.6.2
       lucide-react: 0.479.0(react@19.0.0)
       next: 15.5.7(react-dom@19.0.0)(react@19.0.0)
