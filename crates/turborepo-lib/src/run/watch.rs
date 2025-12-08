@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use futures::StreamExt;
+use futures::{future::join_all, StreamExt};
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{select, sync::Notify, task::JoinHandle};
@@ -211,9 +211,10 @@ impl WatchClient {
                     // Clean up currently running tasks
                     self.active_runs.retain(|h| !h.run_task.is_finished());
 
-                    match &mut changed_packages {
+                    match changed_packages {
                         ChangedPackages::Some(pkgs) => {
-                            self.stop_impacted_tasks(pkgs).await;
+                            let impacted = self.stop_impacted_tasks(&pkgs).await;
+                            changed_packages = ChangedPackages::Some(impacted);
                         }
                         ChangedPackages::All => {
                             for handle in self.active_runs.drain(..) {
@@ -275,7 +276,7 @@ impl WatchClient {
         Ok(())
     }
 
-    async fn stop_impacted_tasks(&self, pkgs: &mut HashSet<PackageName>) {
+    async fn stop_impacted_tasks(&self, pkgs: &HashSet<PackageName>) -> HashSet<PackageName> {
         let engine = self.run.engine();
         let mut tasks_to_stop = HashSet::new();
 
@@ -293,17 +294,20 @@ impl WatchClient {
             }
         }
 
-        let mut impacted_packages = HashSet::new();
-        for task_id in &tasks_to_stop {
-            impacted_packages.insert(PackageName::from(task_id.package()));
-        }
-
-        *pkgs = impacted_packages;
+        let impacted_packages: HashSet<_> = tasks_to_stop
+            .iter()
+            .map(|task_id| PackageName::from(task_id.package()))
+            .collect();
 
         let task_ids: Vec<_> = tasks_to_stop.into_iter().collect();
-        for handle in &self.active_runs {
-            handle.stopper.stop_tasks(&task_ids).await;
-        }
+        join_all(
+            self.active_runs
+                .iter()
+                .map(|handle| handle.stopper.stop_tasks(&task_ids)),
+        )
+        .await;
+
+        impacted_packages
     }
 
     /// Shut down any resources that run as part of watch.

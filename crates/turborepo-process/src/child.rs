@@ -690,12 +690,12 @@ impl Child {
 
     /// Mark this child as being stopped as part of a ProcessManager shutdown
     pub fn set_closing(&self) {
-        self.closing.store(true, Ordering::SeqCst);
+        self.closing.store(true, Ordering::Release);
     }
 
     /// Check if this child was stopped as part of a ProcessManager shutdown
     pub fn is_closing(&self) -> bool {
-        self.closing.load(Ordering::SeqCst)
+        self.closing.load(Ordering::Acquire)
     }
 }
 
