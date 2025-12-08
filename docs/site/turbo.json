@@ -4,7 +4,6 @@
   "tasks": {
     "build": {
       "env": [
-        "NEXT_PUBLIC_ALGOLIA_INDEX",
         "TURBOREPO_SFDC_CAMPAIGN_ID",
         "CONVERT_KIT_FORM_ID",
         "TINYBIRD_TIME_SAVED_TOKEN",
@@ -49,11 +48,6 @@
     },
     "check-types": {
       "dependsOn": ["collect-examples-data", "generate-openapi"]
-    },
-    "index-docs": {
-      "dependsOn": ["build"],
-      "env": ["ALGOLIA_APP_ID", "ALGOLIA_API_KEY", "NEXT_PUBLIC_ALGOLIA_INDEX"],
-      "cache": false
     },
     "generate-openapi": {
       "env": ["BASE_URL", "PROTECTION_BYPASS_SECRET"],

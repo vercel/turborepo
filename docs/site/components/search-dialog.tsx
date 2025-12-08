@@ -1,24 +1,14 @@
 "use client";
 
-import algo from "algoliasearch/lite";
 import type { SharedProps } from "fumadocs-ui/components/dialog/search";
-import FumaSearchDialog from "fumadocs-ui/components/dialog/search-algolia";
+import DefaultSearchDialog from "fumadocs-ui/components/dialog/search-default";
 import { gitHubRepoUrl } from "#lib/constants.ts";
-
-// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Environment variable.
-const appId = process.env.NEXT_PUBLIC_ALGOLIA_APP_ID!;
-// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Environment variable.
-const readKey = process.env.NEXT_PUBLIC_ALGOLIA_READ_KEY!;
-// eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- Environment variable.
-const indexName = process.env.NEXT_PUBLIC_ALGOLIA_INDEX!;
-
-const client = algo(appId, readKey);
-const index = client.initIndex(indexName);
 
 export function SearchDialog(props: SharedProps): JSX.Element {
   return (
-    <FumaSearchDialog
-      index={index}
+    <DefaultSearchDialog
+      type="fetch"
+      api="/api/search"
       {...props}
       links={[
         ["Home", "/"],
