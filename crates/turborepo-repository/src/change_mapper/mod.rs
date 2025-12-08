@@ -263,10 +263,12 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         &self,
         lockfile_content: &[u8],
     ) -> Result<Vec<ExternalDependencyChange>, ChangeMapError> {
+        // We pass None for yarnrc since we're only comparing lockfiles for changes,
+        // not resolving package dependencies. Catalog resolution isn't needed here.
         let previous_lockfile = self
             .pkg_graph
             .package_manager()
-            .parse_lockfile(self.pkg_graph.root_package_json(), lockfile_content)?;
+            .parse_lockfile(self.pkg_graph.root_package_json(), lockfile_content, None)?;
 
         let additional_packages = self
             .pkg_graph

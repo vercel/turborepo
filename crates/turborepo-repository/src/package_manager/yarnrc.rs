@@ -14,6 +14,8 @@ pub enum Error {
     SerdeYaml(#[from] serde_yaml::Error),
 }
 
+type Map<K, V> = std::collections::BTreeMap<K, V>;
+
 /// A yarnrc.yaml file representing settings affecting the package graph.
 #[derive(Debug, PartialEq, Eq, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +26,12 @@ pub struct YarnRc {
     /// the package in the dependency graph
     #[serde(default = "default_enable_transparent_workspaces")]
     pub enable_transparent_workspaces: bool,
+    /// Yarn 4+ catalog support - default catalog
+    #[serde(default)]
+    pub catalog: Option<Map<String, String>>,
+    /// Yarn 4+ catalog support - named catalogs
+    #[serde(default)]
+    pub catalogs: Option<Map<String, Map<String, String>>>,
 }
 
 fn default_enable_transparent_workspaces() -> bool {
@@ -34,6 +42,8 @@ impl Default for YarnRc {
     fn default() -> YarnRc {
         YarnRc {
             enable_transparent_workspaces: default_enable_transparent_workspaces(),
+            catalog: None,
+            catalogs: None,
         }
     }
 }
@@ -65,7 +75,9 @@ mod test {
         assert_eq!(
             empty,
             YarnRc {
-                enable_transparent_workspaces: true
+                enable_transparent_workspaces: true,
+                catalog: None,
+                catalogs: None,
             }
         );
     }
@@ -76,7 +88,9 @@ mod test {
         assert_eq!(
             empty,
             YarnRc {
-                enable_transparent_workspaces: false
+                enable_transparent_workspaces: false,
+                catalog: None,
+                catalogs: None,
             }
         );
     }
@@ -87,7 +101,52 @@ mod test {
         assert_eq!(
             empty,
             YarnRc {
-                enable_transparent_workspaces: true
+                enable_transparent_workspaces: true,
+                catalog: None,
+                catalogs: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_parses_catalog() {
+        let yarnrc = YarnRc::from_reader(
+            b"catalog:\n  lodash: ^4.17.21\n  react: ^18.2.0".as_slice(),
+        )
+        .unwrap();
+        let mut expected_catalog = Map::new();
+        expected_catalog.insert("lodash".to_string(), "^4.17.21".to_string());
+        expected_catalog.insert("react".to_string(), "^18.2.0".to_string());
+        assert_eq!(
+            yarnrc,
+            YarnRc {
+                enable_transparent_workspaces: true,
+                catalog: Some(expected_catalog),
+                catalogs: None,
+            }
+        );
+    }
+
+    #[test]
+    fn test_parses_named_catalogs() {
+        let yarnrc = YarnRc::from_reader(
+            b"catalogs:\n  react18:\n    react: ^18.2.0\n  react17:\n    react: ^17.0.2"
+                .as_slice(),
+        )
+        .unwrap();
+        let mut react18 = Map::new();
+        react18.insert("react".to_string(), "^18.2.0".to_string());
+        let mut react17 = Map::new();
+        react17.insert("react".to_string(), "^17.0.2".to_string());
+        let mut expected_catalogs = Map::new();
+        expected_catalogs.insert("react18".to_string(), react18);
+        expected_catalogs.insert("react17".to_string(), react17);
+        assert_eq!(
+            yarnrc,
+            YarnRc {
+                enable_transparent_workspaces: true,
+                catalog: None,
+                catalogs: Some(expected_catalogs),
             }
         );
     }
