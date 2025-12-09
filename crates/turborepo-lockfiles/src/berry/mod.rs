@@ -1386,7 +1386,7 @@ mod test {
 
         // Create subgraph with the resolved package
         let subgraph = lockfile
-            .subgraph(&["apps/app-a".into()], &[pkg.key.clone()])
+            .subgraph(&["apps/app-a".into()], std::slice::from_ref(&pkg.key))
             .unwrap();
 
         // Subgraph should still be able to resolve catalog references
