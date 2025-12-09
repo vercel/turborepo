@@ -2,12 +2,13 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useParams, usePathname } from "next/navigation";
 import type { PageTree, TOCItemType } from "fumadocs-core/server";
 import { findNeighbour } from "fumadocs-core/server";
 import { useTreeContext, useTreePath } from "fumadocs-ui/provider";
 import * as Base from "fumadocs-core/toc";
 import { useActiveAnchor } from "fumadocs-core/toc";
+import { repoDocsPages } from "#app/source.ts";
 import { SidebarMenu } from "#components/ui/sidebar.tsx";
 import { RemoteCacheCounter } from "#components/remote-cache-counter/index.tsx";
 import { AlignmentLeft } from "../icons/alignment-left";
@@ -21,7 +22,6 @@ import {
   SidebarFolderTrigger,
   SidebarSeparator,
 } from "./sidebar";
-import { useTOC } from "./toc-context";
 
 export const LayoutBody = ({
   children,
@@ -167,14 +167,15 @@ const TOCItem = ({ item }: { item: TOCItemType }) => {
 };
 
 export const TableOfContents = () => {
-  const toc = useTOC();
+  const params = useParams<{ code: string; slug: Array<string> }>();
+  const page = repoDocsPages.getPage(params.slug);
+  if (!page) return null;
+  const { data } = page;
   const ref = React.useRef<HTMLDivElement>(null);
-
-  if (!toc) return <RemoteCacheCounter />;
 
   return (
     <>
-      <Base.AnchorProvider toc={toc}>
+      <Base.AnchorProvider toc={data.toc}>
         <Base.ScrollProvider containerRef={ref}>
           <span className="-ms-0.5 flex mb-2 items-center gap-x-1.5 text-sm font-medium text-gray-1000">
             <AlignmentLeft className="w-3 h-3" />
@@ -182,7 +183,7 @@ export const TableOfContents = () => {
           </span>
           <div className="max-h-[calc(100vh-300px)] overflow-auto">
             <ul className="flex flex-col gap-y-2.5 text-sm text-gray-900">
-              {toc.map((item) => {
+              {data.toc.map((item) => {
                 return <TOCItem key={item.url} item={item} />;
               })}
             </ul>

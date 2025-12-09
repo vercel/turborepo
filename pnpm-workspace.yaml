@@ -1,19 +1,11 @@
 packages:
-  - cli
-  - docs/*
-  - packages/*
-  - turborepo-tests/*
+  - "cli"
+  - "docs/*"
+  - "packages/*"
+  - "turborepo-tests/*"
   # Intentionally exclude the `npm` `turbo` package from the workspaces.
   - "!packages/turbo"
-  - crates/*/js
+  - "crates/*/js"
   - examples
   # Exclude the non-monorepo example as it should be treated as independent of this repo
   - "!examples/non-monorepo"
-
-onlyBuiltDependencies:
-  - "@swc/core"
-  - "@vercel/speed-insights"
-  - core-js-pure
-  - esbuild
-  - sharp
-  - unrs-resolver
