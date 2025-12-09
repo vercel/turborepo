@@ -168,6 +168,14 @@ impl ExperimentalOtelOptions {
             &mut options,
         )?;
 
+        if let Some(raw) = get_non_empty(map, "experimental_otel_use_remote_cache_token") {
+            options.use_remote_cache_token = Some(parse_bool_flag(
+                raw,
+                "TURBO_EXPERIMENTAL_OTEL_USE_REMOTE_CACHE_TOKEN",
+            )?);
+            touched = true;
+        }
+
         Ok(touched.then_some(options))
     }
 }
@@ -541,5 +549,34 @@ mod tests {
             Some(&"test".to_string())
         );
         assert_eq!(opts.metrics.unwrap().run_summary, Some(true));
+    }
+
+    #[test]
+    fn test_from_env_map_use_remote_cache_token_enabled() {
+        let map = build_env_map(&[("experimental_otel_use_remote_cache_token", "1")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().use_remote_cache_token, Some(true));
+    }
+
+    #[test]
+    fn test_from_env_map_use_remote_cache_token_disabled() {
+        let map = build_env_map(&[("experimental_otel_use_remote_cache_token", "0")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().use_remote_cache_token, Some(false));
+    }
+
+    #[test]
+    fn test_from_env_map_use_remote_cache_token_invalid() {
+        let map = build_env_map(&[("experimental_otel_use_remote_cache_token", "invalid")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InvalidExperimentalOtelConfig { message } => {
+                assert!(message.contains("TURBO_EXPERIMENTAL_OTEL_USE_REMOTE_CACHE_TOKEN"));
+            }
+            _ => panic!("Expected InvalidExperimentalOtelConfig"),
+        }
     }
 }
