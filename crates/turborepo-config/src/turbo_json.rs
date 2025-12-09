@@ -171,6 +171,7 @@ fn convert_raw_observability_otel(
         timeout_ms: raw.timeout_ms.map(|timeout| *timeout.as_inner()),
         resource: raw.resource.map(convert_key_values),
         metrics,
+        use_remote_cache_token: raw.use_remote_cache_token.map(|flag| *flag.as_inner()),
     })
 }
 

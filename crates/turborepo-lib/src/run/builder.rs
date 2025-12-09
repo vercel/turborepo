@@ -8,7 +8,7 @@ use std::{
 use chrono::Local;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
+use turborepo_analytics::{AnalyticsHandle, AnalyticsSender, start_analytics};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
@@ -24,10 +24,10 @@ use turborepo_scm::SCM;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::TaskName;
 use turborepo_telemetry::events::{
+    EventBuilder, TrackedErrors,
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
-    EventBuilder, TrackedErrors,
 };
 use turborepo_types::{DryRunMode, UIMode};
 use turborepo_ui::ColorConfig;
@@ -47,7 +47,7 @@ use crate::{
     microfrontends::MicrofrontendsConfigs,
     observability,
     opts::Opts,
-    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
+    run::{Error, Run, RunCache, scope, task_access::TaskAccess},
     shim::TurboState,
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
     DaemonConnector,
@@ -485,9 +485,21 @@ impl RunBuilder {
             .should_print_prelude_override
             .unwrap_or_else(|| self.will_execute_tasks());
 
-        let observability_handle = match self.opts.experimental_observability.as_ref() {
-            Some(opts) => observability::Handle::try_init(opts),
-            None => None,
+        let observability_handle = match (
+            self.opts.future_flags.experimental_observability,
+            self.opts.experimental_observability.as_ref(),
+        ) {
+            (true, Some(opts)) => {
+                let token = opts
+                    .otel
+                    .as_ref()
+                    .and_then(|otel| otel.use_remote_cache_token)
+                    .unwrap_or(false)
+                    .then(|| self.api_auth.as_ref().map(|auth| auth.token.as_str()))
+                    .flatten();
+                observability::Handle::try_init(opts, token)
+            }
+            _ => None,
         };
 
         Ok(Run {

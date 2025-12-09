@@ -79,9 +79,12 @@ impl Handle {
     /// `experimentalObservability.otel` in turbo.json or via environment
     /// variables/CLI flags). In the future, this may dispatch to different
     /// backends based on the configuration provided.
-    pub(crate) fn try_init(options: &ExperimentalObservabilityOptions) -> Option<Self> {
+    pub(crate) fn try_init(
+        options: &ExperimentalObservabilityOptions,
+        token: Option<&str>,
+    ) -> Option<Self> {
         if let Some(otel_options) = options.otel.as_ref() {
-            otel::try_init_otel(otel_options)
+            otel::try_init_otel(otel_options, token)
         } else {
             None
         }

@@ -81,6 +81,7 @@ pub struct ExperimentalOtelOptions {
     pub timeout_ms: Option<u64>,
     pub resource: Option<BTreeMap<String, String>>,
     pub metrics: Option<ExperimentalOtelMetricsOptions>,
+    pub use_remote_cache_token: Option<bool>,
 }
 
 impl ExperimentalOtelOptions {
@@ -91,6 +92,7 @@ impl ExperimentalOtelOptions {
             && self.headers.as_ref().map(|m| m.is_empty()).unwrap_or(true)
             && self.timeout_ms.is_none()
             && self.resource.as_ref().map(|m| m.is_empty()).unwrap_or(true)
+            && self.use_remote_cache_token.is_none()
             && self
                 .metrics
                 .as_ref()
