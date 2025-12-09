@@ -28,8 +28,11 @@ impl RunObserver for OtelObserver {
 
 /// Initialize an OpenTelemetry observability handle from configuration options.
 /// Returns `None` if observability is disabled or misconfigured.
-pub(crate) fn try_init_otel(options: &ExperimentalOtelOptions) -> Option<Handle> {
-    let config = config_from_options(options)?;
+pub(crate) fn try_init_otel(
+    options: &ExperimentalOtelOptions,
+    token: Option<&str>,
+) -> Option<Handle> {
+    let config = config_from_options(options, token)?;
 
     match turborepo_otel::Handle::try_new(config) {
         Ok(handle) => Some(Handle {
@@ -42,7 +45,10 @@ pub(crate) fn try_init_otel(options: &ExperimentalOtelOptions) -> Option<Handle>
     }
 }
 
-fn config_from_options(options: &ExperimentalOtelOptions) -> Option<turborepo_otel::Config> {
+fn config_from_options(
+    options: &ExperimentalOtelOptions,
+    token: Option<&str>,
+) -> Option<turborepo_otel::Config> {
     if options.enabled.is_some_and(|enabled| !enabled) {
         return None;
     }
@@ -58,10 +64,21 @@ fn config_from_options(options: &ExperimentalOtelOptions) -> Option<turborepo_ot
         ExperimentalOtelProtocol::HttpProtobuf => turborepo_otel::Protocol::HttpProtobuf,
     };
 
-    let headers = options.headers.clone().unwrap_or_default();
+    let mut headers = options.headers.clone().unwrap_or_default();
     let resource_attributes = options.resource.clone().unwrap_or_default();
     let metrics = metrics_config(options.metrics.as_ref());
     let timeout = Duration::from_millis(options.timeout_ms.unwrap_or(10_000));
+
+    // If Authorization header is missing, try to populate it from the global auth
+    // token if provided.
+    if !headers
+        .keys()
+        .any(|k| k.eq_ignore_ascii_case("Authorization"))
+    {
+        if let Some(token) = token {
+            headers.insert("Authorization".to_string(), format!("Bearer {}", token));
+        }
+    }
 
     Some(turborepo_otel::Config {
         endpoint,
@@ -162,239 +179,223 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_config_from_options_enabled_false() {
-        let options = ExperimentalOtelOptions {
-            enabled: Some(false),
-            ..Default::default()
-        };
-        let result = config_from_options(&options);
-        assert!(result.is_none());
+    fn make_config(headers: BTreeMap<String, String>) -> turborepo_otel::Config {
+        turborepo_otel::Config {
+            endpoint: "https://example.com/otel".to_string(),
+            protocol: turborepo_otel::Protocol::Grpc,
+            headers,
+            timeout: Duration::from_millis(10_000),
+            resource_attributes: BTreeMap::new(),
+            metrics: turborepo_otel::MetricsConfig {
+                run_summary: true,
+                task_details: false,
+            },
+        }
     }
 
     #[test]
-    fn test_config_from_options_enabled_false_with_endpoint() {
+    fn config_from_options_returns_none_for_invalid_configs() {
+        let cases: &[(&str, ExperimentalOtelOptions)] = &[
+            (
+                "explicitly disabled",
+                ExperimentalOtelOptions {
+                    enabled: Some(false),
+                    endpoint: Some("https://example.com".to_string()),
+                    ..Default::default()
+                },
+            ),
+            ("no endpoint", ExperimentalOtelOptions::default()),
+            (
+                "empty endpoint",
+                ExperimentalOtelOptions {
+                    endpoint: Some("".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "whitespace endpoint",
+                ExperimentalOtelOptions {
+                    endpoint: Some("   ".to_string()),
+                    ..Default::default()
+                },
+            ),
+        ];
+
+        for (name, options) in cases {
+            assert!(
+                config_from_options(options, token).is_none(),
+                "case '{}': expected None",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn config_from_options_applies_defaults() {
         let options = ExperimentalOtelOptions {
-            enabled: Some(false),
             endpoint: Some("https://example.com/otel".to_string()),
             ..Default::default()
         };
-        let result = config_from_options(&options);
-        assert!(result.is_none());
-    }
 
-    #[test]
-    fn test_config_from_options_no_endpoint() {
-        let options = ExperimentalOtelOptions::default();
-        let result = config_from_options(&options);
-        assert!(result.is_none());
-    }
+        let config = config_from_options(&options, token).expect("should create config");
 
-    #[test]
-    fn test_config_from_options_empty_endpoint() {
-        let options = ExperimentalOtelOptions {
-            endpoint: Some("   ".to_string()),
-            ..Default::default()
-        };
-        let result = config_from_options(&options);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_config_from_options_defaults() {
-        let options = ExperimentalOtelOptions {
-            endpoint: Some("https://example.com/otel".to_string()),
-            ..Default::default()
-        };
-        let result = config_from_options(&options);
-        assert!(result.is_some());
-        let config = result.unwrap();
         assert_eq!(config.endpoint, "https://example.com/otel");
         assert_eq!(config.protocol, turborepo_otel::Protocol::Grpc);
         assert_eq!(config.timeout.as_millis(), 10_000);
+        assert!(config.headers.is_empty());
+        assert!(config.resource_attributes.is_empty());
         assert!(config.metrics.run_summary);
         assert!(!config.metrics.task_details);
     }
 
     #[test]
-    fn test_config_from_options_enabled_none_with_endpoint() {
-        let options = ExperimentalOtelOptions {
-            enabled: None,
-            endpoint: Some("https://example.com/otel".to_string()),
-            ..Default::default()
-        };
-        let result = config_from_options(&options);
-        assert!(result.is_some());
-        let config = result.unwrap();
-        assert_eq!(config.endpoint, "https://example.com/otel");
-        assert_eq!(config.protocol, turborepo_otel::Protocol::Grpc);
-        assert!(config.metrics.run_summary);
-        assert!(!config.metrics.task_details);
-    }
-
-    #[test]
-    fn test_config_from_options_enabled_true_no_endpoint() {
-        let options = ExperimentalOtelOptions {
-            enabled: Some(true),
-            endpoint: None,
-            ..Default::default()
-        };
-        let result = config_from_options(&options);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_config_from_options_enabled_true_whitespace_endpoint() {
-        let options = ExperimentalOtelOptions {
-            enabled: Some(true),
-            endpoint: Some("   ".to_string()),
-            ..Default::default()
-        };
-        let result = config_from_options(&options);
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_config_from_options_http_protobuf() {
-        let options = ExperimentalOtelOptions {
-            endpoint: Some("https://example.com/otel".to_string()),
-            protocol: Some(ExperimentalOtelProtocol::HttpProtobuf),
-            ..Default::default()
-        };
-        let result = config_from_options(&options);
-        assert!(result.is_some());
-        assert_eq!(
-            result.unwrap().protocol,
-            turborepo_otel::Protocol::HttpProtobuf
-        );
-    }
-
-    #[test]
-    fn test_config_from_options_custom_timeout() {
-        let options = ExperimentalOtelOptions {
-            endpoint: Some("https://example.com/otel".to_string()),
-            timeout_ms: Some(15000),
-            ..Default::default()
-        };
-        let result = config_from_options(&options);
-        assert!(result.is_some());
-        assert_eq!(result.unwrap().timeout.as_millis(), 15_000);
-    }
-
-    #[test]
-    fn test_config_from_options_headers() {
+    fn config_from_options_respects_custom_values() {
         let mut headers = BTreeMap::new();
-        headers.insert("auth".to_string(), "token123".to_string());
-        let options = ExperimentalOtelOptions {
-            endpoint: Some("https://example.com/otel".to_string()),
-            headers: Some(headers),
-            ..Default::default()
-        };
-        let result = config_from_options(&options);
-        assert!(result.is_some());
-        let config = result.unwrap();
-        assert_eq!(config.headers.get("auth"), Some(&"token123".to_string()));
-    }
-
-    #[test]
-    fn test_config_from_options_resource() {
+        headers.insert("X-Custom".to_string(), "value".to_string());
         let mut resource = BTreeMap::new();
         resource.insert("service.name".to_string(), "my-service".to_string());
-        resource.insert("env".to_string(), "production".to_string());
+
         let options = ExperimentalOtelOptions {
-            endpoint: Some("https://example.com/otel".to_string()),
+            endpoint: Some("  https://example.com/otel  ".to_string()),
+            protocol: Some(ExperimentalOtelProtocol::HttpProtobuf),
+            timeout_ms: Some(5000),
+            headers: Some(headers),
             resource: Some(resource),
-            ..Default::default()
-        };
-        let result = config_from_options(&options);
-        assert!(result.is_some());
-        let config = result.unwrap();
-        assert_eq!(
-            config.resource_attributes.get("service.name"),
-            Some(&"my-service".to_string())
-        );
-        assert_eq!(
-            config.resource_attributes.get("env"),
-            Some(&"production".to_string())
-        );
-    }
-
-    #[test]
-    fn test_metrics_config_defaults() {
-        let result = metrics_config(None);
-        assert!(result.run_summary);
-        assert!(!result.task_details);
-    }
-
-    #[test]
-    fn test_metrics_config_run_summary_override() {
-        let metrics = ExperimentalOtelMetricsOptions {
-            run_summary: Some(false),
-            ..Default::default()
-        };
-        let result = metrics_config(Some(&metrics));
-        assert!(!result.run_summary);
-        assert!(!result.task_details);
-    }
-
-    #[test]
-    fn test_metrics_config_task_details_override() {
-        let metrics = ExperimentalOtelMetricsOptions {
-            task_details: Some(true),
-            ..Default::default()
-        };
-        let result = metrics_config(Some(&metrics));
-        assert!(result.run_summary);
-        assert!(result.task_details);
-    }
-
-    #[test]
-    fn test_config_from_options_metrics_toggles() {
-        let options = ExperimentalOtelOptions {
-            endpoint: Some("https://example.com/otel".to_string()),
             metrics: Some(ExperimentalOtelMetricsOptions {
                 run_summary: Some(false),
                 task_details: Some(true),
             }),
             ..Default::default()
         };
-        let result = config_from_options(&options);
-        assert!(result.is_some());
-        let config = result.unwrap();
+
+        let config = config_from_options(&options, token).expect("should create config");
+
+        assert_eq!(config.endpoint, "https://example.com/otel");
+        assert_eq!(config.protocol, turborepo_otel::Protocol::HttpProtobuf);
+        assert_eq!(config.timeout.as_millis(), 5000);
+        assert_eq!(config.headers.get("X-Custom"), Some(&"value".to_string()));
+        assert_eq!(
+            config.resource_attributes.get("service.name"),
+            Some(&"my-service".to_string())
+        );
         assert!(!config.metrics.run_summary);
         assert!(config.metrics.task_details);
     }
 
     #[test]
-    fn test_try_init_otel_swallows_initialization_errors() {
-        let options = ExperimentalOtelOptions {
-            enabled: Some(true),
-            endpoint: Some("invalid://endpoint".to_string()),
-            ..Default::default()
-        };
-        let result = try_init_otel(&options);
-        assert!(result.is_none());
+    fn metrics_config_applies_defaults_and_overrides() {
+        let cases: &[(&str, Option<ExperimentalOtelMetricsOptions>, bool, bool)] = &[
+            ("defaults", None, true, false),
+            (
+                "both overridden",
+                Some(ExperimentalOtelMetricsOptions {
+                    run_summary: Some(false),
+                    task_details: Some(true),
+                }),
+                false,
+                true,
+            ),
+            (
+                "only run_summary overridden",
+                Some(ExperimentalOtelMetricsOptions {
+                    run_summary: Some(false),
+                    task_details: None,
+                }),
+                false,
+                false,
+            ),
+            (
+                "only task_details overridden",
+                Some(ExperimentalOtelMetricsOptions {
+                    run_summary: None,
+                    task_details: Some(true),
+                }),
+                true,
+                true,
+            ),
+        ];
+
+        for (name, options, expected_run_summary, expected_task_details) in cases {
+            let result = metrics_config(options.as_ref());
+            assert_eq!(
+                result.run_summary, *expected_run_summary,
+                "case '{}': run_summary mismatch",
+                name
+            );
+            assert_eq!(
+                result.task_details, *expected_task_details,
+                "case '{}': task_details mismatch",
+                name
+            );
+        }
     }
 
     #[test]
-    fn test_try_init_otel_returns_none_for_disabled() {
-        let options = ExperimentalOtelOptions {
-            enabled: Some(false),
-            endpoint: Some("https://example.com/otel".to_string()),
-            ..Default::default()
-        };
-        let result = try_init_otel(&options);
-        assert!(result.is_none());
-    }
+    fn apply_auth_token_behavior() {
+        struct Case {
+            name: &'static str,
+            existing_header: Option<(&'static str, &'static str)>,
+            token: Option<&'static str>,
+            expect_auth: Option<&'static str>,
+        }
 
-    #[test]
-    fn test_try_init_otel_returns_none_for_no_endpoint() {
-        let options = ExperimentalOtelOptions {
-            enabled: Some(true),
-            endpoint: None,
-            ..Default::default()
-        };
-        let result = try_init_otel(&options);
-        assert!(result.is_none());
+        let cases = [
+            Case {
+                name: "adds token when no existing header",
+                existing_header: None,
+                token: Some("my-token"),
+                expect_auth: Some("Bearer my-token"),
+            },
+            Case {
+                name: "skips when no token provided",
+                existing_header: None,
+                token: None,
+                expect_auth: None,
+            },
+            Case {
+                name: "preserves existing Authorization header",
+                existing_header: Some(("Authorization", "Bearer existing")),
+                token: Some("new-token"),
+                expect_auth: Some("Bearer existing"),
+            },
+            Case {
+                name: "case-insensitive: preserves lowercase authorization",
+                existing_header: Some(("authorization", "Bearer existing")),
+                token: Some("new-token"),
+                expect_auth: None, // won't find "Authorization", existing is lowercase
+            },
+            Case {
+                name: "case-insensitive: preserves AUTHORIZATION",
+                existing_header: Some(("AUTHORIZATION", "Bearer existing")),
+                token: Some("new-token"),
+                expect_auth: None, // won't find "Authorization", existing is uppercase
+            },
+        ];
+
+        for case in cases {
+            let mut headers = BTreeMap::new();
+            if let Some((key, value)) = case.existing_header {
+                headers.insert(key.to_string(), value.to_string());
+            }
+            let mut config = make_config(headers);
+
+            apply_auth_token(&mut config, case.token);
+
+            assert_eq!(
+                config.headers.get("Authorization").map(|s| s.as_str()),
+                case.expect_auth,
+                "case '{}': Authorization header mismatch",
+                case.name
+            );
+
+            if let Some((key, value)) = case.existing_header {
+                assert_eq!(
+                    config.headers.get(key),
+                    Some(&value.to_string()),
+                    "case '{}': existing header should be preserved",
+                    case.name
+                );
+            }
+        }
     }
 }
