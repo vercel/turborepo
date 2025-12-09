@@ -21,7 +21,6 @@
     "lint:prettier": "prettier -c . --cache",
     "generate-schema": "tsx scripts/generate-schema.ts",
     "copy-schema": "cp schemas/schema.json ../turbo/schema.json",
-    "package:lint": "publint --strict",
     "package:types": "attw --profile node16 --pack"
   },
   "devDependencies": {
