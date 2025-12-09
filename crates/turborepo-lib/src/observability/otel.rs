@@ -64,30 +64,38 @@ fn config_from_options(
         ExperimentalOtelProtocol::HttpProtobuf => turborepo_otel::Protocol::HttpProtobuf,
     };
 
-    let mut headers = options.headers.clone().unwrap_or_default();
+    let headers = options.headers.clone().unwrap_or_default();
     let resource_attributes = options.resource.clone().unwrap_or_default();
     let metrics = metrics_config(options.metrics.as_ref());
     let timeout = Duration::from_millis(options.timeout_ms.unwrap_or(10_000));
 
-    // If Authorization header is missing, try to populate it from the global auth
-    // token if provided.
-    if !headers
-        .keys()
-        .any(|k| k.eq_ignore_ascii_case("Authorization"))
-    {
-        if let Some(token) = token {
-            headers.insert("Authorization".to_string(), format!("Bearer {}", token));
-        }
-    }
-
-    Some(turborepo_otel::Config {
+    let mut config = turborepo_otel::Config {
         endpoint,
         protocol,
         headers,
         timeout,
         resource_attributes,
         metrics,
-    })
+    };
+
+    apply_auth_token(&mut config, token);
+
+    Some(config)
+}
+
+fn apply_auth_token(config: &mut turborepo_otel::Config, token: Option<&str>) {
+    if config
+        .headers
+        .keys()
+        .any(|k| k.eq_ignore_ascii_case("Authorization"))
+    {
+        return;
+    }
+    if let Some(token) = token {
+        config
+            .headers
+            .insert("Authorization".to_string(), format!("Bearer {}", token));
+    }
 }
 
 fn metrics_config(
@@ -223,7 +231,7 @@ mod tests {
 
         for (name, options) in cases {
             assert!(
-                config_from_options(options, token).is_none(),
+                config_from_options(options, None).is_none(),
                 "case '{}': expected None",
                 name
             );
@@ -237,7 +245,7 @@ mod tests {
             ..Default::default()
         };
 
-        let config = config_from_options(&options, token).expect("should create config");
+        let config = config_from_options(&options, None).expect("should create config");
 
         assert_eq!(config.endpoint, "https://example.com/otel");
         assert_eq!(config.protocol, turborepo_otel::Protocol::Grpc);
@@ -268,7 +276,7 @@ mod tests {
             ..Default::default()
         };
 
-        let config = config_from_options(&options, token).expect("should create config");
+        let config = config_from_options(&options, None).expect("should create config");
 
         assert_eq!(config.endpoint, "https://example.com/otel");
         assert_eq!(config.protocol, turborepo_otel::Protocol::HttpProtobuf);
@@ -328,6 +336,42 @@ mod tests {
                 name
             );
         }
+    }
+
+    #[test]
+    fn config_from_options_applies_auth_token() {
+        let options = ExperimentalOtelOptions {
+            endpoint: Some("https://example.com/otel".to_string()),
+            ..Default::default()
+        };
+
+        let config = config_from_options(&options, Some("my-token")).expect("should create config");
+
+        assert_eq!(
+            config.headers.get("Authorization"),
+            Some(&"Bearer my-token".to_string())
+        );
+    }
+
+    #[test]
+    fn config_from_options_preserves_existing_auth_header() {
+        let mut headers = BTreeMap::new();
+        headers.insert("Authorization".to_string(), "Bearer user-token".to_string());
+
+        let options = ExperimentalOtelOptions {
+            endpoint: Some("https://example.com/otel".to_string()),
+            headers: Some(headers),
+            ..Default::default()
+        };
+
+        let config = config_from_options(&options, Some("remote-cache-token"))
+            .expect("should create config");
+
+        assert_eq!(
+            config.headers.get("Authorization"),
+            Some(&"Bearer user-token".to_string()),
+            "should preserve user-provided Authorization header"
+        );
     }
 
     #[test]

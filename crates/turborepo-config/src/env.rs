@@ -78,6 +78,10 @@ const TURBO_MAPPING: &[(&str, &str)] = [
         "turbo_experimental_otel_metrics_task_details",
         "experimental_otel_metrics_task_details",
     ),
+    (
+        "turbo_experimental_otel_use_remote_cache_token",
+        "experimental_otel_use_remote_cache_token",
+    ),
 ]
 .as_slice();
 

@@ -65,6 +65,14 @@ pub struct ExperimentalOtelCliArgs {
         default_missing_value = "true"
     )]
     pub metrics_task_details: Option<bool>,
+
+    #[clap(
+        long = "experimental-otel-use-remote-cache-token",
+        global = true,
+        num_args = 0..=1,
+        default_missing_value = "true"
+    )]
+    pub use_remote_cache_token: Option<bool>,
 }
 
 impl ExperimentalOtelCliArgs {
@@ -116,6 +124,10 @@ impl ExperimentalOtelCliArgs {
                 .metrics
                 .get_or_insert_with(ExperimentalOtelMetricsOptions::default)
                 .task_details = Some(value);
+            touched = true;
+        }
+        if let Some(value) = self.use_remote_cache_token {
+            options.use_remote_cache_token = Some(value);
             touched = true;
         }
 
@@ -365,6 +377,7 @@ mod tests {
             resource_attributes: vec![("service.name".to_string(), "test".to_string())],
             metrics_run_summary: Some(true),
             metrics_task_details: Some(false),
+            use_remote_cache_token: None,
         };
         let result = args.to_config();
         assert!(result.is_some());
@@ -384,6 +397,28 @@ mod tests {
         let metrics = opts.metrics.unwrap();
         assert_eq!(metrics.run_summary, Some(true));
         assert_eq!(metrics.task_details, Some(false));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_use_remote_cache_token_enabled() {
+        let args = ExperimentalOtelCliArgs {
+            use_remote_cache_token: Some(true),
+            ..Default::default()
+        };
+        let result = args.to_config();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().use_remote_cache_token, Some(true));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_use_remote_cache_token_disabled() {
+        let args = ExperimentalOtelCliArgs {
+            use_remote_cache_token: Some(false),
+            ..Default::default()
+        };
+        let result = args.to_config();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().use_remote_cache_token, Some(false));
     }
 
     #[test]
