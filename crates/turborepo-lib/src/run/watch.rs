@@ -278,28 +278,24 @@ impl WatchClient {
 
     async fn stop_impacted_tasks(&self, pkgs: &HashSet<PackageName>) -> HashSet<PackageName> {
         let engine = self.run.engine();
-        let mut tasks_to_stop = HashSet::new();
 
-        for node in engine.tasks() {
-            if let TaskNode::Task(task_id) = node {
-                if pkgs.contains(&PackageName::from(task_id.package())) {
-                    tasks_to_stop.insert(task_id.clone());
+        let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
 
-                    for dependent_node in engine.transitive_dependents(task_id) {
-                        if let TaskNode::Task(dependent_id) = dependent_node {
-                            tasks_to_stop.insert(dependent_id.clone());
-                        }
-                    }
-                }
-            }
-        }
+        // Extract task IDs from task nodes (filtering out Root nodes)
+        let task_ids: Vec<_> = impacted_nodes
+            .iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(task_id) => Some(task_id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect();
 
-        let impacted_packages: HashSet<_> = tasks_to_stop
+        // Collect unique impacted packages
+        let impacted_packages: HashSet<_> = task_ids
             .iter()
             .map(|task_id| PackageName::from(task_id.package()))
             .collect();
 
-        let task_ids: Vec<_> = tasks_to_stop.into_iter().collect();
         join_all(
             self.active_runs
                 .iter()
