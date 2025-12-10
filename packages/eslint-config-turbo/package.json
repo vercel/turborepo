@@ -17,7 +17,6 @@
     "build": "bunchee",
     "lint": "eslint src",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore",
-    "package:lint": "publint --strict",
     "package:types": "attw --profile node16 --pack"
   },
   "keywords": [
@@ -67,7 +66,6 @@
     "@turbo/tsconfig": "workspace:*",
     "@types/eslint": "^8.56.10",
     "@types/node": "^20",
-    "bunchee": "^6.3.4",
-    "publint": "^0.3.12"
+    "bunchee": "^6.3.4"
   }
 }

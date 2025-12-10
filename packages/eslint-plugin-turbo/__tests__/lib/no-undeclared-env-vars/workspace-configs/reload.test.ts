@@ -11,7 +11,12 @@ const ruleTester = new RuleTester({
   parserOptions: { ecmaVersion: 2020, sourceType: "module" },
 });
 
-const cwd = path.join(__dirname, "../../../../__fixtures__/workspace-configs");
+// Use a dedicated fixture directory for reload tests to avoid conflicts
+// with other tests that read from workspace-configs
+const cwd = path.join(
+  __dirname,
+  "../../../../__fixtures__/workspace-configs-reload"
+);
 const webFilename = path.join(cwd, "/apps/web/index.js");
 
 describe("Project reload functionality", () => {

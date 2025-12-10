@@ -1,6 +1,6 @@
+import { createSearchAPI } from "fumadocs-core/search/server";
 import { repoDocsPages } from "../../source";
 import { openapiPages } from "../../(openapi)/docs/openapi/source";
-import { createSearchAPI } from "fumadocs-core/search/server";
 
 export const { GET } = createSearchAPI("advanced", {
   language: "english",
