@@ -8,6 +8,12 @@ module.exports = {
     "!app/.well-known/vercel/flags/route.ts",
     ".source",
     "components/ui/**",
+    // shadcn/ui-style component wrappers around Radix UI primitives
+    "components/button.tsx",
+    "components/dropdown.tsx",
+    "components/popover.tsx",
+    "components/nav/navigation-menu.tsx",
+    "components/docs-layout/sidebar.tsx",
     // TODO: Need to fix the JSON inference in this file
     "components/examples-table.tsx",
   ],
