@@ -367,6 +367,29 @@ impl Engine<Built> {
         )
     }
 
+    /// Returns all tasks belonging to the given packages, plus all tasks that
+    /// transitively depend on them. This performs a single batched graph
+    /// traversal, which is more efficient than calling `transitive_dependents`
+    /// for each task individually.
+    pub fn tasks_impacted_by_packages(
+        &self,
+        packages: &HashSet<PackageName>,
+    ) -> HashSet<&TaskNode> {
+        // Collect all task indices belonging to the changed packages
+        let starting_indices = packages
+            .iter()
+            .filter_map(|pkg| self.package_tasks.get(pkg))
+            .flatten()
+            .copied();
+
+        // Single batched DFS traversal to find all transitive dependents
+        turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            starting_indices,
+            petgraph::Direction::Incoming,
+        )
+    }
+
     fn neighbors(
         &self,
         task_id: &TaskId,
@@ -899,5 +922,116 @@ mod test {
         assert!(tasks.contains(&&TaskNode::Task(a_build_task_id)));
         assert!(tasks.contains(&&TaskNode::Task(a_dev_task_id)));
         assert!(tasks.contains(&&TaskNode::Task(b_build_task_id)));
+    }
+
+    #[tokio::test]
+    async fn test_tasks_impacted_by_packages() {
+        // Tests the batched transitive dependents lookup for watch mode.
+        //
+        // Graph structure:
+        //   a:build  <--  b:build  <--  c:build
+        //   a:test       b:test        c:test
+        //
+        // Where b:build depends on a:build, and c:build depends on b:build.
+        // Changing package "a" should impact: a:build, a:test, b:build, c:build
+        // Changing package "b" should impact: b:build, b:test, c:build
+
+        let mut engine = Engine::new();
+
+        // Package a
+        let a_build = TaskId::new("a", "build");
+        let a_test = TaskId::new("a", "test");
+        let a_build_idx = engine.get_index(&a_build);
+        engine.get_index(&a_test);
+        engine.add_definition(a_build.clone(), TaskDefinition::default());
+        engine.add_definition(a_test.clone(), TaskDefinition::default());
+
+        // Package b (b:build depends on a:build)
+        let b_build = TaskId::new("b", "build");
+        let b_test = TaskId::new("b", "test");
+        let b_build_idx = engine.get_index(&b_build);
+        engine.get_index(&b_test);
+        engine.add_definition(b_build.clone(), TaskDefinition::default());
+        engine.add_definition(b_test.clone(), TaskDefinition::default());
+        engine.task_graph.add_edge(b_build_idx, a_build_idx, ());
+
+        // Package c (c:build depends on b:build)
+        let c_build = TaskId::new("c", "build");
+        let c_test = TaskId::new("c", "test");
+        let c_build_idx = engine.get_index(&c_build);
+        engine.get_index(&c_test);
+        engine.add_definition(c_build.clone(), TaskDefinition::default());
+        engine.add_definition(c_test.clone(), TaskDefinition::default());
+        engine.task_graph.add_edge(c_build_idx, b_build_idx, ());
+
+        let engine = engine.seal();
+
+        // Test: changing package "a" should impact a:build, a:test, b:build, c:build
+        let impacted =
+            engine.tasks_impacted_by_packages(&[PackageName::from("a")].into_iter().collect());
+
+        // Filter out Root node and collect task IDs
+        let impacted_tasks: HashSet<_> = impacted
+            .iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(id) => Some(id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect();
+
+        assert_eq!(impacted_tasks.len(), 4);
+        assert!(impacted_tasks.contains(&a_build));
+        assert!(impacted_tasks.contains(&a_test));
+        assert!(impacted_tasks.contains(&b_build)); // transitive dependent
+        assert!(impacted_tasks.contains(&c_build)); // transitive dependent
+
+        // Test: changing package "b" should impact b:build, b:test, c:build
+        let impacted =
+            engine.tasks_impacted_by_packages(&[PackageName::from("b")].into_iter().collect());
+
+        let impacted_tasks: HashSet<_> = impacted
+            .iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(id) => Some(id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect();
+
+        assert_eq!(impacted_tasks.len(), 3);
+        assert!(impacted_tasks.contains(&b_build));
+        assert!(impacted_tasks.contains(&b_test));
+        assert!(impacted_tasks.contains(&c_build)); // transitive dependent
+
+        // Test: changing multiple packages at once (a and c)
+        // Should find: a:build, a:test, b:build, c:build, c:test
+        let impacted = engine.tasks_impacted_by_packages(
+            &[PackageName::from("a"), PackageName::from("c")]
+                .into_iter()
+                .collect(),
+        );
+
+        let impacted_tasks: HashSet<_> = impacted
+            .iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(id) => Some(id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect();
+
+        assert_eq!(impacted_tasks.len(), 5);
+        assert!(impacted_tasks.contains(&a_build));
+        assert!(impacted_tasks.contains(&a_test));
+        assert!(impacted_tasks.contains(&b_build)); // transitive dependent of a
+        assert!(impacted_tasks.contains(&c_build)); // both direct (c) and transitive (a->b->c)
+        assert!(impacted_tasks.contains(&c_test)); // direct from c
+
+        // Test: empty set returns empty
+        let impacted = engine.tasks_impacted_by_packages(&HashSet::new());
+        assert!(impacted.is_empty());
+
+        // Test: non-existent package returns empty
+        let impacted = engine
+            .tasks_impacted_by_packages(&[PackageName::from("nonexistent")].into_iter().collect());
+        assert!(impacted.is_empty());
     }
 }
