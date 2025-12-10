@@ -753,4 +753,8 @@ impl RunStopper {
     pub async fn stop(&self) {
         self.manager.stop().await;
     }
+
+    pub async fn stop_tasks(&self, task_ids: &[turborepo_task_id::TaskId<'static>]) {
+        self.manager.stop_tasks(task_ids).await;
+    }
 }
