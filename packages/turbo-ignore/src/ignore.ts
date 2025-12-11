@@ -119,8 +119,9 @@ export function turboIgnore(
     `--filter=${filterArg}`,
     "--dry=json",
   ];
-  // For logging, format with quotes around filter value to match expected format
-  const command = `npx -y ${turbo} run ${task} --filter="${filterArg}" --dry=json`;
+  // For logging, format task with quotes if it contains special characters (like #)
+  const displayTask = task.includes("#") ? `"${task}"` : task;
+  const command = `npx -y ${turbo} run ${displayTask} --filter="${filterArg}" --dry=json`;
   info(`Analyzing results of \`${command}\``);
 
   const execOptions: { cwd: string; maxBuffer?: number } = {
