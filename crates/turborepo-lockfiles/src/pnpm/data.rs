@@ -333,6 +333,60 @@ impl PnpmLockfile {
         }
     }
 
+    // Add an injected package to the pruned packages and snapshots.
+    // For v7+ lockfiles, this also adds the corresponding snapshot entry.
+    // Recursively adds any file: protocol dependencies.
+    fn add_injected_package(
+        &self,
+        package_key: &str,
+        pruned_packages: &mut Packages,
+        pruned_snapshots: &mut Option<Snapshots>,
+    ) -> Result<(), crate::Error> {
+        // Skip if already added
+        if pruned_packages.contains_key(package_key) {
+            return Ok(());
+        }
+
+        let entry = self
+            .get_packages(package_key)
+            .ok_or_else(|| crate::Error::MissingPackage(package_key.into()))?;
+        pruned_packages.insert(package_key.to_string(), entry.clone());
+
+        // For v7+ lockfiles, also add the snapshot entry
+        if let Some(pruned_snaps) = pruned_snapshots.as_mut()
+            && let Some(snapshots) = self.snapshots.as_ref()
+            && let Some(snapshot) = snapshots.get(package_key)
+        {
+            pruned_snaps.insert(package_key.to_string(), snapshot.clone());
+
+            // Recursively add file: protocol dependencies from the snapshot
+            // Dependencies are stored as (name, version) pairs
+            let file_deps: Vec<_> = snapshot
+                .dependencies
+                .iter()
+                .flatten()
+                .chain(snapshot.optional_dependencies.iter().flatten())
+                .filter_map(|(name, version)| {
+                    if version.starts_with("file:") {
+                        // Construct the full package key for v7+ lockfiles
+                        match self.version() {
+                            SupportedLockfileVersion::V7AndV9 => Some(format!("{name}@{version}")),
+                            _ => Some(version.clone()),
+                        }
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            for dep_key in file_deps {
+                self.add_injected_package(&dep_key, pruned_packages, pruned_snapshots)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn pruned_packages_and_snapshots(
         &self,
         packages: &[String],
@@ -454,30 +508,59 @@ impl crate::Lockfile for PnpmLockfile {
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect::<Map<_, _>>();
 
-        let (mut pruned_packages, pruned_snapshots) =
+        let (mut pruned_packages, mut pruned_snapshots) =
             self.pruned_packages_and_snapshots(packages)?;
+
+        // Check if workspace packages are globally injected
+        let inject_workspace_packages = self
+            .settings
+            .as_ref()
+            .and_then(|s| s.inject_workspace_packages)
+            .unwrap_or(false);
+
         for importer in importers.values() {
             // Find all injected packages in each workspace and include it in
-            // the pruned lockfile
-            for dependency in
-                importer
-                    .dependencies_meta
-                    .iter()
-                    .flatten()
-                    .filter_map(|(dep, meta)| match meta.injected {
-                        Some(true) => Some(dep),
-                        _ => None,
-                    })
-            {
+            // the pruned lockfile. This handles both:
+            // 1. Per-dependency injection via dependenciesMeta.injected
+            // 2. Global injection via settings.injectWorkspacePackages
+            let injected_deps: Vec<_> = importer
+                .dependencies_meta
+                .iter()
+                .flatten()
+                .filter_map(|(dep, meta)| match meta.injected {
+                    Some(true) => Some(dep.clone()),
+                    _ => None,
+                })
+                .collect();
+
+            for dependency in &injected_deps {
                 let (_, version) = importer
                     .dependencies
                     .find_resolution(dependency)
                     .ok_or_else(|| Error::MissingInjectedPackage(dependency.clone()))?;
 
-                let entry = self
-                    .get_packages(version)
-                    .ok_or_else(|| crate::Error::MissingPackage(version.into()))?;
-                pruned_packages.insert(version.to_string(), entry.clone());
+                self.add_injected_package(version, &mut pruned_packages, &mut pruned_snapshots)?;
+            }
+
+            // When injectWorkspacePackages is true globally, also include all
+            // file: protocol dependencies (workspace packages that are injected)
+            if inject_workspace_packages {
+                for (name, version) in importer.dependencies.file_protocol_deps() {
+                    // Construct the full package key (name@version for v7+, or just version for older)
+                    let package_key = match self.version() {
+                        SupportedLockfileVersion::V7AndV9 => format!("{name}@{version}"),
+                        _ => version.to_string(),
+                    };
+                    // Skip if already added via dependenciesMeta
+                    if pruned_packages.contains_key(&package_key) {
+                        continue;
+                    }
+                    self.add_injected_package(
+                        &package_key,
+                        &mut pruned_packages,
+                        &mut pruned_snapshots,
+                    )?;
+                }
             }
         }
 
@@ -589,6 +672,49 @@ impl DependencyInfo {
         let (_specifier, version) = self.find_resolution("turbo")?;
         Some(version)
     }
+
+    // Returns all dependencies that use the file: protocol
+    // (indicating injected workspace packages).
+    // Returns tuples of (dependency_name, version).
+    fn file_protocol_deps(&self) -> Vec<(&str, &str)> {
+        match self {
+            DependencyInfo::PreV6 {
+                dependencies,
+                optional_dependencies,
+                dev_dependencies,
+                ..
+            } => dependencies
+                .iter()
+                .flatten()
+                .chain(optional_dependencies.iter().flatten())
+                .chain(dev_dependencies.iter().flatten())
+                .filter_map(|(name, v)| {
+                    if v.starts_with("file:") {
+                        Some((name.as_str(), v.as_str()))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            DependencyInfo::V6 {
+                dependencies,
+                optional_dependencies,
+                dev_dependencies,
+            } => dependencies
+                .iter()
+                .flatten()
+                .chain(optional_dependencies.iter().flatten())
+                .chain(dev_dependencies.iter().flatten())
+                .filter_map(|(name, dep)| {
+                    if dep.version.starts_with("file:") {
+                        Some((name.as_str(), dep.version.as_str()))
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        }
+    }
 }
 
 impl Dependency {
@@ -652,6 +778,8 @@ mod tests {
     const PNPM10_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-10-patch.lock").as_slice();
     const PNPM_INJECT_WORKSPACE: &[u8] =
         include_bytes!("../../fixtures/pnpm-inject-workspace.yaml").as_slice();
+    const PNPM_INJECT_WORKSPACE_GLOBAL: &[u8] =
+        include_bytes!("../../fixtures/pnpm-inject-workspace-global.yaml").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -1626,6 +1754,70 @@ c:
         assert!(
             encoded_str.contains("injectWorkspacePackages: true"),
             "Encoded lockfile should contain injectWorkspacePackages setting"
+        );
+    }
+
+    #[test]
+    fn test_inject_workspace_packages_global() {
+        // Test for issue #11059: turbo prune removes necessary packages when
+        // injectWorkspacePackages=true is set globally in pnpm-workspace.yaml
+        let lockfile = PnpmLockfile::from_bytes(PNPM_INJECT_WORKSPACE_GLOBAL).unwrap();
+
+        // Verify the lockfile has injectWorkspacePackages set to true
+        assert_eq!(
+            lockfile
+                .settings
+                .as_ref()
+                .unwrap()
+                .inject_workspace_packages,
+            Some(true)
+        );
+
+        // Create a subgraph to simulate turbo prune operation
+        // Note: we only pass lodash as a package, but the subgraph should also include
+        // the injected workspace packages (@org/mongodb and @org/logger)
+        let pruned_lockfile = lockfile
+            .subgraph(&["apps/web".into()], &["lodash@4.17.21".into()])
+            .unwrap();
+
+        // Downcast to access the internal data
+        let pruned_pnpm = (pruned_lockfile.as_ref() as &dyn Any)
+            .downcast_ref::<PnpmLockfile>()
+            .unwrap();
+
+        let packages = pruned_pnpm.packages.as_ref().unwrap();
+        let snapshots = pruned_pnpm.snapshots.as_ref().unwrap();
+
+        // Verify that the injected workspace package is included
+        assert!(
+            packages.contains_key("@org/mongodb@file:packages/mongodb"),
+            "Pruned lockfile should contain the injected @org/mongodb package"
+        );
+
+        // Verify that the snapshot entry is also included
+        assert!(
+            snapshots.contains_key("@org/mongodb@file:packages/mongodb"),
+            "Pruned lockfile should contain the snapshot for @org/mongodb"
+        );
+
+        // Verify that transitive file: dependencies are also included
+        assert!(
+            packages.contains_key("@org/logger@file:packages/logger"),
+            "Pruned lockfile should contain the transitive @org/logger package"
+        );
+        assert!(
+            snapshots.contains_key("@org/logger@file:packages/logger"),
+            "Pruned lockfile should contain the snapshot for @org/logger"
+        );
+
+        // Verify that regular packages are still included
+        assert!(
+            packages.contains_key("lodash@4.17.21"),
+            "Pruned lockfile should contain lodash"
+        );
+        assert!(
+            snapshots.contains_key("lodash@4.17.21"),
+            "Pruned lockfile should contain the snapshot for lodash"
         );
     }
 }
