@@ -38,6 +38,13 @@ Configuration in a package can override any of [the configurations for a
 task](/docs/reference/configuration#defining-tasks). Any keys that are not included are inherited
 from the extended `turbo.json`.
 
+<Callout type="good-to-know">
+  By default, array fields like `outputs` and `env` completely replace the
+  values from the root configuration. To append to inherited values instead of
+  replacing them, use the [`$TURBO_EXTENDS$`
+  microsyntax](/docs/reference/configuration#turbo_extends).
+</Callout>
+
 ## Examples
 
 ### Different frameworks in one Workspace
