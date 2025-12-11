@@ -209,6 +209,21 @@ impl PackageJson {
             .chain(self.dependencies.iter().flatten())
     }
 
+    /// Returns all production dependencies (from `dependencies` field)
+    pub fn production_dependencies(&self) -> impl Iterator<Item = (&String, &String)> + '_ {
+        self.dependencies.iter().flatten()
+    }
+
+    /// Returns all dev dependencies (from `devDependencies` field)
+    pub fn dev_dependencies_iter(&self) -> impl Iterator<Item = (&String, &String)> + '_ {
+        self.dev_dependencies.iter().flatten()
+    }
+
+    /// Returns all optional dependencies (from `optionalDependencies` field)
+    pub fn optional_dependencies_iter(&self) -> impl Iterator<Item = (&String, &String)> + '_ {
+        self.optional_dependencies.iter().flatten()
+    }
+
     /// Returns the command for script_name if it is non-empty
     pub fn command(&self, script_name: &str) -> Option<&str> {
         self.scripts

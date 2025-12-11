@@ -104,12 +104,15 @@ pub async fn prune(
     docker: bool,
     output_dir: &str,
     use_gitignore: bool,
+    production: bool,
     telemetry: CommandEventBuilder,
 ) -> Result<(), Error> {
     telemetry.track_arg_usage("docker", docker);
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
+    telemetry.track_arg_usage("production", production);
 
-    let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
+    let prune =
+        Prune::new(base, scope, docker, output_dir, use_gitignore, production, telemetry).await?;
 
     println!(
         "Generating pruned monorepo for {} in {}",
@@ -254,6 +257,7 @@ struct Prune<'a> {
     docker: bool,
     scope: &'a [String],
     use_gitignore: bool,
+    production: bool,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq)]
@@ -272,6 +276,7 @@ impl<'a> Prune<'a> {
         docker: bool,
         output_dir: &str,
         use_gitignore: bool,
+        production: bool,
         telemetry: CommandEventBuilder,
     ) -> Result<Self, Error> {
         let allow_missing_package_manager = base.opts().repo_opts.allow_no_package_manager;
@@ -301,6 +306,7 @@ impl<'a> Prune<'a> {
 
         trace!("scope: {}", scope.join(", "));
         trace!("docker: {}", docker);
+        trace!("production: {}", production);
         trace!("out directory: {}", &out_directory);
 
         for target in scope {
@@ -343,6 +349,7 @@ impl<'a> Prune<'a> {
             docker,
             scope,
             use_gitignore,
+            production,
         })
     }
 
@@ -438,7 +445,15 @@ impl<'a> Prune<'a> {
                     .map(|workspace| PackageNode::Workspace(PackageName::Other(workspace.clone()))),
             )
             .collect::<Vec<_>>();
-        let nodes = self.package_graph.transitive_closure(workspaces.iter());
+
+        // When production mode is enabled, only include production dependencies
+        // (excludes devDependencies)
+        let nodes = if self.production {
+            self.package_graph
+                .transitive_closure_production(workspaces.iter())
+        } else {
+            self.package_graph.transitive_closure(workspaces.iter())
+        };
 
         let mut names: Vec<_> = nodes
             .into_iter()

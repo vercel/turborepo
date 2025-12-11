@@ -4,7 +4,10 @@ use std::{
 };
 
 use itertools::Itertools;
-use petgraph::graph::{Edge, NodeIndex};
+use petgraph::{
+    graph::{Edge, NodeIndex},
+    visit::EdgeRef,
+};
 use serde::Serialize;
 use tracing::debug;
 use turbopath::{
@@ -25,9 +28,24 @@ pub use builder::{Error, PackageGraphBuilder};
 
 pub const ROOT_PKG_NAME: &str = "//";
 
+/// Represents the type of dependency relationship between packages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum DependencyType {
+    /// A regular production dependency (from `dependencies` in package.json)
+    #[default]
+    Production,
+    /// A development dependency (from `devDependencies` in package.json)
+    Dev,
+    /// An optional dependency (from `optionalDependencies` in package.json)
+    /// These are treated as production dependencies for pruning purposes
+    Optional,
+    /// The root workspace dependency edge (special case)
+    Root,
+}
+
 #[derive(Debug)]
 pub struct PackageGraph {
-    graph: petgraph::Graph<PackageNode, ()>,
+    graph: petgraph::Graph<PackageNode, DependencyType>,
     #[allow(dead_code)]
     node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
     packages: HashMap<PackageName, PackageInfo>,
@@ -231,7 +249,7 @@ impl PackageGraph {
         self.graph.node_indices()
     }
 
-    pub fn edges(&self) -> &[Edge<()>] {
+    pub fn edges(&self) -> &[Edge<DependencyType>] {
         self.graph.raw_edges()
     }
 
@@ -429,13 +447,89 @@ impl PackageGraph {
         &'a self,
         nodes: I,
     ) -> HashSet<&'a PackageNode> {
-        turborepo_graph_utils::transitive_closure(
-            &self.graph,
-            nodes
-                .into_iter()
-                .flat_map(|node| self.node_lookup.get(node).cloned()),
-            petgraph::Direction::Outgoing,
-        )
+        self.transitive_closure_inner(nodes, None)
+    }
+
+    /// Returns the transitive closure of the given nodes, including only
+    /// production dependencies (i.e., excluding devDependencies).
+    /// This is useful for pruning to get only the packages needed at runtime.
+    pub fn transitive_closure_production<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
+        &'a self,
+        nodes: I,
+    ) -> HashSet<&'a PackageNode> {
+        self.transitive_closure_inner(nodes, Some(false))
+    }
+
+    /// Inner implementation of transitive closure that optionally filters by
+    /// dependency type.
+    ///
+    /// - `include_dev: None` - include all dependencies
+    /// - `include_dev: Some(false)` - exclude dev dependencies (production only)
+    /// - `include_dev: Some(true)` - include only dev dependencies
+    fn transitive_closure_inner<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
+        &'a self,
+        nodes: I,
+        include_dev: Option<bool>,
+    ) -> HashSet<&'a PackageNode> {
+        let indices: Vec<_> = nodes
+            .into_iter()
+            .flat_map(|node| self.node_lookup.get(node).cloned())
+            .collect();
+
+        let mut visited = HashSet::new();
+
+        let should_follow_edge = |edge_idx: petgraph::graph::EdgeIndex| -> bool {
+            match include_dev {
+                None => true,
+                Some(dev_only) => {
+                    let edge_weight = self.graph.edge_weight(edge_idx);
+                    match edge_weight {
+                        Some(DependencyType::Dev) => dev_only,
+                        Some(DependencyType::Production)
+                        | Some(DependencyType::Optional)
+                        | Some(DependencyType::Root) => !dev_only,
+                        None => true,
+                    }
+                }
+            }
+        };
+
+        // Use a custom DFS that filters edges
+        for start in indices {
+            self.dfs_with_edge_filter(start, &mut visited, &should_follow_edge);
+        }
+
+        visited
+    }
+
+    /// Custom DFS that filters edges based on a predicate
+    fn dfs_with_edge_filter<'a, F>(
+        &'a self,
+        start: NodeIndex,
+        visited: &mut HashSet<&'a PackageNode>,
+        should_follow_edge: &F,
+    ) where
+        F: Fn(petgraph::graph::EdgeIndex) -> bool,
+    {
+        let mut stack = vec![start];
+        let mut seen = HashSet::new();
+
+        while let Some(node) = stack.pop() {
+            if !seen.insert(node) {
+                continue;
+            }
+
+            if let Some(weight) = self.graph.node_weight(node) {
+                visited.insert(weight);
+            }
+
+            // Get outgoing edges and filter them
+            for edge in self.graph.edges_directed(node, petgraph::Direction::Outgoing) {
+                if should_follow_edge(edge.id()) {
+                    stack.push(edge.target());
+                }
+            }
+        }
     }
 
     pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
@@ -979,5 +1073,115 @@ mod test {
             .unwrap();
 
         assert!(pkg_graph.validate().is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_production_only_transitive_closure() {
+        // Test that transitive_closure_production excludes devDependencies
+        // Setup:
+        // - app depends on lib-prod (production dep)
+        // - app depends on lib-dev (dev dep)
+        // - lib-prod depends on lib-shared (production dep)
+        // - lib-dev depends on lib-shared (production dep)
+        //
+        // With production mode, app should only include lib-prod and lib-shared
+        // Without production mode, app should include lib-prod, lib-dev, and lib-shared
+
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_component("app"),
+                PackageJson::from_value(json!({
+                    "name": "app",
+                    "dependencies": {
+                        "lib-prod": "workspace:*"
+                    },
+                    "devDependencies": {
+                        "lib-dev": "workspace:*"
+                    }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("lib-prod"),
+                PackageJson::from_value(json!({
+                    "name": "lib-prod",
+                    "dependencies": {
+                        "lib-shared": "workspace:*"
+                    }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("lib-dev"),
+                PackageJson::from_value(json!({
+                    "name": "lib-dev",
+                    "dependencies": {
+                        "lib-shared": "workspace:*"
+                    }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("lib-shared"),
+                PackageJson::from_value(json!({
+                    "name": "lib-shared"
+                }))
+                .unwrap(),
+            );
+            map
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        assert!(pkg_graph.validate().is_ok());
+
+        // Test full transitive closure (includes devDependencies)
+        let full_closure =
+            pkg_graph.transitive_closure(Some(&PackageNode::Workspace("app".into())));
+        assert!(
+            full_closure.contains(&PackageNode::Workspace("app".into())),
+            "app should be in full closure"
+        );
+        assert!(
+            full_closure.contains(&PackageNode::Workspace("lib-prod".into())),
+            "lib-prod should be in full closure"
+        );
+        assert!(
+            full_closure.contains(&PackageNode::Workspace("lib-dev".into())),
+            "lib-dev should be in full closure"
+        );
+        assert!(
+            full_closure.contains(&PackageNode::Workspace("lib-shared".into())),
+            "lib-shared should be in full closure"
+        );
+
+        // Test production-only transitive closure (excludes devDependencies)
+        let prod_closure =
+            pkg_graph.transitive_closure_production(Some(&PackageNode::Workspace("app".into())));
+        assert!(
+            prod_closure.contains(&PackageNode::Workspace("app".into())),
+            "app should be in production closure"
+        );
+        assert!(
+            prod_closure.contains(&PackageNode::Workspace("lib-prod".into())),
+            "lib-prod should be in production closure"
+        );
+        assert!(
+            !prod_closure.contains(&PackageNode::Workspace("lib-dev".into())),
+            "lib-dev should NOT be in production closure (it's a devDependency)"
+        );
+        assert!(
+            prod_closure.contains(&PackageNode::Workspace("lib-shared".into())),
+            "lib-shared should be in production closure (transitive prod dep via lib-prod)"
+        );
     }
 }

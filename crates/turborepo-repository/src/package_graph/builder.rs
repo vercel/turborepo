@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 
 use miette::{Diagnostic, Report};
 use petgraph::graph::{Graph, NodeIndex};
@@ -10,7 +10,8 @@ use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    PackageGraph, PackageInfo, PackageName, PackageNode, dep_splitter::DependencySplitter,
+    DependencyType, PackageGraph, PackageInfo, PackageName, PackageNode,
+    dep_splitter::DependencySplitter,
 };
 use crate::{
     discovery::{
@@ -167,7 +168,7 @@ struct BuildState<'a, S, T> {
     repo_root: &'a AbsoluteSystemPath,
     single: bool,
     workspaces: HashMap<PackageName, PackageInfo>,
-    workspace_graph: Graph<PackageNode, ()>,
+    workspace_graph: Graph<PackageNode, DependencyType>,
     node_lookup: HashMap<PackageNode, NodeIndex>,
     lockfile: Option<Box<dyn Lockfile>>,
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
@@ -195,7 +196,7 @@ impl<S, T> BuildState<'_, S, T> {
         let root_index = self.add_node(PackageNode::Root);
         let root_workspace = self.add_node(PackageNode::Workspace(PackageName::Root));
         self.workspace_graph
-            .add_edge(root_workspace, root_index, ());
+            .add_edge(root_workspace, root_index, DependencyType::Root);
     }
 }
 
@@ -385,7 +386,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                         &entry.package_json_path,
                         &self.workspaces,
                         package_manager,
-                        entry.package_json.all_dependencies(),
+                        &entry.package_json,
                     ),
                 )
             })
@@ -405,15 +406,16 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                     .node_lookup
                     .get(&PackageNode::Root)
                     .expect("root node should have index");
-                self.workspace_graph.add_edge(*node_idx, *root_idx, ());
+                self.workspace_graph
+                    .add_edge(*node_idx, *root_idx, DependencyType::Root);
             }
-            for dependency in internal {
+            for (dependency, dep_type) in internal {
                 let dependency_idx = self
                     .node_lookup
                     .get(&PackageNode::Workspace(dependency))
                     .expect("unable to find workspace node index");
                 self.workspace_graph
-                    .add_edge(*node_idx, *dependency_idx, ());
+                    .add_edge(*node_idx, *dependency_idx, dep_type);
             }
             entry.unresolved_external_dependencies = Some(external);
         }
@@ -570,33 +572,57 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
 }
 
 struct Dependencies {
-    internal: HashSet<PackageName>,
+    /// Map of internal package name to the dependency type
+    internal: HashMap<PackageName, DependencyType>,
     external: BTreeMap<String, String>, // Package name and version
 }
 
 impl Dependencies {
-    pub fn new<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
+    pub fn new(
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
         workspaces: &HashMap<PackageName, PackageInfo>,
         package_manager: &PackageManager,
-        dependencies: I,
+        package_json: &crate::package_json::PackageJson,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
         let workspace_dir = resolved_workspace_json_path
             .parent()
             .expect("package.json path should have parent");
-        let mut internal = HashSet::new();
+        let mut internal = HashMap::new();
         let mut external = BTreeMap::new();
         let splitter =
             DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager);
-        for (name, version) in dependencies.into_iter() {
+
+        // Process production dependencies
+        for (name, version) in package_json.production_dependencies() {
             if let Some(workspace) = splitter.is_internal(name, version) {
-                internal.insert(workspace);
+                internal.insert(workspace, DependencyType::Production);
             } else {
                 external.insert(name.clone(), version.clone());
             }
         }
+
+        // Process dev dependencies
+        for (name, version) in package_json.dev_dependencies_iter() {
+            if let Some(workspace) = splitter.is_internal(name, version) {
+                // Only insert if not already present (production takes precedence)
+                internal.entry(workspace).or_insert(DependencyType::Dev);
+            } else {
+                external.insert(name.clone(), version.clone());
+            }
+        }
+
+        // Process optional dependencies
+        for (name, version) in package_json.optional_dependencies_iter() {
+            if let Some(workspace) = splitter.is_internal(name, version) {
+                // Only insert if not already present
+                internal.entry(workspace).or_insert(DependencyType::Optional);
+            } else {
+                external.insert(name.clone(), version.clone());
+            }
+        }
+
         Self { internal, external }
     }
 }

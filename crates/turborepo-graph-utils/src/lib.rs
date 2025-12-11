@@ -22,8 +22,8 @@ pub enum Error {
     SelfDependency(String),
 }
 
-pub fn transitive_closure<N: Hash + Eq + PartialEq, I: IntoIterator<Item = NodeIndex>>(
-    graph: &Graph<N, ()>,
+pub fn transitive_closure<N: Hash + Eq + PartialEq, E, I: IntoIterator<Item = NodeIndex>>(
+    graph: &Graph<N, E>,
     indices: I,
     direction: petgraph::Direction,
 ) -> HashSet<&N> {
@@ -116,7 +116,9 @@ fn edges_to_break_cycle<N: Clone + Hash + Eq, E: Clone>(
     breaking_edge_sets
 }
 
-pub fn validate_graph<N: Display + Clone + Hash + Eq>(graph: &Graph<N, ()>) -> Result<(), Error> {
+pub fn validate_graph<N: Display + Clone + Hash + Eq, E: Clone>(
+    graph: &Graph<N, E>,
+) -> Result<(), Error> {
     let cycles = cycles_and_cut_candidates(graph);
 
     let cycle_lines = cycles

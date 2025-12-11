@@ -718,6 +718,10 @@ pub enum Command {
         /// Respect `.gitignore` when copying files to <OUT-DIR>
         #[clap(long, default_missing_value = "true", num_args = 0..=1, require_equals = true)]
         use_gitignore: Option<bool>,
+        /// Exclude devDependencies from the pruned output (only include production
+        /// dependencies)
+        #[clap(long)]
+        production: bool,
     },
 
     /// Run tasks across projects in your monorepo
@@ -1683,6 +1687,7 @@ pub async fn run(
             docker,
             output_dir,
             use_gitignore,
+            production,
         } => {
             let event = CommandEventBuilder::new("prune").with_parent(&root_telemetry);
             event.track_call();
@@ -1694,6 +1699,7 @@ pub async fn run(
             let docker = *docker;
             let output_dir = output_dir.clone();
             let use_gitignore = use_gitignore.unwrap_or(true);
+            let production = *production;
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
@@ -1703,6 +1709,7 @@ pub async fn run(
                 docker,
                 &output_dir,
                 use_gitignore,
+                production,
                 event_child,
             )
             .await?;
@@ -2836,6 +2843,7 @@ mod test {
             docker: false,
             output_dir: "out".to_string(),
             use_gitignore: None,
+            production: false,
         };
 
         assert_eq!(
@@ -2867,6 +2875,7 @@ mod test {
                     docker: false,
                     output_dir: "out".to_string(),
                     use_gitignore: None,
+                    production: false,
                 }),
                 ..Args::default()
             }
@@ -2881,6 +2890,7 @@ mod test {
                     docker: false,
                     output_dir: "out".to_string(),
                     use_gitignore: None,
+                    production: false,
                 }),
                 ..Args::default()
             }
@@ -2895,6 +2905,7 @@ mod test {
                     docker: true,
                     output_dir: "out".to_string(),
                     use_gitignore: None,
+                    production: false,
                 }),
                 ..Args::default()
             }
@@ -2909,6 +2920,7 @@ mod test {
                     docker: false,
                     output_dir: "dist".to_string(),
                     use_gitignore: None,
+                    production: false,
                 }),
                 ..Args::default()
             }
@@ -2925,6 +2937,7 @@ mod test {
                     docker: true,
                     output_dir: "dist".to_string(),
                     use_gitignore: None,
+                    production: false,
                 }),
                 ..Args::default()
             },
@@ -2942,6 +2955,7 @@ mod test {
                     docker: true,
                     output_dir: "dist".to_string(),
                     use_gitignore: None,
+                    production: false,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2964,6 +2978,7 @@ mod test {
                     docker: true,
                     output_dir: "dist".to_string(),
                     use_gitignore: None,
+                    production: false,
                 }),
                 ..Args::default()
             },
@@ -2981,6 +2996,7 @@ mod test {
                     docker: false,
                     output_dir: "out".to_string(),
                     use_gitignore: Some(true),
+                    production: false,
                 }),
                 ..Args::default()
             },
@@ -2998,6 +3014,7 @@ mod test {
                     docker: false,
                     output_dir: "out".to_string(),
                     use_gitignore: Some(true),
+                    production: false,
                 }),
                 ..Args::default()
             },
@@ -3015,6 +3032,25 @@ mod test {
                     docker: false,
                     output_dir: "out".to_string(),
                     use_gitignore: Some(false),
+                    production: false,
+                }),
+                ..Args::default()
+            },
+        }
+        .test();
+
+        CommandTestCase {
+            command: "prune",
+            command_args: vec![vec!["foo"], vec!["--production"]],
+            global_args: vec![],
+            expected_output: Args {
+                command: Some(Command::Prune {
+                    scope: None,
+                    scope_arg: Some(vec!["foo".to_string()]),
+                    docker: false,
+                    output_dir: "out".to_string(),
+                    use_gitignore: None,
+                    production: true,
                 }),
                 ..Args::default()
             },
