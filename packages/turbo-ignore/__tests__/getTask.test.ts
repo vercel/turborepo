@@ -13,12 +13,12 @@ describe("getWorkspace()", () => {
     );
   });
 
-  it("getTask returns a quoted task if user-supplied", () => {
+  it("getTask returns the task unquoted if user-supplied", () => {
     expect(
       getTask({
         task: "workspace#task",
       })
-    ).toEqual(`"workspace#task"`);
+    ).toEqual("workspace#task");
 
     expect(mockConsole.log).toHaveBeenNthCalledWith(
       1,
