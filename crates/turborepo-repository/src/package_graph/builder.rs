@@ -594,20 +594,10 @@ impl Dependencies {
         let splitter =
             DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager);
 
-        // Process production dependencies
-        for (name, version) in package_json.production_dependencies() {
-            if let Some(workspace) = splitter.is_internal(name, version) {
-                internal.insert(workspace, DependencyType::Production);
-            } else {
-                external.insert(name.clone(), version.clone());
-            }
-        }
-
         // Process dev dependencies
         for (name, version) in package_json.dev_dependencies_iter() {
             if let Some(workspace) = splitter.is_internal(name, version) {
-                // Only insert if not already present (production takes precedence)
-                internal.entry(workspace).or_insert(DependencyType::Dev);
+                internal.insert(workspace, DependencyType::Dev);
             } else {
                 external.insert(name.clone(), version.clone());
             }
@@ -616,8 +606,16 @@ impl Dependencies {
         // Process optional dependencies
         for (name, version) in package_json.optional_dependencies_iter() {
             if let Some(workspace) = splitter.is_internal(name, version) {
-                // Only insert if not already present
-                internal.entry(workspace).or_insert(DependencyType::Optional);
+                internal.insert(workspace, DependencyType::Optional);
+            } else {
+                external.insert(name.clone(), version.clone());
+            }
+        }
+
+        // Process production dependencies
+        for (name, version) in package_json.production_dependencies() {
+            if let Some(workspace) = splitter.is_internal(name, version) {
+                internal.insert(workspace, DependencyType::Production);
             } else {
                 external.insert(name.clone(), version.clone());
             }

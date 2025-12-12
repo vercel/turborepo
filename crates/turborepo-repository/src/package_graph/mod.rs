@@ -6,7 +6,7 @@ use std::{
 use itertools::Itertools;
 use petgraph::{
     graph::{Edge, NodeIndex},
-    visit::EdgeRef,
+    visit::{EdgeRef, VisitMap, Visitable},
 };
 use serde::Serialize;
 use tracing::debug;
@@ -472,12 +472,12 @@ impl PackageGraph {
         nodes: I,
         include_dev: Option<bool>,
     ) -> HashSet<&'a PackageNode> {
-        let indices: Vec<_> = nodes
+        let mut visited = HashSet::new();
+        let mut seen = self.graph.visit_map();
+        let mut stack: Vec<NodeIndex> = nodes
             .into_iter()
             .flat_map(|node| self.node_lookup.get(node).copied())
             .collect();
-
-        let mut visited = HashSet::new();
 
         let should_follow_edge = |edge_idx: petgraph::graph::EdgeIndex| -> bool {
             match include_dev {
@@ -495,28 +495,8 @@ impl PackageGraph {
             }
         };
 
-        // Use a custom DFS that filters edges
-        for start in indices {
-            self.dfs_with_edge_filter(start, &mut visited, &should_follow_edge);
-        }
-
-        visited
-    }
-
-    /// Custom DFS that filters edges based on a predicate
-    fn dfs_with_edge_filter<'a, F>(
-        &'a self,
-        start: NodeIndex,
-        visited: &mut HashSet<&'a PackageNode>,
-        should_follow_edge: &F,
-    ) where
-        F: Fn(petgraph::graph::EdgeIndex) -> bool,
-    {
-        let mut stack = vec![start];
-        let mut seen = HashSet::new();
-
         while let Some(node) = stack.pop() {
-            if !seen.insert(node) {
+            if !seen.visit(node) {
                 continue;
             }
 
@@ -524,7 +504,6 @@ impl PackageGraph {
                 visited.insert(weight);
             }
 
-            // Get outgoing edges and filter them
             for edge in self
                 .graph
                 .edges_directed(node, petgraph::Direction::Outgoing)
@@ -534,6 +513,8 @@ impl PackageGraph {
                 }
             }
         }
+
+        visited
     }
 
     pub fn transitive_external_dependencies<'a, I: IntoIterator<Item = &'a PackageName>>(
@@ -1186,6 +1167,56 @@ mod test {
         assert!(
             prod_closure.contains(&PackageNode::Workspace("lib-shared".into())),
             "lib-shared should be in production closure (transitive prod dep via lib-prod)"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_dependency_type_precedence_keeps_production() {
+        // If a workspace dependency is listed in both dependencies and devDependencies,
+        // the edge should be treated as production (so it is kept in production
+        // pruning).
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+        let pkg_graph = PackageGraph::builder(
+            &root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some({
+            let mut map = HashMap::new();
+            map.insert(
+                root.join_component("app"),
+                PackageJson::from_value(json!({
+                    "name": "app",
+                    "dependencies": {
+                        "lib": "workspace:*"
+                    },
+                    "devDependencies": {
+                        "lib": "workspace:*"
+                    }
+                }))
+                .unwrap(),
+            );
+            map.insert(
+                root.join_component("lib"),
+                PackageJson::from_value(json!({
+                    "name": "lib"
+                }))
+                .unwrap(),
+            );
+            map
+        }))
+        .build()
+        .await
+        .unwrap();
+
+        assert!(pkg_graph.validate().is_ok());
+
+        let prod_closure =
+            pkg_graph.transitive_closure_production(Some(&PackageNode::Workspace("app".into())));
+        assert!(
+            prod_closure.contains(&PackageNode::Workspace("lib".into())),
+            "lib should be in production closure when also listed as a production dependency"
         );
     }
 }

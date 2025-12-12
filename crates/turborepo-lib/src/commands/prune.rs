@@ -23,6 +23,17 @@ use crate::{
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
+fn strip_dev_dependencies_from_package_json(contents: &str) -> Result<String, serde_json::Error> {
+    let mut json: serde_json::Value = serde_json::from_str(contents)?;
+    if let Some(obj) = json.as_object_mut() {
+        obj.remove("devDependencies");
+    }
+
+    let mut pruned_contents = serde_json::to_string_pretty(&json)?;
+    pruned_contents.push('\n');
+    Ok(pruned_contents)
+}
+
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum Error {
     #[error("I/O error while pruning: {0}")]
@@ -111,8 +122,16 @@ pub async fn prune(
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
     telemetry.track_arg_usage("production", production);
 
-    let prune =
-        Prune::new(base, scope, docker, output_dir, use_gitignore, production, telemetry).await?;
+    let prune = Prune::new(
+        base,
+        scope,
+        docker,
+        output_dir,
+        use_gitignore,
+        production,
+        telemetry,
+    )
+    .await?;
 
     println!(
         "Generating pruned monorepo for {} in {}",
@@ -133,6 +152,7 @@ pub async fn prune(
 
     let mut workspace_paths = Vec::new();
     let mut workspace_names = Vec::new();
+    let mut workspace_package_json_paths = Vec::new();
     let workspaces = prune.internal_dependencies();
     let lockfile_keys: Vec<_> = prune
         .package_graph
@@ -149,6 +169,7 @@ pub async fn prune(
         // We don't want to do any copying for the root workspace
         if let PackageName::Other(workspace) = workspace {
             prune.copy_workspace(entry.package_json_path())?;
+            workspace_package_json_paths.push(entry.package_json_path().to_owned());
             workspace_paths.push(
                 entry
                     .package_json_path()
@@ -203,8 +224,7 @@ pub async fn prune(
         let pruned_patches = lockfile.patches()?;
         trace!(
             "original patches: {:?}, pruned patches: {:?}",
-            original_patches,
-            pruned_patches
+            original_patches, pruned_patches
         );
 
         let repo_root = &prune.root;
@@ -244,6 +264,10 @@ pub async fn prune(
         }
     } else {
         prune.copy_file(package_json(), Some(CopyDestination::Docker))?;
+    }
+
+    if prune.production {
+        prune.strip_dev_dependencies(&workspace_package_json_paths)?;
     }
 
     Ok(())
@@ -355,6 +379,50 @@ impl<'a> Prune<'a> {
 
     fn docker_directory(&self) -> AbsoluteSystemPathBuf {
         self.out_directory.join_component("json")
+    }
+
+    fn strip_dev_dependencies(
+        &self,
+        workspace_package_json_paths: &[AnchoredSystemPathBuf],
+    ) -> Result<(), Error> {
+        self.strip_dev_dependencies_in_output(self.full_directory.resolve(package_json()))?;
+        if self.docker {
+            self.strip_dev_dependencies_in_output(self.docker_directory().resolve(package_json()))?;
+        }
+
+        for package_json_path in workspace_package_json_paths {
+            self.strip_dev_dependencies_in_output(self.full_directory.resolve(package_json_path))?;
+            if self.docker {
+                self.strip_dev_dependencies_in_output(
+                    self.docker_directory().resolve(package_json_path),
+                )?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn strip_dev_dependencies_in_output(
+        &self,
+        package_json_path: AbsoluteSystemPathBuf,
+    ) -> Result<(), Error> {
+        if !package_json_path.try_exists()? {
+            return Ok(());
+        }
+
+        let permissions = package_json_path.symlink_metadata()?.permissions();
+        let contents = package_json_path.read_to_string()?;
+        let pruned_contents = strip_dev_dependencies_from_package_json(&contents)?;
+
+        package_json_path.create_with_contents(&pruned_contents)?;
+        #[cfg(unix)]
+        package_json_path.set_mode(permissions.mode())?;
+        #[cfg(windows)]
+        if permissions.readonly() {
+            package_json_path.set_readonly()?
+        }
+
+        Ok(())
     }
 
     fn copy_file(
@@ -495,5 +563,22 @@ impl<'a> Prune<'a> {
         let turbo_json =
             RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.into();
         Ok(Some((turbo_json, turbo_json_name)))
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_strip_dev_dependencies_from_package_json() {
+        let input = r#"{
+  "name": "app",
+  "devDependencies": { "typescript": "5.0.0" },
+  "dependencies": { "react": "18.0.0" }
+}"#;
+        let out = strip_dev_dependencies_from_package_json(input).unwrap();
+        assert!(!out.contains("devDependencies"));
+        assert!(out.contains("\"dependencies\""));
     }
 }
