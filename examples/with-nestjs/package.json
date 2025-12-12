@@ -1,26 +1,25 @@
 {
-  "name": "my-turborepo",
-  "version": "0.0.0",
-  "private": true,
-  "description": "",
-  "author": "",
-  "license": "UNLICENSED",
-  "scripts": {
-    "dev": "turbo run dev",
-    "build": "turbo run build",
-    "test": "turbo run test",
-    "test:e2e": "turbo run test:e2e",
-    "lint": "turbo run lint",
-    "format": "prettier --write \"**/*.{ts,tsx,md}\""
-  },
-  "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
-    "@repo/typescript-config": "workspace:*",
-    "prettier": "^3.2.5",
-    "turbo": "^2.6.1"
-  },
-  "packageManager": "pnpm@8.15.5",
-  "engines": {
-    "node": ">=18"
-  }
+	"name": "my-turborepo",
+	"version": "0.0.0",
+	"private": true,
+	"description": "",
+	"author": "",
+	"license": "UNLICENSED",
+	"scripts": {
+		"dev": "turbo run dev",
+		"build": "turbo run build",
+		"test": "turbo run test",
+		"test:e2e": "turbo run test:e2e",
+		"format-and-lint": "biome check .",
+		"format-and-lint:fix": "biome check . --write"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.3.8",
+		"@repo/typescript-config": "workspace:*",
+		"turbo": "^2.6.1"
+	},
+	"packageManager": "pnpm@8.15.5",
+	"engines": {
+		"node": ">=18"
+	}
 }
