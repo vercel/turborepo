@@ -203,7 +203,8 @@ const validateHashLink = (doc: Document, href: string) => {
       // Because we're parsing the raw document (not the rendered output), the JSX declaration is still present.
       hashLink.replace(
         "-experimental",
-        "-experimentalbadgeexperimentalexperimentalbadge"
+        "-experimentalbadgeexperimentalexperimentalbadge",
+        "-experimentalbadgepre-releaseexperimentalbadge"
       )
     )
   ) {
