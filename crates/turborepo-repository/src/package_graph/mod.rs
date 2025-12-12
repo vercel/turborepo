@@ -323,7 +323,7 @@ impl PackageGraph {
     pub fn dependencies<'a>(&'a self, node: &PackageNode) -> HashSet<&'a PackageNode> {
         let mut dependencies = turborepo_graph_utils::transitive_closure(
             &self.graph,
-            self.node_lookup.get(node).cloned(),
+            self.node_lookup.get(node).copied(),
             petgraph::Direction::Outgoing,
         );
         // Add in all root dependencies as they're implied dependencies for every
@@ -348,7 +348,7 @@ impl PackageGraph {
         } else {
             turborepo_graph_utils::transitive_closure(
                 &self.graph,
-                self.node_lookup.get(node).cloned(),
+                self.node_lookup.get(node).copied(),
                 petgraph::Direction::Incoming,
             )
         };
@@ -464,7 +464,8 @@ impl PackageGraph {
     /// dependency type.
     ///
     /// - `include_dev: None` - include all dependencies
-    /// - `include_dev: Some(false)` - exclude dev dependencies (production only)
+    /// - `include_dev: Some(false)` - exclude dev dependencies (production
+    ///   only)
     /// - `include_dev: Some(true)` - include only dev dependencies
     fn transitive_closure_inner<'a, 'b, I: IntoIterator<Item = &'b PackageNode>>(
         &'a self,
@@ -473,7 +474,7 @@ impl PackageGraph {
     ) -> HashSet<&'a PackageNode> {
         let indices: Vec<_> = nodes
             .into_iter()
-            .flat_map(|node| self.node_lookup.get(node).cloned())
+            .flat_map(|node| self.node_lookup.get(node).copied())
             .collect();
 
         let mut visited = HashSet::new();
@@ -524,7 +525,10 @@ impl PackageGraph {
             }
 
             // Get outgoing edges and filter them
-            for edge in self.graph.edges_directed(node, petgraph::Direction::Outgoing) {
+            for edge in self
+                .graph
+                .edges_directed(node, petgraph::Direction::Outgoing)
+            {
                 if should_follow_edge(edge.id()) {
                     stack.push(edge.target());
                 }
