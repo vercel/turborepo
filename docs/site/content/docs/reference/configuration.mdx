@@ -508,7 +508,7 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
   `turbo.json`.
 </Callout>
 
-When using [Package Configurations](/docs/reference/package-configurations), array fields normally completely replace the values from the root `turbo.json`. The `$TURBO_EXTENDS$` microsyntax changes this behavior to append instead of replace.
+When using [Package Configurations](/docs/reference/package-configurations), array fields normally completely replace the values from the root `turbo.json`. The `$TURBO_EXTENDS$` microsyntax changes this behavior to **append** instead of **replace**.
 
 This microsyntax can be used in the following array fields:
 
@@ -548,7 +548,7 @@ A Package Configuration can add additional outputs while keeping the root output
 }
 ```
 
-Without `$TURBO_EXTENDS$`, the `outputs` array would be completely replaced with `[".next/**", "!.next/cache/**"]`, losing the `"dist/**"` from the root configuration.
+Without `$TURBO_EXTENDS$`, the `outputs` array would be completely replaced with `[".next/**", "!.next/cache/**"]`, dropping the `"dist/**"` from the root configuration.
 
 ### `outputLogs`
 

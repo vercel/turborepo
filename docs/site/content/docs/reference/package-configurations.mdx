@@ -38,12 +38,23 @@ Configuration in a package can override any of [the configurations for a
 task](/docs/reference/configuration#defining-tasks). Any keys that are not included are inherited
 from the extended `turbo.json`.
 
-<Callout type="good-to-know">
-  By default, array fields like `outputs` and `env` completely replace the
-  values from the root configuration. To append to inherited values instead of
-  replacing them, use the [`$TURBO_EXTENDS$`
-  microsyntax](/docs/reference/configuration#turbo_extends).
-</Callout>
+## Extending array fields with `$TURBO_EXTENDS$`
+
+By default, array fields like `outputs` and `env` **completely replace** the values from the root configuration. To **add** to inherited values instead, use the [`$TURBO_EXTENDS$` microsyntax](/docs/reference/configuration#turbo_extends):
+
+```jsonc title="./apps/my-app/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      // Inherits `outputs` from root turbo.json AND adds ".cache/**"
+      "outputs": ["$TURBO_EXTENDS$", ".cache/**"]
+    }
+  }
+}
+```
+
+Without `$TURBO_EXTENDS$`, the `outputs` array above would completely override the root configuration's `outputs`. With `$TURBO_EXTENDS$`, the values from the root are preserved and `.cache/**` is appended.
 
 ## Examples
 
