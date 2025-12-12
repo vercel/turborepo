@@ -146,6 +146,31 @@ const prepareDocumentMapEntry = async (
   }
 };
 
+/** Checks if the hash exists in a document's headings, accounting for ExperimentalBadge suffixes */
+const hashExistsInHeadings = (headings: string[], hash: string): boolean => {
+  if (headings.includes(hash)) {
+    return true;
+  }
+
+  // Handle experimental badge suffix
+  const experimentalHeading = hash.replace(
+    "-experimental",
+    "-experimentalbadgeexperimentalexperimentalbadge"
+  );
+  if (headings.includes(experimentalHeading)) {
+    return true;
+  }
+
+  // Handle pre-release badge suffix
+  const preReleaseHeading =
+    hash + "-experimentalbadgepre-releaseexperimentalbadge";
+  if (headings.includes(preReleaseHeading)) {
+    return true;
+  }
+
+  return false;
+};
+
 /** Checks if the links point to existing documents */
 const validateInternalLink =
   (documentMap: Map<string, Document>) => (doc: Document, href: string) => {
@@ -172,7 +197,7 @@ const validateInternalLink =
       });
     } else if (hash && !EXCLUDED_HASHES.includes(hash)) {
       // Check if the hash link points to an existing section within the document
-      const hashFound = foundPage.headings.includes(hash);
+      const hashFound = hashExistsInHeadings(foundPage.headings, hash);
 
       if (!hashFound) {
         errors.push({
