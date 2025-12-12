@@ -197,19 +197,26 @@ const validateHashLink = (doc: Document, href: string) => {
     return [];
   }
 
-  if (
-    doc.headings.includes(
-      // Handles when the link has the experimental badge in it.
-      // Because we're parsing the raw document (not the rendered output), the JSX declaration is still present.
-      hashLink.replace(
-        "-experimental",
-        "-experimentalbadgeexperimentalexperimentalbadge",
-        "-experimentalbadgepre-releaseexperimentalbadge"
-      )
-    )
-  ) {
+  // Handles when the link has the experimental badge in it.
+  // Because we're parsing the raw document (not the rendered output), the JSX declaration is still present.
+  const experimentalHeading = hashLink.replace(
+    "-experimental",
+    "-experimentalbadgeexperimentalexperimentalbadge"
+  );
+  const preReleaseHeading =
+    hashLink + "-experimentalbadgepre-releaseexperimentalbadge";
+
+  if (doc.headings.includes(experimentalHeading)) {
     console.warn(
-      `The hash link "${hashLink}" passed when including the <ExperimentalBadge /> JSX declaration.`
+      `The hash link "${hashLink}" passed when including the <ExperimentalBadge>Experimental</ExperimentalBadge> JSX declaration.`
+    );
+    console.log();
+    return [];
+  }
+
+  if (doc.headings.includes(preReleaseHeading)) {
+    console.warn(
+      `The hash link "${hashLink}" passed when including the <ExperimentalBadge>Pre-release</ExperimentalBadge> JSX declaration.`
     );
     console.log();
     return [];
