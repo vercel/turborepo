@@ -34,27 +34,60 @@ key:
   special name used to identify the root directory of the monorepo.
 </Callout>
 
-Configuration in a package can override any of [the configurations for a
-task](/docs/reference/configuration#defining-tasks). Any keys that are not included are inherited
-from the extended `turbo.json`.
+## Inheritance behavior
 
-## Extending array fields with `$TURBO_EXTENDS$`
+When a Package Configuration extends the root `turbo.json`, task properties are inherited differently depending on their type.
 
-By default, array fields like `outputs` and `env` **completely replace** the values from the root configuration. To **add** to inherited values instead, use the [`$TURBO_EXTENDS$` microsyntax](/docs/reference/configuration#turbo_extends):
+### Scalar fields are inherited
+
+Scalar fields like `outputLogs`, `cache`, `persistent`, and `interactive` are **inherited** from the root configuration. You only need to specify them in a Package Configuration if you want to override them.
+
+For example, if your root `turbo.json` sets `"outputLogs": "hash-only"` for a task, all packages inherit that setting automatically.
+
+### Array fields replace by default
+
+Array fields like `outputs`, `env`, `inputs`, `dependsOn`, and `passThroughEnv` **completely replace** the root configuration's values by default.
+
+```jsonc title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"],
+      "env": ["NODE_ENV"]
+    }
+  }
+}
+```
 
 ```jsonc title="./apps/my-app/turbo.json"
 {
   "extends": ["//"],
   "tasks": {
     "build": {
-      // Inherits `outputs` from root turbo.json AND adds ".cache/**"
-      "outputs": ["$TURBO_EXTENDS$", ".cache/**"]
+      // This REPLACES the root outputs - "dist/**" is NOT included
+      "outputs": [".next/**"]
     }
   }
 }
 ```
 
-Without `$TURBO_EXTENDS$`, the `outputs` array above would completely override the root configuration's `outputs`. With `$TURBO_EXTENDS$`, the values from the root are preserved and `.cache/**` is appended.
+### Extending arrays with `$TURBO_EXTENDS$` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+To **add** to inherited array values instead of replacing them, use the [`$TURBO_EXTENDS$` microsyntax](/docs/reference/configuration#turbo_extends):
+
+```jsonc title="./apps/my-app/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      // Inherits "dist/**" from root AND adds ".next/**"
+      "outputs": ["$TURBO_EXTENDS$", ".next/**"]
+    }
+  }
+}
+```
+
+The `$TURBO_EXTENDS$` marker must be the first element in the array. It works with `outputs`, `env`, `inputs`, `dependsOn`, `passThroughEnv`, and `with`.
 
 ## Examples
 
@@ -161,40 +194,9 @@ but continue to inherit any other tasks defined at the root.
 
 ## Comparison to package-specific tasks
 
-At first glance, Package Configurations may sound a lot like the
-[`package#task` syntax](/docs/crafting-your-repository/configuring-tasks#depending-on-a-specific-task-in-a-specific-package) in the root `turbo.json`. The features are
-similar, but have one significant difference: when you declare a package-specific task
-in the root `turbo.json`, it _completely_ overwrites the baseline task
-configuration. With a Package Configuration, the task configuration is merged
-instead.
+The [`package#task` syntax](/docs/crafting-your-repository/configuring-tasks#depending-on-a-specific-task-in-a-specific-package) in the root `turbo.json` **completely overwrites** all task configuration—nothing is inherited.
 
-Consider the example of the monorepo with multiple Next.js apps and a Sveltekit
-app again. With a package-specific task, you might configure your root
-`turbo.json` like this:
-
-```jsonc title="./turbo.json"
-{
-  "tasks": {
-    "build": {
-      "outputLogs": "hash-only",
-      "inputs": ["src/**"],
-      "outputs": [".next/**", "!.next/cache/**"]
-    },
-    "my-sveltekit-app#build": {
-      "outputLogs": "hash-only", // must duplicate this
-      "inputs": ["src/**"], // must duplicate this
-      "outputs": [".svelte-kit/**"]
-    }
-  }
-}
-```
-
-In this example, `my-sveltekit-app#build` completely overwrites `build` for the
-Sveltekit app, so `outputLogs` and `inputs` also need to be duplicated.
-
-With Package Configurations, `outputLogs` and `inputs` are inherited, so
-you don't need to duplicate them. You only need to override `outputs` in
-`my-sveltekit-app` config.
+With Package Configurations, scalar fields are inherited and only the fields you specify are overridden. This means less duplication when you only need to change one or two properties.
 
 <Callout type="info">
   Although there are no plans to remove package-specific task configurations, we
@@ -236,18 +238,18 @@ Package Configuration for `my-nextjs-app`:
 {
   "tasks": {
     "my-nextjs-app#build": {
-      // ❌ This is not allowed. Even though it's
+      // This is not allowed. Even though it's
       // referencing the correct package, "my-nextjs-app"
       // is inferred, and we don't need to specify it again.
       // This syntax also has different behavior, so we do not want to allow it.
       // (see "Comparison to package-specific tasks" section)
     },
     "my-sveltekit-app#build": {
-      // ❌ Changing configuration for the "my-sveltekit-app" package
+      // Changing configuration for the "my-sveltekit-app" package
       // from Package Configuration in "my-nextjs-app" is not allowed.
     },
     "build": {
-      // ✅ just use the task name!
+      // Just use the task name!
     }
   }
 }

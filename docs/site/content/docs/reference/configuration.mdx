@@ -500,7 +500,7 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 }
 ```
 
-#### `$TURBO_EXTENDS$`
+#### `$TURBO_EXTENDS$` <ExperimentalBadge>Pre-release</ExperimentalBadge>
 
 <Callout type="info">
   This feature requires enabling
@@ -508,7 +508,7 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
   `turbo.json`.
 </Callout>
 
-When using [Package Configurations](/docs/reference/package-configurations), array fields normally completely replace the values from the root `turbo.json`. The `$TURBO_EXTENDS$` microsyntax changes this behavior to **append** instead of **replace**.
+When using [Package Configurations](/docs/reference/package-configurations), array fields completely replace the values from the root `turbo.json` by default. The `$TURBO_EXTENDS$` microsyntax changes this behavior to **append** instead of **replace**.
 
 This microsyntax can be used in the following array fields:
 
