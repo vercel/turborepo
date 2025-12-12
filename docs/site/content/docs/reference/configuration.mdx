@@ -187,6 +187,30 @@ Turborepo's Environment Modes allow you to control which environment variables a
 
 Read more about [Environment Modes](/docs/crafting-your-repository/using-environment-variables#environment-modes).
 
+### `futureFlags`
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "turboExtendsKeyword": true
+  }
+}
+```
+
+Enable experimental features that will become the default behavior in future versions of Turborepo.
+
+<Callout type="info">
+  `futureFlags` can only be set in the root `turbo.json`. An error will be
+  thrown if set in a [Package
+  Configuration](/docs/reference/package-configurations).
+</Callout>
+
+#### `turboExtendsKeyword`
+
+Default: `false`
+
+When enabled, allows using the [`$TURBO_EXTENDS$`](#turbo_extends) microsyntax in array fields. This microsyntax changes the behavior of [Package Configurations](/docs/reference/package-configurations) from replacing array fields to appending to them.
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"
@@ -475,6 +499,56 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
   }
 }
 ```
+
+#### `$TURBO_EXTENDS$` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+<Callout type="info">
+  This feature requires enabling
+  [`futureFlags.turboExtendsKeyword`](#turboextendskeyword) in your root
+  `turbo.json`.
+</Callout>
+
+When using [Package Configurations](/docs/reference/package-configurations), array fields completely replace the values from the root `turbo.json` by default. The `$TURBO_EXTENDS$` microsyntax changes this behavior to **append** instead of **replace**.
+
+This microsyntax can be used in the following array fields:
+
+- `dependsOn`
+- `env`
+- `inputs`
+- `outputs`
+- `passThroughEnv`
+- `with`
+
+For example, if your root `turbo.json` defines:
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "turboExtendsKeyword": true
+  },
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"]
+    }
+  }
+}
+```
+
+A Package Configuration can add additional outputs while keeping the root outputs:
+
+```jsonc title="./apps/web/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      // Inherits "dist/**" from root, and adds ".next/**"
+      "outputs": ["$TURBO_EXTENDS$", ".next/**", "!.next/cache/**"]
+    }
+  }
+}
+```
+
+Without `$TURBO_EXTENDS$`, the `outputs` array would be completely replaced with `[".next/**", "!.next/cache/**"]`, dropping the `"dist/**"` from the root configuration.
 
 ### `outputLogs`
 
