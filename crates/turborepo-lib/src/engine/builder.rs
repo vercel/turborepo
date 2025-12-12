@@ -14,7 +14,7 @@ use crate::{
     config,
     task_graph::TaskDefinition,
     turbo_json::{
-        FutureFlags, ProcessedTaskDefinition, TurboJson, TurboJsonLoader, validator::Validator,
+        validator::Validator, FutureFlags, ProcessedTaskDefinition, TurboJson, TurboJsonLoader,
     },
 };
 
