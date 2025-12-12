@@ -51,7 +51,9 @@ const slugger = new GitHubSlugger();
 /** Collect the paths of all .mdx files we care about */
 const getAllMdxFilePaths = async (): Promise<string[]> => {
   const allFiles = await fs.readdir(DOCS_PATH, { recursive: true });
-  return allFiles.filter((file) => file.endsWith(".mdx"));
+  return allFiles.filter(
+    (file) => file.endsWith(".mdx") && !file.startsWith("openapi/")
+  );
 };
 
 // Returns the slugs of all headings in a tree
@@ -152,7 +154,7 @@ const hashExistsInHeadings = (headings: string[], hash: string): boolean => {
     return true;
   }
 
-  // Handle experimental badge suffix
+  // Handle experimental badge suffix: -experimental -> -experimentalbadgeexperimentalexperimentalbadge
   const experimentalHeading = hash.replace(
     "-experimental",
     "-experimentalbadgeexperimentalexperimentalbadge"
@@ -161,9 +163,11 @@ const hashExistsInHeadings = (headings: string[], hash: string): boolean => {
     return true;
   }
 
-  // Handle pre-release badge suffix
-  const preReleaseHeading =
-    hash + "-experimentalbadgepre-releaseexperimentalbadge";
+  // Handle pre-release badge suffix: -pre-release -> -experimentalbadgepre-releaseexperimentalbadge
+  const preReleaseHeading = hash.replace(
+    "-pre-release",
+    "-experimentalbadgepre-releaseexperimentalbadge"
+  );
   if (headings.includes(preReleaseHeading)) {
     return true;
   }
