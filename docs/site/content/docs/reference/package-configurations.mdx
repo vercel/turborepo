@@ -5,6 +5,7 @@ description: Learn how to use Package Configurations to bring greater task flexi
 
 import { Callout } from '#components/callout';
 import { ExperimentalBadge } from '#components/experimental-badge';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 Many monorepos can declare a `turbo.json` in the root directory with a
 [task description](/docs/reference/configuration#tasks) that applies to all packages. But, sometimes, a monorepo can contain packages that need to configure their tasks differently.
@@ -30,8 +31,10 @@ key:
 ```
 
 <Callout>
-  For now, the only valid value for the `extends` key is `["//"]`. `//` is a
-  special name used to identify the root directory of the monorepo.
+  By default, the only valid value for the `extends` key is `["//"]`. `//` is a
+  special name used to identify the root directory of the monorepo. With the
+  [`futureFlags.nonRootExtends`](/docs/reference/configuration#nonrootextends-pre-release)
+  flag, you can also extend from other packages.
 </Callout>
 
 ## Inheritance behavior
@@ -88,6 +91,111 @@ To **add** to inherited array values instead of replacing them, use the [`$TURBO
 ```
 
 The `$TURBO_EXTENDS$` marker must be the first element in the array. It works with `outputs`, `env`, `inputs`, `dependsOn`, `passThroughEnv`, and `with`.
+
+### Extending from other packages <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+By default, Package Configurations can only extend from the root `turbo.json`. With the [`futureFlags.nonRootExtends`](/docs/reference/configuration#nonrootextends-pre-release) flag, you can extend from any package that has a `turbo.json`.
+
+First, enable the flag in your root `turbo.json`:
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "nonRootExtends": true
+  }
+}
+```
+
+Then, extend from any package by using its `name` from `package.json` in your `extends` array. For example, if you have a Next.js app at `./apps/web` with `"name": "web"` in its `package.json`:
+
+```jsonc title="./apps/web/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": [".next/**", "!.next/cache/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
+```
+
+Another Next.js app can extend from it to share the same configuration:
+
+```jsonc title="./apps/docs/turbo.json"
+{
+  "extends": ["//", "web"],
+  "tasks": {
+    "build": {
+      // Additional customization specific to this package
+      "env": ["NEXT_PUBLIC_DOCS_URL"]
+    }
+  }
+}
+```
+
+<Callout type="warn">
+  When extending from multiple configurations, the root (`"//"`) must always be
+  listed **first** in the `extends` array.
+</Callout>
+
+#### Inheritance order
+
+When extending from multiple configurations, task definitions are merged in the order they appear in the `extends` array:
+
+1. Root `turbo.json` (`"//"`) is applied first
+2. Each additional package configuration is applied in order
+3. The current package's configuration is applied last
+
+Later configurations override earlier ones for scalar fields. For array fields, see [Extending arrays with `$TURBO_EXTENDS$`](#extending-arrays-with-turbo_extends-pre-release) to append instead of replace.
+
+#### Patterns for sharing configuration
+
+**Extend from an existing package**: If you already have a package with the configuration you want to share, other packages can extend from it directly. This works well when one package serves as the "canonical" example for similar packages (e.g., your main Next.js app that other Next.js apps can extend from).
+
+**Create a dedicated configuration package**: For larger monorepos, you may want to create packages specifically for sharing configuration. This keeps configuration separate from application code and makes it clear that other packages depend on these settings. These packages typically only contain a `package.json` and `turbo.json`.
+
+<Tabs items={["shared-config/package.json", "shared-config/turbo.json", "apps/web/turbo.json"]}>
+<Tab value="shared-config/package.json">
+```json title="./packages/shared-config/package.json"
+{
+  "name": "shared-config",
+  "private": true
+}
+```
+</Tab>
+<Tab value="shared-config/turbo.json">
+```jsonc title="./packages/shared-config/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
+```
+</Tab>
+<Tab value="apps/web/turbo.json">
+```jsonc title="./apps/web/turbo.json"
+{
+  "extends": ["//", "shared-config"],
+  "tasks": {
+    "build": {
+      "env": ["MY_API_URL"]
+    }
+  }
+}
+```
+</Tab>
+</Tabs>
 
 ## Examples
 
