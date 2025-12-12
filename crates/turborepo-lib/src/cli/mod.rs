@@ -721,7 +721,7 @@ pub enum Command {
         /// Exclude devDependencies from the pruned output (only include production
         /// dependencies)
         #[clap(long)]
-        production_only: bool,
+        production: bool,
     },
 
     /// Run tasks across projects in your monorepo
@@ -1687,7 +1687,7 @@ pub async fn run(
             docker,
             output_dir,
             use_gitignore,
-            production_only,
+            production,
         } => {
             let event = CommandEventBuilder::new("prune").with_parent(&root_telemetry);
             event.track_call();
@@ -1699,7 +1699,7 @@ pub async fn run(
             let docker = *docker;
             let output_dir = output_dir.clone();
             let use_gitignore = use_gitignore.unwrap_or(true);
-            let production_only = *production_only;
+            let production = *production;
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
             let event_child = event.child();
@@ -2843,7 +2843,7 @@ mod test {
             docker: false,
             output_dir: "out".to_string(),
             use_gitignore: None,
-            production_only: false,
+            production: false,
         };
 
         assert_eq!(
@@ -2875,7 +2875,7 @@ mod test {
                     docker: false,
                     output_dir: "out".to_string(),
                     use_gitignore: None,
-                    production_only: false,
+                    production: false,
                 }),
                 ..Args::default()
             }
