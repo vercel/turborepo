@@ -721,7 +721,7 @@ pub enum Command {
         /// Exclude devDependencies from the pruned output (only include production
         /// dependencies)
         #[clap(long)]
-        production: bool,
+        production_only: bool,
     },
 
     /// Run tasks across projects in your monorepo
