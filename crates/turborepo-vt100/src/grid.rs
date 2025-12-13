@@ -991,7 +991,7 @@ mod test {
 
         // Fill multiple lines to cause scrolling
         for i in 0..10 {
-            let line = format!("line{:06}", i);
+            let line = format!("line{i:06}");
             parser.process(line.as_bytes());
             parser.process(b"\r\n");
         }
@@ -1002,6 +1002,6 @@ mod test {
         parser.process(b"X"); // This should trigger col_wrap
 
         // The test passes if we don't panic
-        assert!(parser.screen().contents().contains("X"));
+        assert!(parser.screen().contents().contains('X'));
     }
 }
