@@ -600,7 +600,6 @@ impl<'a> EngineBuilder<'a> {
 
         let task_id_as_name = task_id.as_task_name();
 
-        // Helper to check if a task definition has `extends: false`
         let has_extends_false = |task_def: &RawTaskDefinition| -> bool {
             task_def
                 .extends
@@ -609,14 +608,12 @@ impl<'a> EngineBuilder<'a> {
                 .unwrap_or(false)
         };
 
-        // Helper to check if a task definition excludes the task via `extends: false`
-        // with no other configuration
         let is_task_excluded = |task_def: &RawTaskDefinition| -> bool {
             has_extends_false(task_def) && !Self::task_has_config_beyond_extends(task_def)
         };
 
-        // Check if this workspace's turbo.json has `extends: false` for the task
-        // (meaning the task should be excluded entirely for this workspace)
+        // Check if this package's turbo.json has `extends: false` for the task
+        // (meaning the task should be excluded entirely for this package)
         let task_key_to_check = if turbo_json.tasks.contains_key(&task_id_as_name) {
             Some(&task_id_as_name)
         } else if turbo_json.tasks.contains_key(task_name) {
@@ -628,7 +625,8 @@ impl<'a> EngineBuilder<'a> {
                 && turbo_json.tasks.contains_key(&base_task_name)
             {
                 // We need to handle this case specially since base_task_name is owned
-                None // Will check below
+                // Gets checked below
+                None
             } else {
                 None
             }
