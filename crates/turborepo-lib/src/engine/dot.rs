@@ -1,6 +1,6 @@
 use std::io;
 
-use petgraph::{Graph, visit::EdgeRef};
+use petgraph::{visit::EdgeRef, Graph};
 
 use super::{Built, Engine, TaskNode};
 

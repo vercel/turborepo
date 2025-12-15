@@ -13,7 +13,7 @@ use turborepo_task_id::TaskName;
 use super::{Pipeline, RawTaskDefinition, TurboJson};
 use crate::{
     cli::EnvMode,
-    config::{CONFIG_FILE, CONFIG_FILE_JSONC, Error},
+    config::{Error, CONFIG_FILE, CONFIG_FILE_JSONC},
     microfrontends::MicrofrontendsConfigs,
     run::task_access::TASK_ACCESS_CONFIG_PATH,
     turbo_json::FutureFlags,

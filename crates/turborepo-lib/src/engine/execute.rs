@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use futures::{StreamExt, stream::FuturesUnordered};
-use tokio::sync::{Semaphore, mpsc, oneshot};
+use futures::{stream::FuturesUnordered, StreamExt};
+use tokio::sync::{mpsc, oneshot, Semaphore};
 use tracing::log::debug;
 use turborepo_graph_utils::Walker;
 use turborepo_task_id::TaskId;

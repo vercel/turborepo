@@ -9,13 +9,13 @@ use turborepo_graph_utils as graph;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
 use turborepo_task_id::{TaskId, TaskName};
 
-use super::{Engine, task_inheritance::TaskInheritanceResolver};
+use super::{task_inheritance::TaskInheritanceResolver, Engine};
 use crate::{
     config,
     task_graph::TaskDefinition,
     turbo_json::{
-        FutureFlags, HasConfigBeyondExtends, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
-        TurboJsonLoader, validator::Validator,
+        validator::Validator, FutureFlags, HasConfigBeyondExtends, ProcessedTaskDefinition,
+        RawTaskDefinition, TurboJson, TurboJsonLoader,
     },
 };
 

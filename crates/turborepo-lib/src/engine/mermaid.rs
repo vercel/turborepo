@@ -1,8 +1,8 @@
 use std::{collections::HashMap, io};
 
 use itertools::Itertools;
-use petgraph::{Graph, visit::EdgeRef};
-use rand::{Rng, SeedableRng, distributions::Uniform, prelude::Distribution};
+use petgraph::{visit::EdgeRef, Graph};
+use rand::{distributions::Uniform, prelude::Distribution, Rng, SeedableRng};
 
 use super::{Built, Engine, TaskNode};
 
