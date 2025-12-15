@@ -171,11 +171,7 @@ Initialize a new monorepo
   No tasks provided, here are some potential ones
   
     build
-      invalid-config, my-app, task-extends-exclude, util
-    lint
-      add-keys, add-tasks, bad-json, blank-pkg, cached, config-change, cross-workspace, invalid-config, missing-workspace-config, my-app, omit-keys, override-values, persistent, util
-    test
-      add-keys, add-tasks, bad-json, blank-pkg, cached, config-change, cross-workspace, invalid-config, missing-workspace-config, my-app, omit-keys, override-values, persistent, task-extends-exclude, util
+      invalid-config, my-app, util
     maybefails
       my-app, util
     add-keys-task
@@ -250,11 +246,7 @@ Initialize a new monorepo
   No tasks provided, here are some potential ones
   
     build
-      invalid-config, my-app, task-extends-exclude, util
-    lint
-      add-keys, add-tasks, bad-json, blank-pkg, cached, config-change, cross-workspace, invalid-config, missing-workspace-config, my-app, omit-keys, override-values, persistent, util
-    test
-      add-keys, add-tasks, bad-json, blank-pkg, cached, config-change, cross-workspace, invalid-config, missing-workspace-config, my-app, omit-keys, override-values, persistent, task-extends-exclude, util
+      invalid-config, my-app, util
     maybefails
       my-app, util
     add-keys-task
