@@ -119,10 +119,10 @@ impl<'a> TaskInheritanceResolver<'a> {
 
         // Collect inherited tasks from the extends chain
         let (inherited_tasks, chain_exclusions) =
-            self.collect_from_extends_chain(&turbo_json, state)?;
+            self.collect_from_extends_chain(turbo_json, state)?;
 
         // Process tasks from this turbo.json
-        self.process_local_tasks(&turbo_json, &inherited_tasks, state)?;
+        self.process_local_tasks(turbo_json, &inherited_tasks, state)?;
 
         // Add inherited tasks that aren't excluded
         Self::merge_inherited_tasks(inherited_tasks, &chain_exclusions, state);
