@@ -25,7 +25,8 @@ Configure the behavior of `turbo` by using a `turbo.json` file in your Workspace
 
 Extend from the root `turbo.json` to create specific configuration for a package using [Package Configurations](/docs/reference/package-configurations).
 
-- The only valid value for `extends` is `["//"]` to inherit configuration from the root `turbo.json`.
+- By default, the only valid value for `extends` is `["//"]` to inherit configuration from the root `turbo.json`.
+- With the [`futureFlags.nonRootExtends`](#nonrootextends) flag enabled, you can also extend from other packages (e.g., `["//", "shared-config"]`).
 - If `extends` is used in the root `turbo.json`, it will be ignored.
 
 ### `globalDependencies`
@@ -211,6 +212,38 @@ Default: `false`
 
 When enabled, allows using the [`$TURBO_EXTENDS$`](#turbo_extends) microsyntax in array fields. This microsyntax changes the behavior of [Package Configurations](/docs/reference/package-configurations) from replacing array fields to appending to them.
 
+#### `nonRootExtends` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+Default: `false`
+
+When enabled, allows [Package Configurations](/docs/reference/package-configurations) to extend from other packages' `turbo.json` files, not just the root. This enables composing shared task configurations across packages.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "nonRootExtends": true
+  }
+}
+```
+
+With this flag enabled, packages can extend from multiple configurations:
+
+```jsonc title="./apps/web/turbo.json"
+{
+  "extends": ["//", "ui"],
+  "tasks": {
+    "build": {}
+  }
+}
+```
+
+<Callout type="warn">
+  When using `nonRootExtends`, the root configuration (`"//"`) must always be
+  listed **first** in the `extends` array.
+</Callout>
+
+See the [Package Configurations documentation](/docs/reference/package-configurations#extending-from-other-packages-pre-release) for more details and examples.
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"
@@ -256,6 +289,34 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
 ## Task options
 
 Using the options available in the tasks you define in `tasks`, you can describe how `turbo` will run your tasks.
+
+### `extends` (task-level) <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+<Callout type="info">
+  This feature requires enabling
+  [`futureFlags.nonRootExtends`](#nonrootextends-pre-release) in your root
+  `turbo.json`.
+</Callout>
+
+Controls whether a task inherits configuration from the extends chain. This option is only available in [Package Configurations](/docs/reference/package-configurations), not in the root `turbo.json`.
+
+```jsonc title="./packages/ui/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "lint": {
+      "extends": false // Exclude this task from the package
+    }
+  }
+}
+```
+
+| Value            | Behavior                                                                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `false`          | Task is excluded from inheritance. If no other config is provided, the task won't exist for this package. If other config is provided, creates a fresh task definition with no inheritance. |
+| `true` (default) | Task inherits configuration normally from the extends chain.                                                                                                                                |
+
+See [Excluding tasks from inheritance](/docs/reference/package-configurations#excluding-tasks-from-inheritance-pre-release) for examples and more details.
 
 ### `dependsOn`
 

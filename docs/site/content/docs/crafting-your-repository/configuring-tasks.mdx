@@ -8,6 +8,7 @@ import { Callout } from '#components/callout';
 import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Files, File, Folder } from '#components/files';
 import { ThemeAwareImage } from '#components/theme-aware-image';
+import { ExperimentalBadge } from '#components/experimental-badge';
 
 A task is a script that Turborepo runs. You can express relationships between tasks in your [`turbo.json` configuration](/docs/reference/configuration) and [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph).
 
@@ -305,6 +306,13 @@ With the Root Task now registered, `turbo run lint:root` will now run the task. 
 [Package Configurations](/docs/reference/package-configurations) are `turbo.json` files that are placed directly into a package. This allows a package to define specific behavior for its own tasks without affecting the rest of the repository.
 
 In large monorepos with many teams, this allows teams greater control over their own tasks. To learn more, visit [the Package Configurations documentation](/docs/reference/package-configurations)
+
+### Composing configurations
+
+[Package Configurations](/docs/reference/package-configurations) can be composed for greater control with less configuration:
+
+- [**Extending from other packages**](/docs/reference/package-configurations#extending-from-other-packages-pre-release): Create shared configuration packages that multiple packages can extend from, enabling shared `turbo.json` configurations.
+- [**Adding to extended configurations**](/docs/reference/package-configurations#extending-arrays-with-turbo_extends-pre-release): Use the `$TURBO_EXTENDS$` microsyntax to add to inherited array values like `outputs` and `env` instead of replacing them.
 
 ### Long-running tasks with runtime dependencies
 
