@@ -1,8 +1,8 @@
 use std::{backtrace, collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use biome_deserialize::{
-    json::deserialize_from_json_str, Deserializable, DeserializableValue,
-    DeserializationDiagnostic, DeserializationVisitor, VisitableType,
+    Deserializable, DeserializableValue, DeserializationDiagnostic, DeserializationVisitor,
+    VisitableType, json::deserialize_from_json_str,
 };
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;

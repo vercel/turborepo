@@ -1,5 +1,6 @@
 mod builder;
 mod execute;
+pub(crate) mod task_inheritance;
 
 mod dot;
 mod mermaid;
