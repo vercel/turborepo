@@ -14,8 +14,8 @@ use crate::{
     config,
     task_graph::TaskDefinition,
     turbo_json::{
-        validator::Validator, FutureFlags, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
-        TurboJsonLoader,
+        FutureFlags, HasConfigBeyondExtends, ProcessedTaskDefinition, RawTaskDefinition, TurboJson,
+        TurboJsonLoader, validator::Validator,
     },
 };
 
@@ -104,6 +104,223 @@ pub struct CyclicExtends {
     span: Option<SourceSpan>,
     #[source_code]
     text: NamedSource<String>,
+}
+
+/// Resolves task inheritance through the extends chain.
+///
+/// This struct encapsulates the logic for collecting tasks from a turbo.json
+/// and its extends chain, handling task-level `extends: false` which can:
+/// - Exclude a task entirely (when no other config is provided)
+/// - Create a fresh task definition (when other config is provided)
+///
+/// Task exclusions propagate through the extends chain. If package B
+/// excludes a task from package C, and package A extends B, then A will
+/// not see that task from C (unless A explicitly re-adds it).
+struct TaskInheritanceResolver<'a> {
+    loader: &'a TurboJsonLoader,
+    /// Tasks collected from the inheritance chain
+    tasks: HashSet<TaskName<'static>>,
+    /// Tasks that have been excluded via `extends: false`
+    excluded_tasks: HashSet<TaskName<'static>>,
+    /// Packages that have been visited to prevent infinite loops
+    visited: HashSet<PackageName>,
+    /// Whether to validate `extends: false` usage (only at entry point)
+    validate: bool,
+}
+
+impl<'a> TaskInheritanceResolver<'a> {
+    /// Creates a new resolver for collecting tasks from a workspace.
+    fn new(loader: &'a TurboJsonLoader) -> Self {
+        Self {
+            loader,
+            tasks: HashSet::new(),
+            excluded_tasks: HashSet::new(),
+            visited: HashSet::new(),
+            validate: true,
+        }
+    }
+
+    /// Resolves all tasks from the given workspace and its extends chain.
+    fn resolve(mut self, workspace: &PackageName) -> Result<HashSet<TaskName<'static>>, Error> {
+        self.collect_from_workspace(workspace)?;
+        Ok(self.tasks)
+    }
+
+    /// Internal recursive collection that tracks exclusions.
+    fn collect_from_workspace(&mut self, workspace: &PackageName) -> Result<(), Error> {
+        // Avoid infinite loops from cyclic extends
+        if self.visited.contains(workspace) {
+            return Ok(());
+        }
+        self.visited.insert(workspace.clone());
+
+        let turbo_json = match self.loader.load(workspace) {
+            Ok(json) => json,
+            Err(config::Error::NoTurboJSON) if !matches!(workspace, PackageName::Root) => {
+                // If no turbo.json for this workspace, check root
+                return self.collect_from_workspace(&PackageName::Root);
+            }
+            Err(err) => return Err(err.into()),
+        };
+
+        // Collect inherited tasks from the extends chain
+        let (inherited_tasks, chain_exclusions) = self.collect_from_extends_chain(&turbo_json)?;
+
+        // Process tasks from this turbo.json
+        self.process_local_tasks(&turbo_json, &inherited_tasks)?;
+
+        // Add inherited tasks that aren't excluded
+        self.merge_inherited_tasks(inherited_tasks, &chain_exclusions);
+
+        // Merge chain exclusions into our exclusions (they propagate up)
+        self.excluded_tasks.extend(chain_exclusions);
+
+        Ok(())
+    }
+
+    /// Collects tasks from the extends chain of a turbo.json.
+    fn collect_from_extends_chain(
+        &mut self,
+        turbo_json: &TurboJson,
+    ) -> Result<(HashSet<TaskName<'static>>, HashSet<TaskName<'static>>), Error> {
+        let mut inherited_tasks = HashSet::new();
+        let mut chain_exclusions = HashSet::new();
+
+        for extend in turbo_json.extends.as_inner().iter() {
+            let extend_package = PackageName::from(extend.as_str());
+            let mut child_resolver = TaskInheritanceResolver {
+                loader: self.loader,
+                tasks: HashSet::new(),
+                excluded_tasks: HashSet::new(),
+                visited: self.visited.clone(),
+                validate: false, // don't validate in recursive calls
+            };
+            child_resolver.collect_from_workspace(&extend_package)?;
+            inherited_tasks.extend(child_resolver.tasks);
+            chain_exclusions.extend(child_resolver.excluded_tasks);
+            self.visited = child_resolver.visited;
+        }
+
+        // Fallback to root if no explicit extends and not already at root
+        if turbo_json.extends.is_empty() {
+            // We need to check if we're processing a non-root workspace
+            // This is determined by whether we have any extends configured
+            let mut child_resolver = TaskInheritanceResolver {
+                loader: self.loader,
+                tasks: HashSet::new(),
+                excluded_tasks: HashSet::new(),
+                visited: self.visited.clone(),
+                validate: false,
+            };
+            // The collect_from_workspace will handle the root fallback internally
+            // We only need to explicitly extend from root if this turbo.json has no extends
+            if !self.visited.contains(&PackageName::Root) {
+                child_resolver.collect_from_workspace(&PackageName::Root)?;
+                inherited_tasks.extend(child_resolver.tasks);
+                chain_exclusions.extend(child_resolver.excluded_tasks);
+                self.visited = child_resolver.visited;
+            }
+        }
+
+        Ok((inherited_tasks, chain_exclusions))
+    }
+
+    /// Processes tasks defined in the local turbo.json.
+    fn process_local_tasks(
+        &mut self,
+        turbo_json: &TurboJson,
+        inherited_tasks: &HashSet<TaskName<'static>>,
+    ) -> Result<(), Error> {
+        for (task_name, task_def) in turbo_json.tasks.iter() {
+            match task_def.extends.as_ref().map(|s| *s.as_inner()) {
+                Some(false) => {
+                    self.handle_excluded_task(turbo_json, task_name, task_def, inherited_tasks)?;
+                }
+                _ => {
+                    // Normal task or explicit `extends: true` - add it
+                    self.tasks.insert(task_name.clone());
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Handles a task with `extends: false`.
+    fn handle_excluded_task(
+        &mut self,
+        turbo_json: &TurboJson,
+        task_name: &TaskName<'static>,
+        task_def: &RawTaskDefinition,
+        inherited_tasks: &HashSet<TaskName<'static>>,
+    ) -> Result<(), Error> {
+        // Validate that the task exists in the extends chain (only at entry point)
+        if self.validate && !inherited_tasks.contains(task_name) {
+            let (span, text) = task_def
+                .extends
+                .as_ref()
+                .unwrap()
+                .span_and_text("turbo.json");
+            let extends_chain = Self::format_extends_chain(turbo_json, inherited_tasks);
+            return Err(Error::Config(config::Error::TaskNotInExtendsChain {
+                task_name: task_name.to_string(),
+                extends_chain,
+                span,
+                text,
+            }));
+        }
+
+        if task_def.has_config_beyond_extends() {
+            // Has other config - this is a fresh definition, add it
+            self.tasks.insert(task_name.clone());
+        }
+        // Track as excluded (propagates to parent packages)
+        self.excluded_tasks.insert(task_name.clone());
+        Ok(())
+    }
+
+    /// Merges inherited tasks that aren't excluded.
+    fn merge_inherited_tasks(
+        &mut self,
+        inherited_tasks: HashSet<TaskName<'static>>,
+        chain_exclusions: &HashSet<TaskName<'static>>,
+    ) {
+        for task in inherited_tasks {
+            if !self.excluded_tasks.contains(&task) && !chain_exclusions.contains(&task) {
+                self.tasks.insert(task);
+            }
+        }
+    }
+
+    /// Formats the extends chain for error messages.
+    fn format_extends_chain(
+        turbo_json: &TurboJson,
+        available_tasks: &HashSet<TaskName<'static>>,
+    ) -> String {
+        let mut result = String::new();
+        result.push_str("The extends chain includes:\n");
+
+        let extends = turbo_json.extends.as_inner();
+        if extends.is_empty() {
+            result.push_str("  → // (root)\n");
+        } else {
+            for extend in extends {
+                result.push_str(&format!("  → {}\n", extend));
+            }
+        }
+
+        result.push_str("\nTasks available from extends chain:\n");
+        if available_tasks.is_empty() {
+            result.push_str("  (none)\n");
+        } else {
+            let mut sorted_tasks: Vec<_> = available_tasks.iter().collect();
+            sorted_tasks.sort();
+            for task in sorted_tasks {
+                result.push_str(&format!("  • {}\n", task));
+            }
+        }
+
+        result
+    }
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -263,23 +480,15 @@ impl<'a> EngineBuilder<'a> {
             let mut tasks_set = HashSet::new();
 
             // Collect tasks from root and its extends chain
-            let mut visited = HashSet::new();
-            Self::collect_tasks_from_extends_chain(
-                turbo_json_loader,
-                &PackageName::Root,
-                &mut tasks_set,
-                &mut visited,
-            )?;
+            let root_tasks =
+                TaskInheritanceResolver::new(turbo_json_loader).resolve(&PackageName::Root)?;
+            tasks_set.extend(root_tasks);
 
             // Collect tasks from each workspace and its extends chain
             for workspace in self.workspaces.iter() {
-                let mut visited = HashSet::new();
-                Self::collect_tasks_from_extends_chain(
-                    turbo_json_loader,
-                    workspace,
-                    &mut tasks_set,
-                    &mut visited,
-                )?;
+                let workspace_tasks =
+                    TaskInheritanceResolver::new(turbo_json_loader).resolve(workspace)?;
+                tasks_set.extend(workspace_tasks);
             }
 
             tasks_set.into_iter().map(Spanned::new).collect()
@@ -600,68 +809,45 @@ impl<'a> EngineBuilder<'a> {
 
         let task_id_as_name = task_id.as_task_name();
 
-        let has_extends_false = |task_def: &RawTaskDefinition| -> bool {
-            task_def
+        // Helper to check task definition status based on extends configuration
+        let check_task_def = |task_def: &RawTaskDefinition| -> (bool, bool) {
+            let has_extends_false = task_def
                 .extends
                 .as_ref()
                 .map(|e| !*e.as_inner())
-                .unwrap_or(false)
-        };
+                .unwrap_or(false);
 
-        let is_task_excluded = |task_def: &RawTaskDefinition| -> bool {
-            has_extends_false(task_def) && !Self::task_has_config_beyond_extends(task_def)
-        };
-
-        // Check if this package's turbo.json has `extends: false` for the task
-        // (meaning the task should be excluded entirely for this package)
-        let task_key_to_check = if turbo_json.tasks.contains_key(&task_id_as_name) {
-            Some(&task_id_as_name)
-        } else if turbo_json.tasks.contains_key(task_name) {
-            Some(task_name)
-        } else {
-            let base_task_name = TaskName::from(task_name.task());
-            if (matches!(workspace, PackageName::Root)
-                || workspace == &PackageName::from(task_id.package()))
-                && turbo_json.tasks.contains_key(&base_task_name)
-            {
-                // We need to handle this case specially since base_task_name is owned
-                // Gets checked below
-                None
+            if has_extends_false && !task_def.has_config_beyond_extends() {
+                // Task is explicitly excluded via `extends: false` with no config
+                (false, true)
             } else {
-                None
+                // Task exists (either with `extends: false` + config, or normal definition)
+                (true, false)
             }
         };
 
-        if let Some(key) = task_key_to_check {
-            if let Some(task_def) = turbo_json.tasks.get(key) {
-                if is_task_excluded(task_def) {
-                    // Task is explicitly excluded via `extends: false` with no config
-                    return Ok((false, true));
-                }
-                if has_extends_false(task_def) {
-                    // Task has `extends: false` but with config - it's a fresh definition
-                    return Ok((true, false));
-                }
-                // Task exists and is not excluded
-                return Ok((true, false));
-            }
-        }
-
-        // Handle the base_task_name case separately (since it's an owned value)
+        // Check if this package's turbo.json has the task defined under various key
+        // formats
         let base_task_name = TaskName::from(task_name.task());
-        if (matches!(workspace, PackageName::Root)
-            || workspace == &PackageName::from(task_id.package()))
-            && turbo_json.tasks.contains_key(&base_task_name)
-        {
-            if let Some(task_def) = turbo_json.tasks.get(&base_task_name) {
-                if is_task_excluded(task_def) {
-                    return Ok((false, true));
+        let check_base_task = matches!(workspace, PackageName::Root)
+            || workspace == &PackageName::from(task_id.package());
+
+        // Try task keys in order of specificity: task_id, task_name, base_task_name
+        let task_def = turbo_json
+            .tasks
+            .get(&task_id_as_name)
+            .or_else(|| turbo_json.tasks.get(task_name))
+            .or_else(|| {
+                if check_base_task {
+                    turbo_json.tasks.get(&base_task_name)
+                } else {
+                    None
                 }
-                if has_extends_false(task_def) {
-                    return Ok((true, false));
-                }
-                return Ok((true, false));
-            }
+            });
+
+        if let Some(task_def) = task_def {
+            let (has_def, is_excluded) = check_task_def(task_def);
+            return Ok((has_def, is_excluded));
         }
 
         // Check the extends chain for the task definition
@@ -702,204 +888,20 @@ impl<'a> EngineBuilder<'a> {
     }
 
     /// Collects all task names from a turbo.json and its extends chain.
-    /// Handles task-level `extends: false` which can:
-    /// - Exclude a task entirely (when no other config is provided)
-    /// - Create a fresh task definition (when other config is provided)
     ///
-    /// Task exclusions propagate through the extends chain. If package B
-    /// excludes a task from package C, and package A extends B, then A will
-    /// not see that task from C (unless A explicitly re-adds it).
+    /// This is a convenience wrapper around `TaskInheritanceResolver` that
+    /// maintains the original API for compatibility with existing code and
+    /// tests.
+    #[cfg(test)]
     fn collect_tasks_from_extends_chain(
         loader: &TurboJsonLoader,
         workspace: &PackageName,
         tasks: &mut HashSet<TaskName<'static>>,
-        visited: &mut HashSet<PackageName>,
+        _visited: &mut HashSet<PackageName>,
     ) -> Result<(), Error> {
-        let mut excluded_tasks = HashSet::new();
-        Self::collect_tasks_from_extends_chain_with_exclusions(
-            loader,
-            workspace,
-            tasks,
-            &mut excluded_tasks,
-            visited,
-            true, // validate extends: false usage
-        )
-    }
-
-    /// Core implementation that collects tasks and tracks exclusions.
-    /// The `validate` parameter controls whether to error on `extends: false`
-    /// for non-inherited tasks (true for entry point, false for recursive
-    /// calls).
-    fn collect_tasks_from_extends_chain_with_exclusions(
-        loader: &TurboJsonLoader,
-        workspace: &PackageName,
-        tasks: &mut HashSet<TaskName<'static>>,
-        excluded_tasks: &mut HashSet<TaskName<'static>>,
-        visited: &mut HashSet<PackageName>,
-        validate: bool,
-    ) -> Result<(), Error> {
-        // Avoid infinite loops from cyclic extends
-        if visited.contains(workspace) {
-            return Ok(());
-        }
-        visited.insert(workspace.clone());
-
-        let turbo_json = match loader.load(workspace) {
-            Ok(json) => json,
-            Err(config::Error::NoTurboJSON) if !matches!(workspace, PackageName::Root) => {
-                // If no turbo.json for this workspace, check root
-                return Self::collect_tasks_from_extends_chain_with_exclusions(
-                    loader,
-                    &PackageName::Root,
-                    tasks,
-                    excluded_tasks,
-                    visited,
-                    validate,
-                );
-            }
-            Err(err) => return Err(err.into()),
-        };
-
-        // First, collect all inherited tasks from the extends chain (with their
-        // exclusions)
-        let mut inherited_tasks = HashSet::new();
-        let mut chain_exclusions = HashSet::new();
-        for extend in turbo_json.extends.as_inner().iter() {
-            let extend_package = PackageName::from(extend.as_str());
-            let mut chain_visited = visited.clone();
-            Self::collect_tasks_from_extends_chain_with_exclusions(
-                loader,
-                &extend_package,
-                &mut inherited_tasks,
-                &mut chain_exclusions,
-                &mut chain_visited,
-                false, // don't validate in recursive calls
-            )?;
-            *visited = chain_visited;
-        }
-
-        // Fallback to root if no explicit extends
-        if turbo_json.extends.is_empty() && !matches!(workspace, PackageName::Root) {
-            Self::collect_tasks_from_extends_chain_with_exclusions(
-                loader,
-                &PackageName::Root,
-                &mut inherited_tasks,
-                &mut chain_exclusions,
-                visited,
-                false,
-            )?;
-        }
-
-        // Process tasks from this turbo.json
-        for (task_name, task_def) in turbo_json.tasks.iter() {
-            match task_def.extends.as_ref().map(|s| *s.as_inner()) {
-                Some(false) => {
-                    // Task has `extends: false` - validate it exists in the extends chain
-                    // (only at the entry point, not in recursive calls)
-                    if validate && !inherited_tasks.contains(task_name) {
-                        let (span, text) = task_def
-                            .extends
-                            .as_ref()
-                            .unwrap()
-                            .span_and_text("turbo.json");
-                        let extends_chain =
-                            Self::format_extends_chain(turbo_json, &inherited_tasks);
-                        return Err(Error::Config(config::Error::TaskNotInExtendsChain {
-                            task_name: task_name.to_string(),
-                            extends_chain,
-                            span,
-                            text,
-                        }));
-                    }
-
-                    if Self::task_has_config_beyond_extends(task_def) {
-                        // Has other config - this is a fresh definition, add it
-                        tasks.insert(task_name.clone());
-                    }
-                    // Track as excluded (propagates to parent packages)
-                    excluded_tasks.insert(task_name.clone());
-                }
-                _ => {
-                    // Normal task or explicit `extends: true` - add it
-                    tasks.insert(task_name.clone());
-                }
-            }
-        }
-
-        // Add inherited tasks that aren't excluded by this package or the chain
-        for task in inherited_tasks {
-            if !excluded_tasks.contains(&task) && !chain_exclusions.contains(&task) {
-                tasks.insert(task);
-            }
-        }
-
-        // Merge chain exclusions into our exclusions (they propagate up)
-        excluded_tasks.extend(chain_exclusions);
-
+        let resolved_tasks = TaskInheritanceResolver::new(loader).resolve(workspace)?;
+        tasks.extend(resolved_tasks);
         Ok(())
-    }
-
-    /// Formats the extends chain for error messages
-    fn format_extends_chain(
-        turbo_json: &TurboJson,
-        available_tasks: &HashSet<TaskName<'static>>,
-    ) -> String {
-        let mut result = String::new();
-        result.push_str("The extends chain includes:\n");
-
-        let extends = turbo_json.extends.as_inner();
-        if extends.is_empty() {
-            result.push_str("  → // (root)\n");
-        } else {
-            for extend in extends {
-                result.push_str(&format!("  → {}\n", extend));
-            }
-        }
-
-        result.push_str("\nTasks available from extends chain:\n");
-        if available_tasks.is_empty() {
-            result.push_str("  (none)\n");
-        } else {
-            let mut sorted_tasks: Vec<_> = available_tasks.iter().collect();
-            sorted_tasks.sort();
-            for task in sorted_tasks {
-                result.push_str(&format!("  • {}\n", task));
-            }
-        }
-
-        result
-    }
-
-    /// Checks if a task definition has any configuration beyond just the
-    /// `extends` field
-    fn task_has_config_beyond_extends(task_def: &RawTaskDefinition) -> bool {
-        task_def.cache.is_some()
-            || task_def.depends_on.is_some()
-            || task_def.env.is_some()
-            || task_def.inputs.is_some()
-            || task_def.pass_through_env.is_some()
-            || task_def.persistent.is_some()
-            || task_def.interruptible.is_some()
-            || task_def.outputs.is_some()
-            || task_def.output_logs.is_some()
-            || task_def.interactive.is_some()
-            || task_def.with.is_some()
-    }
-
-    /// Checks if a processed task definition has any configuration beyond just
-    /// the `extends` field
-    fn processed_task_has_config_beyond_extends(task_def: &ProcessedTaskDefinition) -> bool {
-        task_def.cache.is_some()
-            || task_def.depends_on.is_some()
-            || task_def.env.is_some()
-            || task_def.inputs.is_some()
-            || task_def.pass_through_env.is_some()
-            || task_def.persistent.is_some()
-            || task_def.interruptible.is_some()
-            || task_def.outputs.is_some()
-            || task_def.output_logs.is_some()
-            || task_def.interactive.is_some()
-            || task_def.with.is_some()
     }
 
     fn task_definition(
@@ -942,7 +944,7 @@ impl<'a> EngineBuilder<'a> {
             if let Some(turbo_json) = turbo_json_chain.last() {
                 if let Some(local_def) = turbo_json.task(task_id, task_name)? {
                     // Only add if there's config beyond just `extends`
-                    if Self::processed_task_has_config_beyond_extends(&local_def) {
+                    if local_def.has_config_beyond_extends() {
                         task_definitions.push(local_def);
                     }
                 }

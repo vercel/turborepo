@@ -41,6 +41,14 @@ use crate::boundaries::BoundariesConfig;
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
+/// Trait to check if a task definition has any configuration beyond just the
+/// `extends` field. This is used to determine if a task definition with
+/// `extends: false` should actually skip inheritance or if it's just an
+/// empty marker.
+pub trait HasConfigBeyondExtends {
+    fn has_config_beyond_extends(&self) -> bool;
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
@@ -1174,6 +1182,6 @@ mod tests {
         let deps = boundaries.dependencies.as_ref().unwrap();
         assert!(deps.allow.is_some());
         assert!(deps.deny.is_none()); // This should be None, not serialized as
-                                      // null
+        // null
     }
 }

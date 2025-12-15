@@ -1,7 +1,7 @@
 use miette::{NamedSource, SourceSpan};
 use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
 
-use super::{Error, FutureFlags, TurboJson, TOPOLOGICAL_PIPELINE_DELIMITER};
+use super::{Error, FutureFlags, TOPOLOGICAL_PIPELINE_DELIMITER, TurboJson};
 use crate::config::UnnecessaryPackageTaskSyntaxError;
 
 pub type TurboJSONValidation = fn(&Validator, &TurboJson) -> Vec<Error>;
@@ -664,6 +664,70 @@ mod test {
         assert!(
             task_extends_errors.is_empty(),
             "Task-level extends: true should be allowed in package turbo.json"
+        );
+    }
+
+    // ==================== Error Message Snapshot Tests ====================
+
+    #[test]
+    fn test_task_extends_in_root_error_message() {
+        let validator = Validator::new();
+
+        // Root turbo.json with task-level extends should produce a user-friendly error
+        let turbo_json = TurboJson {
+            tasks: Pipeline(
+                vec![(
+                    TaskName::from("build"),
+                    Spanned::new(RawTaskDefinition {
+                        extends: Some(Spanned::new(false)),
+                        ..Default::default()
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::Root, &turbo_json);
+        let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
+        insta::assert_debug_snapshot!("task_extends_in_root_error_message", error_messages);
+    }
+
+    #[test]
+    fn test_task_extends_in_root_error_message_multiple_tasks() {
+        let validator = Validator::new();
+
+        // Multiple tasks with extends in root turbo.json
+        let turbo_json = TurboJson {
+            tasks: Pipeline(
+                vec![
+                    (
+                        TaskName::from("build"),
+                        Spanned::new(RawTaskDefinition {
+                            extends: Some(Spanned::new(false)),
+                            ..Default::default()
+                        }),
+                    ),
+                    (
+                        TaskName::from("lint"),
+                        Spanned::new(RawTaskDefinition {
+                            extends: Some(Spanned::new(true)),
+                            ..Default::default()
+                        }),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::Root, &turbo_json);
+        let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
+        insta::assert_debug_snapshot!(
+            "task_extends_in_root_error_message_multiple_tasks",
+            error_messages
         );
     }
 

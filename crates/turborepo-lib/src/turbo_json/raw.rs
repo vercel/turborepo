@@ -182,6 +182,22 @@ pub struct RawTaskDefinition {
     pub(crate) with: Option<Vec<Spanned<UnescapedString>>>,
 }
 
+impl super::HasConfigBeyondExtends for RawTaskDefinition {
+    fn has_config_beyond_extends(&self) -> bool {
+        self.cache.is_some()
+            || self.depends_on.is_some()
+            || self.env.is_some()
+            || self.inputs.is_some()
+            || self.pass_through_env.is_some()
+            || self.persistent.is_some()
+            || self.interruptible.is_some()
+            || self.outputs.is_some()
+            || self.output_logs.is_some()
+            || self.interactive.is_some()
+            || self.with.is_some()
+    }
+}
+
 impl From<RawRootTurboJson> for RawTurboJson {
     fn from(root: RawRootTurboJson) -> Self {
         RawTurboJson {
