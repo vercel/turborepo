@@ -56,15 +56,22 @@ impl From<Error> for super::builder::Error {
 /// not see that task from C (unless A explicitly re-adds it).
 pub struct TaskInheritanceResolver<'a> {
     loader: &'a TurboJsonLoader,
+    /// Controls validation of `extends: false` usage.
+    /// Set to `Validate` at entry point, `Skip` in recursive calls.
+    validation_mode: ValidationMode,
+}
+
+/// Internal state for recursive resolution.
+/// Separated from TaskInheritanceResolver to allow sharing the visited set
+/// across the entire resolution without cloning.
+struct ResolutionState {
     /// Tasks collected from the inheritance chain
     tasks: HashSet<TaskName<'static>>,
     /// Tasks that have been excluded via `extends: false`
     excluded_tasks: HashSet<TaskName<'static>>,
-    /// Packages that have been visited to prevent infinite loops
+    /// Packages that have been visited to prevent infinite loops.
+    /// This is shared across all recursive calls to avoid O(n²) cloning.
     visited: HashSet<PackageName>,
-    /// Controls validation of `extends: false` usage.
-    /// Set to `Validate` at entry point, `Skip` in recursive calls.
-    validation_mode: ValidationMode,
 }
 
 impl<'a> TaskInheritanceResolver<'a> {
@@ -72,93 +79,124 @@ impl<'a> TaskInheritanceResolver<'a> {
     pub fn new(loader: &'a TurboJsonLoader) -> Self {
         Self {
             loader,
-            tasks: HashSet::new(),
-            excluded_tasks: HashSet::new(),
-            visited: HashSet::new(),
             validation_mode: ValidationMode::Validate,
         }
     }
 
     /// Resolves all tasks from the given workspace and its extends chain.
-    pub fn resolve(mut self, workspace: &PackageName) -> Result<HashSet<TaskName<'static>>, Error> {
-        self.collect_from_workspace(workspace)?;
-        Ok(self.tasks)
+    pub fn resolve(self, workspace: &PackageName) -> Result<HashSet<TaskName<'static>>, Error> {
+        let mut state = ResolutionState {
+            tasks: HashSet::new(),
+            excluded_tasks: HashSet::new(),
+            visited: HashSet::new(),
+        };
+        self.collect_from_workspace(workspace, &mut state)?;
+        Ok(state.tasks)
     }
 
     /// Internal recursive collection that tracks exclusions.
-    fn collect_from_workspace(&mut self, workspace: &PackageName) -> Result<(), Error> {
+    /// Uses a shared mutable state to avoid cloning the visited set on each
+    /// iteration.
+    fn collect_from_workspace(
+        &self,
+        workspace: &PackageName,
+        state: &mut ResolutionState,
+    ) -> Result<(), Error> {
         // Avoid infinite loops from cyclic extends
-        if self.visited.contains(workspace) {
+        if state.visited.contains(workspace) {
             return Ok(());
         }
-        self.visited.insert(workspace.clone());
+        state.visited.insert(workspace.clone());
 
         let turbo_json = match self.loader.load(workspace) {
             Ok(json) => json,
             Err(config::Error::NoTurboJSON) if !matches!(workspace, PackageName::Root) => {
                 // If no turbo.json for this workspace, check root
-                return self.collect_from_workspace(&PackageName::Root);
+                return self.collect_from_workspace(&PackageName::Root, state);
             }
             Err(err) => return Err(err.into()),
         };
 
         // Collect inherited tasks from the extends chain
-        let (inherited_tasks, chain_exclusions) = self.collect_from_extends_chain(&turbo_json)?;
+        let (inherited_tasks, chain_exclusions) =
+            self.collect_from_extends_chain(&turbo_json, state)?;
 
         // Process tasks from this turbo.json
-        self.process_local_tasks(&turbo_json, &inherited_tasks)?;
+        self.process_local_tasks(&turbo_json, &inherited_tasks, state)?;
 
         // Add inherited tasks that aren't excluded
-        self.merge_inherited_tasks(inherited_tasks, &chain_exclusions);
+        Self::merge_inherited_tasks(inherited_tasks, &chain_exclusions, state);
 
         // Merge chain exclusions into our exclusions (they propagate up)
-        self.excluded_tasks.extend(chain_exclusions);
+        state.excluded_tasks.extend(chain_exclusions);
 
         Ok(())
     }
 
     /// Collects tasks from the extends chain of a turbo.json.
+    /// Uses the shared visited set from state to avoid O(n²) cloning for deep
+    /// chains.
     fn collect_from_extends_chain(
-        &mut self,
+        &self,
         turbo_json: &TurboJson,
+        state: &mut ResolutionState,
     ) -> Result<(HashSet<TaskName<'static>>, HashSet<TaskName<'static>>), Error> {
         let mut inherited_tasks = HashSet::new();
         let mut chain_exclusions = HashSet::new();
 
         for extend in turbo_json.extends.as_inner().iter() {
             let extend_package = PackageName::from(extend.as_str());
-            let mut child_resolver = TaskInheritanceResolver {
+
+            // Skip if already visited (cycle detection without cloning)
+            if state.visited.contains(&extend_package) {
+                continue;
+            }
+
+            // Create a child resolver that skips validation (only validate at entry point)
+            let child_resolver = TaskInheritanceResolver {
                 loader: self.loader,
-                tasks: HashSet::new(),
-                excluded_tasks: HashSet::new(),
-                visited: self.visited.clone(),
                 validation_mode: ValidationMode::Skip,
             };
-            child_resolver.collect_from_workspace(&extend_package)?;
-            inherited_tasks.extend(child_resolver.tasks);
-            chain_exclusions.extend(child_resolver.excluded_tasks);
-            self.visited = child_resolver.visited;
+
+            // Use separate state for child to collect its tasks/exclusions,
+            // but share the visited set to avoid cloning
+            let mut child_state = ResolutionState {
+                tasks: HashSet::new(),
+                excluded_tasks: HashSet::new(),
+                // Take ownership of visited temporarily to avoid cloning
+                visited: std::mem::take(&mut state.visited),
+            };
+
+            child_resolver.collect_from_workspace(&extend_package, &mut child_state)?;
+
+            // Restore visited set (now includes all packages visited by child)
+            state.visited = child_state.visited;
+
+            inherited_tasks.extend(child_state.tasks);
+            chain_exclusions.extend(child_state.excluded_tasks);
         }
 
         // Fallback to root if no explicit extends and not already at root
-        if turbo_json.extends.is_empty() {
-            // We need to check if we're processing a non-root workspace
-            // This is determined by whether we have any extends configured
-            let mut child_resolver = TaskInheritanceResolver {
+        if turbo_json.extends.is_empty() && !state.visited.contains(&PackageName::Root) {
+            let child_resolver = TaskInheritanceResolver {
                 loader: self.loader,
-                tasks: HashSet::new(),
-                excluded_tasks: HashSet::new(),
-                visited: self.visited.clone(),
                 validation_mode: ValidationMode::Skip,
             };
-            // The collect_from_workspace will handle the root fallback internally
-            // We only need to explicitly extend from root if this turbo.json has no extends
-            if !self.visited.contains(&PackageName::Root) {
-                child_resolver.collect_from_workspace(&PackageName::Root)?;
-                inherited_tasks.extend(child_resolver.tasks);
-                chain_exclusions.extend(child_resolver.excluded_tasks);
-                self.visited = child_resolver.visited;
-            }
+
+            // Use separate state for child, sharing visited set
+            let mut child_state = ResolutionState {
+                tasks: HashSet::new(),
+                excluded_tasks: HashSet::new(),
+                visited: std::mem::take(&mut state.visited),
+            };
+
+            child_resolver.collect_from_workspace(&PackageName::Root, &mut child_state)?;
+
+            // Restore visited set
+            state.visited = child_state.visited;
+
+            inherited_tasks.extend(child_state.tasks);
+            chain_exclusions.extend(child_state.excluded_tasks);
         }
 
         Ok((inherited_tasks, chain_exclusions))
@@ -166,18 +204,25 @@ impl<'a> TaskInheritanceResolver<'a> {
 
     /// Processes tasks defined in the local turbo.json.
     fn process_local_tasks(
-        &mut self,
+        &self,
         turbo_json: &TurboJson,
         inherited_tasks: &HashSet<TaskName<'static>>,
+        state: &mut ResolutionState,
     ) -> Result<(), Error> {
         for (task_name, task_def) in turbo_json.tasks.iter() {
             match task_def.extends.as_ref().map(|s| *s.as_inner()) {
                 Some(false) => {
-                    self.handle_excluded_task(turbo_json, task_name, task_def, inherited_tasks)?;
+                    self.handle_excluded_task(
+                        turbo_json,
+                        task_name,
+                        task_def,
+                        inherited_tasks,
+                        state,
+                    )?;
                 }
                 _ => {
                     // Normal task or explicit `extends: true` - add it
-                    self.tasks.insert(task_name.clone());
+                    state.tasks.insert(task_name.clone());
                 }
             }
         }
@@ -186,11 +231,12 @@ impl<'a> TaskInheritanceResolver<'a> {
 
     /// Handles a task with `extends: false`.
     fn handle_excluded_task(
-        &mut self,
+        &self,
         turbo_json: &TurboJson,
         task_name: &TaskName<'static>,
         task_def: &RawTaskDefinition,
         inherited_tasks: &HashSet<TaskName<'static>>,
+        state: &mut ResolutionState,
     ) -> Result<(), Error> {
         // Validate that the task exists in the extends chain (only at entry point)
         if self.validation_mode == ValidationMode::Validate && !inherited_tasks.contains(task_name)
@@ -211,22 +257,22 @@ impl<'a> TaskInheritanceResolver<'a> {
 
         if task_def.has_config_beyond_extends() {
             // Has other config - this is a fresh definition, add it
-            self.tasks.insert(task_name.clone());
+            state.tasks.insert(task_name.clone());
         }
         // Track as excluded (propagates to parent packages)
-        self.excluded_tasks.insert(task_name.clone());
+        state.excluded_tasks.insert(task_name.clone());
         Ok(())
     }
 
     /// Merges inherited tasks that aren't excluded.
     fn merge_inherited_tasks(
-        &mut self,
         inherited_tasks: HashSet<TaskName<'static>>,
         chain_exclusions: &HashSet<TaskName<'static>>,
+        state: &mut ResolutionState,
     ) {
         for task in inherited_tasks {
-            if !self.excluded_tasks.contains(&task) && !chain_exclusions.contains(&task) {
-                self.tasks.insert(task);
+            if !state.excluded_tasks.contains(&task) && !chain_exclusions.contains(&task) {
+                state.tasks.insert(task);
             }
         }
     }
