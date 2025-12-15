@@ -603,6 +603,7 @@ mod tests {
           "interruptible": true
         }"#,
         RawTaskDefinition {
+            extends: None,
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(26..37)]).with_range(25..38)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(58..62)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(94..110)]),
@@ -649,6 +650,7 @@ mod tests {
               "interruptible": true
             }"#,
         RawTaskDefinition {
+            extends: None,
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(30..41)]).with_range(29..42)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(66..70)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(106..122)]),
@@ -1172,6 +1174,6 @@ mod tests {
         let deps = boundaries.dependencies.as_ref().unwrap();
         assert!(deps.allow.is_some());
         assert!(deps.deny.is_none()); // This should be None, not serialized as
-                                      // null
+        // null
     }
 }

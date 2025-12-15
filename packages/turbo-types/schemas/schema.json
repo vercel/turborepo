@@ -111,13 +111,16 @@
         }
       },
       "additionalProperties": false,
-      "required": [
-        "tasks"
-      ]
+      "required": ["tasks"]
     },
     "Pipeline": {
       "type": "object",
       "properties": {
+        "extends": {
+          "type": "boolean",
+          "description": "Controls whether this task inherits its definition from the extends chain.\n\nWhen set to `false`, the task either does not exist for this package (if no other configuration is provided) or uses only the local definition without inheriting from the extends chain (if other configuration is provided).\n\nWhen set to `true` or omitted, normal inheritance behavior applies.\n\nThis field is only valid in package turbo.json files, not in the root turbo.json.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#extends",
+          "default": true
+        },
         "dependsOn": {
           "type": "array",
           "items": {
@@ -206,13 +209,7 @@
     },
     "OutputLogs": {
       "type": "string",
-      "enum": [
-        "full",
-        "hash-only",
-        "new-only",
-        "errors-only",
-        "none"
-      ]
+      "enum": ["full", "hash-only", "new-only", "errors-only", "none"]
     },
     "RemoteCache": {
       "type": "object",
@@ -265,10 +262,7 @@
     },
     "UI": {
       "type": "string",
-      "enum": [
-        "tui",
-        "stream"
-      ]
+      "enum": ["tui", "stream"]
     },
     "RelativeUnixPath": {
       "type": "string",
@@ -276,10 +270,7 @@
     },
     "EnvMode": {
       "type": "string",
-      "enum": [
-        "strict",
-        "loose"
-      ]
+      "enum": ["strict", "loose"]
     },
     "RootBoundariesConfig": {
       "type": "object",
@@ -357,9 +348,7 @@
             "type": "string"
           },
           "description": "This key is only available in Workspace Configs and cannot be used in your root turbo.json.\n\nTells turbo to extend your root `turbo.json` and overrides with the keys provided in your Workspace Configs.\n\nCurrently, only the \"//\" value is allowed.",
-          "default": [
-            "//"
-          ]
+          "default": ["//"]
         },
         "tags": {
           "type": "array",
@@ -373,10 +362,7 @@
           "description": "Configuration for `turbo boundaries` that is specific to this package"
         }
       },
-      "required": [
-        "extends",
-        "tasks"
-      ],
+      "required": ["extends", "tasks"],
       "additionalProperties": false,
       "description": "A `turbo.json` file in a package in the monorepo (not the root)"
     },

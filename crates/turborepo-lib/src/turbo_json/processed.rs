@@ -329,6 +329,7 @@ impl ProcessedWith {
 /// Intermediate representation for task definitions with DSL processing
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ProcessedTaskDefinition {
+    pub extends: Option<Spanned<bool>>,
     pub cache: Option<Spanned<bool>>,
     pub depends_on: Option<ProcessedDependsOn>,
     pub env: Option<ProcessedEnv>,
@@ -350,6 +351,7 @@ impl ProcessedTaskDefinition {
         future_flags: &FutureFlags,
     ) -> Result<Self, crate::config::Error> {
         Ok(ProcessedTaskDefinition {
+            extends: raw_task.extends,
             cache: raw_task.cache,
             depends_on: raw_task
                 .depends_on

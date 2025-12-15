@@ -152,6 +152,8 @@ pub struct RawTurboJson {
 #[deserializable(unknown_fields = "deny")]
 pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) extends: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) cache: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) depends_on: Option<Spanned<Vec<Spanned<UnescapedString>>>>,
