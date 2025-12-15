@@ -26,7 +26,7 @@ Configure the behavior of `turbo` by using a `turbo.json` file in your Workspace
 Extend from the root `turbo.json` to create specific configuration for a package using [Package Configurations](/docs/reference/package-configurations).
 
 - By default, the only valid value for `extends` is `["//"]` to inherit configuration from the root `turbo.json`.
-- With the [`futureFlags.nonRootExtends`](#nonrootextends-pre-release) flag enabled, you can also extend from other packages (e.g., `["//", "shared-config"]`).
+- With the [`futureFlags.nonRootExtends`](#nonrootextends) flag enabled, you can also extend from other packages (e.g., `["//", "shared-config"]`).
 - If `extends` is used in the root `turbo.json`, it will be ignored.
 
 ### `globalDependencies`
