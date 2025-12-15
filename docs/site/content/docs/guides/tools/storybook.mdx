@@ -188,7 +188,7 @@ npm install @repo/ui --workspace=storybook
 <Tab value="bun">
 
 ```bash title="Terminal"
-bun install @repo/ui --filter=storybook
+cd apps/storybook && bun install @repo/ui
 ```
 
 </Tab>
@@ -354,7 +354,7 @@ npm install @storybook/react --workspace=@repo/ui --save-dev
 <Tab value="bun">
 
 ```bash title="Terminal"
-bun install @storybook/react --filter=@repo/ui --save-dev
+cd packages/ui && bun install @storybook/react --dev
 ```
 
 </Tab>

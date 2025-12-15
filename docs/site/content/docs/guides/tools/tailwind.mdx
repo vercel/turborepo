@@ -303,7 +303,8 @@ npm install @repo/ui @repo/tailwind-config --workspace=web --workspace=@repo/ui 
 <Tab value="bun">
 
 ```bash title="Terminal"
-bun install @repo/ui @repo/tailwind-config --dev --filter=@repo/ui --filter=web
+cd apps/web && bun install @repo/ui @repo/tailwind-config --dev
+cd packages/ui && bun install @repo/ui @repo/tailwind-config --dev
 ```
 
 </Tab>
