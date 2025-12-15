@@ -742,23 +742,38 @@ impl<'a> EngineBuilder<'a> {
         let turbo_json_chain = self.turbo_json_chain(turbo_json_loader, &package_name)?;
         let mut task_definitions = Vec::new();
 
-        // Check if the package's turbo.json has `extends: false` for this task
-        // The last item in the chain is the package's turbo.json (if it exists)
-        let skip_inheritance = turbo_json_chain
-            .last()
-            .and_then(|tj| tj.tasks.get(task_name))
-            .and_then(|task_def| task_def.extends.as_ref())
-            .map(|e| !*e.as_inner())
-            .unwrap_or(false);
+        // Find the first package in the chain (iterating in reverse from leaf to root)
+        // that has `extends: false` for this task. This stops inheritance from earlier
+        // packages.
+        let mut extends_false_index: Option<usize> = None;
+        for (index, turbo_json) in turbo_json_chain.iter().enumerate().rev() {
+            if let Some(task_def) = turbo_json.tasks.get(task_name) {
+                if task_def
+                    .extends
+                    .as_ref()
+                    .map(|e| !*e.as_inner())
+                    .unwrap_or(false)
+                {
+                    // Found `extends: false` for this task in this package
+                    extends_false_index = Some(index);
+                    break;
+                }
+            }
+        }
 
-        if skip_inheritance {
-            // When `extends: false`, only return the local definition (if it has config)
-            if let Some(turbo_json) = turbo_json_chain.last() {
+        // If we found extends: false, only process from that point onwards
+        if let Some(index) = extends_false_index {
+            if let Some(turbo_json) = turbo_json_chain.get(index) {
                 if let Some(local_def) = turbo_json.task(task_id, task_name)? {
-                    // Only add if there's config beyond just `extends`
                     if local_def.has_config_beyond_extends() {
                         task_definitions.push(local_def);
                     }
+                }
+            }
+            // Process any packages after this one (towards the leaf)
+            for turbo_json in turbo_json_chain.iter().skip(index + 1) {
+                if let Some(workspace_def) = turbo_json.task(task_id, task_name)? {
+                    task_definitions.push(workspace_def);
                 }
             }
             return Ok(task_definitions);
@@ -3986,6 +4001,102 @@ mod test {
         assert!(
             !tasks.contains(&TaskName::from("lint")),
             "Should NOT have lint - excluded"
+        );
+    }
+
+    // Test that task_definition_chain correctly handles extends: false in
+    // intermediate packages. This ensures that when a shared-config package
+    // uses `extends: false` for a task, packages extending from it will
+    // use the shared-config's definition, not the root's.
+    #[test]
+    fn test_task_definition_chain_with_extends_false_in_intermediate() {
+        // Scenario:
+        // - Root turbo.json: defines build: { cache: true, outputs: ["dist/**"] }
+        // - shared-config/turbo.json: extends root, defines build: { extends: false,
+        //   cache: false }
+        // - app/turbo.json: extends shared-config, empty tasks
+        //
+        // Expected: app#build should use shared-config's cache: false, NOT root's
+        // cache: true
+        let turbo_jsons = vec![
+            (
+                PackageName::Root,
+                turbo_json(json!({
+                    "tasks": {
+                        "build": { "cache": true, "outputs": ["dist/**"] }
+                    }
+                })),
+            ),
+            (
+                PackageName::from("shared-config"),
+                turbo_json(json!({
+                    "extends": ["//"],
+                    "tasks": {
+                        "build": {
+                            "extends": false,
+                            "cache": false
+                        }
+                    }
+                })),
+            ),
+            (
+                PackageName::from("app"),
+                turbo_json(json!({
+                    "extends": ["//", "shared-config"],
+                    "tasks": {}
+                })),
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "shared-config" => [],
+                "app" => []
+            },
+        );
+
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+        let future_flags = FutureFlags {
+            non_root_extends: true,
+            ..Default::default()
+        };
+        let engine_builder = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_future_flags(future_flags);
+
+        // Verify task_definition_chain gets definitions from shared-config, not root
+        let task_name = TaskName::from("build");
+        let task_id = TaskId::try_from("app#build").unwrap();
+        let task_id_spanned = Spanned::new(task_id);
+        let definitions = engine_builder
+            .task_definition_chain(&loader, &task_id_spanned, &task_name)
+            .unwrap();
+
+        assert!(
+            !definitions.is_empty(),
+            "task_definition_chain should return definitions for app#build"
+        );
+
+        // Should use shared-config's cache: false (not root's cache: true)
+        // The first definition in the chain should be from shared-config
+        if let Some(first_def) = definitions.first() {
+            assert_eq!(
+                first_def.cache.as_ref().map(|c| *c.as_inner()),
+                Some(false),
+                "Should use shared-config cache: false, not root cache: true"
+            );
+        }
+
+        // There should only be one definition (shared-config's), not two
+        assert_eq!(
+            definitions.len(),
+            1,
+            "Should only have one definition from shared-config, not root + shared-config"
         );
     }
 }
