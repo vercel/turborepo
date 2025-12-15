@@ -329,6 +329,7 @@ impl ProcessedWith {
 /// Intermediate representation for task definitions with DSL processing
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ProcessedTaskDefinition {
+    pub extends: Option<Spanned<bool>>,
     pub cache: Option<Spanned<bool>>,
     pub depends_on: Option<ProcessedDependsOn>,
     pub env: Option<ProcessedEnv>,
@@ -350,6 +351,7 @@ impl ProcessedTaskDefinition {
         future_flags: &FutureFlags,
     ) -> Result<Self, crate::config::Error> {
         Ok(ProcessedTaskDefinition {
+            extends: raw_task.extends,
             cache: raw_task.cache,
             depends_on: raw_task
                 .depends_on
@@ -381,6 +383,22 @@ impl ProcessedTaskDefinition {
                 .map(|with| ProcessedWith::new(with, future_flags))
                 .transpose()?,
         })
+    }
+}
+
+impl super::HasConfigBeyondExtends for ProcessedTaskDefinition {
+    fn has_config_beyond_extends(&self) -> bool {
+        self.cache.is_some()
+            || self.depends_on.is_some()
+            || self.env.is_some()
+            || self.inputs.is_some()
+            || self.pass_through_env.is_some()
+            || self.persistent.is_some()
+            || self.interruptible.is_some()
+            || self.outputs.is_some()
+            || self.output_logs.is_some()
+            || self.interactive.is_some()
+            || self.with.is_some()
     }
 }
 

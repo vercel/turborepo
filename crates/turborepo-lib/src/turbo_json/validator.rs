@@ -11,7 +11,8 @@ pub struct Validator {
     non_root_extends: bool,
 }
 
-const ROOT_VALIDATIONS: &[TurboJSONValidation] = &[validate_with_has_no_topo];
+const ROOT_VALIDATIONS: &[TurboJSONValidation] =
+    &[validate_with_has_no_topo, validate_no_task_extends_in_root];
 const PACKAGE_VALIDATIONS: &[TurboJSONValidation] = &[
     validate_with_has_no_topo,
     validate_no_package_task_syntax,
@@ -147,6 +148,32 @@ pub fn validate_with_has_no_topo(_validator: &Validator, turbo_json: &TurboJson)
                     None
                 }
             })
+        })
+        .collect()
+}
+
+pub fn validate_no_task_extends_in_root(
+    _validator: &Validator,
+    turbo_json: &TurboJson,
+) -> Vec<Error> {
+    turbo_json
+        .tasks
+        .iter()
+        .filter_map(|(task_name, definition)| {
+            if definition.extends.is_some() {
+                let (span, text) = definition
+                    .extends
+                    .as_ref()
+                    .unwrap()
+                    .span_and_text("turbo.json");
+                Some(Error::TaskExtendsInRoot {
+                    task_name: task_name.to_string(),
+                    span,
+                    text,
+                })
+            } else {
+                None
+            }
         })
         .collect()
 }
@@ -296,5 +323,442 @@ mod test {
         let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
         assert_eq!(errs.len(), 1, "Workspace turbo.json should have extends");
         assert_matches!(errs[0], Error::NoExtends { .. });
+    }
+
+    #[test]
+    fn test_task_extends_in_root_turbo_json_errors() {
+        let validator = Validator::new();
+
+        // Root turbo.json with task-level extends should error
+        let turbo_json = TurboJson {
+            tasks: Pipeline(
+                vec![(
+                    TaskName::from("build"),
+                    Spanned::new(RawTaskDefinition {
+                        extends: Some(Spanned::new(false)),
+                        ..Default::default()
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::Root, &turbo_json);
+        assert_eq!(
+            errs.len(),
+            1,
+            "Root turbo.json should not allow task-level extends"
+        );
+        assert_matches!(errs[0], Error::TaskExtendsInRoot { .. });
+    }
+
+    #[test]
+    fn test_task_extends_in_package_turbo_json_allowed() {
+        let validator = Validator::new();
+
+        // Package turbo.json with task-level extends should be allowed
+        let turbo_json = TurboJson {
+            extends: Spanned::new(vec!["//".to_string()]),
+            tasks: Pipeline(
+                vec![(
+                    TaskName::from("lint"),
+                    Spanned::new(RawTaskDefinition {
+                        extends: Some(Spanned::new(false)),
+                        ..Default::default()
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
+        // Should only have no errors related to task-level extends
+        // (there might be other validation errors but not TaskExtendsInRoot)
+        let extends_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| matches!(e, Error::TaskExtendsInRoot { .. }))
+            .collect();
+        assert!(
+            extends_errors.is_empty(),
+            "Package turbo.json should allow task-level extends"
+        );
+    }
+
+    // ==================== Additional Validator Test Coverage ====================
+
+    // Test that multiple task-level extends in root all produce errors
+    #[test]
+    fn test_multiple_task_extends_in_root_turbo_json_errors() {
+        let validator = Validator::new();
+
+        // Root turbo.json with multiple task-level extends should produce multiple
+        // errors
+        let turbo_json = TurboJson {
+            tasks: Pipeline(
+                vec![
+                    (
+                        TaskName::from("build"),
+                        Spanned::new(RawTaskDefinition {
+                            extends: Some(Spanned::new(false)),
+                            ..Default::default()
+                        }),
+                    ),
+                    (
+                        TaskName::from("lint"),
+                        Spanned::new(RawTaskDefinition {
+                            extends: Some(Spanned::new(true)),
+                            ..Default::default()
+                        }),
+                    ),
+                    (
+                        TaskName::from("test"),
+                        Spanned::new(RawTaskDefinition {
+                            // No extends - should not produce error
+                            ..Default::default()
+                        }),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::Root, &turbo_json);
+        let extends_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| matches!(e, Error::TaskExtendsInRoot { .. }))
+            .collect();
+
+        // Should have 2 errors (build and lint have extends, test does not)
+        assert_eq!(
+            extends_errors.len(),
+            2,
+            "Should have 2 TaskExtendsInRoot errors"
+        );
+    }
+
+    // Test task-level extends: true in root also errors
+    #[test]
+    fn test_task_extends_true_in_root_also_errors() {
+        let validator = Validator::new();
+
+        let turbo_json = TurboJson {
+            tasks: Pipeline(
+                vec![(
+                    TaskName::from("build"),
+                    Spanned::new(RawTaskDefinition {
+                        extends: Some(Spanned::new(true)), // extends: true
+                        ..Default::default()
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::Root, &turbo_json);
+        assert_matches!(errs.first(), Some(Error::TaskExtendsInRoot { .. }));
+    }
+
+    // Test extends validation with non_root_extends disabled
+    #[test]
+    fn test_extends_non_root_packages_error_without_future_flag() {
+        let validator = Validator::new(); // non_root_extends = false by default
+
+        let turbo_json = TurboJson {
+            extends: Spanned::new(vec!["//".to_string(), "other-package".to_string()]),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
+
+        // Should error because non_root_extends is false
+        let extend_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| matches!(e, Error::ExtendFromNonRoot { .. }))
+            .collect();
+        assert!(
+            !extend_errors.is_empty(),
+            "Should have ExtendFromNonRoot error when non_root_extends is false"
+        );
+    }
+
+    // Test extends validation with non_root_extends enabled but root not first
+    #[test]
+    fn test_extends_root_must_be_first_with_future_flag() {
+        let future_flags = FutureFlags {
+            non_root_extends: true,
+            ..Default::default()
+        };
+        let validator = Validator::new().with_future_flags(future_flags);
+
+        // Root is NOT first
+        let turbo_json = TurboJson {
+            extends: Spanned::new(vec!["other-package".to_string(), "//".to_string()]),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
+
+        let root_first_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| matches!(e, Error::ExtendsRootFirst { .. }))
+            .collect();
+        assert!(
+            !root_first_errors.is_empty(),
+            "Should have ExtendsRootFirst error when root is not first"
+        );
+    }
+
+    // Test that extends with only root is valid
+    #[test]
+    fn test_extends_only_root_valid() {
+        let validator = Validator::new();
+
+        let turbo_json = TurboJson {
+            extends: Spanned::new(vec!["//".to_string()]),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
+
+        // Should have no extends-related errors
+        let extends_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    Error::ExtendFromNonRoot { .. }
+                        | Error::ExtendsRootFirst { .. }
+                        | Error::NoExtends { .. }
+                )
+            })
+            .collect();
+        assert!(
+            extends_errors.is_empty(),
+            "Extending only from root should be valid"
+        );
+    }
+
+    // Test empty extends produces error
+    #[test]
+    fn test_empty_extends_errors() {
+        let validator = Validator::new();
+
+        let turbo_json = TurboJson {
+            extends: Spanned::new(vec![]),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
+
+        assert_matches!(errs.first(), Some(Error::NoExtends { .. }));
+    }
+
+    // Test multiple non-root extends with future flag enabled
+    #[test]
+    fn test_multiple_non_root_extends_with_future_flag() {
+        let future_flags = FutureFlags {
+            non_root_extends: true,
+            ..Default::default()
+        };
+        let validator = Validator::new().with_future_flags(future_flags);
+
+        // Root first, then multiple other packages
+        let turbo_json = TurboJson {
+            extends: Spanned::new(vec![
+                "//".to_string(),
+                "config-a".to_string(),
+                "config-b".to_string(),
+            ]),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
+
+        // Should have no extends-related errors
+        let extends_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| {
+                matches!(
+                    e,
+                    Error::ExtendFromNonRoot { .. }
+                        | Error::ExtendsRootFirst { .. }
+                        | Error::NoExtends { .. }
+                )
+            })
+            .collect();
+        assert!(
+            extends_errors.is_empty(),
+            "Multiple non-root extends should be valid with future flag enabled"
+        );
+    }
+
+    // Test task-level extends: false allowed in package turbo.json
+    #[test]
+    fn test_task_extends_false_allowed_in_package() {
+        let validator = Validator::new();
+
+        let turbo_json = TurboJson {
+            extends: Spanned::new(vec!["//".to_string()]),
+            tasks: Pipeline(
+                vec![(
+                    TaskName::from("lint"),
+                    Spanned::new(RawTaskDefinition {
+                        extends: Some(Spanned::new(false)),
+                        ..Default::default()
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
+
+        // Should have no TaskExtendsInRoot errors
+        let task_extends_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| matches!(e, Error::TaskExtendsInRoot { .. }))
+            .collect();
+        assert!(
+            task_extends_errors.is_empty(),
+            "Task-level extends: false should be allowed in package turbo.json"
+        );
+    }
+
+    // Test task-level extends: true allowed in package turbo.json
+    #[test]
+    fn test_task_extends_true_allowed_in_package() {
+        let validator = Validator::new();
+
+        let turbo_json = TurboJson {
+            extends: Spanned::new(vec!["//".to_string()]),
+            tasks: Pipeline(
+                vec![(
+                    TaskName::from("build"),
+                    Spanned::new(RawTaskDefinition {
+                        extends: Some(Spanned::new(true)),
+                        ..Default::default()
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
+
+        let task_extends_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| matches!(e, Error::TaskExtendsInRoot { .. }))
+            .collect();
+        assert!(
+            task_extends_errors.is_empty(),
+            "Task-level extends: true should be allowed in package turbo.json"
+        );
+    }
+
+    // ==================== Error Message Snapshot Tests ====================
+
+    #[test]
+    fn test_task_extends_in_root_error_message() {
+        let validator = Validator::new();
+
+        // Root turbo.json with task-level extends should produce a user-friendly error
+        let turbo_json = TurboJson {
+            tasks: Pipeline(
+                vec![(
+                    TaskName::from("build"),
+                    Spanned::new(RawTaskDefinition {
+                        extends: Some(Spanned::new(false)),
+                        ..Default::default()
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::Root, &turbo_json);
+        let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
+        insta::assert_debug_snapshot!("task_extends_in_root_error_message", error_messages);
+    }
+
+    #[test]
+    fn test_task_extends_in_root_error_message_multiple_tasks() {
+        let validator = Validator::new();
+
+        // Multiple tasks with extends in root turbo.json
+        let turbo_json = TurboJson {
+            tasks: Pipeline(
+                vec![
+                    (
+                        TaskName::from("build"),
+                        Spanned::new(RawTaskDefinition {
+                            extends: Some(Spanned::new(false)),
+                            ..Default::default()
+                        }),
+                    ),
+                    (
+                        TaskName::from("lint"),
+                        Spanned::new(RawTaskDefinition {
+                            extends: Some(Spanned::new(true)),
+                            ..Default::default()
+                        }),
+                    ),
+                ]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::Root, &turbo_json);
+        let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
+        insta::assert_debug_snapshot!(
+            "task_extends_in_root_error_message_multiple_tasks",
+            error_messages
+        );
+    }
+
+    // Test with_has_no_topo validation for task-level extends combinations
+    #[test]
+    fn test_with_has_no_topo_with_task_extends() {
+        let turbo_json = TurboJson {
+            extends: Spanned::new(vec!["//".to_string()]),
+            tasks: Pipeline(
+                vec![(
+                    TaskName::from("dev"),
+                    Spanned::new(RawTaskDefinition {
+                        extends: Some(Spanned::new(false)),
+                        with: Some(vec![Spanned::new(UnescapedString::from("^proxy"))]),
+                        ..Default::default()
+                    }),
+                )]
+                .into_iter()
+                .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let validator = Validator::new();
+        let errs = validate_with_has_no_topo(&validator, &turbo_json);
+
+        // Should have InvalidTaskWith error for ^proxy
+        assert!(
+            !errs.is_empty(),
+            "Should have error for topo dependency in with"
+        );
+        assert_matches!(errs.first(), Some(Error::InvalidTaskWith { .. }));
     }
 }

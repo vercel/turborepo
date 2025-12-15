@@ -166,6 +166,7 @@ mod test {
     // Shared test fixtures
     fn create_base_task() -> ProcessedTaskDefinition {
         ProcessedTaskDefinition {
+            extends: None,
             cache: Some(Spanned::new(true)),
             persistent: Some(Spanned::new(false)),
             outputs: Some(
@@ -201,6 +202,7 @@ mod test {
 
     fn create_override_task() -> ProcessedTaskDefinition {
         ProcessedTaskDefinition {
+            extends: None,
             cache: Some(Spanned::new(false)),
             persistent: Some(Spanned::new(true)),
             outputs: Some(
@@ -236,6 +238,7 @@ mod test {
 
     fn create_partial_task() -> ProcessedTaskDefinition {
         ProcessedTaskDefinition {
+            extends: None,
             persistent: Some(Spanned::new(true)),
             output_logs: Some(Spanned::new(OutputLogsMode::HashOnly)),
             cache: None,

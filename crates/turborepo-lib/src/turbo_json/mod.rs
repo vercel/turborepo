@@ -41,6 +41,14 @@ use crate::boundaries::BoundariesConfig;
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
+/// Trait to check if a task definition has any configuration beyond just the
+/// `extends` field. This is used to determine if a task definition with
+/// `extends: false` should actually skip inheritance or if it's just an
+/// empty marker.
+pub trait HasConfigBeyondExtends {
+    fn has_config_beyond_extends(&self) -> bool;
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
@@ -603,6 +611,7 @@ mod tests {
           "interruptible": true
         }"#,
         RawTaskDefinition {
+            extends: None,
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(26..37)]).with_range(25..38)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(58..62)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(94..110)]),
@@ -649,6 +658,7 @@ mod tests {
               "interruptible": true
             }"#,
         RawTaskDefinition {
+            extends: None,
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(30..41)]).with_range(29..42)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(66..70)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(106..122)]),

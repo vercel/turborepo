@@ -147,6 +147,29 @@ pub enum Error {
         #[source_code]
         text: NamedSource<String>,
     },
+    #[error(
+        "The \"extends\" key on task \"{task_name}\" can only be used in Package Configurations."
+    )]
+    TaskExtendsInRoot {
+        task_name: String,
+        #[label("\"extends\" found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error(
+        "Cannot set \"extends\": false on task \"{task_name}\" because it is not defined in the \
+         extends chain."
+    )]
+    #[diagnostic(help("{extends_chain}"))]
+    TaskNotInExtendsChain {
+        task_name: String,
+        extends_chain: String,
+        #[label("task is not inherited")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
     #[error("`{field}` cannot contain an environment variable.")]
     InvalidDependsOnValue {
         field: &'static str,
