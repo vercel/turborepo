@@ -116,7 +116,8 @@ npm install jest --workspace=web --workspace=@repo/ui --save-dev
 <Tab value="bun">
 
 ```bash title="Terminal"
-bun install jest --filter=web --filter=@repo/ui --dev
+cd apps/web && bun install jest --dev
+cd packages/ui && bun install jest --dev
 ```
 
 <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">bun documentation</LinkToDocumentation>
