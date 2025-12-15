@@ -290,6 +290,34 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
 
 Using the options available in the tasks you define in `tasks`, you can describe how `turbo` will run your tasks.
 
+### `extends` (task-level) <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+<Callout type="info">
+  This feature requires enabling
+  [`futureFlags.nonRootExtends`](#nonrootextends-pre-release) in your root
+  `turbo.json`.
+</Callout>
+
+Controls whether a task inherits configuration from the extends chain. This option is only available in [Package Configurations](/docs/reference/package-configurations), not in the root `turbo.json`.
+
+```jsonc title="./packages/ui/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "lint": {
+      "extends": false // Exclude this task from the package
+    }
+  }
+}
+```
+
+| Value            | Behavior                                                                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `false`          | Task is excluded from inheritance. If no other config is provided, the task won't exist for this package. If other config is provided, creates a fresh task definition with no inheritance. |
+| `true` (default) | Task inherits configuration normally from the extends chain.                                                                                                                                |
+
+See [Excluding tasks from inheritance](/docs/reference/package-configurations#excluding-tasks-from-inheritance-pre-release) for examples and more details.
+
 ### `dependsOn`
 
 A list of tasks that are required to complete before the task begins running.
