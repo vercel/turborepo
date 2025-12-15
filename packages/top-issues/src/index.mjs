@@ -9,8 +9,8 @@ if (!outputDir) {
 }
 const outputPath = `${outputDir}/slack-payload.json`;
 
-console.log("outputDir: ", outputDir);
-console.log("outputPath: ", outputPath);
+info(`outputDir: ${outputDir}`);
+info(`outputPath: ${outputPath}`);
 
 const NUM_OF_DAYS = 30;
 const NUM_OF_ISSUES = 5;
@@ -18,9 +18,7 @@ const NUM_OF_ISSUES = 5;
 // context.repo is the current repo
 const { owner: OWNER, repo: REPO } = context.repo;
 
-// For testing from a fork
-// const OWNER = "vercel";
-// const REPO = "turbo";
+
 
 async function run() {
   if (!process.env.GITHUB_TOKEN) throw new TypeError("GITHUB_TOKEN not set");
@@ -40,7 +38,7 @@ async function run() {
       sort: "reactions-+1",
     });
 
-    console.log("Found issues: ", data.items.length);
+    info(`Found issues: ${data.items.length}`);
 
     if (data.items.length === 0) {
       info("No issues found");
