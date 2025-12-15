@@ -158,8 +158,8 @@ mod test {
     use crate::{
         cli::OutputLogsMode,
         turbo_json::{
-            FutureFlags,
             processed::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
+            FutureFlags,
         },
     };
 
