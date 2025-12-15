@@ -142,6 +142,40 @@ pub enum Error {
     InvalidTaskName(Box<InvalidTaskNameError>),
 }
 
+/// Result of checking if a task has a definition in the current run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct TaskDefinitionResult {
+    /// True if the task has a valid definition.
+    has_definition: bool,
+    /// True if the task was excluded via `extends: false` somewhere in the
+    /// chain.
+    is_excluded: bool,
+}
+
+impl TaskDefinitionResult {
+    fn new(has_definition: bool, is_excluded: bool) -> Self {
+        Self {
+            has_definition,
+            is_excluded,
+        }
+    }
+
+    /// Creates a result indicating no definition was found.
+    fn not_found() -> Self {
+        Self::new(false, false)
+    }
+
+    /// Creates a result indicating the task was explicitly excluded.
+    fn excluded() -> Self {
+        Self::new(false, true)
+    }
+
+    /// Creates a result indicating a definition was found.
+    fn found() -> Self {
+        Self::new(true, false)
+    }
+}
+
 pub struct EngineBuilder<'a> {
     repo_root: &'a AbsoluteSystemPath,
     package_graph: &'a PackageGraph,
@@ -539,30 +573,26 @@ impl<'a> EngineBuilder<'a> {
         task_name: &TaskName<'static>,
         task_id: &TaskId,
     ) -> Result<bool, Error> {
-        let (has_def, _excluded) = Self::has_task_definition_in_run_inner(
+        let result = Self::has_task_definition_in_run_inner(
             loader,
             workspace,
             task_name,
             task_id,
             &mut HashSet::new(),
         )?;
-        Ok(has_def)
+        Ok(result.has_definition)
     }
 
-    /// Returns (has_definition, is_excluded)
-    /// - has_definition: true if the task has a valid definition
-    /// - is_excluded: true if the task was excluded via `extends: false`
-    ///   somewhere in the chain
     fn has_task_definition_in_run_inner(
         loader: &TurboJsonLoader,
         workspace: &PackageName,
         task_name: &TaskName<'static>,
         task_id: &TaskId,
         visited: &mut HashSet<PackageName>,
-    ) -> Result<(bool, bool), Error> {
+    ) -> Result<TaskDefinitionResult, Error> {
         // Avoid infinite loops from cyclic extends
         if visited.contains(workspace) {
-            return Ok((false, false));
+            return Ok(TaskDefinitionResult::not_found());
         }
         visited.insert(workspace.clone());
 
@@ -593,7 +623,7 @@ impl<'a> EngineBuilder<'a> {
         let task_id_as_name = task_id.as_task_name();
 
         // Helper to check task definition status based on extends configuration
-        let check_task_def = |task_def: &RawTaskDefinition| -> (bool, bool) {
+        let check_task_def = |task_def: &RawTaskDefinition| -> TaskDefinitionResult {
             let has_extends_false = task_def
                 .extends
                 .as_ref()
@@ -602,10 +632,10 @@ impl<'a> EngineBuilder<'a> {
 
             if has_extends_false && !task_def.has_config_beyond_extends() {
                 // Task is explicitly excluded via `extends: false` with no config
-                (false, true)
+                TaskDefinitionResult::excluded()
             } else {
                 // Task exists (either with `extends: false` + config, or normal definition)
-                (true, false)
+                TaskDefinitionResult::found()
             }
         };
 
@@ -629,15 +659,14 @@ impl<'a> EngineBuilder<'a> {
             });
 
         if let Some(task_def) = task_def {
-            let (has_def, is_excluded) = check_task_def(task_def);
-            return Ok((has_def, is_excluded));
+            return Ok(check_task_def(task_def));
         }
 
         // Check the extends chain for the task definition
         // Track if any package in the chain excluded this task
         for extend in turbo_json.extends.as_inner().iter() {
             let extend_package = PackageName::from(extend.as_str());
-            let (has_def, is_excluded) = Self::has_task_definition_in_run_inner(
+            let result = Self::has_task_definition_in_run_inner(
                 loader,
                 &extend_package,
                 task_name,
@@ -645,11 +674,11 @@ impl<'a> EngineBuilder<'a> {
                 visited,
             )?;
             // If any package in the chain excluded this task, propagate that exclusion
-            if is_excluded {
-                return Ok((false, true));
+            if result.is_excluded {
+                return Ok(TaskDefinitionResult::excluded());
             }
-            if has_def {
-                return Ok((true, false));
+            if result.has_definition {
+                return Ok(TaskDefinitionResult::found());
             }
         }
 
@@ -667,7 +696,7 @@ impl<'a> EngineBuilder<'a> {
             );
         }
 
-        Ok((false, false))
+        Ok(TaskDefinitionResult::not_found())
     }
 
     /// Collects all task names from a turbo.json and its extends chain.
