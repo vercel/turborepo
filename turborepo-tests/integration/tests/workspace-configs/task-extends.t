@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh task_extends
 
 Test that task-level extends: false excludes a task from inheritance.
 The workspace turbo.json has "lint": { "extends": false }, so lint should not run.
