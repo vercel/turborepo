@@ -14,6 +14,21 @@ use crate::{
     turbo_json::{HasConfigBeyondExtends, RawTaskDefinition, TurboJson, TurboJsonLoader},
 };
 
+/// Controls whether validation is performed during task inheritance resolution.
+///
+/// This enum replaces a boolean flag to make the code's intent clearer at call
+/// sites. Validation checks that tasks referenced with `extends: false`
+/// actually exist in the extends chain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValidationMode {
+    /// Validate that `extends: false` references existing tasks.
+    /// Used at the entry point of resolution.
+    Validate,
+    /// Skip validation. Used in recursive calls where validation
+    /// has already been performed at the entry point.
+    Skip,
+}
+
 /// Error type for task inheritance resolution.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -47,8 +62,9 @@ pub struct TaskInheritanceResolver<'a> {
     excluded_tasks: HashSet<TaskName<'static>>,
     /// Packages that have been visited to prevent infinite loops
     visited: HashSet<PackageName>,
-    /// Whether to validate `extends: false` usage (only at entry point)
-    validate: bool,
+    /// Controls validation of `extends: false` usage.
+    /// Set to `Validate` at entry point, `Skip` in recursive calls.
+    validation_mode: ValidationMode,
 }
 
 impl<'a> TaskInheritanceResolver<'a> {
@@ -59,7 +75,7 @@ impl<'a> TaskInheritanceResolver<'a> {
             tasks: HashSet::new(),
             excluded_tasks: HashSet::new(),
             visited: HashSet::new(),
-            validate: true,
+            validation_mode: ValidationMode::Validate,
         }
     }
 
@@ -116,7 +132,7 @@ impl<'a> TaskInheritanceResolver<'a> {
                 tasks: HashSet::new(),
                 excluded_tasks: HashSet::new(),
                 visited: self.visited.clone(),
-                validate: false, // don't validate in recursive calls
+                validation_mode: ValidationMode::Skip,
             };
             child_resolver.collect_from_workspace(&extend_package)?;
             inherited_tasks.extend(child_resolver.tasks);
@@ -133,7 +149,7 @@ impl<'a> TaskInheritanceResolver<'a> {
                 tasks: HashSet::new(),
                 excluded_tasks: HashSet::new(),
                 visited: self.visited.clone(),
-                validate: false,
+                validation_mode: ValidationMode::Skip,
             };
             // The collect_from_workspace will handle the root fallback internally
             // We only need to explicitly extend from root if this turbo.json has no extends
@@ -177,7 +193,8 @@ impl<'a> TaskInheritanceResolver<'a> {
         inherited_tasks: &HashSet<TaskName<'static>>,
     ) -> Result<(), Error> {
         // Validate that the task exists in the extends chain (only at entry point)
-        if self.validate && !inherited_tasks.contains(task_name) {
+        if self.validation_mode == ValidationMode::Validate && !inherited_tasks.contains(task_name)
+        {
             let (span, text) = task_def
                 .extends
                 .as_ref()
