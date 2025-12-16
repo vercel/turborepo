@@ -379,7 +379,7 @@ function SelectionIndicator({
 function DevtoolsContent() {
   const searchParams = useSearchParams();
   const port = searchParams.get("port");
-  const { fitBounds, getNodes } = useReactFlow();
+  const { fitBounds, fitView, getNodes } = useReactFlow();
 
   const [graphState, setGraphState] = useState<GraphState | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -457,6 +457,21 @@ function DevtoolsContent() {
     setEdges,
   ]);
 
+  // Clear selection and reset viewport to show all nodes
+  const clearSelection = useCallback(
+    (hadFilter: boolean) => {
+      setSelectedNode(null);
+      setSelectionMode("none");
+      // Reset viewport to show all nodes only if we had a filter active
+      if (hadFilter) {
+        setTimeout(() => {
+          fitView();
+        }, 50);
+      }
+    },
+    [fitView]
+  );
+
   // Handle node click
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_, node) => {
@@ -465,8 +480,7 @@ function DevtoolsContent() {
         if (selectionMode === "direct") {
           setSelectionMode("affected");
         } else if (selectionMode === "affected") {
-          setSelectionMode("none");
-          setSelectedNode(null);
+          clearSelection(true);
         }
       } else {
         // Clicking a different node - start with direct dependencies
@@ -474,19 +488,13 @@ function DevtoolsContent() {
         setSelectionMode("direct");
       }
     },
-    [selectedNode, selectionMode]
+    [selectedNode, selectionMode, clearSelection]
   );
-
-  // Clear selection
-  const clearSelection = useCallback(() => {
-    setSelectedNode(null);
-    setSelectionMode("none");
-  }, []);
 
   // Handle clicking on the background to clear selection
   const handlePaneClick = useCallback(() => {
-    clearSelection();
-  }, [clearSelection]);
+    clearSelection(selectionMode !== "none");
+  }, [clearSelection, selectionMode]);
 
   // Get set of node IDs that have at least one edge connection
   const getConnectedNodeIds = useCallback((edges: Array<GraphEdge>) => {
@@ -587,8 +595,8 @@ function DevtoolsContent() {
   // Update flow elements when view or graph state changes
   const updateFlowElements = useCallback(
     async (state: GraphState, currentView: GraphView) => {
-      // Clear selection when switching views or updating
-      clearSelection();
+      // Clear selection when switching views or updating (don't reset viewport, layout will handle it)
+      clearSelection(false);
 
       if (currentView === "packages") {
         await updatePackageGraphElements(state);
@@ -800,8 +808,7 @@ function DevtoolsContent() {
           const affected = getAffectedNodes(nodeId, rawEdges);
           focusOnNodes(affected);
         } else if (selectionMode === "affected") {
-          setSelectionMode("none");
-          setSelectedNode(null);
+          clearSelection(true);
         }
       } else {
         setSelectedNode(nodeId);
@@ -811,7 +818,7 @@ function DevtoolsContent() {
         focusOnNodes(direct);
       }
     },
-    [selectedNode, selectionMode, rawEdges, focusOnNodes]
+    [selectedNode, selectionMode, rawEdges, focusOnNodes, clearSelection]
   );
 
   // No port provided - show instructions
@@ -854,7 +861,7 @@ function DevtoolsContent() {
           <SelectionIndicator
             selectedNode={selectedNode}
             selectionMode={selectionMode}
-            onClear={clearSelection}
+            onClear={() => clearSelection(true)}
           />
         </div>
 
