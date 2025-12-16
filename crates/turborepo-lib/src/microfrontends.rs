@@ -1193,7 +1193,8 @@ mod test {
     #[test]
     fn test_vercel_fields_accepted_when_other_package_has_dependency() {
         // This tests the scenario where:
-        // - "host" package has the config with Vercel-specific fields (like assetPrefix)
+        // - "host" package has the config with Vercel-specific fields (like
+        //   assetPrefix)
         // - "host" package does NOT have @vercel/microfrontends dependency
         // - "app" package DOES have @vercel/microfrontends dependency
         // The config should be accepted because ANY package has the dependency.
@@ -1219,8 +1220,8 @@ mod test {
         // Config should parse successfully with lenient mode
         assert!(
             config_with_vercel_fields.is_ok(),
-            "Config with Vercel fields like assetPrefix should be accepted when parsed \
-             with has_mfe_dependency=true (simulating another package having the dep)"
+            "Config with Vercel fields like assetPrefix should be accepted when parsed with \
+             has_mfe_dependency=true (simulating another package having the dep)"
         );
 
         // Now verify it works through PackageGraphResult as well
