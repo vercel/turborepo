@@ -138,10 +138,12 @@ impl DevtoolsServer {
 
         // Bind and serve
         let addr = format!("127.0.0.1:{}", self.port);
-        let listener = TcpListener::bind(&addr).await.map_err(|e| ServerError::Bind {
-            port: self.port,
-            source: e,
-        })?;
+        let listener = TcpListener::bind(&addr)
+            .await
+            .map_err(|e| ServerError::Bind {
+                port: self.port,
+                source: e,
+            })?;
 
         info!("Devtools server listening on ws://{}", addr);
 
@@ -241,7 +243,8 @@ async fn build_graph_state(repo_root: &AbsoluteSystemPathBuf) -> Result<GraphSta
         .map_err(|e| ServerError::PackageJson(e.to_string()))?;
 
     // Build package graph using local discovery (no daemon)
-    // We use allow_no_package_manager to be more permissive about package manager detection
+    // We use allow_no_package_manager to be more permissive about package manager
+    // detection
     let pkg_graph = PackageGraphBuilder::new(repo_root, root_package_json)
         .with_allow_no_package_manager(true)
         .build()

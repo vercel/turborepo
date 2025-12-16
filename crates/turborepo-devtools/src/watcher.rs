@@ -3,8 +3,7 @@
 //! Watches the repository for changes to relevant files (package.json,
 //! turbo.json, etc.) and emits events when changes are detected.
 
-use std::path::Path;
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 use notify::Event;
 use thiserror::Error;
@@ -183,8 +182,9 @@ async fn watch_loop(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     #[test]
     fn test_is_relevant_file() {
@@ -200,9 +200,13 @@ mod tests {
     #[test]
     fn test_is_in_ignored_dir() {
         assert!(is_in_ignored_dir(Path::new(".git/config")));
-        assert!(is_in_ignored_dir(Path::new("node_modules/foo/package.json")));
+        assert!(is_in_ignored_dir(Path::new(
+            "node_modules/foo/package.json"
+        )));
         assert!(is_in_ignored_dir(Path::new("/repo/.turbo/cache")));
-        assert!(!is_in_ignored_dir(Path::new("/repo/packages/app/package.json")));
+        assert!(!is_in_ignored_dir(Path::new(
+            "/repo/packages/app/package.json"
+        )));
         assert!(!is_in_ignored_dir(Path::new("turbo.json")));
     }
 }

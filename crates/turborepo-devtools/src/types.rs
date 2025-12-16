@@ -33,7 +33,8 @@ pub enum ClientMessage {
 pub struct GraphState {
     /// The package dependency graph
     pub package_graph: PackageGraphData,
-    /// The task dependency graph (tasks and their dependencies based on turbo.json)
+    /// The task dependency graph (tasks and their dependencies based on
+    /// turbo.json)
     pub task_graph: TaskGraphData,
     /// Absolute path to the repository root
     pub repo_root: String,

@@ -41,8 +41,9 @@ pub fn package_graph_to_data(pkg_graph: &PackageGraph) -> PackageGraphData {
         });
 
         // Get dependencies for this package and create edges
-        // Note: All packages (including root) are stored as Workspace nodes in the graph.
-        // PackageNode::Root is a separate synthetic node that all workspace packages depend on.
+        // Note: All packages (including root) are stored as Workspace nodes in the
+        // graph. PackageNode::Root is a separate synthetic node that all
+        // workspace packages depend on.
         let pkg_node = RepoPackageNode::Workspace(name.clone());
 
         if let Some(deps) = pkg_graph.immediate_dependencies(&pkg_node) {
