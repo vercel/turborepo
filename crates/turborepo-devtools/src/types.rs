@@ -98,4 +98,6 @@ pub struct TaskNode {
     pub package: String,
     /// Task name (e.g., "build", "test")
     pub task: String,
+    /// The script command from package.json (e.g., "tsc --build")
+    pub script: String,
 }

@@ -92,12 +92,13 @@ pub fn task_graph_to_data(pkg_graph: &PackageGraph) -> TaskGraphData {
             PackageName::Other(n) => n.clone(),
         };
 
-        for script in info.package_json.scripts.keys() {
-            let task_id = format!("{}#{}", package_id, script);
+        for (script_name, script_cmd) in info.package_json.scripts.iter() {
+            let task_id = format!("{}#{}", package_id, script_name);
             nodes.push(TaskNode {
                 id: task_id,
                 package: package_id.clone(),
-                task: script.clone(),
+                task: script_name.clone(),
+                script: script_cmd.value.clone(),
             });
         }
     }

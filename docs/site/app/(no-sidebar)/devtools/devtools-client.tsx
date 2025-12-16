@@ -43,6 +43,7 @@ interface TaskNode {
   id: string;
   package: string;
   task: string;
+  script: string;
 }
 
 interface GraphEdge {
@@ -91,7 +92,6 @@ const edgeTypes = {
 
 const defaultEdgeOptions = {
   type: "turbo",
-  markerEnd: "edge-circle",
 };
 
 // Constants for node sizing
@@ -353,7 +353,7 @@ function GraphViewToggle({
           color:
             view === "packages" ? "var(--ds-gray-1000)" : "var(--ds-gray-900)",
           backgroundColor:
-            view === "packages" ? "var(--ds-gray-400)" : "transparent",
+            view === "packages" ? "var(--ds-background-100)" : "transparent",
         }}
       >
         Packages
@@ -367,7 +367,7 @@ function GraphViewToggle({
           color:
             view === "tasks" ? "var(--ds-gray-1000)" : "var(--ds-gray-900)",
           backgroundColor:
-            view === "tasks" ? "var(--ds-gray-400)" : "transparent",
+            view === "tasks" ? "var(--ds-background-100)" : "transparent",
         }}
       >
         Tasks
@@ -584,7 +584,7 @@ function DevtoolsContent() {
       return {
         ...edge,
         markerStart: useArrow ? "edge-arrow" : undefined,
-        markerEnd: useArrow ? undefined : edge.markerEnd,
+        markerEnd: undefined,
         style: {
           ...edge.style,
           opacity: isHighlighted ? 1 : 0.1,
@@ -694,7 +694,6 @@ function DevtoolsContent() {
           source: edge.source,
           target: edge.target,
           type: "turbo",
-          markerEnd: "edge-circle",
         })
       );
 
@@ -737,7 +736,6 @@ function DevtoolsContent() {
         source: edge.source,
         target: edge.target,
         type: "turbo",
-        markerEnd: "edge-circle",
       }));
 
       const { nodes: layoutedNodes, edges: layoutedEdges } =
@@ -872,8 +870,8 @@ function DevtoolsContent() {
           }))
         : graphState.taskGraph.nodes.map((task) => ({
             id: task.id,
-            name: task.task,
-            subtitle: task.package,
+            name: task.id, // package#task format
+            subtitle: task.script,
           }));
 
     const connected: typeof allNodes = [];
@@ -1086,7 +1084,7 @@ function DevtoolsContent() {
             onChange={(e) => {
               setSearchQuery(e.target.value);
             }}
-            className="w-full px-2 py-1.5 text-sm rounded focus:outline-none"
+            className="w-full px-2 py-1.5 text-sm rounded focus:outline-none placeholder:text-[var(--ds-gray-900)]"
             style={{
               backgroundColor: "var(--ds-gray-200)",
               border: "1px solid var(--ds-gray-400)",
@@ -1243,25 +1241,6 @@ function DevtoolsContent() {
                 <stop offset="0%" stopColor="#ae53ba" />
                 <stop offset="100%" stopColor="#2a8af6" />
               </linearGradient>
-
-              <marker
-                id="edge-circle"
-                viewBox="-5 -5 10 10"
-                refX="0"
-                refY="0"
-                markerUnits="strokeWidth"
-                markerWidth="10"
-                markerHeight="10"
-                orient="auto"
-              >
-                <circle
-                  stroke="#2a8af6"
-                  strokeOpacity="0.75"
-                  r="2"
-                  cx="0"
-                  cy="0"
-                />
-              </marker>
 
               {/* Arrow marker for directional highlighting */}
               <marker
