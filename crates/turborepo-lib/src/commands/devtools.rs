@@ -11,13 +11,17 @@ use crate::cli;
 // In production, use the hosted devtools UI
 // For local development, set TURBO_DEVTOOLS_LOCAL=1 to use localhost:3000
 const DEVTOOLS_URL: &str = if cfg!(debug_assertions) {
-    "http://localhost:3000/tools"
+    "http://localhost:3000/devtools"
 } else {
-    "https://turbo.build/tools"
+    "https://turborepo.dev/devtools"
 };
 
 /// Run the devtools server.
-pub async fn run(repo_root: AbsoluteSystemPathBuf, port: u16, no_open: bool) -> Result<(), cli::Error> {
+pub async fn run(
+    repo_root: AbsoluteSystemPathBuf,
+    port: u16,
+    no_open: bool,
+) -> Result<(), cli::Error> {
     // Find available port
     let port = find_available_port(port);
 
@@ -43,7 +47,10 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, port: u16, no_open: bool) -> 
     }
 
     // Run server
-    server.run().await.map_err(|e| cli::Error::Devtools(Box::new(e)))?;
+    server
+        .run()
+        .await
+        .map_err(|e| cli::Error::Devtools(Box::new(e)))?;
 
     Ok(())
 }

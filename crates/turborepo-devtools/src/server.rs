@@ -196,7 +196,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         }
                     }
                     Some(Err(e)) => {
-                        warn!("WebSocket error: {}", e);
+                        // Connection resets without closing handshake are expected when
+                        // clients disconnect abruptly (laptop sleep, network drop, etc.)
+                        debug!("WebSocket error: {}", e);
                         break;
                     }
                     None => {
