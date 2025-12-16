@@ -13,6 +13,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   Controls,
+  MiniMap,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -22,13 +23,22 @@ import {
 } from "reactflow";
 import ELK from "elkjs/lib/elk.bundled.js";
 import { Package } from "lucide-react";
+import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
+import { createCssVariablesTheme } from "shiki";
 
 import "reactflow/dist/base.css";
 import "./turbo-flow.css";
 
+import { Callout } from "#components/callout.tsx";
 import TurboNode, { type TurboNodeData } from "./turbo-node";
 import TurboEdge from "./turbo-edge";
 import FunctionIcon from "./function-icon";
+
+const theme = createCssVariablesTheme({
+  name: "css-variables",
+  variablePrefix: "--shiki-",
+  variableDefaults: {},
+});
 
 // Types matching Rust server
 interface PackageNode {
@@ -274,22 +284,61 @@ function getConnectedEdges(
 
 function SetupInstructions() {
   return (
-    <div className="flex items-center justify-center min-h-screen bg-[rgb(17,17,17)]">
-      <div className="max-w-md p-8 bg-[rgb(30,30,30)] rounded-lg shadow-[10px_0_15px_rgba(42,138,246,0.2),-10px_0_15px_rgba(233,42,103,0.2)]">
-        <h1 className="text-2xl font-bold mb-4 text-[rgb(243,244,246)]">
+    <div
+      className="flex items-center justify-center min-h-screen"
+      style={{ backgroundColor: "var(--ds-background-100)" }}
+    >
+      <div
+        className="max-w-md p-8 rounded-lg shadow-[10px_0_15px_rgba(42,138,246,0.2),-10px_0_15px_rgba(233,42,103,0.2)]"
+        style={{
+          backgroundColor: "var(--ds-background-200)",
+          border: "1px solid var(--ds-gray-400)",
+        }}
+      >
+        <h1
+          className="text-2xl font-bold mb-4"
+          style={{ color: "var(--ds-gray-1000)" }}
+        >
           Turborepo Devtools
         </h1>
-        <p className="text-gray-400 mb-4">
+        <p className="mb-4" style={{ color: "var(--ds-gray-900)" }}>
           Run the following command in your Turborepo to start the devtools
           server:
         </p>
-        <pre className="bg-[rgb(17,17,17)] text-[rgb(243,244,246)] p-4 rounded-md mb-4 overflow-x-auto border border-[#95679e]">
-          turbo devtools
-        </pre>
-        <p className="text-gray-500 text-sm">
+        <DynamicCodeBlock
+          lang="bash"
+          code="turbo devtools"
+          options={
+            {
+              themes: {
+                light: theme,
+                dark: theme,
+              },
+            } as Parameters<typeof DynamicCodeBlock>[0]["options"]
+          }
+        />
+        <p
+          className="text-sm mt-4 mb-4"
+          style={{ color: "var(--ds-gray-900)" }}
+        >
           This will automatically open this page with the correct connection
           parameters.
         </p>
+        <Callout type="info">
+          <p>
+            Already ran it? Add{" "}
+            <code
+              className="px-1.5 py-0.5 rounded text-xs"
+              style={{
+                backgroundColor: "var(--ds-gray-200)",
+                color: "var(--ds-gray-1000)",
+              }}
+            >
+              ?port=&lt;your-port&gt;
+            </code>{" "}
+            to the URL to get connected.
+          </p>
+        </Callout>
       </div>
     </div>
   );
@@ -297,16 +346,28 @@ function SetupInstructions() {
 
 function DisconnectedOverlay({ port }: { port: string }) {
   return (
-    <div className="absolute inset-0 z-10 bg-black/70 flex items-center justify-center">
-      <div className="bg-[rgb(30,30,30)] p-6 rounded-lg shadow-[10px_0_15px_rgba(42,138,246,0.2),-10px_0_15px_rgba(233,42,103,0.2)] max-w-md text-center">
-        <h2 className="text-xl font-semibold mb-2 text-[rgb(243,244,246)]">
+    <div className="absolute inset-0 z-10 bg-black/50 dark:bg-black/70 flex items-center justify-center">
+      <div
+        className="p-6 rounded-lg shadow-[10px_0_15px_rgba(42,138,246,0.2),-10px_0_15px_rgba(233,42,103,0.2)] max-w-md text-center"
+        style={{ backgroundColor: "var(--ds-background-200)" }}
+      >
+        <h2
+          className="text-xl font-semibold mb-2"
+          style={{ color: "var(--ds-gray-1000)" }}
+        >
           Disconnected
         </h2>
-        <p className="text-gray-400 mb-4">
+        <p className="mb-4" style={{ color: "var(--ds-gray-900)" }}>
           The connection to turbo devtools was lost. Run the command below to
           reconnect:
         </p>
-        <pre className="bg-[rgb(17,17,17)] text-[rgb(243,244,246)] p-3 rounded-md text-sm border border-[#95679e]">
+        <pre
+          className="p-3 rounded-md text-sm border border-[#95679e]"
+          style={{
+            backgroundColor: "var(--ds-background-100)",
+            color: "var(--ds-gray-1000)",
+          }}
+        >
           turbo devtools --port {port}
         </pre>
       </div>
@@ -446,7 +507,8 @@ function SelectionIndicator({
       <div className="flex items-center gap-2 px-3 py-1 bg-[#2a8af6]/20 text-[#2a8af6] rounded-lg text-sm border border-[#2a8af6]/50 backdrop-blur-sm">
         <button
           onClick={onToggleOpen}
-          className="flex items-center gap-1 hover:text-[rgb(243,244,246)]"
+          className="flex items-center gap-1 hover:opacity-80"
+          style={{ color: "#2a8af6" }}
         >
           <span>
             {prefix}
@@ -471,16 +533,16 @@ function SelectionIndicator({
             />
           </svg>
         </button>
-        <button
-          onClick={onClear}
-          className="ml-1 hover:text-[rgb(243,244,246)]"
-        >
+        <button onClick={onClear} className="ml-1 hover:opacity-80">
           ✕
         </button>
       </div>
 
       {isOpen && (
-        <div className="mt-1 py-1 bg-[rgb(30,30,30)] rounded-lg border border-[#2a8af6]/50 backdrop-blur-sm shadow-lg">
+        <div
+          className="mt-1 py-1 rounded-lg border border-[#2a8af6]/50 backdrop-blur-sm shadow-lg"
+          style={{ backgroundColor: "var(--ds-background-200)" }}
+        >
           {modeOptions.map((option) => {
             const { prefix: optPrefix, suffix: optSuffix } = option.getLabel();
             const isSelected = option.mode === selectionMode;
@@ -491,9 +553,10 @@ function SelectionIndicator({
                 onClick={() => {
                   onModeChange(option.mode);
                 }}
-                className={`w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a8af6]/20 ${
-                  isSelected ? "text-[#2a8af6]" : "text-[rgb(243,244,246)]"
-                }`}
+                className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a8af6]/20"
+                style={{
+                  color: isSelected ? "#2a8af6" : "var(--ds-gray-1000)",
+                }}
               >
                 {optPrefix}
                 {optPrefix && " "}
@@ -523,6 +586,7 @@ function DevtoolsContent() {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showDisconnected, setShowDisconnected] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showMinimap, setShowMinimap] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
 
   // Store the base (unlayouted) nodes and edges for the current view
@@ -1228,7 +1292,29 @@ function DevtoolsContent() {
           defaultEdgeOptions={defaultEdgeOptions}
           className="turbo-flow"
         >
-          <Controls showInteractive={false} />
+          <Controls showInteractive={false}>
+            <button
+              onClick={() => {
+                setShowMinimap(!showMinimap);
+              }}
+              className="react-flow__controls-button"
+              title={showMinimap ? "Hide minimap" : "Show minimap"}
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <rect x="12" y="12" width="7" height="7" rx="1" />
+              </svg>
+            </button>
+          </Controls>
+          {showMinimap && <MiniMap pannable zoomable nodeStrokeWidth={3} />}
           <svg>
             <defs>
               <linearGradient
@@ -1271,8 +1357,11 @@ export function DevtoolsClientComponent() {
   return (
     <Suspense
       fallback={
-        <div className="flex items-center justify-center min-h-screen bg-[rgb(17,17,17)]">
-          <div className="text-gray-400">Loading...</div>
+        <div
+          className="flex items-center justify-center min-h-screen"
+          style={{ backgroundColor: "var(--ds-background-100)" }}
+        >
+          <div style={{ color: "var(--ds-gray-900)" }}>Loading...</div>
         </div>
       }
     >

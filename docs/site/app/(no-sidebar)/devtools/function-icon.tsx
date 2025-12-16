@@ -1,22 +1,17 @@
 export default function FunctionIcon() {
   return (
-    <svg width="14" viewBox="0 0 75 100" xmlns="http://www.w3.org/2000/svg">
-      <rect x="2" y="3" width="71" height="94" rx="10" fill="#F9F9F9" />
+    <svg
+      height="14"
+      strokeLinejoin="round"
+      viewBox="0 0 16 16"
+      width="14"
+      style={{ color: "currentcolor" }}
+    >
       <path
-        d="M22 50H52"
-        stroke="rgb(17, 17, 17)"
-        strokeWidth="6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
-      />
-      <path
-        d="M17 77H23.9528C26.2429 76.9949 30.242 75.9738 32 74.5C33.758 73.0262 35.164 71.1925 35.5778 68.9307L39.4222 31.0693C39.836 28.8075 41.242 26.9738 43 25.5C44.758 24.0262 47.7571 23.0051 50.0472 23H57"
-        stroke="rgb(17, 17, 17)"
-        strokeWidth="6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        fill="none"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M9 2H9.75H14.25H15V3.5H14.25H9.75H9V2ZM9 12.5H9.75H14.25H15V14H14.25H9.75H9V12.5ZM9.75 7.25H9V8.75H9.75H14.25H15V7.25H14.25H9.75ZM1 12.5H1.75H2.25H3V14H2.25H1.75H1V12.5ZM1.75 2H1V3.5H1.75H2.25H3V2H2.25H1.75ZM1 7.25H1.75H2.25H3V8.75H2.25H1.75H1V7.25ZM5.75 12.5H5V14H5.75H6.25H7V12.5H6.25H5.75ZM5 2H5.75H6.25H7V3.5H6.25H5.75H5V2ZM5.75 7.25H5V8.75H5.75H6.25H7V7.25H6.25H5.75Z"
+        fill="currentColor"
       />
     </svg>
   );

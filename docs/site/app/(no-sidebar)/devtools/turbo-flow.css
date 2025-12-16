@@ -1,11 +1,31 @@
 .turbo-flow.react-flow {
-  --bg-color: rgb(17, 17, 17);
-  --text-color: rgb(243, 244, 246);
+  /* Light mode defaults */
+  --bg-color: rgb(255, 255, 255);
+  --text-color: rgb(23, 23, 23);
+  --node-inner-bg: rgb(250, 250, 250);
   --node-border-radius: 10px;
-  --node-box-shadow: 10px 0 15px rgba(42, 138, 246, 0.3),
-    -10px 0 15px rgba(233, 42, 103, 0.3);
+  --node-box-shadow: 10px 0 15px rgba(42, 138, 246, 0.15),
+    -10px 0 15px rgba(233, 42, 103, 0.15);
+  --control-border-color: #95679e;
+  --control-hover-bg: rgb(240, 240, 240);
+  --subtitle-color: #666;
+  --minimap-mask-color: rgba(255, 255, 255, 0.8);
+  --attribution-bg: rgba(200, 200, 200, 0.2);
+
   background-color: var(--bg-color);
   color: var(--text-color);
+}
+
+/* Dark mode overrides */
+.dark .turbo-flow.react-flow {
+  --bg-color: rgb(17, 17, 17);
+  --text-color: rgb(243, 244, 246);
+  --node-inner-bg: rgb(17, 17, 17);
+  --node-box-shadow: 10px 0 15px rgba(42, 138, 246, 0.3),
+    -10px 0 15px rgba(233, 42, 103, 0.3);
+  --control-hover-bg: rgb(37, 37, 37);
+  --subtitle-color: #777;
+  --minimap-mask-color: rgba(17, 17, 17, 0.8);
 }
 
 .turbo-flow .react-flow__node-turbo {
@@ -67,7 +87,7 @@
 }
 
 .turbo-flow .react-flow__node-turbo .inner {
-  background: var(--bg-color);
+  background: var(--node-inner-bg);
   padding: 16px 20px;
   border-radius: var(--node-border-radius);
   display: flex;
@@ -93,7 +113,7 @@
 
 .turbo-flow .react-flow__node-turbo .subtitle {
   font-size: 12px;
-  color: #777;
+  color: var(--subtitle-color);
 }
 
 .turbo-flow .react-flow__node-turbo .cloud {
@@ -113,7 +133,7 @@
 }
 
 .turbo-flow .react-flow__node-turbo .cloud div {
-  background-color: var(--bg-color);
+  background-color: var(--node-inner-bg);
   flex-grow: 1;
   border-radius: 100%;
   display: flex;
@@ -147,12 +167,12 @@
 .turbo-flow .react-flow__controls button {
   background-color: var(--bg-color);
   color: var(--text-color);
-  border: 1px solid #95679e;
+  border: 1px solid var(--control-border-color);
   border-bottom: none;
 }
 
 .turbo-flow .react-flow__controls button:hover {
-  background-color: rgb(37, 37, 37);
+  background-color: var(--control-hover-bg);
 }
 
 .turbo-flow .react-flow__controls button:first-child {
@@ -160,7 +180,7 @@
 }
 
 .turbo-flow .react-flow__controls button:last-child {
-  border-bottom: 1px solid #95679e;
+  border-bottom: 1px solid var(--control-border-color);
   border-radius: 0 0 5px 5px;
 }
 
@@ -168,10 +188,35 @@
   fill: var(--text-color);
 }
 
+.turbo-flow .react-flow__controls button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.turbo-flow .react-flow__controls button rect {
+  stroke: var(--text-color);
+}
+
 .turbo-flow .react-flow__attribution {
-  background: rgba(200, 200, 200, 0.2);
+  background: var(--attribution-bg);
 }
 
 .turbo-flow .react-flow__attribution a {
   color: #95679e;
+}
+
+/* MiniMap styles */
+.turbo-flow .react-flow__minimap {
+  background-color: var(--bg-color);
+  border: 1px solid var(--control-border-color);
+  border-radius: 5px;
+}
+
+.turbo-flow .react-flow__minimap-mask {
+  fill: var(--minimap-mask-color);
+}
+
+.turbo-flow .react-flow__minimap-node {
+  fill: #95679e;
+  stroke: #2a8af6;
 }
