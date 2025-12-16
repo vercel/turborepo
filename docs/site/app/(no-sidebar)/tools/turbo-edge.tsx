@@ -1,11 +1,23 @@
 import { getBezierPath, useStore, type EdgeProps } from "reactflow";
 import { getEdgeParams, type InternalNodeType } from "./floating-edge-utils";
 
+// Helper to resolve marker ID to url(#id) format
+function resolveMarker(marker: string | undefined): string | undefined {
+  if (typeof marker === "string" && marker && !marker.startsWith("url(")) {
+    return `url(#${marker})`;
+  }
+  return marker;
+}
+
+// Offset for arrow marker to prevent line from extending past arrowhead
+const ARROW_OFFSET = 10;
+
 export default function TurboEdge({
   id,
   source,
   target,
   style = {},
+  markerStart,
   markerEnd,
 }: EdgeProps) {
   const sourceNode = useStore((store) => store.nodeInternals.get(source));
@@ -15,10 +27,26 @@ export default function TurboEdge({
     return null;
   }
 
-  const { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(
+  let { sx, sy, tx, ty, sourcePos, targetPos } = getEdgeParams(
     sourceNode as unknown as InternalNodeType,
     targetNode as unknown as InternalNodeType
   );
+
+  // If there's an arrow marker, shorten the line at the source end
+  // so the line doesn't extend past the arrowhead
+  const hasArrowMarker =
+    typeof markerStart === "string" && markerStart.includes("edge-arrow");
+  if (hasArrowMarker) {
+    const dx = tx - sx;
+    const dy = ty - sy;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    if (length > 0) {
+      const offsetX = (dx / length) * ARROW_OFFSET;
+      const offsetY = (dy / length) * ARROW_OFFSET;
+      sx += offsetX;
+      sy += offsetY;
+    }
+  }
 
   const [edgePath] = getBezierPath({
     sourceX: sx,
@@ -35,7 +63,8 @@ export default function TurboEdge({
       style={style}
       className="react-flow__edge-path"
       d={edgePath}
-      markerEnd={markerEnd}
+      markerStart={resolveMarker(markerStart)}
+      markerEnd={resolveMarker(markerEnd)}
     />
   );
 }

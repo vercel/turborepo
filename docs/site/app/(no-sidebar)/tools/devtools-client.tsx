@@ -75,8 +75,8 @@ interface ServerMessage {
 
 type GraphView = "packages" | "tasks";
 
-// Selection mode: none -> direct (first click) -> affected (second click) -> none (third click)
-type SelectionMode = "none" | "direct" | "affected";
+// Selection mode: none -> direct (first click) -> affected (second click) -> affects (third click) -> none (fourth click)
+type SelectionMode = "none" | "direct" | "affected" | "affects";
 
 const elk = new ELK();
 
@@ -222,6 +222,40 @@ function getAffectedNodes(
   return affected;
 }
 
+// Get nodes that affect the selected node (transitive dependencies)
+// These are the packages that, if changed, would cause the selected node's hash to change.
+// In the edge model: edge.source depends on edge.target
+// So we traverse "downstream" - following edges from source to target
+function getAffectsNodes(nodeId: string, edges: Array<GraphEdge>): Set<string> {
+  const affects = new Set<string>();
+  affects.add(nodeId);
+
+  // Build an adjacency list for forward traversal (dependent -> dependencies)
+  const dependenciesMap = new Map<string, Array<string>>();
+  for (const edge of edges) {
+    // edge.source depends on edge.target
+    const dependencies = dependenciesMap.get(edge.source) || [];
+    dependencies.push(edge.target);
+    dependenciesMap.set(edge.source, dependencies);
+  }
+
+  // BFS to find all transitive dependencies
+  const queue = [nodeId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const dependencies = dependenciesMap.get(current) || [];
+
+    for (const dependency of dependencies) {
+      if (!affects.has(dependency)) {
+        affects.add(dependency);
+        queue.push(dependency);
+      }
+    }
+  }
+
+  return affects;
+}
+
 // Get edges that connect the visible nodes
 function getConnectedEdges(
   visibleNodes: Set<string>,
@@ -356,18 +390,29 @@ function SelectionIndicator({
   const getModeLabel = () => {
     switch (selectionMode) {
       case "direct":
-        return "Direct deps of";
+        // Direct dependencies (both directions, no arrow needed)
+        return { prefix: "Direct deps of", suffix: "" };
       case "affected":
-        return "Affected by";
+        // Shows packages that this node affects (dependents) - arrow points outward
+        return { prefix: "", suffix: "→ affects" };
+      case "affects":
+        // Shows packages that affect this node (dependencies) - arrow points inward
+        return { prefix: "affected by →", suffix: "" };
       default:
-        return "";
+        return { prefix: "", suffix: "" };
     }
   };
+
+  const { prefix, suffix } = getModeLabel();
 
   return (
     <div className="flex items-center gap-2 px-3 py-1 bg-[#2a8af6]/20 text-[#2a8af6] rounded-lg text-sm border border-[#2a8af6]/50">
       <span>
-        {getModeLabel()} <strong>{selectedNode}</strong>
+        {prefix}
+        {prefix && " "}
+        <strong>{selectedNode}</strong>
+        {suffix && " "}
+        {suffix}
       </span>
       <button onClick={onClear} className="ml-1 hover:text-[rgb(243,244,246)]">
         ✕
@@ -405,10 +450,14 @@ function DevtoolsContent() {
       return { highlightedNodes: null, highlightedEdges: null };
     }
 
-    const visibleNodes =
-      selectionMode === "direct"
-        ? getDirectDependencies(selectedNode, rawEdges)
-        : getAffectedNodes(selectedNode, rawEdges);
+    let visibleNodes: Set<string>;
+    if (selectionMode === "direct") {
+      visibleNodes = getDirectDependencies(selectedNode, rawEdges);
+    } else if (selectionMode === "affected") {
+      visibleNodes = getAffectedNodes(selectedNode, rawEdges);
+    } else {
+      visibleNodes = getAffectsNodes(selectedNode, rawEdges);
+    }
 
     const visibleEdges = getConnectedEdges(visibleNodes, rawEdges);
 
@@ -436,8 +485,17 @@ function DevtoolsContent() {
     const updatedEdges = baseEdges.map((edge) => {
       const isHighlighted = !highlightedEdges || highlightedEdges.has(edge.id);
 
+      // Use arrow markers for directional modes (affected/affects)
+      // For "affected" mode: arrows point from selected node outward (shows what it affects)
+      // For "affects" mode: arrows point toward selected node (shows what affects it)
+      const useArrow =
+        isHighlighted &&
+        (selectionMode === "affected" || selectionMode === "affects");
+
       return {
         ...edge,
+        markerStart: useArrow ? "edge-arrow" : undefined,
+        markerEnd: useArrow ? undefined : edge.markerEnd,
         style: {
           ...edge.style,
           opacity: isHighlighted ? 1 : 0.1,
@@ -453,6 +511,7 @@ function DevtoolsContent() {
     highlightedNodes,
     highlightedEdges,
     selectedNode,
+    selectionMode,
     setNodes,
     setEdges,
   ]);
@@ -476,10 +535,12 @@ function DevtoolsContent() {
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_, node) => {
       if (selectedNode === node.id) {
-        // Clicking the same node - cycle through modes: direct -> affected -> none
+        // Clicking the same node - cycle through modes: direct -> affected -> affects -> none
         if (selectionMode === "direct") {
           setSelectionMode("affected");
         } else if (selectionMode === "affected") {
+          setSelectionMode("affects");
+        } else if (selectionMode === "affects") {
           clearSelection(true);
         }
       } else {
@@ -808,6 +869,11 @@ function DevtoolsContent() {
           const affected = getAffectedNodes(nodeId, rawEdges);
           focusOnNodes(affected);
         } else if (selectionMode === "affected") {
+          setSelectionMode("affects");
+          // Focus on nodes that affect this one
+          const affects = getAffectsNodes(nodeId, rawEdges);
+          focusOnNodes(affects);
+        } else if (selectionMode === "affects") {
           clearSelection(true);
         }
       } else {
@@ -861,7 +927,9 @@ function DevtoolsContent() {
           <SelectionIndicator
             selectedNode={selectedNode}
             selectionMode={selectionMode}
-            onClear={() => clearSelection(true)}
+            onClear={() => {
+              clearSelection(true);
+            }}
           />
         </div>
 
@@ -1030,6 +1098,24 @@ function DevtoolsContent() {
                   r="2"
                   cx="0"
                   cy="0"
+                />
+              </marker>
+
+              {/* Arrow marker for directional highlighting */}
+              <marker
+                id="edge-arrow"
+                viewBox="0 0 10 10"
+                refX="6"
+                refY="5"
+                markerUnits="userSpaceOnUse"
+                markerWidth="12"
+                markerHeight="12"
+                orient="auto-start-reverse"
+              >
+                <path
+                  d="M 0 0 L 10 5 L 0 10 z"
+                  fill="#2a8af6"
+                  fillOpacity="0.9"
                 />
               </marker>
             </defs>
