@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { DevtoolsClientComponent } from "./devtools-client";
 
 export const metadata: Metadata = {
-  title: "Turbo Devtools",
+  title: "Turborepo Devtools",
   description: "Visualize your Turborepo package and task graphs",
 };
 

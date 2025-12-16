@@ -75,8 +75,8 @@ interface ServerMessage {
 
 type GraphView = "packages" | "tasks";
 
-// Selection mode: none -> direct (first click) -> affected (second click) -> affects (third click) -> none (fourth click)
-type SelectionMode = "none" | "direct" | "affected" | "affects";
+// Selection mode: none -> direct (first click) -> blocks (second click) -> dependsOn (third click) -> none (fourth click)
+type SelectionMode = "none" | "direct" | "blocks" | "dependsOn";
 
 const elk = new ELK();
 
@@ -277,7 +277,7 @@ function SetupInstructions() {
     <div className="flex items-center justify-center min-h-screen bg-[rgb(17,17,17)]">
       <div className="max-w-md p-8 bg-[rgb(30,30,30)] rounded-lg shadow-[10px_0_15px_rgba(42,138,246,0.2),-10px_0_15px_rgba(233,42,103,0.2)]">
         <h1 className="text-2xl font-bold mb-4 text-[rgb(243,244,246)]">
-          Turbo Devtools
+          Turborepo Devtools
         </h1>
         <p className="text-gray-400 mb-4">
           Run the following command in your Turborepo to start the devtools
@@ -376,47 +376,135 @@ function GraphViewToggle({
   );
 }
 
+type ActiveSelectionMode = Exclude<SelectionMode, "none">;
+
+function getModeOptions(view: GraphView): Array<{
+  mode: ActiveSelectionMode;
+  getLabel: () => { prefix: string; suffix: string };
+}> {
+  if (view === "tasks") {
+    return [
+      {
+        mode: "direct",
+        getLabel: () => ({ prefix: "Direct neighbors of", suffix: "" }),
+      },
+      {
+        mode: "blocks",
+        getLabel: () => ({ prefix: "Blocked by", suffix: "" }),
+      },
+      {
+        mode: "dependsOn",
+        getLabel: () => ({ prefix: "", suffix: "depends on..." }),
+      },
+    ];
+  }
+  // Package graph
+  return [
+    {
+      mode: "direct",
+      getLabel: () => ({ prefix: "Direct neighbors of", suffix: "" }),
+    },
+    {
+      mode: "blocks",
+      getLabel: () => ({ prefix: "", suffix: "affects..." }),
+    },
+    {
+      mode: "dependsOn",
+      getLabel: () => ({ prefix: "Packages that affect", suffix: "" }),
+    },
+  ];
+}
+
 function SelectionIndicator({
   selectedNode,
   selectionMode,
+  view,
+  isOpen,
+  onToggleOpen,
+  onModeChange,
   onClear,
 }: {
   selectedNode: string | null;
   selectionMode: SelectionMode;
+  view: GraphView;
+  isOpen: boolean;
+  onToggleOpen: () => void;
+  onModeChange: (mode: ActiveSelectionMode) => void;
   onClear: () => void;
 }) {
   if (!selectedNode || selectionMode === "none") return null;
 
-  const getModeLabel = () => {
-    switch (selectionMode) {
-      case "direct":
-        // Direct dependencies (both directions, no arrow needed)
-        return { prefix: "Direct deps of", suffix: "" };
-      case "affected":
-        // Shows packages that this node affects (dependents) - arrow points outward
-        return { prefix: "", suffix: "→ affects" };
-      case "affects":
-        // Shows packages that affect this node (dependencies) - arrow points inward
-        return { prefix: "affected by →", suffix: "" };
-      default:
-        return { prefix: "", suffix: "" };
-    }
+  const modeOptions = getModeOptions(view);
+  const currentOption = modeOptions.find((opt) => opt.mode === selectionMode);
+  const { prefix, suffix } = currentOption?.getLabel() ?? {
+    prefix: "",
+    suffix: "",
   };
 
-  const { prefix, suffix } = getModeLabel();
-
   return (
-    <div className="flex items-center gap-2 px-3 py-1 bg-[#2a8af6]/20 text-[#2a8af6] rounded-lg text-sm border border-[#2a8af6]/50">
-      <span>
-        {prefix}
-        {prefix && " "}
-        <strong>{selectedNode}</strong>
-        {suffix && " "}
-        {suffix}
-      </span>
-      <button onClick={onClear} className="ml-1 hover:text-[rgb(243,244,246)]">
-        ✕
-      </button>
+    <div className="absolute top-3 left-3 z-10">
+      <div className="flex items-center gap-2 px-3 py-1 bg-[#2a8af6]/20 text-[#2a8af6] rounded-lg text-sm border border-[#2a8af6]/50 backdrop-blur-sm">
+        <button
+          onClick={onToggleOpen}
+          className="flex items-center gap-1 hover:text-[rgb(243,244,246)]"
+        >
+          <span>
+            {prefix}
+            {prefix && " "}
+            <strong>{selectedNode}</strong>
+            {suffix && " "}
+            {suffix}
+          </span>
+          <svg
+            className={`w-3 h-3 transition-transform ${
+              isOpen ? "rotate-180" : ""
+            }`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 9l-7 7-7-7"
+            />
+          </svg>
+        </button>
+        <button
+          onClick={onClear}
+          className="ml-1 hover:text-[rgb(243,244,246)]"
+        >
+          ✕
+        </button>
+      </div>
+
+      {isOpen && (
+        <div className="mt-1 py-1 bg-[rgb(30,30,30)] rounded-lg border border-[#2a8af6]/50 backdrop-blur-sm shadow-lg">
+          {modeOptions.map((option) => {
+            const { prefix: optPrefix, suffix: optSuffix } = option.getLabel();
+            const isSelected = option.mode === selectionMode;
+
+            return (
+              <button
+                key={option.mode}
+                onClick={() => {
+                  onModeChange(option.mode);
+                }}
+                className={`w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a8af6]/20 ${
+                  isSelected ? "text-[#2a8af6]" : "text-[rgb(243,244,246)]"
+                }`}
+              >
+                {optPrefix}
+                {optPrefix && " "}
+                <strong>{selectedNode}</strong>
+                {optSuffix && " "}
+                {optSuffix}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -432,6 +520,7 @@ function DevtoolsContent() {
   const [view, setView] = useState<GraphView>("packages");
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState<SelectionMode>("none");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showDisconnected, setShowDisconnected] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const wsRef = useRef<WebSocket | null>(null);
@@ -453,7 +542,7 @@ function DevtoolsContent() {
     let visibleNodes: Set<string>;
     if (selectionMode === "direct") {
       visibleNodes = getDirectDependencies(selectedNode, rawEdges);
-    } else if (selectionMode === "affected") {
+    } else if (selectionMode === "blocks") {
       visibleNodes = getAffectedNodes(selectedNode, rawEdges);
     } else {
       visibleNodes = getAffectsNodes(selectedNode, rawEdges);
@@ -485,12 +574,12 @@ function DevtoolsContent() {
     const updatedEdges = baseEdges.map((edge) => {
       const isHighlighted = !highlightedEdges || highlightedEdges.has(edge.id);
 
-      // Use arrow markers for directional modes (affected/affects)
-      // For "affected" mode: arrows point from selected node outward (shows what it affects)
-      // For "affects" mode: arrows point toward selected node (shows what affects it)
+      // Use arrow markers for directional modes (blocks/dependsOn)
+      // For "blocks" mode: arrows point from selected node outward (shows what it blocks)
+      // For "dependsOn" mode: arrows point toward selected node (shows what it depends on)
       const useArrow =
         isHighlighted &&
-        (selectionMode === "affected" || selectionMode === "affects");
+        (selectionMode === "blocks" || selectionMode === "dependsOn");
 
       return {
         ...edge,
@@ -534,13 +623,19 @@ function DevtoolsContent() {
   // Handle node click
   const handleNodeClick: NodeMouseHandler = useCallback(
     (_, node) => {
+      // If dropdown is open, just close it
+      if (isDropdownOpen) {
+        setIsDropdownOpen(false);
+        return;
+      }
+
       if (selectedNode === node.id) {
-        // Clicking the same node - cycle through modes: direct -> affected -> affects -> none
+        // Clicking the same node - cycle through modes: direct -> blocks -> dependsOn -> none
         if (selectionMode === "direct") {
-          setSelectionMode("affected");
-        } else if (selectionMode === "affected") {
-          setSelectionMode("affects");
-        } else if (selectionMode === "affects") {
+          setSelectionMode("blocks");
+        } else if (selectionMode === "blocks") {
+          setSelectionMode("dependsOn");
+        } else if (selectionMode === "dependsOn") {
           clearSelection(true);
         }
       } else {
@@ -549,13 +644,17 @@ function DevtoolsContent() {
         setSelectionMode("direct");
       }
     },
-    [selectedNode, selectionMode, clearSelection]
+    [selectedNode, selectionMode, clearSelection, isDropdownOpen]
   );
 
-  // Handle clicking on the background to clear selection
+  // Handle clicking on the background to clear selection (or just close dropdown)
   const handlePaneClick = useCallback(() => {
+    if (isDropdownOpen) {
+      setIsDropdownOpen(false);
+      return;
+    }
     clearSelection(selectionMode !== "none");
-  }, [clearSelection, selectionMode]);
+  }, [clearSelection, selectionMode, isDropdownOpen]);
 
   // Get set of node IDs that have at least one edge connection
   const getConnectedNodeIds = useCallback((edges: Array<GraphEdge>) => {
@@ -798,16 +897,43 @@ function DevtoolsContent() {
     };
   }, [graphState, view, connectedNodeIds]);
 
-  // Filter nodes based on search query
+  // Filter and sort nodes based on search query and highlighting
   const filteredConnectedNodes = useMemo(() => {
-    if (!searchQuery.trim()) return connectedNodes;
-    const query = searchQuery.toLowerCase();
-    return connectedNodes.filter(
-      (node) =>
-        node.name.toLowerCase().includes(query) ||
-        node.subtitle.toLowerCase().includes(query)
-    );
-  }, [connectedNodes, searchQuery]);
+    let filtered = connectedNodes;
+
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = connectedNodes.filter(
+        (node) =>
+          node.name.toLowerCase().includes(query) ||
+          node.subtitle.toLowerCase().includes(query)
+      );
+    }
+
+    // Sort: selected node first, then highlighted nodes, then the rest
+    if (selectedNode || highlightedNodes) {
+      return [...filtered].sort((a, b) => {
+        // Selected node always comes first
+        if (a.id === selectedNode) return -1;
+        if (b.id === selectedNode) return 1;
+
+        // Then sort by highlighted status
+        if (highlightedNodes) {
+          const aHighlighted = highlightedNodes.has(a.id);
+          const bHighlighted = highlightedNodes.has(b.id);
+          if (aHighlighted && !bHighlighted) return -1;
+          if (!aHighlighted && bHighlighted) return 1;
+        }
+
+        // Within each group, sort alphabetically
+        return (
+          a.name.localeCompare(b.name) || a.subtitle.localeCompare(b.subtitle)
+        );
+      });
+    }
+
+    return filtered;
+  }, [connectedNodes, searchQuery, highlightedNodes, selectedNode]);
 
   const filteredDisconnectedNodes = useMemo(() => {
     if (!searchQuery.trim()) return disconnectedNodes;
@@ -858,22 +984,44 @@ function DevtoolsContent() {
     [fitBounds, getNodes]
   );
 
+  // Handle mode change from dropdown
+  const handleModeChange = useCallback(
+    (mode: ActiveSelectionMode) => {
+      if (!selectedNode) return;
+
+      setSelectionMode(mode);
+      setIsDropdownOpen(false);
+
+      // Focus on the appropriate nodes for the new mode
+      let nodesToFocus: Set<string>;
+      if (mode === "direct") {
+        nodesToFocus = getDirectDependencies(selectedNode, rawEdges);
+      } else if (mode === "blocks") {
+        nodesToFocus = getAffectedNodes(selectedNode, rawEdges);
+      } else {
+        nodesToFocus = getAffectsNodes(selectedNode, rawEdges);
+      }
+      focusOnNodes(nodesToFocus);
+    },
+    [selectedNode, rawEdges, focusOnNodes]
+  );
+
   // Handle sidebar node click
   const handleSidebarNodeClick = useCallback(
     (nodeId: string) => {
       if (selectedNode === nodeId) {
         // Clicking the same node - cycle through modes
         if (selectionMode === "direct") {
-          setSelectionMode("affected");
-          // Focus on affected nodes
-          const affected = getAffectedNodes(nodeId, rawEdges);
-          focusOnNodes(affected);
-        } else if (selectionMode === "affected") {
-          setSelectionMode("affects");
-          // Focus on nodes that affect this one
-          const affects = getAffectsNodes(nodeId, rawEdges);
-          focusOnNodes(affects);
-        } else if (selectionMode === "affects") {
+          setSelectionMode("blocks");
+          // Focus on nodes that this blocks (dependents)
+          const blocked = getAffectedNodes(nodeId, rawEdges);
+          focusOnNodes(blocked);
+        } else if (selectionMode === "blocks") {
+          setSelectionMode("dependsOn");
+          // Focus on nodes that this depends on
+          const dependencies = getAffectsNodes(nodeId, rawEdges);
+          focusOnNodes(dependencies);
+        } else if (selectionMode === "dependsOn") {
           clearSelection(true);
         }
       } else {
@@ -918,19 +1066,12 @@ function DevtoolsContent() {
           backgroundColor: "var(--ds-background-100)",
         }}
       >
-        {/* Toggle and selection indicator */}
+        {/* Toggle */}
         <div
-          className="px-3 py-3 space-y-3"
+          className="px-3 py-3"
           style={{ borderBottom: "1px solid var(--ds-gray-400)" }}
         >
           <GraphViewToggle view={view} onViewChange={handleViewChange} />
-          <SelectionIndicator
-            selectedNode={selectedNode}
-            selectionMode={selectionMode}
-            onClear={() => {
-              clearSelection(true);
-            }}
-          />
         </div>
 
         {/* Search input */}
@@ -1057,7 +1198,22 @@ function DevtoolsContent() {
       </aside>
 
       {/* Graph */}
-      <div className="flex-1">
+      <div className="flex-1 relative">
+        {/* Selection indicator overlay */}
+        <SelectionIndicator
+          selectedNode={selectedNode}
+          selectionMode={selectionMode}
+          view={view}
+          isOpen={isDropdownOpen}
+          onToggleOpen={() => {
+            setIsDropdownOpen(!isDropdownOpen);
+          }}
+          onModeChange={handleModeChange}
+          onClear={() => {
+            clearSelection(true);
+            setIsDropdownOpen(false);
+          }}
+        />
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -1077,7 +1233,13 @@ function DevtoolsContent() {
           <Controls showInteractive={false} />
           <svg>
             <defs>
-              <linearGradient id="edge-gradient">
+              <linearGradient
+                id="edge-gradient"
+                x1="0%"
+                y1="0%"
+                x2="0%"
+                y2="100%"
+              >
                 <stop offset="0%" stopColor="#ae53ba" />
                 <stop offset="100%" stopColor="#2a8af6" />
               </linearGradient>

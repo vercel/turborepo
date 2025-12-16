@@ -27,7 +27,7 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, port: u16, no_open: bool) -> 
     let url = format!("{}?port={}", DEVTOOLS_URL, port);
 
     println!();
-    println!("  Turbo Devtools");
+    println!("  Turborepo Devtools");
     println!("  ──────────────────────────────────────");
     println!("  WebSocket: ws://localhost:{}", port);
     println!("  Browser:   {}", url);
