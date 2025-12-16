@@ -47,6 +47,14 @@ function getNodeIntersection(
     return { x: nodeCenter.x, y: nodeCenter.y };
   }
 
+  // Handle perfectly vertical lines (dx === 0)
+  if (dx === 0) {
+    return {
+      x: nodeCenter.x,
+      y: dy > 0 ? nodeCenter.y + h : nodeCenter.y - h,
+    };
+  }
+
   const slope = Math.abs(dy / dx);
   const nodeSlope = h / w;
 
