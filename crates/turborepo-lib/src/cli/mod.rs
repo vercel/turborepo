@@ -610,6 +610,15 @@ pub enum Command {
         #[clap(subcommand)]
         command: Option<DaemonCommand>,
     },
+    /// Visualize your monorepo's package graph in the browser
+    Devtools {
+        /// Port for the WebSocket server
+        #[clap(long, default_value_t = turborepo_devtools::DEFAULT_PORT)]
+        port: u16,
+        /// Don't automatically open the browser
+        #[clap(long)]
+        no_open: bool,
+    },
     /// Generate a new app / package
     #[clap(aliases = ["g", "gen"])]
     Generate {
@@ -1447,6 +1456,13 @@ pub async fn run(
                 }
             }?;
 
+            Ok(0)
+        }
+        Command::Devtools { port, no_open } => {
+            let event = CommandEventBuilder::new("devtools").with_parent(&root_telemetry);
+            event.track_call();
+
+            crate::commands::devtools::run(repo_root, *port, *no_open).await?;
             Ok(0)
         }
         Command::Generate {

@@ -6769,6 +6769,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-devtools"
+version = "0.1.0"
+dependencies = [
+ "axum 0.7.5",
+ "futures",
+ "ignore",
+ "notify",
+ "port_scanner",
+ "radix_trie",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.63",
+ "tokio",
+ "tower-http",
+ "tracing",
+ "turbopath",
+ "turborepo-filewatch",
+ "turborepo-repository",
+ "turborepo-scm",
+ "webbrowser",
+]
+
+[[package]]
 name = "turborepo-dirs"
 version = "0.1.0"
 dependencies = [
@@ -6976,6 +7000,7 @@ dependencies = [
  "turborepo-auth",
  "turborepo-cache",
  "turborepo-ci",
+ "turborepo-devtools",
  "turborepo-dirs",
  "turborepo-env",
  "turborepo-errors",
