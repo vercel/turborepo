@@ -13,7 +13,7 @@ use crate::{cli, devtools::ProperTaskGraphBuilder};
 const DEVTOOLS_URL: &str = if cfg!(debug_assertions) {
     "http://localhost:3000/devtools"
 } else {
-    "https://turborepo.dev/devtools"
+    "https://turborepo.com/devtools"
 };
 
 /// Run the devtools server.
