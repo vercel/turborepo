@@ -124,16 +124,19 @@ function calculateDepths(
 
   // Build incoming edge map (target -> sources)
   for (const edge of edges) {
-    if (!incomingEdges.has(edge.target)) {
-      incomingEdges.set(edge.target, []);
+    const existing = incomingEdges.get(edge.target);
+    if (existing) {
+      existing.push(edge.source);
+    } else {
+      incomingEdges.set(edge.target, [edge.source]);
     }
-    incomingEdges.get(edge.target)!.push(edge.source);
   }
 
   // Find root nodes (no incoming edges)
   const roots: Array<string> = [];
   for (const id of nodeIds) {
-    if (!incomingEdges.has(id) || incomingEdges.get(id)!.length === 0) {
+    const incoming = incomingEdges.get(id);
+    if (!incoming || incoming.length === 0) {
       roots.push(id);
       depths.set(id, 0);
     }
@@ -142,7 +145,8 @@ function calculateDepths(
   // BFS to calculate depths
   const queue = [...roots];
   while (queue.length > 0) {
-    const current = queue.shift()!;
+    const current = queue.shift();
+    if (current === undefined) continue;
     const currentDepth = depths.get(current) ?? 0;
 
     for (const edge of edges) {
@@ -238,13 +242,13 @@ function getLayoutedElements(
   >();
   for (const node of nodes) {
     const depth = depths.get(node.id) ?? 0;
-    if (!nodesByDepth.has(depth)) {
-      nodesByDepth.set(depth, []);
+    const existing = nodesByDepth.get(depth);
+    const nodeInfo = { node, width: calculateNodeWidth(node.data) };
+    if (existing) {
+      existing.push(nodeInfo);
+    } else {
+      nodesByDepth.set(depth, [nodeInfo]);
     }
-    nodesByDepth.get(depth)!.push({
-      node,
-      width: calculateNodeWidth(node.data),
-    });
   }
 
   // Layout constants
@@ -264,7 +268,7 @@ function getLayoutedElements(
 
   for (let i = sortedDepths.length - 1; i >= 0; i--) {
     const depth = sortedDepths[i];
-    const nodesAtDepth = nodesByDepth.get(depth)!;
+    const nodesAtDepth = nodesByDepth.get(depth) ?? [];
     const naturalWidth = calculateRowWidth(nodesAtDepth, horizontalSpacing);
 
     // Max allowed is 1.5x the row below, or Infinity for the deepest level
@@ -286,7 +290,7 @@ function getLayoutedElements(
   let currentY = 0;
 
   for (const depth of sortedDepths) {
-    const nodesAtDepth = nodesByDepth.get(depth)!;
+    const nodesAtDepth = nodesByDepth.get(depth) ?? [];
     const naturalWidth = calculateRowWidth(nodesAtDepth, horizontalSpacing);
     const maxAllowedWidth = maxWidthByDepth.get(depth) ?? Infinity;
 
