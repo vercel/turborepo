@@ -9,8 +9,8 @@ workspace = true
 
 [dependencies]
 # Async runtime
-tokio = { workspace = true, features = ["full", "sync"] }
 futures = { workspace = true }
+tokio = { workspace = true, features = ["full", "sync"] }
 
 # Web server + WebSocket
 axum = { workspace = true, features = ["ws"] }
@@ -21,14 +21,14 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
 # File watching
+ignore = "0.4.22"
 notify = { workspace = true }
 radix_trie = { workspace = true }
-ignore = "0.4.22"
 
 # Utilities
+port_scanner = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
-port_scanner = { workspace = true }
 webbrowser = { workspace = true }
 
 # Internal crates
