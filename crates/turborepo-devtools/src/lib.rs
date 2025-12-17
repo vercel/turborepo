@@ -23,7 +23,7 @@ pub const DEFAULT_PORT: u16 = 9876;
 pub fn find_available_port(requested: u16) -> u16 {
     if port_scanner::scan_port(requested) {
         // Port is in use, find another
-        port_scanner::request_open_port().unwrap_or(requested + 1)
+        port_scanner::request_open_port().unwrap_or(requested.saturating_add(1))
     } else {
         requested
     }
