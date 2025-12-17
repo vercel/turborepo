@@ -1,4 +1,4 @@
-export default function FunctionIcon() {
+export function FunctionIcon() {
   return (
     <svg
       height="14"

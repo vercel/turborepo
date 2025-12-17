@@ -21,18 +21,16 @@ import {
   type Edge,
   type NodeMouseHandler,
 } from "reactflow";
-import ELK from "elkjs/lib/elk.bundled.js";
+import Elk from "elkjs/lib/elk.bundled.js";
 import { Package } from "lucide-react";
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
 import { createCssVariablesTheme } from "shiki";
-
 import "reactflow/dist/base.css";
 import "./turbo-flow.css";
-
 import { Callout } from "#components/callout.tsx";
-import TurboNode, { type TurboNodeData } from "./turbo-node";
-import TurboEdge from "./turbo-edge";
-import FunctionIcon from "./function-icon";
+import { TurboNode, type TurboNodeData } from "./turbo-node";
+import { TurboEdge } from "./turbo-edge";
+import { FunctionIcon } from "./function-icon";
 
 const theme = createCssVariablesTheme({
   name: "css-variables",
@@ -89,7 +87,7 @@ type GraphView = "packages" | "tasks";
 // Selection mode: none -> direct (first click) -> blocks (second click) -> dependsOn (third click) -> none (fourth click)
 type SelectionMode = "none" | "direct" | "blocks" | "dependsOn";
 
-const elk = new ELK();
+const elk = new Elk();
 
 // Turbo node and edge types
 const nodeTypes = {
@@ -218,7 +216,8 @@ function getAffectedNodes(
   // BFS to find all transitively affected nodes
   const queue = [nodeId];
   while (queue.length > 0) {
-    const current = queue.shift()!;
+    const current = queue.shift();
+    if (current === undefined) continue;
     const dependents = dependentsMap.get(current) || [];
 
     for (const dependent of dependents) {
@@ -252,7 +251,8 @@ function getAffectsNodes(nodeId: string, edges: Array<GraphEdge>): Set<string> {
   // BFS to find all transitive dependencies
   const queue = [nodeId];
   while (queue.length > 0) {
-    const current = queue.shift()!;
+    const current = queue.shift();
+    if (current === undefined) continue;
     const dependencies = dependenciesMap.get(current) || [];
 
     for (const dependency of dependencies) {
@@ -594,8 +594,12 @@ function DevtoolsContent() {
   const [baseEdges, setBaseEdges] = useState<Array<Edge>>([]);
   const [rawEdges, setRawEdges] = useState<Array<GraphEdge>>([]);
 
-  const [nodes, setNodes, onNodesChange] = useNodesState([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- reactflow types are imperfect
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node<TurboNodeData>>(
+    []
+  );
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- reactflow types are imperfect
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
   // Calculate which nodes/edges should be highlighted based on selection
   const { highlightedNodes, highlightedEdges } = useMemo(() => {
@@ -621,7 +625,7 @@ function DevtoolsContent() {
   useEffect(() => {
     if (baseNodes.length === 0) return;
 
-    const updatedNodes = baseNodes.map((node) => {
+    const updatedNodes: Array<Node> = baseNodes.map((node) => {
       const isHighlighted = !highlightedNodes || highlightedNodes.has(node.id);
       const isSelected = node.id === selectedNode;
 
@@ -629,13 +633,13 @@ function DevtoolsContent() {
         ...node,
         selected: isSelected,
         style: {
-          ...node.style,
+          ...(node.style as React.CSSProperties),
           opacity: isHighlighted ? 1 : 0.2,
         },
       };
     });
 
-    const updatedEdges = baseEdges.map((edge) => {
+    const updatedEdges: Array<Edge> = baseEdges.map((edge) => {
       const isHighlighted = !highlightedEdges || highlightedEdges.has(edge.id);
 
       // Use arrow markers for directional modes (blocks/dependsOn)
@@ -650,13 +654,15 @@ function DevtoolsContent() {
         markerStart: useArrow ? "edge-arrow" : undefined,
         markerEnd: undefined,
         style: {
-          ...edge.style,
+          ...(edge.style as React.CSSProperties),
           opacity: isHighlighted ? 1 : 0.1,
         },
       };
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- reactflow types are imperfect
     setNodes(updatedNodes);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- reactflow types are imperfect
     setEdges(updatedEdges);
   }, [
     baseNodes,
@@ -721,9 +727,9 @@ function DevtoolsContent() {
   }, [clearSelection, selectionMode, isDropdownOpen]);
 
   // Get set of node IDs that have at least one edge connection
-  const getConnectedNodeIds = useCallback((edges: Array<GraphEdge>) => {
+  const getConnectedNodeIds = useCallback((graphEdges: Array<GraphEdge>) => {
     const connected = new Set<string>();
-    for (const edge of edges) {
+    for (const edge of graphEdges) {
       connected.add(edge.source);
       connected.add(edge.target);
     }
@@ -767,7 +773,9 @@ function DevtoolsContent() {
       setBaseNodes(layoutedNodes);
       setBaseEdges(layoutedEdges);
       setRawEdges(state.packageGraph.edges);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- reactflow types are imperfect
       setNodes(layoutedNodes);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- reactflow types are imperfect
       setEdges(layoutedEdges);
     },
     [setNodes, setEdges, getConnectedNodeIds]
@@ -808,7 +816,9 @@ function DevtoolsContent() {
       setBaseNodes(layoutedNodes);
       setBaseEdges(layoutedEdges);
       setRawEdges(state.taskGraph.edges);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- reactflow types are imperfect
       setNodes(layoutedNodes);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-call -- reactflow types are imperfect
       setEdges(layoutedEdges);
     },
     [setNodes, setEdges, getConnectedNodeIds]
@@ -831,10 +841,10 @@ function DevtoolsContent() {
 
   // Handle view change
   const handleViewChange = useCallback(
-    async (newView: GraphView) => {
+    (newView: GraphView) => {
       setView(newView);
       if (graphState) {
-        await updateFlowElements(graphState, newView);
+        void updateFlowElements(graphState, newView);
       }
     },
     [graphState, updateFlowElements]
@@ -859,9 +869,11 @@ function DevtoolsContent() {
         setError(null);
       };
 
-      ws.onmessage = (event) => {
+      ws.onmessage = (event: MessageEvent<string>) => {
         try {
-          const message: ServerMessage = JSON.parse(event.data);
+          const message: ServerMessage = JSON.parse(
+            event.data
+          ) as ServerMessage;
           switch (message.type) {
             case "init":
             case "update":
@@ -876,8 +888,8 @@ function DevtoolsContent() {
               setError(message.message ?? "Unknown error");
               break;
           }
-        } catch (e) {
-          console.error("Failed to parse message:", e);
+        } catch {
+          // Failed to parse message - ignore invalid messages
         }
       };
 
@@ -905,7 +917,7 @@ function DevtoolsContent() {
   // Update flow elements when graphState or view changes
   useEffect(() => {
     if (graphState) {
-      updateFlowElements(graphState, view);
+      void updateFlowElements(graphState, view);
     }
   }, [graphState, view, updateFlowElements]);
 
@@ -1165,19 +1177,20 @@ function DevtoolsContent() {
             const isHighlighted =
               !highlightedNodes || highlightedNodes.has(node.id);
 
+            let selectionClass = "";
+            if (isSelected) {
+              selectionClass = "border-l-2 border-l-[#2a8af6]";
+            } else if (!isHighlighted) {
+              selectionClass = "opacity-40";
+            }
+
             return (
               <button
                 key={node.id}
                 onClick={() => {
                   handleSidebarNodeClick(node.id);
                 }}
-                className={`w-full text-left px-3 py-2 transition-colors ${
-                  isSelected
-                    ? "border-l-2 border-l-[#2a8af6]"
-                    : isHighlighted
-                    ? ""
-                    : "opacity-40"
-                }`}
+                className={`w-full text-left px-3 py-2 transition-colors ${selectionClass}`}
                 style={{
                   borderBottom: "1px solid var(--ds-gray-400)",
                   backgroundColor: isSelected

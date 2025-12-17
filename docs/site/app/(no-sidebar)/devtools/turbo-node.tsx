@@ -1,13 +1,13 @@
 import { memo, type ReactNode } from "react";
 import { Handle, Position, type NodeProps } from "reactflow";
 
-export type TurboNodeData = {
+export interface TurboNodeData {
   title: string;
   icon?: ReactNode;
   subtitle?: string;
-};
+}
 
-function TurboNode({ data }: NodeProps<TurboNodeData>) {
+function TurboNodeComponent({ data }: NodeProps<TurboNodeData>) {
   return (
     <div className="wrapper gradient">
       <div className="inner">
@@ -25,4 +25,4 @@ function TurboNode({ data }: NodeProps<TurboNodeData>) {
   );
 }
 
-export default memo(TurboNode);
+export const TurboNode = memo(TurboNodeComponent);
