@@ -3,8 +3,7 @@
 //! This module provides the proper task graph building implementation
 //! for the devtools server, using the same logic as `turbo run`.
 
-use std::future::Future;
-use std::pin::Pin;
+use std::{future::Future, pin::Pin};
 
 use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
@@ -57,20 +56,15 @@ impl ProperTaskGraphBuilder {
         // Create turbo json loader
         let root_turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
         let reader = TurboJsonReader::new(self.repo_root.clone());
-        let loader = TurboJsonLoader::workspace(
-            reader,
-            root_turbo_json_path.clone(),
-            pkg_graph.packages(),
-        );
+        let loader =
+            TurboJsonLoader::workspace(reader, root_turbo_json_path.clone(), pkg_graph.packages());
 
         // Determine if this is a single package repo
         let is_single = pkg_graph.len() == 1;
 
         // Collect all workspaces
-        let workspaces: Vec<PackageName> = pkg_graph
-            .packages()
-            .map(|(name, _)| name.clone())
-            .collect();
+        let workspaces: Vec<PackageName> =
+            pkg_graph.packages().map(|(name, _)| name.clone()).collect();
 
         // Collect all root tasks from turbo.json AND root package.json scripts
         // For devtools, we want to show all tasks including root tasks
@@ -89,7 +83,7 @@ impl ProperTaskGraphBuilder {
         // This ensures tasks like //#build:ts are allowed even if not in turbo.json
         if let Some(root_pkg_json) = pkg_graph.package_json(&PackageName::Root) {
             for script_name in root_pkg_json.scripts.keys() {
-                let task_name = TaskName::from(format!("//#{}",script_name)).into_owned();
+                let task_name = TaskName::from(format!("//#{}", script_name)).into_owned();
                 if !root_tasks.contains(&task_name) {
                     root_tasks.push(task_name);
                 }
@@ -104,9 +98,7 @@ impl ProperTaskGraphBuilder {
             .add_all_tasks()
             .do_not_validate_engine() // Don't validate for devtools visualization
             .build()
-            .map_err(|e| {
-                TaskGraphError::BuildError(format!("Failed to build task graph: {e}"))
-            })?;
+            .map_err(|e| TaskGraphError::BuildError(format!("Failed to build task graph: {e}")))?;
 
         // Convert engine to TaskGraphData
         let mut nodes = Vec::new();

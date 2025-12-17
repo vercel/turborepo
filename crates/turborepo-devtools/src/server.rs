@@ -96,8 +96,7 @@ impl<T: TaskGraphBuilder + 'static> DevtoolsServer<T> {
     /// Run the server until shutdown
     pub async fn run(self) -> Result<(), ServerError> {
         // Build initial graph state
-        let initial_state =
-            build_graph_state(&self.repo_root, &self.task_graph_builder).await?;
+        let initial_state = build_graph_state(&self.repo_root, &self.task_graph_builder).await?;
         let graph_state = Arc::new(RwLock::new(initial_state));
         let (update_tx, _) = broadcast::channel::<()>(16);
 
@@ -274,7 +273,8 @@ async fn build_graph_state(
     // Convert package graph to serializable format
     let package_graph = package_graph_to_data(&pkg_graph);
 
-    // Build task graph using the provided builder (which uses proper turbo run logic)
+    // Build task graph using the provided builder (which uses proper turbo run
+    // logic)
     let task_graph = task_graph_builder
         .build_task_graph()
         .await
@@ -287,5 +287,3 @@ async fn build_graph_state(
         turbo_version: env!("CARGO_PKG_VERSION").to_string(),
     })
 }
-
-

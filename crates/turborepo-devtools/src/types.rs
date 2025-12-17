@@ -3,8 +3,7 @@
 //! These types define the messages exchanged between the CLI server
 //! and the web client, as well as the graph data structures.
 
-use std::future::Future;
-use std::pin::Pin;
+use std::{future::Future, pin::Pin};
 
 use serde::{Deserialize, Serialize};
 
