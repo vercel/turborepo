@@ -21,7 +21,7 @@ import {
   type Edge,
   type NodeMouseHandler,
 } from "reactflow";
-import Elk from "elkjs/lib/elk.bundled.js";
+import Dagre from "@dagrejs/dagre";
 import { Package } from "lucide-react";
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
 import { createCssVariablesTheme } from "shiki";
@@ -87,8 +87,6 @@ type GraphView = "packages" | "tasks";
 // Selection mode: none -> direct (first click) -> blocks (second click) -> dependsOn (third click) -> none (fourth click)
 type SelectionMode = "none" | "direct" | "blocks" | "dependsOn";
 
-const elk = new Elk();
-
 // Turbo node and edge types
 const nodeTypes = {
   turbo: TurboNode,
@@ -118,74 +116,114 @@ function calculateNodeWidth(data: TurboNodeData): number {
   return Math.max(MIN_NODE_WIDTH, contentWidth + NODE_PADDING_X);
 }
 
-// ELK layout function
-async function getLayoutedElements(
+// Dagre layout function - significantly faster than ELK for DAGs
+function getLayoutedElements(
   nodes: Array<Node<TurboNodeData>>,
   edges: Array<Edge>
-): Promise<{ nodes: Array<Node>; edges: Array<Edge> }> {
+): { nodes: Array<Node>; edges: Array<Edge> } {
   if (nodes.length === 0) {
     return { nodes: [], edges: [] };
   }
 
-  // Calculate width for each node based on its content
-  const nodeWidths = new Map<string, number>();
+  // Create a new directed graph
+  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+
+  // Configure the graph layout
+  g.setGraph({
+    rankdir: "TB", // Top to bottom (equivalent to ELK's DOWN direction)
+    nodesep: NODE_SPACING, // Horizontal spacing between nodes
+    ranksep: 150, // Vertical spacing between layers
+    marginx: 50,
+    marginy: 50,
+  });
+
+  // Add nodes with their dimensions
   for (const node of nodes) {
-    nodeWidths.set(node.id, calculateNodeWidth(node.data));
+    const width = calculateNodeWidth(node.data);
+    g.setNode(node.id, { width, height: NODE_HEIGHT });
   }
 
-  const graph = {
-    id: "root",
-    layoutOptions: {
-      "elk.algorithm": "layered",
-      "elk.direction": "DOWN",
-      "elk.spacing.nodeNode": String(NODE_SPACING),
-      "elk.layered.spacing.nodeNodeBetweenLayers": "150",
-      "elk.spacing.componentComponent": "150",
-      "elk.layered.spacing.edgeNodeBetweenLayers": "50",
-      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-    },
-    children: nodes.map((node) => ({
-      id: node.id,
-      width: nodeWidths.get(node.id) ?? MIN_NODE_WIDTH,
-      height: NODE_HEIGHT,
-    })),
-    edges: edges.map((edge, i) => ({
-      id: `e${i}`,
-      sources: [edge.source],
-      targets: [edge.target],
-    })),
-  };
+  // Add edges
+  for (const edge of edges) {
+    g.setEdge(edge.source, edge.target);
+  }
 
-  const layoutedGraph = await elk.layout(graph);
+  // Run the layout algorithm
+  Dagre.layout(g);
 
+  // Map the layout results back to React Flow nodes
   return {
     nodes: nodes.map((node) => {
-      const layoutedNode = layoutedGraph.children?.find(
-        (n: { id: string; x?: number; y?: number }) => n.id === node.id
-      );
+      const nodeWithPosition = g.node(node.id);
+      // Dagre returns center coordinates, React Flow uses top-left
+      // Adjust by subtracting half the width/height
+      const width = calculateNodeWidth(node.data);
       return {
         ...node,
-        position: { x: layoutedNode?.x ?? 0, y: layoutedNode?.y ?? 0 },
+        position: {
+          x: (nodeWithPosition?.x ?? 0) - width / 2,
+          y: (nodeWithPosition?.y ?? 0) - NODE_HEIGHT / 2,
+        },
       };
     }),
     edges,
   };
 }
 
+// Adjacency maps for graph traversal - built once per edge set
+interface AdjacencyMaps {
+  // dependency -> dependents (for finding what a node blocks/affects)
+  dependentsMap: Map<string, Array<string>>;
+  // dependent -> dependencies (for finding what a node depends on)
+  dependenciesMap: Map<string, Array<string>>;
+  // node -> all direct neighbors (both directions)
+  neighborsMap: Map<string, Set<string>>;
+}
+
+// Build adjacency maps once from edges - O(E) where E is number of edges
+function buildAdjacencyMaps(edges: Array<GraphEdge>): AdjacencyMaps {
+  const dependentsMap = new Map<string, Array<string>>();
+  const dependenciesMap = new Map<string, Array<string>>();
+  const neighborsMap = new Map<string, Set<string>>();
+
+  for (const edge of edges) {
+    // edge.source depends on edge.target
+    // So edge.target has edge.source as a dependent
+    const dependents = dependentsMap.get(edge.target) ?? [];
+    dependents.push(edge.source);
+    dependentsMap.set(edge.target, dependents);
+
+    // edge.source depends on edge.target
+    const dependencies = dependenciesMap.get(edge.source) ?? [];
+    dependencies.push(edge.target);
+    dependenciesMap.set(edge.source, dependencies);
+
+    // Build neighbors (both directions)
+    const sourceNeighbors = neighborsMap.get(edge.source) ?? new Set<string>();
+    sourceNeighbors.add(edge.target);
+    neighborsMap.set(edge.source, sourceNeighbors);
+
+    const targetNeighbors = neighborsMap.get(edge.target) ?? new Set<string>();
+    targetNeighbors.add(edge.source);
+    neighborsMap.set(edge.target, targetNeighbors);
+  }
+
+  return { dependentsMap, dependenciesMap, neighborsMap };
+}
+
 // Get direct dependencies (nodes directly connected to the selected node)
+// Uses pre-built adjacency maps for O(1) neighbor lookup
 function getDirectDependencies(
   nodeId: string,
-  edges: Array<GraphEdge>
+  adjacencyMaps: AdjacencyMaps
 ): Set<string> {
   const connected = new Set<string>();
   connected.add(nodeId);
 
-  for (const edge of edges) {
-    if (edge.source === nodeId) {
-      connected.add(edge.target);
-    }
-    if (edge.target === nodeId) {
-      connected.add(edge.source);
+  const neighbors = adjacencyMaps.neighborsMap.get(nodeId);
+  if (neighbors) {
+    for (const neighbor of neighbors) {
+      connected.add(neighbor);
     }
   }
 
@@ -196,29 +234,20 @@ function getDirectDependencies(
 // If package A changes, then all packages that depend on A (directly or transitively) are affected.
 // In the edge model: edge.source depends on edge.target (arrow points from dependent to dependency)
 // So we traverse "upstream" - following edges backwards from target to source
+// Uses pre-built adjacency maps - no more rebuilding on every call
 function getAffectedNodes(
   nodeId: string,
-  edges: Array<GraphEdge>
+  adjacencyMaps: AdjacencyMaps
 ): Set<string> {
   const affected = new Set<string>();
   affected.add(nodeId);
-
-  // Build an adjacency list for reverse traversal (dependency -> dependents)
-  const dependentsMap = new Map<string, Array<string>>();
-  for (const edge of edges) {
-    // edge.source depends on edge.target
-    // So edge.target has edge.source as a dependent
-    const dependents = dependentsMap.get(edge.target) || [];
-    dependents.push(edge.source);
-    dependentsMap.set(edge.target, dependents);
-  }
 
   // BFS to find all transitively affected nodes
   const queue = [nodeId];
   while (queue.length > 0) {
     const current = queue.shift();
     if (current === undefined) continue;
-    const dependents = dependentsMap.get(current) || [];
+    const dependents = adjacencyMaps.dependentsMap.get(current) ?? [];
 
     for (const dependent of dependents) {
       if (!affected.has(dependent)) {
@@ -235,25 +264,20 @@ function getAffectedNodes(
 // These are the packages that, if changed, would cause the selected node's hash to change.
 // In the edge model: edge.source depends on edge.target
 // So we traverse "downstream" - following edges from source to target
-function getAffectsNodes(nodeId: string, edges: Array<GraphEdge>): Set<string> {
+// Uses pre-built adjacency maps - no more rebuilding on every call
+function getAffectsNodes(
+  nodeId: string,
+  adjacencyMaps: AdjacencyMaps
+): Set<string> {
   const affects = new Set<string>();
   affects.add(nodeId);
-
-  // Build an adjacency list for forward traversal (dependent -> dependencies)
-  const dependenciesMap = new Map<string, Array<string>>();
-  for (const edge of edges) {
-    // edge.source depends on edge.target
-    const dependencies = dependenciesMap.get(edge.source) || [];
-    dependencies.push(edge.target);
-    dependenciesMap.set(edge.source, dependencies);
-  }
 
   // BFS to find all transitive dependencies
   const queue = [nodeId];
   while (queue.length > 0) {
     const current = queue.shift();
     if (current === undefined) continue;
-    const dependencies = dependenciesMap.get(current) || [];
+    const dependencies = adjacencyMaps.dependenciesMap.get(current) ?? [];
 
     for (const dependency of dependencies) {
       if (!affects.has(dependency)) {
@@ -601,6 +625,10 @@ function DevtoolsContent() {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- reactflow types are imperfect
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
+  // Memoize adjacency maps - rebuilt only when rawEdges changes
+  // This avoids O(E) map rebuilding on every node selection/mode change
+  const adjacencyMaps = useMemo(() => buildAdjacencyMaps(rawEdges), [rawEdges]);
+
   // Calculate which nodes/edges should be highlighted based on selection
   const { highlightedNodes, highlightedEdges } = useMemo(() => {
     if (!selectedNode || selectionMode === "none") {
@@ -609,17 +637,17 @@ function DevtoolsContent() {
 
     let visibleNodes: Set<string>;
     if (selectionMode === "direct") {
-      visibleNodes = getDirectDependencies(selectedNode, rawEdges);
+      visibleNodes = getDirectDependencies(selectedNode, adjacencyMaps);
     } else if (selectionMode === "blocks") {
-      visibleNodes = getAffectedNodes(selectedNode, rawEdges);
+      visibleNodes = getAffectedNodes(selectedNode, adjacencyMaps);
     } else {
-      visibleNodes = getAffectsNodes(selectedNode, rawEdges);
+      visibleNodes = getAffectsNodes(selectedNode, adjacencyMaps);
     }
 
     const visibleEdges = getConnectedEdges(visibleNodes, rawEdges);
 
     return { highlightedNodes: visibleNodes, highlightedEdges: visibleEdges };
-  }, [selectedNode, selectionMode, rawEdges]);
+  }, [selectedNode, selectionMode, rawEdges, adjacencyMaps]);
 
   // Apply highlighting to nodes and edges
   useEffect(() => {
@@ -738,7 +766,7 @@ function DevtoolsContent() {
 
   // Convert package graph to React Flow elements
   const updatePackageGraphElements = useCallback(
-    async (state: GraphState) => {
+    (state: GraphState) => {
       // Filter to only nodes that have connections
       const connectedIds = getConnectedNodeIds(state.packageGraph.edges);
       const connectedPackages = state.packageGraph.nodes.filter((pkg) =>
@@ -768,7 +796,7 @@ function DevtoolsContent() {
       );
 
       const { nodes: layoutedNodes, edges: layoutedEdges } =
-        await getLayoutedElements(flowNodes, flowEdges);
+        getLayoutedElements(flowNodes, flowEdges);
 
       setBaseNodes(layoutedNodes);
       setBaseEdges(layoutedEdges);
@@ -783,7 +811,7 @@ function DevtoolsContent() {
 
   // Convert task graph to React Flow elements
   const updateTaskGraphElements = useCallback(
-    async (state: GraphState) => {
+    (state: GraphState) => {
       // Filter to only nodes that have connections
       const connectedIds = getConnectedNodeIds(state.taskGraph.edges);
       const connectedTasks = state.taskGraph.nodes.filter((task) =>
@@ -811,7 +839,7 @@ function DevtoolsContent() {
       }));
 
       const { nodes: layoutedNodes, edges: layoutedEdges } =
-        await getLayoutedElements(flowNodes, flowEdges);
+        getLayoutedElements(flowNodes, flowEdges);
 
       setBaseNodes(layoutedNodes);
       setBaseEdges(layoutedEdges);
@@ -826,14 +854,14 @@ function DevtoolsContent() {
 
   // Update flow elements when view or graph state changes
   const updateFlowElements = useCallback(
-    async (state: GraphState, currentView: GraphView) => {
+    (state: GraphState, currentView: GraphView) => {
       // Clear selection when switching views or updating (don't reset viewport, layout will handle it)
       clearSelection(false);
 
       if (currentView === "packages") {
-        await updatePackageGraphElements(state);
+        updatePackageGraphElements(state);
       } else {
-        await updateTaskGraphElements(state);
+        updateTaskGraphElements(state);
       }
     },
     [updatePackageGraphElements, updateTaskGraphElements, clearSelection]
@@ -844,7 +872,7 @@ function DevtoolsContent() {
     (newView: GraphView) => {
       setView(newView);
       if (graphState) {
-        void updateFlowElements(graphState, newView);
+        updateFlowElements(graphState, newView);
       }
     },
     [graphState, updateFlowElements]
@@ -1069,15 +1097,15 @@ function DevtoolsContent() {
       // Focus on the appropriate nodes for the new mode
       let nodesToFocus: Set<string>;
       if (mode === "direct") {
-        nodesToFocus = getDirectDependencies(selectedNode, rawEdges);
+        nodesToFocus = getDirectDependencies(selectedNode, adjacencyMaps);
       } else if (mode === "blocks") {
-        nodesToFocus = getAffectedNodes(selectedNode, rawEdges);
+        nodesToFocus = getAffectedNodes(selectedNode, adjacencyMaps);
       } else {
-        nodesToFocus = getAffectsNodes(selectedNode, rawEdges);
+        nodesToFocus = getAffectsNodes(selectedNode, adjacencyMaps);
       }
       focusOnNodes(nodesToFocus);
     },
-    [selectedNode, rawEdges, focusOnNodes]
+    [selectedNode, adjacencyMaps, focusOnNodes]
   );
 
   // Handle sidebar node click
@@ -1088,12 +1116,12 @@ function DevtoolsContent() {
         if (selectionMode === "direct") {
           setSelectionMode("blocks");
           // Focus on nodes that this blocks (dependents)
-          const blocked = getAffectedNodes(nodeId, rawEdges);
+          const blocked = getAffectedNodes(nodeId, adjacencyMaps);
           focusOnNodes(blocked);
         } else if (selectionMode === "blocks") {
           setSelectionMode("dependsOn");
           // Focus on nodes that this depends on
-          const dependencies = getAffectsNodes(nodeId, rawEdges);
+          const dependencies = getAffectsNodes(nodeId, adjacencyMaps);
           focusOnNodes(dependencies);
         } else if (selectionMode === "dependsOn") {
           clearSelection(true);
@@ -1102,11 +1130,11 @@ function DevtoolsContent() {
         setSelectedNode(nodeId);
         setSelectionMode("direct");
         // Focus on direct dependencies
-        const direct = getDirectDependencies(nodeId, rawEdges);
+        const direct = getDirectDependencies(nodeId, adjacencyMaps);
         focusOnNodes(direct);
       }
     },
-    [selectedNode, selectionMode, rawEdges, focusOnNodes, clearSelection]
+    [selectedNode, selectionMode, adjacencyMaps, focusOnNodes, clearSelection]
   );
 
   // No port provided - show instructions

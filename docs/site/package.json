@@ -22,6 +22,7 @@
     "collect-examples-data": "node --experimental-strip-types  ./scripts/collect-examples-data.ts"
   },
   "dependencies": {
+    "@dagrejs/dagre": "^1.1.8",
     "@flags-sdk/vercel": "^0.1.8",
     "@heroicons/react": "1.0.6",
     "@radix-ui/react-collapsible": "1.1.3",
@@ -39,7 +40,6 @@
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "copy-to-clipboard": "3.3.3",
-    "elkjs": "0.9.3",
     "fast-glob": "3.3.3",
     "flags": "^4.0.2",
     "framer-motion": "12.2.0",
@@ -70,6 +70,7 @@
     "@turbo/eslint-config": "workspace:*",
     "@turbo/tsconfig": "workspace:^",
     "@turbo/types": "workspace:*",
+    "@types/dagre": "^0.7.53",
     "@types/mdx": "2.0.13",
     "@types/node": "20.11.30",
     "@types/react": "18.3.1",
