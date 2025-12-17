@@ -1,0 +1,324 @@
+---
+title: Turborepo 2.7
+date: 2025/12/17
+description: 'Devtools, Composable configuration, Biome rule, Yarn 4 catalogs'
+tag: 'web development'
+---
+
+import { Authors } from '#components/authors';
+import { Callout } from '#components/callout';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Date } from '#components/blog/date';
+import { Accordion, Accordions } from '#components/accordion';
+import { ThemeAwareImage } from '#components/theme-aware-image';
+
+# Turborepo 2.7
+
+<Date>Wednesday, December 17th, 2025</Date>
+
+<Authors authors={['anthonyshew', 'tomknickman']} />
+
+Turborepo 2.7 is now available, including new features like:
+
+- [**Devtools**](#devtools): Visualize your Package Graph and Task Graph
+- [**Composable configuration**](#compose-configuration-with-extends): Extend Package Configurations from other configurations
+- [**New Turborepo rule in Biome**](#new-biome-rule-noundeclaredenvvars): Lint with Biome to find unsafe usage of environment variables
+- [**Yarn 4 catalogs**](#yarn-4-catalogs): Centralized dependency management for Yarn
+
+Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
+
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+pnpm dlx @turbo/codemod migrate
+
+# Start a new repository
+pnpm dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+yarn dlx @turbo/codemod migrate
+
+# Start a new repository
+yarn dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+npx @turbo/codemod migrate
+
+# Start a new repository
+npx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+bunx @turbo/codemod migrate
+
+# Start a new repository
+bunx create-turbo@latest
+```
+
+</Tab>
+
+</Tabs>
+
+## Devtools
+
+We’ve shipped a brand new experience at [turborepo.com/devtools](http://turborepo.com/devtools). Starting with this version of Turborepo, you can run `turbo devtools` to visually explore your Package Graph and Task Graph.
+
+The graphs will hot-reload as you make changes to your repository, and help you to answer questions like:
+
+- Which packages will miss cache when I change my utilities package?
+- What tasks does this task depend on, directly and indirectly?
+- What packages does _this specific package_ depend on that makes it miss cache so often?
+
+And much, much more. Visit [turborepo.com/devtools](http://turborepo.com/devtools) to get started, or [learn more in the documentation](/docs/reference/devtools).
+
+## Compose configuration with `extends`
+
+We’ve expanded the capabilities of [Package Configurations](https://turborepo.com/docs/reference/package-configurations) so you can write your configuration once, and share it to anywhere in your repository.
+
+### A more powerful `extends` key
+
+Previously, you could only extend from your root `turbo.json` when you used the `extends` key. Now, you can reference `turbo.json` from any other package in your workspace by the package name:
+
+<Tabs items={["./apps/docs/turbo.json", "./apps/web/turbo.json"]}>
+
+<Tab value="./apps/docs/turbo.json">
+
+```json title="./apps/docs/turbo.json"
+// Inherits the "build" and "prepare-build" tasks from apps/web/turbo.json
+// No extra configuration necessary
+{
+  "extends": ["//", "web"]
+}
+```
+
+</Tab>
+
+<Tab value="./apps/web/turbo.json">
+
+```json title="./apps/web/turbo.json"
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["prepare-build"],
+      "outputs": ["dist/**"]
+    },
+    "prepare-build": {}
+  }
+}
+```
+
+</Tab>
+
+</Tabs>
+
+[Visit the docs to learn more.](https://turborepo.com/docs/reference/package-configurations#extending-arrays-with-turbo_extends-pre-release)
+
+### Extending array configurations
+
+Additionally, we’re introducing a new keyword: `$TURBO_EXTENDS$`.
+
+```json title="./apps/web/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      // Inherits "dist/**" from root AND adds ".next/**"
+      "outputs": ["$TURBO_EXTENDS$", ".next/**"]
+    }
+  }
+}
+```
+
+Previously, you could only overwrite array configurations completely. But now, in the example above, you can use `$TURBO_EXTENDS$` to append to an existing array. This gives you a greater degree of control so you can choose to completely overwrite or extend from existing configuration.
+
+[Visit the docs to learn more.](https://turborepo.com/docs/reference/package-configurations#extending-arrays-with-turbo_extends-pre-release)
+
+## New Biome rule: `noUndeclaredEnvVars`
+
+Turborepo users love going fast, so its no surprise they enjoy using [Biome](https://biomejs.dev/) for linting and formatting. However, until today, the only linting support we had for finding unsafe environment variable usage was in ESLint, with [our `eslint-plugin-turbo` plugin](https://turborepo.com/docs/reference/eslint-plugin-turbo).
+
+Now, you can find environment variables that can cause unexpected cache hits faster with [the new Turborepo domain](https://biomejs.dev/linter/domains/#turborepo) in Biome.
+
+Biome will read your dependencies in your repository, and activate the Turborepo domain automatically. The `noUndeclaredEnvVars` rule is currently in the “nursery” group, so must be activated manually:
+
+```json title="./biome.json"
+{
+  "linter": {
+    "rules": {
+      "nursery": {
+        "noUndeclaredEnvVars": "error"
+      }
+    }
+  }
+}
+```
+
+Once the rule is promoted out of the nursery group in a future release of Biome, the rule will be automatically activated for Turborepo projects, requiring zero-configuration.
+
+## Yarn 4 catalogs
+
+Yarn’s 4.10.0 release introduced “catalogs”, inspired by [pnpm’s catalogs feature](https://pnpm.io/catalogs). Catalogs allow you to define a specific version of a dependency once, and reuse that version as a constant in the rest of your repository.
+
+```yaml title="./.yarnrc.yml"
+catalog:
+  react: ^18.3.1
+  lodash: ^4.17.21
+```
+
+We’ve updated our lockfile parser to work with this new Yarn feature, ensuring our smart lockfile detection doesn’t cause global invalidations in your repository. Only the packages and tasks that are affected by the change to your catalogs will see cache misses, improving your cache hit rates.
+
+[Visit our Support Policy](https://turborepo.com/docs/support-policy#package-managers) to learn more about our package manager support, or learn more about catalogs in [the Yarn documentation](https://yarnpkg.com/features/catalogs).
+
+## Other changes
+
+<Accordions>
+
+  <Accordion title="Features (8)">
+
+    - feat: Add GitHub Actions environment variable as default passthrough ([#10740](https://github.com/vercel/turborepo/pull/10740))
+    - feat(tui): Add padding to task names and icons ([#11104](https://github.com/vercel/turborepo/pull/11104))
+    - feat: Cross-platform microfrontends port command ([#11098](https://github.com/vercel/turborepo/pull/11098))
+    - feat: Move icon to left side in TUI ([#11097](https://github.com/vercel/turborepo/pull/11097))
+    - feat: Add Windows-specific env var to default passthroughs ([#11126](https://github.com/vercel/turborepo/pull/11126))
+
+  </Accordion>
+
+  <Accordion title="Fixes (30)">
+
+    - fix: Improve layouts and task graph sourcing for devtools ([#11269](https://github.com/vercel/turborepo/pull/11269))
+    - fix: Allow root microfrontends.json config for @vercel/microfrontends ([#11264](https://github.com/vercel/turborepo/pull/11264))
+    - fix: Compose tasks when composing turbo.json ([#11248](https://github.com/vercel/turborepo/pull/11248))
+    - fix: React Server Components CVE vulnerabilities ([#11245](https://github.com/vercel/turborepo/pull/11245))
+    - fix: Quoting in turbo-ignore commands ([#11239](https://github.com/vercel/turborepo/pull/11239))
+    - fix: Add fine grained interruptible task restarts in watch mode ([#11135](https://github.com/vercel/turborepo/pull/11135))
+    - fix: Add Windows-specific env var to default passthroughs ([#11233](https://github.com/vercel/turborepo/pull/11233))
+    - fix: Upgrade Next.js to 15.5.7 (CVE-2025-55182) ([#11232](https://github.com/vercel/turborepo/pull/11232))
+    - fix(turbo-utils): Add test for conflicting configs and remove stale TODO ([#11201](https://github.com/vercel/turborepo/pull/11201))
+    - fix(cli): Preserve exit codes in notifyUpdate functions ([#11153](https://github.com/vercel/turborepo/pull/11153))
+    - fix: Command injection in `turbo-ignore` ([#11154](https://github.com/vercel/turborepo/pull/11154))
+    - fix(vercel-api): Add `VIEWER_FOR_PLUS` and `SECURITY` role variants ([#11169](https://github.com/vercel/turborepo/pull/11169))
+    - fix: Normalize config dir env vars to absolute ([#11146](https://github.com/vercel/turborepo/pull/11146))
+    - fix: Handle pidlock AlreadyOwned without failing init in LSP ([#10831](https://github.com/vercel/turborepo/pull/10831))
+    - fix: Prevent vt100 TUI crash during column wrap ([#11170](https://github.com/vercel/turborepo/pull/11170))
+    - fix(with-vite-react): Remove unused React import to fix build error ([#11162](https://github.com/vercel/turborepo/pull/11162))
+    - fix: Validate missing \<cwd-path\> argument in test-codemod server script ([#11166](https://github.com/vercel/turborepo/pull/11166))
+    - fix: Use -z option to git commands to handle unicode file paths ([#10844](https://github.com/vercel/turborepo/pull/10844))
+    - fix(config-dir): Resolve relative `TURBO_CONFIG_DIR_PATH` before validation ([#11122](https://github.com/vercel/turborepo/pull/11122))
+    - fix: Make selected task highlight use reverse video for accessibility ([#11090](https://github.com/vercel/turborepo/pull/11090))
+    - fix: Improve version resolution in Bun lockfiles ([#11095](https://github.com/vercel/turborepo/pull/11095))
+    - fix: Bun lockfile pruner adjustment ([#11092](https://github.com/vercel/turborepo/pull/11092))
+    - fix: Revert "fix(logs): create log files for non-cached tasks" ([#11072](https://github.com/vercel/turborepo/pull/11072))
+    - fix: Improve determinism for graceful shutdown ([#11063](https://github.com/vercel/turborepo/pull/11063))
+    - fix(boundaries): Enable import attributes parsing ([#11053](https://github.com/vercel/turborepo/pull/11053))
+    - fix(prune): Handle `patchedDependencies` for bun ([#11027](https://github.com/vercel/turborepo/pull/11027))
+    - fix(prune): Add bunfig.toml to list of copied files ([#11055](https://github.com/vercel/turborepo/pull/11055))
+    - fix: Labels for k + j backwards in binds list ([#11036](https://github.com/vercel/turborepo/pull/11036))
+    - fix: add some Linux variables to default passthrough env vars ([#10959](https://github.com/vercel/turborepo/pull/10959))
+    - fix: Improve parity with real Bun lockfile format for `prune` ([#11048](https://github.com/vercel/turborepo/pull/11048))
+    - fix: path validation in `microfrontends.json` ([#11006](https://github.com/vercel/turborepo/pull/11006))
+
+  </Accordion>
+
+  <Accordion title="Documentation (25)">
+
+    - docs: Devtools ([#11270](https://github.com/vercel/turborepo/pull/11270))
+    - docs: Add `turbo.json` composition docs ([#11247](https://github.com/vercel/turborepo/pull/11247))
+    - docs: Fix Bun filtered install commands ([#11260](https://github.com/vercel/turborepo/pull/11260))
+    - docs: Add `turboExtendsKeyword` future flag and `$TURBO_EXTENDS$` microsyntax ([#11246](https://github.com/vercel/turborepo/pull/11246))
+    - docs: fix typo in design-system.css comment ([#11231](https://github.com/vercel/turborepo/pull/11231))
+    - docs: Move search to built-in ([#11224](https://github.com/vercel/turborepo/pull/11224))
+    - docs: Revert "Comment out Tinybird" ([#11223](https://github.com/vercel/turborepo/pull/11223))
+    - docs(fix): Sitemap ([#11207](https://github.com/vercel/turborepo/pull/11207))
+    - docs: Remove spellchecker ([#11214](https://github.com/vercel/turborepo/pull/11214))
+    - docs: Comment out Tinybird ([#11211](https://github.com/vercel/turborepo/pull/11211))
+    - docs: Cleanup Sentry from gitignore ([#11210](https://github.com/vercel/turborepo/pull/11210))
+    - docs: Remove flags code ([#11209](https://github.com/vercel/turborepo/pull/11209))
+    - docs(security): Update Next.js ([#11208](https://github.com/vercel/turborepo/pull/11208))
+    - docs: Updating READMEs ([#11190](https://github.com/vercel/turborepo/pull/11190))
+    - docs: Fix vitest merged code coverage example ([#11158](https://github.com/vercel/turborepo/pull/11158))
+    - docs: Update Prisma integration guide link ([#11155](https://github.com/vercel/turborepo/pull/11155))
+    - docs(internal): Document release pipeline ([#11141](https://github.com/vercel/turborepo/pull/11141))
+    - docs: Fix typo in tailwind set up guide ([#11143](https://github.com/vercel/turborepo/pull/11143))
+    - docs: Fix copy-pasted testimonial quote ([#11117](https://github.com/vercel/turborepo/pull/11117))
+    - docs: Add new testimonial to home page ([#11116](https://github.com/vercel/turborepo/pull/11116))
+    - docs: Add mentions to `turborepo-summary` and `turborepo-summary-action` ([#11023](https://github.com/vercel/turborepo/pull/11023))
+    - docs: Fix grammar, consistency, and formatting issues in CONTRIBUTING.md ([#11105](https://github.com/vercel/turborepo/pull/11105))
+    - docs: Fix grammatical mistake on structuring-a-repository.mdx ([#11091](https://github.com/vercel/turborepo/pull/11091))
+    - docs: update typo'd link ([#11032](https://github.com/vercel/turborepo/pull/11032))
+    - docs: Clarify passtrhough args cache miss ([#11026](https://github.com/vercel/turborepo/pull/11026))
+
+  </Accordion>
+
+  <Accordion title="Examples (33)">
+
+    - examples(deps): bump react from 19.2.0 to 19.2.3 in /examples/non-monorepo ([#11255](https://github.com/vercel/turborepo/pull/11255))
+    - examples(dev-deps): bump typescript-eslint from 8.48.1 to 8.49.0 in /examples/basic in the basic group ([#11253](https://github.com/vercel/turborepo/pull/11253))
+    - examples(dev-deps): bump the with-svelte group in /examples/with-svelte with 2 updates ([#11254](https://github.com/vercel/turborepo/pull/11254))
+    - examples: Use slim image (debian) for prepare and builder stage, use latest no… ([#11228](https://github.com/vercel/turborepo/pull/11228))
+    - examples(dev-deps): bump the with-svelte group in /examples/with-svelte with 3 updates ([#11219](https://github.com/vercel/turborepo/pull/11219))
+    - examples(dev-deps): bump the basic group in /examples/basic with 2 updates ([#11218](https://github.com/vercel/turborepo/pull/11218))
+    - examples(dev-deps): bump turbo from 2.6.1 to 2.6.3 in /examples/with-shell-commands ([#11217](https://github.com/vercel/turborepo/pull/11217))
+    - examples(security): Upgrade `Next.js` versions ([#11195](https://github.com/vercel/turborepo/pull/11195))
+    - examples: Add `with-biome` example ([#11145](https://github.com/vercel/turborepo/pull/11145))
+    - examples(security): Upgrade Next.js versions ([#11188](https://github.com/vercel/turborepo/pull/11188))
+    - examples: Fix lockfile in kitchen-sink ([#11174](https://github.com/vercel/turborepo/pull/11174))
+    - examples(kitchen-sink): Use simpler eslint config for kitchen-sink ([#11163](https://github.com/vercel/turborepo/pull/11163))
+    - examples(dev-deps): bump @types/react from 19.2.5 to 19.2.7 in /examples/non-monorepo ([#11151](https://github.com/vercel/turborepo/pull/11151))
+    - examples(dev-deps): bump typescript-eslint from 8.46.3 to 8.47.0 in /examples/basic in the basic group ([#11149](https://github.com/vercel/turborepo/pull/11149))
+    - examples(dev-deps): bump the with-svelte group in /examples/with-svelte with 2 updates ([#11152](https://github.com/vercel/turborepo/pull/11152))
+    - examples(with-nestjs): Add missing eslint devDependency ([#11138](https://github.com/vercel/turborepo/pull/11138))
+    - examples(dev-deps): bump @types/react from 19.2.2 to 19.2.5 in /examples/non-monorepo ([#11125](https://github.com/vercel/turborepo/pull/11125))
+    - examples: Remove uneeded microfrontends.json property ([#11101](https://github.com/vercel/turborepo/pull/11101))
+    - examples: Bump `turbo` to latest ([#11100](https://github.com/vercel/turborepo/pull/11100))
+    - examples(deps): bump next from 16.0.0 to 16.0.1 in /examples/kitchen-sink ([#11088](https://github.com/vercel/turborepo/pull/11088))
+    - examples(dev-deps): bump svelte from 5.43.3 to 5.43.5 in /examples/with-svelte ([#11087](https://github.com/vercel/turborepo/pull/11087))
+    - examples(fix): Gradient in `with-tailwind` ([#11073](https://github.com/vercel/turborepo/pull/11073))
+    - examples(dev-deps): bump eslint-config-next from 16.0.0 to 16.0.1 in /examples/non-monorepo ([#11086](https://github.com/vercel/turborepo/pull/11086))
+    - examples(deps): bump next from 16.0.0 to 16.0.1 in /examples/with-tailwind ([#11083](https://github.com/vercel/turborepo/pull/11083))
+    - examples(deps): bump next from 16.0.0 to 16.0.1 in /examples/basic ([#11082](https://github.com/vercel/turborepo/pull/11082))
+    - examples(deps): bump next from 16.0.0 to 16.0.1 in /examples/non-monorepo ([#11051](https://github.com/vercel/turborepo/pull/11051))
+    - examples(deps-dev): bump the with-tailwind group in /examples/with-tailwind with 6 updates ([#11038](https://github.com/vercel/turborepo/pull/11038))
+    - examples(deps): bump the basic group in /examples/basic with 9 updates ([#11040](https://github.com/vercel/turborepo/pull/11040))
+    - examples(deps-dev): bump the with-svelte group in /examples/with-svelte with 7 updates ([#11041](https://github.com/vercel/turborepo/pull/11041))
+    - examples(deps-dev): bump turbo from 2.5.6 to 2.6.0 in /examples/with-shell-commands in the with-shell-commands group ([#11039](https://github.com/vercel/turborepo/pull/11039))
+    - examples: Remove redundant border declaration ([#11042](https://github.com/vercel/turborepo/pull/11042))
+    - examples(deps-dev): bump the kitchen-sink group in /examples/kitchen-sink with 9 updates ([#11043](https://github.com/vercel/turborepo/pull/11043))
+    - examples(deps-dev): bump @types/node from 18.17.4 to 24.10.0 in /examples/non-monorepo ([#11037](https://github.com/vercel/turborepo/pull/11037))
+
+  </Accordion>
+
+</Accordions>
+
+## Acknowledgments and community
+
+Turborepo is the result of the combined work of all of its contributors, including our core team: [Anthony](https://github.com/anthonyshew) and [Tom](https://github.com/tknickman).
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](https://turborepo.com/docs/community).
+
+We also thank everyone who contributed to this release of Turborepo: @2qp, @AdelFetner, @AndrewPynch, @AryanBagade, @birajitsaikia, @ctate, @dsmurdoch357, @deepakpathik, @mrr11k, @lishaduck, @ethan-fraser, @eug-vs, @GAMMA_Demon, @hanlee, @jnsamines, @kitfoster, @louisbompart, @ognevny, @cmg8431, @chosim-dvlpr, @amond, @nicolascharpentier, @progyansen, @pyrytakala, @sakena1303, @vanshagarwal, @yairopro, @YASHRDX0001, @Yeom-JinHo, @Gabrola, @zacowan, @hookim, @johnpyp, @mahi656, and @neel.
+
+Additionally, the core team would like to thank:
+
+- [moklick](https://github.com/moklick) for their work on [xyflow](https://xyflow.com/), an open-source library for building node-based UIs with React and Svelte. xyflow is the basis of the package and task graph visualizations in Turborepo Devtools.
+
+- [The Biome core team](https://biomejs.dev/internals/people-and-credits/#core-contributors) for their help in adding [the `noUndeclaredEnvVars` rule to Biome](https://biomejs.dev/linter/rules/no-undeclared-env-vars/).
