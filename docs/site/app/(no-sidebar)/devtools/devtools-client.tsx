@@ -302,17 +302,6 @@ function getLayoutedElements(
       subRows = [nodesAtDepth];
     }
 
-    // DEBUG: Log what's happening
-    console.log(
-      `Depth ${depth}: ${
-        nodesAtDepth.length
-      } nodes, naturalWidth=${naturalWidth.toFixed(0)}, ` +
-        `maxAllowed=${
-          maxAllowedWidth === Infinity ? "Infinity" : maxAllowedWidth.toFixed(0)
-        }, ` +
-        `split into ${subRows.length} sub-rows`
-    );
-
     // Position each sub-row
     for (const subRow of subRows) {
       const subRowWidth = calculateRowWidth(subRow, horizontalSpacing);
