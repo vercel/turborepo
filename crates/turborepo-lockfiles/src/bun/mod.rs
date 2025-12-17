@@ -273,16 +273,20 @@ pub struct BunLockfile {
 #[serde(rename_all = "camelCase")]
 pub struct BunLockfileData {
     lockfile_version: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    config_version: Option<i32>,
     workspaces: Map<String, WorkspaceEntry>,
-    packages: Map<String, PackageEntry>,
-    #[serde(default, skip_serializing_if = "Map::is_empty")]
-    patched_dependencies: Map<String, String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    trusted_dependencies: Vec<String>,
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     overrides: Map<String, String>,
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     catalog: Map<String, String>,
     #[serde(default, skip_serializing_if = "Map::is_empty")]
     catalogs: Map<String, Map<String, String>>,
+    packages: Map<String, PackageEntry>,
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    patched_dependencies: Map<String, String>,
 }
 
 #[derive(Debug, Deserialize, PartialEq, Default, Clone, Serialize)]
@@ -673,7 +677,11 @@ impl Lockfile for BunLockfile {
         let mut output = String::new();
         self.write_header(&mut output);
         self.write_workspaces(&mut output)?;
+        self.write_trusted_dependencies(&mut output)?;
+        self.write_overrides(&mut output)?;
+        self.write_catalogs(&mut output)?;
         self.write_packages(&mut output)?;
+        self.write_patched_dependencies(&mut output)?;
         output.push_str("}\n");
         Ok(output.into_bytes())
     }
@@ -721,6 +729,10 @@ impl BunLockfile {
             "  \"lockfileVersion\": {},\n",
             self.data.lockfile_version
         ));
+        // Write configVersion if present
+        if let Some(config_version) = self.data.config_version {
+            output.push_str(&format!("  \"configVersion\": {},\n", config_version));
+        }
     }
 
     fn write_workspaces(&self, output: &mut String) -> Result<(), crate::Error> {
@@ -740,23 +752,129 @@ impl BunLockfile {
             }
         }
 
-        // Bun requires trailing commas after every value and closing brace
-        let mut workspaces_with_commas = adjusted_json
-            .replace("\"\n      }", "\",\n      }")
-            .replace("\"\n        }", "\",\n        }")
-            .replace("\"\n          }", "\",\n          }")
-            .replace("\"\n    }", "\",\n    }")
-            .replace("}\n      }", "},\n      }")
-            .replace("}\n        }", "},\n        }")
-            .replace("}\n    }", "},\n    }");
-
-        if let Some(last_pos) = workspaces_with_commas.rfind("}\n  }") {
-            workspaces_with_commas.replace_range(last_pos..last_pos + 1, "},");
-        }
+        // Use the helper function to add trailing commas
+        let workspaces_with_commas = Self::add_trailing_commas(&adjusted_json);
 
         output.push_str(&workspaces_with_commas);
         output.push_str(",\n");
 
+        Ok(())
+    }
+
+    fn write_trusted_dependencies(&self, output: &mut String) -> Result<(), crate::Error> {
+        if self.data.trusted_dependencies.is_empty() {
+            return Ok(());
+        }
+        let json = serde_json::to_string_pretty(&self.data.trusted_dependencies)?;
+        // Format with proper indentation
+        let lines: Vec<&str> = json.lines().collect();
+        output.push_str("  \"trustedDependencies\": ");
+        let mut adjusted = String::new();
+        for (i, line) in lines.iter().enumerate() {
+            if i == 0 {
+                adjusted.push_str(line);
+            } else {
+                let spaces = line.len() - line.trim_start().len();
+                let indent = " ".repeat(spaces + 2);
+                adjusted.push_str(&format!("\n{}{}", indent, line.trim_start()));
+            }
+        }
+        // Add trailing commas after all strings (bun requires trailing commas)
+        let with_commas = Self::add_trailing_commas(&adjusted);
+        output.push_str(&with_commas);
+        output.push_str(",\n");
+        Ok(())
+    }
+
+    /// Add trailing commas to JSON values before closing brackets/braces
+    /// Handles strings, numbers, booleans, nulls, and nested structures
+    fn add_trailing_commas(json: &str) -> String {
+        use regex::Regex;
+        // Match: any JSON value (string, number, boolean, null, ] or }) followed by
+        // newline+whitespace and then a closing bracket/brace
+        // Pattern covers:
+        // - Strings ending with "
+        // - Numbers ending with digits
+        // - Booleans: true, false
+        // - Null: null
+        // - Nested closings: ] or }
+        let re = Regex::new(r#"("|true|false|null|\d|[\]}])\n(\s*)([\]}])"#).unwrap();
+        // Run multiple passes until no more changes (handles deeply nested structures)
+        let mut result = json.to_string();
+        loop {
+            let new_result = re.replace_all(&result, "$1,\n$2$3").to_string();
+            if new_result == result {
+                break;
+            }
+            result = new_result;
+        }
+        result
+    }
+
+    fn write_overrides(&self, output: &mut String) -> Result<(), crate::Error> {
+        if self.data.overrides.is_empty() {
+            return Ok(());
+        }
+        let json = serde_json::to_string_pretty(&self.data.overrides)?;
+        let lines: Vec<&str> = json.lines().collect();
+        output.push_str("  \"overrides\": ");
+        let mut adjusted = String::new();
+        for (i, line) in lines.iter().enumerate() {
+            if i == 0 {
+                adjusted.push_str(line);
+            } else {
+                let spaces = line.len() - line.trim_start().len();
+                let indent = " ".repeat(spaces + 2);
+                adjusted.push_str(&format!("\n{}{}", indent, line.trim_start()));
+            }
+        }
+        let with_commas = Self::add_trailing_commas(&adjusted);
+        output.push_str(&with_commas);
+        output.push_str(",\n");
+        Ok(())
+    }
+
+    fn write_catalogs(&self, output: &mut String) -> Result<(), crate::Error> {
+        // Write default catalog if present
+        if !self.data.catalog.is_empty() {
+            let json = serde_json::to_string_pretty(&self.data.catalog)?;
+            let lines: Vec<&str> = json.lines().collect();
+            output.push_str("  \"catalog\": ");
+            let mut adjusted = String::new();
+            for (i, line) in lines.iter().enumerate() {
+                if i == 0 {
+                    adjusted.push_str(line);
+                } else {
+                    let spaces = line.len() - line.trim_start().len();
+                    let indent = " ".repeat(spaces + 2);
+                    adjusted.push_str(&format!("\n{}{}", indent, line.trim_start()));
+                }
+            }
+            let with_commas = Self::add_trailing_commas(&adjusted);
+            output.push_str(&with_commas);
+            output.push_str(",\n");
+        }
+
+        // Write named catalogs if present
+        if self.data.catalogs.is_empty() {
+            return Ok(());
+        }
+        let json = serde_json::to_string_pretty(&self.data.catalogs)?;
+        let lines: Vec<&str> = json.lines().collect();
+        output.push_str("  \"catalogs\": ");
+        let mut adjusted = String::new();
+        for (i, line) in lines.iter().enumerate() {
+            if i == 0 {
+                adjusted.push_str(line);
+            } else {
+                let spaces = line.len() - line.trim_start().len();
+                let indent = " ".repeat(spaces + 2);
+                adjusted.push_str(&format!("\n{}{}", indent, line.trim_start()));
+            }
+        }
+        let with_commas = Self::add_trailing_commas(&adjusted);
+        output.push_str(&with_commas);
+        output.push_str(",\n");
         Ok(())
     }
 
@@ -773,7 +891,6 @@ impl BunLockfile {
                 output.push_str(&format!("    \"{key}\": [{ident_json}],"));
             } else {
                 let ident_json = serde_json::to_string(&entry.ident)?;
-                let registry_json = serde_json::to_string(entry.registry.as_deref().unwrap_or(""))?;
                 let info_json =
                     serde_json::to_string(&entry.info.as_ref().unwrap_or(&PackageInfo::default()))?;
                 let checksum_json = serde_json::to_string(entry.checksum.as_deref().unwrap_or(""))?;
@@ -782,10 +899,25 @@ impl BunLockfile {
                 // 3-element arrays get expanded with trailing commas, others stay compact
                 let info_json_spaced = self.format_info_json(&info_json);
 
-                output.push_str(&format!(
-                    "    \"{key}\": [{ident_json}, {registry_json}, {info_json_spaced}, \
-                     {checksum_json}],",
-                ));
+                // GitHub and git packages have 3 elements (no registry)
+                // npm packages have 4 elements (with registry)
+                let is_git_package =
+                    entry.ident.contains("@git+") || entry.ident.contains("@github:");
+
+                if is_git_package {
+                    // GitHub/git packages: [ident, info, checksum] - 3 elements
+                    output.push_str(&format!(
+                        "    \"{key}\": [{ident_json}, {info_json_spaced}, {checksum_json}],",
+                    ));
+                } else {
+                    // npm packages: [ident, registry, info, checksum] - 4 elements
+                    let registry_json =
+                        serde_json::to_string(entry.registry.as_deref().unwrap_or(""))?;
+                    output.push_str(&format!(
+                        "    \"{key}\": [{ident_json}, {registry_json}, {info_json_spaced}, \
+                         {checksum_json}],",
+                    ));
+                }
             }
 
             if i < package_keys.len() - 1 {
@@ -794,8 +926,37 @@ impl BunLockfile {
                 output.push('\n');
             }
         }
-        output.push_str("  }\n");
+        // Add comma if there are patched dependencies to follow
+        if !self.data.patched_dependencies.is_empty() {
+            output.push_str("  },\n");
+        } else {
+            output.push_str("  }\n");
+        }
 
+        Ok(())
+    }
+
+    fn write_patched_dependencies(&self, output: &mut String) -> Result<(), crate::Error> {
+        if self.data.patched_dependencies.is_empty() {
+            return Ok(());
+        }
+        let json = serde_json::to_string_pretty(&self.data.patched_dependencies)?;
+        let lines: Vec<&str> = json.lines().collect();
+        output.push_str("  \"patchedDependencies\": ");
+        let mut adjusted = String::new();
+        for (i, line) in lines.iter().enumerate() {
+            if i == 0 {
+                adjusted.push_str(line);
+            } else {
+                let spaces = line.len() - line.trim_start().len();
+                let indent = " ".repeat(spaces + 2);
+                adjusted.push_str(&format!("\n{}{}", indent, line.trim_start()));
+            }
+        }
+        let with_commas = Self::add_trailing_commas(&adjusted);
+        output.push_str(&with_commas);
+        // No trailing comma - this is the last section before closing brace
+        output.push('\n');
         Ok(())
     }
 
@@ -913,7 +1074,6 @@ impl BunLockfile {
     fn format_array(&self, chars: &[char], i: &mut usize) -> String {
         let mut array_depth = 1;
         let mut array_content = String::new();
-        let mut comma_count = 0;
         let mut in_array_string = false;
         let mut array_escape_next = false;
         *i += 1;
@@ -934,8 +1094,6 @@ impl BunLockfile {
                         if array_depth == 0 {
                             break;
                         }
-                    } else if array_char == ',' && array_depth == 1 {
-                        comma_count += 1;
                     }
                 }
             } else {
@@ -948,13 +1106,8 @@ impl BunLockfile {
 
         let trimmed_content = array_content.trim_matches(|c: char| c == ',' || c.is_whitespace());
 
-        if comma_count == 0 {
-            format!("[{trimmed_content}]")
-        } else if comma_count == 2 {
-            format!("[ {}, ]", self.format_array_content(trimmed_content))
-        } else {
-            format!("[{}]", self.format_array_content(trimmed_content))
-        }
+        // Bun uses compact arrays without trailing commas inside package entries
+        format!("[{}]", self.format_array_content(trimmed_content))
     }
 
     /// Formats the content inside an array by adding proper spacing after
@@ -1060,12 +1213,14 @@ impl BunLockfile {
         // Create pruned lockfile structure
         let mut pruned_data = BunLockfileData {
             lockfile_version: self.data.lockfile_version,
+            config_version: self.data.config_version,
             workspaces: Map::new(),
-            packages: Map::new(),
-            patched_dependencies: Map::new(),
+            trusted_dependencies: self.data.trusted_dependencies.clone(),
             overrides: Map::new(),
             catalog: self.data.catalog.clone(),
             catalogs: self.data.catalogs.clone(),
+            packages: Map::new(),
+            patched_dependencies: Map::new(),
         };
 
         if let Some(root) = self.data.workspaces.get("") {
@@ -1421,12 +1576,14 @@ impl BunLockfile {
         // Create temporary lockfile for recomputation
         let temp_data = BunLockfileData {
             lockfile_version: pruned_data.lockfile_version,
+            config_version: pruned_data.config_version,
             workspaces: pruned_data.workspaces.clone(),
-            packages: pruned_data.packages.clone(),
-            patched_dependencies: pruned_data.patched_dependencies.clone(),
+            trusted_dependencies: pruned_data.trusted_dependencies.clone(),
             overrides: pruned_data.overrides.clone(),
             catalog: self.data.catalog.clone(),
             catalogs: self.data.catalogs.clone(),
+            packages: pruned_data.packages.clone(),
+            patched_dependencies: pruned_data.patched_dependencies.clone(),
         };
         let temp_index = PackageIndex::new(&temp_data.packages);
         let temp_lockfile = BunLockfile {
@@ -3262,5 +3419,417 @@ mod test {
         let pruned = prune_for_workspace(&lockfile, "apps/app-a");
         let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
         insta::assert_snapshot!(pruned_str);
+    }
+
+    /// Test that pruning a lockfile with GitHub dependencies doesn't corrupt the format.
+    /// GitHub packages should have 3 elements: [ident, info, checksum]
+    /// NOT 4 elements with an empty registry: [ident, "", info, checksum]
+    #[test]
+    fn test_prune_github_package_format() {
+        let lockfile_json = json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "root",
+                },
+                "packages/a": {
+                    "name": "pkg-a",
+                    "dependencies": {
+                        "some-lib": "github:user/repo#abc123",
+                    },
+                },
+            },
+            "packages": {
+                "some-lib": [
+                    "some-lib@github:user/repo#abc123",
+                    { "dependencies": {} },
+                    "abc123"
+                ],
+            },
+        });
+
+        let lockfile = BunLockfile::from_str(&lockfile_json.to_string()).unwrap();
+        let subgraph = lockfile
+            .subgraph(
+                &["packages/a".into()],
+                &["some-lib@github:user/repo#abc123".into()],
+            )
+            .unwrap();
+
+        let encoded = String::from_utf8(subgraph.encode().unwrap()).unwrap();
+
+        // Verify the GitHub package has exactly 3 elements (no empty string registry)
+        // The output should contain the ident followed directly by the info object
+        assert!(
+            !encoded.contains(r#"["some-lib@github:user/repo#abc123", "", {"#),
+            "GitHub package should NOT have empty string registry field"
+        );
+        assert!(
+            encoded.contains(r#""some-lib": ["some-lib@github:user/repo#abc123", {"#),
+            "GitHub package should have ident followed directly by info object"
+        );
+    }
+
+    /// Test that metadata sections are preserved through encode round-trip.
+    /// Bun expects configVersion, trustedDependencies, overrides, and catalogs.
+    #[test]
+    fn test_encode_preserves_metadata_sections() {
+        let lockfile_json = json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test",
+                },
+            },
+            "trustedDependencies": ["esbuild", "sharp"],
+            "overrides": {
+                "lodash": "4.17.21",
+            },
+            "catalog": {
+                "react": "^18.0.0",
+            },
+            "packages": {},
+        });
+
+        let lockfile = BunLockfile::from_str(&lockfile_json.to_string()).unwrap();
+        let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+
+        // Verify configVersion is present
+        assert!(
+            encoded.contains(r#""configVersion": 1"#),
+            "configVersion should be preserved in encoded output"
+        );
+
+        // Verify trustedDependencies section is present with its contents
+        assert!(
+            encoded.contains(r#""trustedDependencies""#),
+            "trustedDependencies section should be present"
+        );
+        assert!(
+            encoded.contains(r#""esbuild""#),
+            "trustedDependencies should contain esbuild"
+        );
+        assert!(
+            encoded.contains(r#""sharp""#),
+            "trustedDependencies should contain sharp"
+        );
+
+        // Verify overrides section is present with its contents
+        assert!(
+            encoded.contains(r#""overrides""#),
+            "overrides section should be present"
+        );
+        assert!(
+            encoded.contains(r#""lodash""#),
+            "overrides should contain lodash"
+        );
+
+        // Verify catalog section is present with its contents
+        assert!(
+            encoded.contains(r#""catalog""#),
+            "catalog section should be present"
+        );
+        assert!(
+            encoded.contains(r#""react""#),
+            "catalog should contain react"
+        );
+    }
+
+    /// Test that optionalPeers arrays use compact format without trailing commas.
+    /// Bun expects: ["react", "vue"] NOT [ "react", "vue", ]
+    #[test]
+    fn test_optional_peers_compact_format() {
+        let lockfile_json = json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test",
+                },
+            },
+            "packages": {
+                "some-pkg": [
+                    "some-pkg@1.0.0",
+                    "",
+                    {
+                        "peerDependencies": {
+                            "react": "^18.0.0",
+                            "vue": "^3.0.0",
+                        },
+                        "optionalPeers": ["react", "vue"],
+                    },
+                    "sha512-abc"
+                ],
+            },
+        });
+
+        let lockfile = BunLockfile::from_str(&lockfile_json.to_string()).unwrap();
+        let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+
+        // Verify optionalPeers uses compact format without leading/trailing spaces or commas
+        // The array should be formatted as ["react", "vue"] or ["vue", "react"]
+        // NOT as [ "react", "vue", ] or similar
+        assert!(
+            !encoded.contains(r#"[ ""#),
+            "optionalPeers array should NOT have leading space after opening bracket"
+        );
+        assert!(
+            !encoded.contains(r#", ]"#),
+            "optionalPeers array should NOT have trailing comma before closing bracket"
+        );
+
+        // Verify the optionalPeers field exists and has content
+        assert!(
+            encoded.contains(r#""optionalPeers""#),
+            "optionalPeers field should be present"
+        );
+    }
+
+    /// Test that named catalogs (catalogs field) are preserved through encode.
+    /// This tests the plural "catalogs" field, not the singular "catalog" field.
+    #[test]
+    fn test_encode_preserves_named_catalogs() {
+        let lockfile_json = json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test",
+                },
+            },
+            "catalog": {
+                "lodash": "^4.17.0",
+            },
+            "catalogs": {
+                "frontend": {
+                    "react": "^18.0.0",
+                    "vue": "^3.0.0",
+                },
+                "backend": {
+                    "express": "^4.18.0",
+                },
+            },
+            "packages": {},
+        });
+
+        let lockfile = BunLockfile::from_str(&lockfile_json.to_string()).unwrap();
+        let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+
+        // Verify default catalog is present
+        assert!(
+            encoded.contains(r#""catalog""#),
+            "default catalog section should be present"
+        );
+        assert!(
+            encoded.contains(r#""lodash""#),
+            "default catalog should contain lodash"
+        );
+
+        // Verify named catalogs section is present
+        assert!(
+            encoded.contains(r#""catalogs""#),
+            "named catalogs section should be present"
+        );
+
+        // Verify frontend catalog entries
+        assert!(
+            encoded.contains(r#""frontend""#),
+            "frontend catalog should be present"
+        );
+        assert!(
+            encoded.contains(r#""react""#),
+            "frontend catalog should contain react"
+        );
+        assert!(
+            encoded.contains(r#""vue""#),
+            "frontend catalog should contain vue"
+        );
+
+        // Verify backend catalog entries
+        assert!(
+            encoded.contains(r#""backend""#),
+            "backend catalog should be present"
+        );
+        assert!(
+            encoded.contains(r#""express""#),
+            "backend catalog should contain express"
+        );
+    }
+
+    /// Test that patched_dependencies are preserved through encode.
+    #[test]
+    fn test_encode_preserves_patched_dependencies() {
+        let lockfile_json = json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test",
+                    "dependencies": {
+                        "lodash": "^4.17.21",
+                    },
+                },
+            },
+            "packages": {
+                "lodash": [
+                    "lodash@4.17.21",
+                    "",
+                    {},
+                    "sha512-abc"
+                ],
+            },
+            "patchedDependencies": {
+                "lodash@4.17.21": "patches/lodash+4.17.21.patch",
+            },
+        });
+
+        let lockfile = BunLockfile::from_str(&lockfile_json.to_string()).unwrap();
+        let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+
+        // Verify patchedDependencies section is present
+        assert!(
+            encoded.contains(r#""patchedDependencies""#),
+            "patchedDependencies section should be present"
+        );
+        assert!(
+            encoded.contains(r#""lodash@4.17.21""#),
+            "patchedDependencies should contain lodash entry"
+        );
+        assert!(
+            encoded.contains(r#"patches/lodash+4.17.21.patch"#),
+            "patchedDependencies should contain patch path"
+        );
+    }
+
+    /// Test that packages section is correctly encoded with proper format.
+    /// This verifies the packages field ordering and structure.
+    #[test]
+    fn test_encode_packages_structure() {
+        let lockfile_json = json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test",
+                    "dependencies": {
+                        "is-odd": "^3.0.0",
+                    },
+                },
+            },
+            "packages": {
+                "is-odd": [
+                    "is-odd@3.0.1",
+                    "",
+                    {
+                        "dependencies": {
+                            "is-number": "^6.0.0",
+                        },
+                    },
+                    "sha512-def"
+                ],
+                "is-number": [
+                    "is-number@6.0.0",
+                    "",
+                    {},
+                    "sha512-ghi"
+                ],
+            },
+        });
+
+        let lockfile = BunLockfile::from_str(&lockfile_json.to_string()).unwrap();
+        let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+
+        // Verify packages section exists
+        assert!(
+            encoded.contains(r#""packages""#),
+            "packages section should be present"
+        );
+
+        // Verify package entries are present with correct identifiers
+        assert!(
+            encoded.contains(r#""is-odd": ["is-odd@3.0.1""#),
+            "is-odd package should be present with correct format"
+        );
+        assert!(
+            encoded.contains(r#""is-number": ["is-number@6.0.0""#),
+            "is-number package should be present with correct format"
+        );
+
+        // Verify packages have registry field (empty string for npm packages)
+        assert!(
+            encoded.contains(r#"["is-odd@3.0.1", "","#),
+            "npm packages should have empty string registry field"
+        );
+    }
+
+    /// Comprehensive test that all metadata sections are written in correct order.
+    /// Bun expects a specific ordering of top-level keys.
+    #[test]
+    fn test_encode_section_ordering() {
+        let lockfile_json = json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": { "name": "test" },
+            },
+            "trustedDependencies": ["esbuild"],
+            "overrides": { "lodash": "4.17.21" },
+            "catalog": { "react": "^18.0.0" },
+            "catalogs": {
+                "frontend": { "vue": "^3.0.0" },
+            },
+            "packages": {
+                "lodash": ["lodash@4.17.21", "", {}, "sha512-abc"],
+            },
+            "patchedDependencies": {
+                "lodash@4.17.21": "patches/lodash.patch",
+            },
+        });
+
+        let lockfile = BunLockfile::from_str(&lockfile_json.to_string()).unwrap();
+        let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+
+        // Find positions of each section to verify ordering
+        let lockfile_version_pos = encoded.find(r#""lockfileVersion""#).unwrap();
+        let config_version_pos = encoded.find(r#""configVersion""#).unwrap();
+        let workspaces_pos = encoded.find(r#""workspaces""#).unwrap();
+        let trusted_deps_pos = encoded.find(r#""trustedDependencies""#).unwrap();
+        let overrides_pos = encoded.find(r#""overrides""#).unwrap();
+        let catalog_pos = encoded.find(r#""catalog""#).unwrap();
+        let catalogs_pos = encoded.find(r#""catalogs""#).unwrap();
+        let packages_pos = encoded.find(r#""packages""#).unwrap();
+        let patched_deps_pos = encoded.find(r#""patchedDependencies""#).unwrap();
+
+        // Verify ordering: lockfileVersion < configVersion < workspaces < trustedDependencies
+        // < overrides < catalog < catalogs < packages < patchedDependencies
+        assert!(
+            lockfile_version_pos < config_version_pos,
+            "lockfileVersion should come before configVersion"
+        );
+        assert!(
+            config_version_pos < workspaces_pos,
+            "configVersion should come before workspaces"
+        );
+        assert!(
+            workspaces_pos < trusted_deps_pos,
+            "workspaces should come before trustedDependencies"
+        );
+        assert!(
+            trusted_deps_pos < overrides_pos,
+            "trustedDependencies should come before overrides"
+        );
+        assert!(
+            overrides_pos < catalog_pos,
+            "overrides should come before catalog"
+        );
+        assert!(
+            catalog_pos < catalogs_pos,
+            "catalog should come before catalogs"
+        );
+        assert!(
+            catalogs_pos < packages_pos,
+            "catalogs should come before packages"
+        );
+        assert!(
+            packages_pos < patched_deps_pos,
+            "packages should come before patchedDependencies"
+        );
     }
 }
