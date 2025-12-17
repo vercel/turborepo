@@ -15,7 +15,7 @@ use turborepo_repository::{
 use turborepo_task_id::TaskName;
 
 use crate::{
-    config::CONFIG_FILE,
+    config::resolve_turbo_config_path,
     engine::{EngineBuilder, TaskNode as EngineTaskNode},
     turbo_json::{TurboJsonLoader, TurboJsonReader},
 };
@@ -54,7 +54,8 @@ impl ProperTaskGraphBuilder {
         pkg_graph: &PackageGraph,
     ) -> Result<TaskGraphData, TaskGraphError> {
         // Create turbo json loader
-        let root_turbo_json_path = self.repo_root.join_component(CONFIG_FILE);
+        let root_turbo_json_path = resolve_turbo_config_path(&self.repo_root)
+            .map_err(|e| TaskGraphError::BuildError(format!("{e}")))?;
         let reader = TurboJsonReader::new(self.repo_root.clone());
         let loader =
             TurboJsonLoader::workspace(reader, root_turbo_json_path.clone(), pkg_graph.packages());
