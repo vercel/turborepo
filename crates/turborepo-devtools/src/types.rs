@@ -3,6 +3,9 @@
 //! These types define the messages exchanged between the CLI server
 //! and the web client, as well as the graph data structures.
 
+use std::future::Future;
+use std::pin::Pin;
+
 use serde::{Deserialize, Serialize};
 
 /// Messages sent from CLI server to web client
@@ -100,4 +103,30 @@ pub struct TaskNode {
     pub task: String,
     /// The script command from package.json (e.g., "tsc --build")
     pub script: String,
+}
+
+/// Error type for task graph building
+#[derive(Debug, thiserror::Error)]
+pub enum TaskGraphError {
+    #[error("Failed to build task graph: {0}")]
+    BuildError(String),
+}
+
+/// Trait for building task graphs.
+///
+/// This trait allows the core turbo library to provide its own implementation
+/// of task graph building, ensuring consistency with the actual `turbo run`
+/// task graph logic.
+///
+/// The devtools server will call this trait to build task graphs when files
+/// change, rather than using its own simplified logic.
+pub trait TaskGraphBuilder: Send + Sync {
+    /// Build the task graph for the given repository.
+    ///
+    /// This should use the same logic as `turbo run` to build the task graph,
+    /// including proper resolution of `dependsOn`, topological dependencies,
+    /// and task inheritance from turbo.json files.
+    fn build_task_graph(
+        &self,
+    ) -> Pin<Box<dyn Future<Output = Result<TaskGraphData, TaskGraphError>> + Send + '_>>;
 }
