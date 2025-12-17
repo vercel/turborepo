@@ -83,6 +83,28 @@ bunx create-turbo@latest
 
 We’ve shipped a brand new experience at [turborepo.com/devtools](http://turborepo.com/devtools). Starting with this version of Turborepo, you can run `turbo devtools` to visually explore your Package Graph and Task Graph.
 
+<ThemeAwareImage
+  className="my-4 flex justify-center"
+  light={{
+    alt: '',
+    src: '/images/blog/turbo-2-7/devtools-light.png',
+    props: {
+      width: 1600,
+      height: 750,
+      className: 'dark:hidden block rounded-xl',
+    },
+  }}
+  dark={{
+    alt: '',
+    src: '/images/blog/turbo-2-7/devtools-dark.png',
+    props: {
+      width: 1600,
+      height: 750,
+      className: 'hidden dark:block rounded-xl',
+    },
+  }}
+/>
+
 The graphs will hot-reload as you make changes to your repository, and help you to answer questions like:
 
 - Which packages will miss cache when I change my utilities package?
