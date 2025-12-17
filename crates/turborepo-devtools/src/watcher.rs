@@ -182,8 +182,6 @@ async fn watch_loop(
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::*;
 
     #[test]

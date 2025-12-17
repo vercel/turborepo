@@ -27,7 +27,7 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{package_graph::PackageGraphBuilder, package_json::PackageJson};
 
 use crate::{
-    graph::{package_graph_to_data, task_graph_to_data},
+    graph::{package_graph_to_data, read_pipeline_tasks, task_graph_to_data},
     types::{GraphState, ServerMessage},
     watcher::{DevtoolsWatcher, WatchEvent},
 };
@@ -251,9 +251,12 @@ async fn build_graph_state(repo_root: &AbsoluteSystemPathBuf) -> Result<GraphSta
         .await
         .map_err(|e| ServerError::PackageGraph(e.to_string()))?;
 
+    // Read task names from turbo.json for determining cross-package dependencies
+    let pipeline_tasks = read_pipeline_tasks(repo_root);
+
     // Convert to our serializable formats
     let package_graph = package_graph_to_data(&pkg_graph);
-    let task_graph = task_graph_to_data(&pkg_graph);
+    let task_graph = task_graph_to_data(&pkg_graph, &pipeline_tasks);
 
     Ok(GraphState {
         package_graph,
