@@ -72,9 +72,16 @@ impl<'de> Deserialize<'de> for PackageEntry {
         }
 
         // The second value can be either registry (string) or info (object)
+        // Note: GitHub/git packages should never have a registry field
+        let is_git_package = key.contains("@git+") || key.contains("@github:");
         if let Some(val) = vals.pop_front() {
             match val {
-                Vals::Str(reg) => registry = Some(reg),
+                Vals::Str(reg) => {
+                    // Only set registry for npm packages, not git/github packages
+                    if !is_git_package {
+                        registry = Some(reg);
+                    }
+                }
                 Vals::Info(package_info) => info = Some(*package_info),
             }
         };
@@ -201,11 +208,70 @@ mod test {
             checksum: None,
         }
     );
+
+    // GitHub package fixture - should never have a registry field
+    fixture!(
+        github_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "@tanstack/react-store@github:TanStack/store#24a971c".into(),
+            registry: None, // GitHub packages must NOT have registry
+            info: Some(PackageInfo {
+                dependencies: Some(("@tanstack/store".into(), "0.7.0".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: Some("24a971c".into()),
+            root: None,
+        }
+    );
+
+    // GitHub package with CORRUPTED input (has empty string at position 1)
+    // This tests that the deserializer fix correctly ignores registry for github packages
+    fixture!(
+        github_pkg_corrupted_input,
+        PackageEntry,
+        PackageEntry {
+            ident: "@tanstack/react-store@github:TanStack/store#24a971c".into(),
+            registry: None, // Even with corrupted 4-element input, github packages must NOT have registry
+            info: Some(PackageInfo {
+                dependencies: Some(("@tanstack/store".into(), "0.7.0".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: Some("24a971c".into()),
+            root: None,
+        }
+    );
+
+    // Git package fixture - should never have a registry field
+    fixture!(
+        git_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "my-package@git+https://github.com/user/repo#abc123".into(),
+            registry: None, // Git packages must NOT have registry
+            info: Some(PackageInfo {
+                dependencies: Some(("lodash".into(), "4.17.21".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: Some("abc123".into()),
+            root: None,
+        }
+    );
+
     #[test_case(json!({"name": "bun-test", "devDependencies": {"turbo": "^2.3.3"}}), basic_workspace() ; "basic")]
     #[test_case(json!({"name": "docs", "version": "0.1.0"}), workspace_with_version() ; "with version")]
     #[test_case(json!(["is-odd@3.0.1", "", {"dependencies": {"is-number": "^6.0.0"}, "devDependencies": {"is-bigint": "1.1.0"}, "peerDependencies": {"is-even": "1.0.0"}, "optionalDependencies": {"is-regexp": "1.0.0"}, "optionalPeers": ["is-even"]}, "sha"]), registry_pkg() ; "registry package")]
     #[test_case(json!(["docs", {"dependencies": {"is-odd": "3.0.1"}}]), workspace_pkg() ; "workspace package")]
     #[test_case(json!(["some-package@root:", {"bin": "bin", "binDir": "binDir"}]), root_pkg() ; "root package")]
+    #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg() ; "github package")]
+    #[test_case(json!(["my-package@git+https://github.com/user/repo#abc123", {"dependencies": {"lodash": "4.17.21"}}, "abc123"]), git_pkg() ; "git package")]
+    #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", "", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg_corrupted_input() ; "github package with corrupted 4-element input")]
     fn test_deserialization<T: for<'a> Deserialize<'a> + PartialEq + std::fmt::Debug>(
         input: serde_json::Value,
         expected: &T,
