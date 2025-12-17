@@ -21,7 +21,6 @@ import {
   type Edge,
   type NodeMouseHandler,
 } from "reactflow";
-import Dagre from "@dagrejs/dagre";
 import { Package } from "lucide-react";
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
 import { createCssVariablesTheme } from "shiki";
@@ -102,21 +101,125 @@ const defaultEdgeOptions = {
 
 // Constants for node sizing
 const NODE_HEIGHT = 70;
-const NODE_PADDING_X = 60; // Padding for icon, margins, and handle areas
 const MIN_NODE_WIDTH = 150;
-const CHAR_WIDTH = 9.6; // Approximate character width for "Fira Mono" at 16px
-const SUBTITLE_CHAR_WIDTH = 7.2; // Approximate character width at 12px
-const NODE_SPACING = 50; // Consistent spacing between nodes
+const MAX_NODE_WIDTH = 250; // Cap node width for layout purposes
 
-// Calculate node width based on content
+// Calculate node width based on content (capped for compact layout)
 function calculateNodeWidth(data: TurboNodeData): number {
-  const titleWidth = data.title.length * CHAR_WIDTH;
-  const subtitleWidth = (data.subtitle?.length ?? 0) * SUBTITLE_CHAR_WIDTH;
-  const contentWidth = Math.max(titleWidth, subtitleWidth);
-  return Math.max(MIN_NODE_WIDTH, contentWidth + NODE_PADDING_X);
+  // Use a simpler calculation - base width plus a bit for longer names
+  // Cap at MAX_NODE_WIDTH to prevent overly wide layouts
+  const charWidth = 8;
+  const padding = 50;
+  const titleWidth = data.title.length * charWidth + padding;
+  return Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, titleWidth));
 }
 
-// Dagre layout function - significantly faster than ELK for DAGs
+// Calculate dependency depth for each node (for vertical layering)
+function calculateDepths(
+  nodeIds: Set<string>,
+  edges: Array<Edge>
+): Map<string, number> {
+  const depths = new Map<string, number>();
+  const incomingEdges = new Map<string, Array<string>>();
+
+  // Build incoming edge map (target -> sources)
+  for (const edge of edges) {
+    if (!incomingEdges.has(edge.target)) {
+      incomingEdges.set(edge.target, []);
+    }
+    incomingEdges.get(edge.target)!.push(edge.source);
+  }
+
+  // Find root nodes (no incoming edges)
+  const roots: Array<string> = [];
+  for (const id of nodeIds) {
+    if (!incomingEdges.has(id) || incomingEdges.get(id)!.length === 0) {
+      roots.push(id);
+      depths.set(id, 0);
+    }
+  }
+
+  // BFS to calculate depths
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    const currentDepth = depths.get(current) ?? 0;
+
+    for (const edge of edges) {
+      if (edge.source === current) {
+        const targetDepth = depths.get(edge.target);
+        if (targetDepth === undefined || targetDepth < currentDepth + 1) {
+          depths.set(edge.target, currentDepth + 1);
+          queue.push(edge.target);
+        }
+      }
+    }
+  }
+
+  // Handle any disconnected nodes
+  for (const id of nodeIds) {
+    if (!depths.has(id)) {
+      depths.set(id, 0);
+    }
+  }
+
+  return depths;
+}
+
+// Calculate total width of a row of nodes
+function calculateRowWidth(
+  nodesInRow: Array<{ node: Node<TurboNodeData>; width: number }>,
+  horizontalSpacing: number
+): number {
+  return nodesInRow.reduce(
+    (sum, n) => sum + n.width + horizontalSpacing,
+    -horizontalSpacing
+  );
+}
+
+// Split nodes into sub-rows such that no sub-row exceeds maxWidth
+function splitIntoSubRows(
+  nodesAtDepth: Array<{ node: Node<TurboNodeData>; width: number }>,
+  maxWidth: number,
+  horizontalSpacing: number
+): Array<Array<{ node: Node<TurboNodeData>; width: number }>> {
+  if (nodesAtDepth.length === 0) return [];
+
+  const subRows: Array<Array<{ node: Node<TurboNodeData>; width: number }>> =
+    [];
+  let currentRow: Array<{ node: Node<TurboNodeData>; width: number }> = [];
+  let currentRowWidth = 0;
+
+  for (const nodeInfo of nodesAtDepth) {
+    const nodeWidthWithSpacing =
+      nodeInfo.width + (currentRow.length > 0 ? horizontalSpacing : 0);
+
+    // If adding this node would exceed maxWidth and we have at least one node,
+    // start a new sub-row
+    if (
+      currentRowWidth + nodeWidthWithSpacing > maxWidth &&
+      currentRow.length > 0
+    ) {
+      subRows.push(currentRow);
+      currentRow = [nodeInfo];
+      currentRowWidth = nodeInfo.width;
+    } else {
+      currentRow.push(nodeInfo);
+      currentRowWidth += nodeWidthWithSpacing;
+    }
+  }
+
+  // Don't forget the last row
+  if (currentRow.length > 0) {
+    subRows.push(currentRow);
+  }
+
+  return subRows;
+}
+
+// Simple manual layout - positions nodes by depth with no overlap
+// Rows at depth N+1 cannot exceed 1.5x the width of depth N; if they would,
+// they are split into multiple sub-rows
 function getLayoutedElements(
   nodes: Array<Node<TurboNodeData>>,
   edges: Array<Edge>
@@ -125,45 +228,113 @@ function getLayoutedElements(
     return { nodes: [], edges: [] };
   }
 
-  // Create a new directed graph
-  const g = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const depths = calculateDepths(nodeIds, edges);
 
-  // Configure the graph layout
-  g.setGraph({
-    rankdir: "TB", // Top to bottom (equivalent to ELK's DOWN direction)
-    nodesep: NODE_SPACING, // Horizontal spacing between nodes
-    ranksep: 150, // Vertical spacing between layers
-    marginx: 50,
-    marginy: 50,
-  });
-
-  // Add nodes with their dimensions
+  // Group nodes by depth
+  const nodesByDepth = new Map<
+    number,
+    Array<{ node: Node<TurboNodeData>; width: number }>
+  >();
   for (const node of nodes) {
-    const width = calculateNodeWidth(node.data);
-    g.setNode(node.id, { width, height: NODE_HEIGHT });
+    const depth = depths.get(node.id) ?? 0;
+    if (!nodesByDepth.has(depth)) {
+      nodesByDepth.set(depth, []);
+    }
+    nodesByDepth.get(depth)!.push({
+      node,
+      width: calculateNodeWidth(node.data),
+    });
   }
 
-  // Add edges
-  for (const edge of edges) {
-    g.setEdge(edge.source, edge.target);
+  // Layout constants
+  const verticalSpacing = NODE_HEIGHT + 40;
+  const horizontalSpacing = 80; // Extra spacing to account for node borders/shadows
+  const widthMultiplier = 1.75; // Max width ratio compared to reference width
+  const minBaselineWidth = 1000; // Minimum width baseline to prevent over-constraining small graphs
+
+  // Get sorted depth levels (ascending: 0, 1, 2, ...)
+  const sortedDepths = Array.from(nodesByDepth.keys()).sort((a, b) => a - b);
+
+  // First pass: calculate max allowed widths by going from deepest to shallowest
+  // The deepest level (highest depth number) has no constraint, and each level
+  // above it is constrained to 1.5x the level below it
+  const maxWidthByDepth = new Map<number, number>();
+  let nextRowWidth = 0; // Width of the row "below" (higher depth number)
+
+  for (let i = sortedDepths.length - 1; i >= 0; i--) {
+    const depth = sortedDepths[i];
+    const nodesAtDepth = nodesByDepth.get(depth)!;
+    const naturalWidth = calculateRowWidth(nodesAtDepth, horizontalSpacing);
+
+    // Max allowed is 1.5x the row below, or Infinity for the deepest level
+    const maxAllowedWidth =
+      nextRowWidth > 0 ? nextRowWidth * widthMultiplier : Infinity;
+
+    maxWidthByDepth.set(depth, maxAllowedWidth);
+
+    // For the next iteration (shallower depth), use the effective width
+    // If we split this row, use maxAllowedWidth as the reference
+    // Enforce minimum baseline to prevent over-constraining small graphs
+    const effectiveWidth =
+      naturalWidth > maxAllowedWidth ? maxAllowedWidth : naturalWidth;
+    nextRowWidth = Math.max(effectiveWidth, minBaselineWidth);
   }
 
-  // Run the layout algorithm
-  Dagre.layout(g);
+  // Second pass: position nodes using the calculated constraints
+  const positions = new Map<string, { x: number; y: number }>();
+  let currentY = 0;
 
-  // Map the layout results back to React Flow nodes
+  for (const depth of sortedDepths) {
+    const nodesAtDepth = nodesByDepth.get(depth)!;
+    const naturalWidth = calculateRowWidth(nodesAtDepth, horizontalSpacing);
+    const maxAllowedWidth = maxWidthByDepth.get(depth) ?? Infinity;
+
+    // Determine if we need to split into sub-rows
+    let subRows: Array<Array<{ node: Node<TurboNodeData>; width: number }>>;
+    if (naturalWidth > maxAllowedWidth) {
+      subRows = splitIntoSubRows(
+        nodesAtDepth,
+        maxAllowedWidth,
+        horizontalSpacing
+      );
+    } else {
+      subRows = [nodesAtDepth];
+    }
+
+    // DEBUG: Log what's happening
+    console.log(
+      `Depth ${depth}: ${
+        nodesAtDepth.length
+      } nodes, naturalWidth=${naturalWidth.toFixed(0)}, ` +
+        `maxAllowed=${
+          maxAllowedWidth === Infinity ? "Infinity" : maxAllowedWidth.toFixed(0)
+        }, ` +
+        `split into ${subRows.length} sub-rows`
+    );
+
+    // Position each sub-row
+    for (const subRow of subRows) {
+      const subRowWidth = calculateRowWidth(subRow, horizontalSpacing);
+
+      // Center the sub-row horizontally
+      let x = -subRowWidth / 2;
+
+      for (const { node, width } of subRow) {
+        positions.set(node.id, { x, y: currentY });
+        x += width + horizontalSpacing;
+      }
+
+      currentY += verticalSpacing;
+    }
+  }
+
   return {
     nodes: nodes.map((node) => {
-      const nodeWithPosition = g.node(node.id);
-      // Dagre returns center coordinates, React Flow uses top-left
-      // Adjust by subtracting half the width/height
-      const width = calculateNodeWidth(node.data);
+      const pos = positions.get(node.id) ?? { x: 0, y: 0 };
       return {
         ...node,
-        position: {
-          x: (nodeWithPosition?.x ?? 0) - width / 2,
-          y: (nodeWithPosition?.y ?? 0) - NODE_HEIGHT / 2,
-        },
+        position: pos,
       };
     }),
     edges,
@@ -945,7 +1116,7 @@ function DevtoolsContent() {
   // Update flow elements when graphState or view changes
   useEffect(() => {
     if (graphState) {
-      void updateFlowElements(graphState, view);
+      updateFlowElements(graphState, view);
     }
   }, [graphState, view, updateFlowElements]);
 
