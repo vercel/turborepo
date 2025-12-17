@@ -18,6 +18,7 @@ mod cli;
 mod commands;
 mod config;
 mod daemon;
+pub mod devtools;
 mod diagnostics;
 mod engine;
 

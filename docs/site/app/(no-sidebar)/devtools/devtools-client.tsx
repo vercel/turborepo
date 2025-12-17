@@ -21,7 +21,6 @@ import {
   type Edge,
   type NodeMouseHandler,
 } from "reactflow";
-import Elk from "elkjs/lib/elk.bundled.js";
 import { Package } from "lucide-react";
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
 import { createCssVariablesTheme } from "shiki";
@@ -87,8 +86,6 @@ type GraphView = "packages" | "tasks";
 // Selection mode: none -> direct (first click) -> blocks (second click) -> dependsOn (third click) -> none (fourth click)
 type SelectionMode = "none" | "direct" | "blocks" | "dependsOn";
 
-const elk = new Elk();
-
 // Turbo node and edge types
 const nodeTypes = {
   turbo: TurboNode,
@@ -104,88 +101,293 @@ const defaultEdgeOptions = {
 
 // Constants for node sizing
 const NODE_HEIGHT = 70;
-const NODE_PADDING_X = 60; // Padding for icon, margins, and handle areas
 const MIN_NODE_WIDTH = 150;
-const CHAR_WIDTH = 9.6; // Approximate character width for "Fira Mono" at 16px
-const SUBTITLE_CHAR_WIDTH = 7.2; // Approximate character width at 12px
-const NODE_SPACING = 50; // Consistent spacing between nodes
+const MAX_NODE_WIDTH = 250; // Cap node width for layout purposes
 
-// Calculate node width based on content
+// Calculate node width based on content (capped for compact layout)
 function calculateNodeWidth(data: TurboNodeData): number {
-  const titleWidth = data.title.length * CHAR_WIDTH;
-  const subtitleWidth = (data.subtitle?.length ?? 0) * SUBTITLE_CHAR_WIDTH;
-  const contentWidth = Math.max(titleWidth, subtitleWidth);
-  return Math.max(MIN_NODE_WIDTH, contentWidth + NODE_PADDING_X);
+  // Use a simpler calculation - base width plus a bit for longer names
+  // Cap at MAX_NODE_WIDTH to prevent overly wide layouts
+  const charWidth = 8;
+  const padding = 50;
+  const titleWidth = data.title.length * charWidth + padding;
+  return Math.min(MAX_NODE_WIDTH, Math.max(MIN_NODE_WIDTH, titleWidth));
 }
 
-// ELK layout function
-async function getLayoutedElements(
+// Calculate dependency depth for each node (for vertical layering)
+function calculateDepths(
+  nodeIds: Set<string>,
+  edges: Array<Edge>
+): Map<string, number> {
+  const depths = new Map<string, number>();
+  const incomingEdges = new Map<string, Array<string>>();
+
+  // Build incoming edge map (target -> sources)
+  for (const edge of edges) {
+    const existing = incomingEdges.get(edge.target);
+    if (existing) {
+      existing.push(edge.source);
+    } else {
+      incomingEdges.set(edge.target, [edge.source]);
+    }
+  }
+
+  // Find root nodes (no incoming edges)
+  const roots: Array<string> = [];
+  for (const id of nodeIds) {
+    const incoming = incomingEdges.get(id);
+    if (!incoming || incoming.length === 0) {
+      roots.push(id);
+      depths.set(id, 0);
+    }
+  }
+
+  // BFS to calculate depths
+  const queue = [...roots];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current === undefined) continue;
+    const currentDepth = depths.get(current) ?? 0;
+
+    for (const edge of edges) {
+      if (edge.source === current) {
+        const targetDepth = depths.get(edge.target);
+        if (targetDepth === undefined || targetDepth < currentDepth + 1) {
+          depths.set(edge.target, currentDepth + 1);
+          queue.push(edge.target);
+        }
+      }
+    }
+  }
+
+  // Handle any disconnected nodes
+  for (const id of nodeIds) {
+    if (!depths.has(id)) {
+      depths.set(id, 0);
+    }
+  }
+
+  return depths;
+}
+
+// Calculate total width of a row of nodes
+function calculateRowWidth(
+  nodesInRow: Array<{ node: Node<TurboNodeData>; width: number }>,
+  horizontalSpacing: number
+): number {
+  return nodesInRow.reduce(
+    (sum, n) => sum + n.width + horizontalSpacing,
+    -horizontalSpacing
+  );
+}
+
+// Split nodes into sub-rows such that no sub-row exceeds maxWidth
+function splitIntoSubRows(
+  nodesAtDepth: Array<{ node: Node<TurboNodeData>; width: number }>,
+  maxWidth: number,
+  horizontalSpacing: number
+): Array<Array<{ node: Node<TurboNodeData>; width: number }>> {
+  if (nodesAtDepth.length === 0) return [];
+
+  const subRows: Array<Array<{ node: Node<TurboNodeData>; width: number }>> =
+    [];
+  let currentRow: Array<{ node: Node<TurboNodeData>; width: number }> = [];
+  let currentRowWidth = 0;
+
+  for (const nodeInfo of nodesAtDepth) {
+    const nodeWidthWithSpacing =
+      nodeInfo.width + (currentRow.length > 0 ? horizontalSpacing : 0);
+
+    // If adding this node would exceed maxWidth and we have at least one node,
+    // start a new sub-row
+    if (
+      currentRowWidth + nodeWidthWithSpacing > maxWidth &&
+      currentRow.length > 0
+    ) {
+      subRows.push(currentRow);
+      currentRow = [nodeInfo];
+      currentRowWidth = nodeInfo.width;
+    } else {
+      currentRow.push(nodeInfo);
+      currentRowWidth += nodeWidthWithSpacing;
+    }
+  }
+
+  // Don't forget the last row
+  if (currentRow.length > 0) {
+    subRows.push(currentRow);
+  }
+
+  return subRows;
+}
+
+// Simple manual layout - positions nodes by depth with no overlap
+// Rows at depth N+1 cannot exceed 1.5x the width of depth N; if they would,
+// they are split into multiple sub-rows
+function getLayoutedElements(
   nodes: Array<Node<TurboNodeData>>,
   edges: Array<Edge>
-): Promise<{ nodes: Array<Node>; edges: Array<Edge> }> {
+): { nodes: Array<Node>; edges: Array<Edge> } {
   if (nodes.length === 0) {
     return { nodes: [], edges: [] };
   }
 
-  // Calculate width for each node based on its content
-  const nodeWidths = new Map<string, number>();
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const depths = calculateDepths(nodeIds, edges);
+
+  // Group nodes by depth
+  const nodesByDepth = new Map<
+    number,
+    Array<{ node: Node<TurboNodeData>; width: number }>
+  >();
   for (const node of nodes) {
-    nodeWidths.set(node.id, calculateNodeWidth(node.data));
+    const depth = depths.get(node.id) ?? 0;
+    const existing = nodesByDepth.get(depth);
+    const nodeInfo = { node, width: calculateNodeWidth(node.data) };
+    if (existing) {
+      existing.push(nodeInfo);
+    } else {
+      nodesByDepth.set(depth, [nodeInfo]);
+    }
   }
 
-  const graph = {
-    id: "root",
-    layoutOptions: {
-      "elk.algorithm": "layered",
-      "elk.direction": "DOWN",
-      "elk.spacing.nodeNode": String(NODE_SPACING),
-      "elk.layered.spacing.nodeNodeBetweenLayers": "150",
-      "elk.spacing.componentComponent": "150",
-      "elk.layered.spacing.edgeNodeBetweenLayers": "50",
-      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
-    },
-    children: nodes.map((node) => ({
-      id: node.id,
-      width: nodeWidths.get(node.id) ?? MIN_NODE_WIDTH,
-      height: NODE_HEIGHT,
-    })),
-    edges: edges.map((edge, i) => ({
-      id: `e${i}`,
-      sources: [edge.source],
-      targets: [edge.target],
-    })),
-  };
+  // Layout constants
+  const verticalSpacing = NODE_HEIGHT + 40;
+  const horizontalSpacing = 80; // Extra spacing to account for node borders/shadows
+  const widthMultiplier = 1.75; // Max width ratio compared to reference width
+  const minBaselineWidth = 1000; // Minimum width baseline to prevent over-constraining small graphs
 
-  const layoutedGraph = await elk.layout(graph);
+  // Get sorted depth levels (ascending: 0, 1, 2, ...)
+  const sortedDepths = Array.from(nodesByDepth.keys()).sort((a, b) => a - b);
+
+  // First pass: calculate max allowed widths by going from deepest to shallowest
+  // The deepest level (highest depth number) has no constraint, and each level
+  // above it is constrained to 1.5x the level below it
+  const maxWidthByDepth = new Map<number, number>();
+  let nextRowWidth = 0; // Width of the row "below" (higher depth number)
+
+  for (let i = sortedDepths.length - 1; i >= 0; i--) {
+    const depth = sortedDepths[i];
+    const nodesAtDepth = nodesByDepth.get(depth) ?? [];
+    const naturalWidth = calculateRowWidth(nodesAtDepth, horizontalSpacing);
+
+    // Max allowed is 1.5x the row below, or Infinity for the deepest level
+    const maxAllowedWidth =
+      nextRowWidth > 0 ? nextRowWidth * widthMultiplier : Infinity;
+
+    maxWidthByDepth.set(depth, maxAllowedWidth);
+
+    // For the next iteration (shallower depth), use the effective width
+    // If we split this row, use maxAllowedWidth as the reference
+    // Enforce minimum baseline to prevent over-constraining small graphs
+    const effectiveWidth =
+      naturalWidth > maxAllowedWidth ? maxAllowedWidth : naturalWidth;
+    nextRowWidth = Math.max(effectiveWidth, minBaselineWidth);
+  }
+
+  // Second pass: position nodes using the calculated constraints
+  const positions = new Map<string, { x: number; y: number }>();
+  let currentY = 0;
+
+  for (const depth of sortedDepths) {
+    const nodesAtDepth = nodesByDepth.get(depth) ?? [];
+    const naturalWidth = calculateRowWidth(nodesAtDepth, horizontalSpacing);
+    const maxAllowedWidth = maxWidthByDepth.get(depth) ?? Infinity;
+
+    // Determine if we need to split into sub-rows
+    let subRows: Array<Array<{ node: Node<TurboNodeData>; width: number }>>;
+    if (naturalWidth > maxAllowedWidth) {
+      subRows = splitIntoSubRows(
+        nodesAtDepth,
+        maxAllowedWidth,
+        horizontalSpacing
+      );
+    } else {
+      subRows = [nodesAtDepth];
+    }
+
+    // Position each sub-row
+    for (const subRow of subRows) {
+      const subRowWidth = calculateRowWidth(subRow, horizontalSpacing);
+
+      // Center the sub-row horizontally
+      let x = -subRowWidth / 2;
+
+      for (const { node, width } of subRow) {
+        positions.set(node.id, { x, y: currentY });
+        x += width + horizontalSpacing;
+      }
+
+      currentY += verticalSpacing;
+    }
+  }
 
   return {
     nodes: nodes.map((node) => {
-      const layoutedNode = layoutedGraph.children?.find(
-        (n: { id: string; x?: number; y?: number }) => n.id === node.id
-      );
+      const pos = positions.get(node.id) ?? { x: 0, y: 0 };
       return {
         ...node,
-        position: { x: layoutedNode?.x ?? 0, y: layoutedNode?.y ?? 0 },
+        position: pos,
       };
     }),
     edges,
   };
 }
 
+// Adjacency maps for graph traversal - built once per edge set
+interface AdjacencyMaps {
+  // dependency -> dependents (for finding what a node blocks/affects)
+  dependentsMap: Map<string, Array<string>>;
+  // dependent -> dependencies (for finding what a node depends on)
+  dependenciesMap: Map<string, Array<string>>;
+  // node -> all direct neighbors (both directions)
+  neighborsMap: Map<string, Set<string>>;
+}
+
+// Build adjacency maps once from edges - O(E) where E is number of edges
+function buildAdjacencyMaps(edges: Array<GraphEdge>): AdjacencyMaps {
+  const dependentsMap = new Map<string, Array<string>>();
+  const dependenciesMap = new Map<string, Array<string>>();
+  const neighborsMap = new Map<string, Set<string>>();
+
+  for (const edge of edges) {
+    // edge.source depends on edge.target
+    // So edge.target has edge.source as a dependent
+    const dependents = dependentsMap.get(edge.target) ?? [];
+    dependents.push(edge.source);
+    dependentsMap.set(edge.target, dependents);
+
+    // edge.source depends on edge.target
+    const dependencies = dependenciesMap.get(edge.source) ?? [];
+    dependencies.push(edge.target);
+    dependenciesMap.set(edge.source, dependencies);
+
+    // Build neighbors (both directions)
+    const sourceNeighbors = neighborsMap.get(edge.source) ?? new Set<string>();
+    sourceNeighbors.add(edge.target);
+    neighborsMap.set(edge.source, sourceNeighbors);
+
+    const targetNeighbors = neighborsMap.get(edge.target) ?? new Set<string>();
+    targetNeighbors.add(edge.source);
+    neighborsMap.set(edge.target, targetNeighbors);
+  }
+
+  return { dependentsMap, dependenciesMap, neighborsMap };
+}
+
 // Get direct dependencies (nodes directly connected to the selected node)
+// Uses pre-built adjacency maps for O(1) neighbor lookup
 function getDirectDependencies(
   nodeId: string,
-  edges: Array<GraphEdge>
+  adjacencyMaps: AdjacencyMaps
 ): Set<string> {
   const connected = new Set<string>();
   connected.add(nodeId);
 
-  for (const edge of edges) {
-    if (edge.source === nodeId) {
-      connected.add(edge.target);
-    }
-    if (edge.target === nodeId) {
-      connected.add(edge.source);
+  const neighbors = adjacencyMaps.neighborsMap.get(nodeId);
+  if (neighbors) {
+    for (const neighbor of neighbors) {
+      connected.add(neighbor);
     }
   }
 
@@ -196,29 +398,20 @@ function getDirectDependencies(
 // If package A changes, then all packages that depend on A (directly or transitively) are affected.
 // In the edge model: edge.source depends on edge.target (arrow points from dependent to dependency)
 // So we traverse "upstream" - following edges backwards from target to source
+// Uses pre-built adjacency maps - no more rebuilding on every call
 function getAffectedNodes(
   nodeId: string,
-  edges: Array<GraphEdge>
+  adjacencyMaps: AdjacencyMaps
 ): Set<string> {
   const affected = new Set<string>();
   affected.add(nodeId);
-
-  // Build an adjacency list for reverse traversal (dependency -> dependents)
-  const dependentsMap = new Map<string, Array<string>>();
-  for (const edge of edges) {
-    // edge.source depends on edge.target
-    // So edge.target has edge.source as a dependent
-    const dependents = dependentsMap.get(edge.target) || [];
-    dependents.push(edge.source);
-    dependentsMap.set(edge.target, dependents);
-  }
 
   // BFS to find all transitively affected nodes
   const queue = [nodeId];
   while (queue.length > 0) {
     const current = queue.shift();
     if (current === undefined) continue;
-    const dependents = dependentsMap.get(current) || [];
+    const dependents = adjacencyMaps.dependentsMap.get(current) ?? [];
 
     for (const dependent of dependents) {
       if (!affected.has(dependent)) {
@@ -235,25 +428,20 @@ function getAffectedNodes(
 // These are the packages that, if changed, would cause the selected node's hash to change.
 // In the edge model: edge.source depends on edge.target
 // So we traverse "downstream" - following edges from source to target
-function getAffectsNodes(nodeId: string, edges: Array<GraphEdge>): Set<string> {
+// Uses pre-built adjacency maps - no more rebuilding on every call
+function getAffectsNodes(
+  nodeId: string,
+  adjacencyMaps: AdjacencyMaps
+): Set<string> {
   const affects = new Set<string>();
   affects.add(nodeId);
-
-  // Build an adjacency list for forward traversal (dependent -> dependencies)
-  const dependenciesMap = new Map<string, Array<string>>();
-  for (const edge of edges) {
-    // edge.source depends on edge.target
-    const dependencies = dependenciesMap.get(edge.source) || [];
-    dependencies.push(edge.target);
-    dependenciesMap.set(edge.source, dependencies);
-  }
 
   // BFS to find all transitive dependencies
   const queue = [nodeId];
   while (queue.length > 0) {
     const current = queue.shift();
     if (current === undefined) continue;
-    const dependencies = dependenciesMap.get(current) || [];
+    const dependencies = adjacencyMaps.dependenciesMap.get(current) ?? [];
 
     for (const dependency of dependencies) {
       if (!affects.has(dependency)) {
@@ -601,6 +789,10 @@ function DevtoolsContent() {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- reactflow types are imperfect
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
 
+  // Memoize adjacency maps - rebuilt only when rawEdges changes
+  // This avoids O(E) map rebuilding on every node selection/mode change
+  const adjacencyMaps = useMemo(() => buildAdjacencyMaps(rawEdges), [rawEdges]);
+
   // Calculate which nodes/edges should be highlighted based on selection
   const { highlightedNodes, highlightedEdges } = useMemo(() => {
     if (!selectedNode || selectionMode === "none") {
@@ -609,17 +801,17 @@ function DevtoolsContent() {
 
     let visibleNodes: Set<string>;
     if (selectionMode === "direct") {
-      visibleNodes = getDirectDependencies(selectedNode, rawEdges);
+      visibleNodes = getDirectDependencies(selectedNode, adjacencyMaps);
     } else if (selectionMode === "blocks") {
-      visibleNodes = getAffectedNodes(selectedNode, rawEdges);
+      visibleNodes = getAffectedNodes(selectedNode, adjacencyMaps);
     } else {
-      visibleNodes = getAffectsNodes(selectedNode, rawEdges);
+      visibleNodes = getAffectsNodes(selectedNode, adjacencyMaps);
     }
 
     const visibleEdges = getConnectedEdges(visibleNodes, rawEdges);
 
     return { highlightedNodes: visibleNodes, highlightedEdges: visibleEdges };
-  }, [selectedNode, selectionMode, rawEdges]);
+  }, [selectedNode, selectionMode, rawEdges, adjacencyMaps]);
 
   // Apply highlighting to nodes and edges
   useEffect(() => {
@@ -738,7 +930,7 @@ function DevtoolsContent() {
 
   // Convert package graph to React Flow elements
   const updatePackageGraphElements = useCallback(
-    async (state: GraphState) => {
+    (state: GraphState) => {
       // Filter to only nodes that have connections
       const connectedIds = getConnectedNodeIds(state.packageGraph.edges);
       const connectedPackages = state.packageGraph.nodes.filter((pkg) =>
@@ -768,7 +960,7 @@ function DevtoolsContent() {
       );
 
       const { nodes: layoutedNodes, edges: layoutedEdges } =
-        await getLayoutedElements(flowNodes, flowEdges);
+        getLayoutedElements(flowNodes, flowEdges);
 
       setBaseNodes(layoutedNodes);
       setBaseEdges(layoutedEdges);
@@ -783,7 +975,7 @@ function DevtoolsContent() {
 
   // Convert task graph to React Flow elements
   const updateTaskGraphElements = useCallback(
-    async (state: GraphState) => {
+    (state: GraphState) => {
       // Filter to only nodes that have connections
       const connectedIds = getConnectedNodeIds(state.taskGraph.edges);
       const connectedTasks = state.taskGraph.nodes.filter((task) =>
@@ -811,7 +1003,7 @@ function DevtoolsContent() {
       }));
 
       const { nodes: layoutedNodes, edges: layoutedEdges } =
-        await getLayoutedElements(flowNodes, flowEdges);
+        getLayoutedElements(flowNodes, flowEdges);
 
       setBaseNodes(layoutedNodes);
       setBaseEdges(layoutedEdges);
@@ -826,14 +1018,14 @@ function DevtoolsContent() {
 
   // Update flow elements when view or graph state changes
   const updateFlowElements = useCallback(
-    async (state: GraphState, currentView: GraphView) => {
+    (state: GraphState, currentView: GraphView) => {
       // Clear selection when switching views or updating (don't reset viewport, layout will handle it)
       clearSelection(false);
 
       if (currentView === "packages") {
-        await updatePackageGraphElements(state);
+        updatePackageGraphElements(state);
       } else {
-        await updateTaskGraphElements(state);
+        updateTaskGraphElements(state);
       }
     },
     [updatePackageGraphElements, updateTaskGraphElements, clearSelection]
@@ -844,7 +1036,7 @@ function DevtoolsContent() {
     (newView: GraphView) => {
       setView(newView);
       if (graphState) {
-        void updateFlowElements(graphState, newView);
+        updateFlowElements(graphState, newView);
       }
     },
     [graphState, updateFlowElements]
@@ -917,7 +1109,7 @@ function DevtoolsContent() {
   // Update flow elements when graphState or view changes
   useEffect(() => {
     if (graphState) {
-      void updateFlowElements(graphState, view);
+      updateFlowElements(graphState, view);
     }
   }, [graphState, view, updateFlowElements]);
 
@@ -1069,15 +1261,15 @@ function DevtoolsContent() {
       // Focus on the appropriate nodes for the new mode
       let nodesToFocus: Set<string>;
       if (mode === "direct") {
-        nodesToFocus = getDirectDependencies(selectedNode, rawEdges);
+        nodesToFocus = getDirectDependencies(selectedNode, adjacencyMaps);
       } else if (mode === "blocks") {
-        nodesToFocus = getAffectedNodes(selectedNode, rawEdges);
+        nodesToFocus = getAffectedNodes(selectedNode, adjacencyMaps);
       } else {
-        nodesToFocus = getAffectsNodes(selectedNode, rawEdges);
+        nodesToFocus = getAffectsNodes(selectedNode, adjacencyMaps);
       }
       focusOnNodes(nodesToFocus);
     },
-    [selectedNode, rawEdges, focusOnNodes]
+    [selectedNode, adjacencyMaps, focusOnNodes]
   );
 
   // Handle sidebar node click
@@ -1088,12 +1280,12 @@ function DevtoolsContent() {
         if (selectionMode === "direct") {
           setSelectionMode("blocks");
           // Focus on nodes that this blocks (dependents)
-          const blocked = getAffectedNodes(nodeId, rawEdges);
+          const blocked = getAffectedNodes(nodeId, adjacencyMaps);
           focusOnNodes(blocked);
         } else if (selectionMode === "blocks") {
           setSelectionMode("dependsOn");
           // Focus on nodes that this depends on
-          const dependencies = getAffectsNodes(nodeId, rawEdges);
+          const dependencies = getAffectsNodes(nodeId, adjacencyMaps);
           focusOnNodes(dependencies);
         } else if (selectionMode === "dependsOn") {
           clearSelection(true);
@@ -1102,11 +1294,11 @@ function DevtoolsContent() {
         setSelectedNode(nodeId);
         setSelectionMode("direct");
         // Focus on direct dependencies
-        const direct = getDirectDependencies(nodeId, rawEdges);
+        const direct = getDirectDependencies(nodeId, adjacencyMaps);
         focusOnNodes(direct);
       }
     },
-    [selectedNode, selectionMode, rawEdges, focusOnNodes, clearSelection]
+    [selectedNode, selectionMode, adjacencyMaps, focusOnNodes, clearSelection]
   );
 
   // No port provided - show instructions

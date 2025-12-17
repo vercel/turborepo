@@ -27,8 +27,8 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{package_graph::PackageGraphBuilder, package_json::PackageJson};
 
 use crate::{
-    graph::{package_graph_to_data, read_pipeline_tasks, task_graph_to_data},
-    types::{GraphState, ServerMessage},
+    graph::package_graph_to_data,
+    types::{GraphState, ServerMessage, TaskGraphBuilder},
     watcher::{DevtoolsWatcher, WatchEvent},
 };
 
@@ -53,6 +53,9 @@ pub enum ServerError {
 
     #[error("File watcher error: {0}")]
     Watcher(#[from] crate::watcher::WatchError),
+
+    #[error("Failed to build task graph: {0}")]
+    TaskGraph(String),
 }
 
 /// Shared state for the WebSocket server
@@ -65,15 +68,24 @@ struct AppState {
 }
 
 /// The devtools WebSocket server
-pub struct DevtoolsServer {
+pub struct DevtoolsServer<T: TaskGraphBuilder> {
     repo_root: AbsoluteSystemPathBuf,
     port: u16,
+    task_graph_builder: T,
 }
 
-impl DevtoolsServer {
-    /// Creates a new devtools server for the given repository
-    pub fn new(repo_root: AbsoluteSystemPathBuf, port: u16) -> Self {
-        Self { repo_root, port }
+impl<T: TaskGraphBuilder + 'static> DevtoolsServer<T> {
+    /// Creates a new devtools server with a task graph builder.
+    ///
+    /// The task graph builder should use the same logic as `turbo run`
+    /// to ensure consistency between what the devtools shows and what
+    /// turbo actually executes.
+    pub fn new(repo_root: AbsoluteSystemPathBuf, port: u16, task_graph_builder: T) -> Self {
+        Self {
+            repo_root,
+            port,
+            task_graph_builder,
+        }
     }
 
     /// Returns the port the server will listen on
@@ -84,7 +96,7 @@ impl DevtoolsServer {
     /// Run the server until shutdown
     pub async fn run(self) -> Result<(), ServerError> {
         // Build initial graph state
-        let initial_state = build_graph_state(&self.repo_root).await?;
+        let initial_state = build_graph_state(&self.repo_root, &self.task_graph_builder).await?;
         let graph_state = Arc::new(RwLock::new(initial_state));
         let (update_tx, _) = broadcast::channel::<()>(16);
 
@@ -96,12 +108,16 @@ impl DevtoolsServer {
         let graph_state_clone = graph_state.clone();
         let update_tx_clone = update_tx.clone();
         let repo_root_clone = self.repo_root.clone();
+        let task_graph_builder = Arc::new(self.task_graph_builder);
+        let task_graph_builder_clone = task_graph_builder.clone();
         tokio::spawn(async move {
             while let Ok(event) = watch_rx.recv().await {
                 match event {
                     WatchEvent::FilesChanged => {
                         info!("Files changed, rebuilding graph...");
-                        match build_graph_state(&repo_root_clone).await {
+                        match build_graph_state(&repo_root_clone, task_graph_builder_clone.as_ref())
+                            .await
+                        {
                             Ok(new_state) => {
                                 *graph_state_clone.write().await = new_state;
                                 // Notify all connected clients
@@ -236,7 +252,10 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
 }
 
 /// Build the current graph state from the repository
-async fn build_graph_state(repo_root: &AbsoluteSystemPathBuf) -> Result<GraphState, ServerError> {
+async fn build_graph_state(
+    repo_root: &AbsoluteSystemPathBuf,
+    task_graph_builder: &dyn TaskGraphBuilder,
+) -> Result<GraphState, ServerError> {
     // Load root package.json
     let root_package_json_path = repo_root.join_component("package.json");
     let root_package_json = PackageJson::load(&root_package_json_path)
@@ -251,12 +270,15 @@ async fn build_graph_state(repo_root: &AbsoluteSystemPathBuf) -> Result<GraphSta
         .await
         .map_err(|e| ServerError::PackageGraph(e.to_string()))?;
 
-    // Read task names from turbo.json for determining cross-package dependencies
-    let pipeline_tasks = read_pipeline_tasks(repo_root);
-
-    // Convert to our serializable formats
+    // Convert package graph to serializable format
     let package_graph = package_graph_to_data(&pkg_graph);
-    let task_graph = task_graph_to_data(&pkg_graph, &pipeline_tasks);
+
+    // Build task graph using the provided builder (which uses proper turbo run
+    // logic)
+    let task_graph = task_graph_builder
+        .build_task_graph()
+        .await
+        .map_err(|e| ServerError::TaskGraph(e.to_string()))?;
 
     Ok(GraphState {
         package_graph,

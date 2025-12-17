@@ -6,7 +6,7 @@
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_devtools::{find_available_port, DevtoolsServer};
 
-use crate::cli;
+use crate::{cli, devtools::ProperTaskGraphBuilder};
 
 // In production, use the hosted devtools UI
 // For local development, set TURBO_DEVTOOLS_LOCAL=1 to use localhost:3000
@@ -25,8 +25,12 @@ pub async fn run(
     // Find available port
     let port = find_available_port(port);
 
-    // Create server
-    let server = DevtoolsServer::new(repo_root, port);
+    // Create the task graph builder that uses EngineBuilder
+    // This ensures the devtools shows the same task graph as `turbo run`
+    let task_graph_builder = ProperTaskGraphBuilder::new(repo_root.clone());
+
+    // Create server with the task graph builder
+    let server = DevtoolsServer::new(repo_root, port, task_graph_builder);
 
     let url = format!("{}?port={}", DEVTOOLS_URL, port);
 
