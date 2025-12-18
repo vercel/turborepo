@@ -4,6 +4,8 @@
 #![feature(once_cell_try)]
 #![feature(try_blocks)]
 #![feature(impl_trait_in_assoc_type)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 // Clippy's needless mut lint is buggy: https://github.com/rust-lang/rust-clippy/issues/11299
 #![allow(clippy::needless_pass_by_ref_mut)]

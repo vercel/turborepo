@@ -8,6 +8,8 @@
 
 #![feature(assert_matches)]
 #![feature(error_generic_member_access)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![allow(clippy::result_large_err)]
 
 pub mod change_mapper;

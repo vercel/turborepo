@@ -19,7 +19,7 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use output::{StdWriter, TaskOutput};
 use regex::Regex;
 use tokio::sync::mpsc;
-use tracing::{debug, error, warn, Span};
+use tracing::{debug, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
