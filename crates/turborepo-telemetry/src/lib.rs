@@ -4,6 +4,8 @@
 //! More detail is available at https://turborepo.com/docs/telemetry.
 
 #![feature(error_generic_member_access)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 
 pub mod config;
 pub mod errors;
@@ -21,7 +23,7 @@ use tokio::{
     sync::{mpsc, oneshot},
     task::{JoinError, JoinHandle},
 };
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 use turborepo_api_client::telemetry;
 use turborepo_ui::{BOLD, ColorConfig, GREY, color};
 use uuid::Uuid;

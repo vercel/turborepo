@@ -1,3 +1,6 @@
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
+
 mod import_finder;
 mod tracer;
 
