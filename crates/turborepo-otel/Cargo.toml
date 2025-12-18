@@ -6,10 +6,11 @@ license = "MIT"
 
 [dependencies]
 opentelemetry = { version = "0.31", features = ["metrics"] }
-opentelemetry-otlp = { version = "0.31", features = [
+opentelemetry-otlp = { version = "0.31", default-features = false, features = [
   "grpc-tonic",
   "http-proto",
   "metrics",
+  "reqwest-client",
 ] }
 opentelemetry-semantic-conventions = "0.31"
 opentelemetry_sdk = { version = "0.31", features = [
