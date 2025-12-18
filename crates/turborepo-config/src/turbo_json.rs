@@ -125,17 +125,6 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
     }
 }
 
-fn convert_key_values(entries: Vec<RawKeyValue>) -> BTreeMap<String, String> {
-    let mut map = BTreeMap::new();
-    for entry in entries {
-        map.insert(
-            entry.key.into_inner().into(),
-            entry.value.into_inner().into(),
-        );
-    }
-    map
-}
-
 fn convert_raw_observability(
     raw: RawExperimentalObservability,
 ) -> Result<ExperimentalObservabilityOptions, Error> {
@@ -163,13 +152,25 @@ fn convert_raw_observability_otel(
         task_details: metrics.task_details.map(|flag| *flag.as_inner()),
     });
 
+    let headers = raw.headers.map(|h| {
+        h.into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect::<BTreeMap<String, String>>()
+    });
+
+    let resource = raw.resource.map(|r| {
+        r.into_iter()
+            .map(|(k, v)| (k.into(), v.into()))
+            .collect::<BTreeMap<String, String>>()
+    });
+
     Ok(ExperimentalOtelOptions {
         enabled: raw.enabled.map(|flag| *flag.as_inner()),
         protocol,
         endpoint: raw.endpoint.map(|endpoint| endpoint.into_inner().into()),
-        headers: raw.headers.map(convert_key_values),
+        headers,
         timeout_ms: raw.timeout_ms.map(|timeout| *timeout.as_inner()),
-        resource: raw.resource.map(convert_key_values),
+        resource,
         metrics,
         use_remote_cache_token: raw.use_remote_cache_token.map(|flag| *flag.as_inner()),
     })
@@ -391,5 +392,55 @@ mod test {
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         // Should be None because future flag is not set (defaults to false)
         assert_eq!(config.experimental_observability(), None);
+    }
+
+    #[test]
+    fn test_experimental_observability_otel_with_headers_and_resource() {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "futureFlags": {
+                    "experimentalObservability": true
+                },
+                "experimentalObservability": {
+                    "otel": {
+                        "enabled": true,
+                        "endpoint": "https://example.com/otel",
+                        "headers": {
+                            "Authorization": "Bearer token123",
+                            "X-Custom-Header": "custom-value"
+                        },
+                        "resource": {
+                            "service.name": "turborepo",
+                            "service.version": "1.0.0"
+                        }
+                    }
+                }
+            }))
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .into();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        let observability_config = config.experimental_observability();
+        assert!(observability_config.is_some());
+        let otel_config = observability_config.unwrap().otel.as_ref().unwrap();
+        assert_eq!(otel_config.enabled, Some(true));
+
+        // Verify headers are parsed correctly
+        let headers = otel_config.headers.as_ref().unwrap();
+        assert_eq!(
+            headers.get("Authorization"),
+            Some(&"Bearer token123".to_string())
+        );
+        assert_eq!(
+            headers.get("X-Custom-Header"),
+            Some(&"custom-value".to_string())
+        );
+
+        // Verify resource is parsed correctly
+        let resource = otel_config.resource.as_ref().unwrap();
+        assert_eq!(resource.get("service.name"), Some(&"turborepo".to_string()));
+        assert_eq!(resource.get("service.version"), Some(&"1.0.0".to_string()));
     }
 }
