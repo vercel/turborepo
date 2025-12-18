@@ -8,7 +8,7 @@ use std::{
 use chrono::Local;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_analytics::{AnalyticsHandle, AnalyticsSender, start_analytics};
+use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
@@ -24,10 +24,10 @@ use turborepo_scm::SCM;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::TaskName;
 use turborepo_telemetry::events::{
-    EventBuilder, TrackedErrors,
     command::CommandEventBuilder,
     generic::{DaemonInitStatus, GenericEventBuilder},
     repo::{RepoEventBuilder, RepoType},
+    EventBuilder, TrackedErrors,
 };
 use turborepo_types::{DryRunMode, UIMode};
 use turborepo_ui::ColorConfig;
@@ -47,7 +47,7 @@ use crate::{
     microfrontends::MicrofrontendsConfigs,
     observability,
     opts::Opts,
-    run::{Error, Run, RunCache, scope, task_access::TaskAccess},
+    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
     DaemonConnector,
