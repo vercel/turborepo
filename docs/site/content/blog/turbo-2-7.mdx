@@ -123,9 +123,9 @@ Previously, you could only extend from your root `turbo.json` when you used the 
 
 <Tabs items={["/apps/docs/turbo.json", "/apps/web/turbo.json"]}>
 
-<Tab value="/apps/docs/turbo.json">
+<Tab value="./apps/docs/turbo.json">
 
-```json title="/apps/docs/turbo.json"
+```json title="./apps/docs/turbo.json"
 // Inherits the "build" and "prepare-build" tasks from apps/web/turbo.json
 // No extra configuration necessary
 {
@@ -135,9 +135,9 @@ Previously, you could only extend from your root `turbo.json` when you used the 
 
 </Tab>
 
-<Tab value="/apps/web/turbo.json">
+<Tab value="./apps/web/turbo.json">
 
-```json title="/apps/web/turbo.json"
+```json title="./apps/web/turbo.json"
 {
   "tasks": {
     "build": {
@@ -153,13 +153,13 @@ Previously, you could only extend from your root `turbo.json` when you used the 
 
 </Tabs>
 
-[Visit the docs to learn more.](https://turborepo.com/docs/reference/package-configurations#extending-arrays-with-turbo_extends-pre-release)
+[Visit the docs to learn more.](https://turborepo.com/docs/reference/package-configurations#extending-arrays-with-turbo_extends)
 
 ### Extending array configurations
 
 Additionally, we’re introducing a new keyword: `$TURBO_EXTENDS$`.
 
-```json title="apps/web/turbo.json"
+```json title="./apps/web/turbo.json"
 {
   "extends": ["//"],
   "tasks": {
@@ -173,7 +173,7 @@ Additionally, we’re introducing a new keyword: `$TURBO_EXTENDS$`.
 
 Previously, you could only overwrite array configurations completely. But now, in the example above, you can use `$TURBO_EXTENDS$` to append to an existing array. This gives you a greater degree of control so you can choose to completely overwrite or extend from existing configuration.
 
-[Visit the docs to learn more.](https://turborepo.com/docs/reference/package-configurations#extending-arrays-with-turbo_extends-pre-release)
+[Visit the docs to learn more.](https://turborepo.com/docs/reference/package-configurations#extending-arrays-with-turbo_extends)
 
 ## New Biome rule: `noUndeclaredEnvVars`
 

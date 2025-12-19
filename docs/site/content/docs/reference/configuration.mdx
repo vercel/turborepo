@@ -212,7 +212,7 @@ Default: `false`
 
 When enabled, allows using the [`$TURBO_EXTENDS$`](#turbo_extends) microsyntax in array fields. This microsyntax changes the behavior of [Package Configurations](/docs/reference/package-configurations) from replacing array fields to appending to them.
 
-#### `nonRootExtends` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### `nonRootExtends`
 
 Default: `false`
 
@@ -242,7 +242,7 @@ With this flag enabled, packages can extend from multiple configurations:
   listed **first** in the `extends` array.
 </Callout>
 
-See the [Package Configurations documentation](/docs/reference/package-configurations#extending-from-other-packages-pre-release) for more details and examples.
+See the [Package Configurations documentation](/docs/reference/package-configurations#extending-from-other-packages) for more details and examples.
 
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
@@ -290,12 +290,11 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
 
 Using the options available in the tasks you define in `tasks`, you can describe how `turbo` will run your tasks.
 
-### `extends` (task-level) <ExperimentalBadge>Pre-release</ExperimentalBadge>
+### `extends` (task-level)
 
 <Callout type="info">
-  This feature requires enabling
-  [`futureFlags.nonRootExtends`](#nonrootextends-pre-release) in your root
-  `turbo.json`.
+  This feature requires enabling [`futureFlags.nonRootExtends`](#nonrootextends)
+  in your root `turbo.json`.
 </Callout>
 
 Controls whether a task inherits configuration from the extends chain. This option is only available in [Package Configurations](/docs/reference/package-configurations), not in the root `turbo.json`.
@@ -316,7 +315,7 @@ Controls whether a task inherits configuration from the extends chain. This opti
 | `false`          | Task is excluded from inheritance. If no other config is provided, the task won't exist for this package. If other config is provided, creates a fresh task definition with no inheritance. |
 | `true` (default) | Task inherits configuration normally from the extends chain.                                                                                                                                |
 
-See [Excluding tasks from inheritance](/docs/reference/package-configurations#excluding-tasks-from-inheritance-pre-release) for examples and more details.
+See [Excluding tasks from inheritance](/docs/reference/package-configurations#excluding-tasks-from-inheritance) for examples and more details.
 
 ### `dependsOn`
 
@@ -561,7 +560,7 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 }
 ```
 
-#### `$TURBO_EXTENDS$` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+#### `$TURBO_EXTENDS$`
 
 <Callout type="info">
   This feature requires enabling
