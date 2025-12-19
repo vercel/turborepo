@@ -178,7 +178,7 @@ Previously, you could only overwrite array configurations completely. But now, i
 
 Turborepo users love going fast, so its no surprise they enjoy using [Biome](https://biomejs.dev/) for linting and formatting. However, until today, the only linting support we had for finding unsafe environment variable usage was in ESLint, with [our `eslint-plugin-turbo` plugin](/docs/reference/eslint-plugin-turbo).
 
-In [Biome 2.3.10+](https://github.com/biomejs/biome/releases/tag/%40biomejs%2Fbiome%402.3.10), you can find environment variables that can cause unexpected cache hits faster with [the new Turborepo domain](https://biomejs.dev/linter/domains/#turborepo) in Biome.
+In [Biome 2.3.10](https://github.com/biomejs/biome/releases/tag/%40biomejs%2Fbiome%402.3.10) and above, you can find environment variables that can cause unexpected cache hits faster with [the new Turborepo domain](https://biomejs.dev/linter/domains/#turborepo) in Biome.
 
 Biome will read your dependencies in your repository, and activate the Turborepo domain automatically. The `noUndeclaredEnvVars` rule is currently in the “nursery” group, so must be activated manually:
 
