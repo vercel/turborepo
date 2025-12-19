@@ -2090,14 +2090,9 @@ mod test {
             "app should inherit 'build' task from shared-config via extends"
         );
 
-        // Also verify the engine can be built with this task (with non_root_extends
-        // enabled)
-        let future_flags = FutureFlags {
-            non_root_extends: true,
-            ..Default::default()
-        };
+        // Also verify the engine can be built with this task
         let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
-            .with_future_flags(future_flags)
+            .with_future_flags(FutureFlags::default())
             .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app")])
             .build()
@@ -2375,12 +2370,8 @@ mod test {
         );
 
         // Also verify has_task_definition_in_run works for deep chain
-        let future_flags = FutureFlags {
-            non_root_extends: true,
-            ..Default::default()
-        };
         let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
-            .with_future_flags(future_flags)
+            .with_future_flags(FutureFlags::default())
             .with_tasks(Some(Spanned::new(TaskName::from("task-d"))))
             .with_workspaces(vec![PackageName::from("pkg-a")])
             .build()
@@ -2491,12 +2482,8 @@ mod test {
         assert_eq!(tasks.len(), 4, "Should have exactly 4 unique tasks");
 
         // Also verify the engine builds successfully
-        let future_flags = FutureFlags {
-            non_root_extends: true,
-            ..Default::default()
-        };
         let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
-            .with_future_flags(future_flags)
+            .with_future_flags(FutureFlags::default())
             .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app")])
             .build()
@@ -3374,14 +3361,10 @@ mod test {
         .collect();
 
         let loader = TurboJsonLoader::noop(turbo_jsons);
-        let future_flags = FutureFlags {
-            non_root_extends: true,
-            ..Default::default()
-        };
 
         // All tasks should be found since they have config beyond extends
         let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
-            .with_future_flags(future_flags)
+            .with_future_flags(FutureFlags::default())
             .with_tasks(vec![
                 Spanned::new(TaskName::from("build")),
                 Spanned::new(TaskName::from("lint")),
@@ -3438,14 +3421,10 @@ mod test {
         .collect();
 
         let loader = TurboJsonLoader::noop(turbo_jsons);
-        let future_flags = FutureFlags {
-            non_root_extends: true,
-            ..Default::default()
-        };
 
         // Use add_all_tasks mode
         let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
-            .with_future_flags(future_flags)
+            .with_future_flags(FutureFlags::default())
             .add_all_tasks()
             .with_workspaces(vec![PackageName::from("app")])
             .build()
@@ -3504,13 +3483,9 @@ mod test {
         .collect();
 
         let loader = TurboJsonLoader::noop(turbo_jsons);
-        let future_flags = FutureFlags {
-            non_root_extends: true,
-            ..Default::default()
-        };
 
         let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
-            .with_future_flags(future_flags)
+            .with_future_flags(FutureFlags::default())
             .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app")])
             .build()
@@ -3906,14 +3881,10 @@ mod test {
         .collect();
 
         let loader = TurboJsonLoader::noop(turbo_jsons);
-        let future_flags = FutureFlags {
-            non_root_extends: true,
-            ..Default::default()
-        };
 
         // Build with both workspaces
         let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
-            .with_future_flags(future_flags)
+            .with_future_flags(FutureFlags::default())
             .with_tasks(Some(Spanned::new(TaskName::from("build"))))
             .with_workspaces(vec![PackageName::from("app1"), PackageName::from("app2")])
             .build()
@@ -4062,12 +4033,8 @@ mod test {
         );
 
         let loader = TurboJsonLoader::noop(turbo_jsons);
-        let future_flags = FutureFlags {
-            non_root_extends: true,
-            ..Default::default()
-        };
         let engine_builder = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
-            .with_future_flags(future_flags);
+            .with_future_flags(FutureFlags::default());
 
         // Verify task_definition_chain gets definitions from shared-config, not root
         let task_name = TaskName::from("build");

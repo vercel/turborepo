@@ -133,13 +133,6 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     UnnecessaryPackageTaskSyntax(Box<UnnecessaryPackageTaskSyntaxError>),
-    #[error("You can only extend from the root of the workspace.")]
-    ExtendFromNonRoot {
-        #[label("non-root workspace found here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
     #[error("You must extend from the root of the workspace first.")]
     ExtendsRootFirst {
         #[label("'//' should be first")]
