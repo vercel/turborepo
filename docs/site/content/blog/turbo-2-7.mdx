@@ -115,7 +115,7 @@ And much, much more. Visit [turborepo.com/devtools](http://turborepo.com/devtool
 
 ## Compose configuration with `extends`
 
-We’ve expanded the capabilities of [Package Configurations](https://turborepo.com/docs/reference/package-configurations) so you can write your configuration once, and share it to anywhere in your repository.
+We’ve expanded the capabilities of [Package Configurations](/docs/reference/package-configurations) so you can write your configuration once, and share it to anywhere in your repository.
 
 ### A more powerful `extends` key
 
@@ -152,7 +152,7 @@ Previously, you could only extend from your root `turbo.json` when you used the 
 
 </Tabs>
 
-[Visit the docs to learn more.](https://turborepo.com/docs/reference/package-configurations#extending-arrays-with-turbo_extends)
+[Visit the docs to learn more.](/docs/reference/package-configurations#extending-arrays-with-turbo_extends)
 
 ### Extending array configurations
 
@@ -172,11 +172,11 @@ Additionally, we’re introducing a new keyword: `$TURBO_EXTENDS$`.
 
 Previously, you could only overwrite array configurations completely. But now, in the example above, you can use `$TURBO_EXTENDS$` to append to an existing array. This gives you a greater degree of control so you can choose to completely overwrite or extend from existing configuration.
 
-[Visit the docs to learn more.](https://turborepo.com/docs/reference/package-configurations#extending-arrays-with-turbo_extends)
+[Visit the docs to learn more.](/docs/reference/package-configurations#extending-arrays-with-turbo_extends)
 
 ## New Biome rule: `noUndeclaredEnvVars`
 
-Turborepo users love going fast, so its no surprise they enjoy using [Biome](https://biomejs.dev/) for linting and formatting. However, until today, the only linting support we had for finding unsafe environment variable usage was in ESLint, with [our `eslint-plugin-turbo` plugin](https://turborepo.com/docs/reference/eslint-plugin-turbo).
+Turborepo users love going fast, so its no surprise they enjoy using [Biome](https://biomejs.dev/) for linting and formatting. However, until today, the only linting support we had for finding unsafe environment variable usage was in ESLint, with [our `eslint-plugin-turbo` plugin](/docs/reference/eslint-plugin-turbo).
 
 Now, you can find environment variables that can cause unexpected cache hits faster with [the new Turborepo domain](https://biomejs.dev/linter/domains/#turborepo) in Biome.
 
@@ -208,7 +208,7 @@ catalog:
 
 We’ve updated our lockfile parser to work with this new Yarn feature, ensuring our smart lockfile detection doesn’t cause global invalidations in your repository. Only the packages and tasks that are affected by the change to your catalogs will see cache misses, improving your cache hit rates.
 
-[Visit our Support Policy](https://turborepo.com/docs/support-policy#package-managers) to learn more about our package manager support, or learn more about catalogs in [the Yarn documentation](https://yarnpkg.com/features/catalogs).
+[Visit our Support Policy](/docs/support-policy#package-managers) to learn more about our package manager support, or learn more about catalogs in [the Yarn documentation](https://yarnpkg.com/features/catalogs).
 
 ## Other changes
 
