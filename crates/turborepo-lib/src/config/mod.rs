@@ -1,4 +1,5 @@
 mod env;
+mod experimental_otel;
 mod file;
 mod override_env;
 mod turbo_json;
@@ -13,7 +14,7 @@ use file::{AuthFile, ConfigFile};
 use merge::Merge;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use override_env::OverrideEnvVars;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use thiserror::Error;
 use tracing::debug;
@@ -31,6 +32,16 @@ use crate::{
 
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
+
+pub use experimental_otel::{
+    ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
+};
+
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
+#[serde(rename_all = "camelCase")]
+pub struct ExperimentalObservabilityOptions {
+    pub otel: Option<ExperimentalOtelOptions>,
+}
 
 #[derive(Debug, Error, Diagnostic)]
 #[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
@@ -275,6 +286,8 @@ pub enum Error {
     InvalidTuiScrollbackLength(#[source] std::num::ParseIntError),
     #[error("TURBO_SSO_LOGIN_CALLBACK_PORT: Invalid value. Use a number for the callback port.")]
     InvalidSsoLoginCallbackPort(#[source] std::num::ParseIntError),
+    #[error("Invalid experimentalOtel configuration: {message}")]
+    InvalidExperimentalOtelConfig { message: String },
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
@@ -347,6 +360,8 @@ pub struct ConfigurationOptions {
     pub(crate) sso_login_callback_port: Option<u16>,
     #[serde(skip)]
     future_flags: Option<FutureFlags>,
+    #[serde(rename = "experimentalObservability")]
+    pub(crate) experimental_observability: Option<ExperimentalObservabilityOptions>,
 }
 
 #[derive(Default)]
@@ -509,6 +524,10 @@ impl ConfigurationOptions {
 
     pub fn future_flags(&self) -> FutureFlags {
         self.future_flags.unwrap_or_default()
+    }
+
+    pub fn experimental_observability(&self) -> Option<&ExperimentalObservabilityOptions> {
+        self.experimental_observability.as_ref()
     }
 }
 

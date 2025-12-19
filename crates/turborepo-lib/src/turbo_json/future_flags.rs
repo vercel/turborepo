@@ -42,6 +42,12 @@ pub struct FutureFlags {
     /// root. All `turbo.json` must still extend from the root `turbo.json`
     /// first.
     pub non_root_extends: bool,
+    /// Enable experimental OpenTelemetry exporter support.
+    ///
+    /// When enabled, Turborepo will honor the `experimentalObservability`
+    /// configuration block (if present) to send run summaries to an
+    /// observability backend.
+    pub experimental_observability: bool,
 }
 
 impl FutureFlags {

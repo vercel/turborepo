@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use biome_deserialize_macros::Deserializable;
 use serde::Serialize;
@@ -41,6 +41,32 @@ pub struct RawRemoteCacheOptions {
     pub upload_timeout: Option<Spanned<u64>>,
 }
 
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawObservabilityOtel {
+    pub enabled: Option<Spanned<bool>>,
+    pub protocol: Option<Spanned<UnescapedString>>,
+    pub endpoint: Option<Spanned<UnescapedString>>,
+    pub headers: Option<BTreeMap<UnescapedString, UnescapedString>>,
+    pub timeout_ms: Option<Spanned<u64>>,
+    pub resource: Option<BTreeMap<UnescapedString, UnescapedString>>,
+    pub metrics: Option<RawObservabilityOtelMetrics>,
+    pub use_remote_cache_token: Option<Spanned<bool>>,
+}
+
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawExperimentalObservability {
+    pub otel: Option<RawObservabilityOtel>,
+}
+
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawObservabilityOtelMetrics {
+    pub run_summary: Option<Spanned<bool>>,
+    pub task_details: Option<Spanned<bool>>,
+}
+
 // Root turbo.json
 #[derive(Default, Debug, Clone, Iterable, Deserializable)]
 pub struct RawRootTurboJson {
@@ -49,6 +75,8 @@ pub struct RawRootTurboJson {
     #[deserializable(rename = "$schema")]
     pub(crate) schema: Option<UnescapedString>,
     pub(crate) experimental_spaces: Option<SpacesJson>,
+    #[deserializable(rename = "experimentalObservability")]
+    pub(crate) experimental_observability: Option<RawExperimentalObservability>,
 
     // Global root filesystem dependencies
     pub(crate) global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
@@ -142,6 +170,9 @@ pub struct RawTurboJson {
     pub concurrency: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub future_flags: Option<Spanned<FutureFlags>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "experimentalObservability")]
+    pub experimental_observability: Option<RawExperimentalObservability>,
     #[deserializable(rename = "//")]
     #[serde(skip)]
     pub(crate) _comment: Option<String>,
@@ -204,6 +235,7 @@ impl From<RawRootTurboJson> for RawTurboJson {
             span: root.span,
             schema: root.schema,
             experimental_spaces: root.experimental_spaces,
+            experimental_observability: root.experimental_observability,
             global_dependencies: root.global_dependencies,
             global_env: root.global_env,
             global_pass_through_env: root.global_pass_through_env,

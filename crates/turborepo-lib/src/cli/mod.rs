@@ -39,6 +39,8 @@ use crate::{
 };
 
 mod error;
+mod observability;
+
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
@@ -228,6 +230,8 @@ pub struct Args {
     /// verbosity
     #[clap(flatten)]
     pub verbosity: Verbosity,
+    #[clap(flatten)]
+    pub experimental_otel_args: observability::ExperimentalOtelCliArgs,
     /// Force a check for a new version of turbo
     #[clap(long, global = true, hide = true)]
     pub check_for_update: bool,
