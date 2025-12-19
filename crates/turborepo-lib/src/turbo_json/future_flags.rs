@@ -10,7 +10,6 @@
 //! ```json
 //! {
 //!   "futureFlags": {
-//!     "turboExtends": true
 //!   }
 //! }
 //! ```
@@ -26,26 +25,16 @@ use struct_iterable::Iterable;
 ///
 /// Each flag represents an experimental feature that can be enabled
 /// before it becomes the default behavior in a future version.
+///
+/// Note: Currently all previous future flags (turboExtendsKeyword,
+/// nonRootExtends) have been graduated and are now enabled by default.
 #[derive(Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[deserializable()]
-pub struct FutureFlags {
-    /// Enable `$TURBO_EXTENDS$`
-    ///
-    /// When enabled, allows using `$TURBO_EXTENDS$` in array fields.
-    /// This will change the default behavior of overriding the field to instead
-    /// append.
-    pub turbo_extends_keyword: bool,
-    /// Enable extending from a non-root `turbo.json`
-    ///
-    /// When enabled, allows using extends targeting `turbo.json`s other than
-    /// root. All `turbo.json` must still extend from the root `turbo.json`
-    /// first.
-    pub non_root_extends: bool,
-}
+pub struct FutureFlags {}
 
 impl FutureFlags {
-    /// Create a new FutureFlags with all features disabled
+    /// Create a new FutureFlags
     pub fn new() -> Self {
         Self::default()
     }

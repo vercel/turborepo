@@ -1419,19 +1419,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7704b5fdd17b18ae31c4c1da5a2e0305a2bf17b5249300a9ee9ed7b72114c636"
 
 [[package]]
-name = "coverage"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "glob",
- "serde_json",
- "tracing",
- "tracing-subscriber",
- "which 6.0.3",
-]
-
-[[package]]
 name = "cpp_demangle"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2258,12 +2245,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "glob"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8d1add55171497b4705a648c6b583acafb01d58050a51727785f0b2c8e0a2b2"
-
-[[package]]
 name = "globset"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2441,15 +2422,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
 dependencies = [
  "digest",
-]
-
-[[package]]
-name = "home"
-version = "0.5.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "589533453244b0995c858700322199b2becb13b627df2851f64a2775d024abcf"
-dependencies = [
- "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4408,7 +4380,7 @@ dependencies = [
  "regex",
  "syn 1.0.109",
  "tempfile",
- "which 4.4.0",
+ "which",
 ]
 
 [[package]]
@@ -6588,7 +6560,7 @@ dependencies = [
  "tempfile",
  "turbopath",
  "turborepo-lib",
- "which 4.4.0",
+ "which",
 ]
 
 [[package]]
@@ -7026,7 +6998,7 @@ dependencies = [
  "uds_windows",
  "wax",
  "webbrowser",
- "which 4.4.0",
+ "which",
 ]
 
 [[package]]
@@ -7184,7 +7156,7 @@ dependencies = [
  "turborepo-lockfiles",
  "turborepo-unescape",
  "wax",
- "which 4.4.0",
+ "which",
 ]
 
 [[package]]
@@ -7208,7 +7180,7 @@ dependencies = [
  "turborepo-ci",
  "turborepo-telemetry",
  "wax",
- "which 4.4.0",
+ "which",
 ]
 
 [[package]]
@@ -7290,7 +7262,7 @@ dependencies = [
  "turbopath",
  "turborepo-ci",
  "turborepo-vt100",
- "which 4.4.0",
+ "which",
  "windows-sys 0.59.0",
 ]
 
@@ -7800,18 +7772,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "which"
-version = "6.0.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4ee928febd44d98f2f459a4a79bd4d928591333a494a10a868418ac1b39cf1f"
-dependencies = [
- "either",
- "home",
- "rustix 0.38.31",
- "winsafe",
-]
-
-[[package]]
 name = "winapi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8127,12 +8087,6 @@ checksum = "80d0f4e272c85def139476380b12f9ac60926689dd2e01d4923222f40580869d"
 dependencies = [
  "winapi",
 ]
-
-[[package]]
-name = "winsafe"
-version = "0.0.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "wit-bindgen-rt"

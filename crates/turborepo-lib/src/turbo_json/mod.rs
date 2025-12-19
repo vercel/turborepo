@@ -1013,7 +1013,6 @@ mod tests {
                 "build": {}
             },
             "futureFlags": {
-                "turboExtendsKeyword": true
             }
         }"#;
 
@@ -1024,16 +1023,11 @@ mod tests {
         );
         let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
 
-        // Verify that futureFlags is parsed correctly
+        // Verify that futureFlags is parsed correctly (empty now that flags are
+        // removed)
         assert!(raw_turbo_json.future_flags.is_some());
         let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
-        assert_eq!(
-            future_flags.as_inner(),
-            &FutureFlags {
-                turbo_extends_keyword: true,
-                non_root_extends: false,
-            }
-        );
+        assert_eq!(future_flags.as_inner(), &FutureFlags {});
 
         // Verify that the futureFlags field doesn't cause errors during conversion to
         // TurboJson
@@ -1050,7 +1044,7 @@ mod tests {
         true ; "root config with global fields should succeed"
     )]
     #[test_case(
-        r#"{"futureFlags": {"turboExtendsKeyword": true}, "tasks": {"build": {}}}"#,
+        r#"{"futureFlags": {}, "tasks": {"build": {}}}"#,
         true ; "root config with futureFlags should succeed"
     )]
     #[test_case(

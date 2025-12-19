@@ -63,6 +63,7 @@ pub enum ShutdownStyle {
 }
 
 /// Child process stopped.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct ShutdownFailed;
 

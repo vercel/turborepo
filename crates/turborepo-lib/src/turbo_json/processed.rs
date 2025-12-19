@@ -23,12 +23,8 @@ const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 /// Returns (processed_array, extends_found)
 fn extract_turbo_extends(
     mut items: Vec<Spanned<UnescapedString>>,
-    future_flags: &FutureFlags,
+    _future_flags: &FutureFlags,
 ) -> (Vec<Spanned<UnescapedString>>, bool) {
-    if !future_flags.turbo_extends_keyword {
-        return (items, false);
-    }
-
     if let Some(pos) = items.iter().position(|item| item.as_str() == TURBO_EXTENDS) {
         items.remove(pos);
         (items, true)
@@ -414,46 +410,19 @@ mod tests {
     use crate::turbo_json::FutureFlags;
 
     #[test]
-    fn test_extract_turbo_extends_with_flag_enabled() {
+    fn test_extract_turbo_extends_with_marker() {
         let items = vec![
             Spanned::new(UnescapedString::from("item1")),
             Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
             Spanned::new(UnescapedString::from("item2")),
         ];
 
-        let (processed, extends) = extract_turbo_extends(
-            items,
-            &FutureFlags {
-                turbo_extends_keyword: true,
-                non_root_extends: false,
-            },
-        );
+        let (processed, extends) = extract_turbo_extends(items, &FutureFlags {});
 
         assert!(extends);
         assert_eq!(processed.len(), 2);
         assert_eq!(processed[0].as_str(), "item1");
         assert_eq!(processed[1].as_str(), "item2");
-    }
-
-    #[test]
-    fn test_extract_turbo_extends_with_flag_disabled() {
-        let items = vec![
-            Spanned::new(UnescapedString::from("item1")),
-            Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
-            Spanned::new(UnescapedString::from("item2")),
-        ];
-
-        let (processed, extends) = extract_turbo_extends(
-            items,
-            &FutureFlags {
-                turbo_extends_keyword: false,
-                non_root_extends: false,
-            },
-        );
-
-        assert!(!extends);
-        assert_eq!(processed.len(), 3);
-        assert_eq!(processed[1].as_str(), "$TURBO_EXTENDS$");
     }
 
     #[test]
@@ -463,13 +432,7 @@ mod tests {
             Spanned::new(UnescapedString::from("item2")),
         ];
 
-        let (processed, extends) = extract_turbo_extends(
-            items,
-            &FutureFlags {
-                turbo_extends_keyword: true,
-                non_root_extends: false,
-            },
-        );
+        let (processed, extends) = extract_turbo_extends(items, &FutureFlags {});
 
         assert!(!extends);
         assert_eq!(processed.len(), 2);
@@ -609,14 +572,7 @@ mod tests {
             Spanned::new(UnescapedString::from("lib/**")),
         ];
 
-        let inputs = ProcessedInputs::new(
-            raw_globs,
-            &FutureFlags {
-                turbo_extends_keyword: true,
-                non_root_extends: false,
-            },
-        )
-        .unwrap();
+        let inputs = ProcessedInputs::new(raw_globs, &FutureFlags {}).unwrap();
 
         assert!(inputs.extends);
         assert_eq!(inputs.globs.len(), 2);
@@ -625,42 +581,34 @@ mod tests {
     }
 
     #[test]
-    fn test_processed_env_turbo_extends_disabled_errors() {
-        // When turbo_extends is disabled, $TURBO_EXTENDS$ triggers validation error
+    fn test_processed_env_with_turbo_extends() {
+        // $TURBO_EXTENDS$ is now always processed
         let raw_env: Vec<Spanned<UnescapedString>> = vec![
             Spanned::new(UnescapedString::from("NODE_ENV")),
             Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
             Spanned::new(UnescapedString::from("API_KEY")),
         ];
 
-        let result = ProcessedEnv::new(
-            raw_env,
-            &FutureFlags {
-                turbo_extends_keyword: false,
-                non_root_extends: false,
-            },
-        );
-        assert!(result.is_err());
-        assert_matches!(result, Err(Error::InvalidEnvPrefix(_)));
+        let result = ProcessedEnv::new(raw_env, &FutureFlags {});
+        assert!(result.is_ok());
+        let env = result.unwrap();
+        assert!(env.extends);
+        assert_eq!(env.vars.len(), 2);
     }
 
     #[test]
-    fn test_processed_depends_on_turbo_extends_disabled_errors() {
-        // When turbo_extends is disabled, $TURBO_EXTENDS$ triggers validation error
+    fn test_processed_depends_on_with_turbo_extends() {
+        // $TURBO_EXTENDS$ is now always processed
         let raw_deps: Vec<Spanned<UnescapedString>> = vec![
             Spanned::new(UnescapedString::from("build")),
             Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
             Spanned::new(UnescapedString::from("test")),
         ];
 
-        let result = ProcessedDependsOn::new(
-            Spanned::new(raw_deps),
-            &FutureFlags {
-                turbo_extends_keyword: false,
-                non_root_extends: false,
-            },
-        );
-        assert!(result.is_err());
-        assert_matches!(result, Err(Error::InvalidDependsOnValue { .. }));
+        let result = ProcessedDependsOn::new(Spanned::new(raw_deps), &FutureFlags {});
+        assert!(result.is_ok());
+        let depends_on = result.unwrap();
+        assert!(depends_on.extends);
+        assert_eq!(depends_on.deps.len(), 2);
     }
 }

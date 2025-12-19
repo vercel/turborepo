@@ -25,8 +25,8 @@ Configure the behavior of `turbo` by using a `turbo.json` file in your Workspace
 
 Extend from the root `turbo.json` to create specific configuration for a package using [Package Configurations](/docs/reference/package-configurations).
 
-- By default, the only valid value for `extends` is `["//"]` to inherit configuration from the root `turbo.json`.
-- With the [`futureFlags.nonRootExtends`](#nonrootextends) flag enabled, you can also extend from other packages (e.g., `["//", "shared-config"]`).
+- The `extends` array must start with `["//"]` to inherit configuration from the root `turbo.json`.
+- You can also extend from other packages (e.g., `["//", "shared-config"]`).
 - If `extends` is used in the root `turbo.json`, it will be ignored.
 
 ### `globalDependencies`
@@ -192,9 +192,7 @@ Read more about [Environment Modes](/docs/crafting-your-repository/using-environ
 
 ```jsonc title="./turbo.json"
 {
-  "futureFlags": {
-    "turboExtendsKeyword": true
-  }
+  "futureFlags": {}
 }
 ```
 
@@ -206,43 +204,7 @@ Enable experimental features that will become the default behavior in future ver
   Configuration](/docs/reference/package-configurations).
 </Callout>
 
-#### `turboExtendsKeyword`
-
-Default: `false`
-
-When enabled, allows using the [`$TURBO_EXTENDS$`](#turbo_extends) microsyntax in array fields. This microsyntax changes the behavior of [Package Configurations](/docs/reference/package-configurations) from replacing array fields to appending to them.
-
-#### `nonRootExtends`
-
-Default: `false`
-
-When enabled, allows [Package Configurations](/docs/reference/package-configurations) to extend from other packages' `turbo.json` files, not just the root. This enables composing shared task configurations across packages.
-
-```jsonc title="./turbo.json"
-{
-  "futureFlags": {
-    "nonRootExtends": true
-  }
-}
-```
-
-With this flag enabled, packages can extend from multiple configurations:
-
-```jsonc title="./apps/web/turbo.json"
-{
-  "extends": ["//", "ui"],
-  "tasks": {
-    "build": {}
-  }
-}
-```
-
-<Callout type="warn">
-  When using `nonRootExtends`, the root configuration (`"//"`) must always be
-  listed **first** in the `extends` array.
-</Callout>
-
-See the [Package Configurations documentation](/docs/reference/package-configurations#extending-from-other-packages) for more details and examples.
+There are no future flags at this time.
 
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
@@ -291,11 +253,6 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
 Using the options available in the tasks you define in `tasks`, you can describe how `turbo` will run your tasks.
 
 ### `extends` (task-level)
-
-<Callout type="info">
-  This feature requires enabling [`futureFlags.nonRootExtends`](#nonrootextends)
-  in your root `turbo.json`.
-</Callout>
 
 Controls whether a task inherits configuration from the extends chain. This option is only available in [Package Configurations](/docs/reference/package-configurations), not in the root `turbo.json`.
 
@@ -562,12 +519,6 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
 
 #### `$TURBO_EXTENDS$`
 
-<Callout type="info">
-  This feature requires enabling
-  [`futureFlags.turboExtendsKeyword`](#turboextendskeyword) in your root
-  `turbo.json`.
-</Callout>
-
 When using [Package Configurations](/docs/reference/package-configurations), array fields completely replace the values from the root `turbo.json` by default. The `$TURBO_EXTENDS$` microsyntax changes this behavior to **append** instead of **replace**.
 
 This microsyntax can be used in the following array fields:
@@ -583,9 +534,6 @@ For example, if your root `turbo.json` defines:
 
 ```jsonc title="./turbo.json"
 {
-  "futureFlags": {
-    "turboExtendsKeyword": true
-  },
   "tasks": {
     "build": {
       "outputs": ["dist/**"]
