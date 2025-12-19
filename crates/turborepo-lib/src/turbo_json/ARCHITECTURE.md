@@ -44,14 +44,14 @@ Turborepo uses two different schemas for `turbo.json` files depending on their l
 
   - Can define global configuration options (`globalEnv`, `globalDependencies`, `globalPassThroughEnv`)
   - Can set repository-wide settings (`remoteCache`, `ui`, `daemon`, `envMode`, etc.)
-  - Can define `futureFlags` for experimental features
   - Cannot use `extends` field
 
 - **Package `turbo.json`** (`RawPackageTurboJson`): Located in workspace packages
   - Limited to task definitions and workspace-specific configuration
-  - Must use `extends: ["//"]` to inherit from root configuration
+  - Must use `extends: ["//", ...]` to inherit from root configuration (root must be first)
+  - Can extend from other packages (e.g., `["//", "shared-config"]`)
   - Can define workspace-specific `tags` and `boundaries`
-  - Cannot define global settings or `futureFlags`
+  - Cannot define global settings
 
 ### Key Components
 

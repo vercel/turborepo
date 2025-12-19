@@ -7,9 +7,7 @@ use crate::config::UnnecessaryPackageTaskSyntaxError;
 pub type TurboJSONValidation = fn(&Validator, &TurboJson) -> Vec<Error>;
 
 /// Validator for TurboJson structures with context-aware validation
-pub struct Validator {
-    non_root_extends: bool,
-}
+pub struct Validator {}
 
 const ROOT_VALIDATIONS: &[TurboJSONValidation] =
     &[validate_with_has_no_topo, validate_no_task_extends_in_root];
@@ -22,13 +20,10 @@ const PACKAGE_VALIDATIONS: &[TurboJSONValidation] = &[
 impl Validator {
     /// Creates a new validator instance
     pub fn new() -> Self {
-        Self {
-            non_root_extends: false,
-        }
+        Self {}
     }
 
-    pub fn with_future_flags(mut self, future_flags: FutureFlags) -> Self {
-        self.non_root_extends = future_flags.non_root_extends;
+    pub fn with_future_flags(self, _future_flags: FutureFlags) -> Self {
         self
     }
 
@@ -78,7 +73,7 @@ pub fn validate_no_package_task_syntax(
         .collect()
 }
 
-pub fn validate_extends(validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
+pub fn validate_extends(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
     if turbo_json.extends.is_empty() {
         let path = turbo_json
             .path
@@ -99,8 +94,9 @@ pub fn validate_extends(validator: &Validator, turbo_json: &TurboJson) -> Vec<Er
             text: NamedSource::new(path, text),
         }];
     }
+    // Root must always be first when extending from multiple packages
     if let Some(package_name) = turbo_json.extends.first() {
-        if package_name != ROOT_PKG_NAME && validator.non_root_extends {
+        if package_name != ROOT_PKG_NAME {
             let path = turbo_json
                 .path
                 .as_ref()
@@ -121,18 +117,7 @@ pub fn validate_extends(validator: &Validator, turbo_json: &TurboJson) -> Vec<Er
             }];
         }
     }
-    // If we allow for non-root extends we don't need to perform this check
-    (!validator.non_root_extends
-        && turbo_json
-            .extends
-            .iter()
-            .any(|package_name| package_name != ROOT_PKG_NAME))
-    .then(|| {
-        let (span, text) = turbo_json.extends.span_and_text("turbo.json");
-        Error::ExtendFromNonRoot { span, text }
-    })
-    .into_iter()
-    .collect()
+    vec![]
 }
 
 pub fn validate_with_has_no_topo(_validator: &Validator, turbo_json: &TurboJson) -> Vec<Error> {
@@ -278,16 +263,11 @@ mod test {
             ..Default::default()
         };
 
-        for non_root_extends in [false, true] {
-            let validator = Validator { non_root_extends };
-            let errs = validate_extends(&validator, &turbo_json);
-            let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
-            let mut snapshot_name = format!("validate_extends_{}", name);
-            if non_root_extends {
-                snapshot_name.push_str("_true");
-            }
-            insta::assert_debug_snapshot!(snapshot_name, error_messages);
-        }
+        let validator = Validator::new();
+        let errs = validate_extends(&validator, &turbo_json);
+        let error_messages: Vec<String> = errs.iter().map(|e| e.to_string()).collect();
+        let snapshot_name = format!("validate_extends_{}", name);
+        insta::assert_debug_snapshot!(snapshot_name, error_messages);
     }
 
     #[test]
@@ -466,10 +446,10 @@ mod test {
         assert_matches!(errs.first(), Some(Error::TaskExtendsInRoot { .. }));
     }
 
-    // Test extends validation with non_root_extends disabled
+    // Test extends with non-root packages is valid
     #[test]
-    fn test_extends_non_root_packages_error_without_future_flag() {
-        let validator = Validator::new(); // non_root_extends = false by default
+    fn test_extends_non_root_packages_valid() {
+        let validator = Validator::new();
 
         let turbo_json = TurboJson {
             extends: Spanned::new(vec!["//".to_string(), "other-package".to_string()]),
@@ -478,25 +458,21 @@ mod test {
 
         let errs = validator.validate_turbo_json(&PackageName::from("app"), &turbo_json);
 
-        // Should error because non_root_extends is false
+        // Should have no extends-related errors
         let extend_errors: Vec<_> = errs
             .iter()
-            .filter(|e| matches!(e, Error::ExtendFromNonRoot { .. }))
+            .filter(|e| matches!(e, Error::ExtendsRootFirst { .. } | Error::NoExtends { .. }))
             .collect();
         assert!(
-            !extend_errors.is_empty(),
-            "Should have ExtendFromNonRoot error when non_root_extends is false"
+            extend_errors.is_empty(),
+            "Should not have extends-related errors"
         );
     }
 
-    // Test extends validation with non_root_extends enabled but root not first
+    // Test extends root must be first
     #[test]
-    fn test_extends_root_must_be_first_with_future_flag() {
-        let future_flags = FutureFlags {
-            non_root_extends: true,
-            ..Default::default()
-        };
-        let validator = Validator::new().with_future_flags(future_flags);
+    fn test_extends_root_must_be_first() {
+        let validator = Validator::new();
 
         // Root is NOT first
         let turbo_json = TurboJson {
@@ -531,14 +507,7 @@ mod test {
         // Should have no extends-related errors
         let extends_errors: Vec<_> = errs
             .iter()
-            .filter(|e| {
-                matches!(
-                    e,
-                    Error::ExtendFromNonRoot { .. }
-                        | Error::ExtendsRootFirst { .. }
-                        | Error::NoExtends { .. }
-                )
-            })
+            .filter(|e| matches!(e, Error::ExtendsRootFirst { .. } | Error::NoExtends { .. }))
             .collect();
         assert!(
             extends_errors.is_empty(),
@@ -561,14 +530,10 @@ mod test {
         assert_matches!(errs.first(), Some(Error::NoExtends { .. }));
     }
 
-    // Test multiple non-root extends with future flag enabled
+    // Test multiple non-root extends is now always valid
     #[test]
-    fn test_multiple_non_root_extends_with_future_flag() {
-        let future_flags = FutureFlags {
-            non_root_extends: true,
-            ..Default::default()
-        };
-        let validator = Validator::new().with_future_flags(future_flags);
+    fn test_multiple_non_root_extends() {
+        let validator = Validator::new();
 
         // Root first, then multiple other packages
         let turbo_json = TurboJson {
@@ -585,18 +550,11 @@ mod test {
         // Should have no extends-related errors
         let extends_errors: Vec<_> = errs
             .iter()
-            .filter(|e| {
-                matches!(
-                    e,
-                    Error::ExtendFromNonRoot { .. }
-                        | Error::ExtendsRootFirst { .. }
-                        | Error::NoExtends { .. }
-                )
-            })
+            .filter(|e| matches!(e, Error::ExtendsRootFirst { .. } | Error::NoExtends { .. }))
             .collect();
         assert!(
             extends_errors.is_empty(),
-            "Multiple non-root extends should be valid with future flag enabled"
+            "Multiple non-root extends should be valid"
         );
     }
 

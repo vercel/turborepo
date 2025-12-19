@@ -31,10 +31,9 @@ key:
 ```
 
 <Callout>
-  By default, the only valid value for the `extends` key is `["//"]`. `//` is a
-  special name used to identify the root directory of the monorepo. With the
-  [`futureFlags.nonRootExtends`](/docs/reference/configuration#nonrootextends-pre-release)
-  flag, you can also extend from other packages.
+  The `extends` array must start with `["//"]`. `//` is a special name used to
+  identify the root directory of the monorepo. You can also extend from other
+  packages by adding them after `//` (e.g., `["//", "shared-config"]`).
 </Callout>
 
 ## Inheritance behavior
@@ -74,9 +73,9 @@ Array fields like `outputs`, `env`, `inputs`, `dependsOn`, and `passThroughEnv` 
 }
 ```
 
-### Extending arrays with `$TURBO_EXTENDS$` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+### Extending arrays with `$TURBO_EXTENDS$`
 
-To **add** to inherited array values instead of replacing them, use the [`$TURBO_EXTENDS$` microsyntax](/docs/reference/configuration#turbo_extends-pre-release):
+To **add** to inherited array values instead of replacing them, use the [`$TURBO_EXTENDS$` microsyntax](/docs/reference/configuration#turbo_extends):
 
 ```jsonc title="./apps/my-app/turbo.json"
 {
@@ -92,21 +91,11 @@ To **add** to inherited array values instead of replacing them, use the [`$TURBO
 
 The `$TURBO_EXTENDS$` marker must be the first element in the array. It works with `outputs`, `env`, `inputs`, `dependsOn`, `passThroughEnv`, and `with`.
 
-### Extending from other packages <ExperimentalBadge>Pre-release</ExperimentalBadge>
+### Extending from other packages
 
-By default, Package Configurations can only extend from the root `turbo.json`. With the [`futureFlags.nonRootExtends`](/docs/reference/configuration#nonrootextends-pre-release) flag, you can extend from any package that has a `turbo.json`.
+Package Configurations can extend from other packages' `turbo.json` files, not just the root. This enables composing shared task configurations across packages.
 
-First, enable the flag in your root `turbo.json`:
-
-```jsonc title="./turbo.json"
-{
-  "futureFlags": {
-    "nonRootExtends": true
-  }
-}
-```
-
-Then, extend from any package by using its `name` from `package.json` in your `extends` array. For example, if you have a Next.js app at `./apps/web` with `"name": "web"` in its `package.json`:
+Extend from any package by using its `name` from `package.json` in your `extends` array. For example, if you have a Next.js app at `./apps/web` with `"name": "web"` in its `package.json`:
 
 ```jsonc title="./apps/web/turbo.json"
 {
@@ -197,9 +186,9 @@ Later configurations override earlier ones for scalar fields. For array fields, 
 </Tab>
 </Tabs>
 
-### Excluding tasks from inheritance <ExperimentalBadge>Pre-release</ExperimentalBadge>
+### Excluding tasks from inheritance
 
-When extending from the root or other packages, your package inherits all their task definitions by default. With the [`futureFlags.nonRootExtends`](/docs/reference/configuration#nonrootextends-pre-release) flag, you can use the task-level `extends` field to opt out of specific tasks.
+When extending from the root or other packages, your package inherits all their task definitions by default. You can use the task-level `extends` field to opt out of specific tasks.
 
 #### Excluding a task entirely
 
@@ -207,9 +196,6 @@ To completely exclude an inherited task from your package, set `extends: false` 
 
 ```jsonc title="./turbo.json"
 {
-  "futureFlags": {
-    "nonRootExtends": true
-  },
   "tasks": {
     "build": {},
     "lint": {},
