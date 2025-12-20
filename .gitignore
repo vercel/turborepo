@@ -10,7 +10,6 @@ tests_output/
 vendor/
 /out/
 coverage/
-!crates/coverage/
 
 *.tsbuildinfo
 .eslintcache
@@ -27,7 +26,7 @@ artifacts
 .turbo
 .vercel
 .DS_Store
-.env
+.env*
 vendor/
 data
 *.log
@@ -68,3 +67,4 @@ file_descriptor_set.bin
 # DevContainer cache directories
 .devcontainer/cache/
 .devcontainer/cargo/
+.env*.local

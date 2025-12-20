@@ -41,6 +41,16 @@ impl MicrofrontendsConfigs {
             configs: Vec<(&'a str, Result<Option<MfeConfig>, Error>)>,
         }
 
+        let any_has_mfe_dep = package_graph.packages().any(|(_, info)| {
+            info.package_json
+                .all_dependencies()
+                .any(|(dep, _)| dep.as_str() == MICROFRONTENDS_PACKAGE)
+        });
+        tracing::debug!(
+            "from_disk - any package has @vercel/microfrontends dep: {}",
+            any_has_mfe_dep
+        );
+
         let metadata = package_graph.packages().fold(
             PackageMetadata {
                 names: HashSet::new(),
@@ -61,8 +71,11 @@ impl MicrofrontendsConfigs {
                 );
                 acc.has_mfe_dep.insert(name_str, has_dep);
 
-                let config_result =
-                    MfeConfig::load_from_dir_with_mfe_dep(repo_root, info.package_path(), has_dep);
+                let config_result = MfeConfig::load_from_dir_with_mfe_dep(
+                    repo_root,
+                    info.package_path(),
+                    any_has_mfe_dep,
+                );
                 if let Ok(Some(ref _config)) = config_result {
                     tracing::debug!(
                         "from_disk - found config in package: {}, path: {:?}",
@@ -1174,6 +1187,61 @@ mod test {
         assert!(
             result.is_ok(),
             "Config with Vercel fields should be accepted for packages with @vercel/microfrontends"
+        );
+    }
+
+    #[test]
+    fn test_vercel_fields_accepted_when_other_package_has_dependency() {
+        // This tests the scenario where:
+        // - "host" package has the config with Vercel-specific fields (like
+        //   assetPrefix)
+        // - "host" package does NOT have @vercel/microfrontends dependency
+        // - "app" package DOES have @vercel/microfrontends dependency
+        // The config should be accepted because ANY package has the dependency.
+        //
+        // In from_disk, we pre-compute any_has_mfe_dep and pass it to all config loads,
+        // so the config gets parsed leniently even if its own package lacks the dep.
+        let config_with_vercel_fields = MfeConfig::from_str_with_mfe_dep(
+            &serde_json::to_string_pretty(&json!({
+                "version": "1",
+                "applications": {
+                    "host": {},
+                    "app": {
+                        "routing": [{"paths": ["/app", "/app/:path*"]}],
+                        "assetPrefix": "app-assets"
+                    }
+                }
+            }))
+            .unwrap(),
+            "microfrontends.json",
+            true, // Simulates any_has_mfe_dep=true (some package has the dep)
+        );
+
+        // Config should parse successfully with lenient mode
+        assert!(
+            config_with_vercel_fields.is_ok(),
+            "Config with Vercel fields like assetPrefix should be accepted when parsed with \
+             has_mfe_dependency=true (simulating another package having the dep)"
+        );
+
+        // Now verify it works through PackageGraphResult as well
+        let config = config_with_vercel_fields.unwrap();
+
+        // "app" has the MFE dependency, "host" does not
+        let mut deps = HashMap::new();
+        deps.insert("host", false);
+        deps.insert("app", true);
+
+        let result = PackageGraphResult::new(
+            HashSet::from_iter(["host", "app"].iter().copied()),
+            vec![("host", Ok(Some(config)))].into_iter(),
+            deps,
+        );
+
+        assert!(
+            result.is_ok(),
+            "Config in 'host' package should be accepted when 'app' package has \
+             @vercel/microfrontends dependency"
         );
     }
 }

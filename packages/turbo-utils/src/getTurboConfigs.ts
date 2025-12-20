@@ -11,7 +11,7 @@ import type {
   PipelineV2,
 } from "@turbo/types";
 import * as logger from "./logger";
-import { getTurboRoot } from "./getTurboRoot";
+import { getTurboRoot, clearTurboRootCache } from "./getTurboRoot";
 import type { PackageJson, PNPMWorkspaceConfig } from "./types";
 
 const ROOT_GLOB = "{turbo.json,turbo.jsonc}";
@@ -302,4 +302,5 @@ export function clearConfigCaches(): void {
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- This is safe.
     delete workspaceConfigCache[key];
   });
+  clearTurboRootCache();
 }

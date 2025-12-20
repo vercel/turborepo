@@ -1,5 +1,5 @@
 // utils
-export { getTurboRoot } from "./getTurboRoot";
+export { getTurboRoot, clearTurboRootCache } from "./getTurboRoot";
 export {
   getTurboConfigs,
   getWorkspaceConfigs,

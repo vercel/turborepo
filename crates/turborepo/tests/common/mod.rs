@@ -49,7 +49,15 @@ macro_rules! check_json_output {
                 let mut command = assert_cmd::Command::cargo_bin("turbo")?;
 
                 command
-                    .arg($command);
+                    .arg($command)
+                    // Ensure telemetry can initialize by providing a writable config directory.
+                    // This prevents debug builds from printing errors to stdout when telemetry
+                    // init fails due to missing config directories.
+                    .env("TURBO_CONFIG_DIR_PATH", tempdir.path())
+                    // Disable telemetry and various warnings to ensure clean JSON output
+                    .env("DO_NOT_TRACK", "1")
+                    .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+                    .env("TURBO_GLOBAL_WARNING_DISABLED", "1");
 
                 $(
                     command.arg($query);

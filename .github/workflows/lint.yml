@@ -27,6 +27,7 @@ jobs:
   rust_lint:
     name: Rust lints
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -51,6 +52,7 @@ jobs:
   format_lint:
     name: Formatting
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}

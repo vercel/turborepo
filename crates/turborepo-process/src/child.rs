@@ -20,7 +20,10 @@ const CHILD_POLL_INTERVAL: Duration = Duration::from_micros(50);
 use std::{
     fmt,
     io::{self, BufRead, Read, Write},
-    sync::{Arc, Mutex},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
     time::Duration,
 };
 
@@ -60,6 +63,7 @@ pub enum ShutdownStyle {
 }
 
 /// Child process stopped.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct ShutdownFailed;
 
@@ -381,6 +385,9 @@ pub struct Child {
     stdin: Arc<Mutex<Option<ChildInput>>>,
     output: Arc<Mutex<Option<ChildOutput>>>,
     label: String,
+    /// Flag indicating this child is being stopped as part of a shutdown of the
+    /// ProcessManager, rather than individually stopped.
+    closing: Arc<AtomicBool>,
 }
 
 #[derive(Clone, Debug)]
@@ -469,6 +476,7 @@ impl Child {
             stdin: Arc::new(Mutex::new(stdin)),
             output: Arc::new(Mutex::new(output)),
             label,
+            closing: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -679,6 +687,16 @@ impl Child {
 
     pub fn label(&self) -> &str {
         &self.label
+    }
+
+    /// Mark this child as being stopped as part of a ProcessManager shutdown
+    pub fn set_closing(&self) {
+        self.closing.store(true, Ordering::Release);
+    }
+
+    /// Check if this child was stopped as part of a ProcessManager shutdown
+    pub fn is_closing(&self) -> bool {
+        self.closing.load(Ordering::Acquire)
     }
 }
 

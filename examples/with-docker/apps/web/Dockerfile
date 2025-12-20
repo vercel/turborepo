@@ -1,11 +1,10 @@
-FROM node:18-alpine AS base
+ARG NODE_VERSION=24.11.1
+FROM node:${NODE_VERSION}-slim AS base
 
 # This Dockerfile is copy-pasted into our main docs at /docs/handbook/deploying-with-docker.
 # Make sure you update both files!
 
 # Check https://github.com/nodejs/docker-node/tree/b4117f9333da4138b03a546ec926ef50a31506c3#nodealpine to understand why libc6-compat might be needed.
-RUN apk update
-RUN apk add --no-cache libc6-compat
 # Set working directory
 WORKDIR /app
 
@@ -34,7 +33,7 @@ COPY --from=prepare /app/out/full/ .
 RUN yarn turbo build
 
 # ---
-FROM base AS runner
+FROM node:${NODE_VERSION}-alpine AS runner
 # Don't run production as root for security reasons
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs

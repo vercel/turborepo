@@ -22,3 +22,6 @@ import { walkThePlank } from "module-package";
 // @boundaries-ignore one more reason
 
 import { walkThePlank } from "module-package";
+
+// Allow importing own package
+import { walkThePlank } from "my-app";

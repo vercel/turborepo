@@ -72,6 +72,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Watch(#[from] watch::Error),
+    #[error("Devtools error: {0}")]
+    Devtools(Box<turborepo_devtools::ServerError>),
     #[error(transparent)]
     Opts(#[from] crate::opts::Error),
     #[error(transparent)]

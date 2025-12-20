@@ -27,7 +27,6 @@ runs:
       if: inputs.node == 'true'
       uses: ./.github/actions/setup-node
       with:
-        extra-flags: --no-optional
         node-version: ${{ inputs.node-version }}
       env:
         PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1

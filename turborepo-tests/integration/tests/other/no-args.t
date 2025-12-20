@@ -12,6 +12,7 @@ Make sure exit code is 2 when no args are passed
     get-mfe-port  Get the port assigned to the current microfrontend
     completion    Generate the autocompletion script for the specified shell
     daemon        Runs the Turborepo background daemon
+    devtools      Visualize your monorepo's package graph in the browser
     generate      Generate a new app / package
     telemetry     Enable or disable anonymous telemetry
     scan          Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance

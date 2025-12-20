@@ -13,6 +13,7 @@
     html_logo_url = "https://raw.githubusercontent.com/olson-sean-k/wax/master/doc/wax.svg?sanitize=true"
 )]
 #![allow(dead_code)]
+#![allow(unused_assignments)]
 #![allow(clippy::all)]
 #![deny(
     clippy::cast_lossless,

@@ -66,6 +66,7 @@ on:
 jobs:
   stage:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -92,6 +93,7 @@ jobs:
   rust-smoke-test:
     name: Rust Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [stage]
     steps:
       - name: Show Stage Commit
@@ -119,6 +121,7 @@ jobs:
   js-smoke-test:
     name: JS Package Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [stage]
     steps:
       - name: Show Stage Commit
@@ -160,6 +163,7 @@ jobs:
           - host: windows-latest
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.settings.host }}
+    timeout-minutes: 30
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
@@ -203,6 +207,7 @@ jobs:
   npm-publish:
     name: "Publish To NPM"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     needs: [stage, build-rust, rust-smoke-test, js-smoke-test]
     steps:
       - name: Show Stage Commit
@@ -256,6 +261,7 @@ jobs:
     name: "Open Release Branch PR"
     needs: [stage, npm-publish]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"

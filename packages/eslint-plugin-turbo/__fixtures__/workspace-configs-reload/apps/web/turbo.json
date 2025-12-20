@@ -1,0 +1,10 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "dotEnv": [".env"],
+      "env": ["ENV_2", "NEXT_PUBLIC_*", "!NEXT_PUBLIC_EXCLUDE*"]
+    }
+  }
+}

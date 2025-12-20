@@ -7,6 +7,8 @@
 //! as well as the architecture documentation in `packages/turbo-vsc`.
 
 #![feature(box_patterns)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 #![warn(clippy::unwrap_used)]
 

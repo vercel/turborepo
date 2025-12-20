@@ -7,6 +7,8 @@
 #![feature(error_generic_member_access)]
 #![feature(assert_matches)]
 #![feature(box_patterns)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 
 /// A wrapper for the cache that uses a worker pool to perform cache operations

@@ -13,6 +13,6 @@ describe("Workspace", () => {
   it("finds a package manager", async () => {
     const workspace = await Workspace.find();
     const packageManager: PackageManager = workspace.packageManager;
-    assert.equal(packageManager.name, "pnpm");
+    assert.equal(packageManager.name, "pnpm9");
   });
 });
