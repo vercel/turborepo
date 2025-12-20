@@ -15,7 +15,7 @@ use thiserror::Error;
 use tiny_gradient::{GradientStr, RGB};
 use tracing::{debug, warn};
 pub use turbo_state::TurboState;
-use turbo_updater::display_update_check;
+use turbo_updater::{display_update_check, UpdateCheckConfig};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
@@ -343,7 +343,7 @@ fn try_check_for_updates(
 ) {
     let package_manager = package_manager.unwrap_or(&PackageManager::Npm);
 
-    if args.should_check_for_update() && !config.no_update_notifier() {
+    if args.should_check_for_update() {
         // custom footer for update message
         let footer = format!(
             "Follow {username} for updates: {url}",
@@ -359,16 +359,17 @@ fn try_check_for_updates(
             None
         };
         // check for updates
-        let _ = display_update_check(
-            "turbo",
-            "https://github.com/vercel/turborepo",
-            Some(&footer),
+        let _ = display_update_check(UpdateCheckConfig {
+            package_name: "turbo",
+            github_repo: "https://github.com/vercel/turborepo",
+            footer: Some(&footer),
             current_version,
             // use default for timeout (800ms)
-            None,
+            timeout: None,
             interval,
             package_manager,
-        );
+            config_no_update: config.no_update_notifier(),
+        });
     }
 }
 
