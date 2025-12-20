@@ -23,28 +23,18 @@ Bad flag with an implied run command should display run flags
   
   Options:
       --cache-dir <CACHE_DIR>
-      --cache-workers <CACHE_WORKERS>
       --concurrency <CONCURRENCY>
-      --continue
-      --dry-run \[<DRY_RUN>\] (re)
+      --continue\[=<CONTINUE>\] (re)
       --single-package
-      --filter <FILTER>
-      --force \[<FORCE>\] (re)
       --framework-inference \[<BOOL>\] (re)
       --global-deps <GLOBAL_DEPS>
-      --graph \[<GRAPH>\] (re)
       --env-mode \[<ENV_MODE>\] (re)
-      --ignore <IGNORE>
-      --no-cache
-      --no-daemon
+      --filter <FILTER>
+      --affected
       --output-logs <OUTPUT_LOGS>
       --log-order <LOG_ORDER>
       --only
-      --parallel
       --pkg-inference-root <PKG_INFERENCE_ROOT>
-      --profile <PROFILE>
-      --remote-only \[<BOOL>\] (re)
-      --summarize \[<SUMMARIZE>\] (re)
       --log-prefix <LOG_PREFIX>
       TASKS
       PASS_THROUGH_ARGS
