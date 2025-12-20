@@ -27,17 +27,22 @@ impl Validator {
         self
     }
 
-    /// Validates a TurboJson based on its package context
-    ///
-    /// Root turbo.json files have different validation rules than workspace
-    /// turbo.json files
+    /// Validates a TurboJson based on its package context, since root
+    /// turbo.json files have different validation rules than Package
+    /// Configuration files
     pub fn validate_turbo_json(
         &self,
         package_name: &PackageName,
         turbo_json: &TurboJson,
     ) -> Vec<Error> {
+        // Check if this is the root turbo.json based on its path.
+        // This can happen when a workspace includes "." as a package. In that
+        // case, the root turbo.json would be loaded for that package but should
+        // still be validated with root schema.
+        let is_root_turbo_json = turbo_json.is_root_config();
         let validations = match package_name {
             PackageName::Root => ROOT_VALIDATIONS,
+            PackageName::Other(_) if is_root_turbo_json => ROOT_VALIDATIONS,
             PackageName::Other(_) => PACKAGE_VALIDATIONS,
         };
         validations
@@ -718,5 +723,124 @@ mod test {
             "Should have error for topo dependency in with"
         );
         assert_matches!(errs.first(), Some(Error::InvalidTaskWith { .. }));
+    }
+
+    /// Test that a turbo.json with root path is validated with root schema,
+    /// even when the package name is not Root.
+    #[test]
+    fn test_root_config_uses_root_validation_for_non_root_package() {
+        let validator = Validator::new();
+
+        // Create a turbo.json that looks like root (path is "turbo.json")
+        // but we're validating it for a non-root package
+        let turbo_json = TurboJson {
+            path: Some("turbo.json".into()),
+            extends: Spanned::new(vec![]),
+            tasks: Pipeline(
+                vec![(TaskName::from("build"), Spanned::default())]
+                    .into_iter()
+                    .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("my-app"), &turbo_json);
+
+        let no_extends_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| matches!(e, Error::NoExtends { .. }))
+            .collect();
+        assert!(
+            no_extends_errors.is_empty(),
+            "Root config (path=turbo.json) should not require extends even for non-root package: \
+             {:?}",
+            no_extends_errors
+        );
+    }
+
+    /// Test that a turbo.json with package path still requires extends.
+    #[test]
+    fn test_package_config_still_requires_extends() {
+        let validator = Validator::new();
+
+        let turbo_json = TurboJson {
+            path: Some("packages/my-app/turbo.json".into()),
+            extends: Spanned::new(vec![]),
+            tasks: Pipeline(
+                vec![(TaskName::from("build"), Spanned::default())]
+                    .into_iter()
+                    .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("my-app"), &turbo_json);
+
+        assert_matches!(
+            errs.first(),
+            Some(Error::NoExtends { .. }),
+            "Package config should require extends"
+        );
+    }
+
+    /// Test that turbo.jsonc (with 'c' suffix) at root is also detected as root
+    /// config.
+    #[test]
+    fn test_root_config_with_jsonc_extension() {
+        let validator = Validator::new();
+
+        let turbo_json = TurboJson {
+            path: Some("turbo.jsonc".into()),
+            extends: Spanned::new(vec![]),
+            tasks: Pipeline(
+                vec![(TaskName::from("build"), Spanned::default())]
+                    .into_iter()
+                    .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::from("my-app"), &turbo_json);
+
+        let no_extends_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| matches!(e, Error::NoExtends { .. }))
+            .collect();
+        assert!(
+            no_extends_errors.is_empty(),
+            "Root config (path=turbo.jsonc) should not require extends: {:?}",
+            no_extends_errors
+        );
+    }
+
+    /// Test that PackageName::Root always uses root validation regardless of
+    /// path.
+    #[test]
+    fn test_root_package_always_uses_root_validation() {
+        let validator = Validator::new();
+
+        let turbo_json = TurboJson {
+            // Even with no path, Root package should use root validation
+            path: None,
+            extends: Spanned::new(vec![]),
+            tasks: Pipeline(
+                vec![(TaskName::from("build"), Spanned::default())]
+                    .into_iter()
+                    .collect(),
+            ),
+            ..Default::default()
+        };
+
+        let errs = validator.validate_turbo_json(&PackageName::Root, &turbo_json);
+
+        let no_extends_errors: Vec<_> = errs
+            .iter()
+            .filter(|e| matches!(e, Error::NoExtends { .. }))
+            .collect();
+        assert!(
+            no_extends_errors.is_empty(),
+            "Root package should never require extends: {:?}",
+            no_extends_errors
+        );
     }
 }

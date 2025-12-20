@@ -384,6 +384,16 @@ impl TurboJson {
         false
     }
 
+    pub(super) fn is_root_config(&self) -> bool {
+        self.path
+            .as_ref()
+            .map(|p| {
+                let path_str = p.as_ref();
+                path_str == "turbo.json" || path_str == "turbo.jsonc"
+            })
+            .unwrap_or(false)
+    }
+
     /// Reads a `RawTurboJson` from the given path
     /// and then converts it into `TurboJson`
     ///
@@ -1177,5 +1187,41 @@ mod tests {
         assert!(deps.allow.is_some());
         assert!(deps.deny.is_none()); // This should be None, not serialized as
                                       // null
+    }
+
+    #[test]
+    fn test_is_root_config_with_root_path() {
+        let turbo_json = TurboJson {
+            path: Some("turbo.json".into()),
+            ..Default::default()
+        };
+        assert!(
+            turbo_json.is_root_config(),
+            "turbo.json should be detected as root config"
+        );
+    }
+
+    #[test]
+    fn test_is_root_config_with_jsonc_extension() {
+        let turbo_json = TurboJson {
+            path: Some("turbo.jsonc".into()),
+            ..Default::default()
+        };
+        assert!(
+            turbo_json.is_root_config(),
+            "turbo.jsonc should be detected as root config"
+        );
+    }
+
+    #[test]
+    fn test_is_root_config_with_package_path() {
+        let turbo_json = TurboJson {
+            path: Some("packages/my-app/turbo.json".into()),
+            ..Default::default()
+        };
+        assert!(
+            !turbo_json.is_root_config(),
+            "packages/my-app/turbo.json should NOT be detected as root config"
+        );
     }
 }
