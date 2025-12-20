@@ -603,6 +603,22 @@ expression: query_output
               },
               "isDeprecated": false,
               "deprecationReason": null
+            },
+            {
+              "name": "internalDependants",
+              "description": null,
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "Packages",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
             }
           ],
           "inputFields": null,
@@ -1981,6 +1997,22 @@ expression: query_output
                 "ofType": {
                   "kind": "OBJECT",
                   "name": "Packages",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "externalDependencies",
+              "description": null,
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "OBJECT",
+                  "name": "ExternalPackages",
                   "ofType": null
                 }
               },
