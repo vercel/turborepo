@@ -222,8 +222,6 @@ mod tests {
             .iter()
             .map(|(key, value)| {
                 let original = std::env::var(key).ok();
-                // SAFETY: We hold ENV_MUTEX to ensure exclusive access to env vars
-                // during test execution, preventing data races between tests.
                 unsafe {
                     match value {
                         Some(v) => std::env::set_var(key, v),
@@ -238,8 +236,6 @@ mod tests {
 
         // Restore original values
         for (key, original) in originals {
-            // SAFETY: We hold ENV_MUTEX to ensure exclusive access to env vars
-            // during test execution, preventing data races between tests.
             unsafe {
                 match original {
                     Some(v) => std::env::set_var(key, v),
@@ -251,12 +247,8 @@ mod tests {
         result
     }
 
-    // ==================== should_skip_notification tests ====================
-
     #[test]
     fn test_skip_notification_when_config_no_update_is_true() {
-        // When config_no_update is true, should always skip regardless of other
-        // conditions
         with_env_vars(&[("NO_UPDATE_NOTIFIER", None), ("CI", None)], || {
             assert!(
                 should_skip_notification(true),
@@ -328,17 +320,10 @@ mod tests {
         // non-TTY path. When running in a non-TTY environment with no env vars,
         // should still skip due to non-TTY.
         with_env_vars(&[("NO_UPDATE_NOTIFIER", None), ("CI", None)], || {
-            // In test environment, we're typically not in a TTY
-            // The function should return true (skip) when not in a TTY
             let result = should_skip_notification(false);
-            // We can't guarantee TTY status in tests, so we just verify it runs
-            // without panicking. The actual TTY check behavior depends on the
-            // test runner environment.
             let _ = result;
         });
     }
-
-    // ==================== get_tag_from_version tests ====================
 
     #[test]
     fn test_get_tag_canary_prerelease() {
@@ -400,8 +385,6 @@ mod tests {
         );
     }
 
-    // ==================== VersionTag Display tests ====================
-
     #[test]
     fn test_version_tag_display_latest() {
         let tag = VersionTag::Latest;
@@ -413,9 +396,6 @@ mod tests {
         let tag = VersionTag::Canary;
         assert_eq!(tag.to_string(), "canary");
     }
-
-    // ==================== Integration tests for version parsing
-    // ====================
 
     #[test]
     fn test_version_parsing_stable() {
@@ -437,8 +417,6 @@ mod tests {
         let tag = get_tag_from_version(&version.pre);
         assert!(matches!(tag, VersionTag::Canary));
     }
-
-    // ==================== Constants verification tests ====================
 
     #[test]
     fn test_notifier_disable_vars_contains_no_update_notifier() {
