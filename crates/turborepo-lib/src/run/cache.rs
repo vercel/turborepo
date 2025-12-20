@@ -15,6 +15,7 @@ use turborepo_cache::{
 };
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
+use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, ColorSelector, LogWriter, GREY};
 
@@ -23,7 +24,6 @@ use crate::{
     daemon::{DaemonClient, DaemonConnector},
     hash::{FileHashes, TurboHash},
     opts::RunCacheOpts,
-    run::task_id::TaskId,
     task_graph::{TaskDefinition, TaskOutputs},
 };
 
@@ -506,11 +506,11 @@ impl ConfigCache {
 
         // empty inputs to get all files
         let inputs: Vec<String> = vec![];
-        let hash_object = match scm.get_package_file_hashes(repo_root, anchored_root, &inputs, None)
-        {
-            Ok(hash_object) => hash_object,
-            Err(_) => return Err(CacheError::ConfigCacheError),
-        };
+        let hash_object =
+            match scm.get_package_file_hashes(repo_root, anchored_root, &inputs, false, None) {
+                Ok(hash_object) => hash_object,
+                Err(_) => return Err(CacheError::ConfigCacheError),
+            };
 
         // return the hash
         Ok(FileHashes(hash_object).hash())

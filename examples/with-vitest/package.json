@@ -1,0 +1,21 @@
+{
+  "name": "vitest",
+  "private": true,
+  "scripts": {
+    "test": "turbo run test",
+    "test:projects": "vitest run",
+    "test:projects:watch": "vitest --watch",
+    "view-report": "turbo run view-report"
+  },
+  "devDependencies": {
+    "@repo/vitest-config": "workspace:*",
+    "prettier": "^3.5.0",
+    "turbo": "^2.6.1",
+    "typescript": "5.7.3",
+    "vitest": "^3.2.4"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=18"
+  }
+}

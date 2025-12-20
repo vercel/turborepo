@@ -3,7 +3,7 @@ use std::{fs::OpenOptions, io, io::Read, path::Path};
 use tar::Entry;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 
-use crate::{cache_archive::restore_directory::CachedDirTree, CacheError};
+use crate::{CacheError, cache_archive::restore_directory::CachedDirTree};
 
 pub fn restore_regular(
     dir_cache: &mut CachedDirTree,

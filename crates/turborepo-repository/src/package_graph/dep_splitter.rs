@@ -170,6 +170,11 @@ impl<'a> DependencyVersion<'a> {
                 false
             }
             _ if self.version == "*" => true,
+            _ if package_version.is_empty() => {
+                // The workspace version of this package does not contain a version, no version
+                // based constraints will match it so it must be external.
+                false
+            }
             _ => {
                 // If we got this far, then we need to check the workspace package version to
                 // see it satisfies the dependencies range to determine whether
@@ -186,7 +191,7 @@ impl<'a> DependencyVersion<'a> {
                 constraint
                     .ok()
                     .zip(version.ok())
-                    .map_or(true, |(constraint, version)| constraint.satisfies(&version))
+                    .is_none_or(|(constraint, version)| constraint.satisfies(&version))
             }
         }
     }
@@ -234,6 +239,7 @@ mod test {
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo"), true ; "handles pnpm alias caret")]
     #[test_case("1.2.3", None, "1.2.3", None, false ; "no workspace linking")]
     #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo"), false ; "no workspace linking with protocol")]
+    #[test_case("", None, "1.2.3", None, true ; "no workspace package version")]
     fn test_matches_workspace_package(
         package_version: &str,
         dependency_name: Option<&str>,

@@ -1,7 +1,5 @@
 {
-  "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": ["foo.txt"],
-  "globalEnv": ["SOME_ENV_VAR"],
+  "$schema": "https://turborepo.com/schema.json",
   "extends": ["//"],
   "tasks": {
     // this comment verifies that turbo can read .json files with comments

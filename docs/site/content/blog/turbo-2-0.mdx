@@ -1,0 +1,151 @@
+---
+title: Turborepo 2.0
+date: 2024/6/4
+description: Turborepo 2.0 is a milestone for the ergonomics of JavaScript and TypeScript monorepos.
+tag: 'web development'
+---
+
+<h1 className="text-center">Turborepo 2.0</h1>
+
+import { Authors } from '#components/authors';
+import { Date } from '#components/blog/date';
+import { Callout } from '#components/callout';
+import { Video } from '#components/video';
+
+<Date>Tuesday, June 4, 2024</Date>
+
+<Authors authors={['chrisolszewski', 'nicholasyang']} />
+
+Turborepo 2.0 improves the developer experience of JavaScript and TypeScript repositories, with features including:
+
+- [**New terminal UI**](#new-terminal-ui): Interactive tasks and clearer logs
+- [**Watch Mode**](#watch-mode): Dependency-aware task watcher for any tooling in your repository
+- [**All-new documentation**](#all-new-documentation): Core monorepo concepts, refreshed API reference, and ecosystem tooling guides
+- **Licensing and maintenance updates**: Upgraded to MIT license and added [Long Term Support policy](/docs/support-policy#lts-policy)
+
+Update today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
+
+Visit [the upgrading guide](/docs/crafting-your-repository/upgrading#upgrading-to-20) for update instructions. [Breaking changes](#breaking-changes) are listed below.
+
+## New terminal UI
+
+In [Turborepo 1.13](https://turborepo.com/blog/turbo-1-13-0), we released an experimental interface to learn how a refined terminal UI could improve development velocity. Through [the RFC process](https://github.com/vercel/turbo/discussions/7802), we were able to work with the community on designing a revamped local experience, driven by your feedback. Thank you to those who participated.
+
+Today, we’re releasing the new UI as stable, along with the highly requested features that it enables.
+
+<Video
+  src="/images/blog/turbo-2-0/interactive-ui.mp4"
+  width="928"
+  height="522"
+  className="rounded"
+/>
+
+### Improved clarity for logs
+
+Before 2.0, `turbo` would output logs as a stream while you were working on your libraries and applications. This could be overwhelming at times, since the intermixed logs made it difficult to understand what was going on with a specific task.
+
+In this iteration of the UI, you can select individual tasks using your arrow keys to inspect their logs one at a time, making it easier to read the logs that you want to focus on.
+
+<Callout type="good-to-know">
+  The streamed logs view from prior versions of `turbo` is still available for
+  local development by using the `--log-order` flag. Note that tasks will not be
+  interactive with this option and some tools may clear the terminal
+  unexpectedly.
+</Callout>
+
+### Interactive tasks
+
+Many tools allow for interacting with a script for important functionality. But, in previous versions of Turborepo, your scripts were trapped inside `turbo` so you couldn’t interact with them.
+
+You can now enter the shell of individual tasks and pass inputs to your scripts via `stdin` by typing directly into the interface. This enables workflows like running specific test suites with [Jest](https://jestjs.io) or [Vitest](https://vitest.dev/), handling database migrations with [Drizzle](https://orm.drizzle.team/) or [Prisma](https://www.prisma.io/), and much more.
+
+To mark a task as interactive, add `"persistent": true` to its definition:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true // [!code highlight]
+    }
+  }
+}
+```
+
+With the task selected in the UI, use the `Enter` key to enter the task’s shell and `CTRL+Z` to exit.
+
+To learn more about persistent and interactive tasks, [visit the documentation](/docs/reference/configuration#persistent).
+
+## Watch Mode
+
+Turborepo's ability to run many tasks at once gives you tighter feedback loops that help you ship faster. To get the most out of Turborepo's parallelization when working locally, your tools need to have a "watcher" feature available to re-run your code whenever you make changes. Unfortunately, many common tools don't, and most tools aren't monorepo-aware, leading to problems with scripts that depend on other scripts in your repository.
+
+Today, we're releasing Watch Mode to bring this functionality to all your tooling:
+
+```bash title="Terminal"
+turbo watch dev lint test
+```
+
+Using `turbo watch`, Turborepo will re-run tasks whenever you make changes to your source code. Tasks will be run using your dependency graph and configuration from `turbo.json`, just like `turbo run`.
+
+[Learn more about Watch Mode in the documentation.](/docs/crafting-your-repository/developing-applications#watch-mode)
+
+## All-new documentation
+
+With this release, we’re also publishing revitalized documentation that builds on the strengths of prior versions. We’ve heard your feedback, so the docs now include:
+
+- More monorepo fundamentals and how-tos
+- Guides on integrating your favorite tools with Turborepo
+- Clearer information architecture and improved search
+
+[Visit the Turborepo documentation.](/docs)
+
+## Breaking changes
+
+Visit [the upgrading guide](/docs/crafting-your-repository/upgrading#upgrading-to-20) for instructions on how to update to 2.0.
+
+### Configuration
+
+<Callout type="info">
+  Breaking changes for `turbo.json` can be updated using `npx @turbo/codemod
+  migrate`.
+</Callout>
+
+- Ignore `turbo` field in `package.json` ([PR](https://github.com/vercel/turbo/pull/8023))
+- Turborepo’s default disk cache location moved to `.turbo/cache` from `node_modules/.cache` ([PR](https://github.com/vercel/turbo/pull/8126))
+- `pipeline` key in `turbo.json` renamed to `tasks` ([PR](https://github.com/vercel/turbo/pull/8157))
+- File globs for directories in `inputs`/`outputs` include the directory's contents (e.g. `dist` and`dist/` equal `dist/**`) ([PR](https://github.com/vercel/turbo/pull/8180))
+- `outputMode` key renamed to `outputLogs` for clarity and to match the `--output-logs` flag ([PR](https://github.com/vercel/turbo/pull/8149))
+  - This change will be reflected in Run Summaries in `resolvedTaskConfig`
+- Error on environment variable syntax in `dependsOn` and `globalDependencies` (deprecated since 1.4) ([PR](https://github.com/vercel/turbo/pull/8026))
+- `globalDotEnv` and `dotEnv` removed in favor of including `.env` files in `inputs` ([PR](https://github.com/vercel/turbo/pull/8181))
+- `--ignore` removed in favor of `--filter` and graph correctness changes below ([PR](https://github.com/vercel/turbo/pull/8201))
+
+### Correctness
+
+- Strict Mode for environment variables is now the default, moving from Loose Mode ([PR](https://github.com/vercel/turbo/pull/8182))
+- Workspace root directory is now an implicit dependency of all packages ([PR](https://github.com/vercel/turbo/pull/8202))
+- Removed `--scope` flag (deprecated since 1.2) ([PR](https://github.com/vercel/turbo/pull/7970))
+- Packages must have a `name` in `package.json` ([PR](https://github.com/vercel/turbo/pull/8152))
+- `packageManager` field in root `package.json` is now required ([PR](https://github.com/vercel/turbo/pull/8017))
+- `engines` field in root `package.json` is now used in hashing ([PR](https://github.com/vercel/turbo/pull/8173))
+- `--filter` no longer infers namespaces for package names ([PR](https://github.com/vercel/turbo/pull/8137))
+- `--filter` now errors when no package names or directories are matched ([PR](https://github.com/vercel/turbo/pull/8142))
+- `--only` restricts task dependencies instead of only package dependencies ([PR](https://github.com/vercel/turbo/pull/8163))
+
+### Other
+
+- Minimum package manager version support for npm and pnpm updated to 8 ([Source](/docs/support-policy#package-managers))
+- Remove package manager argument from `create-turbo`, replaced by option ([PR](https://github.com/vercel/turbo/pull/8150))
+
+## Community
+
+We're excited to see the continued growth and adoption of Turborepo:
+
+- [25.2k+ GitHub Stars](https://github.com/vercel/turbo)
+- [2.3m+ weekly NPM downloads](https://www.npmjs.com/package/turbo)
+- 347 years of compute time saved using [Vercel Remote Cache](https://vercel.com/docs/concepts/monorepos/remote-caching)
+
+Turborepo is the result of the combined work of all of its contributors, including our core team: [Anthony](https://github.com/anthonyshew), [Chris](https://github.com/chris-olszewski), [Greg](https://github.com/gsoltis), [Mehul](https://github.com/mehulkar), [Mitch](https://github.com/Zertsov), [Nicholas](https://github.com/NicholasLYang), and [Tom](https://github.com/tknickman).
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. If you haven't already, join the conversation on [GitHub](https://github.com/vercel/turbo) and [Discord](/discord).

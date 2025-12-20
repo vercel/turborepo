@@ -1,3 +1,6 @@
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
+
 mod import_finder;
 mod tracer;
 
@@ -53,7 +56,7 @@ async fn main() -> Result<(), PathError> {
         std::process::exit(1);
     } else {
         for file in result.files.keys() {
-            println!("{}", file);
+            println!("{file}");
         }
     }
 

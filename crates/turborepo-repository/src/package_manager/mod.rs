@@ -1,9 +1,10 @@
-mod bun;
-mod npm;
-mod npmrc;
-mod pnpm;
-mod yarn;
-mod yarnrc;
+pub mod berry;
+pub mod bun;
+pub mod npm;
+pub mod npmrc;
+pub mod pnpm;
+pub mod yarn;
+pub mod yarnrc;
 
 use std::{
     backtrace,
@@ -13,19 +14,16 @@ use std::{
 
 use bun::BunDetector;
 use itertools::{Either, Itertools};
-use lazy_regex::{lazy_regex, Lazy};
+use lazy_regex::{Lazy, lazy_regex};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use node_semver::SemverError;
 use npm::NpmDetector;
-use npmrc::NpmRc;
 use regex::Regex;
 use serde::Deserialize;
 use thiserror::Error;
-use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_lockfiles::Lockfile;
-use yarnrc::YarnRc;
 
 use crate::{
     discovery,
@@ -33,11 +31,6 @@ use crate::{
     package_manager::{pnpm::PnpmDetector, yarn::YarnDetector},
     workspaces::WorkspaceGlobs,
 };
-
-#[derive(Debug, Deserialize)]
-struct PnpmWorkspace {
-    pub packages: Vec<String>,
-}
 
 #[derive(Debug, Deserialize)]
 struct PackageJsonWorkspaces {
@@ -116,7 +109,7 @@ impl Display for MissingWorkspaceError {
                  defined in the root package.json"
             }
         };
-        write!(f, "{}", err)
+        write!(f, "{err}")
     }
 }
 
@@ -264,7 +257,7 @@ impl PackageManager {
     pub fn get_default_exclusions(&self) -> impl Iterator<Item = String> {
         let ignores = match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
-                ["**/node_modules/**", "**/bower_components/**"].as_slice()
+                pnpm::get_default_exclusions()
             }
             PackageManager::Npm => ["**/node_modules/**"].as_slice(),
             PackageManager::Bun => ["**/node_modules", "**/.git"].as_slice(),
@@ -282,15 +275,8 @@ impl PackageManager {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
                 // Make sure to convert this to a missing workspace error
                 // so we can catch it in the case of single package mode.
-                let source = self.workspace_glob_source(root_path);
-                let workspace_yaml = fs::read_to_string(source)
-                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self.clone())))?;
-                let pnpm_workspace: PnpmWorkspace = serde_yaml::from_str(&workspace_yaml)?;
-                if pnpm_workspace.packages.is_empty() {
-                    return Err(MissingWorkspaceError::from(self.clone()).into());
-                } else {
-                    pnpm_workspace.packages
-                }
+                pnpm::get_configured_workspace_globs(root_path)
+                    .ok_or_else(|| Error::Workspace(MissingWorkspaceError::from(self.clone())))?
             }
             PackageManager::Berry
             | PackageManager::Npm
@@ -435,7 +421,7 @@ impl PackageManager {
     pub fn get_package_jsons(
         &self,
         repo_root: &AbsoluteSystemPath,
-    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf>, Error> {
+    ) -> Result<impl Iterator<Item = AbsoluteSystemPathBuf> + use<>, Error> {
         let globs = self.get_workspace_globs(repo_root)?;
         Ok(globs.get_package_jsons(repo_root)?)
     }
@@ -452,7 +438,7 @@ impl PackageManager {
     pub fn workspace_configuration_path(&self) -> Option<&'static str> {
         match self {
             PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9 => {
-                Some("pnpm-workspace.yaml")
+                Some(pnpm::WORKSPACE_CONFIGURATION_PATH)
             }
             PackageManager::Npm
             | PackageManager::Berry
@@ -471,14 +457,23 @@ impl PackageManager {
         let contents = lockfile_path
             .read()
             .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?;
-        self.parse_lockfile(root_package_json, &contents)
+
+        // Read .yarnrc.yml for Berry to get catalog information
+        let yarnrc = if matches!(self, PackageManager::Berry) {
+            Some(yarnrc::YarnRc::from_file(root_path)?)
+        } else {
+            None
+        };
+
+        self.parse_lockfile(root_package_json, &contents, yarnrc)
     }
 
-    #[tracing::instrument(skip(self, root_package_json, contents))]
+    #[tracing::instrument(skip(self, root_package_json, contents, yarnrc))]
     pub fn parse_lockfile(
         &self,
         root_package_json: &PackageJson,
         contents: &[u8],
+        yarnrc: Option<yarnrc::YarnRc>,
     ) -> Result<Box<dyn Lockfile>, Error> {
         Ok(match self {
             PackageManager::Npm => Box::new(turborepo_lockfiles::NpmLockfile::load(contents)?),
@@ -491,16 +486,26 @@ impl PackageManager {
             PackageManager::Bun => {
                 Box::new(turborepo_lockfiles::BunLockfile::from_bytes(contents)?)
             }
-            PackageManager::Berry => Box::new(turborepo_lockfiles::BerryLockfile::load(
-                contents,
-                Some(turborepo_lockfiles::BerryManifest::with_resolutions(
+            PackageManager::Berry => {
+                // Take ownership of yarnrc fields to avoid cloning
+                let (catalog, catalogs) = yarnrc
+                    .map(|y| (y.catalog, y.catalogs))
+                    .unwrap_or((None, None));
+
+                let manifest = turborepo_lockfiles::BerryManifest::new(
                     root_package_json
                         .resolutions
                         .iter()
                         .flatten()
                         .map(|(k, v)| (k.clone(), v.clone())),
-                )),
-            )?),
+                    catalog,
+                    catalogs,
+                );
+                Box::new(turborepo_lockfiles::BerryLockfile::load(
+                    contents,
+                    Some(manifest),
+                )?)
+            }
         })
     }
 
@@ -508,14 +513,16 @@ impl PackageManager {
         &self,
         package_json: &PackageJson,
         patches: &[R],
+        repo_root: &AbsoluteSystemPath,
     ) -> PackageJson {
         match self {
             PackageManager::Berry => yarn::prune_patches(package_json, patches),
             PackageManager::Pnpm9 | PackageManager::Pnpm6 | PackageManager::Pnpm => {
-                pnpm::prune_patches(package_json, patches)
+                pnpm::prune_patches(package_json, patches, repo_root)
             }
-            PackageManager::Yarn | PackageManager::Npm | PackageManager::Bun => {
-                unreachable!("bun, npm, and yarn 1 don't have a concept of patches")
+            PackageManager::Bun => bun::prune_patches(package_json, patches),
+            PackageManager::Yarn | PackageManager::Npm => {
+                unreachable!("npm and yarn 1 don't have a concept of patches")
             }
         }
     }
@@ -550,21 +557,11 @@ impl PackageManager {
     /// be used where `false` would use a `lib` package from the registry.
     pub fn link_workspace_packages(&self, repo_root: &AbsoluteSystemPath) -> bool {
         match self {
-            PackageManager::Berry => {
-                let yarnrc = YarnRc::from_file(repo_root)
-                    .inspect_err(|e| debug!("unable to read yarnrc: {e}"))
-                    .unwrap_or_default();
-                yarnrc.enable_transparent_workspaces
-            }
+            PackageManager::Berry => berry::link_workspace_packages(repo_root),
             PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
-                let npmrc = NpmRc::from_file(repo_root)
-                    .inspect_err(|e| debug!("unable to read npmrc: {e}"))
-                    .unwrap_or_default();
-                npmrc
-                    .link_workspace_packages
-                    // The default for pnpm 9 is false if not explicitly set
-                    // All previous versions had a default of true
-                    .unwrap_or(!matches!(self, PackageManager::Pnpm9))
+                let pnpm_version = pnpm::PnpmVersion::try_from(self)
+                    .expect("attempted to extract pnpm version from non-pnpm package manager");
+                pnpm::link_workspace_packages(pnpm_version, repo_root)
             }
             PackageManager::Yarn | PackageManager::Bun | PackageManager::Npm => true,
         }
@@ -596,7 +593,7 @@ mod tests {
                 return ancestor.to_owned();
             }
         }
-        panic!("Couldn't find Turborepo root from {}", cwd);
+        panic!("Couldn't find Turborepo root from {cwd}");
     }
 
     #[test]
@@ -849,33 +846,16 @@ mod tests {
         Ok(())
     }
 
-    #[test_case(PackageManager::Npm, None, true)]
-    #[test_case(PackageManager::Yarn, None, true)]
-    #[test_case(PackageManager::Bun, None, true)]
-    #[test_case(PackageManager::Pnpm6, None, true)]
-    #[test_case(PackageManager::Pnpm, None, true)]
-    #[test_case(PackageManager::Pnpm, Some(false), false)]
-    #[test_case(PackageManager::Pnpm, Some(true), true)]
-    #[test_case(PackageManager::Pnpm9, None, false)]
-    #[test_case(PackageManager::Pnpm9, Some(true), true)]
-    #[test_case(PackageManager::Pnpm9, Some(false), false)]
-    #[test_case(PackageManager::Berry, None, true)]
-    #[test_case(PackageManager::Berry, Some(false), false)]
-    #[test_case(PackageManager::Berry, Some(true), true)]
-    fn test_link_workspace_packages(pm: PackageManager, enabled: Option<bool>, expected: bool) {
+    #[test_case(PackageManager::Npm)]
+    #[test_case(PackageManager::Yarn)]
+    #[test_case(PackageManager::Bun)]
+    fn test_link_workspace_packages_enabled_by_default(pm: PackageManager) {
         let tmpdir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
-        if let Some(enabled) = enabled {
-            repo_root
-                .join_component(npmrc::NPMRC_FILENAME)
-                .create_with_contents(format!("link-workspace-packages={enabled}"))
-                .unwrap();
-            repo_root
-                .join_component(yarnrc::YARNRC_FILENAME)
-                .create_with_contents(format!("enableTransparentWorkspaces: {enabled}"))
-                .unwrap();
-        }
         let actual = pm.link_workspace_packages(repo_root);
-        assert_eq!(actual, expected);
+        assert!(
+            actual,
+            "all package managers without a special implementation should use workspace packages"
+        );
     }
 }

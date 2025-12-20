@@ -6,6 +6,7 @@ import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/getTransformerHelpers";
 import type { TransformerResults } from "../runner";
 import { loadTurboJson } from "../utils/loadTurboJson";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 const DEFAULT_OUTPUTS = ["dist/**", "build/**"];
 
@@ -16,7 +17,11 @@ const DESCRIPTION =
 const INTRODUCED_IN = "1.7.0";
 const IDEMPOTENT = false;
 
-function migrateConfig(config: SchemaV1) {
+export function migrateConfig(config: SchemaV1) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     if (taskDef.cache !== false) {
       if (!taskDef.outputs) {

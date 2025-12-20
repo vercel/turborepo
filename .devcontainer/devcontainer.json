@@ -1,52 +1,51 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
-// https://github.com/microsoft/vscode-dev-containers/tree/v0.233.0/containers/go
 {
-  "name": "turbo (go, node, rust)",
+  "name": "Turborepo Development Environment",
   "build": {
     "dockerfile": "Dockerfile",
-    "args": {
-      // Update the VARIANT arg to pick a version of Go: 1, 1.18, 1.17
-      // Append -bullseye or -buster to pin to an OS version.
-      // Use -bullseye variants on local arm64/Apple Silicon.
-      "VARIANT": "1.18-bullseye",
-      // Options
-      "NODE_VERSION": "lts/*"
-    }
+    "context": "."
   },
   "runArgs": [
     "--cap-add=SYS_PTRACE",
     "--security-opt",
     "seccomp=unconfined"
   ],
-  // Add the IDs of extensions you want installed when the container is created.
-  "extensions": [
-    "bradlc.vscode-tailwindcss",
-    "christian-kohler.npm-intellisense",
-    "dbaeumer.vscode-eslint",
-    "eamodio.gitlens",
-    "EditorConfig.EditorConfig",
-    "esbenp.prettier-vscode",
-    "github.copilot",
-    "github.vscode-pull-request-github",
-    "golang.go",
-    "heybourn.headwind",
-    "rust-lang.rust-analyzer",
-    "silvenon.mdx",
-    "windmilleng.vscode-go-autotest",
-    "yzhang.markdown-all-in-one"
-  ],
-  // Use 'forwardPorts' to make a list of ports inside the container available locally.
-  // "forwardPorts": [],
-
-  // Use 'postCreateCommand' to run commands after the container is created.
-  "postCreateCommand": "cargo --version",
-  // Invoking `cargo` will eagerly install the toolchain specified in rust-toolchain file
-
-  // Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
-  "remoteUser": "vscode",
   "features": {
-    "docker-in-docker": "latest",
-    "git": "latest",
-    "github-cli": "latest"
-  }
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "bradlc.vscode-tailwindcss",
+        "esbenp.prettier-vscode",
+        "ms-vscode.vscode-json",
+        "ms-vscode.vscode-typescript-next",
+        "tamasfe.even-better-toml",
+        "vadimcn.vscode-lldb"
+      ],
+      "settings": {
+        "rust-analyzer.cargo.buildScripts.enable": true,
+        "rust-analyzer.checkOnSave.command": "clippy",
+        "rust-analyzer.rustfmt.rangeFormatting.enable": true,
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "[rust]": {
+          "editor.defaultFormatter": "rust-lang.rust-analyzer"
+        },
+        "[toml]": {
+          "editor.defaultFormatter": "tamasfe.even-better-toml"
+        },
+        "typescript.preferences.importModuleSpecifier": "relative",
+        "javascript.preferences.importModuleSpecifier": "relative"
+      }
+    }
+  },
+  "forwardPorts": [3000, 3001, 9000, 9001],
+  "postCreateCommand": "pnpm install && rustup component add llvm-tools-preview",
+  "remoteUser": "vscode",
+  "mounts": [
+    "source=${localWorkspaceFolder}/.devcontainer/cache,target=/home/vscode/.cache,type=bind,consistency=cached",
+    "source=${localWorkspaceFolder}/.devcontainer/cargo,target=/usr/local/cargo,type=bind,consistency=cached"
+  ]
 }

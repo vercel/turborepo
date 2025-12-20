@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use biome_deserialize::{json::deserialize_from_json_str, Text};
+use biome_deserialize::{Text, json::deserialize_from_json_str};
 use biome_deserialize_macros::Deserializable;
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
@@ -18,7 +18,7 @@ use turborepo_unescape::UnescapedString;
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
+    pub name: Option<Spanned<String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -37,6 +37,8 @@ pub struct PackageJson {
     pub resolutions: Option<BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pnpm: Option<PnpmConfig>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
     // Unstructured fields kept for round trip capabilities
     #[serde(flatten)]
     pub other: BTreeMap<String, serde_json::Value>,
@@ -54,7 +56,7 @@ pub struct PnpmConfig {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Deserializable)]
 pub struct RawPackageJson {
-    pub name: Option<UnescapedString>,
+    pub name: Option<Spanned<UnescapedString>>,
     pub version: Option<UnescapedString>,
     pub package_manager: Option<Spanned<UnescapedString>>,
     pub dependencies: Option<BTreeMap<String, UnescapedString>>,
@@ -64,6 +66,7 @@ pub struct RawPackageJson {
     pub scripts: BTreeMap<String, Spanned<UnescapedString>>,
     pub resolutions: Option<BTreeMap<String, UnescapedString>>,
     pub pnpm: Option<RawPnpmConfig>,
+    pub patched_dependencies: Option<BTreeMap<String, RelativeUnixPathBuf>>,
     // Unstructured fields kept for round trip capabilities
     #[deserializable(rest)]
     pub other: BTreeMap<Text, serde_json::Value>,
@@ -111,7 +114,7 @@ impl WithMetadata for RawPackageJson {
 impl From<RawPackageJson> for PackageJson {
     fn from(raw: RawPackageJson) -> Self {
         Self {
-            name: raw.name.map(|s| s.into()),
+            name: raw.name.map(|s| s.map(|s| s.into())),
             version: raw.version.map(|s| s.into()),
             package_manager: raw.package_manager.map(|s| s.map(|s| s.into())),
             dependencies: raw
@@ -135,6 +138,7 @@ impl From<RawPackageJson> for PackageJson {
                 .resolutions
                 .map(|m| m.into_iter().map(|(k, v)| (k, v.into())).collect()),
             pnpm: raw.pnpm.map(|p| p.into()),
+            patched_dependencies: raw.patched_dependencies.map(|m| m.into_iter().collect()),
             other: raw
                 .other
                 .into_iter()

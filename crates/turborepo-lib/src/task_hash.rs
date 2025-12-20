@@ -10,8 +10,10 @@ use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
+use turborepo_frameworks::{infer_framework, Slug as FrameworkSlug};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
+use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
 };
@@ -19,10 +21,8 @@ use turborepo_telemetry::events::{
 use crate::{
     cli::EnvMode,
     engine::TaskNode,
-    framework::infer_framework,
     hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash},
     opts::RunOpts,
-    run::task_id::TaskId,
     task_graph::TaskDefinition,
     DaemonClient, DaemonConnector,
 };
@@ -190,7 +190,8 @@ impl PackageInputsHashes {
                         let local_hash_result = scm.get_package_file_hashes(
                             repo_root,
                             package_path,
-                            &task_definition.inputs,
+                            &task_definition.inputs.globs,
+                            task_definition.inputs.default,
                             Some(scm_telemetry),
                         );
                         match local_hash_result {
@@ -228,7 +229,7 @@ pub struct TaskHashTrackerState {
     package_task_env_vars: HashMap<TaskId<'static>, DetailedMap>,
     package_task_hashes: HashMap<TaskId<'static>, String>,
     #[serde(skip)]
-    package_task_framework: HashMap<TaskId<'static>, String>,
+    package_task_framework: HashMap<TaskId<'static>, FrameworkSlug>,
     #[serde(skip)]
     package_task_outputs: HashMap<TaskId<'static>, Vec<AnchoredSystemPathBuf>>,
     #[serde(skip)]
@@ -286,7 +287,7 @@ impl<'a> TaskHasher<'a> {
             .hashes
             .get(task_id)
             .ok_or_else(|| Error::MissingPackageFileHash(task_id.to_string()))?;
-        // See if we infer a framework
+        // See if we can infer a framework
         let framework = do_framework_inference
             .then(|| infer_framework(workspace, is_monorepo))
             .flatten()
@@ -295,21 +296,21 @@ impl<'a> TaskHasher<'a> {
                 debug!(
                     "framework: {}, env_prefix: {:?}",
                     framework.slug(),
-                    framework.env_wildcards()
+                    framework.env(self.env_at_execution_start)
                 );
-                telemetry.track_framework(framework.slug());
+                telemetry.track_framework(framework.slug().to_string());
             });
-        let framework_slug = framework.map(|f| f.slug().to_string());
+        let framework_slug = framework.map(|f| f.slug());
 
         let env_vars = if let Some(framework) = framework {
-            let mut computed_wildcards = framework.env_wildcards().to_vec();
+            let mut computed_wildcards = framework.env(self.env_at_execution_start);
 
             if let Some(exclude_prefix) = self
                 .env_at_execution_start
                 .get("TURBO_CI_VENDOR_ENV_KEY")
                 .filter(|prefix| !prefix.is_empty())
             {
-                let computed_exclude = format!("!{}*", exclude_prefix);
+                let computed_exclude = format!("!{exclude_prefix}*");
                 debug!(
                     "excluding environment variables matching wildcard {}",
                     computed_exclude
@@ -443,18 +444,27 @@ impl<'a> TaskHasher<'a> {
                     "LANG",
                     "SHELL",
                     "PWD",
+                    "XDG_RUNTIME_DIR",
+                    "XAUTHORITY",
+                    "DBUS_SESSION_BUS_ADDRESS",
                     "CI",
                     "NODE_OPTIONS",
                     "COREPACK_HOME",
                     "LD_LIBRARY_PATH",
                     "DYLD_FALLBACK_LIBRARY_PATH",
                     "LIBPATH",
+                    "LD_PRELOAD",
+                    "DYLD_INSERT_LIBRARIES",
                     "COLORTERM",
                     "TERM",
                     "TERM_PROGRAM",
                     "DISPLAY",
                     "TMP",
                     "TEMP",
+                    // Windows
+                    "WINDIR",
+                    "ProgramFiles",
+                    "ProgramFiles(x86)",
                     // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
                     "VSCODE_*",
                     "ELECTRON_RUN_AS_NODE",
@@ -473,12 +483,21 @@ impl<'a> TaskHasher<'a> {
                     "NEXT_*",
                     "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
                     "NOW_BUILDER",
+                    "VC_MICROFRONTENDS_CONFIG_FILE_NAME",
+                    // GitHub Actions - https://docs.github.com/en/actions/reference/workflows-and-actions/variables
+                    "GITHUB_*",
+                    "RUNNER_*",
                     // Command Prompt casing of env variables
                     "APPDATA",
                     "PATH",
                     "PROGRAMDATA",
                     "SYSTEMROOT",
                     "SYSTEMDRIVE",
+                    "USERPROFILE",
+                    "HOMEDRIVE",
+                    "HOMEPATH",
+                    "PNPM_HOME",
+                    "NPM_CONFIG_STORE_DIR",
                 ];
                 let pass_through_env_vars = self.env_at_execution_start.pass_through_env(
                     builtin_pass_through,
@@ -536,7 +555,7 @@ pub fn get_internal_deps_hash(
 
     let file_hashes = package_dirs
         .into_par_iter()
-        .map(|package_dir| scm.get_package_file_hashes::<&str>(root, package_dir, &[], None))
+        .map(|package_dir| scm.get_package_file_hashes::<&str>(root, package_dir, &[], false, None))
         .reduce(
             || Ok(HashMap::new()),
             |acc, hashes| {
@@ -570,7 +589,7 @@ impl TaskHashTracker {
         task_id: TaskId<'static>,
         env_vars: DetailedMap,
         hash: String,
-        framework_slug: Option<String>,
+        framework_slug: Option<FrameworkSlug>,
     ) {
         let mut state = self.state.lock().expect("hash tracker mutex poisoned");
         state
@@ -589,7 +608,7 @@ impl TaskHashTracker {
         state.package_task_env_vars.get(task_id).cloned()
     }
 
-    pub fn framework(&self, task_id: &TaskId) -> Option<String> {
+    pub fn framework(&self, task_id: &TaskId) -> Option<FrameworkSlug> {
         let state = self.state.lock().expect("hash tracker mutex poisoned");
         state.package_task_framework.get(task_id).cloned()
     }

@@ -4,11 +4,12 @@ Thank you for your interest in contributing to Turborepo!
 - [Optional dependencies](#optional-dependencies)
 - [Structure of the repository](#structure-of-the-repository)
 - [Building Turborepo](#building-turborepo)
-  - [TLS implementation](#tls-implementation)
+  - [TLS Implementation](#tls-implementation)
 - [Running tests](#running-tests)
 - [Manually testing `turbo`](#manually-testing-turbo)
   - [Repositories to test with](#repositories-to-test-with)
 - [Debugging tips](#debugging-tips)
+  - [Links in error messages](#links-in-error-messages)
   - [Verbose logging](#verbose-logging)
   - [Crash logs](#crash-logs)
   - [Terminal UI debugging](#terminal-ui-debugging)
@@ -17,11 +18,11 @@ Thank you for your interest in contributing to Turborepo!
   - [Contributing to an existing example](#contributing-to-an-existing-example)
   - [Philosophy for new examples](#philosophy-for-new-examples)
     - [Designing a new example](#designing-a-new-example)
-    - [Testing examples](#testing-examples)
+  - [Testing examples](#testing-examples)
 
 ## General dependencies
 
-You will need to have these dependences installed on your machine to work on this repository:
+You will need to have these dependencies installed on your machine to work on this repository:
 
 - [Rust](https://www.rust-lang.org/tools/install) ([Repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
 - [NodeJS](https://nodejs.org/en) v20
@@ -43,7 +44,7 @@ In general, there are two major areas in the repository:
 
 - The `crates` directory with the Rust code for the `turbo` binary
 - The `packages` directory with JavaScript packages
-- the `examples` directory with examples of how to use Turborepo with other tools and frameworks
+- The `examples` directory with examples of how to use Turborepo with other tools and frameworks
 - The `docs` directory with the documentation for Turborepo
 
 ## Building Turborepo
@@ -89,7 +90,7 @@ cargo test -p <module>
   pnpm test -- --filter=turborepo-tests-integration
   ```
 - A single integration test
-  e.g to run everything in `turborepo-tests/integration/tests/run-summary`:
+  e.g., to run everything in `turborepo-tests/integration/tests/run-summary`:
 
   ```bash
   # Build `turbo` first because the next command doesn't run through `turbo`
@@ -128,7 +129,7 @@ A non-exhaustive list of things to check on:
 - Test with and without daemon
 - Installation scenarios
   - Global only. `turbo` is installed as global binary without a local `turbo` in repository.
-  - Local only. `turbo` is installed as local binary without global `turbo` in PATH. turbo` is invoked via a root package
+  - Local only. `turbo` is installed as local binary without global `turbo` in PATH. `turbo` is invoked via a root package
     script.
   - Global and local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to
     local `turbo`
@@ -157,7 +158,7 @@ TURBO_SITE="http://localhost:3000" cargo build
 
 ### Verbose logging
 
-Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for.
+Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for:
 
 ```bash
 turbo build --vvv
@@ -183,7 +184,7 @@ devturbo run build --ui=tui --skip-infer 2&> ~/tmp/logs.txt
 
 ## Publishing `turbo` to the npm registry
 
-See [the publishing guide](./release.md).
+See [the publishing guide](./RELEASE.md).
 
 ## Contributing to examples
 
@@ -192,7 +193,7 @@ Contributing to examples helps the Turborepo community by showcasing how to use 
 > [!IMPORTANT]
 > As Turborepo usage has grown, the community has contributed more and more examples to the repository. While this is exciting for us on the core team, we're unable to maintain the full surface area of every example, given the constant updates across the breadth of tooling that Turborepo works with in the examples.
 >
-> Because of this, a handful of the examples are explictly marked as maintained by the core team. For the rest, we work with the community to keep them as up to date and correct as possible. If you find a problem with a community-supported template, we ask that you do not open a GitHub Issue for it. Instead, please open a pull request with the needed fixes.
+> Because of this, a handful of the examples are explicitly marked as maintained by the core team. For the rest, we work with the community to keep them as up to date and correct as possible. If you find a problem with a community-supported template, we ask that you do not open a GitHub Issue for it. Instead, please open a pull request with the needed fixes.
 
 The `basic` example is the default used by `create-turbo`.
 
@@ -224,7 +225,7 @@ Key characteristics of a great example include:
 - One technology added to the `basic` example
 - An updated README at the root of the example directory. Make sure to include any steps required to run the example
 - All tasks in `turbo.json` in the example run successfully without any code changes needed
-- Works with every package manager listed in our [Support Policy](https://turbo.build/repo/docs/getting-started/support-policy#package-managers)
+- Works with every package manager listed in our [Support Policy](https://turborepo.com/docs/getting-started/support-policy#package-managers)
 
 Once you've created your example (with prior approval, as discussed above), you can submit a pull request to the repository.
 

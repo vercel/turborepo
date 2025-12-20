@@ -1,7 +1,8 @@
+#![cfg(feature = "git2")]
 use tracing::Span;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{package_deps::GitHashes, Error};
+use crate::{Error, GitHashes};
 
 #[tracing::instrument(skip(git_root, hashes, to_hash))]
 pub(crate) fn hash_objects(
@@ -49,7 +50,7 @@ mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::hash_objects;
-    use crate::{find_git_root, package_deps::GitHashes};
+    use crate::{GitHashes, find_git_root};
 
     #[test]
     fn test_read_object_hashes() {

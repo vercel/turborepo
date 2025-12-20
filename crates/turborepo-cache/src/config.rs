@@ -144,7 +144,7 @@ impl FromStr for CacheConfig {
                         text: s.to_string(),
                         s: ty.to_string(),
                         span: Some(SourceSpan::new(idx.into(), ty.len())),
-                    })
+                    });
                 }
             }
 
@@ -190,7 +190,7 @@ impl FromStr for CacheActions {
                         c,
                         text: String::new(),
                         span: None,
-                    })
+                    });
                 }
             }
         }
@@ -221,12 +221,12 @@ mod test {
     )]
     #[test_case("", Ok(CacheConfig { local: CacheActions { read: false, write: false }, remote: CacheActions { read: false, write: false } }) ; "empty"
     )]
-    #[test_case("local:r,local:w", Err(Error::DuplicateKeys { text: "local:r,local:w".to_string(), key: "local", span: Some(SourceSpan::new(8_usize.into(), 5_usize.into())) }) ; "duplicate local key"
+    #[test_case("local:r,local:w", Err(Error::DuplicateKeys { text: "local:r,local:w".to_string(), key: "local", span: Some(SourceSpan::new(8_usize.into(), 5_usize)) }) ; "duplicate local key"
     )]
-    #[test_case("local:rr", Err(Error::DuplicateActions { text: "local:rr".to_string(), action: "r (read)", span: Some(SourceSpan::new(6_usize.into(), 5_usize.into())) }) ; "duplicate action")]
-    #[test_case("remote:r,local=rx", Err(Error::InvalidCacheTypeAndAction { text: "remote:r,local=rx".to_string(), pair: "local=rx".to_string(), span: Some(SourceSpan::new(9_usize.into(), 8_usize.into())) }) ; "invalid key action pair")]
-    #[test_case("local:rx", Err(Error::InvalidCacheAction { c: 'x', text: "local:rx".to_string(), span: Some(SourceSpan::new(6_usize.into(), 5_usize.into())) }) ; "invalid action")]
-    #[test_case("file:r", Err(Error::InvalidCacheType { s: "file".to_string(), text: "file:r".to_string(), span: Some(SourceSpan::new(0_usize.into(), 4_usize.into())) }) ; "invalid cache type")]
+    #[test_case("local:rr", Err(Error::DuplicateActions { text: "local:rr".to_string(), action: "r (read)", span: Some(SourceSpan::new(6_usize.into(), 5_usize)) }) ; "duplicate action")]
+    #[test_case("remote:r,local=rx", Err(Error::InvalidCacheTypeAndAction { text: "remote:r,local=rx".to_string(), pair: "local=rx".to_string(), span: Some(SourceSpan::new(9_usize.into(), 8_usize)) }) ; "invalid key action pair")]
+    #[test_case("local:rx", Err(Error::InvalidCacheAction { c: 'x', text: "local:rx".to_string(), span: Some(SourceSpan::new(6_usize.into(), 5_usize)) }) ; "invalid action")]
+    #[test_case("file:r", Err(Error::InvalidCacheType { s: "file".to_string(), text: "file:r".to_string(), span: Some(SourceSpan::new(0_usize.into(), 4_usize)) }) ; "invalid cache type")]
     fn test_cache_config(s: &str, expected: Result<CacheConfig, Error>) {
         assert_eq!(CacheConfig::from_str(s), expected);
     }

@@ -1,13 +1,12 @@
 [package]
 name = "turbo-trace"
 version = "0.1.0"
-edition = "2021"
+edition = { workspace = true }
 license = "MIT"
 
 [dependencies]
 camino.workspace = true
 clap = { version = "4.5.17", features = ["derive"] }
-futures = { workspace = true }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 miette = { workspace = true, features = ["fancy"] }
 oxc_resolver = { workspace = true }

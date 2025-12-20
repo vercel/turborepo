@@ -3,7 +3,7 @@ name = "pidlock"
 version = "0.1.4"
 authors = ["Paul Hummer <paul@eventuallyanyway.com>"]
 license = "MIT"
-edition = "2021"
+edition = { workspace = true }
 description = "A library for using pidfiles as resource locks"
 repository = "https://github.com/rockstar/pidlock"
 keywords = ["pidfile", "file", "filelock", "server", "lock"]

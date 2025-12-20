@@ -50,8 +50,8 @@ Open http://localhost:3000.
 To shutdown all running containers:
 
 ```
-# Stop all running containers
-docker kill $(docker ps -q) && docker rm $(docker ps -a -q)
+# Stop running containers started by docker-compse
+ docker-compose -f docker-compose.yml down
 ```
 
 ### Remote Caching

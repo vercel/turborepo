@@ -26,10 +26,7 @@ pub fn setup_fixture(
 
     Command::new(bash)
         .arg("-c")
-        .arg(format!(
-            "{} {} {}",
-            unix_script_path, fixture, package_manager
-        ))
+        .arg(format!("{unix_script_path} {fixture} {package_manager}"))
         .current_dir(test_dir)
         .spawn()?
         .wait()?;
@@ -43,20 +40,32 @@ pub fn setup_fixture(
 /// Creates a snapshot file for each set of arguments.
 /// Note that the command must return valid JSON
 #[macro_export]
-macro_rules! check_json {
-    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => $query:expr,)*) => {
+macro_rules! check_json_output {
+    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
         {
             let tempdir = tempfile::tempdir()?;
             $crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
             $(
-                println!("Running command: `turbo {} {}` in {}", $command, $query, $fixture);
-                let output = assert_cmd::Command::cargo_bin("turbo")?
-                    .arg($command)
-                    .arg($query)
-                    .current_dir(tempdir.path())
-                    .output()?;
+                let mut command = assert_cmd::Command::cargo_bin("turbo")?;
 
-                let stdout = String::from_utf8(output.stdout)?;
+                command
+                    .arg($command)
+                    // Ensure telemetry can initialize by providing a writable config directory.
+                    // This prevents debug builds from printing errors to stdout when telemetry
+                    // init fails due to missing config directories.
+                    .env("TURBO_CONFIG_DIR_PATH", tempdir.path())
+                    // Disable telemetry and various warnings to ensure clean JSON output
+                    .env("DO_NOT_TRACK", "1")
+                    .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+                    .env("TURBO_GLOBAL_WARNING_DISABLED", "1");
+
+                $(
+                    command.arg($query);
+                )*
+
+                let output = command.current_dir(tempdir.path()).output()?;
+
+                let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
 
                 println!("stderr: {}", stderr);
@@ -68,7 +77,13 @@ macro_rules! check_json {
                     $name.replace(' ', "_"),
                     $package_manager
                 );
-                insta::assert_json_snapshot!(test_name, query_output);
+
+                insta::with_settings!({ filters => vec![(r"\\\\", "/")]}, {
+                    insta::assert_json_snapshot!(
+                        format!("{}", test_name),
+                        query_output
+                    )
+                });
             )*
         }
     }

@@ -13,7 +13,12 @@ import {
   DownloadError,
   logger,
 } from "@turbo/utils";
-import { tryGitCommit, tryGitInit, tryGitAdd } from "../../utils/git";
+import {
+  tryGitCommit,
+  tryGitInit,
+  tryGitAdd,
+  removeGitDirectory,
+} from "../../utils/git";
 import { isOnline } from "../../utils/isOnline";
 import { transforms } from "../../transforms";
 import { TransformError } from "../../transforms/errors";
@@ -78,7 +83,7 @@ export async function create(
 
   let isMaintainedByCoreTeam = false;
 
-  const { packageManager, skipInstall, skipTransforms } = opts;
+  const { packageManager, skipInstall, skipTransforms, noGit } = opts;
 
   const [online, availablePackageManagers] = await Promise.all([
     isOnline(),
@@ -292,7 +297,7 @@ export async function create(
         `${packageManagerMeta.executable} turbo login`
       )}`
     );
-    logger.log("   - Learn more: https://turbo.build/repo/remote-cache");
+    logger.log("   - Learn more: https://turborepo.com/remote-cache");
     logger.log();
     logger.log("- Run commands with Turborepo:");
     availableScripts
@@ -305,6 +310,13 @@ export async function create(
         );
       });
     logger.log("- Run a command twice to hit cache");
+  }
+
+  // remove .git directory if --no-git flag is used
+  if (noGit) {
+    if (!removeGitDirectory(root)) {
+      logger.warn("Failed to remove '.git' directory");
+    }
   }
 
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });

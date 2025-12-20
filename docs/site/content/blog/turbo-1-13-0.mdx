@@ -1,0 +1,159 @@
+---
+title: Turborepo 1.13
+date: 2024/03/21
+description: Turborepo 1.13 brings a new and improved local development experience along with other enhancements.
+tag: 'web development'
+---
+
+<h1 className="text-center">Turborepo 1.13</h1>
+
+import { Authors } from '#components/authors';
+import { Date } from '#components/blog/date';
+import { Callout } from '#components/callout';
+import { ThemeAwareImage } from '#components/theme-aware-image';
+import { ExperimentalBadge } from '#components/experimental-badge';
+
+<Date>Thursday, March 21st, 2024</Date>
+
+<Authors authors={['gregsoltis', 'chrisolszewski']} />
+
+Turborepo 1.13 brings a new and improved local development experience along with other enhancements, including:
+
+- [**New terminal UI**](#new-terminal-ui) <ExperimentalBadge />: Interact with your tasks locally in an enhanced terminal experience
+- [**Enable the fastest defaults**](#enable-the-fastest-defaults): Make your local development environment faster with `turbo scan`
+- [**CI logging improvements**](#ci-logging-improvements): Support for four major providers and automatic unfurling of errored tasks
+- [**Enhanced `prune` support**](#enhanced-package-manager-support-for-prune): Bug fixes and improved stability for `turbo prune`
+
+Update today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
+
+## New terminal UI
+
+Until today, `turbo` would output logs as a stream while you were working on your libraries and applications. This could be overwhelming at times since the interleaved logs made it difficult to understand what was going on with a specific task.
+
+With this release, we’re shipping a new, experimental terminal UI, which allows you to:
+
+- **Toggle through the logs of each of your tasks**, making them easier to follow and read
+- **Interact with your persistent tasks** by entering and exiting the task’s shell, giving you the ability to re-run unit tests, for example
+- **See the duration for each of your tasks** in a bar graph
+
+<ThemeAwareImage
+  className="my-4 flex justify-center"
+  light={{
+    alt: 'A screenshot of a terminal running `turbo scan`.',
+    src: '/images/blog/turbo-1-13-0/experimental-ui.gif',
+    props: {
+      width: 800,
+      height: 350,
+      className: 'dark:hidden block',
+    },
+  }}
+  dark={{
+    alt: 'A screenshot of a terminal running `turbo scan`.',
+    src: '/images/blog/turbo-1-13-0/experimental-ui.gif',
+    props: {
+      width: 800,
+      height: 350,
+      className: 'hidden dark:block',
+    },
+  }}
+/>
+
+To enable the new UI, either use the `--experimental-ui` flag or add the `experimentalUI` flag to your `turbo.json`:
+
+```json title="./turbo.json"
+{
+  "experimentalUI": true
+}
+```
+
+**We are looking forward to hearing your feedback on this new feature.** Please [visit the RFC on GitHub Discussions](https://github.com/vercel/turbo/discussions/7802) to share your thoughts.
+
+## Enable the fastest defaults
+
+We want your local development experience to be as fast as possible - through even more than the parallelization and caching of `turbo`.
+
+Running `turbo scan` will inspect your machine for optimizations that make your experience faster.
+
+<ThemeAwareImage
+  className="my-4 flex justify-center"
+  light={{
+    alt: 'A screenshot of a terminal running `turbo scan`.',
+    src: '/images/blog/turbo-1-13-0/turbo-scan-light.png',
+    props: {
+      width: 934,
+      height: 869,
+      className: 'dark:hidden block rounded-xl border border-2',
+    },
+  }}
+  dark={{
+    alt: 'A screenshot of a terminal running `turbo scan`.',
+    src: '/images/blog/turbo-1-13-0/turbo-scan-dark.png',
+    props: {
+      width: 1868,
+      height: 1800,
+      className:
+        'hidden dark:block rounded-xl border border-2 dark:border-gray-700',
+    },
+  }}
+/>
+
+For more information, [visit the documentation](/docs/reference/scan).
+
+<Callout type="info">
+  This command is for your local development environment. It will not optimize
+  your CI.
+</Callout>
+
+## CI logging improvements
+
+This release adds support for automatically grouping successful logs in:
+
+- Azure Pipelines
+- TeamCity
+- Travis CI
+
+These providers join GitHub Actions, which was already supported.
+
+Additionally, Turborepo now ungroups any tasks that did not complete successfully so you can find errorful tasks faster.
+
+<ThemeAwareImage
+  className="my-4 flex justify-center"
+  light={{
+    alt: "A screenshot of a GitHub Action that ran a `turbo` task. The logs for tasks that completed successfully are folded while the errored task shows it's logs in full with red highlighting.",
+    src: '/images/blog/turbo-1-13-0/github-action.png',
+    props: {
+      width: 3306,
+      height: 2607,
+      className: 'dark:hidden block rounded-xl',
+    },
+  }}
+  dark={{
+    alt: "A screenshot of a GitHub Action that ran a `turbo` task. The logs for tasks that completed successfully are folded while the errored task shows it's logs in full with red highlighting.",
+    src: '/images/blog/turbo-1-13-0/github-action.png',
+    props: {
+      width: 3306,
+      height: 2607,
+      className: 'hidden dark:block rounded-xl',
+    },
+  }}
+/>
+
+## Enhanced package manager support for `prune`
+
+Turborepo’s `prune` command is an important optimization for Docker users, helping them to create lightweight images from monorepos.
+
+pnpm lockfile support has been upgraded by adding support for [Workspace relative path references](https://pnpm.io/workspaces#referencing-workspace-packages-through-their-relative-path) and respecting the [`link-workspace-packages` property in `.npmrc`](https://pnpm.io/npmrc#link-workspace-packages).
+
+Yarn4 support has been improved by supporting [`resolutions` in `package.json`](https://yarnpkg.com/configuration/manifest#resolutions) at the root of your Workspace.
+
+## Community
+
+Since releasing [Turborepo 1.12](/blog/turbo-1-12-0) we've seen incredible adoption and community growth:
+
+- [24.6k+ GitHub Stars](https://github.com/vercel/turbo)
+- [2.3M+ weekly NPM downloads](https://www.npmjs.com/package/turbo)
+- 283 years of compute time saved using [Vercel Remote Cache](https://vercel.com/docs/concepts/monorepos/remote-caching)
+
+Turborepo is the result of the combined work of all of its contributors, including our core team.
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice.

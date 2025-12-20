@@ -19,12 +19,14 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use output::{StdWriter, TaskOutput};
 use regex::Regex;
 use tokio::sync::mpsc;
-use tracing::{debug, error, warn, Span};
+use tracing::{debug, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
+use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
+use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
@@ -37,12 +39,10 @@ use crate::{
     engine::{Engine, ExecutionOptions},
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
-    process::ProcessManager,
     run::{
         global_hash::GlobalHashableInputs,
         summary::{self, GlobalHashSummary, RunTracker},
         task_access::TaskAccess,
-        task_id::TaskId,
         RunCache,
     },
     task_hash::{self, PackageInputsHashes, TaskHashTrackerState, TaskHasher},
@@ -113,14 +113,6 @@ pub enum Error {
     InternalErrors(String),
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
-    #[error(
-        "'{package}' is configured with a {mfe_config_filename}, but doesn't have \
-         '@vercel/microfrontends' listed as a dependency."
-    )]
-    MissingMFEDependency {
-        package: String,
-        mfe_config_filename: String,
-    },
 }
 
 impl<'a> Visitor<'a> {
@@ -316,7 +308,6 @@ impl<'a> Visitor<'a> {
                     };
 
                     let tracker = self.run_tracker.track_task(info.clone().into_owned());
-                    let spaces_client = self.run_tracker.spaces_task_client();
                     let parent_span = Span::current();
                     let execution_telemetry = package_task_event.child();
 
@@ -327,7 +318,6 @@ impl<'a> Visitor<'a> {
                                 tracker,
                                 output_client,
                                 callback,
-                                spaces_client,
                                 &execution_telemetry,
                             )
                             .await
@@ -456,9 +446,6 @@ impl<'a> Visitor<'a> {
         vendor_behavior: Option<&VendorBehavior>,
     ) -> OutputClient<impl std::io::Write> {
         let behavior = match self.run_opts.log_order {
-            crate::opts::ResolvedLogOrder::Stream if self.run_tracker.spaces_enabled() => {
-                turborepo_ui::OutputClientBehavior::InMemoryBuffer
-            }
             crate::opts::ResolvedLogOrder::Stream => {
                 turborepo_ui::OutputClientBehavior::Passthrough
             }

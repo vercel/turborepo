@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 
 use miette::{Diagnostic, Report};
 use petgraph::graph::{Graph, NodeIndex};
-use tracing::{warn, Instrument};
+use tracing::{Instrument, warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -10,7 +10,7 @@ use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    dep_splitter::DependencySplitter, PackageGraph, PackageInfo, PackageName, PackageNode,
+    PackageGraph, PackageInfo, PackageName, PackageNode, dep_splitter::DependencySplitter,
 };
 use crate::{
     discovery::{
@@ -59,6 +59,21 @@ pub enum Error {
     Discovery(#[from] crate::discovery::Error),
 }
 
+/// Attempts to extract the file path that caused the error from the error chain
+/// Falls back to the lockfile path if no specific file can be determined
+fn extract_file_path_from_error(
+    error: &Error,
+    package_manager: &crate::package_manager::PackageManager,
+    repo_root: &AbsoluteSystemPath,
+) -> AbsoluteSystemPathBuf {
+    match error {
+        Error::PackageJsonMissingName(path) => path.clone(),
+        // TODO: We're handling every other error here. We could handle situations where the
+        // lockfile isn't the issue better.
+        _ => package_manager.lockfile_path(repo_root),
+    }
+}
+
 impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
     pub fn new(repo_root: &'a AbsoluteSystemPath, root_package_json: PackageJson) -> Self {
         Self {
@@ -78,6 +93,12 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
     pub fn with_allow_no_package_manager(mut self, allow_no_package_manager: bool) -> Self {
         self.package_discovery
             .with_allow_no_package_manager(allow_no_package_manager);
+        self
+    }
+
+    pub fn with_package_manager(mut self, package_manager: PackageManager) -> Self {
+        self.package_discovery
+            .with_package_manager(Some(package_manager));
         self
     }
 }
@@ -237,7 +258,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         let name = PackageName::Other(
             json.name
                 .clone()
-                .ok_or(Error::PackageJsonMissingName(package_json_path))?,
+                .ok_or(Error::PackageJsonMissingName(package_json_path))?
+                .into_inner(),
         );
         let entry = PackageInfo {
             package_json: json,
@@ -438,9 +460,13 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         let lockfile = match self.populate_lockfile().await {
             Ok(lockfile) => Some(lockfile),
             Err(e) => {
+                let problematic_file_path =
+                    extract_file_path_from_error(&e, &package_manager, self.repo_root);
+
                 warn!(
-                    "Issues occurred when constructing package graph. Turbo will function, but \
-                     some features may not be available:\n {:?}",
+                    "An issue occurred while attempting to parse {}. Turborepo will still \
+                     function, but some features may not be available:\n {:?}",
+                    problematic_file_path,
                     Report::new(e)
                 );
                 None
@@ -590,7 +616,9 @@ impl PackageInfo {
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
+    use std::{assert_matches::assert_matches, collections::HashMap};
+
+    use turborepo_errors::Spanned;
 
     use super::*;
 
@@ -619,7 +647,7 @@ mod test {
         let builder = PackageGraphBuilder::new(
             &root,
             PackageJson {
-                name: Some("root".into()),
+                name: Some(Spanned::new("root".into())),
                 ..Default::default()
             },
         )
@@ -629,19 +657,45 @@ mod test {
             map.insert(
                 root.join_component("a"),
                 PackageJson {
-                    name: Some("foo".into()),
+                    name: Some(Spanned::new("foo".into())),
                     ..Default::default()
                 },
             );
             map.insert(
                 root.join_component("b"),
                 PackageJson {
-                    name: Some("foo".into()),
+                    name: Some(Spanned::new("foo".into())),
                     ..Default::default()
                 },
             );
             map
         }));
         assert_matches!(builder.build().await, Err(Error::DuplicateWorkspace { .. }));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_missing_name_field_warning_message() {
+        let package_json_path =
+            AbsoluteSystemPathBuf::new("/my-project/packages/app/package.json").unwrap();
+        let missing_name_error = Error::PackageJsonMissingName(package_json_path.clone());
+
+        let fake_repo_root = AbsoluteSystemPathBuf::new("/my-project").unwrap();
+        let fake_package_manager = crate::package_manager::PackageManager::Npm;
+        let extracted_path = extract_file_path_from_error(
+            &missing_name_error,
+            &fake_package_manager,
+            &fake_repo_root,
+        );
+        assert_eq!(extracted_path, package_json_path);
+
+        let warning_message = format!(
+            "An issue occurred while attempting to parse {}. Turborepo will still function, but \
+             some features may not be available:\n {:?}",
+            package_json_path,
+            miette::Report::new(missing_name_error)
+        );
+
+        insta::assert_snapshot!("missing_name_field_warning_message", warning_message);
     }
 }

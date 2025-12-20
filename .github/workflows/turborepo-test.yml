@@ -26,49 +26,126 @@ jobs:
       with-tailwind-example: ${{ steps.filter.outputs.with-tailwind-example }}
       rest: ${{ steps.filter.outputs.rest }}
     steps:
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            docs:
-              - "docs/**"
-            basic-example:
-              - "examples/basic/**"
-              - "turborepo-tests/example-basic-*/**"
-              - "turborepo-tests/helpers/**"
-            kitchen-sink-example:
-              - "examples/kitchen-sink/**"
-              - "turborepo-tests/example-kitchen-sink-*/**"
-              - "turborepo-tests/helpers/**"
-            non-monorepo-example:
-              - "examples/non-monorepo/**"
-              - "turborepo-tests/example-non-monorepo-*/**"
-              - "turborepo-tests/helpers/**"
-            with-svelte-example:
-              - "examples/with-svelte/**"
-              - "turborepo-tests/example-with-svelte-*/**"
-              - "turborepo-tests/helpers/**"
-            with-tailwind-example:
-              - "examples/with-tailwind/**"
-              - "turborepo-tests/example-with-svelte-*/**"
-              - "turborepo-tests/helpers/**"
-            rest:
-              - "!(docs/**|examples/**)**"
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  integration:
-    name: Turborepo Integration
+      - name: Check path changes
+        id: filter
+        run: |
+          # Determine the base and head commits to compare
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            # For pull requests, compare the base branch to the current HEAD
+            git fetch origin ${{ github.base_ref }}
+            BASE_COMMIT="origin/${{ github.base_ref }}"
+            HEAD_COMMIT="HEAD"
+          else
+            # For pushes, use the before and after SHAs
+            BASE_COMMIT="${{ github.event.before }}"
+            HEAD_COMMIT="${{ github.event.after }}"
+          fi
+
+          echo "Comparing changes between $BASE_COMMIT and $HEAD_COMMIT"
+
+          # Function to check if files in given paths have changed
+          check_path_changes() {
+            local name=$1
+            shift
+            local paths=("$@")
+
+            # Create a command that checks all paths
+            local cmd="git diff --name-only $BASE_COMMIT $HEAD_COMMIT -- "
+            for path in "${paths[@]}"; do
+              cmd+="\"$path\" "
+            done
+
+            # Run the command and check if there are any results
+            if eval "$cmd" | grep -q .; then
+              echo "$name=true" >> $GITHUB_OUTPUT
+              echo "Changes detected in $name paths"
+            else
+              echo "$name=false" >> $GITHUB_OUTPUT
+              echo "No changes in $name paths"
+            fi
+          }
+
+          # Function to make path checking more readable
+          check_paths() {
+            local name=$1
+            local path_string=$2
+
+            # Convert the comma-separated string to an array
+            IFS=',' read -ra path_array <<< "$path_string"
+
+            # Call the check_path_changes function with the name and paths
+            check_path_changes "$name" "${path_array[@]}"
+          }
+
+          # Check each path pattern with a more readable syntax
+          echo "Checking path patterns..."
+
+          check_paths "docs" "docs/"
+          check_paths "basic-example" "examples/basic/,turborepo-tests/example-basic-*/,turborepo-tests/helpers/"
+          check_paths "kitchen-sink-example" "examples/kitchen-sink/,turborepo-tests/example-kitchen-sink-*/,turborepo-tests/helpers/"
+          check_paths "non-monorepo-example" "examples/non-monorepo/,turborepo-tests/example-non-monorepo-*/,turborepo-tests/helpers/"
+          check_paths "with-svelte-example" "examples/with-svelte/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
+          check_paths "with-tailwind-example" "examples/with-tailwind/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
+
+          # Handle the "rest" pattern - files that are NOT in examples/ or docs/
+          CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
+
+          # Filter to only include files that do NOT start with examples/ or docs/
+          FILES_NOT_IN_EXAMPLES_OR_DOCS=$(echo "$CHANGED_FILES" | grep -v -E "^(examples/|docs/)" || true)
+
+          if [ -n "$FILES_NOT_IN_EXAMPLES_OR_DOCS" ]; then
+            echo "rest=true" >> $GITHUB_OUTPUT
+            echo "Changes detected outside examples/ and docs/ directories"
+          else
+            echo "rest=false" >> $GITHUB_OUTPUT
+            echo "No changes outside examples/ and docs/ directories"
+          fi
+
+  generate-integration-test-matrix:
+    name: Generate integration test matrix
     needs:
       - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      test-paths: ${{ steps.generate-matrix.outputs.test-paths }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate test path matrix
+        id: generate-matrix
+        run: |
+          TEST_PATHS=$(command ls -1A turborepo-tests/integration/tests | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "test-paths=$TEST_PATHS" >> $GITHUB_OUTPUT
+          echo "Generated test paths: $TEST_PATHS"
+
+          # Check for .t files directly in turborepo-tests/integration/tests (not in subdirectories)
+          if find turborepo-tests/integration/tests -maxdepth 1 -name "*.t" -type f | grep -q .; then
+            echo "::error::Found .t files directly in turborepo-tests/integration/tests/ which would be excluded from the test matrix"
+            echo "::error::Test files must be placed in subdirectories under turborepo-tests/integration/tests/"
+            find turborepo-tests/integration/tests -maxdepth 1 -name "*.t" -type f
+            exit 1
+          fi
+
+  integration:
+    name: Turborepo Integration (${{ matrix.os.runner }}, ${{ matrix.test-path }})
+    needs:
+      - find-changes
+      - generate-integration-test-matrix
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 45
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     strategy:
       fail-fast: false
       matrix:
         os:
           - runner: ubuntu-latest
-          - runner: macos-13
+          - runner: macos-latest
           - runner: windows-latest
+        test-path: ${{ fromJson(needs.generate-integration-test-matrix.outputs.test-paths) }}
     steps:
       # On Windows, set autocrlf to input so that when the repo is cloned down
       # the fixtures retain their line endings and don't get updated to CRLF.
@@ -86,10 +163,13 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
+          node-version: "18.20.2" # TODO: Update integration tests with changed log output in Node.js 22
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
 
       - name: Setup Graphviz
         uses: ts-graphviz/setup-graphviz@v2
@@ -108,12 +188,18 @@ jobs:
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
       - name: Integration Tests
+        timeout-minutes: 45
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }}
+          turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} -- "tests/${{ matrix.test-path }}"
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
@@ -123,6 +209,10 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # sccache timeout configuration to prevent hangs
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
 
   rust_lint:
     name: Rust lints
@@ -138,7 +228,6 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
 
       - name: Run cargo fmt check
         run: |
@@ -148,13 +237,13 @@ jobs:
         run: npx @taplo/cli@0.5.2 format --check
 
       - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses
 
       - name: Run cargo clippy
         run: |
-          cargo clippy --workspace --features rustls-tls -- --deny clippy::all
+          cargo clippy --workspace --features rustls-tls --all-targets -- --deny clippy::all
 
   rust_check:
     # We test dependency changes only on main
@@ -171,11 +260,40 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
+          node: "false"
 
       - name: Run cargo check
         run: |
           cargo check --workspace
+
+  turbo_types_check:
+    name: "@turbo/types codegen check"
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: "Setup Node"
+        uses: ./.github/actions/setup-node
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Build turbo-types schemas
+        run: |
+          turbo build --filter=@turbo/types
+
+      - name: Check for uncommitted changes
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::Generated schema files are out of sync with TypeScript types"
+            echo "::error::Please run 'turbo build --filter=@turbo/types' and commit the changes"
+            git diff
+            exit 1
+          fi
 
   rust_test:
     strategy:
@@ -185,14 +303,15 @@ jobs:
           - name: ubuntu
             runner: ubuntu-latest
           - name: macos
-            runner: macos-13
+            runner: macos-latest
           - name: windows
             runner: windows-latest
+        partition: [1, 2]
     runs-on: ${{ matrix.os.runner }}
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
-    name: Turborepo Rust testing on ${{ matrix.os.name }}
+    name: Turborepo Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/2)
     steps:
       - name: Set git to use LF line endings
         run: |
@@ -207,22 +326,27 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
+          node: "false"
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
-      - name: Run tests
-        timeout-minutes: 120
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Build tests
+        timeout-minutes: 15
         # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
           if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo test --workspace --exclude turborepo-napi
+              cargo nextest run --workspace --exclude turborepo-napi --no-run
           else
-              cargo test --workspace
+              cargo nextest run --workspace --no-run
           fi
         shell: bash
         env:
@@ -233,6 +357,32 @@ jobs:
           CARGO_INCREMENTAL: 0
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # sccache timeout configuration to prevent hangs
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
+
+      - name: Run tests
+        timeout-minutes: 30
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+              cargo nextest run --workspace --exclude turborepo-napi --partition hash:${{ matrix.partition }}/2
+          else
+              cargo nextest run --workspace --partition hash:${{ matrix.partition }}/2
+          fi
+        shell: bash
+        env:
+          SCCACHE_BUCKET: turborepo-sccache
+          SCCACHE_REGION: us-east-2
+          # Only use sccache if we're in the Vercel repo.
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # sccache timeout configuration to prevent hangs
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
 
   basic-example:
     name: "`basic` example"
@@ -338,6 +488,7 @@ jobs:
       - integration
       - rust_lint
       - rust_check
+      - turbo_types_check
       - rust_test
       - basic-example
       - kitchen-sink-example
@@ -364,6 +515,7 @@ jobs:
           subjob ${{needs.integration.result}}
           subjob ${{needs.rust_lint.result}}
           subjob ${{needs.rust_check.result}}
+          subjob ${{needs.turbo_types_check.result}}
           subjob ${{needs.rust_test.result}}
           subjob ${{needs.basic-example.result}}
           subjob ${{needs.kitchen-sink-example.result}}

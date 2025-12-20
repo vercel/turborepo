@@ -10,14 +10,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       basic:
         patterns:
@@ -31,14 +32,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       kitchen-sink:
         patterns:
@@ -47,12 +49,19 @@ updates:
           - "minor"
     ignore:
       # Types are just...broken?
+      - dependency-name: "express"
       - dependency-name: "@types/express"
-      # Remix is behind on updating these peer deps and npm doesn't like it
+      # Remix is messed up in npm
+      - dependency-name: "@remix-run/node"
+      - dependency-name: "@remix-run/react"
+      - dependency-name: "@remix-run/server-runtime"
+      - dependency-name: "@remix-run/dev"
       - dependency-name: "react"
       - dependency-name: "react-dom"
       - dependency-name: "@types/react"
       - dependency-name: "@types/react-dom"
+      # TODO: Investigate why upgrading breaks admin:build
+      - dependency-name: "bunchee"
       # We can't upgrade versions of this due to npm
       - dependency-name: "vite"
 
@@ -62,14 +71,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       non-monorepo:
         patterns:
@@ -83,14 +93,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       with-shell-commands:
         patterns:
@@ -104,14 +115,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       with-svelte:
         patterns:
@@ -125,14 +137,15 @@ updates:
       interval: "weekly"
     labels:
       - "area: examples"
+    commit-message:
+      prefix: examples(deps)
+      prefix-development: examples(dev-deps)
     open-pull-requests-limit: 1
     pull-request-branch-name:
       separator: "-"
     versioning-strategy: "increase"
     allow:
       - dependency-type: "direct"
-    assignees:
-      - "anthonyshew"
     groups:
       with-tailwind:
         patterns:

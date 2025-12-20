@@ -15,10 +15,10 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-13
+          - host: macos-latest
             target: "x86_64-apple-darwin"
             container-options: "--rm"
-          - host: macos-13
+          - host: macos-latest
             target: "aarch64-apple-darwin"
             container-options: "--rm"
           - host: ubuntu-latest
@@ -49,12 +49,6 @@ jobs:
       - name: Setup Container
         if: ${{ matrix.settings.container-setup }}
         run: ${{ matrix.settings.container-setup }}
-
-      - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
-        with:
-          version: "26.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto

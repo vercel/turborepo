@@ -10,21 +10,21 @@
         "RUNNER_OS"
       ],
       "inputs": [
-        "../version.txt",
-        "../crates/**/*.rs",
+        "$TURBO_ROOT$/version.txt",
+        "$TURBO_ROOT$/crates/**/*.rs",
         // Rust crates
-        "../crates/*/Cargo.toml",
-        "../Cargo.toml",
-        "../Cargo.lock",
-        "!../crates/**/target"
+        "$TURBO_ROOT$/crates/*/Cargo.toml",
+        "$TURBO_ROOT$/Cargo.toml",
+        "$TURBO_ROOT$/Cargo.lock",
+        "!$TURBO_ROOT$/crates/**/target"
       ]
     },
     "build": {
       "outputs": [
-        "../target/debug/turbo",
-        "../target/debug/turbo.exe",
-        "../target/release/turbo",
-        "../target/release/turbo.exe"
+        "$TURBO_ROOT$/target/debug/turbo",
+        "$TURBO_ROOT$/target/debug/turbo.exe",
+        "$TURBO_ROOT$/target/release/turbo",
+        "$TURBO_ROOT$/target/release/turbo.exe"
       ],
       "dependsOn": [
         "rust-src"
@@ -39,6 +39,10 @@
         "AWS_ACCESS_KEY_ID",
         "AWS_SECRET_ACCESS_KEY"
       ]
+    },
+    "release-native": {
+      "dependsOn": ["@turbo/releaser#build"],
+      "cache": false
     }
   }
 }

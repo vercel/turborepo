@@ -8,8 +8,9 @@
     "build:ts": "tsc -b tsconfig.project.json",
     "lint:prettier": "turbo run lint:prettier",
     "check:toml": "taplo format --check",
-    "turbo": "pnpm run build:turbo && node turbow.js",
-    "turbo-prebuilt": "node turbow.js",
+    "docs:dev": "turbo run dev --filter=turborepo-docs",
+    "turbo": "pnpm run build:turbo && pnpm -- turbo",
+    "turbo-prebuilt": "pnpm -- turbo",
     "prepare": "husky install",
     "test": "turbo run test",
     "test:integration": "pnpm --filter turborepo-tests-integration exec prysk",
@@ -17,12 +18,13 @@
     "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open"
   },
   "devDependencies": {
-    "@taplo/cli": "^0.5.2",
-    "eslint": "^8.55.0",
-    "husky": "^8.0.0",
-    "lint-staged": "^13.1.0",
-    "prettier": "^2.8.7",
-    "semver": "^7.3.8",
+    "@taplo/cli": "0.5.2",
+    "@types/node": "22.15.3",
+    "eslint": "8.55.0",
+    "husky": "8.0.3",
+    "lint-staged": "13.1.0",
+    "prettier": "2.8.7",
+    "semver": "7.5.0",
     "typescript": "5.5.4"
   },
   "lint-staged": {
@@ -36,11 +38,11 @@
       "taplo format"
     ],
     "*.rs": [
-      "cargo fmt --"
+      "bash -c 'cargo fmt'"
     ]
   },
-  "packageManager": "pnpm@8.14.0",
+  "packageManager": "pnpm@10.25.0",
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   }
 }

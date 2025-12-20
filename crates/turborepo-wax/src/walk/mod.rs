@@ -84,6 +84,7 @@ use walkdir::{DirEntry, Error, WalkDir};
 
 pub use crate::walk::glob::{GlobEntry, GlobWalker};
 use crate::{
+    BuildError, Pattern,
     walk::{
         filter::{
             CancelWalk, HierarchicalIterator, Isomeric, SeparatingFilter, SeparatingFilterInput,
@@ -91,7 +92,6 @@ use crate::{
         },
         glob::FilterAny,
     },
-    BuildError, Pattern,
 };
 
 type FileFiltrate<T> = Result<T, WalkError>;
@@ -118,8 +118,8 @@ where
 
     fn substituent(separation: &Separation<Self>) -> Self::Substituent<'_> {
         match separation {
-            Separation::Filtrate(ref filtrate) => filtrate.get(),
-            Separation::Residue(ref residue) => residue.get().get(),
+            Separation::Filtrate(filtrate) => filtrate.get(),
+            Separation::Residue(residue) => residue.get().get(),
         }
     }
 }
@@ -240,8 +240,8 @@ enum WalkErrorKind {
 impl WalkErrorKind {
     pub fn path(&self) -> Option<&Path> {
         match self {
-            WalkErrorKind::Io { ref path, .. } => path.as_ref().map(PathBuf::as_ref),
-            WalkErrorKind::LinkCycle { ref leaf, .. } => Some(leaf.as_ref()),
+            WalkErrorKind::Io { path, .. } => path.as_ref().map(PathBuf::as_ref),
+            WalkErrorKind::LinkCycle { leaf, .. } => Some(leaf.as_ref()),
         }
     }
 }
@@ -1083,16 +1083,16 @@ impl From<EntryResidue> for TreeResidue<()> {
 mod tests {
     use std::{collections::HashSet, path::PathBuf};
 
-    use build_fs_tree::{dir, file, Build, FileSystemTree};
+    use build_fs_tree::{Build, FileSystemTree, dir, file};
     use path_slash::PathBufExt;
     use tempfile::TempDir;
 
     use crate::{
-        walk::{
-            filter::{HierarchicalIterator, Separation, TreeResidue},
-            Entry, FileIterator, LinkBehavior, PathExt, WalkBehavior,
-        },
         Glob,
+        walk::{
+            Entry, FileIterator, LinkBehavior, PathExt, WalkBehavior,
+            filter::{HierarchicalIterator, Separation, TreeResidue},
+        },
     };
 
     macro_rules! assert_set_eq {

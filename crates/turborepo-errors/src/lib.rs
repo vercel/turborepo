@@ -1,6 +1,16 @@
+//! Diagnostic utilities to preserve source for more actionable error messages
+//! Used in conjunction with `miette` to include source snippets in errors.
+//! Any parsing of files should attempt to produce value of `Spanned<T>` so if
+//! we need to reference where T came from the span is available.
+
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
+
 use std::{
     fmt::Display,
-    ops::{Deref, Range},
+    iter,
+    iter::Once,
+    ops::{Deref, DerefMut, Range},
     sync::Arc,
 };
 
@@ -16,7 +26,7 @@ use thiserror::Error;
 /// used.
 pub const TURBO_SITE: &str = match option_env!("TURBO_SITE") {
     Some(url) => url,
-    None => "https://turbo.build",
+    None => "https://turborepo.com",
 };
 
 /// A little helper to convert from biome's syntax errors to miette.
@@ -76,6 +86,24 @@ pub struct Spanned<T> {
     pub text: Option<Arc<str>>,
 }
 
+impl<T> IntoIterator for Spanned<T> {
+    type Item = T;
+    type IntoIter = Once<T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        iter::once(self.value)
+    }
+}
+
+impl<'a, T> IntoIterator for &'a Spanned<T> {
+    type Item = &'a T;
+    type IntoIter = Once<&'a T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        iter::once(&self.value)
+    }
+}
+
 impl<T: Deserializable> Deserializable for Spanned<T> {
     fn deserialize(
         value: &impl DeserializableValue,
@@ -90,6 +118,12 @@ impl<T: Deserializable> Deserializable for Spanned<T> {
             path: None,
             text: None,
         })
+    }
+}
+
+impl Spanned<String> {
+    pub fn as_str(&self) -> &str {
+        self.value.as_str()
     }
 }
 
@@ -172,7 +206,7 @@ impl<T> Spanned<T> {
         let path = self.path.as_ref().map_or(default_path, |p| p.as_ref());
         match self.range.clone().zip(self.text.as_ref()) {
             Some((range, text)) => (Some(range.into()), NamedSource::new(path, text.to_string())),
-            None => (None, NamedSource::new(path, String::new())),
+            None => (None, NamedSource::new(path, Default::default())),
         }
     }
 
@@ -204,6 +238,13 @@ impl<T> Deref for Spanned<T> {
         &self.value
     }
 }
+
+impl<T> DerefMut for Spanned<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.value
+    }
+}
+
 pub trait WithMetadata {
     fn add_text(&mut self, text: Arc<str>);
     fn add_path(&mut self, path: Arc<str>);

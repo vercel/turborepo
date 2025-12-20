@@ -6,20 +6,26 @@ use ratatui::{
     widgets::{Block, List, ListItem, Padding},
 };
 
-const BIND_LIST: [&str; 12] = [
-    "m      - Toggle this help popup",
-    "↑ or j - Select previous task",
-    "↓ or k - Select next task",
-    "h      - Toggle task list",
-    "p      - Toggle pinned task selection",
-    "/      - Filter tasks to search term",
-    "ESC    - Clear filter",
-    "i      - Interact with task",
-    "Ctrl+z - Stop interacting with task",
-    "c      - Copy logs selection (Only when logs are selected)",
-    "u      - Scroll logs up",
-    "d      - Scroll logs down",
-];
+const BIND_LIST: &[&str] = [
+    "m       - Toggle this help popup",
+    "↑ or k  - Select previous task",
+    "↓ or j  - Select next task",
+    "h       - Toggle task list",
+    "p       - Toggle pinned task selection",
+    "/       - Filter tasks to search term",
+    "ESC     - Clear filter",
+    "i       - Interact with task",
+    "Ctrl+z  - Stop interacting with task",
+    "c       - Copy logs selection (Only when logs are selected)",
+    "u       - Scroll logs up",
+    "d       - Scroll logs down",
+    "Shift+u - Page logs up",
+    "Shift+d - Page logs down",
+    "Shift+c - Clear logs",
+    "t       - Jump to top of logs",
+    "b       - Jump to bottom of logs",
+]
+.as_slice();
 
 pub fn popup_area(area: Rect) -> Rect {
     let screen_width = area.width;
@@ -63,10 +69,8 @@ pub fn popup(area: Rect) -> List<'static> {
         let binds_not_visible = BIND_LIST.len().saturating_sub(available_height);
 
         let pluralize = if binds_not_visible > 1 { "s" } else { "" };
-        let message = format!(
-            " {} more bind{}. Make your terminal taller. ",
-            binds_not_visible, pluralize
-        );
+        let message =
+            format!(" {binds_not_visible} more bind{pluralize}. Make your terminal taller. ");
         Line::from(message)
     } else {
         Line::from("")

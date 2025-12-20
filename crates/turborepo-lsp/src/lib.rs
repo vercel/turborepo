@@ -7,6 +7,8 @@
 //! as well as the architecture documentation in `packages/turbo-vsc`.
 
 #![feature(box_patterns)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 #![warn(clippy::unwrap_used)]
 
@@ -17,17 +19,17 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use itertools::{chain, Itertools};
+use itertools::{Itertools, chain};
 use jsonc_parser::{
-    ast::{ObjectPropName, StringLit},
     CollectOptions,
+    ast::{ObjectPropName, StringLit},
 };
 use serde_json::Value;
 use tokio::sync::watch::{Receiver, Sender};
 use tower_lsp::{
+    Client, LanguageServer,
     jsonrpc::{Error, Result as LspResult},
     lsp_types::*,
-    Client, LanguageServer,
 };
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_lib::{
@@ -85,8 +87,12 @@ impl LanguageServer for Backend {
                     || {
                         let can_start_server = true;
                         let can_kill_server = false;
-                        let connector =
-                            DaemonConnector::new(can_start_server, can_kill_server, &repo_root);
+                        let connector = DaemonConnector::new(
+                            can_start_server,
+                            can_kill_server,
+                            &repo_root,
+                            None,
+                        );
                         connector.connect()
                     },
                 )
@@ -107,7 +113,7 @@ impl LanguageServer for Backend {
                     self.client
                         .log_message(
                             MessageType::ERROR,
-                            format!("version mismatch when connecting to daemon: {}", message),
+                            format!("version mismatch when connecting to daemon: {message}"),
                         )
                         .await;
 
@@ -120,7 +126,7 @@ impl LanguageServer for Backend {
                     self.client
                         .log_message(
                             MessageType::ERROR,
-                            format!("failed to connect to daemon: {}", e),
+                            format!("failed to connect to daemon: {e}"),
                         )
                         .await;
                     return Err(Error::internal_error());
@@ -133,20 +139,32 @@ impl LanguageServer for Backend {
 
             let mut lock = pidlock::Pidlock::new(paths.lsp_pid_file.as_std_path().to_owned());
 
-            if let Err(e) = lock.acquire() {
-                self.client
-                    .log_message(
-                        MessageType::ERROR,
-                        format!(
-                            "failed to acquire pidlock, is another lsp instance running? - {}",
-                            e
-                        ),
-                    )
-                    .await;
-                return Err(Error::internal_error());
+            match lock.acquire() {
+                Ok(()) => {
+                    *self.pidlock.lock().expect("only fails if poisoned") = Some(lock);
+                }
+                Err(pidlock::PidlockError::AlreadyOwned) => {
+                    // Another LSP instance (e.g., another VSCode window) already holds the lock.
+                    // This lock is only used for exclusive optimize features, so proceed without
+                    // it.
+                    self.client
+                        .log_message(
+                            MessageType::INFO,
+                            "another LSP instance holds lock; continuing without exclusive \
+                             optimize features.",
+                        )
+                        .await;
+                }
+                Err(e) => {
+                    self.client
+                        .log_message(
+                            MessageType::ERROR,
+                            format!("Failed to acquire pidlock: {e}"),
+                        )
+                        .await;
+                    return Err(Error::internal_error());
+                }
             }
-
-            *self.pidlock.lock().expect("only fails if poisoned") = Some(lock);
         }
 
         Ok(InitializeResult {
@@ -270,7 +288,7 @@ impl LanguageServer for Backend {
         self.client
             .log_message(
                 MessageType::INFO,
-                format!("finding references for {:?}", referenced_task),
+                format!("finding references for {referenced_task:?}"),
             )
             .await;
 
@@ -325,7 +343,7 @@ impl LanguageServer for Backend {
             let package_json_name = if repo_root.contains(&wd.package_json) {
                 Some("//")
             } else {
-                package_json.name.as_deref()
+                package_json.name.as_ref().map(|name| name.as_str())
             };
 
             // todo: use jsonc_ast instead of text search
@@ -336,13 +354,13 @@ impl LanguageServer for Backend {
                 .map(|(p, t)| (Some(p), t))
                 .unwrap_or((None, &referenced_task));
 
-            if let (Some(package), Some(package_name)) = (package, package_json_name) {
-                if package_name != package {
-                    continue;
-                }
+            if let (Some(package), Some(package_name)) = (package, package_json_name)
+                && package_name != package
+            {
+                continue;
             };
 
-            let Some(start) = data.find(&format!("\"{}\"", task)) else {
+            let Some(start) = data.find(&format!("\"{task}\"")) else {
                 continue;
             };
             let end = start + task.len() + 2;
@@ -443,7 +461,7 @@ impl LanguageServer for Backend {
     /// actions that the user can run
     async fn code_action(&self, params: CodeActionParams) -> LspResult<Option<CodeActionResponse>> {
         self.client
-            .log_message(MessageType::INFO, format!("{:#?}", params))
+            .log_message(MessageType::INFO, format!("{params:#?}"))
             .await;
 
         let mut code_actions = vec![];
@@ -613,7 +631,7 @@ impl LanguageServer for Backend {
             .iter()
             .flat_map(|p| p.scripts.keys().map(move |k| (p.name.clone(), k)))
             .map(|(package, s)| CompletionItem {
-                label: format!("{}#{}", package.unwrap_or_default(), s),
+                label: format!("{}#{}", package.unwrap_or_default().into_inner(), s),
                 kind: Some(CompletionItemKind::FIELD),
                 ..Default::default()
             });
@@ -708,7 +726,7 @@ impl Backend {
                     {
                         Some("//".to_string())
                     } else {
-                        package_json.name
+                        package_json.name.map(|name| name.into_inner())
                     };
                     Some(
                         package_json
@@ -877,7 +895,7 @@ impl Backend {
                     let expression = string.value.strip_prefix('!').unwrap_or(&string.value); // strip the negation
                     if let Err(glob) = wax::Glob::new(expression) {
                         diagnostics.push(Diagnostic {
-                            message: format!("Invalid glob: {}", glob),
+                            message: format!("Invalid glob: {glob}"),
                             range: convert_ranges(&rope, collapse_string_range(string.range)),
                             severity: Some(DiagnosticSeverity::ERROR),
                             ..Default::default()
@@ -949,7 +967,7 @@ fn report_invalid_packages_and_tasks(
         // we specified a package, but that package doesn't exist
         (_, Some(package)) if !packages.contains(&package) => {
             diagnostics.push(Diagnostic {
-                message: format!("The package `{}` does not exist in {:?}", package, packages),
+                message: format!("The package `{package}` does not exist in {packages:?}"),
                 range,
                 severity: Some(DiagnosticSeverity::ERROR),
                 code: Some(NumberOrString::String("turbo:no-such-package".to_string())),
@@ -966,10 +984,7 @@ fn report_invalid_packages_and_tasks(
                 .contains(&package) =>
         {
             diagnostics.push(Diagnostic {
-                message: format!(
-                    "The task `{}` does not exist in the package `{}`.",
-                    task, package
-                ),
+                message: format!("The task `{task}` does not exist in the package `{package}`."),
                 range,
                 severity: Some(DiagnosticSeverity::ERROR),
                 code: Some(NumberOrString::String(
@@ -981,7 +996,7 @@ fn report_invalid_packages_and_tasks(
         // the task doesn't exist anywhere, so we have a problem
         (None, None) => {
             diagnostics.push(Diagnostic {
-                message: format!("The task `{}` does not exist.", task),
+                message: format!("The task `{task}` does not exist."),
                 range,
                 severity: Some(DiagnosticSeverity::ERROR),
                 code: Some(NumberOrString::String("turbo:no-such-task".to_string())),
@@ -992,10 +1007,7 @@ fn report_invalid_packages_and_tasks(
         // all
         (None, Some(package)) => {
             diagnostics.push(Diagnostic {
-                message: format!(
-                    "The task `{}` does not exist in the package `{}`.",
-                    task, package
-                ),
+                message: format!("The task `{task}` does not exist in the package `{package}`."),
                 range,
                 severity: Some(DiagnosticSeverity::ERROR),
                 code: Some(NumberOrString::String("turbo:no-such-task".to_string())),

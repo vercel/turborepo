@@ -267,7 +267,7 @@ impl Grid {
                 );
                 cell.select(false);
             }
-        };
+        }
         self.selection = None;
     }
 
@@ -290,7 +290,7 @@ impl Grid {
                 );
                 cell.select(true);
             }
-        };
+        }
     }
 
     pub fn update_selection(&mut self, row: u16, col: u16) {
@@ -314,7 +314,7 @@ impl Grid {
                 );
                 cell.select(true);
             }
-        };
+        }
     }
 
     fn translate_pos(&self, row: u16, col: u16) -> AbsPos {
@@ -820,11 +820,7 @@ impl Grid {
         let in_scroll_region = self.in_scroll_region();
         // need to account for clamping by both row_clamp_top and by
         // saturating_sub
-        let extra_lines = if count > self.pos.row {
-            count - self.pos.row
-        } else {
-            0
-        };
+        let extra_lines = count.saturating_sub(self.pos.row);
         self.pos.row = self.pos.row.saturating_sub(count);
         let lines = self.row_clamp_top(in_scroll_region);
         self.scroll_down(lines + extra_lines);
@@ -866,12 +862,9 @@ impl Grid {
             let scrolled = self.row_inc_scroll(1);
             prev_pos.row -= scrolled;
             let new_pos = self.pos;
-            self.drawing_row_mut(prev_pos.row)
-                // we assume self.pos.row is always valid, and so prev_pos.row
-                // must be valid because it is always less than or equal to
-                // self.pos.row
-                .unwrap()
-                .wrap(wrap && prev_pos.row + 1 == new_pos.row);
+            if let Some(row) = self.drawing_row_mut(prev_pos.row) {
+                row.wrap(wrap && prev_pos.row + 1 == new_pos.row);
+            }
         }
     }
 
@@ -958,5 +951,57 @@ impl Selection {
             }
         };
         Self { start, end }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    #[test]
+    fn col_wrap_with_invalid_row_does_not_panic() {
+        // This test verifies that col_wrap handles the case where drawing_row_mut
+        // returns None gracefully, without panicking.
+
+        let mut parser = crate::Parser::new(24, 80, 0);
+
+        // Create a scenario where we have a very small terminal
+        parser.screen_mut().set_size(2, 5);
+
+        // Fill the screen to trigger scrolling
+        parser.process(b"12345"); // Fill first row
+        parser.process(b"67890"); // This should wrap and trigger col_wrap
+        parser.process(b"abcde"); // This should cause more scrolling
+        parser.process(b"fghij"); // And more scrolling
+
+        // At this point, we should have scrolled enough that some row references
+        // in col_wrap might be invalid. The key is that this should not panic.
+
+        // Try to trigger more wrapping with a wide character that might cause
+        // the edge case where prev_pos.row is out of bounds
+        parser.process(b"klmno");
+        parser.process(b"pqrst");
+
+        // If we get here without panicking, the fix is working
+        assert_eq!(parser.screen().size(), (2, 5));
+    }
+
+    #[test]
+    fn col_wrap_edge_case_with_scrolling() {
+        // Another test to specifically target the edge case in col_wrap
+        let mut parser = crate::Parser::new(3, 10, 0);
+
+        // Fill multiple lines to cause scrolling
+        for i in 0..10 {
+            let line = format!("line{i:06}");
+            parser.process(line.as_bytes());
+            parser.process(b"\r\n");
+        }
+
+        // Now try to trigger col_wrap with a scenario that might cause
+        // drawing_row_mut to return None
+        parser.process(b"1234567890"); // Exactly fill the width
+        parser.process(b"X"); // This should trigger col_wrap
+
+        // The test passes if we don't panic
+        assert!(parser.screen().contents().contains('X'));
     }
 }

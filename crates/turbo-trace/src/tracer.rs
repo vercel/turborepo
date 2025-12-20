@@ -7,17 +7,17 @@ use oxc_resolver::{
     EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
 };
 use swc_common::{
+    FileName, SourceMap,
     comments::SingleThreadedComments,
     errors::{ColorConfig, Handler},
     input::StringInput,
-    FileName, SourceMap,
 };
 use swc_ecma_ast::EsVersion;
-use swc_ecma_parser::{lexer::Lexer, Capturing, EsSyntax, Parser, Syntax, TsSyntax};
+use swc_ecma_parser::{Capturing, EsSyntax, Parser, Syntax, TsSyntax, lexer::Lexer};
 use swc_ecma_visit::VisitWith;
 use thiserror::Error;
 use tokio::task::JoinSet;
-use tracing::{debug, error};
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 
 use crate::import_finder::ImportFinder;
@@ -48,7 +48,7 @@ pub enum TraceError {
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
     #[error(transparent)]
-    PathEncoding(Arc<PathError>),
+    PathError(Arc<PathError>),
     #[error("tracing a root file `{0}`, no parent found")]
     RootFile(AbsoluteSystemPathBuf),
     #[error("failed to resolve import to `{import}` in `{file_path}`")]
@@ -172,6 +172,7 @@ impl Tracer {
         } else {
             Syntax::Es(EsSyntax {
                 jsx: true,
+                import_attributes: true,
                 ..Default::default()
             })
         };
@@ -212,7 +213,7 @@ impl Tracer {
                     match resolved.into_path_buf().try_into().map_err(Arc::new) {
                         Ok(path) => files.push(path),
                         Err(err) => {
-                            errors.push(TraceError::PathEncoding(err));
+                            errors.push(TraceError::PathError(err));
                             continue;
                         }
                     }
@@ -223,8 +224,8 @@ impl Tracer {
                 Err(err) => {
                     if !import.starts_with(".") {
                         // Try to resolve the import as a type import via `@/types/<import>`
-                        let type_package = format!("@types/{}", import);
-                        debug!("trying to resolve type import: {}", type_package);
+                        let type_package = format!("@types/{import}");
+                        debug!("trying to resolve type import: {type_package}");
                         let resolved_type_import = resolver
                             .resolve(file_dir, type_package.as_str())
                             .ok()
@@ -386,10 +387,10 @@ impl Tracer {
         let resolver = Self::create_resolver(self.ts_config.as_deref());
 
         while let Some((file_path, file_depth)) = self.files.pop() {
-            if let Some(max_depth) = max_depth {
-                if file_depth > max_depth {
-                    continue;
-                }
+            if let Some(max_depth) = max_depth
+                && file_depth > max_depth
+            {
+                continue;
             }
             self.trace_file(&resolver, file_path, file_depth, &mut seen)
                 .await;
@@ -423,7 +424,7 @@ impl Tracer {
                     source_map: self.source_map.clone(),
                     files: HashMap::new(),
                     errors: vec![TraceError::GlobError(Arc::new(e))],
-                }
+                };
             }
         };
 
@@ -453,7 +454,22 @@ impl Tracer {
                     return (errors, None);
                 };
 
-                for import in imported_files {
+                for mut import in imported_files {
+                    // Windows has this annoying habit of abbreviating paths
+                    // like `C:\Users\Admini~1` instead of `C:\Users\Administrator`
+                    // We canonicalize to get the proper, full length path
+                    if cfg!(windows) {
+                        match import.to_realpath() {
+                            Ok(path) => {
+                                import = path;
+                            }
+                            Err(err) => {
+                                errors.push(TraceError::PathError(Arc::new(err)));
+                                return (errors, None);
+                            }
+                        }
+                    }
+
                     if shared_self
                         .files
                         .iter()

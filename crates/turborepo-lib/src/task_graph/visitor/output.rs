@@ -25,21 +25,21 @@ impl<W: Write> TaskOutput<W> {
         }
     }
 
-    pub fn stdout(&self) -> Either<OutputWriter<W>, TaskSender> {
+    pub fn stdout(&self) -> Either<OutputWriter<'_, W>, TaskSender> {
         match self {
             TaskOutput::Direct(client) => Either::Left(client.stdout()),
             TaskOutput::UI(client) => Either::Right(client.clone()),
         }
     }
 
-    pub fn stderr(&self) -> Either<OutputWriter<W>, TaskSender> {
+    pub fn stderr(&self) -> Either<OutputWriter<'_, W>, TaskSender> {
         match self {
             TaskOutput::Direct(client) => Either::Left(client.stderr()),
             TaskOutput::UI(client) => Either::Right(client.clone()),
         }
     }
 
-    pub fn task_logs(&self) -> Either<OutputWriter<W>, TaskSender> {
+    pub fn task_logs(&self) -> Either<OutputWriter<'_, W>, TaskSender> {
         match self {
             TaskOutput::Direct(client) => Either::Left(client.stdout()),
             TaskOutput::UI(client) => Either::Right(client.clone()),
@@ -94,7 +94,7 @@ impl<W: Write> CacheOutput for TaskCacheOutput<W> {
                 let writer = direct.output_prefixed_writer();
                 turborepo_ui::replay_logs(writer, log_file)
             }
-            TaskCacheOutput::UI(task) => turborepo_ui::replay_logs(task, log_file),
+            TaskCacheOutput::UI(task) => turborepo_ui::replay_logs_with_crlf(task, log_file),
         }
     }
 }

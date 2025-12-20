@@ -1,5 +1,5 @@
 use turborepo_ci::Vendor;
-use turborepo_ui::{ceprint, ceprintln, color, ColorConfig, BOLD, GREY, UNDERLINE, YELLOW};
+use turborepo_ui::{BOLD, ColorConfig, GREY, UNDERLINE, YELLOW, ceprint, ceprintln, color};
 
 use crate::EnvironmentVariableMap;
 
@@ -64,7 +64,7 @@ impl PlatformEnv {
         let docs_message = color!(
             color_config,
             UNDERLINE,
-            "https://turbo.build/repo/docs/platform-environment-variables"
+            "https://turborepo.com/docs/crafting-your-repository/using-environment-variables#platform-environment-variables"
         );
 
         match ci {

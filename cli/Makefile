@@ -51,11 +51,8 @@ publish-turbo: build
 	# Include the patch in the log.
 	git format-patch HEAD~1 --stdout | cat
 
-	npm config set --location=project "//registry.npmjs.org/:_authToken" $(NPM_TOKEN)
-
 	# Publishes the native npm modules.
-	# TODO: do this without goreleaser.
-	goreleaser release --rm-dist -f combined-shim.yml $(SKIP_PUBLISH)
+	turbo release-native --env-mode=loose -- $(SKIP_PUBLISH)
 
 	# Split packing from the publish step so that npm locates the correct .npmrc file.
 	cd $(CLI_DIR)/../packages/turbo && pnpm pack --pack-destination=$(CLI_DIR)/../
@@ -71,6 +68,7 @@ publish-turbo: build
 ifneq ($(SKIP_PUBLISH),--skip-publish)
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../
+	npm --version
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../create-turbo-$(TURBO_VERSION).tgz
 	npm publish -ddd --tag $(TURBO_TAG) $(CLI_DIR)/../turbo-codemod-$(TURBO_VERSION).tgz

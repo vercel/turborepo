@@ -37,8 +37,12 @@ impl InputOptions<'_> {
         match event {
             crossterm::event::Event::Key(k) => translate_key_event(self, k),
             crossterm::event::Event::Mouse(m) => match m.kind {
-                crossterm::event::MouseEventKind::ScrollDown => Some(Event::ScrollDown),
-                crossterm::event::MouseEventKind::ScrollUp => Some(Event::ScrollUp),
+                crossterm::event::MouseEventKind::ScrollDown => {
+                    Some(Event::ScrollWithMomentum(Direction::Down))
+                }
+                crossterm::event::MouseEventKind::ScrollUp => {
+                    Some(Event::ScrollWithMomentum(Direction::Up))
+                }
                 crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
                 | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
                     Some(Event::Mouse(m))
@@ -81,16 +85,25 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('/') if matches!(options.focus, LayoutSections::TaskList) => {
             Some(Event::SearchEnter)
         }
+        // If we're in locked search and user presses `/` clear the search
+        KeyCode::Char('/') if matches!(options.focus, LayoutSections::SearchLocked { .. }) => {
+            Some(Event::SearchExit {
+                restore_scroll: false,
+            })
+        }
         KeyCode::Esc if options.is_help_popup_open => Some(Event::ToggleHelpPopup),
         KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: true,
             })
         }
-        KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
+        KeyCode::Esc if matches!(options.focus, LayoutSections::SearchLocked { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: false,
             })
+        }
+        KeyCode::Enter if matches!(options.focus, LayoutSections::Search { .. }) => {
+            Some(Event::SearchLock)
         }
         KeyCode::Up if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchScroll {
@@ -112,6 +125,11 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Char('u') => Some(Event::ScrollUp),
         KeyCode::Char('d') => Some(Event::ScrollDown),
+        KeyCode::PageUp | KeyCode::Char('U') => Some(Event::PageUp),
+        KeyCode::PageDown | KeyCode::Char('D') => Some(Event::PageDown),
+        KeyCode::Char('t') => Some(Event::JumpToLogsTop),
+        KeyCode::Char('b') => Some(Event::JumpToLogsBottom),
+        KeyCode::Char('C') => Some(Event::ClearLogs),
         KeyCode::Char('m') => Some(Event::ToggleHelpPopup),
         KeyCode::Char('p') => Some(Event::TogglePinnedTask),
         KeyCode::Up | KeyCode::Char('k') => Some(Event::Up),
@@ -317,7 +335,7 @@ fn encode_key(key: KeyEvent) -> Vec<u8> {
                     10 => "\x1b[21",
                     11 => "\x1b[23",
                     12 => "\x1b[24",
-                    _ => panic!("unhandled fkey number {}", n),
+                    _ => panic!("unhandled fkey number {n}"),
                 };
                 let encoded_mods = encode_modifiers(mods);
                 if encoded_mods == 0 {

@@ -17,6 +17,11 @@ env:
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
   RELEASE_TURBO_CLI: true # TODO: do we need this?
 
+permissions:
+  id-token: write # Required for npm Trusted Publishing using OIDC
+  contents: write # Allow workflow to checkout code from the repository
+  pull-requests: write # Allows the PR for post-release to be created
+
 on:
   workflow_dispatch:
     inputs:
@@ -52,12 +57,19 @@ on:
         required: false
         type: string
         default: ""
+      sha:
+        description: "Override the SHA to use for the release. Should rarely be used, usually only for debugging."
+        required: false
+        type: string
+        default: ""
 
 jobs:
   stage:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -91,9 +103,18 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node: "false"
 
-      - name: Run Rust Unit Tests
-        run: cargo groups test turborepo
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Run tests
+        timeout-minutes: 30
+        run: |
+          cargo nextest run --workspace
+        shell: bash
 
   js-smoke-test:
     name: JS Package Tests
@@ -109,7 +130,8 @@ jobs:
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "20"
+          rust: "false"
+          capnproto: "false"
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
@@ -119,33 +141,25 @@ jobs:
 
   build-rust:
     name: "Build Rust"
-    needs: [stage, rust-smoke-test, js-smoke-test]
+    needs: [stage]
     strategy:
       fail-fast: false
       matrix:
         settings:
           - host: macos-latest
             target: "x86_64-apple-darwin"
-            container-options: "--rm"
           - host: macos-latest
             target: "aarch64-apple-darwin"
-            container-options: "--rm"
           - host: ubuntu-latest
-            container-options: "--platform=linux/amd64 --rm"
             target: "x86_64-unknown-linux-musl"
             setup: "sudo apt-get update && sudo apt-get install -y build-essential clang lldb llvm libclang-dev curl musl-tools sudo unzip"
           - host: ubuntu-latest
-            container-options: "--rm"
             target: "aarch64-unknown-linux-musl"
             rust-build-env: 'CC_aarch64_unknown_linux_musl=clang AR_aarch64_unknown_linux_musl=llvm-ar RUSTFLAGS="-Clink-self-contained=yes -Clinker=rust-lld"'
             setup: "sudo apt-get update && sudo apt-get install -y build-essential musl-tools clang llvm gcc-aarch64-linux-gnu binutils-aarch64-linux-gnu"
           - host: windows-latest
             target: x86_64-pc-windows-msvc
-            container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
-    container:
-      image: ${{ matrix.settings.container }}
-      options: ${{ matrix.settings.container-options }}
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
@@ -154,26 +168,14 @@ jobs:
         with:
           ref: "${{ needs.stage.outputs.stage-branch }}"
 
-      - name: Setup Container
-        if: ${{ matrix.settings.container-setup }}
-        run: ${{ matrix.settings.container-setup }}
-
       - name: Setup Protoc
-        uses: arduino/setup-protoc@v3
+        uses: ./.github/actions/setup-protoc
         with:
           version: "26.x"
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto
-
-      - name: Setup Rust Up
-        if: ${{ matrix.settings.container-setup }}
-        # setup-rust-toolchain uses the --retry-connrefused flag with curl to install rustup
-        # this flag was added in curl 7.52.0, but the Ubuntu version we use only has 7.47.0
-        run: |
-          curl --proto '=https' --tlsv1.2 --retry 10 --location --silent --show-error --fail "https://sh.rustup.rs" | sh -s -- --default-toolchain none -y
-          echo "${CARGO_HOME:-$HOME/.cargo}/bin" >> $GITHUB_PATH
 
       - name: Rust Setup
         uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -201,7 +203,7 @@ jobs:
   npm-publish:
     name: "Publish To NPM"
     runs-on: ubuntu-latest
-    needs: [stage, build-rust]
+    needs: [stage, build-rust, rust-smoke-test, js-smoke-test]
     steps:
       - name: Show Stage Commit
         run: echo "${{ needs.stage.outputs.stage-branch }}"
@@ -223,15 +225,6 @@ jobs:
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
 
-      - name: Install GoReleaser
-        uses: goreleaser/goreleaser-action@v6
-        with:
-          distribution: goreleaser-pro
-          version: v1.18.2
-          install-only: true
-        env:
-          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-
       - name: Download Rust artifacts
         uses: actions/download-artifact@v4
         with:
@@ -242,15 +235,15 @@ jobs:
           mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
           mv rust-artifacts/turbo-aarch64-unknown-linux-musl cli/dist-linux-arm64
           cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-arm64
-          mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-amd64
-          mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-amd64
-          mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-amd64
+          mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-x64
+          mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-x64
+          mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-x64
+
+      - name: Ensure npm version
+        run: npm install -g npm@11.5.1
 
       - name: Perform Release
         run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
-        env:
-          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts

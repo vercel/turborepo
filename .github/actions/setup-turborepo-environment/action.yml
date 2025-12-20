@@ -7,20 +7,32 @@ inputs:
   node-version:
     description: Node version
     required: false
-    default: "18"
+  node:
+    description: "Setup Node.js environment"
+    required: false
+    default: "true"
+  rust:
+    description: "Setup Rust environment"
+    required: false
+    default: "true"
+  capnproto:
+    description: "Setup Capnproto"
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
   steps:
     - name: "Setup Node"
+      if: inputs.node == 'true'
       uses: ./.github/actions/setup-node
       with:
-        extra-flags: --no-optional
         node-version: ${{ inputs.node-version }}
       env:
         PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
     - name: "Setup Rust"
+      if: inputs.rust == 'true'
       uses: ./.github/actions/setup-rust
       with:
         shared-cache-key: turborepo-debug-build
@@ -29,4 +41,5 @@ runs:
         github-token: ${{ inputs.github-token }}
 
     - name: "Setup capnproto"
+      if: inputs.capnproto == 'true'
       uses: ./.github/actions/setup-capnproto

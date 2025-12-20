@@ -10,7 +10,7 @@
 //! we can track areas of run that are performing sub-optimally.
 
 use tokio::time::error::Elapsed;
-use tokio_stream::{iter, StreamExt};
+use tokio_stream::{StreamExt, iter};
 use turbopath::AbsoluteSystemPathBuf;
 
 use crate::{
@@ -104,6 +104,11 @@ impl LocalPackageDiscoveryBuilder {
     pub fn with_allow_no_package_manager(&mut self, allow_missing_package_manager: bool) {
         self.allow_missing_package_manager = allow_missing_package_manager;
     }
+
+    pub fn with_package_manager(&mut self, package_manager: Option<PackageManager>) -> &mut Self {
+        self.package_manager = package_manager;
+        self
+    }
 }
 
 impl PackageDiscoveryBuilder for LocalPackageDiscoveryBuilder {
@@ -144,7 +149,7 @@ impl PackageDiscovery for LocalPackageDiscovery {
                 return Ok(DiscoveryResponse {
                     workspaces: vec![],
                     package_manager: self.package_manager.clone(),
-                })
+                });
             }
             Err(e) => return Err(Error::Failed(Box::new(e))),
         };
@@ -322,10 +327,7 @@ mod fallback_tests {
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(&self) -> Result<DiscoveryResponse, Error> {
             if self.should_fail {
-                Err(Error::Failed(Box::new(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "mock error",
-                ))))
+                Err(Error::Failed(Box::new(std::io::Error::other("mock error"))))
             } else {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 self.calls.fetch_add(1, Ordering::SeqCst);

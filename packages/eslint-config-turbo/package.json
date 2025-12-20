@@ -1,18 +1,23 @@
 {
   "name": "eslint-config-turbo",
-  "version": "2.4.1-canary.2",
+  "version": "2.7.1-canary.0",
+  "type": "commonjs",
   "description": "ESLint config for Turborepo",
+  "license": "MIT",
+  "author": "Vercel",
   "repository": {
     "type": "git",
-    "url": "https://github.com/vercel/turborepo",
+    "url": "git+https://github.com/vercel/turborepo.git",
     "directory": "packages/eslint-config-turbo"
   },
   "bugs": {
     "url": "https://github.com/vercel/turborepo/issues"
   },
   "scripts": {
-    "lint": "eslint ./index.js",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+    "build": "bunchee",
+    "lint": "eslint src",
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore",
+    "package:types": "attw --profile node16 --pack"
   },
   "keywords": [
     "turbo",
@@ -21,12 +26,33 @@
     "eslintconfig",
     "eslint-config"
   ],
-  "main": "index.js",
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
   "exports": {
-    "./flat": "./flat/index.js",
-    ".": "./index.js"
+    "./flat": {
+      "import": {
+        "types": "./dist/es/flat.d.mts",
+        "default": "./dist/es/flat.mjs"
+      },
+      "require": {
+        "types": "./dist/cjs/flat.d.ts",
+        "default": "./dist/cjs/flat.js"
+      }
+    },
+    ".": {
+      "import": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      },
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      }
+    }
   },
-  "author": "Vercel",
   "dependencies": {
     "eslint-plugin-turbo": "workspace:*"
   },
@@ -34,9 +60,12 @@
     "eslint": ">6.6.0",
     "turbo": ">2.0.0"
   },
-  "license": "MIT",
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.2",
     "@turbo/eslint-config": "workspace:*",
-    "@types/eslint": "^8.44.2"
+    "@turbo/tsconfig": "workspace:*",
+    "@types/eslint": "8.56.12",
+    "@types/node": "20.11.30",
+    "bunchee": "6.3.4"
   }
 }

@@ -23,9 +23,9 @@ use miette::{Diagnostic, LabeledSpan, SourceCode};
 use thiserror::Error;
 
 use crate::{
+    Any, BuildError, Glob, Pattern,
     diagnostics::{CompositeSpan, CorrelatedSpan, SpanExt as _},
     token::{self, InvariantSize, Token, TokenKind, TokenTree, Tokenized},
-    Any, BuildError, Glob, Pattern,
 };
 
 /// Maximum invariant size.
@@ -505,7 +505,7 @@ fn group<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
     {
         for (left, token, right) in tokens.into_iter().adjacent().map(Adjacency::into_tuple) {
             match token.kind() {
-                TokenKind::Alternative(ref alternative) => {
+                TokenKind::Alternative(alternative) => {
                     let outer = outer.push(left, right);
                     let diagnose = diagnose(expression, token, "in this alternative");
                     for tokens in alternative.branches() {
@@ -516,7 +516,7 @@ fn group<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
                         recurse(expression, tokens.iter(), outer)?;
                     }
                 }
-                TokenKind::Repetition(ref repetition) => {
+                TokenKind::Repetition(repetition) => {
                     let outer = outer.push(left, right);
                     let diagnose = diagnose(expression, token, "in this repetition");
                     let tokens = repetition.tokens();
@@ -733,7 +733,7 @@ fn group<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
 
 fn bounds<'t>(tokenized: &Tokenized<'t>) -> Result<(), RuleError<'t>> {
     if let Some((_, token)) = tokenized.walk().find(|(_, token)| match token.kind() {
-        TokenKind::Repetition(ref repetition) => {
+        TokenKind::Repetition(repetition) => {
             let (lower, upper) = repetition.bounds();
             upper.map_or(false, |upper| upper < lower || upper == 0)
         }

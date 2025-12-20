@@ -16,7 +16,10 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::BOLD;
 
 use super::CommandBase;
-use crate::turbo_json::RawTurboJson;
+use crate::{
+    config::{CONFIG_FILE, CONFIG_FILE_JSONC},
+    turbo_json::{RawRootTurboJson, RawTurboJson},
+};
 
 pub const DEFAULT_OUTPUT_DIR: &str = "out";
 
@@ -47,8 +50,6 @@ pub enum Error {
     MissingWorkspace(PackageName),
     #[error("Cannot prune without parsed lockfile.")]
     MissingLockfile,
-    #[error("`prune` is not supported for Bun.")]
-    BunUnsupported,
     #[error("Unable to read config: {0}")]
     Config(#[from] crate::config::Error),
 }
@@ -63,6 +64,10 @@ lazy_static! {
         ),
         (
             RelativeUnixPath::new(".yarnrc.yml").unwrap(),
+            Some(CopyDestination::Docker)
+        ),
+        (
+            RelativeUnixPath::new("bunfig.toml").unwrap(),
             Some(CopyDestination::Docker)
         ),
     ];
@@ -85,7 +90,12 @@ fn package_json() -> &'static AnchoredSystemPath {
 
 fn turbo_json() -> &'static AnchoredSystemPath {
     static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
-    PATH.get_or_init(|| AnchoredSystemPath::new("turbo.json").unwrap())
+    PATH.get_or_init(|| AnchoredSystemPath::new(CONFIG_FILE).unwrap())
+}
+
+fn turbo_jsonc() -> &'static AnchoredSystemPath {
+    static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();
+    PATH.get_or_init(|| AnchoredSystemPath::new(CONFIG_FILE_JSONC).unwrap())
 }
 
 pub async fn prune(
@@ -100,13 +110,6 @@ pub async fn prune(
     telemetry.track_arg_usage("out-dir", output_dir != DEFAULT_OUTPUT_DIR);
 
     let prune = Prune::new(base, scope, docker, output_dir, use_gitignore, telemetry).await?;
-
-    if matches!(
-        prune.package_graph.package_manager(),
-        turborepo_repository::package_manager::PackageManager::Bun
-    ) {
-        return Err(Error::BunUnsupported);
-    }
 
     println!(
         "Generating pruned monorepo for {} in {}",
@@ -200,10 +203,15 @@ pub async fn prune(
             original_patches,
             pruned_patches
         );
-        let pruned_json = prune
-            .package_graph
-            .package_manager()
-            .prune_patched_packages(prune.package_graph.root_package_json(), &pruned_patches);
+
+        let repo_root = &prune.root;
+        let package_manager = prune.package_graph.package_manager();
+
+        let pruned_json = package_manager.prune_patched_packages(
+            prune.package_graph.root_package_json(),
+            &pruned_patches,
+            repo_root,
+        );
         let mut pruned_json_contents = serde_json::to_string_pretty(&pruned_json)?;
         // Add trailing newline to match Go behavior
         pruned_json_contents.push('\n');
@@ -302,7 +310,11 @@ impl<'a> Prune<'a> {
             };
             trace!(
                 "target: {}",
-                info.package_json.name.as_deref().unwrap_or_default()
+                info.package_json
+                    .name
+                    .as_ref()
+                    .map(|name| name.as_str())
+                    .unwrap_or_default()
             );
             trace!("workspace package.json: {}", &info.package_json_path);
             trace!(
@@ -440,24 +452,33 @@ impl<'a> Prune<'a> {
     }
 
     fn copy_turbo_json(&self, workspaces: &[String]) -> Result<(), Error> {
-        let anchored_turbo_path = turbo_json();
-        let original_turbo_path = self.root.resolve(anchored_turbo_path);
-        let new_turbo_path = self.full_directory.resolve(anchored_turbo_path);
-
-        let turbo_json_contents = match original_turbo_path.read_to_string() {
-            Ok(contents) => contents,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                // If turbo.json doesn't exist skip copying
-                return Ok(());
-            }
-            Err(e) => return Err(e.into()),
+        let Some((turbo_json, turbo_json_name)) = self
+            .get_turbo_json(turbo_json())
+            .transpose()
+            .or_else(|| self.get_turbo_json(turbo_jsonc()).transpose())
+            .transpose()?
+        else {
+            return Ok(());
         };
 
-        let turbo_json = RawTurboJson::parse(&turbo_json_contents, anchored_turbo_path.as_str())?;
-
         let pruned_turbo_json = turbo_json.prune_tasks(workspaces);
+        let new_turbo_path = self.full_directory.resolve(turbo_json_name);
         new_turbo_path.create_with_contents(serde_json::to_string_pretty(&pruned_turbo_json)?)?;
 
         Ok(())
+    }
+
+    fn get_turbo_json<'b>(
+        &self,
+        turbo_json_name: &'b AnchoredSystemPath,
+    ) -> Result<Option<(RawTurboJson, &'b AnchoredSystemPath)>, Error> {
+        let original_turbo_path = self.root.resolve(turbo_json_name);
+        let Some(turbo_json_contents) = original_turbo_path.read_existing_to_string()? else {
+            return Ok(None);
+        };
+
+        let turbo_json =
+            RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.into();
+        Ok(Some((turbo_json, turbo_json_name)))
     }
 }

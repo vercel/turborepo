@@ -54,28 +54,27 @@ convert_case = "0.6.0"
 crossterm = "0.26"
 ctrlc = { version = "3.4.0", features = ["termination"] }
 derive_setters = { workspace = true }
-dialoguer = { workspace = true, features = ["fuzzy-select"] }
+dialoguer = { workspace = true, features = ["fuzzy-select", "password"] }
 dirs-next = "2.0.0"
 dunce = { workspace = true }
 either = { workspace = true }
-futures = "0.3.30"
+futures = { workspace = true }
 futures-core = "0.3.30"
 git2 = { workspace = true, default-features = false }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
-globwatch = { path = "../turborepo-globwatch" }
 go-parse-duration = "0.1.1"
 hex = "0.4.3"
 human-panic = "1.2.1"
 human_format = "1.1.0"
 humantime = "2.1.0"
 ignore = "0.4.22"
+indicatif = { workspace = true }
 itertools = { workspace = true }
 jsonc-parser = { version = "0.21.0" }
 lazy_static = { workspace = true }
 libc = "0.2.140"
 merge = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
-nix = "0.26.2"
 notify = { workspace = true }
 num_cpus = { workspace = true }
 owo-colors = { workspace = true }
@@ -83,7 +82,6 @@ oxc_resolver = { workspace = true }
 path-clean = "1.0.1"
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
-portable-pty = "0.8.1"
 pprof = { version = "0.12.1", features = [
   "prost-codec",
   "frame-pointer",
@@ -129,16 +127,23 @@ turborepo-api-client = { workspace = true }
 turborepo-auth = { path = "../turborepo-auth" }
 turborepo-cache = { workspace = true }
 turborepo-ci = { workspace = true }
+turborepo-devtools = { path = "../turborepo-devtools" }
 turborepo-dirs = { path = "../turborepo-dirs" }
 turborepo-env = { workspace = true }
 turborepo-errors = { workspace = true }
 turborepo-filewatch = { path = "../turborepo-filewatch" }
+turborepo-fixed-map = { workspace = true }
+turborepo-frameworks = { workspace = true }
 turborepo-fs = { path = "../turborepo-fs" }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
 turborepo-lockfiles = { workspace = true }
 turborepo-microfrontends = { workspace = true }
+turborepo-microfrontends-proxy = { workspace = true }
+turborepo-process = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
-turborepo-scm = { workspace = true }
+turborepo-scm = { workspace = true, features = ["git2"] }
+turborepo-signals = { workspace = true }
+turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-ui = { workspace = true }
 turborepo-unescape = { workspace = true }
@@ -153,9 +158,6 @@ which = { workspace = true }
 [target.'cfg(target_os = "windows")'.dependencies]
 uds_windows = "1.0.2"
 async-io = "1.12.0"
-
-[target.'cfg(target_os = "windows")'.dev-dependencies]
-windows-sys = { version = "0.59", features = ["Win32_System_Threading"] }
 
 [build-dependencies]
 capnpc = "0.18.0"

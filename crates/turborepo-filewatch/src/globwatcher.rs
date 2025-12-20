@@ -14,8 +14,8 @@ use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPath};
 use wax::{Any, Glob, Program};
 
 use crate::{
-    cookies::{CookieError, CookieWatcher, CookieWriter, CookiedRequest},
     NotifyError, OptionalWatch,
+    cookies::{CookieError, CookieWatcher, CookieWriter, CookiedRequest},
 };
 
 type Hash = String;
@@ -31,7 +31,7 @@ pub struct GlobSet {
 impl GlobSet {
     pub fn as_inputs(&self) -> Vec<String> {
         let mut inputs: Vec<String> = self.include.keys().cloned().collect();
-        inputs.extend(self.exclude_raw.iter().map(|s| format!("!{}", s)));
+        inputs.extend(self.exclude_raw.iter().map(|s| format!("!{s}")));
         inputs
     }
 
@@ -489,12 +489,12 @@ mod test {
     };
 
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-    use wax::{any, Glob};
+    use wax::{Glob, any};
 
     use crate::{
+        FileSystemWatcher,
         cookies::CookieWriter,
         globwatcher::{GlobSet, GlobWatcher},
-        FileSystemWatcher,
     };
 
     fn temp_dir() -> (AbsoluteSystemPathBuf, tempfile::TempDir) {

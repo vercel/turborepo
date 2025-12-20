@@ -52,14 +52,16 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Visitor(#[from] task_graph::VisitorError),
-    #[error("Failed to register signal handler: {0}")]
-    SignalHandler(std::io::Error),
+    #[error(transparent)]
+    SignalHandler(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]
     Daemon(#[from] daemon::DaemonError),
     #[error(transparent)]
     UI(#[from] turborepo_ui::Error),
     #[error(transparent)]
     Tui(#[from] tui::Error),
-    #[error("Failed to read microfrontends configuration: {0}")]
+    #[error(transparent)]
     MicroFrontends(#[from] turborepo_microfrontends::Error),
+    #[error("Microfrontends proxy error: {0}")]
+    Proxy(String),
 }

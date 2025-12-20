@@ -1,0 +1,168 @@
+---
+title: Turborepo 1.10
+description: Turborepo 1.10 introduces new features to improve your local development experience.
+date: '2023/06/01'
+tag: 'web development'
+---
+
+<h1 className="text-center">Turborepo 1.10</h1>
+
+import { Authors } from '#components/authors';
+import { Callout } from '#components/callout';
+import { ThemeAwareImage } from '#components/theme-aware-image';
+import { Date } from '#components/blog/date';
+
+<Date>Thursday, June 1st, 2023</Date>
+
+<Authors
+  authors={['nathanhammond', 'tomknickman', 'anthonyshew', 'mehulkar']}
+/>
+
+Turborepo 1.10 introduces new features to improve your local development experience:
+
+- [**Code Generators**](#code-generators): Use `turbo gen` to generate source code, including creating new workspaces and copying existing ones.
+- [**Improved Environment Variable Inputs**](#improved-environment-variable-inputs): It's now easier to depend on environment variables with wildcards and `.env` support.
+- [**New Environment Modes**](#environment-modes): You can now specify `--env-mode=strict` to control environment variables that are included in your task hashes.
+
+Update today with
+
+```bash title="Terminal"
+npx @turbo/codemod migrate
+```
+
+## Code Generators
+
+<ThemeAwareImage
+  className="my-4 rounded-xl border-2 border-[#f3f7fd] p-4 dark:border-[#1c2428]"
+  light={{
+    alt: 'turbo-gen',
+    src: '/images/blog/turbo-1-10-0/turbo-gen-light.gif',
+    props: {
+      width: 600,
+      height: 205,
+    },
+  }}
+  dark={{
+    alt: 'turbo-gen',
+    src: '/images/blog/turbo-1-10-0/turbo-gen-dark.gif',
+    props: {
+      width: 600,
+      height: 215,
+    },
+  }}
+/>
+
+Turborepo Generators allow you to add new code to your repository in a predictable, structured way.
+Previously, you would need to copy code yourself and manually add dependencies to your new workspace. With Generators,
+we've automated the process of creating new workspaces and integrating them into your repository.
+
+You can [create a blank workspace from scratch](/docs/guides/generating-code#add-an-empty-package), [copy an existing workspace](/docs/guides/generating-code#copy-an-existing-package), or even create custom generators
+for more control. Custom generators leverage [Plop](https://plopjs.com/) configurations, a common template definition strategy used in the JavaScript ecosystem.
+
+[Custom generators](/docs/guides/generating-code#custom-generators) can also be used to scaffold more granular sets of code than workspaces. You can significantly speed up tasks like:
+
+- [Adding new components to your UI library](https://github.com/vercel/turbo/blob/main/examples/basic/packages/ui/turbo/generators/config.ts)
+- Creating new unit tests
+- Generating a new MDX blog post
+
+Get started with your first generator by running:
+
+```bash title="Terminal"
+turbo gen
+```
+
+For more, check out the [documentation](/docs/guides/generating-code).
+
+## Improved Environment Variable Inputs
+
+### Support for `.env` files
+
+[`.env` files](https://www.dotenv.org/docs/) are commonly used to load environment variables. This can cause problems when running with `turbo`, because these variables can be [invisible](/docs/crafting-your-repository/using-environment-variables#avoid-creating-or-mutating-environment-variables-at-runtime), and are not easily
+included in the hash for your task. This problem could cause unintended cache hits while working locally.
+
+Turborepo now makes this much easier with automatic support for `.env` files.
+
+To ensure that Turborepo includes these variables in your hash, use the `dotEnv` key. For example, here is a configuration for a Next.js application:
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "globalDotEnv": [".env"],
+  "pipeline": {
+    "build": {
+      "dotEnv": [
+        ".env.production.local",
+        ".env.local",
+        ".env.production",
+        ".env"
+      ]
+    },
+    "dev": {
+      "dotEnv": [
+        ".env.development.local",
+        ".env.local",
+        ".env.development",
+        ".env"
+      ]
+    },
+    "test": {
+      "dotEnv": [".env.test.local", ".env.test", ".env"]
+    }
+  }
+}
+```
+
+<Callout>
+  This feature does **not** handle system environment variables. If you are not
+  using `.env` files outside of development, make sure your environment
+  variables are still enumerated in either
+  [env](/docs/reference/configuration#env), or
+  [globalEnv](/docs/reference/configuration#globalenv) to ensure they are
+  included in your hash.
+</Callout>
+
+For more, check out the documentation.
+
+### Environment Variable Wildcards
+
+Large applications can end up with many environment variables in their `turbo.json`. This can make your configuration difficult to manage and maintain.
+
+With wildcards, you can now specify patterns of variables to include in your hash.
+
+```json title="./turbo.json"
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "pipeline": {
+    "build": {
+      "env": ["ACME_*"]
+    }
+  }
+}
+```
+
+For more, check out the [documentation](/docs/reference/configuration#wildcards).
+
+### Environment modes
+
+Turborepo environment modes are now out of experimental mode and are available for general use.
+
+By default, and when `turbo run` is invoked with `--env-mode=loose`, all environment variables from the machine are made available to every single Turborepo task.
+This ensures the greatest compatibility while accepting some risk that a task will implicitly have access to a environment variable that is not specified in your `turbo.json`.
+
+In the new strict mode, when `turbo` is invoked with `--env-mode=strict`, only [important system environment variables](/docs/reference/system-environment-variables) and environment variables enumerated inside of `turbo.json` will be made available to a task.
+
+For more, check out the [documentation](/docs/crafting-your-repository/using-environment-variables#environment-modes).
+
+## Community
+
+Since releasing [Turborepo v1.9](/blog/turbo-1-9-0) we've seen incredible adoption and community growth:
+
+- [21.5k+ GitHub Stars](https://github.com/vercel/turbo)
+- [1.2M+ weekly NPM downloads](https://www.npmjs.com/package/turbo)
+- 85 years of compute time saved through [Remote Caching on Vercel](https://vercel.com/docs/concepts/monorepos/remote-caching)
+
+Turborepo is the result of the combined work of all of its contributors, including our core team:
+
+- [Jared](https://github.com/jaredpalmer), [Greg](https://github.com/gsoltis), [Nathan](https://github.com/nathanhammond), [Thomas](https://github.com/tknickman), [Mehul](https://github.com/mehulkar), [Chris](https://github.com/chris-olszewski), [Nicholas](https://github.com/NicholasLYang), and [Alexander](https://github.com/arlyon)
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice.

@@ -2,6 +2,7 @@
 #![feature(io_error_more)]
 #![feature(assert_matches)]
 #![deny(clippy::all)]
+#![allow(clippy::result_large_err)]
 
 //! Turborepo's library for interacting with source control management (SCM).
 //! Currently we only support git. We use SCM for finding changed files,
@@ -9,6 +10,7 @@
 
 use std::{
     backtrace::{self, Backtrace},
+    collections::HashMap,
     io::Read,
     process::{Child, Command},
 };
@@ -18,6 +20,7 @@ use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
 
+pub mod clone;
 pub mod git;
 mod hash_object;
 mod ls_tree;
@@ -27,6 +30,7 @@ mod status;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[cfg(feature = "git2")]
     #[error("Git error on {1}: {0}")]
     Git2(
         #[source] git2::Error,
@@ -65,6 +69,8 @@ pub enum Error {
     UnableToResolveRef,
 }
 
+pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
+
 impl From<wax::BuildError> for Error {
     fn from(value: wax::BuildError) -> Self {
         Error::Glob(Box::new(value), Backtrace::capture())
@@ -76,6 +82,7 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
+    #[cfg(feature = "git2")]
     pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
         Error::Git2(error, error_context, Backtrace::capture())
     }
@@ -128,7 +135,7 @@ pub(crate) fn wait_for_success<R: Read, T>(
         };
         let stderr_output = read_git_error_to_string(stderr);
         let stderr_text = stderr_output
-            .map(|stderr| format!(" stderr: {}", stderr))
+            .map(|stderr| format!(" stderr: {stderr}"))
             .unwrap_or_default();
         let err_text = format!(
             "'{}' in {}{}{}",
@@ -148,7 +155,7 @@ pub(crate) fn wait_for_success<R: Read, T>(
     // We successfully parsed, but the command failed.
     let stderr_output = read_git_error_to_string(stderr);
     let stderr_text = stderr_output
-        .map(|stderr| format!(" stderr: {}", stderr))
+        .map(|stderr| format!(" stderr: {stderr}"))
         .unwrap_or_default();
     if matches!(exit_status.code(), Some(129)) {
         return Err(Error::GitVersion(stderr_text));
@@ -158,15 +165,15 @@ pub(crate) fn wait_for_success<R: Read, T>(
             .code()
             .map(|code| code.to_string())
             .unwrap_or("unknown".to_string());
-        format!(" exited with code {}", code)
+        format!(" exited with code {code}")
     };
     let path_text = root_path.as_ref();
-    let err_text = format!("'{}' in {}{}{}", command, path_text, exit_text, stderr_text);
+    let err_text = format!("'{command}' in {path_text}{exit_text}{stderr_text}");
     Err(Error::Git(err_text, Backtrace::capture()))
 }
 
 #[derive(Debug, Clone)]
-pub struct Git {
+pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
 }
@@ -179,7 +186,7 @@ enum GitError {
     Root(AbsoluteSystemPathBuf, Error),
 }
 
-impl Git {
+impl GitRepo {
     fn find(path_in_repo: &AbsoluteSystemPath) -> Result<Self, GitError> {
         // If which produces an invalid absolute path, it's not an execution error, it's
         // a programming error. We expect it to always give us an absolute path
@@ -210,8 +217,7 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
     if !rev_parse.status.success() {
         let stderr = String::from_utf8_lossy(&rev_parse.stderr);
         return Err(Error::git_error(format!(
-            "git rev-parse --show-cdup error: {}",
-            stderr
+            "git rev-parse --show-cdup error: {stderr}"
         )));
     }
     let cursor = std::io::Cursor::new(rev_parse.stdout);
@@ -223,25 +229,26 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
     } else {
         let stderr = String::from_utf8_lossy(&rev_parse.stderr);
         Err(Error::git_error(format!(
-            "git rev-parse --show-cdup error: no values on stdout. stderr: {}",
-            stderr
+            "git rev-parse --show-cdup error: no values on stdout. stderr: {stderr}"
         )))
     }
 }
 
 #[derive(Debug, Clone)]
 pub enum SCM {
-    Git(Git),
+    Git(GitRepo),
     Manual,
 }
 
 impl SCM {
     #[tracing::instrument]
     pub fn new(path_in_repo: &AbsoluteSystemPath) -> SCM {
-        Git::find(path_in_repo).map(SCM::Git).unwrap_or_else(|e| {
-            debug!("{}, continuing with manual hashing", e);
-            SCM::Manual
-        })
+        GitRepo::find(path_in_repo)
+            .map(SCM::Git)
+            .unwrap_or_else(|e| {
+                debug!("{}, continuing with manual hashing", e);
+                SCM::Manual
+            })
     }
 
     pub fn is_manual(&self) -> bool {
@@ -260,7 +267,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use super::find_git_root;
-    use crate::{wait_for_success, Error};
+    use crate::{Error, wait_for_success};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();

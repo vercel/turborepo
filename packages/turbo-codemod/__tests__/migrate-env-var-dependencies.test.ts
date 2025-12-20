@@ -39,6 +39,34 @@ const getTestTurboConfig = (
 };
 
 describe("migrate-env-var-dependencies", () => {
+  it("skips when no pipeline key", () => {
+    const config: SchemaV2 = {
+      $schema: "./docs/public/schema.json",
+      globalDependencies: ["$GLOBAL_ENV_KEY"],
+      tasks: {
+        test: {
+          outputs: ["coverage/**/*"],
+          dependsOn: ["^build"],
+        },
+        lint: {
+          outputs: [],
+        },
+        dev: {
+          cache: false,
+        },
+        build: {
+          outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
+        },
+      },
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any -- Testing a situation outside of types that users can get themselves into at runtime
+    const doneConfig = migrateConfig(config as any);
+
+    expect(doneConfig).toEqual(config);
+  });
+
   describe("hasLegacyEnvVarDependencies - utility", () => {
     it("finds env keys in legacy turbo.json - has keys", () => {
       const config = getTestTurboConfig();
@@ -395,7 +423,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-        $schema: "https://turbo.build/schema.json",
+        $schema: "https://turborepo.com/schema.json",
         globalDependencies: [".env"],
         globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
         pipeline: {
@@ -445,7 +473,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(readJson("turbo.json") || "{}").toStrictEqual({
-        $schema: "https://turbo.build/schema.json",
+        $schema: "https://turborepo.com/schema.json",
         globalDependencies: [".env"],
         globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
         pipeline: {
@@ -471,7 +499,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
-        $schema: "https://turbo.build/schema.json",
+        $schema: "https://turborepo.com/schema.json",
         extends: ["//"],
         pipeline: {
           build: {
@@ -484,7 +512,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
-        $schema: "https://turbo.build/schema.json",
+        $schema: "https://turborepo.com/schema.json",
         extends: ["//"],
         pipeline: {
           build: {
@@ -529,7 +557,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-        $schema: "https://turbo.build/schema.json",
+        $schema: "https://turborepo.com/schema.json",
         globalDependencies: [".env"],
         globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
         pipeline: {
@@ -625,7 +653,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-        $schema: "https://turbo.build/schema.json",
+        $schema: "https://turborepo.com/schema.json",
         globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
         globalDependencies: [".env"],
         pipeline: {

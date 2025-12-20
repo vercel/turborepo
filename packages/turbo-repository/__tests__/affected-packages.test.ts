@@ -1,4 +1,4 @@
-import { describe, it } from "node:test";
+import { beforeEach, describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import * as path from "node:path";
 import { Workspace, Package, PackageManager } from "../js/dist/index.js";
@@ -8,7 +8,6 @@ type PackageReduced = Pick<Package, "name" | "relativePath">;
 interface AffectedPackagesTestParams {
   description: string;
   files: string[];
-  changedLockfile?: string | undefined | null;
   expected: PackageReduced[];
 }
 
@@ -33,49 +32,22 @@ describe("affectedPackages", () => {
       ],
     },
     {
-      description:
-        "a lockfile change will only affect packages impacted by the change",
-      files: [],
-      changedLockfile: `lockfileVersion: '6.0'
-
-settings:
-  autoInstallPeers: true
-  excludeLinksFromLockfile: false
-
-importers:
-
-  .: {}
-
-  apps/app:
-    dependencies:
-      microdiff:
-        specifier: ^1.4.0
-        version: 1.5.0
-      ui:
-        specifier: workspace:*
-        version: link:../../packages/ui
-
-  packages/blank: {}
-
-  packages/ui: {}
-
-packages:
-
-  /microdiff@1.5.0:
-    resolution: {integrity: sha512-Drq+/THMvDdzRYrK0oxJmOKiC24ayUV8ahrt8l3oRK51PWt6gdtrIGrlIH3pT/lFh1z93FbAcidtsHcWbnRz8Q==}
-    dev: false
-`,
-      expected: [{ name: "app-a", relativePath: "apps/app" }],
+      description: "a lockfile change will affect all packages",
+      files: ["pnpm-lock.yaml"],
+      expected: [
+        { name: "app-a", relativePath: "apps/app" },
+        { name: "ui", relativePath: "packages/ui" },
+      ],
     },
   ];
 
-  for (const { description, files, expected, changedLockfile } of tests) {
+  for (const { description, files, expected } of tests) {
     it(description, async () => {
       const dir = path.resolve(__dirname, "./fixtures/monorepo");
       const workspace = await Workspace.find(dir);
 
       const reduced: PackageReduced[] = (
-        await workspace.affectedPackages(files, changedLockfile)
+        await workspace.affectedPackages(files)
       ).map((pkg) => {
         return {
           name: pkg.name,
@@ -86,4 +58,54 @@ packages:
       assert.deepEqual(reduced, expected);
     });
   }
+
+  it("does not require packageManager for npm", async () => {
+    const dir = path.resolve(__dirname, "./fixtures/npm-monorepo");
+    const workspace = await Workspace.find(dir);
+
+    const reduced: PackageReduced[] = (
+      await workspace.affectedPackages(["apps/app/file.txt"])
+    ).map((pkg) => {
+      return {
+        name: pkg.name,
+        relativePath: pkg.relativePath,
+      };
+    });
+
+    assert.deepEqual(reduced, [{ name: "app-a", relativePath: "apps/app" }]);
+  });
+
+  describe("optimizedLockfileUpdates", () => {
+    it("errors if not provided comparison ref", async () => {
+      const dir = path.resolve(__dirname, "./fixtures/monorepo");
+      const workspace = await Workspace.find(dir);
+
+      assert.rejects(
+        workspace.affectedPackages(["pnpm-lock.yaml"], null, true)
+      );
+    });
+
+    it("still considers root file changes as global", async () => {
+      const dir = path.resolve(__dirname, "./fixtures/monorepo");
+      const workspace = await Workspace.find(dir);
+
+      const reduced: PackageReduced[] = (
+        await workspace.affectedPackages(
+          ["file-we-do-not-understand.txt"],
+          "HEAD",
+          true
+        )
+      ).map((pkg) => {
+        return {
+          name: pkg.name,
+          relativePath: pkg.relativePath,
+        };
+      });
+
+      assert.deepEqual(reduced, [
+        { name: "app-a", relativePath: "apps/app" },
+        { name: "ui", relativePath: "packages/ui" },
+      ]);
+    });
+  });
 });

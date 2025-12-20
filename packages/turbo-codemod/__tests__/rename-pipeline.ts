@@ -21,7 +21,7 @@ describe("rename-pipeline", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       globalDependencies: ["important.txt"],
       tasks: {
         build: {
@@ -55,7 +55,7 @@ describe("rename-pipeline", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       tasks: {
         build: {
           dependsOn: ["^build"],
@@ -74,7 +74,7 @@ describe("rename-pipeline", () => {
     });
 
     expect(JSON.parse(read("apps/web/turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       tasks: {
         build: {
@@ -84,7 +84,7 @@ describe("rename-pipeline", () => {
     });
 
     expect(JSON.parse(read("packages/ui/turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       extends: ["//"],
       tasks: {
         test: {
@@ -154,7 +154,7 @@ describe("rename-pipeline", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turbo.build/schema.json",
+      $schema: "https://turborepo.com/schema.json",
       tasks: {
         build: {
           outputs: ["dist"],

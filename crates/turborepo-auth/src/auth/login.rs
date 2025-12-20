@@ -3,11 +3,11 @@ use std::sync::Arc;
 pub use error::Error;
 use reqwest::Url;
 use tokio::sync::OnceCell;
-use tracing::{debug, warn};
+use tracing::warn;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
-use turborepo_ui::{start_spinner, ColorConfig, BOLD};
+use turborepo_ui::{BOLD, ColorConfig, start_spinner};
 
-use crate::{auth::extract_vercel_token, error, ui, LoginOptions, Token};
+use crate::{LoginOptions, Token, error, ui};
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
@@ -29,6 +29,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
         existing_token,
         force,
         sso_team: _,
+        sso_login_callback_port,
     } = *options; // Deref or we get double references for each of these
 
     // I created a closure that gives back a closure since the `is_valid` checks do
@@ -49,7 +50,6 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     // Check if passed in token exists first.
     if !force {
         if let Some(token) = existing_token {
-            debug!("found existing turbo token");
             let token = Token::existing(token.into());
             if token
                 .is_valid(
@@ -60,30 +60,33 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
             {
                 return Ok(token);
             }
-        // If the user is logging into Vercel, check for an existing `vc` token.
+        // If the user is logging into Vercel, check for an existing `vc` token
+        // with automatic refresh if expired.
         } else if login_url_configuration.contains("vercel.com") {
-            // The extraction can return an error, but we don't want to fail the login if
-            // the token is not found.
-            if let Ok(Some(token)) = extract_vercel_token() {
-                debug!("found existing Vercel token");
-                let token = Token::existing(token);
-                if token
-                    .is_valid(
-                        api_client,
-                        Some(valid_token_callback(
-                            "Existing Vercel token found!",
-                            color_config,
-                        )),
-                    )
-                    .await?
-                {
-                    return Ok(token);
+            match crate::auth::get_token_with_refresh().await {
+                Ok(Some(token_str)) => {
+                    let token = Token::existing(token_str);
+                    if token
+                        .is_valid(
+                            api_client,
+                            Some(valid_token_callback(
+                                "Existing Vercel token found!",
+                                color_config,
+                            )),
+                        )
+                        .await?
+                    {
+                        return Ok(token);
+                    }
                 }
+                Ok(None) => {}
+                Err(_) => {}
             }
         }
     }
 
-    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{DEFAULT_PORT}");
+    let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
+    let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
     let mut login_url = Url::parse(login_url_configuration)?;
     let mut success_url = login_url.clone();
     success_url
@@ -117,7 +120,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     let token_cell = Arc::new(OnceCell::new());
     login_server
         .run(
-            DEFAULT_PORT,
+            port,
             crate::LoginType::Basic {
                 success_redirect: success_url.to_string(),
             },
@@ -142,18 +145,18 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
 
 #[cfg(test)]
 mod tests {
-    use std::{assert_matches::assert_matches, sync::atomic::AtomicUsize};
+    use std::{assert_matches::assert_matches, sync::atomic::AtomicUsize, time::Duration};
 
     use async_trait::async_trait;
     use reqwest::{Method, RequestBuilder, Response};
     use turborepo_vercel_api::{
-        CachingStatus, CachingStatusResponse, Membership, Role, SpacesResponse, Team,
-        TeamsResponse, User, UserResponse, VerifiedSsoUser,
+        CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse, User,
+        UserResponse, VerifiedSsoUser,
     };
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
-    use crate::{login_server, LoginServer};
+    use crate::{LoginServer, login_server};
 
     struct MockLoginServer {
         hits: Arc<AtomicUsize>,
@@ -247,13 +250,6 @@ mod tests {
         fn add_ci_header(_request_builder: RequestBuilder) -> RequestBuilder {
             unimplemented!("add_ci_header")
         }
-        async fn get_spaces(
-            &self,
-            _token: &str,
-            _team_id: Option<&str>,
-        ) -> turborepo_api_client::Result<SpacesResponse> {
-            unimplemented!("get_spaces")
-        }
         async fn verify_sso_token(
             &self,
             token: &str,
@@ -287,10 +283,8 @@ mod tests {
                 id: "id".to_string(),
                 name: "name".to_string(),
                 token_type: "token".to_string(),
-                origin: "github".to_string(),
                 scopes: vec![turborepo_vercel_api::token::Scope {
                     scope_type: "user".to_string(),
-                    origin: "github".to_string(),
                     team_id: None,
                     expires_at: None,
                     created_at: 1111111111111,
@@ -319,10 +313,10 @@ mod tests {
             &self,
             _hash: &str,
             _artifact_body: impl turborepo_api_client::Stream<
-                    Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
-                > + Send
-                + Sync
-                + 'static,
+                Item = Result<turborepo_api_client::Bytes, turborepo_api_client::Error>,
+            > + Send
+            + Sync
+            + 'static,
             _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
@@ -365,7 +359,15 @@ mod tests {
     #[tokio::test]
     async fn test_login() {
         let port = port_scanner::request_open_port().unwrap();
-        let api_server = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let api_server = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .expect("Test server failed to start")
+            .expect("Server setup failed");
+
         let color_config = ColorConfig::new(false);
         let url = format!("http://localhost:{port}");
 

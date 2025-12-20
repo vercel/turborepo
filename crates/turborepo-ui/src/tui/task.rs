@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::{collections::HashSet, mem, time::Instant};
 
-use super::{event::TaskResult, Error};
+use super::{Error, event::TaskResult};
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy)]
 pub struct Planned;

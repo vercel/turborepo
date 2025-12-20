@@ -30,8 +30,7 @@ pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
                 format!(
                     "An error has occurred while attempting to write a \
                      report.\n\n{OPEN_ISSUE_MESSAGE} and include the following error in your \
-                     issue: {}",
-                    e
+                     issue: {e}"
                 )
             }
         }
@@ -50,7 +49,6 @@ pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
     eprintln!(
         "Oops! Turbo has crashed.
 
-{}",
-        report_message
+{report_message}"
     );
 }

@@ -1,20 +1,22 @@
+//! Mock server implementation for a subset of the Vercel API.
+
 #![deny(clippy::all)]
 
 use std::{collections::HashMap, fs::OpenOptions, io::Write, net::SocketAddr, sync::Arc};
 
 use anyhow::Result;
 use axum::{
+    Json, Router,
     body::Body,
     extract::Path,
-    http::{header::CONTENT_LENGTH, HeaderMap, HeaderValue, StatusCode},
-    routing::{get, head, options, patch, post, put},
-    Json, Router,
+    http::{HeaderMap, HeaderValue, StatusCode, header::CONTENT_LENGTH},
+    routing::{get, head, options, post, put},
 };
 use futures_util::StreamExt;
 use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
-    AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Space, SpaceRun,
-    SpacesResponse, Team, TeamsResponse, User, UserResponse, VerificationResponse,
+    AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
+    User, UserResponse, VerificationResponse, telemetry::TelemetryEvent,
 };
 
 pub const EXPECTED_TOKEN: &str = "expected_token";
@@ -28,15 +30,13 @@ pub const EXPECTED_TEAM_SLUG: &str = "expected_team_slug";
 pub const EXPECTED_TEAM_NAME: &str = "expected_team_name";
 pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
 
-pub const EXPECTED_SPACE_ID: &str = "expected_space_id";
-pub const EXPECTED_SPACE_NAME: &str = "expected_space_name";
-pub const EXPECTED_SPACE_RUN_ID: &str = "expected_space_run_id";
-pub const EXPECTED_SPACE_RUN_URL: &str = "https://example.com";
-
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
-pub async fn start_test_server(port: u16) -> Result<()> {
+pub async fn start_test_server(
+    port: u16,
+    ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
+) -> Result<()> {
     let get_durations_ref = Arc::new(Mutex::new(HashMap::new()));
     let head_durations_ref = get_durations_ref.clone();
     let put_durations_ref = get_durations_ref.clone();
@@ -45,6 +45,8 @@ pub async fn start_test_server(port: u16) -> Result<()> {
 
     let get_analytics_events_ref = Arc::new(Mutex::new(Vec::new()));
     let post_analytics_events_ref = get_analytics_events_ref.clone();
+
+    let telemetry_events_ref = Arc::new(Mutex::new(Vec::new()));
 
     let app = Router::new()
         .route(
@@ -75,57 +77,6 @@ pub async fn start_test_server(port: u16) -> Result<()> {
                     }],
                 })
             }),
-        )
-        .route(
-            "/v0/spaces",
-            get(|| async move {
-                Json(SpacesResponse {
-                    spaces: vec![Space {
-                        id: EXPECTED_SPACE_ID.to_string(),
-                        name: EXPECTED_SPACE_NAME.to_string(),
-                    }],
-                })
-            }),
-        )
-        .route(
-            "/v0/spaces/:space_id/runs",
-            post(|Path(space_id): Path<String>| async move {
-                if space_id != EXPECTED_SPACE_ID {
-                    return (StatusCode::NOT_FOUND, Json(None));
-                }
-
-                (
-                    StatusCode::OK,
-                    Json(Some(SpaceRun {
-                        id: EXPECTED_SPACE_RUN_ID.to_string(),
-                        url: EXPECTED_SPACE_RUN_URL.to_string(),
-                    })),
-                )
-            }),
-        )
-        .route(
-            "/v0/spaces/:space_id/runs/:run_id",
-            patch(
-                |Path((space_id, run_id)): Path<(String, String)>| async move {
-                    if space_id != EXPECTED_SPACE_ID || run_id != EXPECTED_SPACE_RUN_ID {
-                        return StatusCode::NOT_FOUND;
-                    }
-
-                    StatusCode::OK
-                },
-            ),
-        )
-        .route(
-            "/v0/spaces/:space_id/runs/:run_id/tasks",
-            post(
-                |Path((space_id, run_id)): Path<(String, String)>| async move {
-                    if space_id != EXPECTED_SPACE_ID || run_id != EXPECTED_SPACE_RUN_ID {
-                        return StatusCode::NOT_FOUND;
-                    }
-
-                    StatusCode::OK
-                },
-            ),
         )
         .route(
             "/v8/artifacts/status",
@@ -279,12 +230,27 @@ pub async fn start_test_server(port: u16) -> Result<()> {
 
                 headers
             }),
+        )
+        .route(
+            "/api/turborepo/v1/events",
+            post(
+                |Json(telemetry_events): Json<Vec<TelemetryEvent>>| async move {
+                    telemetry_events_ref.lock().await.extend(telemetry_events);
+                    StatusCode::OK
+                },
+            ),
         );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = TcpListener::bind(addr).await?;
+
+    // Signal that the server is ready to accept connections
+    if let Some(tx) = ready_tx {
+        let _ = tx.send(());
+    }
+
     // We print the port so integration tests can use it
-    println!("{}", port);
+    println!("{port}");
     axum::serve(listener, app).await?;
 
     Ok(())

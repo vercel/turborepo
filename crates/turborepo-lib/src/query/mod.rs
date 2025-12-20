@@ -15,6 +15,7 @@ use std::{
 use async_graphql::{http::GraphiQLSource, *};
 use axum::{response, response::IntoResponse};
 use external_package::ExternalPackage;
+use itertools::Itertools;
 use package::Package;
 use package_graph::{Edge, PackageGraph};
 pub use server::run_server;
@@ -23,12 +24,12 @@ use tokio::select;
 use turbo_trace::TraceError;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{change_mapper::AllPackageChangeReason, package_graph::PackageName};
+use turborepo_signals::SignalHandler;
 
 use crate::{
     get_version,
     query::{file::File, task::RepositoryTask},
     run::{builder::RunBuilder, Run},
-    signal::SignalHandler,
 };
 
 #[derive(Error, Debug, miette::Diagnostic)]
@@ -60,6 +61,8 @@ pub enum Error {
     Resolution(#[from] crate::run::scope::filter::ResolutionError),
     #[error("Failed to parse file: {0:?}")]
     Parse(swc_ecma_parser::error::Error),
+    #[error(transparent)]
+    SignalListener(#[from] turborepo_signals::listeners::Error),
 }
 
 pub struct RepositoryQuery {
@@ -548,7 +551,7 @@ impl RepositoryQuery {
             let Ok(package) = package.as_ref() else {
                 return true;
             };
-            filter.as_ref().map_or(true, |f| f.check(&package.package))
+            filter.as_ref().is_none_or(|f| f.check(&package.package))
         })
         .collect::<Result<Array<_>, _>>()?;
 
@@ -568,8 +571,13 @@ impl RepositoryQuery {
 
     /// Check boundaries for all packages.
     async fn boundaries(&self) -> Result<Array<Diagnostic>, Error> {
-        match self.run.check_boundaries().await {
-            Ok(result) => Ok(result.diagnostics.into_iter().map(|b| b.into()).collect()),
+        match self.run.check_boundaries(false).await {
+            Ok(result) => Ok(result
+                .diagnostics
+                .into_iter()
+                .map(|b| b.into())
+                .sorted_by(|a: &Diagnostic, b: &Diagnostic| a.message.cmp(&b.message))
+                .collect()),
             Err(err) => Err(Error::Boundaries(err)),
         }
     }
@@ -631,7 +639,12 @@ impl RepositoryQuery {
 }
 
 pub async fn graphiql() -> impl IntoResponse {
-    response::Html(GraphiQLSource::build().endpoint("/").finish())
+    response::Html(
+        GraphiQLSource::build()
+            .version("5.0.0-rc.1")
+            .endpoint("/")
+            .finish(),
+    )
 }
 
 pub async fn run_query_server(run: Run, signal: SignalHandler) -> Result<(), Error> {

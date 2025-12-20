@@ -7,6 +7,10 @@ on:
         description: Do a dry run, skipping the final publish step.
         type: boolean
 
+permissions:
+  id-token: write # Required for npm Trusted Publishing using OIDC
+  contents: write
+
 jobs:
   build:
     defaults:
@@ -29,7 +33,7 @@ jobs:
               sudo apt update
               sudo apt install -y g++-aarch64-linux-gnu libc6-dev-arm64-cross xz-utils
               mkdir zig
-              curl --show-error --location https://ziglang.org/builds/zig-linux-x86_64-0.14.0-dev.3028+cdc9d65b0.tar.xz | tar -J -xf - -C zig --strip-components 1
+              curl --show-error --location https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -J -xf - -C zig --strip-components 1
               export PATH=$PATH:$(pwd)/zig
               echo "$(pwd)/zig" >> $GITHUB_PATH
 
@@ -39,9 +43,9 @@ jobs:
             install: |
               microdnf install -y gcc gcc-c++ git tar xz
               curl https://sh.rustup.rs -sSf | bash -s -- -y
-              npm i -g pnpm@8.9.0
+              npm i -g pnpm@11.5.1
               mkdir ../zig
-              curl --show-error --location https://ziglang.org/builds/zig-linux-x86_64-0.14.0-dev.3028+cdc9d65b0.tar.xz | tar -J -xf - -C ../zig --strip-components 1
+              curl --show-error --location https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -J -xf - -C ../zig --strip-components 1
               export PATH=$PATH:$(pwd)/../zig
               echo "$(pwd)/../zig" >> $GITHUB_PATH
             setup: |
@@ -183,11 +187,8 @@ jobs:
           path: tarballs
 
       - name: Publish Artifacts
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         if: ${{ !inputs.dry_run }}
         run: |
-          npm config set --location=project "//registry.npmjs.org/:_authToken" ${NPM_TOKEN}
           VERSION=$(jq -r .version packages/turbo-repository/js/package.json)
           cd tarballs
           ls

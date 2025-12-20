@@ -44,7 +44,7 @@ jobs:
         run: npx @taplo/cli@0.5.2 format --check
 
       - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v1
+        uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check licenses
 
@@ -54,7 +54,7 @@ jobs:
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_REMOTE_ONLY: true
+      TURBO_CACHE: remote:rw
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -63,7 +63,6 @@ jobs:
         uses: ./.github/actions/setup-node
         with:
           extra-flags: --no-optional
-          node-version: "20"
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo

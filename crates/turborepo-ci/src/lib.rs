@@ -1,4 +1,9 @@
-#![deny(clippy::all)]
+//! CI/CD vendor detection and vendor-specific behavior
+//! Detects CI vendors and provides:
+//! - Env var containing current commit SHA
+//! - Env var containing current branch
+//! - Env var containing current user
+//! - Any vendor specific behavior for producing well formatted logs
 
 mod vendor_behavior;
 mod vendors;
@@ -46,15 +51,12 @@ impl Vendor {
     }
 
     /// Gets user from CI environment variables
-    /// We return an empty String instead of None because
-    /// the Spaces API expects some sort of string in the user field.
-    pub fn get_user() -> String {
+    pub fn get_user() -> Option<String> {
         let vendor = Vendor::infer();
 
         vendor
             .and_then(|v| v.username_env_var)
             .and_then(|v| env::var(v).ok())
-            .unwrap_or_default()
     }
 
     fn infer_inner() -> Option<&'static Vendor> {
@@ -180,7 +182,7 @@ mod tests {
 
             let live_ci = if Vendor::get_name() == Some("GitHub Actions") {
                 let live_ci = std::env::var("GITHUB_ACTIONS").unwrap_or_default();
-                env::remove_var("GITHUB_ACTIONS");
+                unsafe { env::remove_var("GITHUB_ACTIONS") };
                 Some(live_ci)
             } else {
                 None
@@ -190,24 +192,61 @@ mod tests {
                 let mut env_parts = env.split('=');
                 let key = env_parts.next().unwrap();
                 let val = env_parts.next().unwrap_or("some value");
-                env::set_var(key, val);
+                unsafe { env::set_var(key, val) };
             }
 
-            assert_eq!(Vendor::infer_inner(), want.as_ref());
+            assert_eq!(
+                Vendor::infer_inner().map(|v| v.name),
+                want.as_ref().map(|v| v.name)
+            );
 
             if Vendor::get_name() == Some("GitHub Actions") {
                 if let Some(live_ci) = live_ci {
-                    env::set_var("GITHUB_ACTIONS", live_ci);
+                    unsafe { env::set_var("GITHUB_ACTIONS", live_ci) };
                 } else {
-                    env::remove_var("GITHUB_ACTIONS");
+                    unsafe { env::remove_var("GITHUB_ACTIONS") };
                 }
             }
 
             for env in set_env {
                 let mut env_parts = env.split('=');
                 let key = env_parts.next().unwrap();
-                env::remove_var(key);
+                unsafe { env::remove_var(key) };
             }
         }
+    }
+
+    #[test]
+    fn test_gitlab_ci_group_name_sanitization() {
+        use chrono::DateTime;
+
+        let gitlab_vendor = get_vendor("GitLab CI");
+        let behavior = gitlab_vendor.behavior.as_ref().unwrap();
+
+        // Test with a package name containing @ and /
+        let group_name = "@organisation/package:build".to_string();
+        let start_time = DateTime::from_timestamp(1234567890, 0).unwrap();
+        let end_time = DateTime::from_timestamp(1234567900, 0).unwrap();
+
+        let start_fn = (behavior.group_prefix)(group_name.clone());
+        let end_fn = (behavior.group_suffix)(group_name.clone());
+
+        let start_output = start_fn(start_time);
+        let end_output = end_fn(end_time);
+
+        // The section identifier should be sanitized (@ -> at, / -> -)
+        assert!(start_output.contains("section_start:1234567890:at-organisation-package:build"));
+        assert!(end_output.contains("section_end:1234567900:at-organisation-package:build"));
+
+        // The description should contain the original group name
+        assert!(start_output.contains("@organisation/package:build"));
+
+        // Test with a simple package name (should work unchanged)
+        let simple_group_name = "simple-package:build".to_string();
+        let simple_start_fn = (behavior.group_prefix)(simple_group_name.clone());
+        let simple_start_output = simple_start_fn(start_time);
+
+        assert!(simple_start_output.contains("section_start:1234567890:simple-package:build"));
+        assert!(simple_start_output.contains("simple-package:build"));
     }
 }

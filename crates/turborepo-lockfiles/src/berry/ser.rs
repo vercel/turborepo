@@ -32,7 +32,7 @@ impl fmt::Display for LockfileData {
                 true => format!("{wrapped_key}:"),
                 false => format!("? {wrapped_key}\n:"),
             };
-            write!(f, "\n{}\n{}\n", key_line, entry)?;
+            write!(f, "\n{key_line}\n{entry}\n")?;
         }
 
         Ok(())
@@ -62,7 +62,7 @@ impl fmt::Display for BerryPackage {
                 if !first {
                     writeln!(f)?;
                 }
-                write!(f, "  {field}:{whitespace}{}", value,)?;
+                write!(f, "  {field}:{whitespace}{value}")?;
                 first = false;
             }
             Ok(())
@@ -199,7 +199,7 @@ where
     builder.s
 }
 
-fn wrap_string(s: &str) -> Cow<str> {
+fn wrap_string(s: &str) -> Cow<'_, str> {
     match simple_string().is_match(s) {
         // Simple strings require no wrapping
         true => Cow::from(s),

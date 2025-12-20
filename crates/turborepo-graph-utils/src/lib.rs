@@ -1,3 +1,7 @@
+//! Additional utilities to be used with `petgraph`
+//! Provides transitive closure calculation and cycle detection with cut
+//! candidates to break cycles
+
 mod walker;
 
 use std::{collections::HashSet, fmt::Display, hash::Hash};
@@ -6,7 +10,7 @@ use fixedbitset::FixedBitSet;
 use itertools::Itertools;
 use petgraph::{
     prelude::*,
-    visit::{depth_first_search, EdgeFiltered, IntoNeighbors, Reversed, VisitMap, Visitable},
+    visit::{EdgeFiltered, IntoNeighbors, Reversed, VisitMap, Visitable, depth_first_search},
 };
 use thiserror::Error;
 
@@ -262,7 +266,7 @@ mod test {
         g.add_edge(c, a, ());
 
         let breaks = edges_to_break_cycle(&g);
-        assert_eq!(breaks.len(), 3, "{:?}", breaks);
+        assert_eq!(breaks.len(), 3, "{breaks:?}");
         let mut edges_that_break = HashSet::new();
         for brk in breaks {
             assert_eq!(brk.len(), 1);
@@ -296,7 +300,7 @@ mod test {
         g.add_edge(d, a, ());
 
         let breaks = edges_to_break_cycle(&g);
-        assert_eq!(breaks.len(), 1, "{:?}", breaks);
+        assert_eq!(breaks.len(), 1, "{breaks:?}");
         assert_eq!(
             breaks.into_iter().flatten().exactly_one().unwrap(),
             ("a", "b")
@@ -320,7 +324,7 @@ mod test {
         g.add_edge(c, b, ());
 
         let breaks = edges_to_break_cycle(&g);
-        assert_eq!(breaks.len(), 3, "{:?}", breaks);
+        assert_eq!(breaks.len(), 3, "{breaks:?}");
         let expected_1: HashSet<_> = [("b", "c"), ("a", "c")].iter().copied().collect();
         let expected_2: HashSet<_> = [("b", "c"), ("c", "a")].iter().copied().collect();
         let expected_3: HashSet<_> = [("c", "b"), ("c", "a")].iter().copied().collect();

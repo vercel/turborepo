@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 use turbopath::AbsoluteSystemPathBuf;
 
 const TUI_PREFERENCES_PATH_COMPONENTS: &[&str] = &[".turbo", "preferences", "tui.json"];
@@ -17,15 +18,22 @@ pub struct PreferenceLoader {
 }
 
 impl PreferenceLoader {
-    pub fn new(repo_root: &AbsoluteSystemPathBuf) -> Result<Self, Error> {
+    pub fn new(repo_root: &AbsoluteSystemPathBuf) -> Self {
         let file_path = repo_root.join_components(TUI_PREFERENCES_PATH_COMPONENTS);
-        let contents = file_path.read_existing_to_string()?;
+        let contents = file_path
+            .read_existing_to_string()
+            .map_err(|e| debug!("error reading preferences: {e}"))
+            .ok()
+            .flatten();
         let config = contents
             .map(|string| serde_json::from_str(&string))
-            .transpose()?
+            .transpose()
+            .map_err(|e| debug!("error parsing preferences: {e}"))
+            .ok()
+            .flatten()
             .unwrap_or_default();
 
-        Ok(Self { file_path, config })
+        Self { file_path, config }
     }
 
     pub fn is_task_list_visible(&self) -> bool {
@@ -41,9 +49,8 @@ impl PreferenceLoader {
         Some(active_task)
     }
 
-    pub fn set_active_task(&mut self, value: Option<String>) -> Result<(), Error> {
+    pub fn set_active_task(&mut self, value: Option<String>) {
         self.config.active_task = value;
-        Ok(())
     }
 
     pub fn flush_to_disk(&self) -> Result<(), Error> {
@@ -77,7 +84,7 @@ mod test {
     use super::*;
 
     fn create_loader(repo_root: AbsoluteSystemPathBuf) -> PreferenceLoader {
-        PreferenceLoader::new(&repo_root).expect("Failed to create PreferenceLoader")
+        PreferenceLoader::new(&repo_root)
     }
 
     #[test]
@@ -136,7 +143,7 @@ mod test {
             )
             .expect("Failed to create file");
 
-        let task = PreferenceLoader::new(&repo_root).expect("Failed to create PreferenceLoader");
+        let task = PreferenceLoader::new(&repo_root);
         assert_eq!(task.active_task(), Some("web#dev"));
     }
 
@@ -166,7 +173,22 @@ mod test {
             )
             .expect("Failed to create file");
 
-        let task = PreferenceLoader::new(&repo_root).expect("Failed to create PreferenceLoader");
+        let task = PreferenceLoader::new(&repo_root);
         assert!(!task.is_task_list_visible());
+    }
+
+    #[test]
+    fn test_bad_preferences_file_does_not_fail() {
+        let repo_root_tmp = tempdir().expect("Failed to create tempdir");
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+        let preference_path = repo_root.join_components(TUI_PREFERENCES_PATH_COMPONENTS);
+        preference_path.ensure_dir().unwrap();
+        preference_path
+            .create_with_contents("this isn't json!")
+            .unwrap();
+
+        let loader = create_loader(repo_root);
+        assert!(loader.active_task().is_none());
     }
 }

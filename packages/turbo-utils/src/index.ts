@@ -1,9 +1,10 @@
 // utils
-export { getTurboRoot } from "./getTurboRoot";
+export { getTurboRoot, clearTurboRootCache } from "./getTurboRoot";
 export {
   getTurboConfigs,
   getWorkspaceConfigs,
   forEachTaskDef,
+  clearConfigCaches,
 } from "./getTurboConfigs";
 export { searchUp } from "./searchUp";
 export {
@@ -23,6 +24,7 @@ export {
 export { isWriteable } from "./isWriteable";
 export { createProject, DownloadError } from "./createProject";
 export { convertCase } from "./convertCase";
+export { createNotifyUpdate } from "./notifyUpdate";
 
 export * as logger from "./logger";
 

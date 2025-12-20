@@ -28,7 +28,9 @@ echo "Created temporary directory: $temp_dir"
 if [ "$package_manager" == "npm" ]; then
   package_manager_command="npx @turbo/workspaces convert . npm --ignore-unchanged-package-manager"
 elif [ "$package_manager" == "pnpm" ]; then
-  package_manager_command="npx @turbo/workspaces convert . pnpm --ignore-unchanged-package-manager"
+  # We use pnpm in our examples and its safe to assume we will continue to do so.
+  # We can save ourselves the network call.
+  package_manager_command="pnpm install"
 elif [ "$package_manager" == "yarn" ]; then
   package_manager_command="npx @turbo/workspaces convert . yarn --ignore-unchanged-package-manager"
 fi

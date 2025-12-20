@@ -57,6 +57,17 @@ export class Workspace {
    */
   affectedPackages(
     files: Array<string>,
-    changedLockfile?: string | undefined | null
+    base?: string | undefined | null,
+    optimizeGlobalInvalidations?: boolean | undefined | null
   ): Promise<Array<Package>>;
+  /**
+   * Given a path (relative to the workspace root), returns the
+   * package that contains it.
+   *
+   * This is a naive implementation that simply "iterates-up". If this
+   * function is expected to be called many times for files that are deep
+   * within the same package, we could optimize this by caching the
+   * containing-package of every ancestor.
+   */
+  findPackageByPath(path: string): Promise<Package>;
 }

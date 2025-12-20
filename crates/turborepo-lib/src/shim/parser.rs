@@ -52,6 +52,7 @@ pub struct ShimArgs {
     pub forwarded_args: Vec<String>,
     pub color: bool,
     pub no_color: bool,
+    pub root_turbo_json: Option<AbsoluteSystemPathBuf>,
 }
 
 impl ShimArgs {
@@ -75,6 +76,8 @@ impl ShimArgs {
         let mut is_forwarded_args = false;
         let mut color = false;
         let mut no_color = false;
+        let mut root_turbo_json_flag_idx = None;
+        let mut root_turbo_json = None;
 
         let args = args.skip(1);
         for (idx, arg) in args.enumerate() {
@@ -127,6 +130,32 @@ impl ShimArgs {
                 color = true;
             } else if arg == "--no-color" {
                 no_color = true;
+            } else if root_turbo_json_flag_idx.is_some() {
+                // We've seen a `--root-turbo-json` and therefore add this as the path
+                root_turbo_json = Some(AbsoluteSystemPathBuf::from_unknown(&invocation_dir, arg));
+                root_turbo_json_flag_idx = None;
+            } else if arg == "--root-turbo-json" {
+                // If we see a `--root-turbo-json` we expect the next arg to be a path.
+                root_turbo_json_flag_idx = Some(idx);
+            } else if let Some(path) = arg.strip_prefix("--root-turbo-json=") {
+                // In the case where `--root-turbo-json` is passed as
+                // `--root-turbo-json=./path/to/turbo.json`, that entire chunk
+                // is a single arg, so we need to split it up.
+                root_turbo_json = Some(AbsoluteSystemPathBuf::from_unknown(&invocation_dir, path));
+            } else if arg == "--debug" {
+                return Err(Error::UnsupportedFlag {
+                    flag: "--debug".to_string(),
+                    suggestion: "Please use --verbosity instead.\n if you are trying to pass \
+                                 `--debug` as a value, use `-- --debug`."
+                        .to_string(),
+                });
+            } else if arg == "--verbose" {
+                return Err(Error::UnsupportedFlag {
+                    flag: "--verbose".to_string(),
+                    suggestion: "Please use --verbosity instead.\n if you are trying to pass \
+                                 `--verbose` as a value, use `-- --verbose`."
+                        .to_string(),
+                });
             } else {
                 remaining_turbo_args.push(arg);
             }
@@ -137,6 +166,17 @@ impl ShimArgs {
                 Self::get_spans_in_args_string(vec![idx], env::args().skip(1));
 
             return Err(Error::EmptyCwd {
+                backtrace: Backtrace::capture(),
+                args_string,
+                flag_range: spans[0],
+            });
+        }
+
+        if let Some(idx) = root_turbo_json_flag_idx {
+            let (spans, args_string) =
+                Self::get_spans_in_args_string(vec![idx], env::args().skip(1));
+
+            return Err(Error::EmptyRootTurboJson {
                 backtrace: Backtrace::capture(),
                 args_string,
                 flag_range: spans[0],
@@ -175,6 +215,7 @@ impl ShimArgs {
             forwarded_args,
             color,
             no_color,
+            root_turbo_json,
         })
     }
 
@@ -301,6 +342,7 @@ mod test {
         pub color: bool,
         pub no_color: bool,
         pub relative_cwd: Option<&'static [&'static str]>,
+        pub relative_root_turbo_json: Option<&'static str>,
     }
 
     impl ExpectedArgs {
@@ -314,6 +356,7 @@ mod test {
                 color,
                 no_color,
                 relative_cwd,
+                relative_root_turbo_json,
             } = self;
             ShimArgs {
                 cwd: relative_cwd.map_or_else(
@@ -331,6 +374,8 @@ mod test {
                 force_update_check,
                 color,
                 no_color,
+                root_turbo_json: relative_root_turbo_json
+                    .map(|path| AbsoluteSystemPathBuf::from_unknown(invocation_dir, path)),
             }
         }
     }
@@ -460,6 +505,30 @@ mod test {
             ..Default::default()
         }
         ; "cwd equals"
+    )]
+    #[test_case(
+        &["turbo", "--root-turbo-json", "path/to/turbo.json"],
+        ExpectedArgs {
+            relative_root_turbo_json: Some("path/to/turbo.json"),
+            ..Default::default()
+        }
+        ; "root turbo json value"
+    )]
+    #[test_case(
+        &["turbo", "--root-turbo-json=path/to/turbo.json"],
+        ExpectedArgs {
+            relative_root_turbo_json: Some("path/to/turbo.json"),
+            ..Default::default()
+        }
+        ; "root turbo json equals"
+    )]
+    #[test_case(
+        &["turbo", "--root-turbo-json", "/absolute/path/to/turbo.json"],
+        ExpectedArgs {
+            relative_root_turbo_json: Some("/absolute/path/to/turbo.json"),
+            ..Default::default()
+        }
+        ; "root turbo json absolute path"
     )]
     fn test_shim_parsing(args: &[&str], expected: ExpectedArgs) {
         let cwd = AbsoluteSystemPathBuf::new(if cfg!(windows) {

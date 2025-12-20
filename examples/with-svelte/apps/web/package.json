@@ -5,7 +5,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
-		"build": "vite build",
+		"build": "svelte-kit sync && vite build",
 		"preview": "vite preview",
 		"test": "npm run test:integration && npm run test:unit",
 		"check-types": "tsc --noEmit",
@@ -21,17 +21,17 @@
 	"devDependencies": {
 		"@repo/eslint-config": "workspace:*",
 		"@repo/typescript-config": "workspace:*",
-		"@sveltejs/adapter-auto": "^3.3.1",
-		"@sveltejs/kit": "^2.16.0",
-		"@sveltejs/vite-plugin-svelte": "^3.1.2",
-		"eslint": "^9.19.0",
-		"prettier": "^3.4.2",
-		"prettier-plugin-svelte": "^3.3.3",
-		"svelte": "^4.2.19",
-		"svelte-check": "^3.8.6",
+		"@sveltejs/adapter-auto": "^4.0.0",
+		"@sveltejs/kit": "^2.49.0",
+		"@sveltejs/vite-plugin-svelte": "^5.1.0",
+		"prettier": "^3.7.4",
+		"eslint": "^9.39.1",
+		"prettier-plugin-svelte": "^3.4.0",
+		"svelte": "^5.46.0",
+		"svelte-check": "^4.3.0",
 		"tslib": "^2.8.1",
-		"typescript": "5.7.3",
-		"vite": "^5.4.13",
-		"vitest": "^1.6.0"
+		"typescript": "5.9.2",
+		"vite": "^6.3.2",
+		"vitest": "^3.2.0"
 	}
 }

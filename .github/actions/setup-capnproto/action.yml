@@ -4,8 +4,18 @@ description: "Sets up capnproto for the current platform"
 runs:
   using: "composite"
   steps:
+    - name: "Cache capnproto (Linux)"
+      if: runner.os == 'Linux' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      uses: actions/cache@v4
+      id: cache-capnp-linux
+      with:
+        path: |
+          /usr/bin/capnp
+          /usr/bin/capnpc
+        key: ${{ runner.os }}-capnproto-0.11.2
+
     - name: "Setup capnproto for Linux"
-      if: runner.os == 'Linux'
+      if: runner.os == 'Linux' && (steps.cache-capnp-linux.outcome == 'skipped' || steps.cache-capnp-linux.outputs.cache-hit != 'true')
       shell: bash
       run: sudo apt-get -y update && sudo apt-get install -y capnproto
 

@@ -8,12 +8,18 @@ interface Options {
 }
 
 function contentCheck(content: string): boolean {
-  // eslint-disable-next-line import/no-named-as-default-member -- json5 exports different objects depending on if you're using esm or cjs (https://github.com/json5/json5/issues/240)
   const result: Schema | undefined = json5.parse(content);
   return !(result && "extends" in result);
 }
 
 const configCache: Record<string, string> = {};
+
+export function clearTurboRootCache(): void {
+  Object.keys(configCache).forEach((key) => {
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- This is safe.
+    delete configCache[key];
+  });
+}
 
 export function getTurboRoot(cwd?: string, opts?: Options): string | null {
   const cacheEnabled = opts?.cache ?? true;

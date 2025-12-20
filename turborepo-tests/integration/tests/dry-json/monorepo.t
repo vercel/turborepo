@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 # Save JSON to tmp file so we don't need to keep re-running the build
   $ ${TURBO} run build --dry=json > tmpjson.log
@@ -74,6 +74,7 @@ Setup
     "directory": "apps(\/|\\\\)my-app", (re)
     "dependencies": [],
     "dependents": [],
+    "with": [],
     "resolvedTaskDefinition": {
       "outputs": [
         "apple.json",
@@ -131,6 +132,7 @@ Setup
     "directory": "packages(\/|\\\\)util", (re)
     "dependencies": [],
     "dependents": [],
+    "with": [],
     "resolvedTaskDefinition": {
       "outputs": [],
       "cache": true,
@@ -180,8 +182,6 @@ Run again with NODE_ENV set and see the value in the summary. --filter=util work
 Tasks that don't exist throw an error
   $ ${TURBO} run doesnotexist --dry=json
     x Missing tasks in project
-  
-  Error: 
-    x Could not find task `doesnotexist` in project
+    `->   x Could not find task `doesnotexist` in project
   
   [1]

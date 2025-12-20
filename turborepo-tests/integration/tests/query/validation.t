@@ -4,10 +4,8 @@ Setup
 Validate that we get an error when we try to run multiple persistent tasks with concurrency 1
   $ ${TURBO} run build --concurrency=1
     x Invalid task configuration
-  
-  Error: 
-    x You have 2 persistent tasks but `turbo` is configured for concurrency of
-    | 1. Set --concurrency to at least 3
+    `->   x You have 2 persistent tasks but `turbo` is configured for
+          | concurrency of 1. Set --concurrency to at least 3
   
   [1]
 

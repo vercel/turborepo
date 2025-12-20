@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use async_graphql::Object;
 use turborepo_errors::Spanned;
+use turborepo_task_id::TaskId;
 
 use crate::{
     engine::TaskNode,
     query::{package::Package, Array, Error},
-    run::{task_id::TaskId, Run},
+    run::Run,
 };
 
 pub struct RepositoryTask {

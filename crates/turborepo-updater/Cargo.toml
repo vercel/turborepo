@@ -1,7 +1,7 @@
 [package]
 name = "turbo-updater"
 version = "0.1.0"
-edition = "2021"
+edition = { workspace = true }
 description = "Minimal wrapper around update-informer to provide npm registry support and consistent UI"
 license = "MIT"
 publish = false
@@ -22,6 +22,7 @@ reqwest = { workspace = true, features = ["json", "blocking"] }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository" }
 update-informer = { git = "https://github.com/nicholaslyang/update-informer.git", default-features = false, features = [
   "reqwest",
 ] }

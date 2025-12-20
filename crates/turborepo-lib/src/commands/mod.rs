@@ -8,16 +8,22 @@ use turborepo_ui::ColorConfig;
 
 use crate::{
     cli,
-    config::{ConfigurationOptions, Error as ConfigError, TurborepoConfigBuilder},
+    config::{
+        resolve_turbo_config_path, ConfigurationOptions, Error as ConfigError,
+        TurborepoConfigBuilder,
+    },
     opts::Opts,
     Args,
 };
 
 pub(crate) mod bin;
 pub(crate) mod boundaries;
+pub(crate) mod clone;
 pub(crate) mod config;
 pub(crate) mod daemon;
+pub(crate) mod devtools;
 pub(crate) mod generate;
+pub(crate) mod get_mfe_port;
 pub(crate) mod info;
 pub(crate) mod link;
 pub(crate) mod login;
@@ -120,6 +126,10 @@ impl CommandBase {
             )
             .with_run_summary(args.run_args().and_then(|args| args.summarize()))
             .with_allow_no_turbo_json(args.allow_no_turbo_json.then_some(true))
+            .with_concurrency(
+                args.execution_args()
+                    .and_then(|args| args.concurrency.clone()),
+            )
             .build()
     }
 
@@ -139,8 +149,8 @@ impl CommandBase {
     fn root_package_json_path(&self) -> AbsoluteSystemPathBuf {
         self.repo_root.join_component("package.json")
     }
-    fn root_turbo_json_path(&self) -> AbsoluteSystemPathBuf {
-        self.repo_root.join_component("turbo.json")
+    fn root_turbo_json_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
+        resolve_turbo_config_path(&self.repo_root)
     }
 
     pub fn api_auth(&self) -> Result<Option<APIAuth>, ConfigError> {

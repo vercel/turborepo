@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://turbo.build">
+  <a href="https://turborepo.com">
     <picture>
       <source media="(prefers-color-scheme: dark)" srcset="https://user-images.githubusercontent.com/4060187/196936123-f6e1db90-784d-4174-b774-92502b718836.png">
       <img src="https://user-images.githubusercontent.com/4060187/196936104-5797972c-ab10-4834-bd61-0d1e5f442c9c.png" height="128">
@@ -19,11 +19,11 @@ Turborepo is a high-performance build system for JavaScript and TypeScript codeb
 
 ## Getting Started
 
-Visit https://turbo.build/repo to get started with Turborepo.
+Visit https://turborepo.com to get started with Turborepo.
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for more information.
+See [CONTRIBUTING.md](https://github.com/vercel/turborepo/blob/main/CONTRIBUTING.md) for more information.
 
 ## Community
 
@@ -35,17 +35,11 @@ Our [Code of Conduct](https://github.com/vercel/turborepo/blob/main/CODE_OF_COND
 
 ## Who is using Turborepo?
 
-Turborepo is used by the world's leading companies. Check out the [Turborepo Showcase](https://turbo.build/showcase) to learn more.
+Turborepo is used by the world's leading companies. Check out the [Turborepo Showcase](https://turborepo.com/showcase) to learn more.
 
 ## Updates
 
 Follow [@turborepo](https://x.com/turborepo) on X for project updates.
-
-## Authors
-
-**Turborepo**
-
-- Jared Palmer ([@jaredpalmer](https://x.com/jaredpalmer))
 
 ## Security
 

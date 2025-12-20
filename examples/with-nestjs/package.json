@@ -6,18 +6,18 @@
   "author": "",
   "license": "UNLICENSED",
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
-    "test": "turbo test",
-    "test:e2e": "turbo test:e2e",
-    "lint": "turbo lint",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "test:e2e": "turbo run test:e2e",
+    "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "prettier": "^3.2.5",
-    "turbo": "^2.0.4"
+    "turbo": "^2.6.1"
   },
   "packageManager": "pnpm@8.15.5",
   "engines": {

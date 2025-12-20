@@ -8,11 +8,11 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "lint": "turbo run lint",
     "test": "turbo run test",
-    "typecheck": "turbo run typecheck"
+    "check-types": "turbo run check-types"
   },
   "devDependencies": {
-    "prettier": "^3.4.2",
-    "turbo": "^2.3.4"
+    "prettier": "^3.6.0",
+    "turbo": "^2.6.1"
   },
   "packageManager": "pnpm@8.15.6",
   "engines": {

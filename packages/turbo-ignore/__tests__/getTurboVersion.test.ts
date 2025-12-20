@@ -68,4 +68,20 @@ describe("getWorkspace()", () => {
       null
     );
   });
+
+  describe("pnpm catalog", () => {
+    const fixture = "./__fixtures__/turbo_catalog";
+
+    it("warns on catalog usage", () => {
+      getTurboVersion({}, fixture);
+      expect(mockConsole.warn).toHaveBeenCalledWith(
+        "≫  ",
+        "Cannot infer turbo version due to use of `catalog` protocol. Remove `turbo` from your PNPM catalog to ensure correct turbo version is used"
+      );
+    });
+
+    it("falls back to inferring major from turbo.json", () => {
+      expect(getTurboVersion({}, fixture)).toEqual("^2");
+    });
+  });
 });

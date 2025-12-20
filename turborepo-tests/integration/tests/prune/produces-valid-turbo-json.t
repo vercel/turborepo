@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh monorepo_with_root_dep pnpm@7.25.1
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh monorepo_with_root_dep pnpm@7.25.1 --no-install
 
 Make sure that the internal util package is part of the prune output
   $ ${TURBO} prune docs
@@ -11,7 +11,7 @@ Make sure that the internal util package is part of the prune output
 Make sure we prune tasks that reference a pruned workspace
   $ cat out/turbo.json | jq
   {
-    "$schema": "https://turbo.build/schema.json",
+    "$schema": "https://turborepo.com/schema.json",
     "tasks": {
       "build": {
         "outputs": []
@@ -31,7 +31,7 @@ Verify turbo can read the produced turbo.json
 
 Modify turbo.json to add some fields to remoteCache and add a spaceId
   $ rm -rf out
-  $ cat turbo.json | jq '.remoteCache.enabled = true | .remoteCache.timeout = 1000 | .remoteCache.apiUrl = "my-domain.com/cache" | .experimentalSpaces.id = "my-space-id"' > turbo.json.tmp
+  $ cat turbo.json | jq '.remoteCache.enabled = true | .remoteCache.timeout = 1000 | .remoteCache.apiUrl = "my-domain.com/cache"' > turbo.json.tmp
   $ mv turbo.json.tmp turbo.json
   $ ${TURBO} prune docs > /dev/null
   $ cat out/turbo.json | jq '.remoteCache | keys'
@@ -42,8 +42,6 @@ Modify turbo.json to add some fields to remoteCache and add a spaceId
   ]
   $ cat out/turbo.json | jq '.remoteCache.enabled'
   true
-  $ cat out/turbo.json | jq '.experimentalSpaces.id'
-  "my-space-id"
   $ cat out/turbo.json | jq '.remoteCache.timeout'
   1000
   $ cat out/turbo.json | jq '.remoteCache.apiUrl'

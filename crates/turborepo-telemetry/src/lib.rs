@@ -1,9 +1,11 @@
 //! Turborepo's telemetry library. Handles sending anonymous telemetry events to
 //! the Vercel API in the background.
 //!
-//! More detail is available at https://turbo.build/repo/docs/telemetry.
+//! More detail is available at https://turborepo.com/docs/telemetry.
 
 #![feature(error_generic_member_access)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 
 pub mod config;
 pub mod errors;
@@ -13,7 +15,7 @@ use std::time::Duration;
 
 use config::{ConfigError, TelemetryConfig};
 use events::TelemetryEvent;
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::{StreamExt, stream::FuturesUnordered};
 use once_cell::sync::OnceCell;
 use thiserror::Error;
 use tokio::{
@@ -21,9 +23,9 @@ use tokio::{
     sync::{mpsc, oneshot},
     task::{JoinError, JoinHandle},
 };
-use tracing::{debug, error, trace};
+use tracing::{debug, trace};
 use turborepo_api_client::telemetry;
-use turborepo_ui::{color, ColorConfig, BOLD, GREY};
+use turborepo_ui::{BOLD, ColorConfig, GREY, color};
 use uuid::Uuid;
 
 const BUFFER_THRESHOLD: usize = 10;

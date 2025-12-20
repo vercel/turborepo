@@ -2,7 +2,7 @@
 name = "turborepo-cache"
 version = "0.1.0"
 license = "MIT"
-edition = "2021"
+edition = { workspace = true }
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
@@ -48,4 +48,5 @@ tracing = { workspace = true }
 turbopath = { workspace = true }
 turborepo-analytics = { workspace = true }
 turborepo-api-client = { workspace = true }
+turborepo-auth = { workspace = true }
 zstd = "0.12.3"
