@@ -40,6 +40,7 @@ jobs:
             setup: "rustup set default-host aarch64-pc-windows-msvc"
             container-options: "--rm"
     runs-on: ${{ matrix.settings.host }}
+    timeout-minutes: 30
     container:
       image: ${{ matrix.settings.container }}
       options: ${{ matrix.settings.container-options }}
