@@ -1,6 +1,6 @@
 # Solid-Turborepo Starter
 
-A modern Turborepo starter for building SolidJS applications with a complete development setup. This starter comes equipped with the pnpm package manager, Vinxi Bundler foroptimized builds, Tailwind CSS v4 for styling and ESLint for code quality.
+A modern Turborepo starter for building SolidJS applications with a complete development setup. This starter comes equipped with the pnpm package manager, Vinxi Bundler for optimized builds, Tailwind CSS v4 for styling and ESLint for code quality.
 
 ---
 
