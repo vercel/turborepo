@@ -11,7 +11,7 @@ import type {
   PipelineV2,
 } from "@turbo/types";
 import * as logger from "./logger";
-import { getTurboRoot } from "./getTurboRoot";
+import { getTurboRoot, clearTurboRootCache } from "./getTurboRoot";
 import type { PackageJson, PNPMWorkspaceConfig } from "./types";
 
 const ROOT_GLOB = "{turbo.json,turbo.jsonc}";
@@ -231,7 +231,6 @@ export function getWorkspaceConfigs(
         let turboConfig: SchemaV1 | undefined;
 
         try {
-          // TODO: Our code was allowing both config files to exist. This is a bug, needs to be fixed.
           if (error) {
             logger.error(error);
             throw new Error(error);
@@ -292,4 +291,16 @@ export function forEachTaskDef<BaseSchema extends BaseSchemaV1 | BaseSchemaV2>(
   } else {
     Object.entries(config.tasks).forEach(f);
   }
+}
+
+export function clearConfigCaches(): void {
+  Object.keys(turboConfigsCache).forEach((key) => {
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- This is safe.
+    delete turboConfigsCache[key];
+  });
+  Object.keys(workspaceConfigCache).forEach((key) => {
+    // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- This is safe.
+    delete workspaceConfigCache[key];
+  });
+  clearTurboRootCache();
 }

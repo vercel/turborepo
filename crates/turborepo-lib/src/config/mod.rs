@@ -133,16 +133,32 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     UnnecessaryPackageTaskSyntax(Box<UnnecessaryPackageTaskSyntaxError>),
-    #[error("You can only extend from the root of the workspace.")]
-    ExtendFromNonRoot {
-        #[label("non-root workspace found here")]
+    #[error("You must extend from the root of the workspace first.")]
+    ExtendsRootFirst {
+        #[label("'//' should be first")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource<String>,
     },
-    #[error("You must extend from the root of the workspace first.")]
-    ExtendsRootFirst {
-        #[label("'//' should be first")]
+    #[error(
+        "The \"extends\" key on task \"{task_name}\" can only be used in Package Configurations."
+    )]
+    TaskExtendsInRoot {
+        task_name: String,
+        #[label("\"extends\" found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+    #[error(
+        "Cannot set \"extends\": false on task \"{task_name}\" because it is not defined in the \
+         extends chain."
+    )]
+    #[diagnostic(help("{extends_chain}"))]
+    TaskNotInExtendsChain {
+        task_name: String,
+        extends_chain: String,
+        #[label("task is not inherited")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource<String>,

@@ -51,7 +51,9 @@ const slugger = new GitHubSlugger();
 /** Collect the paths of all .mdx files we care about */
 const getAllMdxFilePaths = async (): Promise<string[]> => {
   const allFiles = await fs.readdir(DOCS_PATH, { recursive: true });
-  return allFiles.filter((file) => file.endsWith(".mdx"));
+  return allFiles.filter(
+    (file) => file.endsWith(".mdx") && !file.startsWith("openapi/")
+  );
 };
 
 // Returns the slugs of all headings in a tree
@@ -146,6 +148,33 @@ const prepareDocumentMapEntry = async (
   }
 };
 
+/** Checks if the hash exists in a document's headings, accounting for ExperimentalBadge suffixes */
+const hashExistsInHeadings = (headings: string[], hash: string): boolean => {
+  if (headings.includes(hash)) {
+    return true;
+  }
+
+  // Handle experimental badge suffix: -experimental -> -experimentalbadgeexperimentalexperimentalbadge
+  const experimentalHeading = hash.replace(
+    "-experimental",
+    "-experimentalbadgeexperimentalexperimentalbadge"
+  );
+  if (headings.includes(experimentalHeading)) {
+    return true;
+  }
+
+  // Handle pre-release badge suffix: -pre-release -> -experimentalbadgepre-releaseexperimentalbadge
+  const preReleaseHeading = hash.replace(
+    "-pre-release",
+    "-experimentalbadgepre-releaseexperimentalbadge"
+  );
+  if (headings.includes(preReleaseHeading)) {
+    return true;
+  }
+
+  return false;
+};
+
 /** Checks if the links point to existing documents */
 const validateInternalLink =
   (documentMap: Map<string, Document>) => (doc: Document, href: string) => {
@@ -172,7 +201,7 @@ const validateInternalLink =
       });
     } else if (hash && !EXCLUDED_HASHES.includes(hash)) {
       // Check if the hash link points to an existing section within the document
-      const hashFound = foundPage.headings.includes(hash);
+      const hashFound = hashExistsInHeadings(foundPage.headings, hash);
 
       if (!hashFound) {
         errors.push({
@@ -197,18 +226,26 @@ const validateHashLink = (doc: Document, href: string) => {
     return [];
   }
 
-  if (
-    doc.headings.includes(
-      // Handles when the link has the experimental badge in it.
-      // Because we're parsing the raw document (not the rendered output), the JSX declaration is still present.
-      hashLink.replace(
-        "-experimental",
-        "-experimentalbadgeexperimentalexperimentalbadge"
-      )
-    )
-  ) {
+  // Handles when the link has the experimental badge in it.
+  // Because we're parsing the raw document (not the rendered output), the JSX declaration is still present.
+  const experimentalHeading = hashLink.replace(
+    "-experimental",
+    "-experimentalbadgeexperimentalexperimentalbadge"
+  );
+  const preReleaseHeading =
+    hashLink + "-experimentalbadgepre-releaseexperimentalbadge";
+
+  if (doc.headings.includes(experimentalHeading)) {
     console.warn(
-      `The hash link "${hashLink}" passed when including the <ExperimentalBadge /> JSX declaration.`
+      `The hash link "${hashLink}" passed when including the <ExperimentalBadge>Experimental</ExperimentalBadge> JSX declaration.`
+    );
+    console.log();
+    return [];
+  }
+
+  if (doc.headings.includes(preReleaseHeading)) {
+    console.warn(
+      `The hash link "${hashLink}" passed when including the <ExperimentalBadge>Pre-release</ExperimentalBadge> JSX declaration.`
     );
     console.log();
     return [];

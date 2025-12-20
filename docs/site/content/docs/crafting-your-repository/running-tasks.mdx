@@ -4,7 +4,7 @@ description: Learn how to run tasks in your repository through the `turbo` CLI.
 ---
 
 import { Callout } from '#components/callout';
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { LinkToDocumentation } from '#components/link-to-documentation';
 import { InVersion } from '#components/in-version';
 
@@ -39,7 +39,7 @@ For tasks that you run frequently, you can write your `turbo` commands directly 
 
 These scripts can then be run using your package manager.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
   ```bash title="Terminal"
@@ -64,14 +64,14 @@ npm run dev
 
   </Tab>
 
-  <Tab value="bun (Beta)">
+  <Tab value="bun">
 
 ```bash title="Terminal"
 bun run dev
 ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 <Callout type="warn">
 You only want to write `turbo` commands in your root `package.json`. Writing `turbo` commands into the `package.json` of packages can lead to recursively

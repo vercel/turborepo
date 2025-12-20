@@ -1,0 +1,41 @@
+[package]
+name = "turborepo-devtools"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Async runtime
+futures = { workspace = true }
+tokio = { workspace = true, features = ["full", "sync"] }
+
+# Web server + WebSocket
+axum = { workspace = true, features = ["ws"] }
+tower-http = { version = "0.5.2", features = ["cors"] }
+
+# Serialization
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+# File watching
+ignore = "0.4.22"
+notify = { workspace = true }
+radix_trie = { workspace = true }
+
+# Utilities
+port_scanner = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+webbrowser = { workspace = true }
+
+# Internal crates
+turbopath = { workspace = true }
+turborepo-filewatch = { path = "../turborepo-filewatch" }
+turborepo-repository = { path = "../turborepo-repository" }
+turborepo-scm = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

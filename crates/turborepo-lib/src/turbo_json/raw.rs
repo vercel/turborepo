@@ -152,6 +152,8 @@ pub struct RawTurboJson {
 #[deserializable(unknown_fields = "deny")]
 pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) extends: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) cache: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) depends_on: Option<Spanned<Vec<Spanned<UnescapedString>>>>,
@@ -178,6 +180,22 @@ pub struct RawTaskDefinition {
     // This can currently only be set internally and isn't a part of turbo.json
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) with: Option<Vec<Spanned<UnescapedString>>>,
+}
+
+impl super::HasConfigBeyondExtends for RawTaskDefinition {
+    fn has_config_beyond_extends(&self) -> bool {
+        self.cache.is_some()
+            || self.depends_on.is_some()
+            || self.env.is_some()
+            || self.inputs.is_some()
+            || self.pass_through_env.is_some()
+            || self.persistent.is_some()
+            || self.interruptible.is_some()
+            || self.outputs.is_some()
+            || self.output_logs.is_some()
+            || self.interactive.is_some()
+            || self.with.is_some()
+    }
 }
 
 impl From<RawRootTurboJson> for RawTurboJson {

@@ -3,6 +3,9 @@
 //! Any parsing of files should attempt to produce value of `Spanned<T>` so if
 //! we need to reference where T came from the span is available.
 
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
+
 use std::{
     fmt::Display,
     iter,

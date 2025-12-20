@@ -83,7 +83,7 @@ describe("getComparison()", () => {
 
   it("uses previousDeploy when running in Vercel CI with VERCEL_GIT_PREVIOUS_SHA", () => {
     const mockExec = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockReturnValue("commit");
 
     process.env.VERCEL = "1";
@@ -108,7 +108,7 @@ describe("getComparison()", () => {
 
   it("uses fallback when running in Vercel CI with unreachable VERCEL_GIT_PREVIOUS_SHA", () => {
     const mockExec = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockImplementation(() => {
         throw new Error("fatal: Not a valid object name mygitsha");
       });
@@ -137,7 +137,7 @@ describe("getComparison()", () => {
 
   it("returns null running in Vercel CI with unreachable VERCEL_GIT_PREVIOUS_SHA and no fallback", () => {
     const mockExec = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockImplementation(() => {
         throw new Error("fatal: Not a valid object name mygitsha");
       });
@@ -158,7 +158,7 @@ describe("getComparison()", () => {
 
   it("modifies output when running in Vercel CI with VERCEL_GIT_PREVIOUS_SHA but no VERCEL_GIT_COMMIT_REF", () => {
     const mockExec = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockReturnValue("commit");
 
     process.env.VERCEL = "1";
@@ -182,7 +182,7 @@ describe("getComparison()", () => {
 
   it("modifies output when running in Vercel CI with unreachable VERCEL_GIT_PREVIOUS_SHA and no VERCEL_GIT_COMMIT_REF", () => {
     const mockExec = jest
-      .spyOn(child_process, "execSync")
+      .spyOn(child_process, "execFileSync")
       .mockImplementation(() => {
         throw new Error("fatal: Not a valid object name mygitsha");
       });

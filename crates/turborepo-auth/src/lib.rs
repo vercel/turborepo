@@ -1,5 +1,7 @@
 #![feature(cow_is_borrowed)]
 #![feature(assert_matches)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 //! Turborepo's library for authenticating with the Vercel API.
 //! Handles logging into Vercel, verifying SSO, and storing the token.
@@ -617,6 +619,169 @@ mod tests {
         let result = Token::from_file(&file_path);
 
         assert!(matches!(result, Err(Error::TokenNotFound)));
+    }
+
+    #[test]
+    fn test_auth_tokens_is_expired() {
+        let current_time = current_unix_time_secs();
+
+        // Test with no expiry (should not be expired)
+        let tokens_no_expiry = AuthTokens {
+            token: Some("test_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            expires_at: None,
+        };
+        assert!(!tokens_no_expiry.is_expired());
+
+        // Test with future expiry (should not be expired)
+        let tokens_future_expiry = AuthTokens {
+            token: Some("test_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            expires_at: Some(current_time + 3600), // 1 hour in the future
+        };
+        assert!(!tokens_future_expiry.is_expired());
+
+        // Test with past expiry (should be expired)
+        let tokens_past_expiry = AuthTokens {
+            token: Some("test_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            expires_at: Some(current_time - 3600), // 1 hour in the past
+        };
+        assert!(tokens_past_expiry.is_expired());
+
+        // Test edge case: exactly at expiry time (should be expired)
+        let tokens_exact_expiry = AuthTokens {
+            token: Some("test_token".to_string()),
+            refresh_token: Some("refresh_token".to_string()),
+            expires_at: Some(current_time),
+        };
+        assert!(tokens_exact_expiry.is_expired());
+    }
+
+    #[test]
+    fn test_from_auth_file_with_valid_data() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let auth_content = r#"{
+            "token": "vca_test_token_123",
+            "refreshToken": "refresh_token_456",
+            "expiresAt": 1234567890
+        }"#;
+        file_path.create_with_contents(auth_content).unwrap();
+
+        let result = Token::from_auth_file(&file_path).expect("Failed to read auth from file");
+
+        assert_eq!(result.token, Some("vca_test_token_123".to_string()));
+        assert_eq!(result.refresh_token, Some("refresh_token_456".to_string()));
+        assert_eq!(result.expires_at, Some(1234567890));
+    }
+
+    #[test]
+    fn test_from_auth_file_with_missing_fields() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        // Test with only token field
+        let auth_content = r#"{"token": "legacy_token_123"}"#;
+        file_path.create_with_contents(auth_content).unwrap();
+
+        let result = Token::from_auth_file(&file_path).expect("Failed to read auth from file");
+
+        assert_eq!(result.token, Some("legacy_token_123".to_string()));
+        assert_eq!(result.refresh_token, None);
+        assert_eq!(result.expires_at, None);
+    }
+
+    #[test]
+    fn test_from_auth_file_empty_file() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("nonexistent_auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let result = Token::from_auth_file(&file_path).expect("Should return empty AuthTokens");
+
+        assert_eq!(result.token, None);
+        assert_eq!(result.refresh_token, None);
+        assert_eq!(result.expires_at, None);
+    }
+
+    #[test]
+    fn test_write_to_auth_file() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("test_auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let tokens = AuthTokens {
+            token: Some("vca_test_token".to_string()),
+            refresh_token: Some("test_refresh_token".to_string()),
+            expires_at: Some(1234567890),
+        };
+
+        tokens
+            .write_to_auth_file(&file_path)
+            .expect("Failed to write auth file");
+
+        // Read back and verify
+        let content = file_path
+            .read_to_string()
+            .expect("Failed to read auth file");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("Invalid JSON");
+
+        assert_eq!(parsed["token"], "vca_test_token");
+        assert_eq!(parsed["refreshToken"], "test_refresh_token");
+        assert_eq!(parsed["expiresAt"], 1234567890);
+
+        // Verify the JSON structure includes the expected comments
+        assert!(content.contains("This is your Vercel credentials file"));
+        assert!(content.contains(
+            "https://vercel.com/docs/projects/project-configuration/global-configuration#auth.json"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_refresh_token_missing_refresh_token() {
+        let tokens = AuthTokens {
+            token: Some("vca_test_token".to_string()),
+            refresh_token: None, // No refresh token
+            expires_at: Some(current_unix_time_secs() - 3600),
+        };
+
+        let result = tokens.refresh_token().await;
+        assert!(matches!(result, Err(Error::TokenNotFound)));
+    }
+
+    #[test]
+    fn test_auth_tokens_roundtrip() {
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("roundtrip_auth.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let original_tokens = AuthTokens {
+            token: Some("vca_roundtrip_token".to_string()),
+            refresh_token: Some("roundtrip_refresh_token".to_string()),
+            expires_at: Some(1234567890),
+        };
+
+        // Write tokens to file
+        original_tokens
+            .write_to_auth_file(&file_path)
+            .expect("Failed to write auth file");
+
+        // Read tokens back from file
+        let read_tokens = Token::from_auth_file(&file_path).expect("Failed to read auth file");
+
+        // Verify they match
+        assert_eq!(original_tokens.token, read_tokens.token);
+        assert_eq!(original_tokens.refresh_token, read_tokens.refresh_token);
+        assert_eq!(original_tokens.expires_at, read_tokens.expires_at);
     }
 
     enum MockErrorType {

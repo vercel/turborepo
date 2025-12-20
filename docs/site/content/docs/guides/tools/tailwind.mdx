@@ -3,7 +3,7 @@ title: Tailwind CSS
 description: Learn how to use Tailwind CSS in a Turborepo.
 ---
 
-import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Callout } from '#components/callout';
 import { Steps, Step } from '#components/steps';
 
@@ -11,9 +11,9 @@ import { Steps, Step } from '#components/steps';
 
 ## Quickstart
 
-If you'd rather use a template, this guide is walking throw how to build [this Tailwind CSS + Turborepo template](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind).
+If you'd rather use a template, this guide is walking through how to build [this Tailwind CSS + Turborepo template](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind).
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -39,14 +39,14 @@ npx create-turbo@latest -e with-tailwind
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 
 ```bash title="Terminal"
 bunx create-turbo@latest -e with-tailwind
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Guide
 
@@ -59,7 +59,7 @@ bunx create-turbo@latest -e with-tailwind
 
 If you don't have an existing project, use [create-turbo](/docs/getting-started/installation) to create a new monorepo:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -85,14 +85,14 @@ npx create-turbo@latest
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 
 ```bash title="Terminal"
 bunx create-turbo@latest
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 </Step>
 
@@ -252,14 +252,15 @@ Create a `build` and `dev` task that runs the scripts for building of components
 
 This `styles.css` contains component-level styles for the shared UI library.
 
-<Callout type="info">
-  Do not import Tailwind CSS here. It should only be imported by the consuming
-  application to avoid style duplication issues.
-</Callout>
-
 ```css title="./packages/ui/src/styles.css"
 /* Component-level styles for the UI package */
+@import 'tailwindcss' prefix(ui);
 ```
+
+<Callout type="info">
+  Tailwind classes used in this package should be prefixed with `ui:` to avoid
+  style specificity issues.
+</Callout>
 
 </Tab>
 
@@ -272,7 +273,7 @@ This `styles.css` contains component-level styles for the shared UI library.
 
 Install the packages you've created into your application.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -299,25 +300,34 @@ npm install @repo/ui @repo/tailwind-config --workspace=web --workspace=@repo/ui 
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 
 ```bash title="Terminal"
-bun install @repo/ui @repo/tailwind-config --dev --filter=@repo/ui --filter=web
+cd apps/web && bun install @repo/ui @repo/tailwind-config --dev
+cd packages/ui && bun install @repo/ui @repo/tailwind-config --dev
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 Then, configure the files in your application so the styles from the UI package are reflected in the application.
 
-<Tabs items={["globals.css", "postcss.config.js (Optional)"]}>
+<Tabs items={["globals.css", "layout.tsx", "postcss.config.js (Optional)"]}>
 
 <Tab value="globals.css">
 
 ```css title="./apps/web/app/globals.css"
 @import 'tailwindcss';
 @import '@repo/tailwind-config';
-@import '@repo/ui/styles.css';
+```
+
+</Tab>
+
+<Tab value="layout.tsx">
+
+```tsx title="./apps/web/app/layout.tsx"
+import '@repo/ui/styles.css';
+import './globals.css';
 ```
 
 </Tab>

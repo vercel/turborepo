@@ -6,13 +6,13 @@
   "publishConfig": {
     "access": "public"
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/entry.js",
+  "types": "./dist/entry.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "import": "./dist/entry.js",
+      "require": "./dist/entry.js",
+      "types": "./dist/entry.d.ts"
     },
     "./base": {
       "import": "./dist/base.js",
@@ -33,7 +33,7 @@
   "devDependencies": {
     "@jest/types": "^29.6.3",
     "jest": "^29.7.0",
-    "next": "^15.4.2",
+    "next": "16.0.10",
     "typescript": "^5.8.2"
   },
   "scripts": {

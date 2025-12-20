@@ -3,13 +3,13 @@ title: Internal Packages
 description: Learn how to build Internal Packages in your monorepo.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 Internal Packages are libraries whose source code is inside your Workspace. You can quickly make Internal Packages to share code within your monorepo and choose to [publish them to the npm registry](/docs/guides/publishing-libraries) if you need to later.
 
 Internal Packages are used in your repository by installing them in `package.json` similar to an external package coming from the npm registry. However, instead of marking a version to install, you can reference the package using your package manager's workspace installation syntax:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 ```json title="./apps/web/package.json"
@@ -41,7 +41,7 @@ Internal Packages are used in your repository by installing them in `package.jso
 ```
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 ```json title="./apps/web/package.json"
 {
   "dependencies": {
@@ -50,7 +50,7 @@ Internal Packages are used in your repository by installing them in `package.jso
 }
 ```
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 In the [Creating an Internal Package guide](/docs/crafting-your-repository/creating-an-internal-package), you can build an Internal Package from the beginning using [the Compiled Package strategy](#compiled-packages). On this page, we'll describe other strategies for creating Internal Packages and their tradeoffs, including [publishing the package to the npm registry](#publishable-packages) to create an External Package.
 

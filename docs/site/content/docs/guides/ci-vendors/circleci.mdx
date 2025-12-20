@@ -3,7 +3,7 @@ title: CircleCI
 description: Learn how to use CircleCI with Turborepo.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Callout } from '#components/callout';
 
 The following example shows how to use Turborepo with [CircleCI](https://circleci.com/).
@@ -49,7 +49,7 @@ And a `turbo.json`:
 
 Create a file called `.circleci/config.yml` in your repository with the following contents:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
 
@@ -143,7 +143,7 @@ Create a file called `.circleci/config.yml` in your repository with the followin
 
   </Tab>
 
-  <Tab value="bun (Beta)">
+  <Tab value="bun">
 
     ```yaml title=".circleci/config.yml"
     version: 2.1
@@ -175,7 +175,7 @@ Create a file called `.circleci/config.yml` in your repository with the followin
     ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Remote Caching
 
@@ -197,6 +197,6 @@ Copy the value to a safe place. You'll need it in a moment.
 ![CircleCI Environment Variables](/images/docs/circleci-environment-variables.png)
 ![CircleCI Create Environment Variables](/images/docs/circleci-create-environment-variables.png)
 
-3. Make a second secret called `TURBO_TEAM` and set it to your team slug - the part after `vercel.com/` in [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). For example, the slug for `vercel.com/acme` is `acme`. 
+3. Make a second secret called `TURBO_TEAM` and set it to your team slug - the part after `vercel.com/` in [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). For example, the slug for `vercel.com/acme` is `acme`.
 
 4. CircleCI automatically loads environment variables stored in project settings into the CI environment. No modifications are necessary for the CI file.

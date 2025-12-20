@@ -457,14 +457,23 @@ impl PackageManager {
         let contents = lockfile_path
             .read()
             .map_err(|_| Error::LockfileMissing(lockfile_path.clone()))?;
-        self.parse_lockfile(root_package_json, &contents)
+
+        // Read .yarnrc.yml for Berry to get catalog information
+        let yarnrc = if matches!(self, PackageManager::Berry) {
+            Some(yarnrc::YarnRc::from_file(root_path)?)
+        } else {
+            None
+        };
+
+        self.parse_lockfile(root_package_json, &contents, yarnrc)
     }
 
-    #[tracing::instrument(skip(self, root_package_json, contents))]
+    #[tracing::instrument(skip(self, root_package_json, contents, yarnrc))]
     pub fn parse_lockfile(
         &self,
         root_package_json: &PackageJson,
         contents: &[u8],
+        yarnrc: Option<yarnrc::YarnRc>,
     ) -> Result<Box<dyn Lockfile>, Error> {
         Ok(match self {
             PackageManager::Npm => Box::new(turborepo_lockfiles::NpmLockfile::load(contents)?),
@@ -477,16 +486,26 @@ impl PackageManager {
             PackageManager::Bun => {
                 Box::new(turborepo_lockfiles::BunLockfile::from_bytes(contents)?)
             }
-            PackageManager::Berry => Box::new(turborepo_lockfiles::BerryLockfile::load(
-                contents,
-                Some(turborepo_lockfiles::BerryManifest::with_resolutions(
+            PackageManager::Berry => {
+                // Take ownership of yarnrc fields to avoid cloning
+                let (catalog, catalogs) = yarnrc
+                    .map(|y| (y.catalog, y.catalogs))
+                    .unwrap_or((None, None));
+
+                let manifest = turborepo_lockfiles::BerryManifest::new(
                     root_package_json
                         .resolutions
                         .iter()
                         .flatten()
                         .map(|(k, v)| (k.clone(), v.clone())),
-                )),
-            )?),
+                    catalog,
+                    catalogs,
+                );
+                Box::new(turborepo_lockfiles::BerryLockfile::load(
+                    contents,
+                    Some(manifest),
+                )?)
+            }
         })
     }
 
@@ -501,8 +520,9 @@ impl PackageManager {
             PackageManager::Pnpm9 | PackageManager::Pnpm6 | PackageManager::Pnpm => {
                 pnpm::prune_patches(package_json, patches, repo_root)
             }
-            PackageManager::Yarn | PackageManager::Npm | PackageManager::Bun => {
-                unreachable!("bun, npm, and yarn 1 don't have a concept of patches")
+            PackageManager::Bun => bun::prune_patches(package_json, patches),
+            PackageManager::Yarn | PackageManager::Npm => {
+                unreachable!("npm and yarn 1 don't have a concept of patches")
             }
         }
     }

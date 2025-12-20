@@ -3,20 +3,20 @@ title: eslint-plugin-turbo
 description: Learn more about eslint-plugin-turbo.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 [The `eslint-plugin-turbo` package](https://www.npmjs.com/package/eslint-plugin-turbo) helps you find environment variables that are used in your code that are not a part of Turborepo's hashing. Environment variables used in your source code that are not accounted for in `turbo.json` will be highlighted in your editor and errors will show as ESLint output.
 
 ## Installation
 
-Install `eslint-config-turbo` into the location where your ESLint configuration is held:
+Install `eslint-plugin-turbo` into the location where your ESLint configuration is held:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
 
     ```bash title="Terminal"
-    pnpm add eslint-config-turbo --filter=@repo/eslint-config
+    pnpm add eslint-plugin-turbo --filter=@repo/eslint-config
     ```
 
   </Tab>
@@ -24,7 +24,7 @@ Install `eslint-config-turbo` into the location where your ESLint configuration 
   <Tab value="yarn">
 
     ```bash title="Terminal"
-    yarn workspace @acme/eslint-config add eslint-config-turbo --dev
+    yarn workspace @acme/eslint-config add eslint-plugin-turbo --dev
     ```
 
   </Tab>
@@ -32,19 +32,19 @@ Install `eslint-config-turbo` into the location where your ESLint configuration 
   <Tab value="npm">
 
     ```bash title="Terminal"
-    npm i --save-dev eslint-config-turbo -w @acme/eslint-config
+    npm i --save-dev eslint-plugin-turbo -w @acme/eslint-config
     ```
 
   </Tab>
 
-  <Tab value="bun (Beta)">
+  <Tab value="bun">
 
     ```bash title="Terminal"
-    bun install --dev eslint-config-turbo --filter=@acme/eslint-config
+    cd packages/eslint-config && bun install eslint-plugin-turbo --dev
     ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Usage (Flat Config `eslint.config.js`)
 

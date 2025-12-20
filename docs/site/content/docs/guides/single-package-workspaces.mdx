@@ -4,7 +4,7 @@ description: Learn how to use Turborepo in a single-package workspace.
 ---
 
 import { Callout } from '#components/callout';
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 While Turborepo is highly effective in [multi-package workspaces](https://vercel.com/docs/vercel-platform/glossary#multi-package-workspace) (commonly referred to as monorepos), it can also be used to make [single-package workspaces](https://vercel.com/docs/vercel-platform/glossary#single-package-workspace) faster.
 
@@ -19,7 +19,7 @@ Turborepo's most important features work in single-package workspaces including 
 
 Install `turbo` into your application:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
     ```bash title="Terminal"
@@ -42,13 +42,13 @@ Install `turbo` into your application:
 
   </Tab>
 
-  <Tab value="bun (Beta)">
+  <Tab value="bun">
     ```bash title="Terminal"
     bun install turbo --dev
     ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ### Running a `package.json` script using global `turbo` (optional)
 

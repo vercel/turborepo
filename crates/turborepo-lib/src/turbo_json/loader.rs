@@ -199,10 +199,23 @@ impl TurboJsonLoader {
                 micro_frontends_configs,
             } => {
                 let turbo_json_path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
-                let is_root = package == &PackageName::Root;
+                // Check if this package is at the repo root. This can happen when
+                // the workspace definition includes "." as a package. In that case,
+                // the package's turbo.json would be the root turbo.json, so we
+                // should treat it as root to use the correct schema.
+                // We use to_realpath() to resolve symlinks so that a symlinked
+                // package pointing to the repo root is also detected correctly.
+                let is_package_at_root = !matches!(package, PackageName::Root)
+                    && turbo_json_path
+                        .to_realpath()
+                        .ok()
+                        .zip(reader.repo_root().to_realpath().ok())
+                        .map(|(pkg_real, root_real)| pkg_real == root_real)
+                        .unwrap_or(false);
+                let is_root = package == &PackageName::Root || is_package_at_root;
                 let turbo_json = load_from_file(
                     reader,
-                    if is_root {
+                    if package == &PackageName::Root {
                         LoadTurboJsonPath::File(turbo_json_path)
                     } else {
                         LoadTurboJsonPath::Dir(turbo_json_path)
@@ -865,8 +878,8 @@ mod test {
             vec![
                 (
                     "web",
-                    turborepo_microfrontends::Config::from_str(
-                        r#"{"version": "1", "applications": {"web": {}, "docs": {}}}"#,
+                    turborepo_microfrontends::TurborepoMfeConfig::from_str(
+                        r#"{"version": "1", "applications": {"web": {}, "docs": {"routing": [{"paths": ["/docs"]}]}}}"#,
                         "mfe.json",
                     )
                     .map(Some),
@@ -879,6 +892,11 @@ mod test {
                 ),
             ]
             .into_iter(),
+            {
+                let mut deps = std::collections::HashMap::new();
+                deps.insert("web", true);
+                deps
+            },
         )
         .unwrap();
 
@@ -1106,6 +1124,237 @@ mod test {
         assert!(
             matches!(result.unwrap_err(), Error::TurboJsonParseError(_)),
             "expected parsing to fail due to unknown key"
+        );
+    }
+
+    #[test]
+    fn test_package_at_repo_root_uses_root_schema() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+
+        // Create a root turbo.json WITHOUT extends (valid for root, invalid for
+        // package)
+        let root_turbo_json = repo_root.join_component("turbo.json");
+        root_turbo_json
+            .create_with_contents(
+                r#"{
+                "tasks": {
+                    "build": {},
+                    "test": { "cache": false }
+                }
+            }"#,
+            )
+            .unwrap();
+
+        // Create a loader where a package named "my-app" has its path at the repo root
+        // This simulates `pnpm-workspace.yaml` containing "." as a package
+        let packages = vec![
+            (PackageName::Root, root_turbo_json.clone()),
+            // Package "my-app" points to the repo root directory (not a subdirectory)
+            (PackageName::from("my-app"), repo_root.to_owned()),
+        ]
+        .into_iter()
+        .collect();
+
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+        let loader = TurboJsonLoader {
+            reader,
+            cache: FixedMap::new(vec![PackageName::Root, PackageName::from("my-app")].into_iter()),
+            strategy: Strategy::Workspace {
+                packages,
+                micro_frontends_configs: None,
+            },
+        };
+
+        let root_result = loader.load(&PackageName::Root);
+        assert!(
+            root_result.is_ok(),
+            "Loading root turbo.json for Root package should succeed: {:?}",
+            root_result.err()
+        );
+
+        let pkg_result = loader.load(&PackageName::from("my-app"));
+        assert!(
+            pkg_result.is_ok(),
+            "Loading root turbo.json for package at repo root should succeed: {:?}",
+            pkg_result.err()
+        );
+
+        // Verify both loaded the same config
+        let root_json = root_result.unwrap();
+        let pkg_json = pkg_result.unwrap();
+        assert_eq!(
+            root_json.tasks.len(),
+            pkg_json.tasks.len(),
+            "Both should have the same tasks"
+        );
+    }
+
+    #[test]
+    fn test_package_at_repo_root_allows_root_only_fields() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+
+        let root_turbo_json = repo_root.join_component("turbo.json");
+        root_turbo_json
+            .create_with_contents(
+                r#"{
+                "globalEnv": ["NODE_ENV", "CI"],
+                "tasks": {
+                    "build": {}
+                }
+            }"#,
+            )
+            .unwrap();
+
+        let packages = vec![
+            (PackageName::Root, root_turbo_json.clone()),
+            (PackageName::from("my-app"), repo_root.to_owned()),
+        ]
+        .into_iter()
+        .collect();
+
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+        let loader = TurboJsonLoader {
+            reader,
+            cache: FixedMap::new(vec![PackageName::Root, PackageName::from("my-app")].into_iter()),
+            strategy: Strategy::Workspace {
+                packages,
+                micro_frontends_configs: None,
+            },
+        };
+
+        let pkg_result = loader.load(&PackageName::from("my-app"));
+        assert!(
+            pkg_result.is_ok(),
+            "Package at repo root should allow root-only fields like globalEnv: {:?}",
+            pkg_result.err()
+        );
+
+        // Verify globalEnv was parsed
+        let pkg_json = pkg_result.unwrap();
+        assert!(
+            !pkg_json.global_env.is_empty(),
+            "globalEnv should be parsed for package at repo root"
+        );
+    }
+
+    /// Test that regular packages (not at repo root) use package schema.
+    /// A package turbo.json with root-only fields (like globalEnv) should fail
+    /// because it uses the package schema which doesn't allow those fields.
+    #[test]
+    fn test_regular_package_uses_package_schema() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+
+        let root_turbo_json = repo_root.join_component("turbo.json");
+        root_turbo_json
+            .create_with_contents(r#"{ "tasks": { "build": {} } }"#)
+            .unwrap();
+
+        let pkg_dir = repo_root.join_components(&["packages", "my-pkg"]);
+        pkg_dir.create_dir_all().unwrap();
+        let pkg_turbo_json = pkg_dir.join_component("turbo.json");
+        pkg_turbo_json
+            .create_with_contents(
+                r#"{
+                "extends": ["//"],
+                "globalEnv": ["NODE_ENV"],
+                "tasks": {
+                    "build": { "cache": false }
+                }
+            }"#,
+            )
+            .unwrap();
+
+        let packages = vec![
+            (PackageName::Root, root_turbo_json),
+            (PackageName::from("my-pkg"), pkg_dir),
+        ]
+        .into_iter()
+        .collect();
+
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+        let loader = TurboJsonLoader {
+            reader,
+            cache: FixedMap::new(vec![PackageName::Root, PackageName::from("my-pkg")].into_iter()),
+            strategy: Strategy::Workspace {
+                packages,
+                micro_frontends_configs: None,
+            },
+        };
+
+        let pkg_result = loader.load(&PackageName::from("my-pkg"));
+        assert!(
+            pkg_result.is_err(),
+            "Package turbo.json with root-only fields (globalEnv) should fail parsing"
+        );
+    }
+
+    /// Test that symlinks to repo root are correctly detected as root packages.
+    /// This prevents symlink-based bypasses of package-level validation.
+    #[cfg(unix)]
+    #[test]
+    fn test_symlink_to_repo_root_detected_as_root() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+
+        // Create a root turbo.json with root-only fields
+        let root_turbo_json = repo_root.join_component("turbo.json");
+        root_turbo_json
+            .create_with_contents(
+                r#"{
+                "globalEnv": ["NODE_ENV"],
+                "tasks": {
+                    "build": {}
+                }
+            }"#,
+            )
+            .unwrap();
+
+        // Create a packages directory with a symlink to the repo root
+        let packages_dir = repo_root.join_component("packages");
+        packages_dir.create_dir_all().unwrap();
+        let symlink_pkg = packages_dir.join_component("symlink-pkg");
+        symlink_pkg.symlink_to_dir(repo_root.as_str()).unwrap();
+
+        // Verify the symlink was created correctly
+        assert!(symlink_pkg.exists(), "Symlink should exist");
+
+        // The symlink resolves to the repo root, so it should be treated as root
+        let packages = vec![
+            (PackageName::Root, root_turbo_json.clone()),
+            (PackageName::from("symlink-pkg"), symlink_pkg.clone()),
+        ]
+        .into_iter()
+        .collect();
+
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+        let loader = TurboJsonLoader {
+            reader,
+            cache: FixedMap::new(
+                vec![PackageName::Root, PackageName::from("symlink-pkg")].into_iter(),
+            ),
+            strategy: Strategy::Workspace {
+                packages,
+                micro_frontends_configs: None,
+            },
+        };
+
+        // Loading the symlinked package should succeed because the symlink
+        // points to the repo root, and we should detect this via canonicalization
+        let pkg_result = loader.load(&PackageName::from("symlink-pkg"));
+        assert!(
+            pkg_result.is_ok(),
+            "Symlink to repo root should be treated as root and allow globalEnv: {:?}",
+            pkg_result.err()
+        );
+
+        // Verify globalEnv was parsed (confirming root schema was used)
+        let pkg_json = pkg_result.unwrap();
+        assert!(
+            !pkg_json.global_env.is_empty(),
+            "globalEnv should be parsed when symlink points to repo root"
         );
     }
 }

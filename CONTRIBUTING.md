@@ -1,7 +1,7 @@
 Thank you for your interest in contributing to Turborepo!
 
 - [General dependencies](#general-dependencies)
- - [Optional dependencies](#optional-dependencies)
+- [Optional dependencies](#optional-dependencies)
 - [Structure of the repository](#structure-of-the-repository)
 - [Building Turborepo](#building-turborepo)
   - [TLS Implementation](#tls-implementation)
@@ -37,11 +37,6 @@ You will need to have these dependencies installed on your machine to work on th
   - Linux: `sudo apt update && sudo apt install jq zstd`
   - Windows: `choco install jq zstandard`
 - On Linux, ensure LLD (LLVM Linker) is installed, as it's not installed by default on many Linux distributions (e.g. `apt install lld`).
-- For coverage reporting, install the `llvm-tools-preview` component:
-
-  ```bash
-  rustup component add llvm-tools-preview
-  ```
 
 ## Structure of the repository
 
@@ -49,7 +44,7 @@ In general, there are two major areas in the repository:
 
 - The `crates` directory with the Rust code for the `turbo` binary
 - The `packages` directory with JavaScript packages
-- the `examples` directory with examples of how to use Turborepo with other tools and frameworks
+- The `examples` directory with examples of how to use Turborepo with other tools and frameworks
 - The `docs` directory with the documentation for Turborepo
 
 ## Building Turborepo
@@ -84,20 +79,6 @@ Now, from the root directory, you can run:
   cargo test
 ```
 
-- Unit tests with coverage
-
-```bash
-cargo coverage
-```
-
-After running coverage tests, you can manually open the HTML report by navigating to the `coverage/html/index.html` file in your browser, or use the `--open` flag to automatically open it:
-
-You can also add `--open` to your script to automatically open the file when coverage is completed.
-
-```bash
-cargo coverage -- --open
-```
-
 - A module's unit tests
 
 ```bash
@@ -109,7 +90,7 @@ cargo test -p <module>
   pnpm test -- --filter=turborepo-tests-integration
   ```
 - A single integration test
-  e.g to run everything in `turborepo-tests/integration/tests/run-summary`:
+  e.g., to run everything in `turborepo-tests/integration/tests/run-summary`:
 
   ```bash
   # Build `turbo` first because the next command doesn't run through `turbo`
@@ -148,7 +129,7 @@ A non-exhaustive list of things to check on:
 - Test with and without daemon
 - Installation scenarios
   - Global only. `turbo` is installed as global binary without a local `turbo` in repository.
-  - Local only. `turbo` is installed as local binary without global `turbo` in PATH. turbo` is invoked via a root package
+  - Local only. `turbo` is installed as local binary without global `turbo` in PATH. `turbo` is invoked via a root package
     script.
   - Global and local. `turbo` is installed as global binary, and local `turbo` in repository. Global `turbo` delegates to
     local `turbo`
@@ -177,7 +158,7 @@ TURBO_SITE="http://localhost:3000" cargo build
 
 ### Verbose logging
 
-Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for.
+Verbose logging can be enabled by using the `-v`, `-vv`, or `-vvv` flag on your `turbo` command, depending on the level of logging you're looking for:
 
 ```bash
 turbo build --vvv
@@ -203,7 +184,7 @@ devturbo run build --ui=tui --skip-infer 2&> ~/tmp/logs.txt
 
 ## Publishing `turbo` to the npm registry
 
-See [the publishing guide](./release.md).
+See [the publishing guide](./RELEASE.md).
 
 ## Contributing to examples
 

@@ -4,7 +4,7 @@ description: Start by creating a repository using the conventions of the ecosyst
 ---
 
 import { Callout } from '#components/callout';
-import { PackageManagerTabs, Tab, Tabs } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Step, Steps } from '#components/steps';
 import { File, Folder, Files } from '#components/files';
 import { LinkToDocumentation } from '#components/link-to-documentation';
@@ -22,7 +22,7 @@ In this guide, we'll walk through setting up a multi-package workspace (monorepo
 
 Setting up a workspace's structure can be tedious to do by hand. If you're new to monorepos, we recommend [using `create-turbo` to get started](/docs/getting-started/installation) with a valid workspace structure right away.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 ```bash title="Terminal"
@@ -45,14 +45,14 @@ npx create-turbo@latest
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 ```bash title="Terminal"
 bunx create-turbo@latest
 ```
 
 </Tab>
 
-</PackageManagerTabs>
+</Tabs>
 
 You can then review the repository for the characteristics described in this guide.
 
@@ -62,7 +62,7 @@ In JavaScript, a workspace can either be [a single package](/docs/guides/single-
 
 Below, the structural elements of `create-turbo` that make it a valid workspace are highlighted.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
   <Files>
@@ -128,7 +128,7 @@ Below, the structural elements of `create-turbo` that make it a valid workspace 
   </Files>
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
   <Files>
     <File name="package.json" green />
     <File name="bun.lock" green />
@@ -149,7 +149,7 @@ Below, the structural elements of `create-turbo` that make it a valid workspace 
   </Files>
 </Tab>
 
-</PackageManagerTabs>
+</Tabs>
 
 ### Minimum requirements
 
@@ -168,7 +168,7 @@ Below, the structural elements of `create-turbo` that make it a valid workspace 
 
 First, your package manager needs to describe the locations of your packages. We recommend starting with splitting your packages into `apps/` for applications and services and `packages/` for everything else, like libraries and tooling.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
   <Tab value="pnpm">
   ```json title="pnpm-workspace.yaml"
@@ -206,7 +206,7 @@ First, your package manager needs to describe the locations of your packages. We
   <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces">npm workspace documentation</LinkToDocumentation>
   </Tab>
 
-  <Tab value="bun (Beta)">
+  <Tab value="bun">
   ```json title="./package.json"
   {
     "workspaces": [
@@ -219,7 +219,7 @@ First, your package manager needs to describe the locations of your packages. We
   <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">bun workspace documentation</LinkToDocumentation>
   </Tab>
 
-</PackageManagerTabs>
+</Tabs>
 
 Using this configuration, every directory **with a `package.json`** in the `apps` or `packages` directories will be considered a package.
 
@@ -244,7 +244,7 @@ In the directory of the package, there must be a `package.json` to make the pack
 
 The root `package.json` is the base for your workspace. Below is a common example of what you would find in a root `package.json`:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -305,7 +305,7 @@ The root `package.json` is the base for your workspace. Below is a common exampl
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 
 ```json title="./package.json"
 {
@@ -324,7 +324,7 @@ The root `package.json` is the base for your workspace. Below is a common exampl
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ### Root `turbo.json`
 
@@ -410,7 +410,7 @@ You may be more familiar with TypeScript's `compilerOptions#paths` option, which
 
 ### Source code
 
-Of course, you'll want some source code in your package. Packages commonly use an `src` directory to store their source code and compile to a `dist` directory (that should also be located within the package), although this is not a requirement.
+Of course, you'll want some source code in your package. Packages commonly use a `src` directory to store their source code and compile to a `dist` directory (that should also be located within the package), although this is not a requirement.
 
 ## Common pitfalls
 

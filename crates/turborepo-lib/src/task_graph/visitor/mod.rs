@@ -19,7 +19,7 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use output::{StdWriter, TaskOutput};
 use regex::Regex;
 use tokio::sync::mpsc;
-use tracing::{debug, error, warn, Span};
+use tracing::{debug, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
@@ -113,14 +113,6 @@ pub enum Error {
     InternalErrors(String),
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
-    #[error(
-        "'{package}' is configured with a {mfe_config_filename}, but doesn't have \
-         '@vercel/microfrontends' listed as a dependency."
-    )]
-    MissingMFEDependency {
-        package: String,
-        mfe_config_filename: String,
-    },
 }
 
 impl<'a> Visitor<'a> {

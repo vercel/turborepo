@@ -3,14 +3,14 @@ title: Managing dependencies
 description: Learn how to manage dependencies in your monorepo's workspace.
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Callout } from '#components/callout';
 import { LinkToDocumentation } from '#components/link-to-documentation';
 
 - **External dependencies** come from [the npm registry](https://www.npmjs.com/), allowing you to leverage valuable code from the ecosystem to build your applications and libraries faster.
 - **Internal dependencies** let you share functionality within your repository, dramatically improving discoverability and usability of shared code. We will discuss how to build an Internal Package in [the next guide](/docs/crafting-your-repository/creating-an-internal-package).
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 ```json title="./apps/web/package.json"
@@ -45,7 +45,7 @@ import { LinkToDocumentation } from '#components/link-to-documentation';
 ```
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 ```json title="./apps/web/package.json"
 {
   "dependencies": {
@@ -55,7 +55,7 @@ import { LinkToDocumentation } from '#components/link-to-documentation';
 }
 ```
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Best practices for dependency installation
 
@@ -70,7 +70,7 @@ When you install a dependency in your repository, you should install it directly
 
 To quickly install dependencies in multiple packages, you can use your package manager:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -113,15 +113,16 @@ npm install jest --workspace=web --workspace=@repo/ui --save-dev
 <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/config#workspace">npm documentation</LinkToDocumentation>
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 
 ```bash title="Terminal"
-bun install jest --filter=web --filter=@repo/ui --dev
+cd apps/web && bun install jest --dev
+cd packages/ui && bun install jest --dev
 ```
 
 <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">bun documentation</LinkToDocumentation>
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 This practice has several benefits:
 
@@ -177,7 +178,7 @@ Tools like [`syncpack`](https://www.npmjs.com/package/syncpack), [`manypkg`](htt
 
 You can use your package manager to update dependency versions in one command.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -214,13 +215,13 @@ npm install typescript@latest --workspaces
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 No equivalent
 
 <small>[→ Bun documentation](https://bun.sh/docs/install/workspaces)</small>
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 #### pnpm catalogs
 

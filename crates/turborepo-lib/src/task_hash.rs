@@ -444,12 +444,17 @@ impl<'a> TaskHasher<'a> {
                     "LANG",
                     "SHELL",
                     "PWD",
+                    "XDG_RUNTIME_DIR",
+                    "XAUTHORITY",
+                    "DBUS_SESSION_BUS_ADDRESS",
                     "CI",
                     "NODE_OPTIONS",
                     "COREPACK_HOME",
                     "LD_LIBRARY_PATH",
                     "DYLD_FALLBACK_LIBRARY_PATH",
                     "LIBPATH",
+                    "LD_PRELOAD",
+                    "DYLD_INSERT_LIBRARIES",
                     "COLORTERM",
                     "TERM",
                     "TERM_PROGRAM",
@@ -458,6 +463,8 @@ impl<'a> TaskHasher<'a> {
                     "TEMP",
                     // Windows
                     "WINDIR",
+                    "ProgramFiles",
+                    "ProgramFiles(x86)",
                     // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
                     "VSCODE_*",
                     "ELECTRON_RUN_AS_NODE",
@@ -476,6 +483,10 @@ impl<'a> TaskHasher<'a> {
                     "NEXT_*",
                     "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
                     "NOW_BUILDER",
+                    "VC_MICROFRONTENDS_CONFIG_FILE_NAME",
+                    // GitHub Actions - https://docs.github.com/en/actions/reference/workflows-and-actions/variables
+                    "GITHUB_*",
+                    "RUNNER_*",
                     // Command Prompt casing of env variables
                     "APPDATA",
                     "PATH",

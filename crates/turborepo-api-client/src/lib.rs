@@ -4,6 +4,8 @@
 
 #![feature(error_generic_member_access)]
 #![feature(assert_matches)]
+// miette's derive macro causes false positives for this lint
+#![allow(unused_assignments)]
 #![deny(clippy::all)]
 
 use std::{backtrace::Backtrace, env, future::Future, time::Duration};
@@ -796,7 +798,14 @@ mod test {
     #[tokio::test]
     async fn test_do_preflight() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
         let base_url = format!("http://localhost:{port}");
 
         let client = APIClient::new(
@@ -885,7 +894,14 @@ mod test {
     #[tokio::test]
     async fn test_content_length() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
         let base_url = format!("http://localhost:{port}");
 
         let client = APIClient::new(
@@ -920,7 +936,14 @@ mod test {
     #[tokio::test]
     async fn test_record_telemetry_success() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
         let base_url = format!("http://localhost:{port}");
 
         let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
@@ -955,7 +978,14 @@ mod test {
     #[tokio::test]
     async fn test_record_telemetry_empty_events() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
         let base_url = format!("http://localhost:{port}");
 
         let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;
@@ -977,7 +1007,14 @@ mod test {
     #[tokio::test]
     async fn test_record_telemetry_with_different_event_types() -> Result<()> {
         let port = port_scanner::request_open_port().unwrap();
-        let handle = tokio::spawn(start_test_server(port));
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+
+        // Wait for server to be ready
+        tokio::time::timeout(Duration::from_secs(5), ready_rx)
+            .await
+            .map_err(|_| anyhow::anyhow!("Test server failed to start"))??;
+
         let base_url = format!("http://localhost:{port}");
 
         let client = AnonAPIClient::new(&base_url, 10, "2.0.0")?;

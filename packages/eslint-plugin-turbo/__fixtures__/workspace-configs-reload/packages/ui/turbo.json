@@ -1,0 +1,9 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "extends": ["//"],
+  "pipeline": {
+    "build": {
+      "env": ["IS_SERVER"]
+    }
+  }
+}

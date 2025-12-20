@@ -41,6 +41,14 @@ use crate::boundaries::BoundariesConfig;
 const ENV_PIPELINE_DELIMITER: &str = "$";
 const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 
+/// Trait to check if a task definition has any configuration beyond just the
+/// `extends` field. This is used to determine if a task definition with
+/// `extends: false` should actually skip inheritance or if it's just an
+/// empty marker.
+pub trait HasConfigBeyondExtends {
+    fn has_config_beyond_extends(&self) -> bool;
+}
+
 #[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
 #[serde(rename_all = "camelCase")]
 pub struct SpacesJson {
@@ -99,21 +107,18 @@ impl DerefMut for Pipeline {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum)]
+#[derive(
+    Serialize, Deserialize, Debug, Default, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum,
+)]
 #[serde(rename_all = "camelCase")]
 pub enum UIMode {
     /// Use the terminal user interface
+    #[default]
     Tui,
     /// Use the standard output stream
     Stream,
     /// Use the web user interface (experimental)
     Web,
-}
-
-impl Default for UIMode {
-    fn default() -> Self {
-        Self::Tui
-    }
 }
 
 impl Display for UIMode {
@@ -379,6 +384,16 @@ impl TurboJson {
         false
     }
 
+    pub(super) fn is_root_config(&self) -> bool {
+        self.path
+            .as_ref()
+            .map(|p| {
+                let path_str = p.as_ref();
+                path_str == "turbo.json" || path_str == "turbo.jsonc"
+            })
+            .unwrap_or(false)
+    }
+
     /// Reads a `RawTurboJson` from the given path
     /// and then converts it into `TurboJson`
     ///
@@ -606,6 +621,7 @@ mod tests {
           "interruptible": true
         }"#,
         RawTaskDefinition {
+            extends: None,
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(26..37)]).with_range(25..38)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(58..62)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(94..110)]),
@@ -652,6 +668,7 @@ mod tests {
               "interruptible": true
             }"#,
         RawTaskDefinition {
+            extends: None,
             depends_on: Some(Spanned::new(vec![Spanned::<UnescapedString>::new("cli#build".into()).with_range(30..41)]).with_range(29..42)),
             env: Some(vec![Spanned::<UnescapedString>::new("OS".into()).with_range(66..70)]),
             pass_through_env: Some(vec![Spanned::<UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(106..122)]),
@@ -1006,7 +1023,6 @@ mod tests {
                 "build": {}
             },
             "futureFlags": {
-                "turboExtendsKeyword": true
             }
         }"#;
 
@@ -1017,16 +1033,11 @@ mod tests {
         );
         let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
 
-        // Verify that futureFlags is parsed correctly
+        // Verify that futureFlags is parsed correctly (empty now that flags are
+        // removed)
         assert!(raw_turbo_json.future_flags.is_some());
         let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
-        assert_eq!(
-            future_flags.as_inner(),
-            &FutureFlags {
-                turbo_extends_keyword: true,
-                non_root_extends: false,
-            }
-        );
+        assert_eq!(future_flags.as_inner(), &FutureFlags {});
 
         // Verify that the futureFlags field doesn't cause errors during conversion to
         // TurboJson
@@ -1043,7 +1054,7 @@ mod tests {
         true ; "root config with global fields should succeed"
     )]
     #[test_case(
-        r#"{"futureFlags": {"turboExtendsKeyword": true}, "tasks": {"build": {}}}"#,
+        r#"{"futureFlags": {}, "tasks": {"build": {}}}"#,
         true ; "root config with futureFlags should succeed"
     )]
     #[test_case(
@@ -1176,5 +1187,41 @@ mod tests {
         assert!(deps.allow.is_some());
         assert!(deps.deny.is_none()); // This should be None, not serialized as
                                       // null
+    }
+
+    #[test]
+    fn test_is_root_config_with_root_path() {
+        let turbo_json = TurboJson {
+            path: Some("turbo.json".into()),
+            ..Default::default()
+        };
+        assert!(
+            turbo_json.is_root_config(),
+            "turbo.json should be detected as root config"
+        );
+    }
+
+    #[test]
+    fn test_is_root_config_with_jsonc_extension() {
+        let turbo_json = TurboJson {
+            path: Some("turbo.jsonc".into()),
+            ..Default::default()
+        };
+        assert!(
+            turbo_json.is_root_config(),
+            "turbo.jsonc should be detected as root config"
+        );
+    }
+
+    #[test]
+    fn test_is_root_config_with_package_path() {
+        let turbo_json = TurboJson {
+            path: Some("packages/my-app/turbo.json".into()),
+            ..Default::default()
+        };
+        assert!(
+            !turbo_json.is_root_config(),
+            "packages/my-app/turbo.json should NOT be detected as root config"
+        );
     }
 }

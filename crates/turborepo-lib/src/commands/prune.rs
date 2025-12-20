@@ -66,6 +66,10 @@ lazy_static! {
             RelativeUnixPath::new(".yarnrc.yml").unwrap(),
             Some(CopyDestination::Docker)
         ),
+        (
+            RelativeUnixPath::new("bunfig.toml").unwrap(),
+            Some(CopyDestination::Docker)
+        ),
     ];
     static ref ADDITIONAL_DIRECTORIES: Vec<(&'static RelativeUnixPath, Option<CopyDestination>)> = vec![
         (

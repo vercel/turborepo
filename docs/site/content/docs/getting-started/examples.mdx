@@ -3,13 +3,13 @@ title: Start with an example
 description: Start with an example Turborepo.
 ---
 
-import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { ExamplesTable } from '#components/examples-table';
 import { Callout } from '#components/callout';
 
 Use `create-turbo` to bootstrap an example with your favorite tooling.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -47,7 +47,7 @@ npx create-turbo@latest --example [github-url]
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 
 ```bash title="Terminal"
 # Use an example listed below
@@ -59,7 +59,7 @@ bunx create-turbo@latest --example [github-url]
 
 </Tab>
 
-</PackageManagerTabs>
+</Tabs>
 
 ## Core-maintained examples
 

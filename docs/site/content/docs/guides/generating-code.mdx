@@ -5,7 +5,7 @@ description: Learn how to generate code using Turborepo.
 
 import { Callout } from '#components/callout';
 import { File, Folder, Files } from '#components/files';
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 Splitting your monorepo into packages is a great way to organize your code, speed up tasks, and improve the local development
 experience. With Turborepo's code generation, it's easy to generate new source code for packages, modules,
@@ -89,7 +89,7 @@ manually at `turbo/generators/config.ts` (or `config.js`) at the root of your re
 
 For example, the following illustrates a monorepo with three locations for generators:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
   <Files>
@@ -209,7 +209,7 @@ For example, the following illustrates a monorepo with three locations for gener
   </Files>
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
   <Files>
     <Folder name="apps" defaultOpen>
       <Folder name="docs">
@@ -247,7 +247,7 @@ For example, the following illustrates a monorepo with three locations for gener
     <File name="turbo.json" />
   </Files>
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 Generators created within workspaces are automatically run from the workspace root, **not** the repo root, nor the location of the generator configuration.
 

@@ -33,7 +33,10 @@ pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
-pub async fn start_test_server(port: u16) -> Result<()> {
+pub async fn start_test_server(
+    port: u16,
+    ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
+) -> Result<()> {
     let get_durations_ref = Arc::new(Mutex::new(HashMap::new()));
     let head_durations_ref = get_durations_ref.clone();
     let put_durations_ref = get_durations_ref.clone();
@@ -240,6 +243,12 @@ pub async fn start_test_server(port: u16) -> Result<()> {
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = TcpListener::bind(addr).await?;
+
+    // Signal that the server is ready to accept connections
+    if let Some(tx) = ready_tx {
+        let _ = tx.send(());
+    }
+
     // We print the port so integration tests can use it
     println!("{port}");
     axum::serve(listener, app).await?;

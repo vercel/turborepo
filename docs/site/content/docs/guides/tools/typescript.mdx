@@ -5,7 +5,7 @@ description: Learn how to use TypeScript in a monorepo.
 
 import { Callout } from '#components/callout';
 import { File, Folder, Files } from '#components/files';
-import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { LinkToDocumentation } from '#components/link-to-documentation';
 
 TypeScript is an excellent tool in monorepos, allowing teams to safely add types to their JavaScript code. While there is some complexity to getting set up, this guide will walk you through the important parts of a TypeScript setup for most use cases.
@@ -28,7 +28,7 @@ TypeScript's `tsconfig.json` sets the configuration for the TypeScript compiler 
 
 This guide will use [`create-turbo`](/docs/reference/create-turbo) as an example.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 
@@ -54,14 +54,14 @@ npx create-turbo@latest
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 
 ```bash title="Terminal"
 bunx create-turbo@latest
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ### Use a base `tsconfig` file
 
@@ -106,7 +106,7 @@ Inside `package.json`, name the package so it can be referenced in the rest of t
 
 First, install the `@repo/typescript-config` package into your package:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 ```json title="./apps/web/package.json"
@@ -141,7 +141,7 @@ First, install the `@repo/typescript-config` package into your package:
 ```
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 ```json title="./apps/web/package.json"
 {
   "devDependencies": {
@@ -151,7 +151,7 @@ First, install the `@repo/typescript-config` package into your package:
 }
 ```
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 Then, extend the `tsconfig.json` for the package from the `@repo/typescript-config` package. In this example, the `web` package is a Next.js application:
 

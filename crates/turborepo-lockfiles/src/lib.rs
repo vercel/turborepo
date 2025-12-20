@@ -165,6 +165,23 @@ fn transitive_closure_helper<L: Lockfile + ?Sized>(
     resolved_deps: &mut HashSet<Package>,
     ignore_missing_packages: bool,
 ) -> Result<(), Error> {
+    transitive_closure_helper_impl(
+        lockfile,
+        workspace_path,
+        unresolved_deps,
+        resolved_deps,
+        ignore_missing_packages,
+    )
+}
+
+/// Core transitive closure implementation that walks dependencies.
+fn transitive_closure_helper_impl<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspace_path: &str,
+    unresolved_deps: HashMap<String, impl AsRef<str>>,
+    resolved_deps: &mut HashSet<Package>,
+    ignore_missing_packages: bool,
+) -> Result<(), Error> {
     for (name, specifier) in unresolved_deps {
         let pkg = match lockfile.resolve_package(workspace_path, &name, specifier.as_ref()) {
             Ok(pkg) => pkg,
@@ -187,7 +204,7 @@ fn transitive_closure_helper<L: Lockfile + ?Sized>(
                 if let Some(deps) = all_deps {
                     // we've already found one unresolved dependency, so we can't ignore its set of
                     // dependencies.
-                    transitive_closure_helper(
+                    transitive_closure_helper_impl(
                         lockfile,
                         workspace_path,
                         deps,

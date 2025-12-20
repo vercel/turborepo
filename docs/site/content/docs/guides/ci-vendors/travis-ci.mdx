@@ -3,7 +3,7 @@ title: Travis CI
 description: How to use Travis CI with Turborepo to optimize your CI workflow
 ---
 
-import { PackageManagerTabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 The following example shows how to use Turborepo with [Travis CI](https://www.travis-ci.com/).
 
@@ -41,7 +41,7 @@ And a `turbo.json`:
 
 Create a file called `.travis.yml` in your repository with the following contents:
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
     <Tab value="pnpm">
 
       ```yaml title=".travis.yml"
@@ -99,7 +99,7 @@ Create a file called `.travis.yml` in your repository with the following content
 
   </Tab>
 
-    <Tab value="bun (Beta)">
+    <Tab value="bun">
 
       ```yaml title=".travis.yml"
       language: node_js
@@ -120,7 +120,7 @@ Create a file called `.travis.yml` in your repository with the following content
       ```
 
   </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 ## Remote Caching
 
@@ -141,6 +141,6 @@ Copy the value to a safe place. You'll need it in a moment.
 
 ![Travis CI Variables](/images/docs/travis-ci-environment-variables.png)
 
-3. Make a second secret called `TURBO_TEAM` and set it to your team slug - the part after `vercel.com/` in [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). For example, the slug for `vercel.com/acme` is `acme`. 
+3. Make a second secret called `TURBO_TEAM` and set it to your team slug - the part after `vercel.com/` in [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). For example, the slug for `vercel.com/acme` is `acme`.
 
 4. Travis CI automatically loads environment variables stored in project settings into the CI environment. No modifications are necessary for the CI file.

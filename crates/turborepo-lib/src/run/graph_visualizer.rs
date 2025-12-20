@@ -39,6 +39,13 @@ pub(crate) fn write_graph(
                 render_mermaid_graph(&filename, engine, single_package)?;
             } else if extension == "html" {
                 render_html(&filename, engine, single_package)?;
+            } else if extension == "dot" {
+                let mut opts = OpenOptions::new();
+                opts.truncate(true).create(true).write(true);
+                let file = filename
+                    .open_with_options(opts)
+                    .map_err(Error::GraphOutput)?;
+                render_dot_graph(file, engine, single_package)?;
             } else if let Ok(dot_path) = which("dot") {
                 let mut cmd = Command::new(dot_path);
                 cmd.stdin(Stdio::piped())

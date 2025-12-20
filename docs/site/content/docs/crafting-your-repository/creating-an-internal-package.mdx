@@ -5,7 +5,7 @@ description: Learn how to create an Internal Package for your monorepo.
 
 import { Callout } from '#components/callout';
 import { Steps, Step } from '#components/steps';
-import { PackageManagerTabs, Tabs, Tab } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 import { Files, File, Folder } from '#components/files';
 
 [Internal Packages](/docs/core-concepts/internal-packages) are the building blocks of your workspace, giving you a powerful way to share code and functionality across your repo. Turborepo automatically understands the relationships between Internal Packages using the dependencies in `package.json`, creating a [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph) under the hood to optimize your repository's workflows.
@@ -45,10 +45,13 @@ You'll need a directory to put the package in. Let's create one at `./packages/m
 Next, create the `package.json` for the package. By adding this file, you'll fulfill [the two requirements for an Internal Package](/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), making it discoverable to Turborepo and the rest of your Workspace.
 
 <Callout type="warn">
-The `name` field in your `package.json` determines how your package can be imported throughout your workspace. The name you choose here (e.g. `@repo/math`) is exactly how other packages will import it (e.g. `import { add } from '@repo/math/add'`).
+  The `name` field in your `package.json` determines how your package can be
+  imported throughout your workspace. The name you choose here (e.g.
+  `@repo/math`) is exactly how other packages will import it (e.g. `import {add}
+  from '@repo/math/add'`).
 </Callout>
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 ```json title="./packages/math/package.json"
@@ -132,7 +135,7 @@ The `name` field in your `package.json` determines how your package can be impor
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 ```json title="./packages/math/package.json"
 {
   "name": "@repo/math",
@@ -159,7 +162,7 @@ The `name` field in your `package.json` determines how your package can be impor
 ```
 
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 Let's break down this `package.json` piece-by-piece:
 
@@ -236,7 +239,7 @@ These files map to the outputs that will be created by `tsc` when you run `turbo
 
 You're ready to use your new package in an application. Let's add it to the `web` application.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 ```diff title="apps/web/package.json"
@@ -271,7 +274,7 @@ You're ready to use your new package in an application. Let's add it to the `web
 ```
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 ```diff title="apps/web/package.json"
   "dependencies": {
 +   "@repo/math": "workspace:*",
@@ -281,7 +284,7 @@ You're ready to use your new package in an application. Let's add it to the `web
   },
 ```
 </Tab>
-</PackageManagerTabs>
+</Tabs>
 
 <Callout type="warn">
   You just changed the dependencies in your repo. Make sure to run your package

@@ -174,6 +174,7 @@ pub struct PackageResolution {
 struct LockfileSettings {
     auto_install_peers: Option<bool>,
     exclude_links_from_lockfile: Option<bool>,
+    inject_workspace_packages: Option<bool>,
 }
 
 impl PnpmLockfile {
@@ -649,6 +650,8 @@ mod tests {
     const PNPM6_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm6turbo.yaml").as_slice();
     const PNPM8_TURBO: &[u8] = include_bytes!("../../fixtures/pnpm8turbo.yaml").as_slice();
     const PNPM10_PATCH: &[u8] = include_bytes!("../../fixtures/pnpm-10-patch.lock").as_slice();
+    const PNPM_INJECT_WORKSPACE: &[u8] =
+        include_bytes!("../../fixtures/pnpm-inject-workspace.yaml").as_slice();
 
     use super::*;
     use crate::{Lockfile, Package};
@@ -1477,6 +1480,152 @@ c:
         assert_eq!(
             missing_peer.unwrap_err().to_string(),
             crate::Error::MissingWorkspace("apps/docs".to_string()).to_string()
+        );
+    }
+
+    #[test]
+    fn test_subgraph_with_empty_workspace_packages() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+
+        // Test subgraph with no workspace packages
+        let subgraph = lockfile.subgraph(&[], &["/is-odd@3.0.1".into()]).unwrap();
+        let pnpm_subgraph = (subgraph.as_ref() as &dyn Any)
+            .downcast_ref::<PnpmLockfile>()
+            .unwrap();
+
+        // Should only contain root importer
+        assert_eq!(pnpm_subgraph.importers.len(), 1);
+        assert!(pnpm_subgraph.importers.contains_key("."));
+
+        // Should contain the requested package
+        assert!(
+            pnpm_subgraph
+                .packages
+                .as_ref()
+                .unwrap()
+                .contains_key("/is-odd@3.0.1")
+        );
+    }
+
+    #[test]
+    fn test_subgraph_with_missing_package() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+
+        // Test subgraph with non-existent package
+        let result = lockfile.subgraph(&["packages/a".into()], &["nonexistent-package".into()]);
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            crate::Error::MissingPackage(_)
+        ));
+    }
+
+    #[test]
+    fn test_resolve_package_with_invalid_workspace() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+
+        // Test with invalid workspace
+        let result = lockfile.resolve_package("invalid/workspace", "is-odd", "^3.0.1");
+        assert!(result.is_err());
+        assert!(matches!(
+            result.unwrap_err(),
+            crate::Error::MissingWorkspace(_)
+        ));
+    }
+
+    #[test]
+    fn test_global_change_detection() {
+        let lockfile1 = PnpmLockfile::from_bytes(PNPM8).unwrap();
+        let lockfile2 = PnpmLockfile::from_bytes(PNPM8_6).unwrap();
+
+        // Different lockfiles should show global change
+        assert!(lockfile1.global_change(&lockfile2));
+
+        // Same lockfile should not show global change
+        assert!(!lockfile1.global_change(&lockfile1));
+    }
+
+    #[test]
+    fn test_all_dependencies_with_invalid_key() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+
+        // Test with invalid package key
+        let result = lockfile.all_dependencies("invalid-package-key").unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_workspace_link_resolution() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM8).unwrap();
+
+        // Test workspace link resolution - current implementation returns None
+        // for workspace links since they're not actual packages in the lockfile
+        let workspace_dep = lockfile
+            .resolve_package("packages/a", "c", "workspace:*")
+            .unwrap();
+        assert!(workspace_dep.is_none());
+    }
+
+    #[test]
+    fn test_inject_workspace_packages_preservation() {
+        let lockfile = PnpmLockfile::from_bytes(PNPM_INJECT_WORKSPACE).unwrap();
+
+        // Verify the original lockfile has injectWorkspacePackages set to true
+        assert_eq!(
+            lockfile
+                .settings
+                .as_ref()
+                .unwrap()
+                .inject_workspace_packages,
+            Some(true)
+        );
+
+        // Create a subgraph to simulate turbo prune operation
+        let pruned_lockfile = lockfile
+            .subgraph(
+                &["apps/web".into()],
+                &["/lodash@4.17.21".into(), "/prettier@3.5.3".into()],
+            )
+            .unwrap();
+
+        // Downcast to access the settings
+        let pruned_pnpm = (pruned_lockfile.as_ref() as &dyn Any)
+            .downcast_ref::<PnpmLockfile>()
+            .unwrap();
+
+        // Verify that injectWorkspacePackages is preserved in the pruned lockfile
+        assert_eq!(
+            pruned_pnpm
+                .settings
+                .as_ref()
+                .unwrap()
+                .inject_workspace_packages,
+            Some(true),
+            "injectWorkspacePackages setting should be preserved in pruned lockfile"
+        );
+
+        // Verify other settings are also preserved
+        assert_eq!(
+            pruned_pnpm.settings.as_ref().unwrap().auto_install_peers,
+            Some(true)
+        );
+        assert_eq!(
+            pruned_pnpm
+                .settings
+                .as_ref()
+                .unwrap()
+                .exclude_links_from_lockfile,
+            Some(false)
+        );
+
+        // Verify that the pruned lockfile can be encoded back to YAML
+        let encoded = pruned_lockfile.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+
+        // Verify the encoded YAML contains the injectWorkspacePackages setting
+        assert!(
+            encoded_str.contains("injectWorkspacePackages: true"),
+            "Encoded lockfile should contain injectWorkspacePackages setting"
         );
     }
 }

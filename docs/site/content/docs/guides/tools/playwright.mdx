@@ -3,7 +3,7 @@ title: Playwright
 description: Learn how to use Playwright in a Turborepo.
 ---
 
-import { Tabs, Tab, PackageManagerTabs } from '#components/tabs';
+import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
 
 [Playwright](https://playwright.dev/) enables reliable end-to-end testing for modern web apps.
 
@@ -80,7 +80,7 @@ This relationship can be expressed in `turbo.json` and the end-to-end suite's `p
 
 ```json title="./tooling/playwright-web/package.json"
 {
-  "name": "@repo/playwright-web"
+  "name": "@repo/playwright-web",
   "dependencies": {
     "web": "workspace:*" // [!code highlight]
   }
@@ -97,7 +97,7 @@ Later on, when you want to run your end-to-end tests, use [the `--only` flag](/d
 
 You can also create a common package for shared utilities that you need in your end-to-end test suites. We recommend using `peerDependencies` in this shared package so that you can get access to Playwright used in consumers without having to install Playwright into the shared package itself.
 
-<PackageManagerTabs>
+<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
 
 <Tab value="pnpm">
 ```json title="./packages/playwright-utilities/package.json"
@@ -124,24 +124,24 @@ You can also create a common package for shared utilities that you need in your 
 <Tab value="npm">
 ```json title="./packages/playwright-utilities/package.json"
 {
- "name": "@repo/playwright-utilities",
- "peerDependencies": {
-   "playwright": "*"
-}
+  "name": "@repo/playwright-utilities",
+  "peerDependencies": {
+    "playwright": "*"
+  }
 }
 ```
 
 </Tab>
 
-<Tab value="bun (Beta)">
+<Tab value="bun">
 ```json title="./packages/playwright-utilities/package.json"
 {
   "name": "@repo/playwright-utilities",
   "peerDependencies": {
     "playwright": "workspace:*"
-}
+  }
 }
 ```
 </Tab>
 
-</PackageManagerTabs>
+</Tabs>

@@ -25,7 +25,8 @@ Configure the behavior of `turbo` by using a `turbo.json` file in your Workspace
 
 Extend from the root `turbo.json` to create specific configuration for a package using [Package Configurations](/docs/reference/package-configurations).
 
-- The only valid value for `extends` is `["//"]` to inherit configuration from the root `turbo.json`.
+- The `extends` array must start with `["//"]` to inherit configuration from the root `turbo.json`.
+- You can also extend from other packages (e.g., `["//", "shared-config"]`).
 - If `extends` is used in the root `turbo.json`, it will be ignored.
 
 ### `globalDependencies`
@@ -187,6 +188,24 @@ Turborepo's Environment Modes allow you to control which environment variables a
 
 Read more about [Environment Modes](/docs/crafting-your-repository/using-environment-variables#environment-modes).
 
+### `futureFlags`
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {}
+}
+```
+
+Enable experimental features that will become the default behavior in future versions of Turborepo.
+
+<Callout type="info">
+  `futureFlags` can only be set in the root `turbo.json`. An error will be
+  thrown if set in a [Package
+  Configuration](/docs/reference/package-configurations).
+</Callout>
+
+There are no future flags at this time.
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"
@@ -232,6 +251,28 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
 ## Task options
 
 Using the options available in the tasks you define in `tasks`, you can describe how `turbo` will run your tasks.
+
+### `extends` (task-level)
+
+Controls whether a task inherits configuration from the extends chain. This option is only available in [Package Configurations](/docs/reference/package-configurations), not in the root `turbo.json`.
+
+```jsonc title="./packages/ui/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "lint": {
+      "extends": false // Exclude this task from the package
+    }
+  }
+}
+```
+
+| Value            | Behavior                                                                                                                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `false`          | Task is excluded from inheritance. If no other config is provided, the task won't exist for this package. If other config is provided, creates a fresh task definition with no inheritance. |
+| `true` (default) | Task inherits configuration normally from the extends chain.                                                                                                                                |
+
+See [Excluding tasks from inheritance](/docs/reference/package-configurations#excluding-tasks-from-inheritance) for examples and more details.
 
 ### `dependsOn`
 
@@ -475,6 +516,47 @@ Starting a file glob with `$TURBO_ROOT$` will change the glob to be relative to 
   }
 }
 ```
+
+#### `$TURBO_EXTENDS$`
+
+When using [Package Configurations](/docs/reference/package-configurations), array fields completely replace the values from the root `turbo.json` by default. The `$TURBO_EXTENDS$` microsyntax changes this behavior to **append** instead of **replace**.
+
+This microsyntax can be used in the following array fields:
+
+- `dependsOn`
+- `env`
+- `inputs`
+- `outputs`
+- `passThroughEnv`
+- `with`
+
+For example, if your root `turbo.json` defines:
+
+```jsonc title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"]
+    }
+  }
+}
+```
+
+A Package Configuration can add additional outputs while keeping the root outputs:
+
+```jsonc title="./apps/web/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      // Inherits "dist/**" from root, and adds ".next/**"
+      "outputs": ["$TURBO_EXTENDS$", ".next/**", "!.next/cache/**"]
+    }
+  }
+}
+```
+
+Without `$TURBO_EXTENDS$`, the `outputs` array would be completely replaced with `[".next/**", "!.next/cache/**"]`, dropping the `"dist/**"` from the root configuration.
 
 ### `outputLogs`
 
