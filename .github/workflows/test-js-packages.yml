@@ -79,6 +79,7 @@ jobs:
   summary:
     name: Turborepo JS Test Summary
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: always()
     needs:
       - js_packages

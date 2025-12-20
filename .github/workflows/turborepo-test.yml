@@ -17,6 +17,7 @@ jobs:
   find-changes:
     name: Find path changes
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       docs: ${{ steps.filter.outputs.docs }}
       basic-example: ${{ steps.filter.outputs.basic-example }}
@@ -110,6 +111,7 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       test-paths: ${{ steps.generate-matrix.outputs.test-paths }}
     steps:
@@ -137,6 +139,7 @@ jobs:
       - find-changes
       - generate-integration-test-matrix
     runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 30
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     strategy:
       fail-fast: false
@@ -220,6 +223,7 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -252,6 +256,7 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -272,6 +277,7 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -308,6 +314,7 @@ jobs:
             runner: windows-latest
         partition: [1, 2]
     runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 30
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
@@ -482,6 +489,7 @@ jobs:
   summary:
     name: Turborepo Test Summary
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     if: always()
     needs:
       - find-changes
