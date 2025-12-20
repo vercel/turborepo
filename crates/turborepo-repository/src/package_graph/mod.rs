@@ -35,7 +35,8 @@ pub struct PackageGraph {
     package_manager: PackageManager,
     lockfile: Option<Box<dyn Lockfile>>,
     repo_root: AbsoluteSystemPathBuf,
-    external_to_internal: OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
+    external_dep_to_internal_dependents:
+        OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
 }
 
 /// The WorkspacePackage.
@@ -567,20 +568,21 @@ impl PackageGraph {
         // In order to answer this once we have to calculate the info for every external
         // package so we store the results
         let map = self
-            .external_to_internal
-            .get_or_init(|| self.external_to_internal());
+            .external_dep_to_internal_dependents
+            .get_or_init(|| self.build_external_dep_to_internal_dependents_map());
         map.get(external_package)
     }
 
-    // Gotta come up with a better name
-    pub fn external_to_internal(
+    /// Builds a map from external dependencies to the set of internal workspace
+    /// packages that depend on them (including transitive dependents).
+    fn build_external_dep_to_internal_dependents_map(
         &self,
     ) -> HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> {
         // TODO: provide size hint from Lockfile trait
         let mut map: HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>> = HashMap::new();
         // First find which packages directly depend on each external package
         for (pkg, info) in self.packages.iter() {
-            for dep in info.transitive_dependencies.as_ref().into_iter().flatten() {
+            for dep in info.transitive_dependencies.iter().flatten() {
                 let rdeps = map.entry(dep.clone()).or_default();
                 rdeps.insert(PackageNode::Workspace(pkg.clone()));
             }
@@ -603,12 +605,9 @@ impl PackageGraph {
             } else {
                 let transitive_rdeps = turborepo_graph_utils::transitive_closure(
                     &self.graph,
-                    rdeps.iter().map(|node| {
-                        *self
-                            .node_lookup
-                            .get(node)
-                            .expect("all nodes should have an index")
-                    }),
+                    rdeps
+                        .iter()
+                        .filter_map(|node| self.node_lookup.get(node).copied()),
                     petgraph::Direction::Incoming,
                 );
                 rdeps.extend(transitive_rdeps.into_iter().cloned());

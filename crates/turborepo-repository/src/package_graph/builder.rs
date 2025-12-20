@@ -363,7 +363,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             lockfile,
             package_manager,
             repo_root: repo_root.to_owned(),
-            external_to_internal: std::sync::OnceLock::new(),
+            external_dep_to_internal_dependents: std::sync::OnceLock::new(),
         })
     }
 }
@@ -566,7 +566,7 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
             package_manager,
             lockfile,
             repo_root: repo_root.to_owned(),
-            external_to_internal: std::sync::OnceLock::new(),
+            external_dep_to_internal_dependents: std::sync::OnceLock::new(),
         })
     }
 }

@@ -32,7 +32,7 @@ impl ExternalPackage {
         self.human_name().to_string()
     }
 
-    async fn internal_dependants(&self) -> Result<Array<Package>, Error> {
+    async fn internal_dependents(&self) -> Result<Array<Package>, Error> {
         let Some(names) = self
             .run
             .pkg_dep_graph()
