@@ -624,6 +624,18 @@ impl RepositoryQuery {
 
         Ok(packages)
     }
+
+    async fn external_dependencies(&self) -> Result<Array<ExternalPackage>, Error> {
+        let pkg_dep_graph = self.run.pkg_dep_graph();
+        let all_package_names: Vec<_> = pkg_dep_graph.packages().map(|(name, _)| name).collect();
+        let mut packages = pkg_dep_graph
+            .transitive_external_dependencies(all_package_names)
+            .into_iter()
+            .map(|pkg| ExternalPackage::new(self.run.clone(), pkg.clone()))
+            .collect::<Array<_>>();
+        packages.sort_by_key(|pkg| pkg.human_name());
+        Ok(packages)
+    }
 }
 
 pub async fn graphiql() -> impl IntoResponse {
