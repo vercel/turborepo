@@ -203,8 +203,15 @@ impl TurboJsonLoader {
                 // the workspace definition includes "." as a package. In that case,
                 // the package's turbo.json would be the root turbo.json, so we
                 // should treat it as root to use the correct schema.
+                // We use to_realpath() to resolve symlinks so that a symlinked
+                // package pointing to the repo root is also detected correctly.
                 let is_package_at_root = !matches!(package, PackageName::Root)
-                    && turbo_json_path.as_path() == reader.repo_root().as_path();
+                    && turbo_json_path
+                        .to_realpath()
+                        .ok()
+                        .zip(reader.repo_root().to_realpath().ok())
+                        .map(|(pkg_real, root_real)| pkg_real == root_real)
+                        .unwrap_or(false);
                 let is_root = package == &PackageName::Root || is_package_at_root;
                 let turbo_json = load_from_file(
                     reader,
