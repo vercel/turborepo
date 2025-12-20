@@ -1353,7 +1353,7 @@ pub async fn run(
     let telemetry_handle = initialize_telemetry_client(color_config, version);
 
     if should_print_version() {
-        eprintln!("{}\n", GREY.apply_to(format!("turbo {}", get_version())));
+        eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
     }
 
     let mut command = get_command(&mut cli_args)?;
