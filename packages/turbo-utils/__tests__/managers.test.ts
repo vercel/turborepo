@@ -114,6 +114,7 @@ describe("managers", () => {
         expect(mockExeca).toHaveBeenCalledWith("yarnpkg", ["--version"], {
           cwd: ".",
           env: { COREPACK_ENABLE_STRICT: "0" },
+          timeout: 5000,
         });
 
         // Verify other package manager bin path commands
@@ -123,15 +124,18 @@ describe("managers", () => {
           {
             cwd: "/tmp",
             env: { COREPACK_ENABLE_STRICT: "0" },
+            timeout: 5000,
           }
         );
         expect(mockExeca).toHaveBeenCalledWith("pnpm", ["bin", "--global"], {
           cwd: "/tmp",
           env: { COREPACK_ENABLE_STRICT: "0" },
+          timeout: 5000,
         });
         expect(mockExeca).toHaveBeenCalledWith("bun", ["pm", "--g", "bin"], {
           cwd: "/tmp",
           env: { COREPACK_ENABLE_STRICT: "0" },
+          timeout: 5000,
         });
       });
     });
