@@ -34,3 +34,45 @@ Confirm that the right values appear in the run summary when framework inference
   false
   $ cat output.json | jq -r '.tasks[].framework'
   
+
+Exclude framework-inferred variables using negative wildcard in env key.
+First, update turbo.json to add env exclusion pattern.
+  $ cat turbo.json | jq '.tasks.build.env = ["!NEXT_PUBLIC_*"]' > turbo.json.tmp && mv turbo.json.tmp turbo.json
+  $ cat turbo.json
+  {
+    "$schema": "https://turborepo.com/schema.json",
+    "globalPassThroughEnv": [],
+    "tasks": {
+      "build": {
+        "env": [
+          "!NEXT_PUBLIC_*"
+        ]
+      }
+    }
+  }
+
+Now verify that framework-inferred vars are excluded when negative wildcard is present.
+  $ NEXT_PUBLIC_CHANGED=true ${TURBO} run build --dry=json | jq -c '.tasks[].environmentVariables.inferred'
+  []
+
+The framework is still detected even with exclusion.
+  $ NEXT_PUBLIC_CHANGED=true ${TURBO} run build --dry=json | jq -r '.tasks[].framework'
+  nextjs
+
+Test globalEnv exclusion also applies to framework-inferred vars.
+Reset turbo.json and use globalEnv instead.
+  $ cat > turbo.json << 'EOF'
+  > {
+  >   "$schema": "https://turborepo.com/schema.json",
+  >   "globalEnv": ["!NEXT_PUBLIC_*"],
+  >   "globalPassThroughEnv": [],
+  >   "tasks": {
+  >     "build": {}
+  >   }
+  > }
+  > EOF
+
+Verify globalEnv exclusions also apply to framework-inferred variables.
+  $ NEXT_PUBLIC_CHANGED=true ${TURBO} run build --dry=json | jq -c '.tasks[].environmentVariables.inferred'
+  []
+

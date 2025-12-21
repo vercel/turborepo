@@ -133,6 +133,7 @@ impl<'a> Visitor<'a> {
         manager: ProcessManager,
         repo_root: &'a AbsoluteSystemPath,
         global_env: EnvironmentVariableMap,
+        global_env_patterns: &'a [String],
         ui_sender: Option<UISender>,
         is_watch: bool,
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
@@ -143,6 +144,7 @@ impl<'a> Visitor<'a> {
             env_at_execution_start,
             global_hash,
             global_env,
+            global_env_patterns,
         );
 
         let sink = Self::sink(run_opts);

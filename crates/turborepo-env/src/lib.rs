@@ -418,6 +418,7 @@ mod tests {
     #[test_case(&["FOO*"], &["BAR"], &["BAR", "FOO", "FOOBAR", "FOOD"] ; "wildcard")]
     #[test_case(&["FOO*", "!FOOBAR"], &["BAR"], &["BAR", "FOO", "FOOD"] ; "omit wild")]
     #[test_case(&["FOO*"], &["!FOOBAR"], &["FOO", "FOOD"] ; "omit task")]
+    #[test_case(&["FOO*"], &["!FOO*"], &[] ; "exclude all framework vars")]
     fn test_hashable_env(wildcards: &[&str], task: &[&str], expected: &[&str]) {
         let env_at_start = EnvironmentVariableMap(
             vec![
