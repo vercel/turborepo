@@ -742,17 +742,20 @@ pub async fn run_app(
     repo_root: &AbsoluteSystemPathBuf,
     scrollback_len: u64,
 ) -> Result<(), Error> {
-    let mut terminal = startup(color_config)?;
-    let size = terminal.size()?;
+    // Get terminal size before potentially entering alternate screen
+    let size = crossterm::terminal::size()?;
     let preferences = PreferenceLoader::new(repo_root);
 
     let mut app: App<Box<dyn io::Write + Send>> =
-        App::new(size.height, size.width, tasks, preferences, scrollback_len);
+        App::new(size.1, size.0, tasks, preferences, scrollback_len);
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
+    // Terminal is lazily initialized - only started when a non-cached task runs
+    let mut terminal: Option<Terminal<CrosstermBackend<Stdout>>> = None;
+
     let (result, callback) =
-        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx).await {
+        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx, color_config).await {
             Ok(callback) => (Ok(()), callback),
             Err(err) => {
                 debug!("tui shutting down: {err}");
@@ -760,26 +763,57 @@ pub async fn run_app(
             }
         };
 
-    cleanup(terminal, app, callback)?;
+    // Only cleanup terminal if we actually started it
+    if let Some(terminal) = terminal {
+        cleanup(terminal, app, callback)?;
+    } else {
+        // Even if TUI never started, flush preferences
+        app.preferences.flush_to_disk().ok();
+        if let Some(callback) = callback {
+            // Signal completion even if we never started the terminal
+            callback.send(()).ok();
+        }
+    }
 
     result
 }
 
+/// Check if an event indicates we need to start rendering the TUI.
+/// We start rendering when we receive a cache miss, meaning a task will actually run.
+fn should_start_terminal(event: &Event) -> bool {
+    matches!(
+        event,
+        Event::Status {
+            result: CacheResult::Miss,
+            ..
+        }
+    )
+}
+
 // Break out inner loop so we can use `?` without worrying about cleaning up the
 // terminal.
-async fn run_app_inner<B: Backend + std::io::Write>(
-    terminal: &mut Terminal<B>,
+async fn run_app_inner(
+    terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>,
     app: &mut App<Box<dyn io::Write + Send>>,
     mut receiver: AppReceiver,
     mut crossterm_rx: mpsc::Receiver<crossterm::event::Event>,
+    color_config: ColorConfig,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
-    // Render initial state to paint the screen
-    terminal.draw(|f| view(app, f))?;
     let mut last_render = Instant::now();
     let mut resize_debouncer = Debouncer::new(RESIZE_DEBOUNCE_DELAY);
     let mut callback = None;
     let mut needs_rerender = true;
+
     while let Some(event) = poll(app.input_options()?, &mut receiver, &mut crossterm_rx).await {
+        // Check if we need to start the terminal (on first cache miss)
+        if terminal.is_none() && should_start_terminal(&event) {
+            let term = startup(color_config)?;
+            *terminal = Some(term);
+            // Render initial state to paint the screen
+            terminal.as_mut().unwrap().draw(|f| view(app, f))?;
+            last_render = Instant::now();
+        }
+
         // If we only receive ticks, then there's been no state change so no update
         // needed
         if !matches!(event, Event::Tick) {
@@ -797,7 +831,9 @@ async fn run_app_inner<B: Backend + std::io::Write>(
         }
         if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
             // If we got a resize event, make sure to update ratatui backend.
-            terminal.autoresize()?;
+            if let Some(term) = terminal.as_mut() {
+                term.autoresize()?;
+            }
             update(app, resize)?;
         }
         if let Some(event) = event {
@@ -805,8 +841,12 @@ async fn run_app_inner<B: Backend + std::io::Write>(
             if app.done {
                 break;
             }
-            if FRAMERATE <= last_render.elapsed() && needs_rerender {
-                terminal.draw(|f| view(app, f))?;
+            // Only render if the terminal has been started
+            if let Some(term) = terminal.as_mut()
+                && FRAMERATE <= last_render.elapsed()
+                && needs_rerender
+            {
+                term.draw(|f| view(app, f))?;
                 last_render = Instant::now();
                 needs_rerender = false;
             }
