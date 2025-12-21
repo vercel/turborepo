@@ -1,39 +1,49 @@
-import got from "got";
-import * as Got from "got";
-import { describe, it, expect, jest } from "@jest/globals";
+import {
+  describe,
+  it,
+  expect,
+  jest,
+  beforeEach,
+  afterEach,
+} from "@jest/globals";
 import { isUrlOk, getRepoInfo, hasRepo } from "../src/examples";
 
-jest.mock<typeof import("got")>("got", () => ({
-  __esModule: true,
-  ...jest.requireActual("got"),
-}));
-
 describe("examples", () => {
+  const originalFetch = global.fetch;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+  });
+
   describe("isUrlOk", () => {
     it("returns true if url returns 200", async () => {
-      const mockGot = jest
-        .spyOn(got, "head")
-        .mockReturnValue({ statusCode: 200 } as any);
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: true } as Response)
+      ) as typeof fetch;
 
       const url = "https://github.com/vercel/turborepo/";
       const result = await isUrlOk(url);
       expect(result).toBe(true);
 
-      expect(mockGot).toHaveBeenCalledWith(url);
-      mockGot.mockRestore();
+      expect(global.fetch).toHaveBeenCalledWith(
+        url,
+        expect.objectContaining({ method: "HEAD" })
+      );
     });
 
     it("returns false if url returns status != 200", async () => {
-      const mockGot = jest
-        .spyOn(got, "head")
-        .mockReturnValue({ statusCode: 401 } as any);
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: false } as Response)
+      ) as typeof fetch;
 
       const url = "https://not-github.com/vercel/turborepo/";
       const result = await isUrlOk(url);
       expect(result).toBe(false);
 
-      expect(mockGot).toHaveBeenCalledWith(url);
-      mockGot.mockRestore();
+      expect(global.fetch).toHaveBeenCalledWith(
+        url,
+        expect.objectContaining({ method: "HEAD" })
+      );
     });
   });
 
@@ -85,21 +95,23 @@ describe("examples", () => {
         expectBranchLookup,
         expected,
       }) => {
-        const mockGot = jest.spyOn(Got, "default").mockReturnValue({
-          body: JSON.stringify({ default_branch: defaultBranch }),
-        } as any);
+        global.fetch = jest.fn(() =>
+          Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ default_branch: defaultBranch }),
+          } as Response)
+        ) as typeof fetch;
 
         const url = new URL(repoUrl);
         const result = await getRepoInfo(url, examplePath);
         expect(result).toMatchObject(expected);
 
         if (result && expectBranchLookup) {
-          expect(mockGot).toHaveBeenCalledWith(
-            `https://api.github.com/repos/${result.username}/${result.name}`
+          expect(global.fetch).toHaveBeenCalledWith(
+            `https://api.github.com/repos/${result.username}/${result.name}`,
+            expect.any(Object)
           );
         }
-
-        mockGot.mockRestore();
       }
     );
   });
@@ -120,15 +132,17 @@ describe("examples", () => {
     ])(
       "checks repo at $expectedUrl",
       async ({ expected, repoInfo, expectedUrl }) => {
-        const mockGot = jest
-          .spyOn(got, "head")
-          .mockReturnValue({ statusCode: 200 } as any);
+        global.fetch = jest.fn(() =>
+          Promise.resolve({ ok: true } as Response)
+        ) as typeof fetch;
 
         const result = await hasRepo(repoInfo);
         expect(result).toBe(expected);
 
-        expect(mockGot).toHaveBeenCalledWith(expectedUrl);
-        mockGot.mockRestore();
+        expect(global.fetch).toHaveBeenCalledWith(
+          expectedUrl,
+          expect.objectContaining({ method: "HEAD" })
+        );
       }
     );
   });

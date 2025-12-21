@@ -1,12 +1,13 @@
-import { Stream } from "node:stream";
-import { promisify } from "node:util";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
+import type { ReadableStream } from "node:stream/web";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { createWriteStream, promises as fs } from "node:fs";
 import { x as extract } from "tar";
-import got from "got";
 
-const pipeline = promisify(Stream.pipeline);
+const REQUEST_TIMEOUT = 10000;
+const DOWNLOAD_TIMEOUT = 120000;
 
 export interface RepoInfo {
   username: string;
@@ -16,11 +17,20 @@ export interface RepoInfo {
 }
 
 export async function isUrlOk(url: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, REQUEST_TIMEOUT);
   try {
-    const res = await got.head(url);
-    return res.statusCode === 200;
+    const res = await fetch(url, {
+      method: "HEAD",
+      signal: controller.signal,
+    });
+    return res.ok;
   } catch (err) {
     return false;
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
@@ -44,11 +54,19 @@ export async function getRepoInfo(
     // In this case "t" will be an empty string while the turbo part "_branch" will be undefined
     (tree === "" && sourceBranch === undefined)
   ) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, REQUEST_TIMEOUT);
     try {
-      const infoResponse = await got(
-        `https://api.github.com/repos/${username}/${name}`
+      const infoResponse = await fetch(
+        `https://api.github.com/repos/${username}/${name}`,
+        { signal: controller.signal }
       );
-      const info = JSON.parse(infoResponse.body) as { default_branch: string };
+      if (!infoResponse.ok) {
+        return;
+      }
+      const info = (await infoResponse.json()) as { default_branch: string };
       return {
         username,
         name,
@@ -57,6 +75,8 @@ export async function getRepoInfo(
       } as RepoInfo;
     } catch (err) {
       return;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -100,8 +120,21 @@ export function existsInRepo(nameOrUrl: string): Promise<boolean> {
 
 async function downloadTar(url: string, name: string) {
   const tempFile = join(tmpdir(), `${name}.temp-${Date.now()}`);
-  await pipeline(got.stream(url), createWriteStream(tempFile));
-  return tempFile;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, DOWNLOAD_TIMEOUT);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok || !response.body) {
+      throw new Error(`Failed to download: ${response.status}`);
+    }
+    const body = Readable.fromWeb(response.body as ReadableStream);
+    await pipeline(body, createWriteStream(tempFile));
+    return tempFile;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export async function downloadAndExtractRepo(
