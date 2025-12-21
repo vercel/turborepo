@@ -38,6 +38,20 @@ Bad flag with an implied run command should display run flags
       --log-prefix <LOG_PREFIX>
       TASKS
       PASS_THROUGH_ARGS
+      --cache <CACHE>
+      --force \[<FORCE>\] (re)
+      --remote-only \[<REMOTE_ONLY>\] (re)
+      --remote-cache-read-only \[<REMOTE_CACHE_READ_ONLY>\] (re)
+      --no-cache <NO_CACHE>
+      --cache-workers <CACHE_WORKERS>
+      --dry-run \[<DRY_RUN>\] (re)
+      --graph \[<GRAPH>\] (re)
+      --daemon <DAEMON>
+      --no-daemon <NO_DAEMON>
+      --profile <PROFILE>
+      --anon-profile <ANON_PROFILE>
+      --summarize \[<SUMMARIZE>\] (re)
+      --parallel <PARALLEL>
   
   For more information, try '--help'.
   

@@ -347,6 +347,42 @@ pub enum LinkTarget {
     Spaces,
 }
 
+/// Returns formatted RunArgs options derived from clap's command definition.
+/// These options aren't included in the usage line by clap because they're all
+/// optional.
+fn get_run_args_options() -> Vec<String> {
+    RunArgs::command()
+        .get_arguments()
+        .filter(|arg| arg.get_long().is_some())
+        .map(|arg| {
+            let long = arg.get_long().unwrap();
+            let value_names: Vec<_> = arg.get_value_names().unwrap_or_default().to_vec();
+
+            if value_names.is_empty() {
+                // Boolean flag
+                format!("--{}", long)
+            } else {
+                // Check if value is optional via num_args (0..=1 means optional)
+                let is_optional = arg
+                    .get_num_args()
+                    .is_some_and(|range| range.min_values() == 0);
+
+                let value_str = value_names
+                    .iter()
+                    .map(|v| v.to_string())
+                    .collect::<Vec<_>>()
+                    .join("> <");
+
+                if is_optional {
+                    format!("--{} [<{}>]", long, value_str)
+                } else {
+                    format!("--{} <{}>", long, value_str)
+                }
+            }
+        })
+        .collect()
+}
+
 /// Formats clap error messages to improve readability of pipe-separated options
 fn format_error_message(mut err_str: String) -> String {
     // Replace pipe separators in usage line with newlines for better readability
@@ -365,10 +401,15 @@ fn format_error_message(mut err_str: String) -> String {
                         let options_str = &usage_line[bracket_start + 1..bracket_end];
 
                         // Split the options by pipe and format them as a list
-                        let formatted_options: Vec<String> = options_str
+                        let mut formatted_options: Vec<String> = options_str
                             .split('|')
                             .map(|opt| format!("    {}", opt))
                             .collect();
+
+                        // Add RunArgs options that clap doesn't include
+                        for opt in get_run_args_options() {
+                            formatted_options.push(format!("    {}", opt));
+                        }
 
                         // Build the new usage string
                         let new_usage = format!(
