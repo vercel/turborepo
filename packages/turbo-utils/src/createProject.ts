@@ -25,6 +25,15 @@ function isErrorLike(err: unknown): err is { message: string } {
 
 export class DownloadError extends Error {}
 
+/**
+ * Validates that a URL is a valid GitHub repository URL.
+ * Uses hostname check instead of origin to prevent SSRF bypasses
+ * (e.g., https://github.com.evil.com would bypass an origin check).
+ */
+export function isValidGitHubRepoUrl(url: URL): boolean {
+  return url.hostname === "github.com";
+}
+
 export async function createProject({
   appPath,
   example,
@@ -69,7 +78,7 @@ export async function createProject({
       }
 
       if (repoUrl) {
-        if (repoUrl.origin !== "https://github.com") {
+        if (!isValidGitHubRepoUrl(repoUrl)) {
           loader.stop();
           logger.error(
             `Invalid URL: ${picocolors.red(

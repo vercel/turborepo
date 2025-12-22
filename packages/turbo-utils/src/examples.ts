@@ -4,7 +4,7 @@ import type { ReadableStream } from "node:stream/web";
 import { createGunzip } from "node:zlib";
 import { Parse, type ReadEntry } from "tar";
 import { createWriteStream, mkdirSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { dirname, resolve, relative } from "node:path";
 
 const REQUEST_TIMEOUT = 10000;
 const DOWNLOAD_TIMEOUT = 120000;
@@ -121,6 +121,26 @@ export function existsInRepo(nameOrUrl: string): Promise<boolean> {
 }
 
 /**
+ * Validates that a destination path stays within the target root directory.
+ * Prevents path traversal attacks (Zip Slip).
+ * @returns true if the path is safe, false if it would escape the root
+ */
+export function isPathSafe(root: string, strippedPath: string): boolean {
+  const resolvedRoot = resolve(root);
+  const destPath = resolve(resolvedRoot, strippedPath);
+  const relativePath = relative(resolvedRoot, destPath);
+  return !relativePath.startsWith("..") && resolve(destPath) === destPath;
+}
+
+/**
+ * Checks if a tar entry type is a symlink or hard link.
+ * These are blocked to prevent symlink attacks.
+ */
+export function isLinkEntry(entryType: string): boolean {
+  return entryType === "SymbolicLink" || entryType === "Link";
+}
+
+/**
  * Streaming extraction from a tarball URL.
  */
 async function streamingExtract({
@@ -171,7 +191,22 @@ async function streamingExtract({
           return;
         }
 
-        const destPath = join(root, strippedPath);
+        // Validate the path stays within the target directory (Zip Slip protection)
+        if (!isPathSafe(root, strippedPath)) {
+          console.error(`Blocked path traversal attempt: ${entry.path}`);
+          entry.resume();
+          return;
+        }
+
+        // Block symlinks and hard links to prevent symlink attacks
+        if (entry.type && isLinkEntry(entry.type)) {
+          console.warn(`Blocked symlink: ${entry.path}`);
+          entry.resume();
+          return;
+        }
+
+        const resolvedRoot = resolve(root);
+        const destPath = resolve(resolvedRoot, strippedPath);
 
         if (entry.type === "Directory") {
           mkdirSync(destPath, { recursive: true });
