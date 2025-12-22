@@ -3,9 +3,11 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream } from "node:stream/web";
 import { createGunzip } from "node:zlib";
 import { createWriteStream, mkdirSync, rmSync, cpSync } from "node:fs";
+import { writeFile, unlink } from "node:fs/promises";
 import { dirname, resolve, relative, join } from "node:path";
+import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { Parse, type ReadEntry } from "tar";
+import { Parse, type ReadEntry, extract } from "tar";
 import { error, warn } from "./logger";
 
 const REQUEST_TIMEOUT = 10000;
@@ -299,14 +301,35 @@ export async function downloadAndExtractRepo(
   root: string,
   { username, name, branch, filePath }: RepoInfo
 ) {
-  await streamingExtract({
-    url: `https://codeload.github.com/${username}/${name}/tar.gz/${branch}`,
-    root,
-    strip: filePath ? filePath.split("/").length + 1 : 1,
-    filter: (p: string, rootPath: string | null) => {
-      return p.startsWith(`${rootPath}${filePath ? `/${filePath}/` : "/"}`);
-    },
-  });
+  const url = `https://codeload.github.com/${username}/${name}/tar.gz/${branch}`;
+
+  // Download to temp file first (async - allows spinner to animate)
+  const tempFile = join(tmpdir(), `turbo-download-${Date.now()}.tar.gz`);
+  const response = await fetchWithTimeout(url, {}, DOWNLOAD_TIMEOUT);
+  if (!response.ok || !response.body) {
+    throw new Error(`Failed to download: ${response.status}`);
+  }
+  const buffer = Buffer.from(await response.arrayBuffer());
+  await writeFile(tempFile, buffer);
+
+  // Extract from file (sync but fast)
+  let rootPath: string | null = null;
+  try {
+    await extract({
+      file: tempFile,
+      cwd: root,
+      strip: filePath ? filePath.split("/").length + 1 : 1,
+      filter: (p: string) => {
+        if (rootPath === null) {
+          const pathSegments = p.split("/");
+          rootPath = pathSegments.length ? pathSegments[0] : null;
+        }
+        return p.startsWith(`${rootPath}${filePath ? `/${filePath}/` : "/"}`);
+      },
+    });
+  } finally {
+    await unlink(tempFile);
+  }
 }
 
 export async function downloadAndExtractExample(root: string, name: string) {

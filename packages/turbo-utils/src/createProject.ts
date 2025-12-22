@@ -120,6 +120,13 @@ export async function createProject({
           );
           process.exit(1);
         }
+
+        repoInfo = {
+          username: "vercel",
+          name: "turborepo",
+          branch: "main",
+          filePath: `examples/${example}`,
+        };
       }
     }
 
@@ -159,11 +166,20 @@ export async function createProject({
     const originalDirectory = process.cwd();
     process.chdir(root);
 
-    if (!isDefaultExample && repoInfo) {
-      const info = repoInfo;
-      await retry(() => downloadAndExtractRepo(root, info), {
-        retries: 3,
-      });
+    if (isDefaultExample || repoInfo) {
+      await retry(
+        () =>
+          downloadAndExtractRepo(
+            root,
+            repoInfo ?? {
+              username: "vercel",
+              name: "turborepo",
+              branch: "main",
+              filePath: "examples/basic",
+            }
+          ),
+        { retries: 3 }
+      );
     } else {
       await retry(() => downloadAndExtractExample(root, example), {
         retries: 3,
