@@ -58,14 +58,7 @@ export async function createProject({
   loader.start();
 
   try {
-    if (isDefaultExample) {
-      repoInfo = {
-        username: "vercel",
-        name: "turborepo",
-        branch: "main",
-        filePath: "examples/basic",
-      };
-    } else {
+    if (!isDefaultExample) {
       try {
         repoUrl = new URL(example);
       } catch (err: unknown) {
