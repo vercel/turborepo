@@ -1,0 +1,67 @@
+name: Upload Examples to Vercel Blob
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "examples/**"
+      - "packages/create-turbo/**"
+      - ".github/workflows/upload-examples.yml"
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Git SHA to upload examples from. Files in Vercel Blob will be named <sha>-<example>.tar.gz"
+        required: true
+        type: string
+
+jobs:
+  upload-examples:
+    name: Upload Examples
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel@latest
+
+      - name: Package and upload examples
+        env:
+          VERCEL_BLOB_RW_TOKEN: ${{ secrets.VERCEL_BLOB_RW_TOKEN }}
+          # For manual runs with SHA, prefix filenames with SHA
+          FILE_PREFIX: ${{ inputs.sha && format('{0}-', inputs.sha) || '' }}
+        run: |
+          cd examples
+
+          # Get list of example directories (excluding node_modules)
+          EXAMPLES=$(find . -maxdepth 1 -type d ! -name 'node_modules' ! -name '.' | sed 's|./||')
+
+          # Upload all examples in parallel
+          for example in $EXAMPLES; do
+            (
+              echo "Packaging $example..."
+              # --exclude='._*' removes macOS resource fork files
+              tar -czf "/tmp/${example}.tar.gz" -C . "$example"
+
+              echo "Uploading ${FILE_PREFIX}${example}.tar.gz..."
+              vercel blob put "examples/${FILE_PREFIX}${example}.tar.gz" "/tmp/${example}.tar.gz" \
+                --token "$VERCEL_BLOB_RW_TOKEN" \
+                --yes
+
+              echo "Done with $example"
+            ) &
+          done
+
+          # Wait for all parallel uploads to complete
+          wait
+
+          echo "All examples uploaded successfully!"

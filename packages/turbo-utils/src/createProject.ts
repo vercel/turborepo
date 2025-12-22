@@ -45,7 +45,7 @@ export async function createProject({
   let repoUrl: URL | undefined;
 
   logger.log();
-  const loader = logger.turboLoader("Verifying example and preparing...");
+  const loader = logger.turboLoader("Downloading files...");
   loader.start();
 
   try {
@@ -156,9 +156,6 @@ export async function createProject({
 
     const originalDirectory = process.cwd();
     process.chdir(root);
-
-    // Update loader text for download phase
-    loader.text = "Downloading files... (This might take a moment)";
 
     if (!isDefaultExample && repoInfo) {
       const info = repoInfo;
