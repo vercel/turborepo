@@ -305,7 +305,7 @@ export async function downloadAndExtractRepo(
 
   // Download to temp file first (async - allows spinner to animate)
   const tempFile = join(tmpdir(), `turbo-download-${Date.now()}.tar.gz`);
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url, {}, DOWNLOAD_TIMEOUT);
   if (!response.ok || !response.body) {
     throw new Error(`Failed to download: ${response.status}`);
   }
