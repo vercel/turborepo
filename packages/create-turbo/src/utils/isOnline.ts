@@ -59,7 +59,12 @@ export async function isOnline(): Promise<boolean> {
     return false;
   }
 
-  const { hostname } = new URL(proxy);
+  let hostname: string | undefined;
+  try {
+    ({ hostname } = new URL(proxy));
+  } catch {
+    return false;
+  }
   if (!hostname) {
     return false;
   }
