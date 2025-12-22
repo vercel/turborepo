@@ -3,13 +3,12 @@ import { pipeline } from "node:stream/promises";
 import type { ReadableStream } from "node:stream/web";
 import { createGunzip } from "node:zlib";
 import { Parse, type ReadEntry } from "tar";
-import { createWriteStream, mkdirSync } from "node:fs";
-import { dirname, resolve, relative } from "node:path";
+import { createWriteStream, mkdirSync, rmSync, cpSync } from "node:fs";
+import { dirname, resolve, relative, join } from "node:path";
+import { execSync } from "node:child_process";
 
 const REQUEST_TIMEOUT = 10000;
 const DOWNLOAD_TIMEOUT = 120000;
-const VERCEL_BLOB_BASE_URL =
-  "https://ufa25dqjajkmio0q.public.blob.vercel-storage.com";
 
 export interface RepoInfo {
   username: string;
@@ -254,11 +253,32 @@ export async function downloadAndExtractRepo(
 }
 
 export async function downloadAndExtractExample(root: string, name: string) {
-  await streamingExtract({
-    url: `${VERCEL_BLOB_BASE_URL}/examples/${name}.tar.gz`,
-    root,
-    // The tarball contains a single directory with the example name
-    strip: 1,
-    filter: () => true,
-  });
+  const tempDir = join(root, ".turbo-clone-temp");
+
+  try {
+    // Clone with partial clone (no blobs) and no checkout
+    execSync(
+      `git clone --filter=blob:none --no-checkout --depth 1 --sparse https://github.com/vercel/turborepo.git "${tempDir}"`,
+      { stdio: "pipe" }
+    );
+
+    // Set up sparse checkout for just the example we want
+    execSync(`git sparse-checkout set examples/${name}`, {
+      cwd: tempDir,
+      stdio: "pipe",
+    });
+
+    // Checkout the files
+    execSync("git checkout", {
+      cwd: tempDir,
+      stdio: "pipe",
+    });
+
+    // Copy the example files to the root
+    const examplePath = join(tempDir, "examples", name);
+    cpSync(examplePath, root, { recursive: true });
+  } finally {
+    // Clean up the temp directory
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 }
