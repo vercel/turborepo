@@ -360,8 +360,28 @@ export async function downloadAndExtractExample(root: string, name: string) {
     // Copy the example files to the root
     const examplePath = join(tempDir, "examples", name);
     cpSync(examplePath, root, { recursive: true });
-  } finally {
-    // Clean up the temp directory
+  } catch (gitError) {
+    // Clean up temp directory if git clone failed partway through
     rmSync(tempDir, { recursive: true, force: true });
+
+    // Fall back to tarball download if git is not available
+    warn(
+      "Git is not available. Downloading example via tarball (slower).\n" +
+        "For faster downloads, install git: https://git-scm.com/downloads"
+    );
+
+    await streamingExtract({
+      url: "https://codeload.github.com/vercel/turborepo/tar.gz/main",
+      root,
+      strip: 3,
+      filter: (p: string, rootPath: string | null) => {
+        return p.startsWith(`${rootPath}/examples/${name}/`);
+      },
+    });
+
+    return;
   }
+
+  // Clean up the temp directory on success
+  rmSync(tempDir, { recursive: true, force: true });
 }
