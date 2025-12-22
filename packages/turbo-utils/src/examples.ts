@@ -2,10 +2,10 @@ import { Readable, type Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream } from "node:stream/web";
 import { createGunzip } from "node:zlib";
-import { Parse, type ReadEntry } from "tar";
 import { createWriteStream, mkdirSync, rmSync, cpSync } from "node:fs";
 import { dirname, resolve, relative, join } from "node:path";
 import { execFileSync } from "node:child_process";
+import { Parse, type ReadEntry } from "tar";
 import { error, warn } from "./logger";
 
 const REQUEST_TIMEOUT = 10000;
@@ -195,7 +195,7 @@ export async function streamingExtract({
   }, DOWNLOAD_TIMEOUT);
 
   // Track all write streams so we can clean them up on abort/error
-  const writeStreams: Writable[] = [];
+  const writeStreams: Array<Writable> = [];
 
   // Pre-resolve root once for performance (avoids calling resolve() per entry)
   const resolvedRoot = resolve(root);
@@ -309,27 +309,11 @@ export async function downloadAndExtractRepo(
   });
 }
 
-/**
- * Validates that an example name contains only safe characters.
- * Prevents command injection and path traversal attacks.
- */
-export function isValidExampleName(name: string): boolean {
-  return /^[a-zA-Z0-9_-]+$/.test(name) && !name.includes("..");
-}
-
 export async function downloadAndExtractExample(root: string, name: string) {
-  // Validate example name to prevent command injection
-  if (!isValidExampleName(name)) {
-    throw new Error(
-      `Invalid example name: "${name}". Names must contain only alphanumeric characters, hyphens, and underscores.`
-    );
-  }
-
   const tempDir = join(root, ".turbo-clone-temp");
 
   try {
     // Clone with partial clone (no blobs) and no checkout
-    // Using execFileSync with array args to prevent shell injection
     execFileSync(
       "git",
       [
