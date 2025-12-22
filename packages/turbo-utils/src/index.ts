@@ -20,8 +20,6 @@ export {
   existsInRepo,
   downloadAndExtractRepo,
   downloadAndExtractExample,
-  isValidExampleName,
-  streamingExtract,
 } from "./examples";
 export { isWriteable } from "./isWriteable";
 export { createProject, DownloadError } from "./createProject";
