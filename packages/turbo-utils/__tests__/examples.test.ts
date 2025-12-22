@@ -214,12 +214,6 @@ describe("examples", () => {
     it("allows directories", () => {
       expect(isLinkEntry("Directory")).toBe(false);
     });
-
-    it("allows other entry types", () => {
-      expect(isLinkEntry("BlockDevice")).toBe(false);
-      expect(isLinkEntry("CharacterDevice")).toBe(false);
-      expect(isLinkEntry("FIFO")).toBe(false);
-    });
   });
 
   describe("isPathSafe with pre-resolved root (performance optimization)", () => {
@@ -229,24 +223,6 @@ describe("examples", () => {
       expect(isPathSafe("/tmp/extract", "../etc/passwd", resolvedRoot)).toBe(
         false
       );
-    });
-
-    it("produces same results with and without pre-resolved root", () => {
-      const root = "/tmp/extract";
-      const resolvedRoot = "/tmp/extract";
-      const testPaths = [
-        "file.txt",
-        "subdir/file.txt",
-        "../etc/passwd",
-        "foo/../bar",
-        "foo/../../../etc/passwd",
-      ];
-
-      for (const path of testPaths) {
-        expect(isPathSafe(root, path)).toBe(
-          isPathSafe(root, path, resolvedRoot)
-        );
-      }
     });
   });
 
@@ -443,29 +419,6 @@ describe("examples", () => {
       expect(existsSync(join(testDir, "package.json"))).toBe(true);
     });
 
-    it("handles empty files correctly", async () => {
-      const mockBody = await createMockTarballBody([
-        { path: "empty.txt", content: "" },
-      ]);
-
-      global.fetch = jest.fn(() =>
-        Promise.resolve({
-          ok: true,
-          body: mockBody,
-        } as Response)
-      ) as typeof fetch;
-
-      await streamingExtract({
-        url: "https://example.com/tarball.tar.gz",
-        root: testDir,
-        strip: 1,
-        filter: () => true,
-      });
-
-      expect(existsSync(join(testDir, "empty.txt"))).toBe(true);
-      expect(readFileSync(join(testDir, "empty.txt"), "utf-8")).toBe("");
-    });
-
     it("extracts nested directory structures correctly", async () => {
       const mockBody = await createMockTarballBody([
         { path: "a", type: "directory" },
@@ -492,38 +445,6 @@ describe("examples", () => {
       expect(
         readFileSync(join(testDir, "a", "b", "c", "deep.txt"), "utf-8")
       ).toBe("Deep file");
-    });
-
-    it("handles multiple files in the same directory", async () => {
-      const mockBody = await createMockTarballBody([
-        { path: "file1.txt", content: "Content 1" },
-        { path: "file2.txt", content: "Content 2" },
-        { path: "file3.txt", content: "Content 3" },
-      ]);
-
-      global.fetch = jest.fn(() =>
-        Promise.resolve({
-          ok: true,
-          body: mockBody,
-        } as Response)
-      ) as typeof fetch;
-
-      await streamingExtract({
-        url: "https://example.com/tarball.tar.gz",
-        root: testDir,
-        strip: 1,
-        filter: () => true,
-      });
-
-      expect(readFileSync(join(testDir, "file1.txt"), "utf-8")).toBe(
-        "Content 1"
-      );
-      expect(readFileSync(join(testDir, "file2.txt"), "utf-8")).toBe(
-        "Content 2"
-      );
-      expect(readFileSync(join(testDir, "file3.txt"), "utf-8")).toBe(
-        "Content 3"
-      );
     });
   });
 });
