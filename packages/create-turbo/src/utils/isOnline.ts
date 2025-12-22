@@ -1,6 +1,5 @@
 import { execSync } from "node:child_process";
 import dns from "node:dns";
-import url from "node:url";
 
 const DNS_TIMEOUT = 5000;
 
@@ -26,13 +25,22 @@ function dnsLookupWithTimeout(
   timeout: number
 ): Promise<boolean> {
   return new Promise((resolve) => {
+    // Guard variable to prevent double-resolution from late DNS callbacks
+    let settled = false;
+
     const timeoutId = setTimeout(() => {
-      resolve(false);
+      if (!settled) {
+        settled = true;
+        resolve(false);
+      }
     }, timeout);
 
     dns.lookup(hostname, (err) => {
-      clearTimeout(timeoutId);
-      resolve(err === null);
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(err === null);
+      }
     });
   });
 }
@@ -51,7 +59,7 @@ export async function isOnline(): Promise<boolean> {
     return false;
   }
 
-  const { hostname } = url.parse(proxy);
+  const { hostname } = new URL(proxy);
   if (!hostname) {
     return false;
   }

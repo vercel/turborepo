@@ -1,14 +1,39 @@
-import { Readable } from "node:stream";
+import { Readable, type Writable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream } from "node:stream/web";
 import { createGunzip } from "node:zlib";
 import { Parse, type ReadEntry } from "tar";
 import { createWriteStream, mkdirSync, rmSync, cpSync } from "node:fs";
 import { dirname, resolve, relative, join } from "node:path";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { error, warn } from "./logger";
 
 const REQUEST_TIMEOUT = 10000;
 const DOWNLOAD_TIMEOUT = 120000;
+
+/**
+ * Performs a fetch request with an automatic timeout.
+ * Centralizes the AbortController + setTimeout pattern to avoid repetition.
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit = {},
+  timeoutMs: number = REQUEST_TIMEOUT
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 export interface RepoInfo {
   username: string;
@@ -18,20 +43,11 @@ export interface RepoInfo {
 }
 
 export async function isUrlOk(url: string): Promise<boolean> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
-    controller.abort();
-  }, REQUEST_TIMEOUT);
   try {
-    const res = await fetch(url, {
-      method: "HEAD",
-      signal: controller.signal,
-    });
+    const res = await fetchWithTimeout(url, { method: "HEAD" });
     return res.ok;
-  } catch (err) {
+  } catch {
     return false;
-  } finally {
-    clearTimeout(timeoutId);
   }
 }
 
@@ -55,14 +71,9 @@ export async function getRepoInfo(
     // In this case "t" will be an empty string while the turbo part "_branch" will be undefined
     (tree === "" && sourceBranch === undefined)
   ) {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => {
-      controller.abort();
-    }, REQUEST_TIMEOUT);
     try {
-      const infoResponse = await fetch(
-        `https://api.github.com/repos/${username}/${name}`,
-        { signal: controller.signal }
+      const infoResponse = await fetchWithTimeout(
+        `https://api.github.com/repos/${username}/${name}`
       );
       if (!infoResponse.ok) {
         return;
@@ -74,10 +85,8 @@ export async function getRepoInfo(
         branch: info.default_branch,
         filePath,
       } as RepoInfo;
-    } catch (err) {
+    } catch {
       return;
-    } finally {
-      clearTimeout(timeoutId);
     }
   }
 
@@ -122,12 +131,33 @@ export function existsInRepo(nameOrUrl: string): Promise<boolean> {
 /**
  * Validates that a destination path stays within the target root directory.
  * Prevents path traversal attacks (Zip Slip).
+ * @param root - The root directory (will be resolved if not already absolute)
+ * @param strippedPath - The path to validate
+ * @param resolvedRoot - Optional pre-resolved root for performance optimization
  * @returns true if the path is safe, false if it would escape the root
  */
-export function isPathSafe(root: string, strippedPath: string): boolean {
-  const resolvedRoot = resolve(root);
-  const destPath = resolve(resolvedRoot, strippedPath);
-  const relativePath = relative(resolvedRoot, destPath);
+export function isPathSafe(
+  root: string,
+  strippedPath: string,
+  resolvedRoot?: string
+): boolean {
+  // Check for null bytes which can bypass security checks
+  if (strippedPath.includes("\0")) {
+    return false;
+  }
+
+  // Normalize Windows backslashes to forward slashes before processing
+  // This prevents bypasses using mixed path separators
+  const normalizedPath = strippedPath.replace(/\\/g, "/");
+
+  // Normalize Unicode to NFC form to prevent normalization bypasses
+  // (e.g., combining characters that resolve to "..")
+  const unicodeNormalizedPath = normalizedPath.normalize("NFC");
+
+  // Use pre-resolved root if provided, otherwise resolve it
+  const rootPath = resolvedRoot ?? resolve(root);
+  const destPath = resolve(rootPath, unicodeNormalizedPath);
+  const relativePath = relative(rootPath, destPath);
   return !relativePath.startsWith("..") && resolve(destPath) === destPath;
 }
 
@@ -140,23 +170,38 @@ export function isLinkEntry(entryType: string): boolean {
 }
 
 /**
- * Streaming extraction from a tarball URL.
+ * Options for streaming extraction from a tarball URL.
  */
-async function streamingExtract({
-  url,
-  root,
-  strip,
-  filter,
-}: {
+export interface StreamingExtractOptions {
   url: string;
   root: string;
   strip: number;
   filter: (path: string, rootPath: string | null) => boolean;
-}) {
+}
+
+/**
+ * Streaming extraction from a tarball URL.
+ * Exported for testing purposes.
+ */
+export async function streamingExtract({
+  url,
+  root,
+  strip,
+  filter,
+}: StreamingExtractOptions) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort();
   }, DOWNLOAD_TIMEOUT);
+
+  // Track all write streams so we can clean them up on abort/error
+  const writeStreams: Writable[] = [];
+
+  // Pre-resolve root once for performance (avoids calling resolve() per entry)
+  const resolvedRoot = resolve(root);
+
+  // Cache created directories to avoid redundant mkdirSync calls
+  const createdDirs = new Set<string>();
 
   try {
     const response = await fetch(url, { signal: controller.signal });
@@ -191,34 +236,42 @@ async function streamingExtract({
         }
 
         // Validate the path stays within the target directory (Zip Slip protection)
-        if (!isPathSafe(root, strippedPath)) {
-          console.error(`Blocked path traversal attempt: ${entry.path}`);
+        // Pass pre-resolved root for performance
+        if (!isPathSafe(root, strippedPath, resolvedRoot)) {
+          error(`Blocked path traversal attempt: ${entry.path}`);
           entry.resume();
           return;
         }
 
         // Block symlinks and hard links to prevent symlink attacks
         if (entry.type && isLinkEntry(entry.type)) {
-          console.warn(`Blocked symlink: ${entry.path}`);
+          warn(`Blocked symlink: ${entry.path}`);
           entry.resume();
           return;
         }
 
-        const resolvedRoot = resolve(root);
         const destPath = resolve(resolvedRoot, strippedPath);
 
         if (entry.type === "Directory") {
-          mkdirSync(destPath, { recursive: true });
+          if (!createdDirs.has(destPath)) {
+            mkdirSync(destPath, { recursive: true });
+            createdDirs.add(destPath);
+          }
           entry.resume();
         } else if (entry.type === "File") {
-          mkdirSync(dirname(destPath), { recursive: true });
+          const dirPath = dirname(destPath);
+          if (!createdDirs.has(dirPath)) {
+            mkdirSync(dirPath, { recursive: true });
+            createdDirs.add(dirPath);
+          }
           const writeStream = createWriteStream(destPath);
+          writeStreams.push(writeStream);
 
           // Track when this file write completes
           fileWritePromises.push(
-            new Promise<void>((resolve, reject) => {
-              writeStream.on("finish", resolve);
-              writeStream.on("error", reject);
+            new Promise<void>((resolvePromise, rejectPromise) => {
+              writeStream.on("finish", resolvePromise);
+              writeStream.on("error", rejectPromise);
             })
           );
 
@@ -235,6 +288,10 @@ async function streamingExtract({
     await Promise.all(fileWritePromises);
   } finally {
     clearTimeout(timeoutId);
+    // Clean up all write streams to prevent memory leaks on abort/error
+    for (const stream of writeStreams) {
+      stream.destroy();
+    }
   }
 }
 
@@ -252,24 +309,50 @@ export async function downloadAndExtractRepo(
   });
 }
 
+/**
+ * Validates that an example name contains only safe characters.
+ * Prevents command injection and path traversal attacks.
+ */
+export function isValidExampleName(name: string): boolean {
+  return /^[a-zA-Z0-9_-]+$/.test(name) && !name.includes("..");
+}
+
 export async function downloadAndExtractExample(root: string, name: string) {
+  // Validate example name to prevent command injection
+  if (!isValidExampleName(name)) {
+    throw new Error(
+      `Invalid example name: "${name}". Names must contain only alphanumeric characters, hyphens, and underscores.`
+    );
+  }
+
   const tempDir = join(root, ".turbo-clone-temp");
 
   try {
     // Clone with partial clone (no blobs) and no checkout
-    execSync(
-      `git clone --filter=blob:none --no-checkout --depth 1 --sparse https://github.com/vercel/turborepo.git "${tempDir}"`,
+    // Using execFileSync with array args to prevent shell injection
+    execFileSync(
+      "git",
+      [
+        "clone",
+        "--filter=blob:none",
+        "--no-checkout",
+        "--depth",
+        "1",
+        "--sparse",
+        "https://github.com/vercel/turborepo.git",
+        tempDir,
+      ],
       { stdio: "pipe" }
     );
 
     // Set up sparse checkout for just the example we want
-    execSync(`git sparse-checkout set examples/${name}`, {
+    execFileSync("git", ["sparse-checkout", "set", `examples/${name}`], {
       cwd: tempDir,
       stdio: "pipe",
     });
 
     // Checkout the files
-    execSync("git checkout", {
+    execFileSync("git", ["checkout"], {
       cwd: tempDir,
       stdio: "pipe",
     });
