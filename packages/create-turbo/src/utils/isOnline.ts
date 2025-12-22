@@ -1,6 +1,7 @@
 import { execSync } from "node:child_process";
 import dns from "node:dns";
-import url from "node:url";
+
+const DNS_TIMEOUT = 5000;
 
 function getProxy(): string | undefined {
   if (process.env.https_proxy) {
@@ -8,36 +9,65 @@ function getProxy(): string | undefined {
   }
 
   try {
-    const httpsProxy = execSync("npm config get https-proxy").toString().trim();
+    const httpsProxy = execSync("npm config get https-proxy", {
+      timeout: 3000,
+    })
+      .toString()
+      .trim();
     return httpsProxy !== "null" ? httpsProxy : undefined;
   } catch (_) {
     // do nothing
   }
 }
 
-export function isOnline(): Promise<boolean> {
+function dnsLookupWithTimeout(
+  hostname: string,
+  timeout: number
+): Promise<boolean> {
   return new Promise((resolve) => {
-    dns.lookup("registry.yarnpkg.com", (registryErr) => {
-      if (!registryErr) {
-        resolve(true);
-        return;
-      }
+    // Guard variable to prevent double-resolution from late DNS callbacks
+    let settled = false;
 
-      const proxy = getProxy();
-      if (!proxy) {
+    const timeoutId = setTimeout(() => {
+      if (!settled) {
+        settled = true;
         resolve(false);
-        return;
       }
+    }, timeout);
 
-      const { hostname } = url.parse(proxy);
-      if (!hostname) {
-        resolve(false);
-        return;
+    dns.lookup(hostname, (err) => {
+      if (!settled) {
+        settled = true;
+        clearTimeout(timeoutId);
+        resolve(err === null);
       }
-
-      dns.lookup(hostname, (proxyErr) => {
-        resolve(proxyErr === null);
-      });
     });
   });
+}
+
+export async function isOnline(): Promise<boolean> {
+  const registryOnline = await dnsLookupWithTimeout(
+    "registry.yarnpkg.com",
+    DNS_TIMEOUT
+  );
+  if (registryOnline) {
+    return true;
+  }
+
+  const proxy = getProxy();
+  if (!proxy) {
+    return false;
+  }
+
+  let hostname: string | undefined;
+  try {
+    ({ hostname } = new URL(proxy));
+  } catch {
+    return false;
+  }
+  if (!hostname) {
+    return false;
+  }
+
+  return dnsLookupWithTimeout(hostname, DNS_TIMEOUT);
 }

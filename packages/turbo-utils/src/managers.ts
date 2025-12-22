@@ -3,6 +3,8 @@ import type { Options } from "execa";
 import execa from "execa";
 import type { PackageManager } from "./types";
 
+const EXEC_TIMEOUT = 5000;
+
 async function exec(command: string, args: Array<string> = [], opts?: Options) {
   // run the check from tmpdir to avoid corepack conflicting -
   // this is no longer needed as of https://github.com/nodejs/corepack/pull/167
@@ -10,6 +12,7 @@ async function exec(command: string, args: Array<string> = [], opts?: Options) {
   const execOptions: Options = {
     cwd: os.tmpdir(),
     env: { COREPACK_ENABLE_STRICT: "0" },
+    timeout: EXEC_TIMEOUT,
     ...opts,
   };
   try {
