@@ -754,20 +754,29 @@ pub async fn run_app(
     // Terminal is lazily initialized - only started when a non-cached task runs
     let mut terminal: Option<Terminal<CrosstermBackend<Stdout>>> = None;
 
-    let (result, callback) =
-        match run_app_inner(&mut terminal, &mut app, receiver, crossterm_rx, color_config).await {
-            Ok(callback) => (Ok(()), callback),
-            Err(err) => {
-                debug!("tui shutting down: {err}");
-                (Err(err), None)
-            }
-        };
+    let (result, callback) = match run_app_inner(
+        &mut terminal,
+        &mut app,
+        receiver,
+        crossterm_rx,
+        color_config,
+    )
+    .await
+    {
+        Ok(callback) => (Ok(()), callback),
+        Err(err) => {
+            debug!("tui shutting down: {err}");
+            (Err(err), None)
+        }
+    };
 
     // Only cleanup terminal if we actually started it
     if let Some(terminal) = terminal {
         cleanup(terminal, app, callback)?;
     } else {
-        // Even if TUI never started, flush preferences
+        // Even if TUI never started, still persist task output and flush preferences
+        let tasks_started = app.tasks_by_status.tasks_started();
+        app.persist_tasks(tasks_started)?;
         app.preferences.flush_to_disk().ok();
         if let Some(callback) = callback {
             // Signal completion even if we never started the terminal
@@ -779,7 +788,8 @@ pub async fn run_app(
 }
 
 /// Check if an event indicates we need to start rendering the TUI.
-/// We start rendering when we receive a cache miss, meaning a task will actually run.
+/// We start rendering when we receive a cache miss, meaning a task will
+/// actually run.
 fn should_start_terminal(event: &Event) -> bool {
     matches!(
         event,
@@ -2109,6 +2119,107 @@ mod test {
             app.preferences.is_task_list_visible(),
             "task list should be visible after entering search"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_should_start_terminal_on_cache_miss() {
+        // Cache miss should trigger terminal start
+        let miss_event = Event::Status {
+            task: "task-a".to_string(),
+            status: "building".to_string(),
+            // This includes cache bypasses via `--force`
+            result: CacheResult::Miss,
+        };
+        assert!(
+            super::should_start_terminal(&miss_event),
+            "terminal should start on cache miss"
+        );
+    }
+
+    #[test]
+    fn test_should_not_start_terminal_on_cache_hit() {
+        // Cache hit should NOT trigger terminal start
+        let hit_event = Event::Status {
+            task: "task-a".to_string(),
+            status: "cached".to_string(),
+            result: CacheResult::Hit,
+        };
+        assert!(
+            !super::should_start_terminal(&hit_event),
+            "terminal should NOT start on cache hit"
+        );
+    }
+
+    #[test]
+    fn test_should_not_start_terminal_on_other_events() {
+        // Other events should NOT trigger terminal start
+        let start_event = Event::StartTask {
+            task: "task-a".to_string(),
+            output_logs: OutputLogs::Full,
+        };
+        assert!(
+            !super::should_start_terminal(&start_event),
+            "terminal should NOT start on StartTask event"
+        );
+
+        let end_event = Event::EndTask {
+            task: "task-a".to_string(),
+            result: TaskResult::Success,
+        };
+        assert!(
+            !super::should_start_terminal(&end_event),
+            "terminal should NOT start on EndTask event"
+        );
+
+        let tick_event = Event::Tick;
+        assert!(
+            !super::should_start_terminal(&tick_event),
+            "terminal should NOT start on Tick event"
+        );
+    }
+
+    #[test]
+    fn test_persist_tasks_called_on_cache_hit_only() -> Result<(), Error> {
+        // This test verifies that persist_tasks works correctly for cached tasks.
+        // When all tasks are cache hits, the TUI terminal is never started,
+        // but persist_tasks should still output the task logs.
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Simulate a full cache hit scenario:
+        // 1. Set status as cache hit (this doesn't start the task in running state)
+        app.set_status("a".to_string(), "cached".to_string(), CacheResult::Hit)?;
+        app.set_status("b".to_string(), "cached".to_string(), CacheResult::Hit)?;
+
+        // 2. Start and finish tasks with CacheHit result
+        app.start_task("a", OutputLogs::Full)?;
+        app.start_task("b", OutputLogs::Full)?;
+        app.finish_task("a", TaskResult::CacheHit)?;
+        app.finish_task("b", TaskResult::CacheHit)?;
+
+        // 3. Get the list of started tasks - this should include both tasks
+        let tasks_started = app.tasks_by_status.tasks_started();
+        assert_eq!(
+            tasks_started.len(),
+            2,
+            "both tasks should be in started list"
+        );
+        assert!(tasks_started.contains(&"a".to_string()));
+        assert!(tasks_started.contains(&"b".to_string()));
+
+        // 4. Verify persist_tasks doesn't error (it writes to the task's output)
+        app.persist_tasks(tasks_started)?;
 
         Ok(())
     }
