@@ -406,19 +406,41 @@ impl<'a> EngineBuilder<'a> {
                 engine.add_task_location(task_id.into_owned(), span);
             }
 
+            // For root tasks, verify they are either explicitly enabled OR (when using
+            // add_all_tasks mode like devtools) have a definition in root turbo.json.
+            // Tasks defined without the //#  prefix (like "transit") in root turbo.json
+            // are valid root tasks when referenced as dependencies in add_all_tasks mode.
             if task_id.package() == ROOT_PKG_NAME
                 && !self
                     .root_enabled_tasks
                     .contains(&task_id.as_non_workspace_task_name())
             {
-                let (span, text) = task_id.span_and_text("turbo.json");
-                return Err(Error::MissingRootTaskInTurboJson(Box::new(
-                    MissingRootTaskInTurboJsonError {
-                        span,
-                        text,
-                        task_id: task_id.to_string(),
-                    },
-                )));
+                // In add_all_tasks mode (devtools), allow root tasks that have a definition
+                // in turbo.json even if not explicitly in root_enabled_tasks
+                let should_allow = if self.add_all_tasks {
+                    let task_name: TaskName<'static> =
+                        TaskName::from(task_id.task().to_string()).into_owned();
+                    let task_id_owned = task_id.as_inner().clone().into_owned();
+                    Self::has_task_definition_in_run(
+                        turbo_json_loader,
+                        &PackageName::Root,
+                        &task_name,
+                        &task_id_owned,
+                    )?
+                } else {
+                    false
+                };
+
+                if !should_allow {
+                    let (span, text) = task_id.span_and_text("turbo.json");
+                    return Err(Error::MissingRootTaskInTurboJson(Box::new(
+                        MissingRootTaskInTurboJsonError {
+                            span,
+                            text,
+                            task_id: task_id.to_string(),
+                        },
+                    )));
+                }
             }
 
             validate_task_name(task_id.to(task_id.task()))?;
@@ -3438,6 +3460,96 @@ mod test {
         assert!(
             !task_ids.contains("app#lint"),
             "Should NOT have app#lint - excluded"
+        );
+    }
+
+    // Test that transit node pattern works with add_all_tasks (GitHub issue #11301)
+    // This tests the case where a root task like "transit" is defined without the
+    // //# prefix in turbo.json, but is used as a dependency from other tasks.
+    //
+    // The scenario: User has a turbo.json with:
+    //   "type-check": { "dependsOn": ["transit"] }
+    //   "transit": { "dependsOn": ["^transit"] }
+    //
+    // And a root package.json with a "type-check" script (but NOT a "transit"
+    // script). When devtools runs:
+    // 1. //#type-check is enabled as a root task (from package.json script)
+    // 2. Processing //#type-check adds //#transit as a dependency
+    // 3. //#transit should be allowed because it has a definition in turbo.json
+    #[test]
+    fn test_add_all_tasks_with_transit_node() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app" => ["lib"],
+                "lib" => []
+            },
+        );
+
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "type-check": { "dependsOn": ["transit"] },
+                    "transit": { "dependsOn": ["^transit"] }
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+
+        let loader = TurboJsonLoader::noop(turbo_jsons);
+
+        // Simulate what devtools does:
+        // - Collect task keys from turbo.json (type-check, transit - both without //#)
+        // - Also add //#type-check because it's in root package.json scripts
+        // The key is that //#type-check is enabled but //#transit is NOT explicitly
+        // enabled - it only has a definition in turbo.json.
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_root_tasks(vec![
+                // This simulates having a "type-check" script in root package.json
+                // Devtools adds it with //#  prefix
+                TaskName::from("//#type-check"),
+            ])
+            .add_all_tasks()
+            .with_workspaces(vec![
+                PackageName::Root,
+                PackageName::from("app"),
+                PackageName::from("lib"),
+            ])
+            .build()
+            .expect("Engine build should succeed with transit node pattern");
+
+        let task_ids: HashSet<_> = engine.task_lookup.keys().map(|id| id.to_string()).collect();
+
+        // Should have root tasks
+        assert!(
+            task_ids.contains("//#type-check"),
+            "Should have //#type-check"
+        );
+        assert!(task_ids.contains("//#transit"), "Should have //#transit");
+
+        // Should have workspace transit tasks from ^transit dependency
+        assert!(task_ids.contains("app#transit"), "Should have app#transit");
+        assert!(task_ids.contains("lib#transit"), "Should have lib#transit");
+
+        // Verify the dependency graph structure
+        let deps = all_dependencies(&engine);
+
+        // //#type-check should depend on //#transit
+        let type_check_deps = deps.get(&TaskId::try_from("//#type-check").unwrap());
+        assert!(
+            type_check_deps.is_some(),
+            "//#type-check should have dependencies"
+        );
+        assert!(
+            type_check_deps
+                .unwrap()
+                .contains(&TaskNode::Task(TaskId::try_from("//#transit").unwrap())),
+            "//#type-check should depend on //#transit"
         );
     }
 
