@@ -46,7 +46,7 @@ jobs:
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
 
       - name: Setup Environment
-        uses: ./.github/actions/setup-turborepo-environment
+        uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: ${{ matrix.node-version }}

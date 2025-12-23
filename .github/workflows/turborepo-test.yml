@@ -163,7 +163,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Environment
-        uses: ./.github/actions/setup-turborepo-environment
+        uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2" # TODO: Update integration tests with changed log output in Node.js 22
@@ -229,7 +229,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Environment
-        uses: ./.github/actions/setup-turborepo-environment
+        uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
@@ -262,7 +262,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Environment
-        uses: ./.github/actions/setup-turborepo-environment
+        uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node: "false"
@@ -330,7 +330,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Environment
-        uses: ./.github/actions/setup-turborepo-environment
+        uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node: "false"

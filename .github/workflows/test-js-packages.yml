@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   js_packages:
-    name: "JS Package Tests (${{matrix.os.name}}, Node ${{matrix.node-version}})"
+    name: "(${{matrix.os.name}}, Node ${{matrix.node-version}})"
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:

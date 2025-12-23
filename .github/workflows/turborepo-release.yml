@@ -102,7 +102,7 @@ jobs:
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Setup Environment
-        uses: ./.github/actions/setup-turborepo-environment
+        uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node: "false"
@@ -130,7 +130,7 @@ jobs:
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
       - name: Setup Environment
-        uses: ./.github/actions/setup-turborepo-environment
+        uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           rust: "false"
