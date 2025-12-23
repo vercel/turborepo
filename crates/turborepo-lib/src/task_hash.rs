@@ -41,6 +41,15 @@ pub enum Error {
     Mutex,
     #[error("Missing environment variables for {0}.")]
     MissingEnvVars(TaskId<'static>),
+    #[error(
+        "Error processing environment patterns for task {task_id} (including global exclusions): \
+         {err}"
+    )]
+    EnvPattern {
+        task_id: TaskId<'static>,
+        #[source]
+        err: turborepo_env::Error,
+    },
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
@@ -244,6 +253,7 @@ pub struct TaskHasher<'a> {
     run_opts: &'a RunOpts,
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_env: EnvironmentVariableMap,
+    global_env_patterns: &'a [String],
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
 }
@@ -255,6 +265,7 @@ impl<'a> TaskHasher<'a> {
         env_at_execution_start: &'a EnvironmentVariableMap,
         global_hash: &'a str,
         global_env: EnvironmentVariableMap,
+        global_env_patterns: &'a [String],
     ) -> Self {
         let PackageInputsHashes {
             hashes,
@@ -266,6 +277,7 @@ impl<'a> TaskHasher<'a> {
             env_at_execution_start,
             global_hash,
             global_env,
+            global_env_patterns,
             task_hash_tracker: TaskHashTracker::new(expanded_hashes),
         }
     }
@@ -318,8 +330,26 @@ impl<'a> TaskHasher<'a> {
                 computed_wildcards.push(computed_exclude);
             }
 
+            // Combine task-specific env patterns with global env exclusions
+            // Global exclusions (patterns starting with !) should apply to framework
+            // inference
+            let combined_env_patterns: Vec<String> = task_definition
+                .env
+                .iter()
+                .chain(
+                    self.global_env_patterns
+                        .iter()
+                        .filter(|p| p.starts_with('!')),
+                )
+                .cloned()
+                .collect();
+
             self.env_at_execution_start
-                .hashable_task_env(&computed_wildcards, &task_definition.env)?
+                .hashable_task_env(&computed_wildcards, &combined_env_patterns)
+                .map_err(|err| Error::EnvPattern {
+                    task_id: task_id.clone().into_owned(),
+                    err,
+                })?
         } else {
             let all_env_var_map = self
                 .env_at_execution_start

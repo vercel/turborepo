@@ -661,6 +661,7 @@ impl Run {
             self.processes.clone(),
             &self.repo_root,
             global_env,
+            &self.root_turbo_json.global_env,
             ui_sender,
             is_watch,
             self.micro_frontend_configs.as_ref(),
