@@ -173,8 +173,6 @@ impl TaskGraphBuilder for ProperTaskGraphBuilder {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     // Tests would go here - we can verify that the ProperTaskGraphBuilder
     // produces the same results as a real turbo run would
 }
