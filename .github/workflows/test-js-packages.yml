@@ -22,7 +22,7 @@ permissions:
 
 jobs:
   js_packages:
-    name: "JS Package Tests (${{matrix.os.name}}, Node ${{matrix.node-version}})"
+    name: "(${{matrix.os.name}}, Node ${{matrix.node-version}})"
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -77,7 +77,7 @@ jobs:
           NODE_VERSION: ${{ matrix.node-version }}
 
   summary:
-    name: Turborepo JS Test Summary
+    name: JS Test Summary
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: always()

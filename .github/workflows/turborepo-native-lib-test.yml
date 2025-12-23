@@ -1,4 +1,4 @@
-name: Turborepo Native Library Tests
+name: Native Library Tests
 on:
   push:
     branches: [main]
@@ -45,8 +45,8 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
 
-      - name: Setup Turborepo Environment
-        uses: ./.github/actions/setup-turborepo-environment
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: ${{ matrix.node-version }}
