@@ -41,6 +41,15 @@ pub enum Error {
     Mutex,
     #[error("Missing environment variables for {0}.")]
     MissingEnvVars(TaskId<'static>),
+    #[error(
+        "Error processing environment patterns for task {task_id} (including global exclusions): \
+         {err}"
+    )]
+    EnvPattern {
+        task_id: TaskId<'static>,
+        #[source]
+        err: turborepo_env::Error,
+    },
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
@@ -324,15 +333,23 @@ impl<'a> TaskHasher<'a> {
             // Combine task-specific env patterns with global env exclusions
             // Global exclusions (patterns starting with !) should apply to framework
             // inference
-            let mut combined_env_patterns: Vec<String> = task_definition.env.clone();
-            for pattern in self.global_env_patterns {
-                if pattern.starts_with('!') {
-                    combined_env_patterns.push(pattern.clone());
-                }
-            }
+            let combined_env_patterns: Vec<String> = task_definition
+                .env
+                .iter()
+                .chain(
+                    self.global_env_patterns
+                        .iter()
+                        .filter(|p| p.starts_with('!')),
+                )
+                .cloned()
+                .collect();
 
             self.env_at_execution_start
-                .hashable_task_env(&computed_wildcards, &combined_env_patterns)?
+                .hashable_task_env(&computed_wildcards, &combined_env_patterns)
+                .map_err(|err| Error::EnvPattern {
+                    task_id: task_id.clone().into_owned(),
+                    err,
+                })?
         } else {
             let all_env_var_map = self
                 .env_at_execution_start
