@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use serde::Deserialize;
 
-use super::{PackageEntry, PackageInfo};
+use super::{PackageEntry, PackageInfo, is_git_or_github_package};
 use crate::bun::RootInfo;
 // Comment explaining entry schemas taken from bun.lock.zig
 // first index is resolution for each type of package
@@ -73,12 +73,11 @@ impl<'de> Deserialize<'de> for PackageEntry {
 
         // The second value can be either registry (string) or info (object)
         // Note: GitHub/git packages should never have a registry field
-        let is_git_package = key.contains("@git+") || key.contains("@github:");
         if let Some(val) = vals.pop_front() {
             match val {
                 Vals::Str(reg) => {
                     // Only set registry for npm packages, not git/github packages
-                    if !is_git_package {
+                    if !is_git_or_github_package(&key) {
                         registry = Some(reg);
                     }
                 }
@@ -228,13 +227,15 @@ mod test {
     );
 
     // GitHub package with CORRUPTED input (has empty string at position 1)
-    // This tests that the deserializer fix correctly ignores registry for github packages
+    // This tests that the deserializer fix correctly ignores registry for github
+    // packages
     fixture!(
         github_pkg_corrupted_input,
         PackageEntry,
         PackageEntry {
             ident: "@tanstack/react-store@github:TanStack/store#24a971c".into(),
-            registry: None, // Even with corrupted 4-element input, github packages must NOT have registry
+            registry: None, /* Even with corrupted 4-element input, github packages must NOT have
+                             * registry */
             info: Some(PackageInfo {
                 dependencies: Some(("@tanstack/store".into(), "0.7.0".into()))
                     .into_iter()

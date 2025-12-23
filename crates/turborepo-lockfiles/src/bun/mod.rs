@@ -88,7 +88,7 @@
 //! - [`PackageEntry`]: External package representation
 //! - [`LockfileVersion`]: Version enum for format compatibility
 
-use std::{any::Any, collections::HashMap, str::FromStr};
+use std::{any::Any, collections::HashMap, str::FromStr, sync::OnceLock};
 
 use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
@@ -113,6 +113,19 @@ pub use types::{PackageIdent, PackageKey, VersionSpec};
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 type BTreeSet<T> = std::collections::BTreeSet<T>;
+
+/// Check if a package identifier refers to a git or GitHub package.
+///
+/// Git and GitHub packages have different serialization formats than npm
+/// packages:
+/// - npm packages: `[ident, registry, info, checksum]` (4 elements)
+/// - git/github packages: `[ident, info, checksum]` (3 elements, no registry)
+///
+/// This function is used in deserialization, serialization, and encoding to
+/// ensure consistent handling of these package types.
+pub(crate) fn is_git_or_github_package(ident: &str) -> bool {
+    ident.contains("@git+") || ident.contains("@github:")
+}
 
 /// Represents a platform constraint that can be either inclusive or exclusive.
 /// This matches Bun's Negatable type for os/cpu/libc fields.
@@ -269,23 +282,23 @@ pub struct BunLockfile {
     index: PackageIndex,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BunLockfileData {
     lockfile_version: i32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     config_version: Option<i32>,
     workspaces: Map<String, WorkspaceEntry>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     trusted_dependencies: Vec<String>,
-    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    #[serde(default)]
     overrides: Map<String, String>,
-    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    #[serde(default)]
     catalog: Map<String, String>,
-    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    #[serde(default)]
     catalogs: Map<String, Map<String, String>>,
     packages: Map<String, PackageEntry>,
-    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    #[serde(default)]
     patched_dependencies: Map<String, String>,
 }
 
@@ -766,22 +779,8 @@ impl BunLockfile {
             return Ok(());
         }
         let json = serde_json::to_string_pretty(&self.data.trusted_dependencies)?;
-        // Format with proper indentation
-        let lines: Vec<&str> = json.lines().collect();
         output.push_str("  \"trustedDependencies\": ");
-        let mut adjusted = String::new();
-        for (i, line) in lines.iter().enumerate() {
-            if i == 0 {
-                adjusted.push_str(line);
-            } else {
-                let spaces = line.len() - line.trim_start().len();
-                let indent = " ".repeat(spaces + 2);
-                adjusted.push_str(&format!("\n{}{}", indent, line.trim_start()));
-            }
-        }
-        // Add trailing commas after all strings (bun requires trailing commas)
-        let with_commas = Self::add_trailing_commas(&adjusted);
-        output.push_str(&with_commas);
+        output.push_str(&Self::format_json_field(&json));
         output.push_str(",\n");
         Ok(())
     }
@@ -789,7 +788,7 @@ impl BunLockfile {
     /// Add trailing commas to JSON values before closing brackets/braces
     /// Handles strings, numbers, booleans, nulls, and nested structures
     fn add_trailing_commas(json: &str) -> String {
-        use regex::Regex;
+        static TRAILING_COMMA_RE: OnceLock<regex::Regex> = OnceLock::new();
         // Match: any JSON value (string, number, boolean, null, ] or }) followed by
         // newline+whitespace and then a closing bracket/brace
         // Pattern covers:
@@ -798,7 +797,9 @@ impl BunLockfile {
         // - Booleans: true, false
         // - Null: null
         // - Nested closings: ] or }
-        let re = Regex::new(r#"("|true|false|null|\d|[\]}])\n(\s*)([\]}])"#).unwrap();
+        let re = TRAILING_COMMA_RE.get_or_init(|| {
+            regex::Regex::new(r#"("|true|false|null|\d|[\]}])\n(\s*)([\]}])"#).unwrap()
+        });
         // Run multiple passes until no more changes (handles deeply nested structures)
         let mut result = json.to_string();
         loop {
@@ -811,13 +812,16 @@ impl BunLockfile {
         result
     }
 
-    fn write_overrides(&self, output: &mut String) -> Result<(), crate::Error> {
-        if self.data.overrides.is_empty() {
-            return Ok(());
-        }
-        let json = serde_json::to_string_pretty(&self.data.overrides)?;
+    /// Format a JSON value for Bun lockfile output with proper indentation and
+    /// trailing commas.
+    ///
+    /// This helper consolidates the common formatting logic used by multiple
+    /// write_* methods:
+    /// 1. Adjusts indentation (adds 2 extra spaces to all lines after the
+    ///    first)
+    /// 2. Adds trailing commas (required by Bun's lockfile format)
+    fn format_json_field(json: &str) -> String {
         let lines: Vec<&str> = json.lines().collect();
-        output.push_str("  \"overrides\": ");
         let mut adjusted = String::new();
         for (i, line) in lines.iter().enumerate() {
             if i == 0 {
@@ -828,8 +832,16 @@ impl BunLockfile {
                 adjusted.push_str(&format!("\n{}{}", indent, line.trim_start()));
             }
         }
-        let with_commas = Self::add_trailing_commas(&adjusted);
-        output.push_str(&with_commas);
+        Self::add_trailing_commas(&adjusted)
+    }
+
+    fn write_overrides(&self, output: &mut String) -> Result<(), crate::Error> {
+        if self.data.overrides.is_empty() {
+            return Ok(());
+        }
+        let json = serde_json::to_string_pretty(&self.data.overrides)?;
+        output.push_str("  \"overrides\": ");
+        output.push_str(&Self::format_json_field(&json));
         output.push_str(",\n");
         Ok(())
     }
@@ -838,20 +850,8 @@ impl BunLockfile {
         // Write default catalog if present
         if !self.data.catalog.is_empty() {
             let json = serde_json::to_string_pretty(&self.data.catalog)?;
-            let lines: Vec<&str> = json.lines().collect();
             output.push_str("  \"catalog\": ");
-            let mut adjusted = String::new();
-            for (i, line) in lines.iter().enumerate() {
-                if i == 0 {
-                    adjusted.push_str(line);
-                } else {
-                    let spaces = line.len() - line.trim_start().len();
-                    let indent = " ".repeat(spaces + 2);
-                    adjusted.push_str(&format!("\n{}{}", indent, line.trim_start()));
-                }
-            }
-            let with_commas = Self::add_trailing_commas(&adjusted);
-            output.push_str(&with_commas);
+            output.push_str(&Self::format_json_field(&json));
             output.push_str(",\n");
         }
 
@@ -860,20 +860,8 @@ impl BunLockfile {
             return Ok(());
         }
         let json = serde_json::to_string_pretty(&self.data.catalogs)?;
-        let lines: Vec<&str> = json.lines().collect();
         output.push_str("  \"catalogs\": ");
-        let mut adjusted = String::new();
-        for (i, line) in lines.iter().enumerate() {
-            if i == 0 {
-                adjusted.push_str(line);
-            } else {
-                let spaces = line.len() - line.trim_start().len();
-                let indent = " ".repeat(spaces + 2);
-                adjusted.push_str(&format!("\n{}{}", indent, line.trim_start()));
-            }
-        }
-        let with_commas = Self::add_trailing_commas(&adjusted);
-        output.push_str(&with_commas);
+        output.push_str(&Self::format_json_field(&json));
         output.push_str(",\n");
         Ok(())
     }
@@ -901,10 +889,7 @@ impl BunLockfile {
 
                 // GitHub and git packages have 3 elements (no registry)
                 // npm packages have 4 elements (with registry)
-                let is_git_package =
-                    entry.ident.contains("@git+") || entry.ident.contains("@github:");
-
-                if is_git_package {
+                if is_git_or_github_package(&entry.ident) {
                     // GitHub/git packages: [ident, info, checksum] - 3 elements
                     output.push_str(&format!(
                         "    \"{key}\": [{ident_json}, {info_json_spaced}, {checksum_json}],",
@@ -941,20 +926,8 @@ impl BunLockfile {
             return Ok(());
         }
         let json = serde_json::to_string_pretty(&self.data.patched_dependencies)?;
-        let lines: Vec<&str> = json.lines().collect();
         output.push_str("  \"patchedDependencies\": ");
-        let mut adjusted = String::new();
-        for (i, line) in lines.iter().enumerate() {
-            if i == 0 {
-                adjusted.push_str(line);
-            } else {
-                let spaces = line.len() - line.trim_start().len();
-                let indent = " ".repeat(spaces + 2);
-                adjusted.push_str(&format!("\n{}{}", indent, line.trim_start()));
-            }
-        }
-        let with_commas = Self::add_trailing_commas(&adjusted);
-        output.push_str(&with_commas);
+        output.push_str(&Self::format_json_field(&json));
         // No trailing comma - this is the last section before closing brace
         output.push('\n');
         Ok(())
@@ -3421,9 +3394,10 @@ mod test {
         insta::assert_snapshot!(pruned_str);
     }
 
-    /// Test that pruning a lockfile with GitHub dependencies doesn't corrupt the format.
-    /// GitHub packages should have 3 elements: [ident, info, checksum]
-    /// NOT 4 elements with an empty registry: [ident, "", info, checksum]
+    /// Test that pruning a lockfile with GitHub dependencies doesn't corrupt
+    /// the format. GitHub packages should have 3 elements: [ident, info,
+    /// checksum] NOT 4 elements with an empty registry: [ident, "", info,
+    /// checksum]
     #[test]
     fn test_prune_github_package_format() {
         let lockfile_json = json!({
@@ -3536,8 +3510,8 @@ mod test {
         );
     }
 
-    /// Test that optionalPeers arrays use compact format without trailing commas.
-    /// Bun expects: ["react", "vue"] NOT [ "react", "vue", ]
+    /// Test that optionalPeers arrays use compact format without trailing
+    /// commas. Bun expects: ["react", "vue"] NOT [ "react", "vue", ]
     #[test]
     fn test_optional_peers_compact_format() {
         let lockfile_json = json!({
@@ -3566,9 +3540,9 @@ mod test {
         let lockfile = BunLockfile::from_str(&lockfile_json.to_string()).unwrap();
         let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
 
-        // Verify optionalPeers uses compact format without leading/trailing spaces or commas
-        // The array should be formatted as ["react", "vue"] or ["vue", "react"]
-        // NOT as [ "react", "vue", ] or similar
+        // Verify optionalPeers uses compact format without leading/trailing spaces or
+        // commas The array should be formatted as ["react", "vue"] or ["vue",
+        // "react"] NOT as [ "react", "vue", ] or similar
         assert!(
             !encoded.contains(r#"[ ""#),
             "optionalPeers array should NOT have leading space after opening bracket"
@@ -3586,7 +3560,8 @@ mod test {
     }
 
     /// Test that named catalogs (catalogs field) are preserved through encode.
-    /// This tests the plural "catalogs" field, not the singular "catalog" field.
+    /// This tests the plural "catalogs" field, not the singular "catalog"
+    /// field.
     #[test]
     fn test_encode_preserves_named_catalogs() {
         let lockfile_json = json!({
@@ -3759,8 +3734,8 @@ mod test {
         );
     }
 
-    /// Comprehensive test that all metadata sections are written in correct order.
-    /// Bun expects a specific ordering of top-level keys.
+    /// Comprehensive test that all metadata sections are written in correct
+    /// order. Bun expects a specific ordering of top-level keys.
     #[test]
     fn test_encode_section_ordering() {
         let lockfile_json = json!({
@@ -3797,8 +3772,9 @@ mod test {
         let packages_pos = encoded.find(r#""packages""#).unwrap();
         let patched_deps_pos = encoded.find(r#""patchedDependencies""#).unwrap();
 
-        // Verify ordering: lockfileVersion < configVersion < workspaces < trustedDependencies
-        // < overrides < catalog < catalogs < packages < patchedDependencies
+        // Verify ordering: lockfileVersion < configVersion < workspaces <
+        // trustedDependencies < overrides < catalog < catalogs < packages <
+        // patchedDependencies
         assert!(
             lockfile_version_pos < config_version_pos,
             "lockfileVersion should come before configVersion"

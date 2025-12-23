@@ -1,6 +1,6 @@
 use serde::{Serialize, ser::SerializeTuple};
 
-use super::PackageEntry;
+use super::{PackageEntry, is_git_or_github_package};
 
 // Comment explaining entry schemas taken from bun.lock.zig
 // first index is resolution for each type of package
@@ -33,9 +33,9 @@ impl Serialize for PackageEntry {
 
         // npm packages have a registry (but not git/github packages)
         if let Some(registry) = &self.registry {
-            // Defense-in-depth: skip registry for git/github packages even if incorrectly set
-            let is_git_package = self.ident.contains("@git+") || self.ident.contains("@github:");
-            if !is_git_package {
+            // Skip registry for git/github packages even if incorrectly
+            // set
+            if !is_git_or_github_package(&self.ident) {
                 tuple.serialize_element(registry)?;
             }
         }
@@ -219,7 +219,8 @@ mod test {
     #[test_case(json!(["some-package@root:", {"bin": "bin", "binDir": "binDir"}]), root_pkg() ; "root package")]
     #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg() ; "github package")]
     #[test_case(json!(["my-package@git+https://github.com/user/repo#abc123", {"dependencies": {"lodash": "4.17.21"}}, "abc123"]), git_pkg() ; "git package")]
-    // Defense-in-depth test: corrupted registry should be stripped from github packages during serialization
+    // Defense-in-depth test: corrupted registry should be stripped from github packages during
+    // serialization
     #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg_with_corrupted_registry() ; "github package with corrupted registry stripped")]
     fn test_serialization<T: Serialize + PartialEq + std::fmt::Debug>(
         expected: serde_json::Value,
