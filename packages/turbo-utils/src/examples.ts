@@ -333,7 +333,16 @@ export async function downloadAndExtractRepo(
 }
 
 export async function downloadAndExtractExample(root: string, name: string) {
-  const tempDir = join(root, ".turbo-clone-temp");
+  // Normalize and validate the root directory to prevent unsafe git arguments
+  const normalizedRoot = resolve(root);
+  if (!normalizedRoot || normalizedRoot.includes("\0") || normalizedRoot.startsWith("-")) {
+    throw new Error(`Invalid project root: ${normalizedRoot}`);
+  }
+
+  const tempDir = join(normalizedRoot, ".turbo-clone-temp");
+  if (!tempDir || tempDir.includes("\0") || tempDir.startsWith("-")) {
+    throw new Error(`Invalid temporary directory: ${tempDir}`);
+  }
 
   try {
     // Clone with partial clone (no blobs) and no checkout
@@ -366,7 +375,7 @@ export async function downloadAndExtractExample(root: string, name: string) {
 
     // Copy the example files to the root
     const examplePath = join(tempDir, "examples", name);
-    cpSync(examplePath, root, { recursive: true });
+    cpSync(examplePath, normalizedRoot, { recursive: true });
   } catch (gitError) {
     // Clean up temp directory if git clone failed partway through
     rmSync(tempDir, { recursive: true, force: true });
@@ -379,7 +388,7 @@ export async function downloadAndExtractExample(root: string, name: string) {
 
     await streamingExtract({
       url: "https://codeload.github.com/vercel/turborepo/tar.gz/main",
-      root,
+      root: normalizedRoot,
       strip: 3,
       filter: (p: string, rootPath: string | null) => {
         return p.startsWith(`${rootPath}/examples/${name}/`);
