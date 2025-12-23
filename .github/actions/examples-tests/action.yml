@@ -21,7 +21,7 @@ runs:
       run: corepack disable
 
     - name: Setup Turborepo Environment
-      uses: ./.github/actions/setup-turborepo-environment
+      uses: ./.github/actions/setup-environment
       with:
         github-token: "${{ inputs.github-token }}"
 
