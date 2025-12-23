@@ -134,7 +134,7 @@ jobs:
           fi
 
   integration:
-    name: Turborepo Integration (${{ matrix.os.runner }}, ${{ matrix.test-path }})
+    name: Integration (${{ matrix.os.runner }}, ${{ matrix.test-path }})
     needs:
       - find-changes
       - generate-integration-test-matrix
@@ -162,7 +162,7 @@ jobs:
         run: git config --global core.autocrlf input
       - uses: actions/checkout@v4
 
-      - name: Setup Turborepo Environment
+      - name: Setup Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -228,7 +228,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Turborepo Environment
+      - name: Setup Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -251,7 +251,7 @@ jobs:
 
   rust_check:
     # We test dependency changes only on main
-    name: Turborepo rust check
+    name: Rust check
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
@@ -261,7 +261,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Turborepo Environment
+      - name: Setup Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -318,7 +318,7 @@ jobs:
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
-    name: Turborepo Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/2)
+    name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/2)
     steps:
       - name: Set git to use LF line endings
         run: |
@@ -329,7 +329,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Turborepo Environment
+      - name: Setup Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -487,7 +487,7 @@ jobs:
           test-filter: "@turborepo-examples-tests/with-tailwind-*"
 
   summary:
-    name: Turborepo Test Summary
+    name: Test Summary
     runs-on: ubuntu-latest
     timeout-minutes: 30
     if: always()

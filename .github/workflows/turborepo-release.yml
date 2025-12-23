@@ -1,4 +1,4 @@
-# Turborepo Release Pipeline
+# Release Pipeline
 #
 # This release consists of a few steps
 #
@@ -101,7 +101,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-      - name: Setup Turborepo Environment
+      - name: Setup Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
@@ -129,7 +129,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-      - name: Setup Turborepo Environment
+      - name: Setup Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"

@@ -45,7 +45,7 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
 
-      - name: Setup Turborepo Environment
+      - name: Setup Environment
         uses: ./.github/actions/setup-turborepo-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
