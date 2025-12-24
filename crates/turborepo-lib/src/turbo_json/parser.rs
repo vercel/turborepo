@@ -16,12 +16,9 @@ use turborepo_errors::{ParseDiagnostic, WithMetadata};
 use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;
 
-use crate::{
-    boundaries::{BoundariesConfig, Permissions, Rule},
-    turbo_json::{
-        Pipeline, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson, RawTaskDefinition,
-        RawTurboJson, Spanned,
-    },
+use crate::turbo_json::{
+    Pipeline, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson, RawTaskDefinition,
+    RawTurboJson, Spanned,
 };
 
 #[derive(Debug, Error, Diagnostic)]
@@ -109,91 +106,8 @@ impl WithMetadata for Pipeline {
     }
 }
 
-impl WithMetadata for BoundariesConfig {
-    fn add_text(&mut self, text: Arc<str>) {
-        self.tags.add_text(text.clone());
-        if let Some(tags) = &mut self.tags {
-            for rule in tags.as_inner_mut().values_mut() {
-                rule.add_text(text.clone());
-                rule.value.add_text(text.clone());
-            }
-        }
-        self.implicit_dependencies.add_text(text.clone());
-        if let Some(implicit_dependencies) = &mut self.implicit_dependencies {
-            for dep in implicit_dependencies.as_inner_mut() {
-                dep.add_text(text.clone());
-            }
-        }
-    }
-
-    fn add_path(&mut self, path: Arc<str>) {
-        self.tags.add_path(path.clone());
-        if let Some(tags) = &mut self.tags {
-            for rule in tags.as_inner_mut().values_mut() {
-                rule.add_path(path.clone());
-                rule.value.add_path(path.clone());
-            }
-        }
-        self.implicit_dependencies.add_path(path.clone());
-        if let Some(implicit_dependencies) = &mut self.implicit_dependencies {
-            for dep in implicit_dependencies.as_inner_mut() {
-                dep.add_path(path.clone());
-            }
-        }
-    }
-}
-
-impl WithMetadata for Rule {
-    fn add_text(&mut self, text: Arc<str>) {
-        self.dependencies.add_text(text.clone());
-        if let Some(dependencies) = &mut self.dependencies {
-            dependencies.value.add_text(text.clone());
-        }
-
-        self.dependents.add_text(text.clone());
-        if let Some(dependents) = &mut self.dependents {
-            dependents.value.add_text(text.clone());
-        }
-    }
-
-    fn add_path(&mut self, path: Arc<str>) {
-        self.dependencies.add_path(path.clone());
-        if let Some(dependencies) = &mut self.dependencies {
-            dependencies.value.add_path(path.clone());
-        }
-
-        self.dependents.add_path(path.clone());
-        if let Some(dependents) = &mut self.dependents {
-            dependents.value.add_path(path);
-        }
-    }
-}
-
-impl WithMetadata for Permissions {
-    fn add_text(&mut self, text: Arc<str>) {
-        self.allow.add_text(text.clone());
-        if let Some(allow) = &mut self.allow {
-            allow.value.add_text(text.clone());
-        }
-
-        self.deny.add_text(text.clone());
-        if let Some(deny) = &mut self.deny {
-            deny.value.add_text(text.clone());
-        }
-    }
-
-    fn add_path(&mut self, path: Arc<str>) {
-        self.allow.add_path(path.clone());
-        if let Some(allow) = &mut self.allow {
-            allow.value.add_path(path.clone());
-        }
-
-        self.deny.add_path(path.clone());
-        if let Some(deny) = &mut self.deny {
-            deny.value.add_path(path.clone());
-        }
-    }
-}
+// WithMetadata implementations for BoundariesConfig, Rule, and Permissions
+// are now in the turborepo-boundaries crate
 
 impl WithMetadata for RawTaskDefinition {
     fn add_text(&mut self, text: Arc<str>) {

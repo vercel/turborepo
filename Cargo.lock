@@ -6693,6 +6693,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-boundaries"
+version = "0.1.0"
+dependencies = [
+ "biome_deserialize 0.6.0",
+ "biome_deserialize_macros 0.6.0",
+ "biome_diagnostics",
+ "camino",
+ "git2",
+ "globwalk",
+ "indicatif",
+ "itertools 0.10.5",
+ "miette",
+ "oxc_resolver 4.2.0",
+ "regex",
+ "serde",
+ "struct_iterable",
+ "swc_common",
+ "swc_ecma_ast",
+ "swc_ecma_parser",
+ "swc_ecma_visit",
+ "test-case",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbo-trace",
+ "turbopath",
+ "turborepo-errors",
+ "turborepo-lockfiles",
+ "turborepo-repository",
+ "turborepo-ui",
+]
+
+[[package]]
 name = "turborepo-cache"
 version = "0.1.0"
 dependencies = [
@@ -6970,6 +7003,7 @@ dependencies = [
  "turborepo-analytics",
  "turborepo-api-client",
  "turborepo-auth",
+ "turborepo-boundaries",
  "turborepo-cache",
  "turborepo-ci",
  "turborepo-devtools",
