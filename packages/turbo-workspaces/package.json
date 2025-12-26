@@ -20,7 +20,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "jest",
-    "lint": "eslint src/",
+    "lint": "pnpm -w exec oxlint --ignore-path .oxlintignore packages/turbo-workspaces/src",
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
@@ -39,7 +39,6 @@
   },
   "devDependencies": {
     "@jest/globals": "29.7.0",
-    "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@turbo/utils": "workspace:*",

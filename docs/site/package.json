@@ -10,8 +10,8 @@
   "scripts": {
     "build": "next build --turbopack",
     "dev": "next dev --turbopack",
-    "lint": "fumadocs-mdx && next lint",
-    "lint:fix": "fumadocs-mdx && next lint --fix",
+    "lint": "fumadocs-mdx && pnpm -w exec oxlint --ignore-path .oxlintignore docs/site",
+    "lint:fix": "fumadocs-mdx && pnpm -w exec oxlint --ignore-path .oxlintignore docs/site --fix",
     "lint:prettier": "prettier --write -c . --cache --ignore-path=../../.prettierignore",
     "rss": "node --experimental-strip-types scripts/generate-rss.ts",
     "schema": "node --experimental-strip-types  scripts/copy-json-schema.ts",
@@ -65,8 +65,6 @@
   },
   "devDependencies": {
     "@next/env": "15.4.0-canary.81",
-    "@next/eslint-plugin-next": "15.4.0-canary.81",
-    "@turbo/eslint-config": "workspace:*",
     "@turbo/tsconfig": "workspace:^",
     "@turbo/types": "workspace:*",
     "@types/mdx": "2.0.13",
@@ -78,7 +76,6 @@
     "@vercel/analytics": "1.5.0",
     "@vercel/toolbar": "0.1.30",
     "autoprefixer": "10.4.21",
-    "eslint": "8.57.0",
     "gray-matter": "4.0.3",
     "postcss": "8.5.3",
     "rss": "1.2.2",

@@ -34,9 +34,9 @@
       "dependsOn": ["^build"]
     },
 
-    // run prettier check before eslint
+    // run prettier check before oxlint
     "lint": {
-      "dependsOn": ["lint:prettier", "^build"]
+      "dependsOn": ["lint:prettier"]
     },
 
     // root lint task runs toml check
