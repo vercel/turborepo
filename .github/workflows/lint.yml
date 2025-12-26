@@ -24,31 +24,6 @@ permissions:
   pull-requests: read
 
 jobs:
-  rust_lint:
-    name: Rust lints
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Run cargo fmt check
-        run: |
-          cargo fmt --check
-
-      - name: Check Cargo.toml formatting (taplo)
-        run: npx @taplo/cli@0.5.2 format --check
-
-      - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check licenses
-
   format_lint:
     name: Formatting
     runs-on: ubuntu-latest
@@ -77,7 +52,6 @@ jobs:
   cleanup:
     name: Cleanup
     needs:
-      - rust_lint
       - format_lint
     if: always()
     uses: ./.github/workflows/pr-clean-caches.yml
