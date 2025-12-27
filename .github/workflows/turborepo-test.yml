@@ -140,7 +140,7 @@ jobs:
       - generate-integration-test-matrix
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 30
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.rest == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
