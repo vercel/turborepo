@@ -24,6 +24,10 @@ impl<'a> RunTurboJsonProvider<'a> {
 }
 
 impl<'a> TurboJsonProvider for RunTurboJsonProvider<'a> {
+    fn has_turbo_json(&self, pkg: &PackageName) -> bool {
+        self.run.turbo_json_loader().load(pkg).is_ok()
+    }
+
     fn boundaries_config(&self, pkg: &PackageName) -> Option<&BoundariesConfig> {
         self.run
             .turbo_json_loader()

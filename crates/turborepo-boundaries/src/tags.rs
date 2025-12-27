@@ -8,8 +8,8 @@ use turborepo_repository::{
 };
 
 use crate::{
-    BoundariesConfig, BoundariesContext, BoundariesDiagnostic, Error, PackageGraphProvider,
-    SecondaryDiagnostic, TurboJsonProvider,
+    BoundariesContext, BoundariesDiagnostic, Error, PackageGraphProvider, SecondaryDiagnostic,
+    TurboJsonProvider,
     config::{Permissions, Rule},
 };
 
@@ -244,7 +244,6 @@ pub(crate) fn check_package_tags<G, T>(
     pkg: PackageNode,
     package_json: &PackageJson,
     current_package_tags: Option<&Spanned<Vec<Spanned<String>>>>,
-    package_boundaries: &BoundariesConfig,
     tags_rules: Option<&ProcessedRulesMap>,
 ) -> Result<Vec<BoundariesDiagnostic>, Error>
 where
@@ -253,27 +252,34 @@ where
 {
     let mut diagnostics = Vec::new();
 
-    if let Some(tags) = &package_boundaries.tags {
-        let (span, text) = tags.span_and_text("turbo.json");
-        diagnostics.push(BoundariesDiagnostic::PackageBoundariesHasTags { span, text });
-    }
-    let dependencies = package_boundaries
-        .dependencies
-        .clone()
-        .map(|deps| deps.into_inner().into());
-    let dependents = package_boundaries
-        .dependents
-        .clone()
-        .map(|deps| deps.into_inner().into());
+    // Load boundaries config for this package (matches original behavior)
+    let package_boundaries = ctx
+        .turbo_json_provider
+        .boundaries_config(pkg.as_package_name());
 
-    check_tag(
-        ctx,
-        &mut diagnostics,
-        dependencies.as_ref(),
-        dependents.as_ref(),
-        &pkg,
-        package_json,
-    )?;
+    if let Some(boundaries) = package_boundaries {
+        if let Some(tags) = &boundaries.tags {
+            let (span, text) = tags.span_and_text("turbo.json");
+            diagnostics.push(BoundariesDiagnostic::PackageBoundariesHasTags { span, text });
+        }
+        let dependencies = boundaries
+            .dependencies
+            .clone()
+            .map(|deps| deps.into_inner().into());
+        let dependents = boundaries
+            .dependents
+            .clone()
+            .map(|deps| deps.into_inner().into());
+
+        check_tag(
+            ctx,
+            &mut diagnostics,
+            dependencies.as_ref(),
+            dependents.as_ref(),
+            &pkg,
+            package_json,
+        )?;
+    }
 
     if let Some(tags_rules) = tags_rules {
         // We don't allow tags to share the same name as the package
@@ -291,39 +297,6 @@ where
                     package_json,
                 )?;
             }
-        }
-    }
-
-    Ok(diagnostics)
-}
-
-pub(crate) fn check_package_tags_without_boundaries<G, T>(
-    ctx: &BoundariesContext<'_, G, T>,
-    pkg: PackageNode,
-    package_json: &PackageJson,
-    current_package_tags: Option<&Spanned<Vec<Spanned<String>>>>,
-    tags_rules: &ProcessedRulesMap,
-) -> Result<Vec<BoundariesDiagnostic>, Error>
-where
-    G: PackageGraphProvider,
-    T: TurboJsonProvider,
-{
-    let mut diagnostics = Vec::new();
-
-    // We don't allow tags to share the same name as the package
-    // because we allow package names to be used as a tag
-    diagnostics.extend(check_if_package_name_is_tag(tags_rules, &pkg, package_json));
-
-    for tag in current_package_tags.into_iter().flatten().flatten() {
-        if let Some(rule) = tags_rules.get(tag.as_inner()) {
-            check_tag(
-                ctx,
-                &mut diagnostics,
-                rule.dependencies.as_ref(),
-                rule.dependents.as_ref(),
-                &pkg,
-                package_json,
-            )?;
         }
     }
 

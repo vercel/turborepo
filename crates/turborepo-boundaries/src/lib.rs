@@ -70,6 +70,8 @@ impl PackageGraphProvider for PackageGraph {
 
 /// Trait to provide turbo.json loading capabilities
 pub trait TurboJsonProvider {
+    /// Returns true if turbo.json exists and can be loaded for this package
+    fn has_turbo_json(&self, pkg: &PackageName) -> bool;
     fn boundaries_config(&self, pkg: &PackageName) -> Option<&BoundariesConfig>;
     fn package_tags(&self, pkg: &PackageName) -> Option<&Spanned<Vec<Spanned<String>>>>;
     fn implicit_dependencies(&self, pkg: &PackageName) -> HashMap<String, Spanned<()>>;
@@ -463,29 +465,16 @@ impl BoundariesChecker {
         )
         .await?;
 
-        if let Some(boundaries_config) = ctx.turbo_json_provider.boundaries_config(package_name) {
+        // Only check package tags if turbo.json exists for this package
+        if ctx.turbo_json_provider.has_turbo_json(package_name) {
             let package_tags = ctx.turbo_json_provider.package_tags(package_name);
             result.diagnostics.extend(tags::check_package_tags(
                 ctx,
                 PackageNode::Workspace(package_name.clone()),
                 &package_info.package_json,
                 package_tags,
-                boundaries_config,
                 tag_rules.as_ref(),
             )?);
-        } else {
-            let package_tags = ctx.turbo_json_provider.package_tags(package_name);
-            if let Some(tag_rules) = tag_rules.as_ref() {
-                result
-                    .diagnostics
-                    .extend(tags::check_package_tags_without_boundaries(
-                        ctx,
-                        PackageNode::Workspace(package_name.clone()),
-                        &package_info.package_json,
-                        package_tags,
-                        tag_rules,
-                    )?);
-            }
         }
 
         result.packages_checked += 1;
@@ -518,29 +507,16 @@ impl BoundariesChecker {
         )
         .await?;
 
-        if let Some(boundaries_config) = ctx.turbo_json_provider.boundaries_config(package_name) {
+        // Only check package tags if turbo.json exists for this package
+        if ctx.turbo_json_provider.has_turbo_json(package_name) {
             let package_tags = ctx.turbo_json_provider.package_tags(package_name);
             result.diagnostics.extend(tags::check_package_tags(
                 ctx,
                 PackageNode::Workspace(package_name.clone()),
                 &package_info.package_json,
                 package_tags,
-                boundaries_config,
                 tag_rules.as_ref(),
             )?);
-        } else {
-            let package_tags = ctx.turbo_json_provider.package_tags(package_name);
-            if let Some(tag_rules) = tag_rules.as_ref() {
-                result
-                    .diagnostics
-                    .extend(tags::check_package_tags_without_boundaries(
-                        ctx,
-                        PackageNode::Workspace(package_name.clone()),
-                        &package_info.package_json,
-                        package_tags,
-                        tag_rules,
-                    )?);
-            }
         }
 
         result.packages_checked += 1;
