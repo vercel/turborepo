@@ -42,7 +42,6 @@ use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, color};
 
 use crate::{imports::DependencyLocations, tsconfig::TsConfigLoader};
 
-/// Trait to provide package graph information
 pub trait PackageGraphProvider {
     fn packages(&self) -> Box<dyn Iterator<Item = (&PackageName, &PackageInfo)> + '_>;
     fn immediate_dependencies(&self, node: &PackageNode) -> Option<HashSet<&PackageNode>>;
@@ -68,7 +67,6 @@ impl PackageGraphProvider for PackageGraph {
     }
 }
 
-/// Trait to provide turbo.json loading capabilities
 pub trait TurboJsonProvider {
     /// Returns true if turbo.json exists and can be loaded for this package
     fn has_turbo_json(&self, pkg: &PackageName) -> bool;
@@ -77,7 +75,6 @@ pub trait TurboJsonProvider {
     fn implicit_dependencies(&self, pkg: &PackageName) -> HashMap<String, Spanned<()>>;
 }
 
-/// Context needed for boundaries checking
 pub struct BoundariesContext<'a, G: PackageGraphProvider, T: TurboJsonProvider> {
     pub repo_root: &'a AbsoluteSystemPath,
     pub pkg_dep_graph: &'a G,
@@ -300,7 +297,6 @@ impl BoundariesResult {
     }
 }
 
-/// Main boundaries checking functionality
 pub struct BoundariesChecker;
 
 impl BoundariesChecker {
@@ -709,7 +705,6 @@ impl BoundariesChecker {
         G: PackageGraphProvider,
         T: TurboJsonProvider,
     {
-        // Read the file content
         let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
             return Err(Error::FileNotFound(file_path.to_owned()));
         };

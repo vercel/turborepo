@@ -106,9 +106,6 @@ impl WithMetadata for Pipeline {
     }
 }
 
-// WithMetadata implementations for BoundariesConfig, Rule, and Permissions
-// are now in the turborepo-boundaries crate
-
 impl WithMetadata for RawTaskDefinition {
     fn add_text(&mut self, text: Arc<str>) {
         self.depends_on.add_text(text.clone());

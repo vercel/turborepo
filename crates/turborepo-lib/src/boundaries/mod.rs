@@ -12,7 +12,6 @@ use turborepo_repository::package_graph::PackageName;
 
 use crate::run::Run;
 
-/// Implementation of TurboJsonProvider for the Run context
 pub struct RunTurboJsonProvider<'a> {
     run: &'a Run,
 }
