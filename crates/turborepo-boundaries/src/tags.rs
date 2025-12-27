@@ -77,20 +77,48 @@ where
     let mut has_tag_in_allowlist =
         allow_list.is_none_or(|allow_list| allow_list.contains(relation_package_name.as_str()));
     let tags_span = tags.map(|tags| tags.to(())).unwrap_or_default();
-    if let Some(deny_list) = deny_list {
-        if deny_list.contains(relation_package_name.as_str()) {
-            let (span, text) = package_json
-                .name
-                .as_ref()
-                .map(|name| name.span_and_text("turbo.json"))
-                .unwrap_or_else(|| (None, NamedSource::new("package.json", String::new())));
+    if let Some(deny_list) = deny_list
+        && deny_list.contains(relation_package_name.as_str())
+    {
+        let (span, text) = package_json
+            .name
+            .as_ref()
+            .map(|name| name.span_and_text("turbo.json"))
+            .unwrap_or_else(|| (None, NamedSource::new("package.json", String::new())));
+        let deny_list_spanned = deny_list.to(());
+        let (deny_list_span, deny_list_text) = deny_list_spanned.span_and_text("turbo.json");
+
+        return Ok(Some(BoundariesDiagnostic::DeniedTag {
+            source_package_name: package_name.clone(),
+            package_name: relation_package_name.clone(),
+            tag: relation_package_name.to_string(),
+            span,
+            text,
+            secondary: [SecondaryDiagnostic::Denylist {
+                span: deny_list_span,
+                text: deny_list_text,
+            }],
+        }));
+    }
+
+    for tag in tags.into_iter().flatten().flatten() {
+        if let Some(allow_list) = allow_list
+            && allow_list.contains(tag.as_inner())
+        {
+            has_tag_in_allowlist = true;
+        }
+
+        if let Some(deny_list) = deny_list
+            && deny_list.contains(tag.as_inner())
+        {
+            let (span, text) = tag.span_and_text("turbo.json");
             let deny_list_spanned = deny_list.to(());
             let (deny_list_span, deny_list_text) = deny_list_spanned.span_and_text("turbo.json");
 
             return Ok(Some(BoundariesDiagnostic::DeniedTag {
                 source_package_name: package_name.clone(),
                 package_name: relation_package_name.clone(),
-                tag: relation_package_name.to_string(),
+                tag: tag.as_inner().to_string(),
                 span,
                 text,
                 secondary: [SecondaryDiagnostic::Denylist {
@@ -98,35 +126,6 @@ where
                     text: deny_list_text,
                 }],
             }));
-        }
-    }
-
-    for tag in tags.into_iter().flatten().flatten() {
-        if let Some(allow_list) = allow_list {
-            if allow_list.contains(tag.as_inner()) {
-                has_tag_in_allowlist = true;
-            }
-        }
-
-        if let Some(deny_list) = deny_list {
-            if deny_list.contains(tag.as_inner()) {
-                let (span, text) = tag.span_and_text("turbo.json");
-                let deny_list_spanned = deny_list.to(());
-                let (deny_list_span, deny_list_text) =
-                    deny_list_spanned.span_and_text("turbo.json");
-
-                return Ok(Some(BoundariesDiagnostic::DeniedTag {
-                    source_package_name: package_name.clone(),
-                    package_name: relation_package_name.clone(),
-                    tag: tag.as_inner().to_string(),
-                    span,
-                    text,
-                    secondary: [SecondaryDiagnostic::Denylist {
-                        span: deny_list_span,
-                        text: deny_list_text,
-                    }],
-                }));
-            }
         }
     }
 
