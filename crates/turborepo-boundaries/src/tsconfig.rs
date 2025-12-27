@@ -3,7 +3,7 @@ use std::{collections::HashMap, sync::Arc};
 use oxc_resolver::{ResolveError, Resolver, TsConfigSerde};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
-use crate::boundaries::BoundariesResult;
+use crate::BoundariesResult;
 
 pub struct TsConfigLoader<'a> {
     configs: HashMap<AbsoluteSystemPathBuf, Arc<TsConfigSerde>>,
