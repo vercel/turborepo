@@ -43,7 +43,7 @@ use crate::{
     cli::DryRunMode,
     commands::CommandBase,
     config::resolve_turbo_config_path,
-    engine::{Engine, EngineBuilder},
+    engine::{Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{scope, task_access::TaskAccess, Error, Run, RunCache},

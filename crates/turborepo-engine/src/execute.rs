@@ -1,12 +1,12 @@
 use std::sync::{Arc, Mutex};
 
-use futures::{stream::FuturesUnordered, StreamExt};
-use tokio::sync::{mpsc, oneshot, Semaphore};
+use futures::{StreamExt, stream::FuturesUnordered};
+use tokio::sync::{Semaphore, mpsc, oneshot};
 use tracing::log::debug;
 use turborepo_graph_utils::Walker;
 use turborepo_task_id::TaskId;
 
-use super::{Engine, TaskNode};
+use super::{Built, Engine, TaskDefinitionInfo, TaskNode};
 
 pub struct Message<T, U> {
     pub info: T,
@@ -55,7 +55,7 @@ pub enum StopExecution {
     DependentTasks,
 }
 
-impl Engine {
+impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
     /// Execute a task graph by sending task ids to the visitor
     /// while respecting concurrency limits.
     /// The visitor is expected to handle any error handling on its end.

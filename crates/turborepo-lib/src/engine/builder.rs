@@ -520,7 +520,7 @@ impl<'a> EngineBuilder<'a> {
                         let from_task_index = engine.get_index(&from_task_id);
                         has_topo_deps = true;
                         engine
-                            .task_graph
+                            .task_graph_mut()
                             .add_edge(to_task_index, from_task_index, ());
                         let from_task_id = span.to(from_task_id);
                         traversal_queue.push_back(from_task_id);
@@ -553,7 +553,7 @@ impl<'a> EngineBuilder<'a> {
                 has_deps = true;
                 let from_task_index = engine.get_index(&from_task_id);
                 engine
-                    .task_graph
+                    .task_graph_mut()
                     .add_edge(to_task_index, from_task_index, ());
                 let from_task_id = span.to(from_task_id);
                 traversal_queue.push_back(from_task_id);
@@ -565,7 +565,7 @@ impl<'a> EngineBuilder<'a> {
             }
         }
 
-        graph::validate_graph(&engine.task_graph)?;
+        graph::validate_graph(engine.task_graph_mut())?;
 
         Ok(engine.seal())
     }
@@ -1219,7 +1219,7 @@ mod test {
 
     fn all_dependencies(engine: &Engine) -> HashMap<TaskId<'static>, HashSet<TaskNode>> {
         engine
-            .task_lookup
+            .task_lookup()
             .keys()
             .filter_map(|task_id| {
                 let deps = engine.dependencies(task_id)?;
@@ -3453,7 +3453,11 @@ mod test {
             .unwrap();
 
         // Should have build and test, but NOT lint
-        let task_ids: HashSet<_> = engine.task_lookup.keys().map(|id| id.to_string()).collect();
+        let task_ids: HashSet<_> = engine
+            .task_lookup()
+            .keys()
+            .map(|id| id.to_string())
+            .collect();
 
         assert!(task_ids.contains("app#build"), "Should have app#build");
         assert!(task_ids.contains("app#test"), "Should have app#test");
@@ -3523,7 +3527,11 @@ mod test {
             .build()
             .expect("Engine build should succeed with transit node pattern");
 
-        let task_ids: HashSet<_> = engine.task_lookup.keys().map(|id| id.to_string()).collect();
+        let task_ids: HashSet<_> = engine
+            .task_lookup()
+            .keys()
+            .map(|id| id.to_string())
+            .collect();
 
         // Should have root tasks
         assert!(
@@ -4003,7 +4011,11 @@ mod test {
             .unwrap();
 
         // Only app2#build should be in the engine (app1 excluded it)
-        let task_ids: HashSet<_> = engine.task_lookup.keys().map(|id| id.to_string()).collect();
+        let task_ids: HashSet<_> = engine
+            .task_lookup()
+            .keys()
+            .map(|id| id.to_string())
+            .collect();
 
         assert!(
             !task_ids.contains("app1#build"),
