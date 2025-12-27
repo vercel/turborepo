@@ -14,7 +14,7 @@ use crate::{
         TurborepoConfigBuilder,
     },
     opts::Opts,
-    turbo_json::{RawRootTurboJson, UIMode},
+    turbo_json::RawRootTurboJson,
     Args,
 };
 
@@ -37,28 +37,6 @@ pub(crate) mod run;
 pub(crate) mod scan;
 pub(crate) mod telemetry;
 pub(crate) mod unlink;
-
-/// Configuration values extracted from turbo.json
-/// Used to pass turbo.json config to the TurborepoConfigBuilder
-#[derive(Debug, Default)]
-struct TurboJsonConfig {
-    ui: Option<UIMode>,
-    cache_dir: Option<Utf8PathBuf>,
-    allow_no_package_manager: Option<bool>,
-    daemon: Option<bool>,
-    env_mode: Option<crate::cli::EnvMode>,
-    concurrency: Option<String>,
-    // Remote cache options
-    api_url: Option<String>,
-    login_url: Option<String>,
-    team_slug: Option<String>,
-    team_id: Option<String>,
-    signature: Option<bool>,
-    preflight: Option<bool>,
-    timeout: Option<u64>,
-    upload_timeout: Option<u64>,
-    enabled: Option<bool>,
-}
 
 #[derive(Debug, Clone)]
 pub struct CommandBase {
@@ -105,11 +83,12 @@ impl CommandBase {
         args: &Args,
     ) -> Result<ConfigurationOptions, ConfigError> {
         // First, read turbo.json config values if present
-        // This is needed because turborepo-config's TurboJsonReader is a stub
-        // that returns defaults. The real turbo.json parsing lives in turborepo-lib.
         let turbo_json_config = Self::read_turbo_json_config(repo_root, args)?;
 
-        let mut builder = TurborepoConfigBuilder::new(repo_root)
+        let builder = TurborepoConfigBuilder::new(repo_root)
+            // Provide the turbo.json configuration (lowest priority, merged first)
+            .with_turbo_json_config(turbo_json_config)
+            // CLI arguments (highest priority, applied as overrides)
             // The below should be deprecated and removed.
             .with_api_url(args.api.clone())
             .with_login_url(args.login.clone())
@@ -117,6 +96,7 @@ impl CommandBase {
             .with_token(args.token.clone())
             .with_timeout(args.remote_cache_timeout)
             .with_preflight(args.preflight.then_some(true))
+            .with_ui(args.ui)
             .with_allow_no_package_manager(
                 args.dangerously_disable_package_manager_check
                     .then_some(true),
@@ -159,79 +139,16 @@ impl CommandBase {
                     .and_then(|args| args.concurrency.clone()),
             );
 
-        // Apply turbo.json config values (lower priority than CLI args)
-        // Only apply if CLI didn't provide a value
-        if let Some(config) = turbo_json_config {
-            // UI mode from turbo.json (CLI takes precedence)
-            if args.ui.is_none() {
-                builder = builder.with_ui(config.ui);
-            }
-
-            // Cache dir from turbo.json (CLI takes precedence)
-            if args
-                .execution_args()
-                .and_then(|ea| ea.cache_dir.as_ref())
-                .is_none()
-            {
-                builder = builder.with_cache_dir(config.cache_dir);
-            }
-
-            // Allow no package manager from turbo.json (CLI takes precedence)
-            if !args.dangerously_disable_package_manager_check {
-                builder = builder.with_allow_no_package_manager(config.allow_no_package_manager);
-            }
-
-            // Daemon from turbo.json (CLI takes precedence)
-            if args.run_args().and_then(|ra| ra.daemon()).is_none() {
-                builder = builder.with_daemon(config.daemon);
-            }
-
-            // Env mode from turbo.json (CLI takes precedence)
-            if args.execution_args().and_then(|ea| ea.env_mode).is_none() {
-                builder = builder.with_env_mode(config.env_mode);
-            }
-
-            // Concurrency from turbo.json (CLI takes precedence)
-            if args
-                .execution_args()
-                .and_then(|ea| ea.concurrency.as_ref())
-                .is_none()
-            {
-                builder = builder.with_concurrency(config.concurrency);
-            }
-
-            // Remote cache options from turbo.json (CLI takes precedence)
-            if args.api.is_none() {
-                builder = builder.with_api_url(config.api_url);
-            }
-            if args.login.is_none() {
-                builder = builder.with_login_url(config.login_url);
-            }
-            if args.team.is_none() {
-                builder = builder.with_team_slug(config.team_slug);
-            }
-            // Note: team_id is typically set via TURBO_TEAMID env var, not CLI
-            // Note: token is security-sensitive and should only come from env vars
-            builder = builder.with_signature(config.signature);
-            if !args.preflight {
-                builder = builder.with_preflight(config.preflight);
-            }
-            if args.remote_cache_timeout.is_none() {
-                builder = builder.with_timeout(config.timeout);
-            }
-            builder = builder.with_upload_timeout(config.upload_timeout);
-            builder = builder.with_enabled(config.enabled);
-        }
-
         builder.build().map_err(ConfigError::from)
     }
 
     /// Reads configuration values from turbo.json file.
-    /// Returns None if turbo.json doesn't exist or can't be parsed.
+    /// Returns default ConfigurationOptions if turbo.json doesn't exist or
+    /// can't be parsed.
     fn read_turbo_json_config(
         repo_root: &AbsoluteSystemPath,
         args: &Args,
-    ) -> Result<Option<TurboJsonConfig>, ConfigError> {
+    ) -> Result<ConfigurationOptions, ConfigError> {
         // Determine the turbo.json path
         let turbo_json_path = if let Some(ref custom_path) = args.root_turbo_json {
             AbsoluteSystemPathBuf::from_cwd(custom_path.clone())?
@@ -242,8 +159,8 @@ impl CommandBase {
         // Read and parse turbo.json if it exists
         let contents = match turbo_json_path.read_existing_to_string() {
             Ok(Some(contents)) => contents,
-            Ok(None) => return Ok(None),
-            Err(_) => return Ok(None),
+            Ok(None) => return Ok(ConfigurationOptions::default()),
+            Err(_) => return Ok(ConfigurationOptions::default()),
         };
 
         let root_relative_path = repo_root.anchor(&turbo_json_path).map_or_else(
@@ -251,16 +168,13 @@ impl CommandBase {
             |relative| relative.to_string(),
         );
 
-        // Parse the turbo.json - if parsing fails, just return None
+        // Parse the turbo.json - if parsing fails, return empty defaults
         // The actual error will be reported later when turbo.json is
         // fully loaded for task configuration
         let raw_turbo_json = match RawRootTurboJson::parse(&contents, &root_relative_path) {
             Ok(json) => json,
-            Err(_) => return Ok(None),
+            Err(_) => return Ok(ConfigurationOptions::default()),
         };
-
-        // Extract configuration values using Spanned's value field
-        let ui = raw_turbo_json.ui.as_ref().map(|s| s.value);
 
         // Extract cache_dir if present and valid
         let cache_dir = raw_turbo_json.cache_dir.as_ref().and_then(|spanned| {
@@ -275,19 +189,11 @@ impl CommandBase {
 
         // Extract remote cache options
         let remote_cache = raw_turbo_json.remote_cache.as_ref();
-        let api_url = remote_cache.and_then(|rc| rc.api_url.as_ref().map(|s| s.value.clone()));
-        let login_url = remote_cache.and_then(|rc| rc.login_url.as_ref().map(|s| s.value.clone()));
-        let team_slug = remote_cache.and_then(|rc| rc.team_slug.as_ref().map(|s| s.value.clone()));
-        let team_id = remote_cache.and_then(|rc| rc.team_id.as_ref().map(|s| s.value.clone()));
-        let signature = remote_cache.and_then(|rc| rc.signature.as_ref().map(|s| s.value));
-        let preflight = remote_cache.and_then(|rc| rc.preflight.as_ref().map(|s| s.value));
-        let timeout = remote_cache.and_then(|rc| rc.timeout.as_ref().map(|s| s.value));
-        let upload_timeout =
-            remote_cache.and_then(|rc| rc.upload_timeout.as_ref().map(|s| s.value));
-        let enabled = remote_cache.and_then(|rc| rc.enabled.as_ref().map(|s| s.value));
 
-        Ok(Some(TurboJsonConfig {
-            ui,
+        // Build ConfigurationOptions from turbo.json values
+        // Note: token is intentionally not read from turbo.json for security reasons
+        Ok(ConfigurationOptions {
+            ui: raw_turbo_json.ui.as_ref().map(|s| s.value),
             cache_dir,
             allow_no_package_manager: raw_turbo_json
                 .allow_no_package_manager
@@ -296,16 +202,17 @@ impl CommandBase {
             daemon: raw_turbo_json.daemon.as_ref().map(|s| s.value),
             env_mode: raw_turbo_json.env_mode.as_ref().map(|s| s.value),
             concurrency: raw_turbo_json.concurrency.as_ref().map(|s| s.value.clone()),
-            api_url,
-            login_url,
-            team_slug,
-            team_id,
-            signature,
-            preflight,
-            timeout,
-            upload_timeout,
-            enabled,
-        }))
+            api_url: remote_cache.and_then(|rc| rc.api_url.as_ref().map(|s| s.value.clone())),
+            login_url: remote_cache.and_then(|rc| rc.login_url.as_ref().map(|s| s.value.clone())),
+            team_slug: remote_cache.and_then(|rc| rc.team_slug.as_ref().map(|s| s.value.clone())),
+            team_id: remote_cache.and_then(|rc| rc.team_id.as_ref().map(|s| s.value.clone())),
+            signature: remote_cache.and_then(|rc| rc.signature.as_ref().map(|s| s.value)),
+            preflight: remote_cache.and_then(|rc| rc.preflight.as_ref().map(|s| s.value)),
+            timeout: remote_cache.and_then(|rc| rc.timeout.as_ref().map(|s| s.value)),
+            upload_timeout: remote_cache.and_then(|rc| rc.upload_timeout.as_ref().map(|s| s.value)),
+            enabled: remote_cache.and_then(|rc| rc.enabled.as_ref().map(|s| s.value)),
+            ..ConfigurationOptions::default()
+        })
     }
 
     pub fn opts(&self) -> &Opts {

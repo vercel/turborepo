@@ -21,7 +21,6 @@ use crate::{
     env::EnvVars,
     file::{AuthFile, ConfigFile},
     override_env::OverrideEnvVars,
-    turbo_json::TurboJsonReader,
 };
 
 /// Configuration file name (JSON format)
@@ -183,56 +182,56 @@ pub struct ConfigurationOptions {
     #[serde(alias = "apiurl")]
     #[serde(alias = "ApiUrl")]
     #[serde(alias = "APIURL")]
-    pub(crate) api_url: Option<String>,
+    pub api_url: Option<String>,
     #[serde(alias = "loginurl")]
     #[serde(alias = "LoginUrl")]
     #[serde(alias = "LOGINURL")]
-    pub(crate) login_url: Option<String>,
+    pub login_url: Option<String>,
     #[serde(alias = "teamslug")]
     #[serde(alias = "TeamSlug")]
     #[serde(alias = "TEAMSLUG")]
     /// corresponds to env var TURBO_TEAM
-    pub(crate) team_slug: Option<String>,
+    pub team_slug: Option<String>,
     #[serde(alias = "teamid")]
     #[serde(alias = "TeamId")]
     #[serde(alias = "TEAMID")]
     /// corresponds to env var TURBO_TEAMID
-    pub(crate) team_id: Option<String>,
+    pub team_id: Option<String>,
     /// corresponds to env var TURBO_TOKEN
-    pub(crate) token: Option<String>,
-    pub(crate) signature: Option<bool>,
-    pub(crate) preflight: Option<bool>,
-    pub(crate) timeout: Option<u64>,
-    pub(crate) upload_timeout: Option<u64>,
-    pub(crate) enabled: Option<bool>,
+    pub token: Option<String>,
+    pub signature: Option<bool>,
+    pub preflight: Option<bool>,
+    pub timeout: Option<u64>,
+    pub upload_timeout: Option<u64>,
+    pub enabled: Option<bool>,
     #[serde(rename = "ui")]
-    pub(crate) ui: Option<UIMode>,
+    pub ui: Option<UIMode>,
     #[serde(rename = "dangerouslyDisablePackageManagerCheck")]
-    pub(crate) allow_no_package_manager: Option<bool>,
-    pub(crate) daemon: Option<bool>,
+    pub allow_no_package_manager: Option<bool>,
+    pub daemon: Option<bool>,
     #[serde(rename = "envMode")]
-    pub(crate) env_mode: Option<EnvMode>,
-    pub(crate) scm_base: Option<String>,
-    pub(crate) scm_head: Option<String>,
+    pub env_mode: Option<EnvMode>,
+    pub scm_base: Option<String>,
+    pub scm_head: Option<String>,
     #[serde(rename = "cacheDir")]
-    pub(crate) cache_dir: Option<Utf8PathBuf>,
+    pub cache_dir: Option<Utf8PathBuf>,
     // This is skipped as we never want this to be stored in a file
     #[serde(skip)]
-    pub(crate) root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
-    pub(crate) force: Option<bool>,
-    pub(crate) log_order: Option<LogOrder>,
+    pub root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    pub force: Option<bool>,
+    pub log_order: Option<LogOrder>,
     #[serde(skip)]
-    pub(crate) cache: Option<CacheConfig>,
-    pub(crate) remote_only: Option<bool>,
-    pub(crate) remote_cache_read_only: Option<bool>,
-    pub(crate) run_summary: Option<bool>,
-    pub(crate) allow_no_turbo_json: Option<bool>,
-    pub(crate) tui_scrollback_length: Option<u64>,
-    pub(crate) concurrency: Option<String>,
-    pub(crate) no_update_notifier: Option<bool>,
-    pub(crate) sso_login_callback_port: Option<u16>,
+    pub cache: Option<CacheConfig>,
+    pub remote_only: Option<bool>,
+    pub remote_cache_read_only: Option<bool>,
+    pub run_summary: Option<bool>,
+    pub allow_no_turbo_json: Option<bool>,
+    pub tui_scrollback_length: Option<u64>,
+    pub concurrency: Option<String>,
+    pub no_update_notifier: Option<bool>,
+    pub sso_login_callback_port: Option<u16>,
     #[serde(skip)]
-    pub(crate) future_flags: Option<FutureFlags>,
+    pub future_flags: Option<FutureFlags>,
 }
 
 // Getters
@@ -439,12 +438,34 @@ fn get_lowercased_env_vars() -> HashMap<OsString, OsString> {
 // TurborepoConfigBuilder
 // =============================================================================
 
-/// Builder for constructing TurborepoConfigBuilder.
+/// Builder for constructing Turborepo configuration.
+///
+/// Merges configuration from multiple sources in priority order (highest to
+/// lowest):
+/// 1. Builder pattern overrides (via `with_*` methods)
+/// 2. Environment variables (`TURBO_*`)
+/// 3. Override environment variables (`VERCEL_ARTIFACTS_*`, `CI`, `NO_COLOR`)
+/// 4. Local config file (`<REPO_ROOT>/.turbo/config.json`)
+/// 5. Global auth file (Vercel/Turbo token storage)
+/// 6. Global config file (`~/.turbo/config.json`)
+/// 7. turbo.json configuration (provided via `with_turbo_json_config`)
+///
+/// # Example
+/// ```ignore
+/// let config = TurborepoConfigBuilder::new(&repo_root)
+///     .with_turbo_json_config(turbo_json_config)
+///     .with_api_url(Some("https://custom.api.com".to_string()))
+///     .build()?;
+/// ```
 #[derive(Default)]
 pub struct TurborepoConfigBuilder {
     pub(crate) repo_root: AbsoluteSystemPathBuf,
     pub(crate) override_config: ConfigurationOptions,
     pub(crate) global_config_path: Option<AbsoluteSystemPathBuf>,
+    /// Configuration options extracted from turbo.json
+    /// This must be provided by the caller since turbo.json parsing
+    /// requires types from turborepo-lib (circular dependency otherwise)
+    turbo_json_config: Option<ConfigurationOptions>,
     #[allow(dead_code)]
     environment: Option<HashMap<OsString, OsString>>,
 }
@@ -455,12 +476,33 @@ impl TurborepoConfigBuilder {
             repo_root: repo_root.to_owned(),
             override_config: Default::default(),
             global_config_path: None,
+            turbo_json_config: None,
             environment: None,
         }
     }
 
     pub fn with_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
         self.global_config_path = Some(path);
+        self
+    }
+
+    /// Set the configuration options extracted from turbo.json.
+    ///
+    /// This is required because turbo.json parsing lives in `turborepo-lib`
+    /// due to circular dependency constraints. The caller is responsible for
+    /// parsing turbo.json and extracting the relevant configuration options.
+    ///
+    /// # Example
+    /// ```ignore
+    /// // In turborepo-lib:
+    /// let raw_turbo_json = RawRootTurboJson::parse(&contents, &path)?;
+    /// let turbo_json_config = ConfigurationOptions::from(&raw_turbo_json);
+    /// let config = TurborepoConfigBuilder::new(&repo_root)
+    ///     .with_turbo_json_config(turbo_json_config)
+    ///     .build()?;
+    /// ```
+    pub fn with_turbo_json_config(mut self, config: ConfigurationOptions) -> Self {
+        self.turbo_json_config = Some(config);
         self
     }
 
@@ -473,20 +515,26 @@ impl TurborepoConfigBuilder {
     /// Build the configuration by merging all configuration sources.
     ///
     /// Priority, from least significant to most significant:
-    /// - shared configuration (turbo.json)
+    /// - shared configuration (turbo.json) - provided via
+    ///   `with_turbo_json_config`
     /// - global configuration (~/.turbo/config.json)
     /// - local configuration (<REPO_ROOT>/.turbo/config.json)
     /// - environment variables
     /// - CLI arguments
     /// - builder pattern overrides.
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
-        let turbo_json = TurboJsonReader::new(&self.repo_root);
         let global_config = ConfigFile::global_config(self.global_config_path.clone())?;
         let global_auth = AuthFile::global_auth(self.global_config_path.clone())?;
         let local_config = ConfigFile::local_config(&self.repo_root);
         let env_vars = self.get_environment();
         let env_var_config = EnvVars::new(&env_vars)?;
         let override_env_var_config = OverrideEnvVars::new(&env_vars)?;
+
+        // Use the turbo.json config if provided, otherwise use empty defaults
+        let turbo_json_config = self
+            .turbo_json_config
+            .clone()
+            .unwrap_or_else(ConfigurationOptions::default);
 
         // These are ordered from highest to lowest priority
         let sources: [Box<dyn ResolvedConfigurationOptions>; 7] = [
@@ -496,7 +544,7 @@ impl TurborepoConfigBuilder {
             Box::new(local_config),
             Box::new(global_auth),
             Box::new(global_config),
-            Box::new(turbo_json),
+            Box::new(&turbo_json_config),
         ];
 
         let config = sources.into_iter().try_fold(
