@@ -14,7 +14,7 @@ use clap::{
 };
 use clap_complete::{generate, Shell};
 pub use error::Error;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
@@ -87,34 +87,8 @@ impl From<OutputLogsMode> for turborepo_ui::tui::event::OutputLogs {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
-pub enum LogOrder {
-    #[serde(rename = "auto")]
-    #[default]
-    Auto,
-    #[serde(rename = "stream")]
-    Stream,
-    #[serde(rename = "grouped")]
-    Grouped,
-}
-
-impl Display for LogOrder {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            LogOrder::Auto => "auto",
-            LogOrder::Stream => "stream",
-            LogOrder::Grouped => "grouped",
-        })
-    }
-}
-
-impl LogOrder {
-    pub fn compatible_with_tui(&self) -> bool {
-        // If the user requested a specific order to the logs, then this isn't
-        // compatible with the TUI and means we cannot use it.
-        matches!(self, Self::Auto)
-    }
-}
+// Re-export LogOrder from turborepo-config
+pub use turborepo_config::LogOrder;
 
 #[derive(Copy, Clone, Debug, PartialEq, ValueEnum, Serialize)]
 pub enum DryRunMode {
@@ -131,24 +105,8 @@ impl Display for DryRunMode {
     }
 }
 
-#[derive(
-    Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq, Deserializable,
-)]
-#[serde(rename_all = "lowercase")]
-pub enum EnvMode {
-    Loose,
-    #[default]
-    Strict,
-}
-
-impl fmt::Display for EnvMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            EnvMode::Loose => "loose",
-            EnvMode::Strict => "strict",
-        })
-    }
-}
+// Re-export EnvMode from turborepo-config
+pub use turborepo_config::EnvMode;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, ValueEnum, Serialize)]
 #[serde(rename_all = "lowercase")]

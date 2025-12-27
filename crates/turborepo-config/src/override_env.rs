@@ -1,10 +1,18 @@
+//! Environment variable override handling
+//!
+//! This module handles override environment variables like VERCEL_ARTIFACTS_*
+//! and CI/NO_COLOR that override other configuration sources.
+
 use std::{
     collections::HashMap,
     ffi::{OsStr, OsString},
 };
 
-use super::{env::truth_env_var, ConfigurationOptions, Error, ResolvedConfigurationOptions};
-use crate::turbo_json::UIMode;
+use crate::{
+    Error,
+    config::{ConfigurationOptions, ResolvedConfigurationOptions, UIMode},
+    env::truth_env_var,
+};
 
 /*
 Hi! If you're new here:

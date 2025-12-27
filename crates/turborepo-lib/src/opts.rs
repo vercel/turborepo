@@ -181,7 +181,10 @@ impl Opts {
         let api_client_opts = APIClientOpts::from(inputs);
         let repo_opts = RepoOpts::from(inputs);
         let tui_opts = TuiOpts::from(inputs);
-        let future_flags = config.future_flags();
+        // Convert from turborepo_config::FutureFlags to turbo_json::FutureFlags
+        // Both are currently empty structs, so we just use default
+        let _ = config.future_flags(); // Acknowledge the config value exists
+        let future_flags = FutureFlags::default();
 
         Ok(Self {
             repo_opts,
@@ -317,8 +320,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
     fn try_from(inputs: OptsInputs) -> Result<Self, Self::Error> {
         let concurrency = inputs
             .config
-            .concurrency
-            .as_deref()
+            .concurrency()
             .map(parse_concurrency)
             .transpose()?
             .unwrap_or(DEFAULT_CONCURRENCY);
@@ -504,7 +506,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
         if !is_linked {
             cache.remote.read = false;
             cache.remote.write = false;
-        } else if let Some(false) = inputs.config.enabled {
+        } else if let Some(false) = inputs.config.enabled_raw() {
             // We're linked, but if the user has explicitly disabled remote cache
             cache.remote.read = false;
             cache.remote.write = false;

@@ -1,3 +1,7 @@
+//! Environment variable reading for configuration
+//!
+//! This module handles reading Turbo configuration from environment variables.
+
 use std::{
     collections::HashMap,
     ffi::{OsStr, OsString},
@@ -9,10 +13,9 @@ use tracing::warn;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::CacheConfig;
 
-use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
 use crate::{
-    cli::{EnvMode, LogOrder},
-    turbo_json::UIMode,
+    Error,
+    config::{ConfigurationOptions, EnvMode, LogOrder, ResolvedConfigurationOptions, UIMode},
 };
 
 const TURBO_MAPPING: &[(&str, &str)] = [
@@ -161,10 +164,10 @@ impl ResolvedConfigurationOptions for EnvVars {
             .map_err(Error::InvalidTuiScrollbackLength)?;
 
         // Process ui
-        let ui =
-            self.truthy_value("ui")
-                .flatten()
-                .map(|ui| if ui { UIMode::Tui } else { UIMode::Stream });
+        let ui = self
+            .truthy_value("ui")
+            .flatten()
+            .map(|ui| if ui { UIMode::Tui } else { UIMode::Stream });
 
         let allow_no_package_manager = self.truthy_value("allow_no_package_manager").flatten();
 
@@ -301,9 +304,8 @@ mod test {
     use camino::Utf8PathBuf;
 
     use super::*;
-    use crate::{
-        cli::LogOrder,
-        config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TUI_SCROLLBACK_LENGTH},
+    use crate::config::{
+        DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TUI_SCROLLBACK_LENGTH, LogOrder,
     };
 
     #[test]

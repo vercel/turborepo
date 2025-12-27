@@ -1,8 +1,15 @@
+//! Config file reading utilities
+//!
+//! This module handles reading configuration from config files.
+
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
 use turborepo_dirs::{config_dir, vercel_config_dir};
 
-use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
+use crate::{
+    Error,
+    config::{ConfigurationOptions, ResolvedConfigurationOptions},
+};
 
 pub struct ConfigFile {
     path: AbsoluteSystemPathBuf,

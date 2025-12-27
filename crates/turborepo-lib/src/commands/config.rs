@@ -51,12 +51,12 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli
             enabled: config.enabled(),
             ui: config.ui(),
             package_manager,
-            daemon: config.daemon,
+            daemon: config.daemon(),
             env_mode: config.env_mode(),
             scm_base: config.scm_base(),
             scm_head: config.scm_head(),
             cache_dir: config.cache_dir(),
-            concurrency: config.concurrency.as_deref()
+            concurrency: config.concurrency()
         })?
     );
     Ok(())

@@ -120,7 +120,8 @@ impl WatchClient {
         let signal = get_signal()?;
         let handler = SignalHandler::new(signal);
 
-        let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
+        let standard_config_path =
+            resolve_turbo_config_path(&base.repo_root).map_err(crate::config::Error::from)?;
 
         if matches!(base.opts.run_opts.daemon, Some(false)) {
             warn!("daemon is required for watch, ignoring request to disable daemon");

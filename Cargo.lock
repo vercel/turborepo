@@ -6774,6 +6774,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-config"
+version = "0.1.0"
+dependencies = [
+ "atty",
+ "biome_deserialize 0.6.0",
+ "biome_deserialize_macros 0.6.0",
+ "camino",
+ "clap",
+ "convert_case 0.6.0",
+ "derive_setters",
+ "itertools 0.10.5",
+ "merge",
+ "miette",
+ "pretty_assertions",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "struct_iterable",
+ "thiserror 1.0.63",
+ "tracing",
+ "turbopath",
+ "turborepo-api-client",
+ "turborepo-auth",
+ "turborepo-cache",
+ "turborepo-ci",
+ "turborepo-dirs",
+ "turborepo-errors",
+ "turborepo-repository",
+]
+
+[[package]]
 name = "turborepo-devtools"
 version = "0.1.0"
 dependencies = [
@@ -7025,6 +7056,7 @@ dependencies = [
  "turborepo-boundaries",
  "turborepo-cache",
  "turborepo-ci",
+ "turborepo-config",
  "turborepo-devtools",
  "turborepo-dirs",
  "turborepo-engine",

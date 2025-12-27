@@ -131,6 +131,7 @@ impl CommandBase {
                     .and_then(|args| args.concurrency.clone()),
             )
             .build()
+            .map_err(ConfigError::from)
     }
 
     pub fn opts(&self) -> &Opts {
@@ -150,7 +151,7 @@ impl CommandBase {
         self.repo_root.join_component("package.json")
     }
     fn root_turbo_json_path(&self) -> Result<AbsoluteSystemPathBuf, ConfigError> {
-        resolve_turbo_config_path(&self.repo_root)
+        resolve_turbo_config_path(&self.repo_root).map_err(ConfigError::from)
     }
 
     pub fn api_auth(&self) -> Result<Option<APIAuth>, ConfigError> {

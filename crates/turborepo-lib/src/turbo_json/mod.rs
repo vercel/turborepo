@@ -1,13 +1,11 @@
 use std::{
     collections::{BTreeMap, HashSet},
-    fmt::Display,
     ops::{Deref, DerefMut},
     sync::Arc,
 };
 
 use biome_deserialize_macros::Deserializable;
 use camino::Utf8Path;
-use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_errors::Spanned;
@@ -107,41 +105,8 @@ impl DerefMut for Pipeline {
     }
 }
 
-#[derive(
-    Serialize, Deserialize, Debug, Default, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum,
-)]
-#[serde(rename_all = "camelCase")]
-pub enum UIMode {
-    /// Use the terminal user interface
-    #[default]
-    Tui,
-    /// Use the standard output stream
-    Stream,
-    /// Use the web user interface (experimental)
-    Web,
-}
-
-impl Display for UIMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            UIMode::Tui => write!(f, "tui"),
-            UIMode::Stream => write!(f, "stream"),
-            UIMode::Web => write!(f, "web"),
-        }
-    }
-}
-
-impl UIMode {
-    pub fn use_tui(&self) -> bool {
-        matches!(self, Self::Tui)
-    }
-
-    /// Returns true if the UI mode has a sender,
-    /// i.e. web or tui but not stream
-    pub fn has_sender(&self) -> bool {
-        matches!(self, Self::Tui | Self::Web)
-    }
-}
+// Re-export UIMode from turborepo-config
+pub use turborepo_config::UIMode;
 
 impl TaskOutputs {
     /// Creates TaskOutputs from ProcessedOutputs with resolved paths
