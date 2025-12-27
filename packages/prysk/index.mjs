@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
 import path from "node:path";
 
 // TODO: make this customizable?
@@ -28,17 +28,18 @@ if (!tests) {
   throw new Error("No tests specified");
 }
 
-const flags = [
+const args = [
   "--shell=bash",
-  process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
-  isWindows ? "--dos2unix" : "",
-].join(" ");
+  ...(process.env.PRYSK_INTERACTIVE === "true" ? ["--interactive"] : []),
+  ...(isWindows ? ["--dos2unix"] : []),
+  tests,
+];
 
-const cmd = [getVenvBin("prysk"), flags, tests].join(" ");
-console.log(`Running ${cmd}`);
+const pryskExecutable = getVenvBin("prysk");
+console.log(`Running ${pryskExecutable} ${args.join(" ")}`);
 
 try {
-  execSync(cmd, { stdio: "inherit", env: process.env });
+  execFileSync(pryskExecutable, args, { stdio: "inherit", env: process.env });
 } catch (e) {
   // Swallow the node error stack trace. stdio: inherit should
   // already have the test failures printed. We don't need the Node.js
