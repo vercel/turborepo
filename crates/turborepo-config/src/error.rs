@@ -199,11 +199,14 @@ pub enum Error {
     InvalidPreflight,
     #[error("TURBO_LOG_ORDER should be one of: {0}")]
     InvalidLogOrder(String),
-    // NOTE: TurboJsonParseError variant is defined in turborepo-lib's turbo_json::parser module.
-    // When the turbo_json module is extracted to turborepo-config, this variant should be added:
-    // #[error(transparent)]
-    // #[diagnostic(transparent)]
-    // TurboJsonParseError(#[from] crate::turbo_json::parser::Error),
+    /// Error parsing turbo.json file.
+    ///
+    /// This variant holds a boxed diagnostic error to avoid a circular
+    /// dependency between turborepo-config and turborepo-lib (where the
+    /// actual parser lives).
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TurboJsonParseError(#[from] Box<dyn Diagnostic + Send + Sync + 'static>),
     #[error("found absolute path in `cacheDir`")]
     #[diagnostic(help("If absolute paths are required, use `--cache-dir` or `TURBO_CACHE_DIR`."))]
     AbsoluteCacheDir {

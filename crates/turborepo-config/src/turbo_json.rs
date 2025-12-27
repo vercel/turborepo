@@ -1,11 +1,26 @@
 //! turbo.json reader for configuration values
 //!
-//! This module reads configuration values from turbo.json files.
+//! # Current Implementation Status
 //!
-//! NOTE: This module contains stub types for RawRemoteCacheOptions,
-//! RawRootTurboJson, and RawTurboJson. When the turbo_json module is fully
-//! extracted from turborepo-lib, these stubs will be replaced with the real
-//! types.
+//! **IMPORTANT**: This module currently contains **stub implementations** that
+//! return default/empty configuration values. The real turbo.json parsing
+//! logic lives in `turborepo-lib::turbo_json` and cannot be moved here yet
+//! due to circular dependency constraints.
+//!
+//! ## What This Means
+//!
+//! - `TurboJsonReader::get_configuration_options()` returns default values
+//! - Configuration values like `ui`, `envMode`, `cacheDir`, etc. from
+//!   turbo.json are NOT read by this module
+//! - These values must be provided by the caller through
+//!   `TurborepoConfigBuilder`'s `with_*` methods if turbo.json configuration is
+//!   needed
+//!
+//! ## Future Plan
+//!
+//! When the turbo_json module is fully extracted from turborepo-lib, these
+//! stubs will be replaced with real implementations that parse turbo.json
+//! files.
 
 use camino::Utf8PathBuf;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
