@@ -1,10 +1,10 @@
 use std::io;
 
-use petgraph::{visit::EdgeRef, Graph};
+use petgraph::{Graph, visit::EdgeRef};
 
-use super::{Built, Engine, TaskNode};
+use crate::{Built, Engine, TaskDefinitionInfo, TaskNode};
 
-impl Engine<Built> {
+impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     pub fn dot_graph<W: io::Write>(&self, writer: W, is_single: bool) -> Result<(), io::Error> {
         let display_node = match is_single {
             true => |node: &TaskNode| match node {

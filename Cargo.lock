@@ -6807,6 +6807,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-engine"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "itertools 0.10.5",
+ "miette",
+ "petgraph",
+ "pretty_assertions",
+ "rand 0.8.5",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turborepo-errors",
+ "turborepo-graph-utils",
+ "turborepo-repository",
+ "turborepo-task-id",
+]
+
+[[package]]
 name = "turborepo-env"
 version = "0.1.0"
 dependencies = [
@@ -7008,6 +7027,7 @@ dependencies = [
  "turborepo-ci",
  "turborepo-devtools",
  "turborepo-dirs",
+ "turborepo-engine",
  "turborepo-env",
  "turborepo-errors",
  "turborepo-filewatch",

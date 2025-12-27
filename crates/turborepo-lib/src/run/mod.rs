@@ -44,7 +44,7 @@ use turborepo_ui::{
 pub use crate::run::error::Error;
 use crate::{
     cli::EnvMode,
-    engine::Engine,
+    engine::{Engine, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},

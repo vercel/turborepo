@@ -18,7 +18,7 @@ use crate::{
     commands::CommandBase,
     config::resolve_turbo_config_path,
     daemon::{proto, DaemonConnectorError, DaemonError},
-    engine::TaskNode,
+    engine::{EngineExt, TaskNode},
     get_version, opts,
     run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
     DaemonConnector, DaemonPaths,

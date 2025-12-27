@@ -1,16 +1,15 @@
 use std::{collections::HashMap, io};
 
 use itertools::Itertools;
-use petgraph::{visit::EdgeRef, Graph};
-use rand::{distributions::Uniform, prelude::Distribution, Rng, SeedableRng};
+use petgraph::{Graph, visit::EdgeRef};
+use rand::{Rng, SeedableRng, distributions::Uniform, prelude::Distribution, rngs::SmallRng};
 
-use super::{Built, Engine, TaskNode};
+use crate::{Built, Engine, TaskDefinitionInfo, TaskNode};
 
 struct CapitalLetters;
 
 impl Distribution<char> for CapitalLetters {
     fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> char {
-        const RANGE: u32 = 26;
         const GEN_ASCII_STR_CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
         let range = Uniform::new(0u32, GEN_ASCII_STR_CHARSET.len() as u32);
         char::from_u32(GEN_ASCII_STR_CHARSET[range.sample(rng) as usize] as u32)
@@ -22,7 +21,7 @@ fn generate_id<R: Rng>(rng: &mut R) -> String {
     CapitalLetters.sample_iter(rng).take(4).join("")
 }
 
-impl Engine<Built> {
+impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     pub fn mermaid_graph<W: io::Write>(&self, writer: W, is_single: bool) -> Result<(), io::Error> {
         render_graph(writer, &self.task_graph, is_single)
     }
@@ -37,7 +36,7 @@ fn render_graph<W: io::Write>(
     // Pick a constant seed so that the same graph generates the same nodes every
     // time. This is not a security-sensitive operation, it's just aliases for
     // the graph nodes.
-    let mut rng = rand::rngs::SmallRng::seed_from_u64(4u64);
+    let mut rng = SmallRng::seed_from_u64(4u64);
 
     let display_node = match is_single {
         true => |node: &TaskNode| match node {
