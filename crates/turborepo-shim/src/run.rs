@@ -121,7 +121,8 @@ pub enum Error {
 
     /// CLI error from the runner - stored as a miette::Report to preserve the
     /// full diagnostic chain (related errors, source code, etc.)
-    #[error("{0:?}")]
+    #[error("{0}")]
+    #[diagnostic(transparent)]
     Cli(miette::Report),
 }
 
