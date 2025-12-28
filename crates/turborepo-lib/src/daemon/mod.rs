@@ -3,6 +3,10 @@
 //! This module re-exports types from the `turborepo_daemon` crate for backward
 //! compatibility. New code should depend on `turborepo_daemon` directly.
 
+// These re-exports are intentionally unused within this crate - they exist
+// only for backward compatibility with external consumers.
+#![allow(unused_imports)]
+
 #[deprecated(since = "2.4.0", note = "use `turborepo_daemon::proto` instead")]
 pub use turborepo_daemon::proto;
 #[deprecated(since = "2.4.0", note = "use `turborepo_daemon::CloseReason` instead")]
@@ -33,8 +37,3 @@ pub use turborepo_daemon::Paths;
     note = "use `turborepo_daemon::TurboGrpcService` instead"
 )]
 pub use turborepo_daemon::TurboGrpcService;
-
-// Keep endpoint accessible for internal use
-pub(crate) mod endpoint {
-    pub use turborepo_daemon::endpoint::*;
-}
