@@ -1,11 +1,10 @@
-use std::{backtrace::Backtrace, env};
+use std::env;
 
 use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
+use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_ui::ColorConfig;
-
-use super::Error;
 
 // all arguments that result in a stdout that much be directly parsable and
 // should not be paired with additional output (from the update notifier for
@@ -22,12 +21,38 @@ static TURBO_PURE_OUTPUT_ARGS: [&str; 6] = [
 static TURBO_SKIP_NOTIFIER_ARGS: [&str; 5] =
     ["--help", "--h", "--version", "--v", "--no-update-notifier"];
 
-#[derive(Debug, thiserror::Error, Diagnostic)]
+/// Errors that can occur during shim argument parsing.
+#[derive(Debug, Error, Diagnostic)]
+pub enum Error {
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    MultipleCwd(Box<MultipleCwd>),
+    #[error("No value assigned to `--cwd` flag.")]
+    #[diagnostic(code(turbo::shim::empty_cwd))]
+    EmptyCwd {
+        #[source_code]
+        args_string: String,
+        #[label = "Requires a path to be passed after it"]
+        flag_range: SourceSpan,
+    },
+    #[error("No value assigned to `--root-turbo-json` flag.")]
+    #[diagnostic(code(turbo::shim::empty_root_turbo_json))]
+    EmptyRootTurboJson {
+        #[source_code]
+        args_string: String,
+        #[label = "Requires a path to be passed after it"]
+        flag_range: SourceSpan,
+    },
+    #[error("The {flag} flag is not supported. {suggestion}")]
+    UnsupportedFlag { flag: String, suggestion: String },
+    #[error(transparent)]
+    Path(#[from] turbopath::PathError),
+}
+
+#[derive(Debug, Error, Diagnostic)]
 #[error("cannot have multiple `--cwd` flags in command")]
 #[diagnostic(code(turbo::shim::multiple_cwd))]
 pub struct MultipleCwd {
-    #[backtrace]
-    backtrace: Backtrace,
     #[source_code]
     args_string: String,
     #[label("first flag declared here")]
@@ -166,7 +191,6 @@ impl ShimArgs {
                 Self::get_spans_in_args_string(vec![idx], env::args().skip(1));
 
             return Err(Error::EmptyCwd {
-                backtrace: Backtrace::capture(),
                 args_string,
                 flag_range: spans[0],
             });
@@ -177,7 +201,6 @@ impl ShimArgs {
                 Self::get_spans_in_args_string(vec![idx], env::args().skip(1));
 
             return Err(Error::EmptyRootTurboJson {
-                backtrace: Backtrace::capture(),
                 args_string,
                 flag_range: spans[0],
             });
@@ -191,7 +214,6 @@ impl ShimArgs {
 
             let mut flags = indices.into_iter();
             return Err(Error::MultipleCwd(Box::new(MultipleCwd {
-                backtrace: Backtrace::capture(),
                 args_string,
                 flag1: flags.next(),
                 flag2: flags.next(),

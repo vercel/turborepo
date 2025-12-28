@@ -11,7 +11,7 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::package_json::PackageJson;
 
-use super::TurboState;
+use crate::TurboState;
 
 /// Structure that holds information on an existing local turbo install
 #[derive(Debug)]

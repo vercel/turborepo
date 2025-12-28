@@ -86,7 +86,7 @@ mod test {
         let lockfile = root.join_component("package-lock.json");
         lockfile
             .create_with_contents(include_bytes!(
-                "../../fixtures/local_config/turbov2.package-lock.json"
+                "../fixtures/local_config/turbov2.package-lock.json"
             ))
             .unwrap();
 
@@ -111,7 +111,7 @@ mod test {
         let lockfile = root.join_component("package-lock.json");
         lockfile
             .create_with_contents(include_bytes!(
-                "../../fixtures/local_config/turbov2.package-lock.json"
+                "../fixtures/local_config/turbov2.package-lock.json"
             ))
             .unwrap();
 
@@ -177,7 +177,7 @@ mod test {
         };
         let turbo_json = root.join_component("turbo.json");
         turbo_json
-            .create_with_contents(include_bytes!("../../fixtures/local_config/turbo.v1.json"))
+            .create_with_contents(include_bytes!("../fixtures/local_config/turbo.v1.json"))
             .unwrap();
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None);
     }
@@ -194,7 +194,7 @@ mod test {
         };
         let turbo_json = root.join_component("turbo.json");
         turbo_json
-            .create_with_contents(include_bytes!("../../fixtures/local_config/turbo.v2.json"))
+            .create_with_contents(include_bytes!("../fixtures/local_config/turbo.v2.json"))
             .unwrap();
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None,);
     }

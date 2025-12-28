@@ -1,0 +1,60 @@
+[package]
+name = "turborepo-shim"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Shim for invoking the correct turbo binary version in Turborepo"
+
+[lints]
+workspace = true
+
+[dependencies]
+# Turbo workspace crates
+turbo-updater = { workspace = true }
+turbopath = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-ui = { workspace = true }
+
+# Error handling
+miette = { workspace = true }
+thiserror = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Serialization/Parsing
+semver = { workspace = true }
+serde = { workspace = true }
+serde_yaml = { workspace = true }
+
+# Path utilities
+camino = { workspace = true }
+dunce = { workspace = true }
+
+# Process management
+shared_child = "1.0.0"
+which = { workspace = true }
+
+# Collections/Iterators
+itertools = { workspace = true }
+
+# Display
+const_format = "0.2.32"
+tiny-gradient = { workspace = true }
+
+# Signal handling (for spawn_child)
+ctrlc = { version = "3.4.0", features = ["termination"] }
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+crossterm = "0.27"
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+test-case = { workspace = true }
