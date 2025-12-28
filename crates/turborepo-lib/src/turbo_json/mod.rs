@@ -13,12 +13,12 @@ use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
 use turborepo_task_id::{TaskId, TaskName};
+use turborepo_types::{EnvMode, TaskInputs, TaskOutputs};
 use turborepo_unescape::UnescapedString;
 
 use crate::{
-    cli::EnvMode,
     config::{Error, InvalidEnvPrefixError},
-    task_graph::{TaskDefinition, TaskInputs, TaskOutputs},
+    task_graph::TaskDefinition,
 };
 
 mod extend;
@@ -172,12 +172,22 @@ fn task_outputs_from_processed(
     })
 }
 
-impl TaskInputs {
+/// Extension trait for creating TaskInputs from ProcessedInputs.
+/// This is defined here rather than on the type itself to allow TaskInputs
+/// to live in turborepo-types without depending on turbo_json types.
+trait TaskInputsFromProcessed {
     /// Creates TaskInputs from ProcessedInputs with resolved paths
     fn from_processed(
         inputs: processed::ProcessedInputs,
         turbo_root_path: &RelativeUnixPath,
-    ) -> Result<Self, Error> {
+    ) -> Result<TaskInputs, Error>;
+}
+
+impl TaskInputsFromProcessed for TaskInputs {
+    fn from_processed(
+        inputs: processed::ProcessedInputs,
+        turbo_root_path: &RelativeUnixPath,
+    ) -> Result<TaskInputs, Error> {
         // Resolve all globs with the turbo_root path
         // Absolute path validation was already done during ProcessedGlob creation
         Ok(TaskInputs {

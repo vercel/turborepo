@@ -6,7 +6,6 @@ use std::{
     io, mem, process,
 };
 
-use biome_deserialize_macros::Deserializable;
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
     builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
@@ -48,44 +47,13 @@ const DEFAULT_NUM_WORKERS: u32 = 10;
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Deserializable, Serialize)]
-pub enum OutputLogsMode {
-    #[serde(rename = "full")]
-    #[default]
-    Full,
-    #[serde(rename = "none")]
-    None,
-    #[serde(rename = "hash-only")]
-    HashOnly,
-    #[serde(rename = "new-only")]
-    NewOnly,
-    #[serde(rename = "errors-only")]
-    ErrorsOnly,
-}
-
-impl Display for OutputLogsMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            OutputLogsMode::Full => "full",
-            OutputLogsMode::None => "none",
-            OutputLogsMode::HashOnly => "hash-only",
-            OutputLogsMode::NewOnly => "new-only",
-            OutputLogsMode::ErrorsOnly => "errors-only",
-        })
-    }
-}
-
-impl From<OutputLogsMode> for turborepo_ui::tui::event::OutputLogs {
-    fn from(value: OutputLogsMode) -> Self {
-        match value {
-            OutputLogsMode::Full => turborepo_ui::tui::event::OutputLogs::Full,
-            OutputLogsMode::None => turborepo_ui::tui::event::OutputLogs::None,
-            OutputLogsMode::HashOnly => turborepo_ui::tui::event::OutputLogs::HashOnly,
-            OutputLogsMode::NewOnly => turborepo_ui::tui::event::OutputLogs::NewOnly,
-            OutputLogsMode::ErrorsOnly => turborepo_ui::tui::event::OutputLogs::ErrorsOnly,
-        }
-    }
-}
+// Re-export OutputLogsMode from turborepo-types for backward compatibility.
+// New code should import directly from `turborepo_types::OutputLogsMode`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `OutputLogsMode` directly from `turborepo_types` instead"
+)]
+pub use turborepo_types::OutputLogsMode;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
 pub enum LogOrder {
