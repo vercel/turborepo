@@ -352,7 +352,7 @@ fn find_all_paths<'a>(
 mod test {
     use pretty_assertions::assert_str_eq;
 
-    use crate::rewrite_json::{set_path, unset_path};
+    use crate::{set_path, unset_path};
 
     macro_rules! set_tests {
         ($($name:ident: $value:expr,)*) => {

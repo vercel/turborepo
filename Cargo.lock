@@ -6927,6 +6927,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-json-rewrite"
+version = "0.1.0"
+dependencies = [
+ "jsonc-parser 0.21.0",
+ "pretty_assertions",
+ "thiserror 1.0.63",
+]
+
+[[package]]
 name = "turborepo-lib"
 version = "0.1.0"
 dependencies = [
@@ -7045,6 +7054,7 @@ dependencies = [
  "turborepo-fs",
  "turborepo-gitignore",
  "turborepo-graph-utils",
+ "turborepo-json-rewrite",
  "turborepo-lockfiles",
  "turborepo-microfrontends",
  "turborepo-microfrontends-proxy",
