@@ -1363,18 +1363,18 @@ dependencies = [
 
 [[package]]
 name = "const_format"
-version = "0.2.30"
+version = "0.2.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7309d9b4d3d2c0641e018d449232f2e28f1b22933c137f157d3dbc14228b8c0e"
+checksum = "7faa7469a93a566e9ccc1c73fe783b4a65c274c5ace346038dca9c39fe0030ad"
 dependencies = [
  "const_format_proc_macros",
 ]
 
 [[package]]
 name = "const_format_proc_macros"
-version = "0.2.29"
+version = "0.2.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d897f47bf7270cf70d370f8f98c1abb6d2d4cf60a6845d30e05bfb90c6568650"
+checksum = "1d57c2eccfb16dbac1f4e61e206105db5820c9d26c3c472bc17c774259ef7744"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -7075,6 +7075,7 @@ dependencies = [
  "turborepo-process",
  "turborepo-repository",
  "turborepo-scm",
+ "turborepo-shim",
  "turborepo-signals",
  "turborepo-task-id",
  "turborepo-telemetry",
@@ -7269,6 +7270,36 @@ dependencies = [
  "turborepo-ci",
  "turborepo-telemetry",
  "wax",
+ "which",
+]
+
+[[package]]
+name = "turborepo-shim"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "const_format",
+ "crossterm 0.27.0",
+ "ctrlc",
+ "dunce",
+ "itertools 0.10.5",
+ "libc",
+ "miette",
+ "pretty_assertions",
+ "semver 1.0.23",
+ "serde",
+ "serde_yaml",
+ "shared_child",
+ "tempfile",
+ "test-case",
+ "thiserror 1.0.63",
+ "tiny-gradient",
+ "tokio",
+ "tracing",
+ "turbo-updater",
+ "turbopath",
+ "turborepo-repository",
+ "turborepo-ui",
  "which",
 ]
 
