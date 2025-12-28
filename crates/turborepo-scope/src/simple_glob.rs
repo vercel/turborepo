@@ -1,3 +1,8 @@
+//! Simple glob matching for package names.
+//!
+//! This module provides glob matching that works on package names
+//! rather than file paths.
+
 use regex::Regex;
 
 /// A simple glob-like pattern that supports a subset of

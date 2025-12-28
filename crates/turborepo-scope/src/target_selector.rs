@@ -1,10 +1,14 @@
+//! Target selector parsing.
+//!
+//! This module parses filter strings into structured selectors.
+
 use std::str::FromStr;
 
 use regex::Regex;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct GitRange {
     pub from_ref: Option<String>,
     pub to_ref: Option<String>,
@@ -18,7 +22,8 @@ pub struct GitRange {
     pub merge_base: bool,
 }
 
-#[derive(Debug, Default, PartialEq)]
+/// A parsed target selector from a filter string.
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct TargetSelector {
     pub include_dependencies: bool,
     pub match_dependencies: bool,
@@ -195,6 +200,7 @@ impl FromStr for TargetSelector {
     }
 }
 
+/// Errors when parsing target selectors.
 #[derive(Debug, Error, PartialEq)]
 pub enum InvalidSelectorError {
     #[error("cannot use match dependencies without specifying either a directory or package")]
@@ -243,8 +249,7 @@ mod test {
     use test_case::test_case;
     use turbopath::AnchoredSystemPathBuf;
 
-    use super::TargetSelector;
-    use crate::run::scope::target_selector::GitRange;
+    use super::{GitRange, TargetSelector};
 
     #[test_case("foo", TargetSelector { name_pattern: "foo".to_string(), raw: "foo".to_string(), ..Default::default() }; "foo")]
     #[test_case("foo...", TargetSelector { name_pattern: "foo".to_string(), raw: "foo...".to_string(), include_dependencies: true, ..Default::default() }; "foo dot dot dot")]

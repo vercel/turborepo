@@ -7115,6 +7115,7 @@ dependencies = [
  "turborepo-process",
  "turborepo-repository",
  "turborepo-scm",
+ "turborepo-scope",
  "turborepo-shim",
  "turborepo-signals",
  "turborepo-task-id",
@@ -7311,6 +7312,27 @@ dependencies = [
  "turborepo-telemetry",
  "wax",
  "which",
+]
+
+[[package]]
+name = "turborepo-scope"
+version = "0.1.0"
+dependencies = [
+ "miette",
+ "path-clean",
+ "pretty_assertions",
+ "regex",
+ "serde",
+ "tempfile",
+ "test-case",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-errors",
+ "turborepo-repository",
+ "turborepo-scm",
+ "wax",
 ]
 
 [[package]]

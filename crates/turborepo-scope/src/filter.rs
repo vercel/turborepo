@@ -1,3 +1,7 @@
+//! Filter pattern parsing and resolution.
+//!
+//! This module handles --filter flag parsing and package filtering.
+
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -14,13 +18,14 @@ use turborepo_repository::{
 use turborepo_scm::SCM;
 use wax::Program;
 
-use super::{
-    change_detector::GitChangeDetector,
+use crate::{
+    change_detector::{GitChangeDetector, ScopeChangeDetector},
     simple_glob::{Match, SimpleGlob},
     target_selector::{GitRange, InvalidSelectorError, TargetSelector},
+    ScopeOpts,
 };
-use crate::{run::scope::change_detector::ScopeChangeDetector, turbo_json::TurboJson};
 
+/// Package inference for directory-based filtering.
 pub struct PackageInference {
     package_name: Option<String>,
     directory_root: AnchoredSystemPathBuf,
@@ -99,6 +104,7 @@ impl PackageInference {
     }
 }
 
+/// Resolves filter patterns to package sets.
 pub struct FilterResolver<'a, T: GitChangeDetector> {
     pkg_graph: &'a PackageGraph,
     turbo_root: &'a AbsoluteSystemPath,
@@ -108,22 +114,22 @@ pub struct FilterResolver<'a, T: GitChangeDetector> {
 }
 
 impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
-    pub(crate) fn new(
-        opts: &'a super::ScopeOpts,
+    pub fn new(
+        opts: &'a ScopeOpts,
         pkg_graph: &'a PackageGraph,
         turbo_root: &'a AbsoluteSystemPath,
         inference: Option<PackageInference>,
         scm: &'a SCM,
-        root_turbo_json: &'a TurboJson,
+        global_deps: &'a [String],
     ) -> Result<Self, ResolutionError> {
-        let global_deps = opts
+        let global_deps_iter = opts
             .global_deps
             .iter()
             .map(|s| s.as_str())
-            .chain(root_turbo_json.global_deps.iter().map(|s| s.as_str()));
+            .chain(global_deps.iter().map(|s| s.as_str()));
 
         let change_detector =
-            ScopeChangeDetector::new(turbo_root, scm, pkg_graph, global_deps, vec![])?;
+            ScopeChangeDetector::new(turbo_root, scm, pkg_graph, global_deps_iter, vec![])?;
 
         Ok(Self::new_with_change_detector(
             pkg_graph,
@@ -136,7 +142,7 @@ impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
 }
 
 impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
-    pub(crate) fn new_with_change_detector(
+    pub fn new_with_change_detector(
         pkg_graph: &'a PackageGraph,
         turbo_root: &'a AbsoluteSystemPath,
         inference: Option<PackageInference>,
@@ -159,7 +165,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     /// in the workspace will be returned.
     ///
     /// It applies the following rules:
-    pub(crate) fn resolve(
+    pub fn resolve(
         &self,
         affected: &Option<(Option<String>, Option<String>)>,
         patterns: &[String],
@@ -672,6 +678,7 @@ fn match_package_names(
     Ok(packages)
 }
 
+/// Errors that can occur during scope resolution.
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum ResolutionError {
     #[error("missing info for package")]
@@ -722,9 +729,11 @@ mod test {
         package_manager::PackageManager,
     };
 
-    use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::{
-        change_detector::GitChangeDetector, target_selector::GitRange, ResolutionError,
+    use super::{FilterResolver, PackageInference};
+    use crate::{
+        change_detector::GitChangeDetector,
+        filter::ResolutionError,
+        target_selector::{GitRange, TargetSelector},
     };
 
     fn get_name(name: &str) -> (Option<&str>, &str) {

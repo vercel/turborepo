@@ -1,3 +1,8 @@
+//! Change detection for affected packages.
+//!
+//! This module contains logic for detecting which packages have changed
+//! based on git diffs.
+
 use std::collections::{HashMap, HashSet};
 
 use tracing::debug;
@@ -11,7 +16,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::{git::InvalidRange, SCM};
 
-use crate::run::scope::ResolutionError;
+use crate::ResolutionError;
 
 /// Given two git refs, determine which packages have changed between them.
 pub trait GitChangeDetector {
@@ -25,6 +30,7 @@ pub trait GitChangeDetector {
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError>;
 }
 
+/// Detects changed packages based on SCM state.
 pub struct ScopeChangeDetector<'a> {
     turbo_root: &'a AbsoluteSystemPath,
     change_mapper: ChangeMapper<'a, GlobalDepsPackageChangeMapper<'a>>,
