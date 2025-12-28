@@ -6,6 +6,14 @@ use globwalk::{GlobError, ValidatedGlob};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_task_id::{TaskId, TaskName};
+use turborepo_types::EnvMode;
+// Re-export TaskInputs from turborepo-types for backward compatibility.
+// New code should import directly from `turborepo_types::TaskInputs`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `TaskInputs` directly from `turborepo_types` instead"
+)]
+pub use turborepo_types::TaskInputs;
 // Re-export TaskOutputs from turborepo-types for backward compatibility.
 // New code should import directly from `turborepo_types::TaskOutputs`.
 #[deprecated(
@@ -15,7 +23,7 @@ use turborepo_task_id::{TaskId, TaskName};
 pub use turborepo_types::TaskOutputs;
 pub use visitor::{Error as VisitorError, Visitor};
 
-use crate::cli::{EnvMode, OutputLogsMode};
+use crate::cli::OutputLogsMode;
 
 // Constructed from a RawTaskDefinition
 #[derive(Debug, PartialEq, Clone, Eq)]
@@ -68,14 +76,6 @@ pub struct TaskDefinition {
     // It will also not affect the task's hash aside from the definition getting folded into the
     // hash.
     pub with: Option<Vec<Spanned<TaskName<'static>>>>,
-}
-
-// Structure for holding the inputs for a task
-#[derive(Debug, PartialEq, Clone, Eq, Default)]
-pub struct TaskInputs {
-    pub globs: Vec<String>,
-    // Set when $TURBO_DEFAULT$ is in inputs
-    pub default: bool,
 }
 
 impl Default for TaskDefinition {
@@ -157,20 +157,6 @@ impl TaskDefinition {
         }
 
         repo_relative_globs
-    }
-}
-
-impl TaskInputs {
-    pub fn new(globs: Vec<String>) -> Self {
-        Self {
-            globs,
-            default: false,
-        }
-    }
-
-    pub fn with_default(mut self, default: bool) -> Self {
-        self.default = default;
-        self
     }
 }
 
