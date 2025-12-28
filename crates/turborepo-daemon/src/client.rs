@@ -187,6 +187,7 @@ impl DaemonClient<DaemonConnector> {
     }
 }
 
+#[cfg(test)]
 fn format_repo_relative_glob(glob: &str) -> String {
     #[cfg(windows)]
     let glob = {

@@ -94,6 +94,7 @@ impl<W: PackageChangesWatcher + 'static> Clone for FileWatching<W> {
 #[derive(Debug, Error)]
 enum RpcError {
     #[error("deadline exceeded")]
+    #[allow(dead_code)]
     DeadlineExceeded,
     #[error("invalid relative system path {0}: {1}")]
     InvalidAnchoredPath(String, PathError),
@@ -102,6 +103,7 @@ enum RpcError {
     #[error("globwatching failed: {0}")]
     GlobWatching(#[from] GlobWatcherError),
     #[error("filewatching unavailable")]
+    #[allow(dead_code)]
     NoFileWatching,
     #[error("file hashing failed: {0}")]
     FileHashing(#[from] HashWatcherError),
