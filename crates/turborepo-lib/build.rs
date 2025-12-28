@@ -6,10 +6,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &["./src/daemon/proto/turbod.proto"],
             &["./src/daemon/proto"],
         );
-    let capnpc_result = capnpc::CompilerCommand::new()
-        .file("./src/hash/proto.capnp")
-        .default_parent_module(vec!["hash".to_string()])
-        .run();
 
     let invocation = std::env::var("RUSTC_WRAPPER").unwrap_or_default();
     if invocation.ends_with("rust-analyzer") {
@@ -17,14 +13,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("cargo:warning=tonic_build failed, but continuing with rust-analyzer");
         }
 
-        if capnpc_result.is_err() {
-            println!("cargo:warning=capnpc failed, but continuing with rust-analyzer");
-        }
-
         return Ok(());
     } else {
         tonic_build_result.expect("tonic_build command");
-        capnpc_result.expect("schema compiler command");
     }
 
     Ok(())

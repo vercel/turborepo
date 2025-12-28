@@ -24,7 +24,7 @@ use crate::{
     daemon::{DaemonClient, DaemonConnector},
     hash::{FileHashes, TurboHash},
     opts::RunCacheOpts,
-    task_graph::{TaskDefinition, TaskOutputs},
+    task_graph::{TaskDefinition, TaskOutputs, TaskOutputsExt},
 };
 
 #[derive(Debug, thiserror::Error)]

@@ -6927,6 +6927,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-hash"
+version = "0.1.0"
+dependencies = [
+ "capnp 0.17.2",
+ "capnpc",
+ "hex",
+ "test-case",
+ "turbopath",
+ "turborepo-lockfiles",
+ "turborepo-types",
+ "twox-hash",
+]
+
+[[package]]
 name = "turborepo-json-rewrite"
 version = "0.1.0"
 dependencies = [
@@ -6954,7 +6968,6 @@ dependencies = [
  "biome_json_syntax",
  "camino",
  "capnp 0.17.2",
- "capnpc",
  "chrono",
  "clap",
  "clap_complete",
@@ -7054,6 +7067,7 @@ dependencies = [
  "turborepo-fs",
  "turborepo-gitignore",
  "turborepo-graph-utils",
+ "turborepo-hash",
  "turborepo-json-rewrite",
  "turborepo-lockfiles",
  "turborepo-microfrontends",
@@ -7064,6 +7078,7 @@ dependencies = [
  "turborepo-signals",
  "turborepo-task-id",
  "turborepo-telemetry",
+ "turborepo-types",
  "turborepo-ui",
  "turborepo-unescape",
  "turborepo-vercel-api",
@@ -7303,6 +7318,16 @@ dependencies = [
  "turborepo-vercel-api-mock",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "turborepo-types"
+version = "0.1.0"
+dependencies = [
+ "biome_deserialize 0.6.0",
+ "biome_deserialize_macros 0.6.0",
+ "clap",
+ "serde",
 ]
 
 [[package]]

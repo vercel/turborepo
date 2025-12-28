@@ -131,24 +131,13 @@ impl Display for DryRunMode {
     }
 }
 
-#[derive(
-    Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq, Deserializable,
+// Re-export EnvMode from turborepo-types for backward compatibility.
+// New code should import directly from `turborepo_types::EnvMode`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `EnvMode` directly from `turborepo_types` instead"
 )]
-#[serde(rename_all = "lowercase")]
-pub enum EnvMode {
-    Loose,
-    #[default]
-    Strict,
-}
-
-impl fmt::Display for EnvMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            EnvMode::Loose => "loose",
-            EnvMode::Strict => "strict",
-        })
-    }
-}
+pub use turborepo_types::EnvMode;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, ValueEnum, Serialize)]
 #[serde(rename_all = "lowercase")]
