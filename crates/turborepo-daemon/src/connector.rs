@@ -16,7 +16,7 @@ use tracing::debug;
 use turbopath::AbsoluteSystemPath;
 
 use super::{proto::turbod_client::TurbodClient, DaemonClient, Paths};
-use crate::daemon::DaemonError;
+use crate::DaemonError;
 
 #[derive(Error, Debug)]
 pub enum DaemonConnectorError {
@@ -434,7 +434,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
-    use crate::daemon::{
+    use crate::{
         default_timeout_layer::DefaultTimeoutLayer,
         proto::{self, PackageChangesRequest},
     };

@@ -10,6 +10,9 @@ use notify::Event;
 use radix_trie::{Trie, TrieCommon};
 use tokio::sync::{broadcast, oneshot, Mutex};
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf};
+// Re-export the PackageChangeEvent from turborepo-daemon
+pub use turborepo_daemon::PackageChangeEvent;
+use turborepo_daemon::PackageChangesWatcher as PackageChangesWatcherTrait;
 use turborepo_filewatch::{
     hash_watcher::{HashSpec, HashWatcher, InputGlobs},
     NotifyError, OptionalWatch,
@@ -27,12 +30,6 @@ use crate::{
     config::{resolve_turbo_config_path, CONFIG_FILE, CONFIG_FILE_JSONC},
     turbo_json::{TurboJson, TurboJsonLoader, TurboJsonReader},
 };
-
-#[derive(Clone)]
-pub enum PackageChangeEvent {
-    Package { name: PackageName },
-    Rediscover,
-}
 
 /// Watches for changes to a package's files and directories.
 pub struct PackageChangesWatcher {
@@ -70,8 +67,10 @@ impl PackageChangesWatcher {
             package_change_events_rx,
         }
     }
+}
 
-    pub async fn package_changes(&self) -> broadcast::Receiver<PackageChangeEvent> {
+impl PackageChangesWatcherTrait for PackageChangesWatcher {
+    async fn package_changes(&self) -> broadcast::Receiver<PackageChangeEvent> {
         self.package_change_events_rx.resubscribe()
     }
 }

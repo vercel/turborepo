@@ -6774,6 +6774,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-daemon"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-io",
+ "async-stream",
+ "command-group",
+ "futures",
+ "futures-core",
+ "globwalk",
+ "hex",
+ "miette",
+ "notify",
+ "pidlock",
+ "prost 0.12.3",
+ "semver 1.0.23",
+ "serde_json",
+ "sha2",
+ "sysinfo",
+ "tempfile",
+ "test-case",
+ "thiserror 1.0.63",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-build",
+ "tower 0.4.13",
+ "tracing",
+ "tracing-test",
+ "turbopath",
+ "turborepo-filewatch",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-types",
+ "uds_windows",
+]
+
+[[package]]
 name = "turborepo-devtools"
 version = "0.1.0"
 dependencies = [
@@ -7039,7 +7079,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tonic",
- "tonic-build",
  "tower 0.4.13",
  "tower-http",
  "tracing",
@@ -7056,6 +7095,7 @@ dependencies = [
  "turborepo-boundaries",
  "turborepo-cache",
  "turborepo-ci",
+ "turborepo-daemon",
  "turborepo-devtools",
  "turborepo-dirs",
  "turborepo-engine",

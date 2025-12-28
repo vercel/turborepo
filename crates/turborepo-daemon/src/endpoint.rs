@@ -185,8 +185,9 @@ mod test {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use super::listen_socket;
-    use crate::daemon::{endpoint::SocketOpenError, Paths};
+    use crate::{endpoint::SocketOpenError, Paths};
 
+    #[allow(dead_code)]
     fn pid_path(daemon_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
         daemon_root.join_component("turbod.pid")
     }

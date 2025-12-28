@@ -6,6 +6,7 @@ use thiserror::Error;
 use tonic::{Code, IntoRequest, Status};
 use tracing::info;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
+use turborepo_types::TaskInputs;
 
 use super::{
     connector::{DaemonConnector, DaemonConnectorError},
@@ -13,10 +14,7 @@ use super::{
     proto::{DiscoverPackagesResponse, GetFileHashesResponse},
     Paths,
 };
-use crate::{
-    daemon::proto::{self, PackageChangeEvent},
-    task_graph::TaskInputs,
-};
+use crate::proto::{self, PackageChangeEvent};
 
 #[derive(Debug, Clone)]
 pub struct DaemonClient<T> {
@@ -189,6 +187,7 @@ impl DaemonClient<DaemonConnector> {
     }
 }
 
+#[cfg(test)]
 fn format_repo_relative_glob(glob: &str) -> String {
     #[cfg(windows)]
     let glob = {
@@ -269,7 +268,7 @@ impl From<Status> for DaemonError {
 mod test {
     use std::path::MAIN_SEPARATOR_STR;
 
-    use crate::daemon::client::format_repo_relative_glob;
+    use crate::client::format_repo_relative_glob;
 
     #[test]
     fn test_format_repo_relative_glob() {

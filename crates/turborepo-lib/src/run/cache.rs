@@ -13,6 +13,7 @@ use turbopath::{
 use turborepo_cache::{
     http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheSource,
 };
+use turborepo_daemon::{DaemonClient, DaemonConnector};
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
@@ -21,7 +22,6 @@ use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, ColorSelector, L
 
 use crate::{
     cli::OutputLogsMode,
-    daemon::{DaemonClient, DaemonConnector},
     hash::{FileHashes, TurboHash},
     opts::RunCacheOpts,
     task_graph::{TaskDefinition, TaskOutputs, TaskOutputsExt},
@@ -38,7 +38,7 @@ pub enum Error {
     #[error("Invalid globwalk pattern: {0}")]
     Glob(#[from] globwalk::GlobError),
     #[error("Error with daemon: {0}")]
-    Daemon(#[from] crate::daemon::DaemonError),
+    Daemon(#[from] turborepo_daemon::DaemonError),
     #[error("No connection to daemon")]
     NoDaemon,
     #[error(transparent)]

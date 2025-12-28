@@ -36,13 +36,10 @@ use turborepo_filewatch::{
 use turborepo_repository::package_manager;
 use turborepo_scm::SCM;
 
-use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
+use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto, PackageChangeEvent};
 use crate::{
-    daemon::{
-        bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
-        endpoint::listen_socket, Paths,
-    },
-    package_changes_watcher::{PackageChangeEvent, PackageChangesWatcher},
+    bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
+    endpoint::listen_socket, PackageChangesWatcher, PackageChangesWatcherArgs, Paths,
 };
 
 #[derive(Debug)]
@@ -59,20 +56,45 @@ pub enum CloseReason {
 /// We may need to pass out references to a subset of these, so
 /// we'll make them public Arcs. Eventually we can stabilize on
 /// a general API and close this up.
-#[derive(Clone)]
-pub struct FileWatching {
+pub struct FileWatching<W: PackageChangesWatcher + 'static> {
     repo_root: AbsoluteSystemPathBuf,
     watcher: Arc<FileSystemWatcher>,
     pub glob_watcher: Arc<GlobWatcher>,
     pub package_watcher: Arc<PackageWatcher>,
-    pub package_changes_watcher: OnceLock<Arc<PackageChangesWatcher>>,
+    pub package_changes_watcher: OnceLock<Arc<W>>,
     pub hash_watcher: Arc<HashWatcher>,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    package_changes_watcher_factory: Arc<dyn Fn(PackageChangesWatcherArgs) -> W + Send + Sync>,
+}
+
+impl<W: PackageChangesWatcher + 'static> Clone for FileWatching<W> {
+    fn clone(&self) -> Self {
+        // Clone the OnceLock by getting its value (if set) and setting it on the new
+        // lock This preserves the original behavior where clones share the same
+        // watcher Arc
+        let new_package_changes_watcher = OnceLock::new();
+        if let Some(watcher) = self.package_changes_watcher.get() {
+            // The Arc is cloned, so both instances share the same underlying watcher
+            let _ = new_package_changes_watcher.set(Arc::clone(watcher));
+        }
+
+        Self {
+            repo_root: self.repo_root.clone(),
+            watcher: self.watcher.clone(),
+            glob_watcher: self.glob_watcher.clone(),
+            package_watcher: self.package_watcher.clone(),
+            package_changes_watcher: new_package_changes_watcher,
+            hash_watcher: self.hash_watcher.clone(),
+            custom_turbo_json_path: self.custom_turbo_json_path.clone(),
+            package_changes_watcher_factory: self.package_changes_watcher_factory.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Error)]
 enum RpcError {
     #[error("deadline exceeded")]
+    #[allow(dead_code)]
     DeadlineExceeded,
     #[error("invalid relative system path {0}: {1}")]
     InvalidAnchoredPath(String, PathError),
@@ -81,6 +103,7 @@ enum RpcError {
     #[error("globwatching failed: {0}")]
     GlobWatching(#[from] GlobWatcherError),
     #[error("filewatching unavailable")]
+    #[allow(dead_code)]
     NoFileWatching,
     #[error("file hashing failed: {0}")]
     FileHashing(#[from] HashWatcherError),
@@ -105,17 +128,21 @@ impl From<RpcError> for tonic::Status {
     }
 }
 
-impl FileWatching {
+impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
     /// This function is called in the constructor for the `TurboGrpcService`
     /// and should defer ALL heavy computation to the background, making use
     /// of `OptionalWatch` to ensure that the server can start up without
     /// waiting for the filewatcher to be ready. Using `OptionalWatch`,
     /// dependent services can wait for resources they need to become
     /// available, and the server can start up without waiting for them.
-    pub fn new(
+    pub fn new<F>(
         repo_root: AbsoluteSystemPathBuf,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
-    ) -> Result<FileWatching, WatchError> {
+        package_changes_watcher_factory: F,
+    ) -> Result<FileWatching<W>, WatchError>
+    where
+        F: Fn(PackageChangesWatcherArgs) -> W + Send + Sync + 'static,
+    {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?);
         let recv = watcher.watch();
 
@@ -149,38 +176,50 @@ impl FileWatching {
             package_changes_watcher: OnceLock::new(),
             hash_watcher,
             custom_turbo_json_path,
+            package_changes_watcher_factory: Arc::new(package_changes_watcher_factory),
         })
     }
 
-    pub fn get_or_init_package_changes_watcher(&self) -> Arc<PackageChangesWatcher> {
+    pub fn get_or_init_package_changes_watcher(&self) -> Arc<W> {
         self.package_changes_watcher
             .get_or_init(|| {
                 let recv = self.watcher.watch();
-                Arc::new(PackageChangesWatcher::new(
-                    self.repo_root.clone(),
-                    recv,
-                    self.hash_watcher.clone(),
-                    self.custom_turbo_json_path.clone(),
-                ))
+                let args = PackageChangesWatcherArgs {
+                    repo_root: self.repo_root.clone(),
+                    file_events: recv,
+                    hash_watcher: self.hash_watcher.clone(),
+                    custom_turbo_json_path: self.custom_turbo_json_path.clone(),
+                };
+                Arc::new((self.package_changes_watcher_factory)(args))
             })
             .clone()
+    }
+
+    /// Get the file system watcher
+    pub fn file_watcher(&self) -> &Arc<FileSystemWatcher> {
+        &self.watcher
     }
 }
 
 /// Timeout for every RPC the server handles
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
-pub struct TurboGrpcService<S> {
+pub struct TurboGrpcService<S, W>
+where
+    W: PackageChangesWatcher + 'static,
+{
     repo_root: AbsoluteSystemPathBuf,
     paths: Paths,
     timeout: Duration,
     external_shutdown: S,
     custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    package_changes_watcher_factory: Arc<dyn Fn(PackageChangesWatcherArgs) -> W + Send + Sync>,
 }
 
-impl<S> TurboGrpcService<S>
+impl<S, W> TurboGrpcService<S, W>
 where
     S: Future<Output = CloseReason>,
+    W: PackageChangesWatcher + 'static,
 {
     /// Create a gRPC server providing the Turbod interface. external_shutdown
     /// can be used to deliver a signal to shutdown the server. This is expected
@@ -188,13 +227,17 @@ where
     /// file system watcher for the purposes of managing package discovery
     /// state, and use a `LocalPackageDiscovery` instance to refresh the
     /// state if the filewatcher encounters errors.
-    pub fn new(
+    pub fn new<F>(
         repo_root: AbsoluteSystemPathBuf,
         paths: Paths,
         timeout: Duration,
         external_shutdown: S,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
-    ) -> Self {
+        package_changes_watcher_factory: F,
+    ) -> Self
+    where
+        F: Fn(PackageChangesWatcherArgs) -> W + Send + Sync + 'static,
+    {
         // Run the actual service. It takes ownership of the struct given to it,
         // so we use a private struct with just the pieces of state needed to handle
         // RPCs.
@@ -204,6 +247,7 @@ where
             timeout,
             external_shutdown,
             custom_turbo_json_path,
+            package_changes_watcher_factory: Arc::new(package_changes_watcher_factory),
         }
     }
 
@@ -214,6 +258,7 @@ where
             repo_root,
             timeout,
             custom_turbo_json_path,
+            package_changes_watcher_factory,
         } = self;
 
         // A channel to trigger the shutdown of the gRPC server. This is handed out
@@ -221,11 +266,13 @@ where
         // well as available to the gRPC server itself to handle the shutdown RPC.
         let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
 
+        let factory = package_changes_watcher_factory.clone();
         let (service, exit_root_watch, watch_root_handle) = TurboGrpcServiceInner::new(
             repo_root.clone(),
             trigger_shutdown,
             paths.log_file,
             custom_turbo_json_path,
+            move |args| (factory)(args),
         );
 
         let running = Arc::new(AtomicBool::new(true));
@@ -253,9 +300,7 @@ where
             let service = ServiceBuilder::new()
                 .layer(BumpTimeoutLayer::new(bump_timeout.clone()))
                 .layer(DefaultTimeoutLayer)
-                .service(crate::daemon::proto::turbod_server::TurbodServer::new(
-                    service,
-                ));
+                .service(proto::turbod_server::TurbodServer::new(service));
 
             Server::builder()
                 // we respect the timeout specified by the client if it is set, but
@@ -287,9 +332,9 @@ where
     }
 }
 
-struct TurboGrpcServiceInner {
+struct TurboGrpcServiceInner<W: PackageChangesWatcher + 'static> {
     shutdown: mpsc::Sender<()>,
-    file_watching: FileWatching,
+    file_watching: FileWatching<W>,
     times_saved: Arc<Mutex<HashMap<String, u64>>>,
     start_time: Instant,
     log_file: AbsoluteSystemPathBuf,
@@ -299,18 +344,27 @@ struct TurboGrpcServiceInner {
 // we have a grpc service that uses watching package discovery, and where the
 // watching package hasher also uses watching package discovery as well as
 // falling back to a local package hasher
-impl TurboGrpcServiceInner {
-    pub fn new(
+impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
+    pub fn new<F>(
         repo_root: AbsoluteSystemPathBuf,
         trigger_shutdown: mpsc::Sender<()>,
         log_file: AbsoluteSystemPathBuf,
         custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+        package_changes_watcher_factory: F,
     ) -> (
         Self,
         oneshot::Sender<()>,
         JoinHandle<Result<(), WatchError>>,
-    ) {
-        let file_watching = FileWatching::new(repo_root.clone(), custom_turbo_json_path).unwrap();
+    )
+    where
+        F: Fn(PackageChangesWatcherArgs) -> W + Send + Sync + 'static,
+    {
+        let file_watching = FileWatching::new(
+            repo_root.clone(),
+            custom_turbo_json_path,
+            package_changes_watcher_factory,
+        )
+        .unwrap();
 
         tracing::debug!("initing package discovery");
         // Note that we're cloning the Arc, not the package watcher itself
@@ -409,8 +463,8 @@ impl TurboGrpcServiceInner {
     }
 }
 
-async fn watch_root(
-    filewatching_access: FileWatching,
+async fn watch_root<W: PackageChangesWatcher + 'static>(
+    filewatching_access: FileWatching<W>,
     root: AbsoluteSystemPathBuf,
     trigger_shutdown: mpsc::Sender<()>,
     mut exit_signal: oneshot::Receiver<()>,
@@ -458,7 +512,7 @@ async fn watch_root(
 }
 
 #[tonic::async_trait]
-impl proto::turbod_server::Turbod for TurboGrpcServiceInner {
+impl<W: PackageChangesWatcher + 'static> proto::turbod_server::Turbod for TurboGrpcServiceInner<W> {
     async fn hello(
         &self,
         request: tonic::Request<proto::HelloRequest>,
@@ -701,7 +755,7 @@ fn compare_versions(client: Version, server: Version, constraint: proto::Version
     }
 }
 
-impl NamedService for TurboGrpcServiceInner {
+impl<W: PackageChangesWatcher + 'static> NamedService for TurboGrpcServiceInner<W> {
     const NAME: &'static str = "turborepo.Daemon";
 }
 
@@ -715,7 +769,7 @@ mod test {
     use futures::FutureExt;
     use semver::Version;
     use test_case::test_case;
-    use tokio::sync::oneshot;
+    use tokio::sync::{broadcast, oneshot};
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{
         discovery::{DiscoveryResponse, PackageDiscovery},
@@ -723,7 +777,28 @@ mod test {
     };
 
     use super::compare_versions;
-    use crate::daemon::{proto::VersionRange, CloseReason, Paths, TurboGrpcService};
+    use crate::{
+        proto::VersionRange, CloseReason, PackageChangeEvent, PackageChangesWatcher, Paths,
+        TurboGrpcService,
+    };
+
+    // A simple mock for PackageChangesWatcher for testing
+    struct MockPackageChangesWatcher {
+        tx: broadcast::Sender<PackageChangeEvent>,
+    }
+
+    impl MockPackageChangesWatcher {
+        fn new(_args: crate::PackageChangesWatcherArgs) -> Self {
+            let (tx, _) = broadcast::channel(16);
+            Self { tx }
+        }
+    }
+
+    impl PackageChangesWatcher for MockPackageChangesWatcher {
+        async fn package_changes(&self) -> broadcast::Receiver<PackageChangeEvent> {
+            self.tx.subscribe()
+        }
+    }
 
     #[test_case("1.2.3", "1.2.3", VersionRange::Exact, true ; "exact match")]
     #[test_case("1.2.3", "1.2.3", VersionRange::Patch, true ; "patch match")]
@@ -752,6 +827,7 @@ mod test {
         )
     }
 
+    #[allow(dead_code)]
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(
@@ -800,6 +876,7 @@ mod test {
             Duration::from_secs(60 * 60),
             exit_signal,
             None,
+            MockPackageChangesWatcher::new,
         );
 
         // the package watcher reads data from the package.json file
@@ -858,6 +935,7 @@ mod test {
             Duration::from_millis(10),
             exit_signal,
             None,
+            MockPackageChangesWatcher::new,
         );
 
         // the package watcher reads data from the package.json file
@@ -916,6 +994,7 @@ mod test {
             Duration::from_secs(60 * 60),
             exit_signal,
             None,
+            MockPackageChangesWatcher::new,
         );
 
         let handle = tokio::task::spawn(server.serve());

@@ -1,11 +1,8 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tonic_build_result = tonic_build::configure()
         .build_server(true)
-        .file_descriptor_set_path("src/daemon/file_descriptor_set.bin")
-        .compile(
-            &["./src/daemon/proto/turbod.proto"],
-            &["./src/daemon/proto"],
-        );
+        .file_descriptor_set_path("src/file_descriptor_set.bin")
+        .compile(&["./src/proto/turbod.proto"], &["./src/proto"]);
 
     let invocation = std::env::var("RUSTC_WRAPPER").unwrap_or_default();
     if invocation.ends_with("rust-analyzer") {

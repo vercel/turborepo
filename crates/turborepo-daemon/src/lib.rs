@@ -20,19 +20,55 @@
 //! `_tx`/`_rx` suffixes indicate that this variable is respectively a `Sender`
 //! or `Receiver`.
 
+#![feature(assert_matches)]
+#![feature(impl_trait_in_assoc_type)]
+#![deny(clippy::all)]
+#![allow(clippy::needless_lifetimes)]
+#![allow(clippy::uninlined_format_args)]
+
 mod bump_timeout;
 mod bump_timeout_layer;
 mod client;
 mod connector;
 mod default_timeout_layer;
-pub(crate) mod endpoint;
+pub mod endpoint;
 mod server;
 
 pub use client::{DaemonClient, DaemonError};
 pub use connector::{DaemonConnector, DaemonConnectorError};
-pub use server::{CloseReason, TurboGrpcService};
+pub use server::{CloseReason, FileWatching, TurboGrpcService};
 use sha2::{Digest, Sha256};
+use tokio::sync::broadcast;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_repository::package_graph::PackageName;
+
+/// Trait for watching package changes. Implemented by consumers who need
+/// to integrate with turbo.json configuration.
+pub trait PackageChangesWatcher: Send + Sync {
+    /// Get a receiver for package change events
+    fn package_changes(
+        &self,
+    ) -> impl std::future::Future<Output = broadcast::Receiver<PackageChangeEvent>> + Send;
+}
+
+/// Arguments passed to a PackageChangesWatcher factory
+pub struct PackageChangesWatcherArgs {
+    pub repo_root: AbsoluteSystemPathBuf,
+    pub file_events: turborepo_filewatch::OptionalWatch<
+        broadcast::Receiver<Result<notify::Event, turborepo_filewatch::NotifyError>>,
+    >,
+    pub hash_watcher: std::sync::Arc<turborepo_filewatch::hash_watcher::HashWatcher>,
+    pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+}
+
+/// Events that indicate package changes in the repository.
+#[derive(Clone, Debug)]
+pub enum PackageChangeEvent {
+    /// A specific package has changed
+    Package { name: PackageName },
+    /// All packages need to be rediscovered
+    Rediscover,
+}
 
 #[derive(Clone, Debug)]
 pub struct Paths {
@@ -83,7 +119,7 @@ impl Paths {
     }
 }
 
-pub(crate) mod proto {
+pub mod proto {
 
     tonic::include_proto!("turbodprotocol");
     /// The version of the protocol that this library implements.

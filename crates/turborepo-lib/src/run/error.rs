@@ -1,11 +1,12 @@
 use miette::Diagnostic;
 use thiserror::Error;
+use turborepo_daemon::{DaemonConnectorError, DaemonError};
 use turborepo_repository::package_graph;
 use turborepo_ui::tui;
 
 use super::graph_visualizer;
 use crate::{
-    config, daemon, engine,
+    config, engine,
     engine::ValidateError,
     opts,
     run::{global_hash, scope},
@@ -38,7 +39,7 @@ pub enum Error {
     #[diagnostic(transparent)]
     PackageGraphBuilder(#[from] package_graph::builder::Error),
     #[error(transparent)]
-    DaemonConnector(#[from] daemon::DaemonConnectorError),
+    DaemonConnector(#[from] DaemonConnectorError),
     #[error(transparent)]
     Cache(#[from] turborepo_cache::CacheError),
     #[error(transparent)]
@@ -55,7 +56,7 @@ pub enum Error {
     #[error(transparent)]
     SignalHandler(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]
-    Daemon(#[from] daemon::DaemonError),
+    Daemon(#[from] DaemonError),
     #[error(transparent)]
     UI(#[from] turborepo_ui::Error),
     #[error(transparent)]

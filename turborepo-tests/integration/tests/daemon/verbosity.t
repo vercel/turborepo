@@ -13,6 +13,6 @@ TURBO_LOG_VERBOSITY should be respected
   $ grep --quiet "x daemon is not running, run \`turbo daemon start\` to start it" tmp.log
 
 verbosity doesn't override TURBO_LOG_VERBOSITY package settings
-  $ TURBO_LOG_VERBOSITY=turborepo_lib=debug ${TURBO} daemon status -v > tmp.log 2>&1
+  $ TURBO_LOG_VERBOSITY=turborepo_daemon=debug ${TURBO} daemon status -v > tmp.log 2>&1
   $ grep --quiet -E "\[DEBUG].*" tmp.log
   $ grep --quiet "x daemon is not running, run \`turbo daemon start\` to start it" tmp.log
