@@ -119,9 +119,10 @@ pub enum Error {
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
 
-    /// CLI error from the runner
-    #[error("CLI error: {0}")]
-    Cli(String),
+    /// CLI error from the runner - stored as a boxed error to preserve the
+    /// original error display without requiring a dependency on cli::Error
+    #[error(transparent)]
+    Cli(#[from] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Main entry point for the shim with injected dependencies.
@@ -252,7 +253,7 @@ where
     runtime
         .runner
         .run(repo_state, ui)
-        .map_err(|e| Error::Cli(e.to_string()))
+        .map_err(|e| Error::Cli(Box::new(e)))
 }
 
 /// Attempts to run correct turbo by finding nearest package.json,
