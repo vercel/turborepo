@@ -1,0 +1,15 @@
+[package]
+name = "turborepo-json-rewrite"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+jsonc-parser = "0.21.0"
+thiserror = "1.0.38"
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+
+[lints]
+workspace = true

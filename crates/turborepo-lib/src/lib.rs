@@ -31,7 +31,7 @@ mod opts;
 mod package_changes_watcher;
 mod panic_handler;
 mod query;
-mod rewrite_json;
+pub use turborepo_json_rewrite as rewrite_json;
 mod run;
 mod shim;
 mod task_graph;
