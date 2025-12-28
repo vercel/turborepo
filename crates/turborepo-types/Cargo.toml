@@ -1,0 +1,15 @@
+[package]
+name = "turborepo-types"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Shared types for Turborepo"
+
+[lints]
+workspace = true
+
+[dependencies]
+biome_deserialize = { workspace = true }
+biome_deserialize_macros = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }

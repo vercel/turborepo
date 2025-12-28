@@ -1,8 +1,8 @@
-//! hash module
+//! Turborepo Hash
 //!
-//! This module contains the hash functions used by turborepo for certain
-//! data-types. This is managed using capnproto for deterministic hashing across
-//! languages and platforms.
+//! This crate provides hashing utilities for turborepo. It uses Cap'n Proto for
+//! deterministic serialization across languages and platforms, then applies
+//! xxHash64 for fast hashing.
 
 mod traits;
 
@@ -10,15 +10,12 @@ use std::collections::HashMap;
 
 use capnp::message::{Builder, HeapAllocator};
 pub use traits::TurboHash;
-use turborepo_env::EnvironmentVariablePairs;
-
-use crate::{cli::EnvMode, task_graph::TaskOutputs};
+pub use turborepo_types::{EnvMode, TaskOutputs};
 
 mod proto_capnp {
+    use turborepo_types::EnvMode;
 
-    use crate::cli::EnvMode;
-
-    include!(concat!(env!("OUT_DIR"), "/src/hash/proto_capnp.rs"));
+    include!(concat!(env!("OUT_DIR"), "/src/proto_capnp.rs"));
 
     impl From<EnvMode> for global_hashable::EnvMode {
         fn from(value: EnvMode) -> Self {
@@ -39,25 +36,45 @@ mod proto_capnp {
     }
 }
 
+/// Type alias for environment variable pairs used in hashing.
+pub type EnvVarPairs = Vec<String>;
+
+/// Type alias for environment variable pairs (same as EnvVarPairs).
+/// This matches the type from turborepo-env::EnvironmentVariablePairs.
+pub type EnvironmentVariablePairs = Vec<String>;
+
 #[derive(Debug)]
 pub struct TaskHashable<'a> {
     // hashes
-    pub(crate) global_hash: &'a str,
-    pub(crate) task_dependency_hashes: Vec<String>,
-    pub(crate) hash_of_files: &'a str,
-    pub(crate) external_deps_hash: Option<String>,
+    pub global_hash: &'a str,
+    pub task_dependency_hashes: Vec<String>,
+    pub hash_of_files: &'a str,
+    pub external_deps_hash: Option<String>,
 
     // task
-    pub(crate) package_dir: Option<turbopath::RelativeUnixPathBuf>,
-    pub(crate) task: &'a str,
-    pub(crate) outputs: TaskOutputs,
-    pub(crate) pass_through_args: &'a [String],
+    pub package_dir: Option<turbopath::RelativeUnixPathBuf>,
+    pub task: &'a str,
+    pub outputs: TaskOutputs,
+    pub pass_through_args: &'a [String],
 
     // env
-    pub(crate) env: &'a [String],
-    pub(crate) resolved_env_vars: EnvVarPairs,
-    pub(crate) pass_through_env: &'a [String],
-    pub(crate) env_mode: EnvMode,
+    pub env: &'a [String],
+    pub resolved_env_vars: EnvVarPairs,
+    pub pass_through_env: &'a [String],
+    pub env_mode: EnvMode,
+}
+
+impl TaskHashable<'_> {
+    /// Calculate the task hash, applying env_mode rules.
+    ///
+    /// In Loose mode, pass_through_env is cleared before hashing.
+    pub fn calculate_task_hash(mut self) -> String {
+        if matches!(self.env_mode, EnvMode::Loose) {
+            self.pass_through_env = &[];
+        }
+
+        self.hash()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -80,8 +97,19 @@ pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
 #[derive(Debug, Clone)]
 pub struct FileHashes(pub HashMap<turbopath::RelativeUnixPathBuf, String>);
 
-impl From<TaskOutputs> for Builder<HeapAllocator> {
+/// Wrapper type for TaskOutputs to enable capnp serialization.
+/// This is needed due to Rust's orphan rule - we can't implement From
+/// for two foreign types (TaskOutputs and Builder).
+pub struct HashableTaskOutputs(pub TaskOutputs);
+
+impl From<TaskOutputs> for HashableTaskOutputs {
     fn from(value: TaskOutputs) -> Self {
+        HashableTaskOutputs(value)
+    }
+}
+
+impl From<HashableTaskOutputs> for Builder<HeapAllocator> {
+    fn from(HashableTaskOutputs(value): HashableTaskOutputs) -> Self {
         let mut message = ::capnp::message::TypedBuilder::<
             proto_capnp::task_outputs::Owned,
             HeapAllocator,
@@ -189,8 +217,6 @@ impl From<FileHashes> for Builder<HeapAllocator> {
     }
 }
 
-type EnvVarPairs = Vec<String>;
-
 impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
     fn from(task_hashable: TaskHashable) -> Self {
         let mut message =
@@ -211,7 +237,7 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
         builder.set_env_mode(task_hashable.env_mode.into());
 
         {
-            let output_builder: Builder<_> = task_hashable.outputs.into();
+            let output_builder: Builder<_> = HashableTaskOutputs(task_hashable.outputs).into();
             builder
                 .set_outputs(output_builder.get_root_as_reader().unwrap())
                 .unwrap();
@@ -383,11 +409,9 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
 mod test {
     use test_case::test_case;
     use turborepo_lockfiles::Package;
+    use turborepo_types::{EnvMode, TaskOutputs};
 
-    use super::{
-        FileHashes, GlobalHashable, LockFilePackages, TaskHashable, TaskOutputs, TurboHash,
-    };
-    use crate::cli::EnvMode;
+    use super::{FileHashes, GlobalHashable, LockFilePackages, TaskHashable, TurboHash};
 
     #[test]
     fn task_hashable() {

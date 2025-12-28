@@ -60,16 +60,6 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
 }
 
-impl TaskHashable<'_> {
-    fn calculate_task_hash(mut self) -> String {
-        if matches!(self.env_mode, EnvMode::Loose) {
-            self.pass_through_env = &[];
-        }
-
-        self.hash()
-    }
-}
-
 #[derive(Debug, Default)]
 pub struct PackageInputsHashes {
     hashes: HashMap<TaskId<'static>, String>,

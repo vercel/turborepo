@@ -139,6 +139,7 @@ turborepo-frameworks = { workspace = true }
 turborepo-fs = { path = "../turborepo-fs" }
 turborepo-gitignore = { workspace = true }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
+turborepo-hash = { workspace = true }
 turborepo-json-rewrite = { path = "../turborepo-json-rewrite" }
 turborepo-lockfiles = { workspace = true }
 turborepo-microfrontends = { workspace = true }
@@ -149,6 +150,7 @@ turborepo-scm = { workspace = true, features = ["git2"] }
 turborepo-signals = { workspace = true }
 turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
+turborepo-types = { workspace = true }
 turborepo-ui = { workspace = true }
 turborepo-unescape = { workspace = true }
 turborepo-vercel-api = { path = "../turborepo-vercel-api" }
@@ -164,5 +166,4 @@ uds_windows = "1.0.2"
 async-io = "1.12.0"
 
 [build-dependencies]
-capnpc = "0.18.0"
 tonic-build = "0.8.4"

@@ -25,7 +25,7 @@ mod diagnostics;
 mod engine;
 
 mod boundaries;
-mod hash;
+pub use turborepo_hash as hash;
 mod microfrontends;
 mod opts;
 mod package_changes_watcher;

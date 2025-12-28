@@ -3,10 +3,11 @@ mod visitor;
 use std::str::FromStr;
 
 use globwalk::{GlobError, ValidatedGlob};
-use serde::{Deserialize, Serialize};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_task_id::{TaskId, TaskName};
+// Re-export TaskOutputs from turborepo-types for backward compatibility
+pub use turborepo_types::TaskOutputs;
 pub use visitor::{Error as VisitorError, Visitor};
 
 use crate::cli::{EnvMode, OutputLogsMode};
@@ -62,14 +63,6 @@ pub struct TaskDefinition {
     // It will also not affect the task's hash aside from the definition getting folded into the
     // hash.
     pub with: Option<Vec<Spanned<TaskName<'static>>>>,
-}
-
-// TaskOutputs represents the patterns for including and excluding files from
-// outputs
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct TaskOutputs {
-    pub inclusions: Vec<String>,
-    pub exclusions: Vec<String>,
 }
 
 // Structure for holding the inputs for a task
@@ -176,22 +169,31 @@ impl TaskInputs {
     }
 }
 
-impl TaskOutputs {
-    // We consider an empty outputs to be a log output and nothing else
-    pub fn is_empty(&self) -> bool {
+/// Extension trait for TaskOutputs providing glob validation methods.
+pub trait TaskOutputsExt {
+    /// We consider an empty outputs to be a log output and nothing else
+    fn is_empty(&self) -> bool;
+
+    fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError>;
+
+    fn validated_exclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError>;
+}
+
+impl TaskOutputsExt for TaskOutputs {
+    fn is_empty(&self) -> bool {
         self.inclusions.len() == 1
             && self.inclusions[0].ends_with(".log")
             && self.exclusions.is_empty()
     }
 
-    pub fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
+    fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
         self.inclusions
             .iter()
             .map(|i| ValidatedGlob::from_str(i))
             .collect()
     }
 
-    pub fn validated_exclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
+    fn validated_exclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
         self.exclusions
             .iter()
             .map(|e| ValidatedGlob::from_str(e))

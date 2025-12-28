@@ -143,35 +143,33 @@ impl UIMode {
     }
 }
 
-impl TaskOutputs {
-    /// Creates TaskOutputs from ProcessedOutputs with resolved paths
-    fn from_processed(
-        outputs: processed::ProcessedOutputs,
-        turbo_root_path: &RelativeUnixPath,
-    ) -> Result<Self, Error> {
-        let mut inclusions = Vec::new();
-        let mut exclusions = Vec::new();
+/// Creates TaskOutputs from ProcessedOutputs with resolved paths
+fn task_outputs_from_processed(
+    outputs: processed::ProcessedOutputs,
+    turbo_root_path: &RelativeUnixPath,
+) -> Result<TaskOutputs, Error> {
+    let mut inclusions = Vec::new();
+    let mut exclusions = Vec::new();
 
-        // Resolve all globs with the turbo_root path
-        // Absolute path validation was already done during ProcessedGlob creation
-        let resolved = outputs.resolve(turbo_root_path);
+    // Resolve all globs with the turbo_root path
+    // Absolute path validation was already done during ProcessedGlob creation
+    let resolved = outputs.resolve(turbo_root_path);
 
-        for glob_str in resolved {
-            if let Some(stripped_glob) = glob_str.strip_prefix('!') {
-                exclusions.push(stripped_glob.to_string());
-            } else {
-                inclusions.push(glob_str);
-            }
+    for glob_str in resolved {
+        if let Some(stripped_glob) = glob_str.strip_prefix('!') {
+            exclusions.push(stripped_glob.to_string());
+        } else {
+            inclusions.push(glob_str);
         }
-
-        inclusions.sort();
-        exclusions.sort();
-
-        Ok(TaskOutputs {
-            inclusions,
-            exclusions,
-        })
     }
+
+    inclusions.sort();
+    exclusions.sort();
+
+    Ok(TaskOutputs {
+        inclusions,
+        exclusions,
+    })
 }
 
 impl TaskInputs {
@@ -198,7 +196,7 @@ impl TaskDefinition {
         // Convert outputs with turbo_root resolution
         let outputs = processed
             .outputs
-            .map(|outputs| TaskOutputs::from_processed(outputs, path_to_repo_root))
+            .map(|outputs| task_outputs_from_processed(outputs, path_to_repo_root))
             .transpose()?
             .unwrap_or_default();
 
@@ -790,7 +788,7 @@ mod tests {
             raw_task_outputs.into_iter().map(Spanned::new).collect(),
             &FutureFlags::default(),
         )?;
-        let task_outputs = TaskOutputs::from_processed(processed_outputs, turbo_root)?;
+        let task_outputs = task_outputs_from_processed(processed_outputs, turbo_root)?;
         assert_eq!(task_outputs, expected_task_outputs);
 
         Ok(())
