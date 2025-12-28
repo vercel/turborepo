@@ -25,7 +25,6 @@ mod diagnostics;
 mod engine;
 
 mod boundaries;
-mod gitignore;
 mod hash;
 mod microfrontends;
 mod opts;

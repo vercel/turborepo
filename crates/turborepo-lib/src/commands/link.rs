@@ -17,6 +17,7 @@ use dirs_next::home_dir;
 use rand::Rng;
 use thiserror::Error;
 use turborepo_api_client::{CacheClient, Client};
+use turborepo_gitignore::ensure_turbo_is_gitignored;
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{DialoguerTheme, BOLD, GREY};
@@ -25,7 +26,6 @@ use turborepo_vercel_api::{CachingStatus, Team};
 use crate::{
     commands::CommandBase,
     config,
-    gitignore::ensure_turbo_is_gitignored,
     rewrite_json::{self, set_path, unset_path},
 };
 

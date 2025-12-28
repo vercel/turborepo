@@ -6904,6 +6904,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-gitignore"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tempfile",
+ "turbopath",
+]
+
+[[package]]
 name = "turborepo-graph-utils"
 version = "0.1.0"
 dependencies = [
@@ -7034,6 +7043,7 @@ dependencies = [
  "turborepo-fixed-map",
  "turborepo-frameworks",
  "turborepo-fs",
+ "turborepo-gitignore",
  "turborepo-graph-utils",
  "turborepo-lockfiles",
  "turborepo-microfrontends",

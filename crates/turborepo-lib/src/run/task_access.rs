@@ -9,11 +9,12 @@ use serde::Deserialize;
 use tracing::{debug, error, warn};
 use turbopath::{AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
+use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_scm::SCM;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
-use crate::{gitignore::ensure_turbo_is_gitignored, turbo_json::RawTurboJson};
+use crate::turbo_json::RawTurboJson;
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location
