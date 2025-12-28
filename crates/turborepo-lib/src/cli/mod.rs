@@ -131,7 +131,12 @@ impl Display for DryRunMode {
     }
 }
 
-// Re-export EnvMode from turborepo-types for backward compatibility
+// Re-export EnvMode from turborepo-types for backward compatibility.
+// New code should import directly from `turborepo_types::EnvMode`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `EnvMode` directly from `turborepo_types` instead"
+)]
 pub use turborepo_types::EnvMode;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, ValueEnum, Serialize)]

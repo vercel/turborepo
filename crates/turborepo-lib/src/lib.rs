@@ -25,12 +25,24 @@ mod diagnostics;
 mod engine;
 
 mod boundaries;
+// Re-export for backward compatibility. New code should import from
+// `turborepo_hash`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import from `turborepo_hash` crate directly instead"
+)]
 pub use turborepo_hash as hash;
 mod microfrontends;
 mod opts;
 mod package_changes_watcher;
 mod panic_handler;
 mod query;
+// Re-export for backward compatibility. New code should import from
+// `turborepo_json_rewrite`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import from `turborepo_json_rewrite` crate directly instead"
+)]
 pub use turborepo_json_rewrite as rewrite_json;
 mod run;
 mod shim;

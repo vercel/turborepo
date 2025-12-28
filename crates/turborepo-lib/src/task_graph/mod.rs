@@ -6,7 +6,12 @@ use globwalk::{GlobError, ValidatedGlob};
 use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_task_id::{TaskId, TaskName};
-// Re-export TaskOutputs from turborepo-types for backward compatibility
+// Re-export TaskOutputs from turborepo-types for backward compatibility.
+// New code should import directly from `turborepo_types::TaskOutputs`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `TaskOutputs` directly from `turborepo_types` instead"
+)]
 pub use turborepo_types::TaskOutputs;
 pub use visitor::{Error as VisitorError, Visitor};
 

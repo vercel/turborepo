@@ -10,7 +10,17 @@ use std::collections::HashMap;
 
 use capnp::message::{Builder, HeapAllocator};
 pub use traits::TurboHash;
-pub use turborepo_types::{EnvMode, TaskOutputs};
+// Re-export for backward compatibility. New code should import from `turborepo_types`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `EnvMode` directly from `turborepo_types` instead"
+)]
+pub use turborepo_types::EnvMode;
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `TaskOutputs` directly from `turborepo_types` instead"
+)]
+pub use turborepo_types::TaskOutputs;
 
 mod proto_capnp {
     use turborepo_types::EnvMode;
