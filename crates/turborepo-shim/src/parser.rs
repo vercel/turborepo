@@ -1,3 +1,6 @@
+// miette's Diagnostic derive macro generates code that triggers these warnings
+#![allow(unused_assignments)]
+
 use std::env;
 
 use itertools::Itertools;
