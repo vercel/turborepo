@@ -9,6 +9,7 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{select, sync::Notify, task::JoinHandle};
 use tracing::{instrument, trace, warn};
+use turborepo_daemon::{proto, DaemonConnector, DaemonConnectorError, DaemonError, Paths};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
@@ -17,11 +18,9 @@ use turborepo_ui::sender::UISender;
 use crate::{
     commands::CommandBase,
     config::resolve_turbo_config_path,
-    daemon::{proto, DaemonConnectorError, DaemonError},
     engine::{EngineExt, TaskNode},
     get_version, opts,
     run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
-    DaemonConnector, DaemonPaths,
 };
 
 #[derive(Debug)]
@@ -153,7 +152,7 @@ impl WatchClient {
         let connector = DaemonConnector {
             can_start_server: true,
             can_kill_server: true,
-            paths: DaemonPaths::from_repo_root(&base.repo_root),
+            paths: Paths::from_repo_root(&base.repo_root),
             custom_turbo_json_path,
         };
 

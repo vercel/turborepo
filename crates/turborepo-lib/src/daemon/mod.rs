@@ -1,30 +1,38 @@
-//! The Turborepo daemon watches files and pre-computes data to speed up turbo's
-//! execution. Each repository has a separate daemon instance.
+//! Deprecated: Use `turborepo_daemon` crate directly instead.
 //!
-//! # Architecture
-//! The daemon consists of a gRPC server that can be queried by a client.
+//! This module re-exports types from the `turborepo_daemon` crate for backward
+//! compatibility. New code should depend on `turborepo_daemon` directly.
 
-//! The server spins up a `FileWatching` struct, which contains a struct
-//! responsible for watching the repository (`FileSystemWatcher`), and the
-//! various consumers of that file change data such as `GlobWatcher` and
-//! `PackageWatcher`.
-//!
-//! We use cookie files to ensure proper event synchronization, i.e.
-//! that we don't get stale file system events while handling queries.
-//!
-//! # Naming Conventions
-//! `recv` is a receiver of file system events. Structs such as `GlobWatcher`
-//! or `PackageWatcher` consume these file system events and either derive state
-//! or produce new events.
-//!
-//! `_tx`/`_rx` suffixes indicate that this variable is respectively a `Sender`
-//! or `Receiver`.
-
-// Re-export everything from turborepo-daemon crate
-pub use turborepo_daemon::{
-    proto, CloseReason, DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError,
-    PackageChangesWatcher as PackageChangesWatcherTrait, Paths, TurboGrpcService,
-};
+#[deprecated(since = "2.4.0", note = "use `turborepo_daemon::proto` instead")]
+pub use turborepo_daemon::proto;
+#[deprecated(since = "2.4.0", note = "use `turborepo_daemon::CloseReason` instead")]
+pub use turborepo_daemon::CloseReason;
+#[deprecated(since = "2.4.0", note = "use `turborepo_daemon::DaemonClient` instead")]
+pub use turborepo_daemon::DaemonClient;
+#[deprecated(
+    since = "2.4.0",
+    note = "use `turborepo_daemon::DaemonConnector` instead"
+)]
+pub use turborepo_daemon::DaemonConnector;
+#[deprecated(
+    since = "2.4.0",
+    note = "use `turborepo_daemon::DaemonConnectorError` instead"
+)]
+pub use turborepo_daemon::DaemonConnectorError;
+#[deprecated(since = "2.4.0", note = "use `turborepo_daemon::DaemonError` instead")]
+pub use turborepo_daemon::DaemonError;
+#[deprecated(
+    since = "2.4.0",
+    note = "use `turborepo_daemon::PackageChangesWatcher` instead"
+)]
+pub use turborepo_daemon::PackageChangesWatcher as PackageChangesWatcherTrait;
+#[deprecated(since = "2.4.0", note = "use `turborepo_daemon::Paths` instead")]
+pub use turborepo_daemon::Paths;
+#[deprecated(
+    since = "2.4.0",
+    note = "use `turborepo_daemon::TurboGrpcService` instead"
+)]
+pub use turborepo_daemon::TurboGrpcService;
 
 // Keep endpoint accessible for internal use
 pub(crate) mod endpoint {

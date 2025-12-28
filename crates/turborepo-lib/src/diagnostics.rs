@@ -11,6 +11,7 @@ use tokio::{
 };
 use turbo_updater::check_for_updates;
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_daemon::DaemonConnector;
 use turborepo_scm::GitRepo;
 
 use crate::{
@@ -18,7 +19,6 @@ use crate::{
         link::{self, link},
         CommandBase,
     },
-    daemon::DaemonConnector,
     get_version, DaemonPaths,
 };
 
