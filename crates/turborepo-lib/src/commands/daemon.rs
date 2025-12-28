@@ -18,6 +18,7 @@ use crate::{
         endpoint::SocketOpenError, CloseReason, DaemonConnector, DaemonConnectorError, DaemonError,
         Paths,
     },
+    package_changes_watcher::PackageChangesWatcher,
     tracing::TurboSubscriber,
 };
 
@@ -336,6 +337,14 @@ pub async fn daemon_server(
         timeout,
         exit_signal,
         custom_turbo_json_path,
+        |args| {
+            PackageChangesWatcher::new(
+                args.repo_root,
+                args.file_events,
+                args.hash_watcher,
+                args.custom_turbo_json_path,
+            )
+        },
     );
 
     let reason = server.serve().await?;
