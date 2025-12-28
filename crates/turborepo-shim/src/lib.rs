@@ -22,7 +22,7 @@ use std::sync::Arc;
 // Re-exports
 pub use local_turbo_state::turbo_version_has_shim;
 pub use parser::ShimArgs;
-pub use run::{run, run_with_args, Error, ShimRuntime, INVOCATION_DIR_ENV_VAR};
+pub use run::{run, run_with_args, Error, ShimResult, ShimRuntime, INVOCATION_DIR_ENV_VAR};
 use shared_child::SharedChild;
 pub use turbo_state::TurboState;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -52,8 +52,7 @@ use turborepo_ui::ColorConfig;
 /// ```
 pub trait TurboRunner: Send + Sync {
     /// The error type returned by the runner.
-    /// Must implement both Error and Diagnostic to preserve full error chains.
-    type Error: std::error::Error + miette::Diagnostic + Send + Sync + 'static;
+    type Error: std::error::Error + Send + Sync + 'static;
 
     /// Run the turbo CLI with the given repository state and UI configuration.
     ///

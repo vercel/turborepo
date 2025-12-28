@@ -83,7 +83,7 @@ where
     }
 }
 
-/// Errors that can occur during shim execution.
+/// Errors that can occur during shim execution (excluding CLI errors).
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     /// Error from argument parsing
@@ -118,12 +118,20 @@ pub enum Error {
     /// Path error
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
+}
 
-    /// CLI error from the runner - stored as a miette::Report to preserve the
-    /// full diagnostic chain (related errors, source code, etc.)
-    #[error("{0}")]
-    #[diagnostic(transparent)]
-    Cli(miette::Report),
+/// Result type for shim execution that distinguishes between shim errors and
+/// CLI errors.
+///
+/// This allows the caller to handle CLI errors with their proper type,
+/// preserving the full miette Diagnostic chain (including related errors).
+pub enum ShimResult<E> {
+    /// Successful execution with exit code
+    Ok(i32),
+    /// Shim-level error (arg parsing, inference, process spawning, etc.)
+    ShimError(Error),
+    /// CLI-level error (from the TurboRunner)
+    CliError(E),
 }
 
 /// Main entry point for the shim with injected dependencies.
@@ -141,8 +149,9 @@ pub enum Error {
 ///
 /// # Returns
 ///
-/// The exit code from turbo execution, or an error if execution failed.
-pub fn run<R, C, S, V>(runtime: &ShimRuntime<R, C, S, V>) -> Result<i32, Error>
+/// A `ShimResult` containing either the exit code, a shim error, or a CLI
+/// error.
+pub fn run<R, C, S, V>(runtime: &ShimRuntime<R, C, S, V>) -> ShimResult<R::Error>
 where
     R: TurboRunner,
     C: ConfigProvider,
@@ -150,7 +159,10 @@ where
     V: VersionProvider,
 {
     normalize_config_dir_env_vars();
-    let args = ShimArgs::parse()?;
+    let args = match ShimArgs::parse() {
+        Ok(args) => args,
+        Err(e) => return ShimResult::ShimError(e.into()),
+    };
     run_with_args(runtime, args)
 }
 
@@ -169,11 +181,12 @@ where
 ///
 /// # Returns
 ///
-/// The exit code from turbo execution, or an error if execution failed.
+/// A `ShimResult` containing either the exit code, a shim error, or a CLI
+/// error.
 pub fn run_with_args<R, C, S, V>(
     runtime: &ShimRuntime<R, C, S, V>,
     args: ShimArgs,
-) -> Result<i32, Error>
+) -> ShimResult<R::Error>
 where
     R: TurboRunner,
     C: ConfigProvider,
@@ -219,7 +232,10 @@ where
     // it to execute local turbo. We simply use it to set the `--single-package`
     // and `--cwd` flags.
     if is_turbo_binary_path_set() {
-        let repo_state = RepoState::infer(&args.cwd)?;
+        let repo_state = match RepoState::infer(&args.cwd) {
+            Ok(state) => state,
+            Err(e) => return ShimResult::ShimError(e.into()),
+        };
         debug!("Repository Root: {}", repo_state.root);
         return run_cli(runtime, Some(repo_state), color_config);
     }
@@ -244,17 +260,17 @@ fn run_cli<R, C, S, V>(
     runtime: &ShimRuntime<R, C, S, V>,
     repo_state: Option<RepoState>,
     ui: ColorConfig,
-) -> Result<i32, Error>
+) -> ShimResult<R::Error>
 where
     R: TurboRunner,
     C: ConfigProvider,
     S: ChildSpawner,
     V: VersionProvider,
 {
-    runtime
-        .runner
-        .run(repo_state, ui)
-        .map_err(|e| Error::Cli(miette::Report::new(e)))
+    match runtime.runner.run(repo_state, ui) {
+        Ok(code) => ShimResult::Ok(code),
+        Err(e) => ShimResult::CliError(e),
+    }
 }
 
 /// Attempts to run correct turbo by finding nearest package.json,
@@ -266,7 +282,7 @@ fn run_correct_turbo<R, C, S, V>(
     repo_state: RepoState,
     shim_args: ShimArgs,
     ui: ColorConfig,
-) -> Result<i32, Error>
+) -> ShimResult<R::Error>
 where
     R: TurboRunner,
     C: ConfigProvider,
@@ -354,22 +370,29 @@ fn spawn_local_turbo<R, C, S, V>(
     repo_state: &RepoState,
     local_turbo_state: LocalTurboState,
     mut shim_args: ShimArgs,
-) -> Result<i32, Error>
+) -> ShimResult<R::Error>
 where
     R: TurboRunner,
     C: ConfigProvider,
     S: ChildSpawner,
     V: VersionProvider,
 {
-    let local_turbo_path = fs_canonicalize(local_turbo_state.binary()).map_err(|_| {
-        Error::LocalTurboPath(local_turbo_state.binary().to_string_lossy().to_string())
-    })?;
+    let local_turbo_path = match fs_canonicalize(local_turbo_state.binary()) {
+        Ok(path) => path,
+        Err(_) => {
+            return ShimResult::ShimError(Error::LocalTurboPath(
+                local_turbo_state.binary().to_string_lossy().to_string(),
+            ))
+        }
+    };
     debug!(
         "Running local turbo binary in {}\n",
         local_turbo_path.display()
     );
-    let cwd = fs_canonicalize(&repo_state.root)
-        .map_err(|_| Error::RepoRootPath(repo_state.root.clone()))?;
+    let cwd = match fs_canonicalize(&repo_state.root) {
+        Ok(path) => path,
+        Err(_) => return ShimResult::ShimError(Error::RepoRootPath(repo_state.root.clone())),
+    };
 
     let raw_args = modify_args_for_local(&mut shim_args, repo_state, local_turbo_state.version());
 
@@ -393,7 +416,7 @@ fn spawn_npx_turbo<R, C, S, V>(
     repo_state: &RepoState,
     turbo_version: &str,
     mut shim_args: ShimArgs,
-) -> Result<i32, Error>
+) -> ShimResult<R::Error>
 where
     R: TurboRunner,
     C: ConfigProvider,
@@ -401,9 +424,14 @@ where
     V: VersionProvider,
 {
     debug!("Running turbo@{turbo_version} via npx");
-    let npx_path = which("npx")?;
-    let cwd = fs_canonicalize(&repo_state.root)
-        .map_err(|_| Error::RepoRootPath(repo_state.root.clone()))?;
+    let npx_path = match which("npx") {
+        Ok(path) => path,
+        Err(e) => return ShimResult::ShimError(e.into()),
+    };
+    let cwd = match fs_canonicalize(&repo_state.root) {
+        Ok(path) => path,
+        Err(_) => return ShimResult::ShimError(Error::RepoRootPath(repo_state.root.clone())),
+    };
 
     let raw_args = modify_args_for_local(&mut shim_args, repo_state, turbo_version);
 
@@ -465,16 +493,22 @@ fn spawn_child_turbo<R, C, S, V>(
     runtime: &ShimRuntime<R, C, S, V>,
     command: process::Command,
     err: fn(std::io::Error) -> Error,
-) -> Result<i32, Error>
+) -> ShimResult<R::Error>
 where
     R: TurboRunner,
     C: ConfigProvider,
     S: ChildSpawner,
     V: VersionProvider,
 {
-    let child: Arc<SharedChild> = runtime.child_spawner.spawn(command).map_err(err)?;
+    let child: Arc<SharedChild> = match runtime.child_spawner.spawn(command) {
+        Ok(child) => child,
+        Err(e) => return ShimResult::ShimError(err(e)),
+    };
 
-    let exit_status = child.wait().map_err(err)?;
+    let exit_status = match child.wait() {
+        Ok(status) => status,
+        Err(e) => return ShimResult::ShimError(err(e)),
+    };
     let exit_code = exit_status.code().unwrap_or_else(|| {
         debug!("child turbo failed to report exit code");
         #[cfg(unix)]
@@ -490,7 +524,7 @@ where
         2
     });
 
-    Ok(exit_code)
+    ShimResult::Ok(exit_code)
 }
 
 /// Checks for `TURBO_BINARY_PATH` variable. If it is set,
@@ -572,15 +606,10 @@ mod tests {
     use super::*;
     use crate::DefaultChildSpawner;
 
-    // Mock error that implements both Error and Diagnostic
-    #[derive(Debug, thiserror::Error, Diagnostic)]
-    #[error("mock error")]
-    struct MockError;
-
     // Mock implementations for testing
     struct MockRunner;
     impl TurboRunner for MockRunner {
-        type Error = MockError;
+        type Error = std::io::Error;
         fn run(
             &self,
             _repo_state: Option<RepoState>,

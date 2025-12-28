@@ -16,7 +16,7 @@ use turborepo_repository::inference::RepoState;
 #[allow(unused_imports)]
 pub use turborepo_shim::{turbo_version_has_shim, ShimArgs, TurboState, INVOCATION_DIR_ENV_VAR};
 use turborepo_shim::{
-    ChildSpawner, ConfigProvider, ShimConfigurationOptions, ShimRuntime, TurboRunner,
+    ChildSpawner, ConfigProvider, ShimConfigurationOptions, ShimResult, ShimRuntime, TurboRunner,
     VersionProvider,
 };
 use turborepo_ui::ColorConfig;
@@ -156,5 +156,9 @@ pub fn run() -> Result<i32, Error> {
     );
 
     // Run the shim with pre-parsed args (avoids double parsing)
-    turborepo_shim::run_with_args(&runtime, args).map_err(Error::from)
+    match turborepo_shim::run_with_args(&runtime, args) {
+        ShimResult::Ok(code) => Ok(code),
+        ShimResult::ShimError(e) => Err(Error::Shim(e)),
+        ShimResult::CliError(e) => Err(Error::Cli(e)),
+    }
 }
