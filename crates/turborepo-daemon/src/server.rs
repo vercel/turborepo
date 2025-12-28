@@ -773,7 +773,6 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_repository::{
         discovery::{DiscoveryResponse, PackageDiscovery},
-        package_graph::PackageName,
         package_manager::PackageManager,
     };
 
@@ -828,6 +827,7 @@ mod test {
         )
     }
 
+    #[allow(dead_code)]
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(
