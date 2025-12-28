@@ -52,7 +52,8 @@ use turborepo_ui::ColorConfig;
 /// ```
 pub trait TurboRunner: Send + Sync {
     /// The error type returned by the runner.
-    type Error: std::error::Error + Send + Sync + 'static;
+    /// Must implement both Error and Diagnostic to preserve full error chains.
+    type Error: std::error::Error + miette::Diagnostic + Send + Sync + 'static;
 
     /// Run the turbo CLI with the given repository state and UI configuration.
     ///

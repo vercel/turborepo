@@ -119,10 +119,10 @@ pub enum Error {
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
 
-    /// CLI error from the runner - stored as a boxed error to preserve the
-    /// original error display without requiring a dependency on cli::Error
-    #[error(transparent)]
-    Cli(#[from] Box<dyn std::error::Error + Send + Sync>),
+    /// CLI error from the runner - stored as a miette::Report to preserve the
+    /// full diagnostic chain (related errors, source code, etc.)
+    #[error("{0:?}")]
+    Cli(miette::Report),
 }
 
 /// Main entry point for the shim with injected dependencies.
@@ -253,7 +253,7 @@ where
     runtime
         .runner
         .run(repo_state, ui)
-        .map_err(|e| Error::Cli(Box::new(e)))
+        .map_err(|e| Error::Cli(miette::Report::new(e)))
 }
 
 /// Attempts to run correct turbo by finding nearest package.json,
@@ -571,10 +571,15 @@ mod tests {
     use super::*;
     use crate::DefaultChildSpawner;
 
+    // Mock error that implements both Error and Diagnostic
+    #[derive(Debug, thiserror::Error, Diagnostic)]
+    #[error("mock error")]
+    struct MockError;
+
     // Mock implementations for testing
     struct MockRunner;
     impl TurboRunner for MockRunner {
-        type Error = std::io::Error;
+        type Error = MockError;
         fn run(
             &self,
             _repo_state: Option<RepoState>,
