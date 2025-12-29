@@ -92,7 +92,7 @@ jobs:
           node: "false"
 
       - name: Run cargo clippy
-        run: cargo lint
+        run: cargo lint -- -D warnings
 
   rust_check:
     name: Rust check
@@ -100,6 +100,8 @@ jobs:
     if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      RUSTFLAGS: "-D warnings"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

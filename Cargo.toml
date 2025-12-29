@@ -18,10 +18,8 @@ turborepo = ["path:crates/turborepo*"]
 
 [workspace.lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(debug_assert)'] }
-warnings = "deny"
 
 [workspace.lints.clippy]
-all = { level = "deny", priority = -1 }
 too_many_arguments = "allow"
 
 [profile.dev]
