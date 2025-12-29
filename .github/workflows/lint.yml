@@ -8,6 +8,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+env:
+  RUSTFLAGS: "-D warnings"
+
 permissions:
   actions: write
   contents: read
@@ -92,7 +95,7 @@ jobs:
           node: "false"
 
       - name: Run cargo clippy
-        run: cargo lint -- -D warnings
+        run: cargo lint
 
   rust_check:
     name: Rust check
@@ -100,8 +103,6 @@ jobs:
     if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      RUSTFLAGS: "-D warnings"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

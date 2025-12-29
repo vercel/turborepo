@@ -1,5 +1,5 @@
 [alias]
-lint = "clippy --workspace --features rustls-tls --all-targets"
+lint = "clippy --workspace --features rustls-tls --all-targets -- -D warnings"
 
 [env]
 CARGO_WORKSPACE_DIR = { value = "", relative = true }
