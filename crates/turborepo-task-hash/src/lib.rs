@@ -13,9 +13,7 @@ use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
-use turbopath::{
-    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
-};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_cache::CacheHitMetadata;
 // Re-export turborepo_engine::TaskNode for convenience
 pub use turborepo_engine::TaskNode;
@@ -47,18 +45,6 @@ pub trait TaskDefinitionHashInfo {
     fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs;
 }
 
-const LOG_DIR: &str = ".turbo";
-
-fn task_log_filename(task_name: &str) -> String {
-    format!("turbo-{}.log", task_name.replace(':', "$colon$"))
-}
-
-fn sharable_workspace_relative_log_file(task_name: &str) -> RelativeUnixPathBuf {
-    let log_dir =
-        RelativeUnixPathBuf::new(LOG_DIR).expect("LOG_DIR should be a valid relative unix path");
-    log_dir.join_component(&task_log_filename(task_name))
-}
-
 impl TaskDefinitionHashInfo for TaskDefinition {
     fn env(&self) -> &[String] {
         &self.env
@@ -77,19 +63,8 @@ impl TaskDefinitionHashInfo for TaskDefinition {
     }
 
     fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs {
-        let mut inclusion_outputs =
-            vec![sharable_workspace_relative_log_file(task_id.task()).to_string()];
-        inclusion_outputs.extend_from_slice(&self.outputs.inclusions[..]);
-
-        let mut hashable = TaskOutputs {
-            inclusions: inclusion_outputs,
-            exclusions: self.outputs.exclusions.clone(),
-        };
-
-        hashable.inclusions.sort();
-        hashable.exclusions.sort();
-
-        hashable
+        // Delegate to the canonical implementation in turborepo-types
+        TaskDefinition::hashable_outputs(self, task_id.task())
     }
 }
 

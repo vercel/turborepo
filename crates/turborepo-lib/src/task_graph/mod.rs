@@ -3,7 +3,7 @@ mod visitor;
 use std::str::FromStr;
 
 use globwalk::{GlobError, ValidatedGlob};
-use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_task_id::TaskId;
 // Re-export TaskDefinition from turborepo-types for backward compatibility.
 // New code should import directly from `turborepo_types::TaskDefinition`.
@@ -23,9 +23,9 @@ pub use turborepo_types::TaskInputs;
     note = "Import `TaskOutputs` directly from `turborepo_types` instead"
 )]
 pub use turborepo_types::TaskOutputs;
+// Re-export log file utilities from turborepo-types for backward compatibility
+pub use turborepo_types::{task_log_filename, LOG_DIR};
 pub use visitor::{Error as VisitorError, Visitor};
-
-const LOG_DIR: &str = ".turbo";
 
 /// Extension trait for TaskDefinition providing path and output methods.
 pub trait TaskDefinitionExt {
@@ -51,19 +51,8 @@ impl TaskDefinitionExt for TaskDefinition {
     }
 
     fn hashable_outputs(&self, task_name: &TaskId) -> TaskOutputs {
-        let mut inclusion_outputs =
-            vec![sharable_workspace_relative_log_file(task_name.task()).to_string()];
-        inclusion_outputs.extend_from_slice(&self.outputs.inclusions[..]);
-
-        let mut hashable = TaskOutputs {
-            inclusions: inclusion_outputs,
-            exclusions: self.outputs.exclusions.clone(),
-        };
-
-        hashable.inclusions.sort();
-        hashable.exclusions.sort();
-
-        hashable
+        // Delegate to the canonical implementation in turborepo-types
+        TaskDefinition::hashable_outputs(self, task_name.task())
     }
 
     fn repo_relative_hashable_outputs(
@@ -81,7 +70,7 @@ impl TaskDefinitionExt for TaskDefinition {
         // At this point repo_relative_globs are still workspace relative, but
         // the processing in the rest of the function converts this to be repo
         // relative.
-        let mut repo_relative_globs = self.hashable_outputs(task_name);
+        let mut repo_relative_globs = TaskDefinitionExt::hashable_outputs(self, task_name);
 
         for input in repo_relative_globs.inclusions.iter_mut() {
             let relative_input = make_glob_repo_relative(input.as_str());
@@ -95,12 +84,6 @@ impl TaskDefinitionExt for TaskDefinition {
 
         repo_relative_globs
     }
-}
-
-fn sharable_workspace_relative_log_file(task_name: &str) -> RelativeUnixPathBuf {
-    let log_dir =
-        RelativeUnixPathBuf::new(LOG_DIR).expect("LOG_DIR should be a valid relative unix path");
-    log_dir.join_component(&task_log_filename(task_name))
 }
 
 /// Extension trait for TaskOutputs providing glob validation methods.
@@ -133,10 +116,6 @@ impl TaskOutputsExt for TaskOutputs {
             .map(|e| ValidatedGlob::from_str(e))
             .collect()
     }
-}
-
-fn task_log_filename(task_name: &str) -> String {
-    format!("turbo-{}.log", task_name.replace(':', "$colon$"))
 }
 
 #[cfg(test)]
