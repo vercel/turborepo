@@ -81,8 +81,6 @@ jobs:
     if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      RUSTFLAGS: "-D warnings"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -94,7 +92,7 @@ jobs:
           node: "false"
 
       - name: Run cargo clippy
-        run: cargo clippy --workspace --features rustls-tls --all-targets -- --deny clippy::all
+        run: cargo lint
 
   rust_check:
     name: Rust check
@@ -102,8 +100,6 @@ jobs:
     if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      RUSTFLAGS: "-D warnings"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

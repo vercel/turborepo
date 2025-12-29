@@ -384,9 +384,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_client_error_handling() {
-        let (tx, _rx) = mpsc::unbounded_channel();
-
-        let client = ErrorClient { tx };
+        let client = ErrorClient;
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
@@ -444,10 +442,8 @@ mod tests {
         assert_eq!(events[1].session_id, Some(session_id.to_string()));
     }
 
-    #[derive(Clone)]
-    struct ErrorClient {
-        tx: mpsc::UnboundedSender<()>,
-    }
+    #[derive(Clone, Copy)]
+    struct ErrorClient;
 
     impl AnalyticsClient for ErrorClient {
         async fn record_analytics(

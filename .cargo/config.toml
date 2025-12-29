@@ -1,3 +1,6 @@
+[alias]
+lint = "clippy --workspace --features rustls-tls --all-targets"
+
 [env]
 CARGO_WORKSPACE_DIR = { value = "", relative = true }
 TURBO_PNPM_WORKSPACE_DIR = { value = "", relative = true }
