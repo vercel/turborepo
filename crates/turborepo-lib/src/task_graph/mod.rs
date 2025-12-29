@@ -3,16 +3,22 @@ mod visitor;
 use std::str::FromStr;
 
 use globwalk::{GlobError, ValidatedGlob};
-use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
-use turborepo_errors::Spanned;
-use turborepo_task_id::{TaskId, TaskName};
-use turborepo_types::EnvMode;
+use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
+use turborepo_task_id::TaskId;
+// Re-export TaskDefinition from turborepo-types for backward compatibility.
+// New code should import directly from `turborepo_types::TaskDefinition`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `TaskDefinition` directly from `turborepo_types` instead"
+)]
+pub use turborepo_types::TaskDefinition;
 // Re-export TaskInputs from turborepo-types for backward compatibility.
 // New code should import directly from `turborepo_types::TaskInputs`.
 #[deprecated(
     since = "2.4.0",
     note = "Import `TaskInputs` directly from `turborepo_types` instead"
 )]
+#[allow(unused_imports)]
 pub use turborepo_types::TaskInputs;
 // Re-export TaskOutputs from turborepo-types for backward compatibility.
 // New code should import directly from `turborepo_types::TaskOutputs`.
@@ -21,115 +27,39 @@ pub use turborepo_types::TaskInputs;
     note = "Import `TaskOutputs` directly from `turborepo_types` instead"
 )]
 pub use turborepo_types::TaskOutputs;
+// Re-export log file utilities from turborepo-types for backward compatibility
+pub use turborepo_types::{task_log_filename, LOG_DIR};
 pub use visitor::{Error as VisitorError, Visitor};
 
-use crate::cli::OutputLogsMode;
+/// Extension trait for TaskDefinition providing path and output methods.
+pub trait TaskDefinitionExt {
+    /// Get the workspace-relative path to the log file for a task
+    fn workspace_relative_log_file(task_name: &str) -> AnchoredSystemPathBuf;
 
-// Constructed from a RawTaskDefinition
-#[derive(Debug, PartialEq, Clone, Eq)]
-pub struct TaskDefinition {
-    pub outputs: TaskOutputs,
-    pub cache: bool,
+    /// Get the hashable outputs for a task, including the log file
+    fn hashable_outputs(&self, task_name: &TaskId) -> TaskOutputs;
 
-    // This field is custom-marshalled from `env` and `depends_on``
-    pub env: Vec<String>,
-
-    pub pass_through_env: Option<Vec<String>>,
-
-    // TopologicalDependencies are tasks from package dependencies.
-    // E.g. "build" is a topological dependency in:
-    // dependsOn: ['^build'].
-    // This field is custom-marshalled from rawTask.DependsOn
-    pub topological_dependencies: Vec<Spanned<TaskName<'static>>>,
-
-    // TaskDependencies are anything that is not a topological dependency
-    // E.g. both something and //whatever are TaskDependencies in:
-    // dependsOn: ['something', '//whatever']
-    // This field is custom-marshalled from rawTask.DependsOn
-    pub task_dependencies: Vec<Spanned<TaskName<'static>>>,
-
-    // Inputs indicate the list of files this Task depends on. If any of those files change
-    // we can conclude that any cached outputs or logs for this Task should be invalidated.
-    pub inputs: TaskInputs,
-
-    // OutputMode determines how we should log the output.
-    pub output_logs: OutputLogsMode,
-
-    // Persistent indicates whether the Task is expected to exit or not
-    // Tasks marked Persistent do not exit (e.g. watch mode or dev servers)
-    pub persistent: bool,
-
-    // Indicates whether a persistent task can be interrupted in the middle of execution
-    // by watch mode
-    pub interruptible: bool,
-
-    // Interactive marks that a task can have its stdin written to.
-    // Tasks that take stdin input cannot be cached as their outputs may depend on the
-    // input.
-    pub interactive: bool,
-
-    // Override for global env mode setting
-    pub env_mode: Option<EnvMode>,
-
-    // Tasks that will get added to the graph if this one is
-    // It contains no guarantees regarding ordering, just that this will also get run.
-    // It will also not affect the task's hash aside from the definition getting folded into the
-    // hash.
-    pub with: Option<Vec<Spanned<TaskName<'static>>>>,
+    /// Get the repo-relative hashable outputs for a task
+    fn repo_relative_hashable_outputs(
+        &self,
+        task_name: &TaskId,
+        workspace_dir: &AnchoredSystemPath,
+    ) -> TaskOutputs;
 }
 
-impl Default for TaskDefinition {
-    fn default() -> Self {
-        Self {
-            cache: true,
-            outputs: Default::default(),
-            env: Default::default(),
-            pass_through_env: Default::default(),
-            topological_dependencies: Default::default(),
-            task_dependencies: Default::default(),
-            inputs: Default::default(),
-            output_logs: Default::default(),
-            persistent: Default::default(),
-            interruptible: Default::default(),
-            interactive: Default::default(),
-            env_mode: Default::default(),
-            with: Default::default(),
-        }
-    }
-}
-
-const LOG_DIR: &str = ".turbo";
-
-impl TaskDefinition {
-    pub fn workspace_relative_log_file(task_name: &str) -> AnchoredSystemPathBuf {
+impl TaskDefinitionExt for TaskDefinition {
+    fn workspace_relative_log_file(task_name: &str) -> AnchoredSystemPathBuf {
         let log_dir = AnchoredSystemPath::new(LOG_DIR)
             .expect("LOG_DIR should be a valid AnchoredSystemPathBuf");
         log_dir.join_component(&task_log_filename(task_name))
     }
 
-    fn sharable_workspace_relative_log_file(task_name: &str) -> RelativeUnixPathBuf {
-        let log_dir = RelativeUnixPathBuf::new(LOG_DIR)
-            .expect("LOG_DIR should be a valid relative unix path");
-        log_dir.join_component(&task_log_filename(task_name))
+    fn hashable_outputs(&self, task_name: &TaskId) -> TaskOutputs {
+        // Delegate to the canonical implementation in turborepo-types
+        TaskDefinition::hashable_outputs(self, task_name.task())
     }
 
-    pub fn hashable_outputs(&self, task_name: &TaskId) -> TaskOutputs {
-        let mut inclusion_outputs =
-            vec![Self::sharable_workspace_relative_log_file(task_name.task()).to_string()];
-        inclusion_outputs.extend_from_slice(&self.outputs.inclusions[..]);
-
-        let mut hashable = TaskOutputs {
-            inclusions: inclusion_outputs,
-            exclusions: self.outputs.exclusions.clone(),
-        };
-
-        hashable.inclusions.sort();
-        hashable.exclusions.sort();
-
-        hashable
-    }
-
-    pub fn repo_relative_hashable_outputs(
+    fn repo_relative_hashable_outputs(
         &self,
         task_name: &TaskId,
         workspace_dir: &AnchoredSystemPath,
@@ -144,7 +74,7 @@ impl TaskDefinition {
         // At this point repo_relative_globs are still workspace relative, but
         // the processing in the rest of the function converts this to be repo
         // relative.
-        let mut repo_relative_globs = self.hashable_outputs(task_name);
+        let mut repo_relative_globs = TaskDefinitionExt::hashable_outputs(self, task_name);
 
         for input in repo_relative_globs.inclusions.iter_mut() {
             let relative_input = make_glob_repo_relative(input.as_str());
@@ -192,10 +122,6 @@ impl TaskOutputsExt for TaskOutputs {
     }
 }
 
-fn task_log_filename(task_name: &str) -> String {
-    format!("turbo-{}.log", task_name.replace(':', "$colon$"))
-}
-
 #[cfg(test)]
 mod test {
     use std::path::MAIN_SEPARATOR_STR;
@@ -240,20 +166,22 @@ mod test {
 
     #[test]
     fn test_escape_log_file() {
-        let build_log = TaskDefinition::workspace_relative_log_file("build");
+        let build_log = <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file("build");
         let build_expected =
             AnchoredSystemPathBuf::from_raw([".turbo", "turbo-build.log"].join(MAIN_SEPARATOR_STR))
                 .unwrap();
         assert_eq!(build_log, build_expected);
 
-        let build_log = TaskDefinition::workspace_relative_log_file("build:prod");
+        let build_log =
+            <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file("build:prod");
         let build_expected = AnchoredSystemPathBuf::from_raw(
             [".turbo", "turbo-build$colon$prod.log"].join(MAIN_SEPARATOR_STR),
         )
         .unwrap();
         assert_eq!(build_log, build_expected);
 
-        let build_log = TaskDefinition::workspace_relative_log_file("build:prod:extra");
+        let build_log =
+            <TaskDefinition as TaskDefinitionExt>::workspace_relative_log_file("build:prod:extra");
         let build_expected = AnchoredSystemPathBuf::from_raw(
             [".turbo", "turbo-build$colon$prod$colon$extra.log"].join(MAIN_SEPARATOR_STR),
         )

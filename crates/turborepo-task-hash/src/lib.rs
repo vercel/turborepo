@@ -26,7 +26,7 @@ use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
 };
-use turborepo_types::{EnvMode, TaskInputs, TaskOutputs};
+use turborepo_types::{EnvMode, TaskDefinition, TaskInputs, TaskOutputs};
 
 /// Trait for types that provide task definition information needed for hashing.
 ///
@@ -43,6 +43,29 @@ pub trait TaskDefinitionHashInfo {
     fn outputs(&self) -> &TaskOutputs;
     /// Returns the hashable outputs for this task (includes log file)
     fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs;
+}
+
+impl TaskDefinitionHashInfo for TaskDefinition {
+    fn env(&self) -> &[String] {
+        &self.env
+    }
+
+    fn pass_through_env(&self) -> Option<&[String]> {
+        self.pass_through_env.as_deref()
+    }
+
+    fn inputs(&self) -> &TaskInputs {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &TaskOutputs {
+        &self.outputs
+    }
+
+    fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs {
+        // Delegate to the canonical implementation in turborepo-types
+        TaskDefinition::hashable_outputs(self, task_id.task())
+    }
 }
 
 /// Trait for run options needed by the task hasher.

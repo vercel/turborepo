@@ -516,7 +516,9 @@ mod test {
     use turborepo_unescape::UnescapedString;
 
     use super::*;
-    use crate::{config::Error, task_graph::TaskDefinition};
+    use crate::{
+        config::Error, task_graph::TaskDefinition, turbo_json::TaskDefinitionFromProcessed,
+    };
 
     #[test_case(r"{}", TurboJson::default() ; "empty")]
     #[test_case(r#"{ "globalDependencies": ["tsconfig.json", "jest.config.ts"] }"#,

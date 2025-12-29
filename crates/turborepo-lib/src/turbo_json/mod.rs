@@ -197,12 +197,27 @@ impl TaskInputsFromProcessed for TaskInputs {
     }
 }
 
-impl TaskDefinition {
+/// Extension trait for creating TaskDefinition from processed task definitions.
+pub trait TaskDefinitionFromProcessed {
     /// Creates a TaskDefinition from a ProcessedTaskDefinition
-    pub fn from_processed(
+    fn from_processed(
         processed: ProcessedTaskDefinition,
         path_to_repo_root: &RelativeUnixPath,
-    ) -> Result<Self, Error> {
+    ) -> Result<TaskDefinition, Error>;
+
+    /// Helper method for tests that still use RawTaskDefinition
+    #[cfg(test)]
+    fn from_raw(
+        raw_task: RawTaskDefinition,
+        path_to_repo_root: &RelativeUnixPath,
+    ) -> Result<TaskDefinition, Error>;
+}
+
+impl TaskDefinitionFromProcessed for TaskDefinition {
+    fn from_processed(
+        processed: ProcessedTaskDefinition,
+        path_to_repo_root: &RelativeUnixPath,
+    ) -> Result<TaskDefinition, Error> {
         // Convert outputs with turbo_root resolution
         let outputs = processed
             .outputs
@@ -280,15 +295,17 @@ impl TaskDefinition {
         })
     }
 
-    /// Helper method for tests that still use RawTaskDefinition
     #[cfg(test)]
     fn from_raw(
         raw_task: RawTaskDefinition,
         path_to_repo_root: &RelativeUnixPath,
-    ) -> Result<Self, Error> {
+    ) -> Result<TaskDefinition, Error> {
         // Use default FutureFlags for backward compatibility
         let processed = ProcessedTaskDefinition::from_raw(raw_task, &FutureFlags::default())?;
-        Self::from_processed(processed, path_to_repo_root)
+        <TaskDefinition as TaskDefinitionFromProcessed>::from_processed(
+            processed,
+            path_to_repo_root,
+        )
     }
 }
 

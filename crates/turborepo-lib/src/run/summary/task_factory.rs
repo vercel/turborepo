@@ -13,7 +13,7 @@ use crate::{
     cli,
     engine::{Engine, TaskNode},
     opts::RunOpts,
-    task_graph::TaskDefinition,
+    task_graph::{TaskDefinition, TaskDefinitionExt},
     task_hash::{get_external_deps_hash, TaskHashTracker},
 };
 

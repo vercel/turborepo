@@ -12,27 +12,17 @@ pub use turborepo_engine::{
     Built, ExecuteError, ExecutionOptions, Message, StopExecution, TaskDefinitionInfo, TaskNode,
 };
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_types::TaskDefinition;
 
-use crate::{task_graph::TaskDefinition, turbo_json::UIMode};
+use crate::turbo_json::UIMode;
 
 /// Type alias for Engine specialized with TaskDefinition.
 /// This allows existing code to continue using `Engine` without type
 /// parameters.
 pub type Engine<S = Built> = turborepo_engine::Engine<S, TaskDefinition>;
 
-// Implement TaskDefinitionInfo for TaskDefinition so it can be used with the
-// engine
-impl TaskDefinitionInfo for TaskDefinition {
-    fn persistent(&self) -> bool {
-        self.persistent
-    }
-    fn interruptible(&self) -> bool {
-        self.interruptible
-    }
-    fn interactive(&self) -> bool {
-        self.interactive
-    }
-}
+// Note: TaskDefinitionInfo is now implemented for TaskDefinition
+// directly in turborepo-engine crate.
 
 #[derive(Debug, Error, Diagnostic, PartialEq, PartialOrd, Eq, Ord)]
 pub enum ValidateError {
