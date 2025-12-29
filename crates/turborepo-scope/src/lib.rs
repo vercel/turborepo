@@ -8,6 +8,9 @@
 //! Extracted from turborepo-lib to reduce coupling.
 
 #![deny(clippy::all)]
+// Allow large error types - ResolutionError contains ChangeMapError which is 128+ bytes.
+// Boxing would complicate error handling without significant benefit for a CLI tool.
+#![allow(clippy::result_large_err)]
 
 // Module declarations
 mod change_detector;

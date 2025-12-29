@@ -4,9 +4,32 @@
 
 use std::str::FromStr;
 
+use once_cell::sync::Lazy;
 use regex::Regex;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
+
+/// Regex for parsing target selector syntax.
+///
+/// Syntax: `[name_pattern]{directory}[git_range]`
+///
+/// Examples:
+/// - `"foo"` → name_pattern="foo"
+/// - `"{packages/*}"` → directory="packages/*"
+/// - `"[HEAD~1]"` → git_range from HEAD~1
+/// - `"foo{src}[main]"` → all three components
+///
+/// Pattern breakdown:
+/// - `(?P<name>...)` - Package name/pattern (cannot start with `.` or contain
+///   `{}[]`)
+/// - `(\{(?P<directory>[^}]*)\})?` - Optional directory in curly braces
+/// - `(?P<commits>(?:\.{3})?\[[^\]]*\])?` - Optional git range in square
+///   brackets, optionally prefixed with `...` for match_dependencies
+static SELECTOR_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$"
+    ).expect("selector regex is statically validated")
+});
 
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct GitRange {
@@ -81,8 +104,7 @@ impl FromStr for TargetSelector {
 
         // We explicitly allow empty git ranges so we can return a more targeted error
         // below
-        let re = Regex::new(r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$").expect("valid");
-        let captures = re.captures(selector);
+        let captures = SELECTOR_REGEX.captures(selector);
 
         let captures = match captures {
             Some(captures) => captures,

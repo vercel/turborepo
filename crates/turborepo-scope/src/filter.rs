@@ -432,17 +432,25 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
         let mut entry_packages = HashMap::new();
 
-        for (name, info) in self.pkg_graph.packages() {
-            if let Some(parent_dir) = selector.parent_dir.as_deref() {
+        // Compile glob pattern ONCE outside the loop to avoid O(n) compilation overhead
+        let parent_dir_matcher = selector
+            .parent_dir
+            .as_deref()
+            .map(|parent_dir| {
                 let path = parent_dir.to_unix();
-                let parent_dir_matcher = wax::Glob::new(path.as_str())?;
-                let matches = parent_dir_matcher.is_match(info.package_path().as_path());
+                wax::Glob::new(path.as_str()).map(wax::Glob::into_owned)
+            })
+            .transpose()?;
+
+        for (name, info) in self.pkg_graph.packages() {
+            if let Some(ref matcher) = parent_dir_matcher {
+                let matches = matcher.is_match(info.package_path().as_path());
 
                 if matches {
                     entry_packages.insert(
                         name.to_owned(),
                         PackageInclusionReason::InFilteredDirectory {
-                            directory: parent_dir.to_owned(),
+                            directory: selector.parent_dir.as_ref().unwrap().to_owned(),
                         },
                     );
                 }
