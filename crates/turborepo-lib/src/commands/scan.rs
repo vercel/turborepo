@@ -44,7 +44,10 @@ however, there are some things you can do to make it even faster. {}\n",
     let d1 = Box::new(DaemonDiagnostic(paths.clone()));
     let d2 = Box::new(LSPDiagnostic(paths));
     let d3 = Box::new(GitDaemonDiagnostic);
-    let d5 = Box::new(UpdateDiagnostic::new(base.repo_root.clone(), crate::get_version()));
+    let d5 = Box::new(UpdateDiagnostic::new(
+        base.repo_root.clone(),
+        crate::get_version(),
+    ));
     let d4 = Box::new(RemoteCacheDiagnostic::new(base));
 
     let diags: Vec<Box<dyn Diagnostic>> = vec![d1, d2, d3, d4, d5];

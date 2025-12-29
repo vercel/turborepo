@@ -1,13 +1,12 @@
 //! Diagnostic infrastructure for Turborepo.
 //!
-//! Most of the diagnostics implementation has been moved to the `turborepo-diagnostics`
-//! crate. This module re-exports the public API and contains diagnostics that depend
-//! on turborepo-lib internals.
+//! Most of the diagnostics implementation has been moved to the
+//! `turborepo-diagnostics` crate. This module re-exports the public API and
+//! contains diagnostics that depend on turborepo-lib internals.
 
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
-
 // Re-export everything from the new crate
 pub use turborepo_diagnostics::{
     DaemonDiagnostic, Diagnostic, DiagnosticChannel, DiagnosticMessage, GitDaemonDiagnostic,
