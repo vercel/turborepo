@@ -3,14 +3,13 @@
 //! This module re-exports types from turborepo-task-hash and provides
 //! trait implementations for turborepo-lib types.
 
-use turborepo_task_id::TaskId;
-use turborepo_types::{TaskInputs, TaskOutputs};
-
 // Re-export all public types from turborepo-task-hash
 pub use turborepo_task_hash::{
     get_external_deps_hash, get_internal_deps_hash, Error, PackageInputsHashes, TaskHashTracker,
     TaskHashTrackerState,
 };
+use turborepo_task_id::TaskId;
+use turborepo_types::{TaskInputs, TaskOutputs};
 
 use crate::{opts::RunOpts, task_graph::TaskDefinition};
 

@@ -15,6 +15,8 @@ use thiserror::Error;
 use tracing::{debug, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_cache::CacheHitMetadata;
+// Re-export turborepo_engine::TaskNode for convenience
+pub use turborepo_engine::TaskNode;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
 use turborepo_frameworks::{infer_framework, Slug as FrameworkSlug};
 use turborepo_hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash};
@@ -25,9 +27,6 @@ use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
 };
 use turborepo_types::{EnvMode, TaskInputs, TaskOutputs};
-
-// Re-export turborepo_engine::TaskNode for convenience
-pub use turborepo_engine::TaskNode;
 
 /// Trait for types that provide task definition information needed for hashing.
 ///
@@ -65,8 +64,9 @@ pub trait DaemonFileHasher: Clone + Send {
         &mut self,
         package_path: &AnchoredSystemPath,
         inputs: &TaskInputs,
-    ) -> impl std::future::Future<Output = Result<HashMap<String, String>, turborepo_daemon::DaemonError>>
-           + Send;
+    ) -> impl std::future::Future<
+        Output = Result<HashMap<String, String>, turborepo_daemon::DaemonError>,
+    > + Send;
 }
 
 // Implement DaemonFileHasher for the actual daemon client
@@ -76,8 +76,8 @@ impl DaemonFileHasher for turborepo_daemon::DaemonClient<turborepo_daemon::Daemo
         package_path: &AnchoredSystemPath,
         inputs: &TaskInputs,
     ) -> Result<HashMap<String, String>, turborepo_daemon::DaemonError> {
-        let response = turborepo_daemon::DaemonClient::get_file_hashes(self, package_path, inputs)
-            .await?;
+        let response =
+            turborepo_daemon::DaemonClient::get_file_hashes(self, package_path, inputs).await?;
         Ok(response.file_hashes)
     }
 }
@@ -122,7 +122,15 @@ pub struct PackageInputsHashes {
 }
 
 impl PackageInputsHashes {
-    #[tracing::instrument(skip(all_tasks, workspaces, task_definitions, repo_root, scm, telemetry, daemon))]
+    #[tracing::instrument(skip(
+        all_tasks,
+        workspaces,
+        task_definitions,
+        repo_root,
+        scm,
+        telemetry,
+        daemon
+    ))]
     pub fn calculate_file_hashes<'a, T, D>(
         scm: &SCM,
         all_tasks: impl ParallelIterator<Item = &'a TaskNode>,
@@ -443,9 +451,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             pass_through_args: self.run_opts.pass_through_args(),
             env: task_definition.env(),
             resolved_env_vars: hashable_env_pairs,
-            pass_through_env: task_definition
-                .pass_through_env()
-                .unwrap_or_default(),
+            pass_through_env: task_definition.pass_through_env().unwrap_or_default(),
             env_mode: task_env_mode,
         };
 
@@ -578,9 +584,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 let pass_through_env_vars = self.env_at_execution_start.pass_through_env(
                     builtin_pass_through,
                     &self.global_env,
-                    task_definition
-                        .pass_through_env()
-                        .unwrap_or_default(),
+                    task_definition.pass_through_env().unwrap_or_default(),
                 )?;
 
                 let tracker_env = self
