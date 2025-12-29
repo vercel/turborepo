@@ -290,6 +290,7 @@ impl DaemonConnector {
     }
 
     #[tracing::instrument(skip(self))]
+    #[cfg_attr(target_os = "windows", allow(dead_code))]
     async fn wait_for_socket(&self) -> Result<(), DaemonConnectorError> {
         // Note that we don't care if this is our daemon
         // or not. We started a process, but someone else could beat
@@ -412,6 +413,7 @@ async fn wait_for_file(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(target_os = "windows", allow(dead_code))]
 enum WaitAction {
     /// Wait for the file to exist.
     Exists,
