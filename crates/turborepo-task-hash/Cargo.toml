@@ -1,0 +1,36 @@
+[package]
+name = "turborepo-task-hash"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Task hashing utilities for Turborepo cache invalidation"
+
+[dependencies]
+rayon = "1.7.0"
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = "1.0.38"
+tracing = { workspace = true }
+
+turbopath = { workspace = true }
+turborepo-cache = { workspace = true }
+turborepo-daemon = { workspace = true }
+turborepo-engine = { path = "../turborepo-engine" }
+turborepo-env = { workspace = true }
+turborepo-frameworks = { workspace = true }
+turborepo-hash = { workspace = true }
+turborepo-lockfiles = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository" }
+turborepo-scm = { workspace = true }
+turborepo-task-id = { workspace = true }
+turborepo-telemetry = { path = "../turborepo-telemetry" }
+turborepo-types = { workspace = true }
+
+tokio = { workspace = true, features = ["time", "rt"] }
+
+[features]
+default = []
+daemon-file-hashing = []
+
+[lints]
+workspace = true
