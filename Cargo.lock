@@ -7134,6 +7134,7 @@ dependencies = [
  "turborepo-scope",
  "turborepo-shim",
  "turborepo-signals",
+ "turborepo-task-hash",
  "turborepo-task-id",
  "turborepo-telemetry",
  "turborepo-types",
@@ -7389,6 +7390,31 @@ dependencies = [
  "futures",
  "thiserror 1.0.63",
  "tokio",
+]
+
+[[package]]
+name = "turborepo-task-hash"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+ "regex",
+ "serde",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-cache",
+ "turborepo-daemon",
+ "turborepo-engine",
+ "turborepo-env",
+ "turborepo-frameworks",
+ "turborepo-hash",
+ "turborepo-lockfiles",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-task-id",
+ "turborepo-telemetry",
+ "turborepo-types",
 ]
 
 [[package]]
