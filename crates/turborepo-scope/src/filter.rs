@@ -12,17 +12,17 @@ use miette::Diagnostic;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{merge_changed_packages, ChangeMapError, PackageInclusionReason},
+    change_mapper::{ChangeMapError, PackageInclusionReason, merge_changed_packages},
     package_graph::{self, PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
 use wax::Program;
 
 use crate::{
+    ScopeOpts,
     change_detector::{GitChangeDetector, ScopeChangeDetector},
     simple_glob::{Match, SimpleGlob},
     target_selector::{GitRange, InvalidSelectorError, TargetSelector},
-    ScopeOpts,
 };
 
 /// Package inference for directory-based filtering.
@@ -109,7 +109,6 @@ pub struct FilterResolver<'a, T: GitChangeDetector> {
     pkg_graph: &'a PackageGraph,
     turbo_root: &'a AbsoluteSystemPath,
     inference: Option<PackageInference>,
-    scm: &'a SCM,
     change_detector: T,
 }
 
@@ -135,7 +134,6 @@ impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
             pkg_graph,
             turbo_root,
             inference,
-            scm,
             change_detector,
         ))
     }
@@ -146,14 +144,12 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         pkg_graph: &'a PackageGraph,
         turbo_root: &'a AbsoluteSystemPath,
         inference: Option<PackageInference>,
-        scm: &'a SCM,
         change_detector: T,
     ) -> Self {
         Self {
             pkg_graph,
             turbo_root,
             inference,
-            scm,
             change_detector,
         }
     }
@@ -856,13 +852,10 @@ mod test {
 
         let pkg_graph = Box::leak(Box::new(graph));
 
-        let scm = Box::leak(Box::new(turborepo_scm::SCM::new(turbo_root)));
-
         let resolver = FilterResolver::<'static>::new_with_change_detector(
             pkg_graph,
             turbo_root,
             package_inference,
-            scm,
             change_detector,
         );
 
