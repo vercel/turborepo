@@ -1,3 +1,7 @@
+//! Filter pattern parsing and resolution.
+//!
+//! This module handles --filter flag parsing and package filtering.
+
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -8,19 +12,20 @@ use miette::Diagnostic;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::{merge_changed_packages, ChangeMapError, PackageInclusionReason},
+    change_mapper::{ChangeMapError, PackageInclusionReason, merge_changed_packages},
     package_graph::{self, PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
 use wax::Program;
 
-use super::{
-    change_detector::GitChangeDetector,
+use crate::{
+    ScopeOpts,
+    change_detector::{GitChangeDetector, ScopeChangeDetector},
     simple_glob::{Match, SimpleGlob},
     target_selector::{GitRange, InvalidSelectorError, TargetSelector},
 };
-use crate::{run::scope::change_detector::ScopeChangeDetector, turbo_json::TurboJson};
 
+/// Package inference for directory-based filtering.
 pub struct PackageInference {
     package_name: Option<String>,
     directory_root: AnchoredSystemPathBuf,
@@ -99,55 +104,52 @@ impl PackageInference {
     }
 }
 
+/// Resolves filter patterns to package sets.
 pub struct FilterResolver<'a, T: GitChangeDetector> {
     pkg_graph: &'a PackageGraph,
     turbo_root: &'a AbsoluteSystemPath,
     inference: Option<PackageInference>,
-    scm: &'a SCM,
     change_detector: T,
 }
 
 impl<'a> FilterResolver<'a, ScopeChangeDetector<'a>> {
-    pub(crate) fn new(
-        opts: &'a super::ScopeOpts,
+    pub fn new(
+        opts: &'a ScopeOpts,
         pkg_graph: &'a PackageGraph,
         turbo_root: &'a AbsoluteSystemPath,
         inference: Option<PackageInference>,
         scm: &'a SCM,
-        root_turbo_json: &'a TurboJson,
+        global_deps: &'a [String],
     ) -> Result<Self, ResolutionError> {
-        let global_deps = opts
+        let global_deps_iter = opts
             .global_deps
             .iter()
             .map(|s| s.as_str())
-            .chain(root_turbo_json.global_deps.iter().map(|s| s.as_str()));
+            .chain(global_deps.iter().map(|s| s.as_str()));
 
         let change_detector =
-            ScopeChangeDetector::new(turbo_root, scm, pkg_graph, global_deps, vec![])?;
+            ScopeChangeDetector::new(turbo_root, scm, pkg_graph, global_deps_iter, vec![])?;
 
         Ok(Self::new_with_change_detector(
             pkg_graph,
             turbo_root,
             inference,
-            scm,
             change_detector,
         ))
     }
 }
 
 impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
-    pub(crate) fn new_with_change_detector(
+    pub fn new_with_change_detector(
         pkg_graph: &'a PackageGraph,
         turbo_root: &'a AbsoluteSystemPath,
         inference: Option<PackageInference>,
-        scm: &'a SCM,
         change_detector: T,
     ) -> Self {
         Self {
             pkg_graph,
             turbo_root,
             inference,
-            scm,
             change_detector,
         }
     }
@@ -159,7 +161,7 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     /// in the workspace will be returned.
     ///
     /// It applies the following rules:
-    pub(crate) fn resolve(
+    pub fn resolve(
         &self,
         affected: &Option<(Option<String>, Option<String>)>,
         patterns: &[String],
@@ -426,17 +428,25 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
         let mut entry_packages = HashMap::new();
 
-        for (name, info) in self.pkg_graph.packages() {
-            if let Some(parent_dir) = selector.parent_dir.as_deref() {
+        // Compile glob pattern ONCE outside the loop to avoid O(n) compilation overhead
+        let parent_dir_matcher = selector
+            .parent_dir
+            .as_deref()
+            .map(|parent_dir| {
                 let path = parent_dir.to_unix();
-                let parent_dir_matcher = wax::Glob::new(path.as_str())?;
-                let matches = parent_dir_matcher.is_match(info.package_path().as_path());
+                wax::Glob::new(path.as_str()).map(wax::Glob::into_owned)
+            })
+            .transpose()?;
+
+        for (name, info) in self.pkg_graph.packages() {
+            if let Some(ref matcher) = parent_dir_matcher {
+                let matches = matcher.is_match(info.package_path().as_path());
 
                 if matches {
                     entry_packages.insert(
                         name.to_owned(),
                         PackageInclusionReason::InFilteredDirectory {
-                            directory: parent_dir.to_owned(),
+                            directory: selector.parent_dir.as_ref().unwrap().to_owned(),
                         },
                     );
                 }
@@ -672,6 +682,7 @@ fn match_package_names(
     Ok(packages)
 }
 
+/// Errors that can occur during scope resolution.
 #[derive(Debug, thiserror::Error, Diagnostic)]
 pub enum ResolutionError {
     #[error("missing info for package")]
@@ -722,9 +733,11 @@ mod test {
         package_manager::PackageManager,
     };
 
-    use super::{FilterResolver, PackageInference, TargetSelector};
-    use crate::run::scope::{
-        change_detector::GitChangeDetector, target_selector::GitRange, ResolutionError,
+    use super::{FilterResolver, PackageInference};
+    use crate::{
+        change_detector::GitChangeDetector,
+        filter::ResolutionError,
+        target_selector::{GitRange, TargetSelector},
     };
 
     fn get_name(name: &str) -> (Option<&str>, &str) {
@@ -839,13 +852,10 @@ mod test {
 
         let pkg_graph = Box::leak(Box::new(graph));
 
-        let scm = Box::leak(Box::new(turborepo_scm::SCM::new(turbo_root)));
-
         let resolver = FilterResolver::<'static>::new_with_change_detector(
             pkg_graph,
             turbo_root,
             package_inference,
-            scm,
             change_detector,
         );
 

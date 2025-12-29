@@ -1,0 +1,29 @@
+[package]
+name = "turborepo-scope"
+version = "0.1.0"
+edition.workspace = true
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+miette = { workspace = true, features = ["fancy"] }
+once_cell = { workspace = true }
+path-clean = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+wax = { workspace = true }
+
+turbopath = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-scm = { workspace = true, features = ["git2"] }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+test-case = { workspace = true }
+tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
+turborepo-errors = { workspace = true }

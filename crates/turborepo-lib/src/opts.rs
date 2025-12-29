@@ -6,6 +6,8 @@ use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
+// Re-export ScopeOpts from turborepo-scope to avoid duplication
+pub use turborepo_scope::ScopeOpts;
 use turborepo_task_id::{TaskId, TaskName};
 
 use crate::{
@@ -176,7 +178,7 @@ impl Opts {
         };
         let run_opts = RunOpts::try_from(inputs)?;
         let cache_opts = CacheOpts::try_from(inputs)?;
-        let scope_opts = ScopeOpts::try_from(inputs)?;
+        let scope_opts = scope_opts_from_inputs(inputs)?;
         let runcache_opts = RunCacheOpts::from(inputs);
         let api_client_opts = APIClientOpts::from(inputs);
         let repo_opts = RepoOpts::from(inputs);
@@ -406,41 +408,33 @@ impl From<LogPrefix> for ResolvedLogPrefix {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
-pub struct ScopeOpts {
-    pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
-    pub global_deps: Vec<String>,
-    pub filter_patterns: Vec<String>,
-    pub affected_range: Option<(Option<String>, Option<String>)>,
-}
+/// Create ScopeOpts from OptsInputs.
+///
+/// This is a helper function since we can't implement `TryFrom` for a foreign
+/// type.
+fn scope_opts_from_inputs(inputs: OptsInputs<'_>) -> Result<ScopeOpts, Error> {
+    let pkg_inference_root = inputs
+        .execution_args
+        .pkg_inference_root
+        .as_ref()
+        .map(AnchoredSystemPathBuf::from_raw)
+        .transpose()?;
 
-impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
-    type Error = self::Error;
+    let affected_range = inputs.execution_args.affected.then(|| {
+        let scm_base = inputs.config.scm_base();
+        let scm_head = inputs.config.scm_head();
+        (
+            scm_base.map(|b| b.to_owned()),
+            scm_head.map(|h| h.to_string()),
+        )
+    });
 
-    fn try_from(inputs: OptsInputs<'a>) -> Result<Self, Self::Error> {
-        let pkg_inference_root = inputs
-            .execution_args
-            .pkg_inference_root
-            .as_ref()
-            .map(AnchoredSystemPathBuf::from_raw)
-            .transpose()?;
-
-        let affected_range = inputs.execution_args.affected.then(|| {
-            let scm_base = inputs.config.scm_base();
-            let scm_head = inputs.config.scm_head();
-            (
-                scm_base.map(|b| b.to_owned()),
-                scm_head.map(|h| h.to_string()),
-            )
-        });
-
-        Ok(Self {
-            global_deps: inputs.execution_args.global_deps.clone(),
-            pkg_inference_root,
-            affected_range,
-            filter_patterns: inputs.execution_args.filter.clone(),
-        })
-    }
+    Ok(ScopeOpts {
+        global_deps: inputs.execution_args.global_deps.clone(),
+        pkg_inference_root,
+        affected_range,
+        filter_patterns: inputs.execution_args.filter.clone(),
+    })
 }
 
 impl<'a> From<OptsInputs<'a>> for APIClientOpts {
@@ -539,12 +533,6 @@ impl RunOpts {
         // If we're running on GitHub Actions, force everything to stdout
         // so as not to have out-of-order log lines
         matches!(self.log_order, ResolvedLogOrder::Grouped) && self.is_github_actions
-    }
-}
-
-impl ScopeOpts {
-    pub fn get_filters(&self) -> Vec<String> {
-        self.filter_patterns.clone()
     }
 }
 

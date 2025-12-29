@@ -1,10 +1,37 @@
+//! Target selector parsing.
+//!
+//! This module parses filter strings into structured selectors.
+
 use std::str::FromStr;
 
+use once_cell::sync::Lazy;
 use regex::Regex;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
 
-#[derive(Debug, Default, PartialEq)]
+/// Regex for parsing target selector syntax.
+///
+/// Syntax: `[name_pattern]{directory}[git_range]`
+///
+/// Examples:
+/// - `"foo"` → name_pattern="foo"
+/// - `"{packages/*}"` → directory="packages/*"
+/// - `"[HEAD~1]"` → git_range from HEAD~1
+/// - `"foo{src}[main]"` → all three components
+///
+/// Pattern breakdown:
+/// - `(?P<name>...)` - Package name/pattern (cannot start with `.` or contain
+///   `{}[]`)
+/// - `(\{(?P<directory>[^}]*)\})?` - Optional directory in curly braces
+/// - `(?P<commits>(?:\.{3})?\[[^\]]*\])?` - Optional git range in square
+///   brackets, optionally prefixed with `...` for match_dependencies
+static SELECTOR_REGEX: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$"
+    ).expect("selector regex is statically validated")
+});
+
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct GitRange {
     pub from_ref: Option<String>,
     pub to_ref: Option<String>,
@@ -18,7 +45,8 @@ pub struct GitRange {
     pub merge_base: bool,
 }
 
-#[derive(Debug, Default, PartialEq)]
+/// A parsed target selector from a filter string.
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct TargetSelector {
     pub include_dependencies: bool,
     pub match_dependencies: bool,
@@ -76,8 +104,7 @@ impl FromStr for TargetSelector {
 
         // We explicitly allow empty git ranges so we can return a more targeted error
         // below
-        let re = Regex::new(r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$").expect("valid");
-        let captures = re.captures(selector);
+        let captures = SELECTOR_REGEX.captures(selector);
 
         let captures = match captures {
             Some(captures) => captures,
@@ -195,6 +222,7 @@ impl FromStr for TargetSelector {
     }
 }
 
+/// Errors when parsing target selectors.
 #[derive(Debug, Error, PartialEq)]
 pub enum InvalidSelectorError {
     #[error("cannot use match dependencies without specifying either a directory or package")]
@@ -243,8 +271,7 @@ mod test {
     use test_case::test_case;
     use turbopath::AnchoredSystemPathBuf;
 
-    use super::TargetSelector;
-    use crate::run::scope::target_selector::GitRange;
+    use super::{GitRange, TargetSelector};
 
     #[test_case("foo", TargetSelector { name_pattern: "foo".to_string(), raw: "foo".to_string(), ..Default::default() }; "foo")]
     #[test_case("foo...", TargetSelector { name_pattern: "foo".to_string(), raw: "foo...".to_string(), include_dependencies: true, ..Default::default() }; "foo dot dot dot")]
