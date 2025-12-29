@@ -8,33 +8,11 @@ pub use turborepo_task_hash::{
     get_external_deps_hash, get_internal_deps_hash, Error, PackageInputsHashes, TaskHashTracker,
     TaskHashTrackerState,
 };
-use turborepo_task_id::TaskId;
-use turborepo_types::{TaskInputs, TaskOutputs};
 
-use crate::{opts::RunOpts, task_graph::TaskDefinition};
+use crate::opts::RunOpts;
 
-// Implement TaskDefinitionHashInfo for TaskDefinition
-impl turborepo_task_hash::TaskDefinitionHashInfo for TaskDefinition {
-    fn env(&self) -> &[String] {
-        &self.env
-    }
-
-    fn pass_through_env(&self) -> Option<&[String]> {
-        self.pass_through_env.as_deref()
-    }
-
-    fn inputs(&self) -> &TaskInputs {
-        &self.inputs
-    }
-
-    fn outputs(&self) -> &TaskOutputs {
-        &self.outputs
-    }
-
-    fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs {
-        TaskDefinition::hashable_outputs(self, task_id)
-    }
-}
+// Note: TaskDefinitionHashInfo is now implemented for TaskDefinition
+// directly in turborepo-task-hash crate.
 
 // Implement RunOptsHashInfo for RunOpts
 impl turborepo_task_hash::RunOptsHashInfo for RunOpts {

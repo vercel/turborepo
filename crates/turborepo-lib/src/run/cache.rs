@@ -24,7 +24,7 @@ use crate::{
     cli::OutputLogsMode,
     hash::{FileHashes, TurboHash},
     opts::RunCacheOpts,
-    task_graph::{TaskDefinition, TaskOutputs, TaskOutputsExt},
+    task_graph::{TaskDefinition, TaskDefinitionExt, TaskOutputs, TaskOutputsExt},
 };
 
 #[derive(Debug, thiserror::Error)]

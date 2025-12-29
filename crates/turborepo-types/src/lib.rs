@@ -9,6 +9,8 @@ use std::fmt;
 use biome_deserialize_macros::Deserializable;
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
+use turborepo_errors::Spanned;
+use turborepo_task_id::TaskName;
 
 /// Environment mode for task execution.
 ///
@@ -161,5 +163,79 @@ mod tests {
         let inputs = TaskInputs::new(vec!["src/**".to_string()]).with_default(true);
         assert_eq!(inputs.globs, vec!["src/**".to_string()]);
         assert!(inputs.default);
+    }
+}
+
+/// Constructed from a RawTaskDefinition, this represents the fully resolved
+/// configuration for a task.
+#[derive(Debug, PartialEq, Clone, Eq)]
+pub struct TaskDefinition {
+    pub outputs: TaskOutputs,
+    pub cache: bool,
+
+    // This field is custom-marshalled from `env` and `depends_on`
+    pub env: Vec<String>,
+
+    pub pass_through_env: Option<Vec<String>>,
+
+    // TopologicalDependencies are tasks from package dependencies.
+    // E.g. "build" is a topological dependency in:
+    // dependsOn: ['^build'].
+    // This field is custom-marshalled from rawTask.DependsOn
+    pub topological_dependencies: Vec<Spanned<TaskName<'static>>>,
+
+    // TaskDependencies are anything that is not a topological dependency
+    // E.g. both something and //whatever are TaskDependencies in:
+    // dependsOn: ['something', '//whatever']
+    // This field is custom-marshalled from rawTask.DependsOn
+    pub task_dependencies: Vec<Spanned<TaskName<'static>>>,
+
+    // Inputs indicate the list of files this Task depends on. If any of those files change
+    // we can conclude that any cached outputs or logs for this Task should be invalidated.
+    pub inputs: TaskInputs,
+
+    // OutputMode determines how we should log the output.
+    pub output_logs: OutputLogsMode,
+
+    // Persistent indicates whether the Task is expected to exit or not
+    // Tasks marked Persistent do not exit (e.g. watch mode or dev servers)
+    pub persistent: bool,
+
+    // Indicates whether a persistent task can be interrupted in the middle of execution
+    // by watch mode
+    pub interruptible: bool,
+
+    // Interactive marks that a task can have its stdin written to.
+    // Tasks that take stdin input cannot be cached as their outputs may depend on the
+    // input.
+    pub interactive: bool,
+
+    // Override for global env mode setting
+    pub env_mode: Option<EnvMode>,
+
+    // Tasks that will get added to the graph if this one is
+    // It contains no guarantees regarding ordering, just that this will also get run.
+    // It will also not affect the task's hash aside from the definition getting folded into the
+    // hash.
+    pub with: Option<Vec<Spanned<TaskName<'static>>>>,
+}
+
+impl Default for TaskDefinition {
+    fn default() -> Self {
+        Self {
+            cache: true,
+            outputs: Default::default(),
+            env: Default::default(),
+            pass_through_env: Default::default(),
+            topological_dependencies: Default::default(),
+            task_dependencies: Default::default(),
+            inputs: Default::default(),
+            output_logs: Default::default(),
+            persistent: Default::default(),
+            interruptible: Default::default(),
+            interactive: Default::default(),
+            env_mode: Default::default(),
+            with: Default::default(),
+        }
     }
 }

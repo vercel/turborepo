@@ -13,7 +13,9 @@ use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+};
 use turborepo_cache::CacheHitMetadata;
 // Re-export turborepo_engine::TaskNode for convenience
 pub use turborepo_engine::TaskNode;
@@ -26,7 +28,7 @@ use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
 };
-use turborepo_types::{EnvMode, TaskInputs, TaskOutputs};
+use turborepo_types::{EnvMode, TaskDefinition, TaskInputs, TaskOutputs};
 
 /// Trait for types that provide task definition information needed for hashing.
 ///
@@ -43,6 +45,52 @@ pub trait TaskDefinitionHashInfo {
     fn outputs(&self) -> &TaskOutputs;
     /// Returns the hashable outputs for this task (includes log file)
     fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs;
+}
+
+const LOG_DIR: &str = ".turbo";
+
+fn task_log_filename(task_name: &str) -> String {
+    format!("turbo-{}.log", task_name.replace(':', "$colon$"))
+}
+
+fn sharable_workspace_relative_log_file(task_name: &str) -> RelativeUnixPathBuf {
+    let log_dir =
+        RelativeUnixPathBuf::new(LOG_DIR).expect("LOG_DIR should be a valid relative unix path");
+    log_dir.join_component(&task_log_filename(task_name))
+}
+
+impl TaskDefinitionHashInfo for TaskDefinition {
+    fn env(&self) -> &[String] {
+        &self.env
+    }
+
+    fn pass_through_env(&self) -> Option<&[String]> {
+        self.pass_through_env.as_deref()
+    }
+
+    fn inputs(&self) -> &TaskInputs {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &TaskOutputs {
+        &self.outputs
+    }
+
+    fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs {
+        let mut inclusion_outputs =
+            vec![sharable_workspace_relative_log_file(task_id.task()).to_string()];
+        inclusion_outputs.extend_from_slice(&self.outputs.inclusions[..]);
+
+        let mut hashable = TaskOutputs {
+            inclusions: inclusion_outputs,
+            exclusions: self.outputs.exclusions.clone(),
+        };
+
+        hashable.inclusions.sort();
+        hashable.exclusions.sort();
+
+        hashable
+    }
 }
 
 /// Trait for run options needed by the task hasher.

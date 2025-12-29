@@ -34,6 +34,18 @@ pub trait TaskDefinitionInfo {
     fn interactive(&self) -> bool;
 }
 
+impl TaskDefinitionInfo for turborepo_types::TaskDefinition {
+    fn persistent(&self) -> bool {
+        self.persistent
+    }
+    fn interruptible(&self) -> bool {
+        self.interruptible
+    }
+    fn interactive(&self) -> bool {
+        self.interactive
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum TaskNode {
     Root,
