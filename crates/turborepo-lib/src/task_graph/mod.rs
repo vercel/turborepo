@@ -7,6 +7,10 @@ use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf};
 use turborepo_task_id::TaskId;
 // Re-export TaskDefinition from turborepo-types for backward compatibility.
 // New code should import directly from `turborepo_types::TaskDefinition`.
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `TaskDefinition` directly from `turborepo_types` instead"
+)]
 pub use turborepo_types::TaskDefinition;
 // Re-export TaskInputs from turborepo-types for backward compatibility.
 // New code should import directly from `turborepo_types::TaskInputs`.
