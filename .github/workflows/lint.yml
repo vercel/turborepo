@@ -3,16 +3,6 @@ on:
   push:
     branches: [main]
   pull_request:
-    paths:
-      - ".github/actions/**"
-      - .github/workflows/lint.yml
-      - "**/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}"
-      - pnpm-lock.yaml
-      - package.json
-      - "Cargo.**"
-      - "crates/**"
-      - ".cargo/**"
-      - rust-toolchain
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -24,13 +14,45 @@ permissions:
   pull-requests: read
 
 jobs:
-  rust_lint:
-    name: Rust lints
+  determine_changes:
+    name: Determine changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      formatting: ${{ steps.filter.outputs.formatting }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - ".github/actions/**"
+              - ".github/workflows/lint.yml"
+              - "Cargo.**"
+              - "crates/**"
+              - ".cargo/**"
+              - "rust-toolchain.toml"
+            formatting:
+              - "**/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}"
+              - "pnpm-lock.yaml"
+              - "package.json"
+
+  rust_fmt:
+    name: Rust format
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -38,11 +60,66 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo fmt check
-        run: |
-          cargo fmt --check
+        run: cargo fmt --check
+
+  rust_taplo:
+    name: Cargo.toml format
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Check Cargo.toml formatting (taplo)
         run: npx @taplo/cli@0.5.2 format --check
+
+  rust_clippy:
+    name: Rust clippy
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Run cargo clippy
+        run: cargo clippy --workspace --features rustls-tls --all-targets -- --deny clippy::all
+
+  rust_check:
+    name: Rust check
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Run cargo check
+        run: cargo check --workspace
+
+  rust_licenses:
+    name: Rust licenses
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Check licenses
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -51,6 +128,8 @@ jobs:
 
   format_lint:
     name: Formatting
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.formatting == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -59,7 +138,7 @@ jobs:
       TURBO_CACHE: remote:rw
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: "Setup Node"
         uses: ./.github/actions/setup-node
@@ -77,7 +156,12 @@ jobs:
   cleanup:
     name: Cleanup
     needs:
-      - rust_lint
+      - determine_changes
+      - rust_fmt
+      - rust_taplo
+      - rust_clippy
+      - rust_check
+      - rust_licenses
       - format_lint
     if: always()
     uses: ./.github/workflows/pr-clean-caches.yml
