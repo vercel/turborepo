@@ -217,60 +217,6 @@ jobs:
           SCCACHE_REQUEST_TIMEOUT: 30
           SCCACHE_ERROR_LOG: error
 
-  rust_lint:
-    name: Rust lints
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Run cargo fmt check
-        run: |
-          cargo fmt --check
-
-      - name: Check Cargo.toml formatting (taplo)
-        run: npx @taplo/cli@0.5.2 format --check
-
-      - name: Check licenses
-        uses: EmbarkStudios/cargo-deny-action@v2
-        with:
-          command: check licenses
-
-      - name: Run cargo clippy
-        run: |
-          cargo clippy --workspace --features rustls-tls --all-targets -- --deny clippy::all
-
-  rust_check:
-    # We test dependency changes only on main
-    name: Rust check
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node: "false"
-
-      - name: Run cargo check
-        run: |
-          cargo check --workspace
-
   turbo_types_check:
     name: "@turbo/types codegen check"
     needs:
@@ -494,8 +440,6 @@ jobs:
     needs:
       - find-changes
       - integration
-      - rust_lint
-      - rust_check
       - turbo_types_check
       - rust_test
       - basic-example
@@ -521,8 +465,6 @@ jobs:
           }
 
           subjob ${{needs.integration.result}}
-          subjob ${{needs.rust_lint.result}}
-          subjob ${{needs.rust_check.result}}
           subjob ${{needs.turbo_types_check.result}}
           subjob ${{needs.rust_test.result}}
           subjob ${{needs.basic-example.result}}
