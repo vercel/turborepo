@@ -9,14 +9,12 @@ use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 // Re-export ScopeOpts from turborepo-scope to avoid duplication
 pub use turborepo_scope::ScopeOpts;
 use turborepo_task_id::{TaskId, TaskName};
+use turborepo_types::{DryRunMode, EnvMode, LogOrder, OutputLogsMode, UIMode};
 
 use crate::{
-    cli::{
-        Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
-        OutputLogsMode, RunArgs,
-    },
+    cli::{Command, ContinueMode, ExecutionArgs, LogPrefix, RunArgs},
     config::{ConfigurationOptions, CONFIG_FILE},
-    turbo_json::{FutureFlags, UIMode},
+    turbo_json::FutureFlags,
     Args,
 };
 
@@ -559,15 +557,15 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_task_id::TaskId;
+    use turborepo_types::{DryRunMode, UIMode};
     use turborepo_ui::ColorConfig;
 
     use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
     use crate::{
-        cli::{Command, ContinueMode, DryRunMode, RunArgs},
+        cli::{Command, ContinueMode, RunArgs},
         commands::CommandBase,
         config::{ConfigurationOptions, CONFIG_FILE},
         opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
-        turbo_json::UIMode,
         Args,
     };
 

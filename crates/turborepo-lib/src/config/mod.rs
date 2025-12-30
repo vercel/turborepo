@@ -22,12 +22,9 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_cache::CacheConfig;
 use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::PackageName;
+pub use turborepo_types::{EnvMode, LogOrder, UIMode};
 
-pub use crate::turbo_json::UIMode;
-use crate::{
-    cli::{EnvMode, LogOrder},
-    turbo_json::FutureFlags,
-};
+use crate::turbo_json::FutureFlags;
 
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";

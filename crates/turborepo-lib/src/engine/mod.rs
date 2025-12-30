@@ -12,9 +12,7 @@ pub use turborepo_engine::{
     Built, ExecuteError, ExecutionOptions, Message, StopExecution, TaskDefinitionInfo, TaskNode,
 };
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
-use turborepo_types::TaskDefinition;
-
-use crate::turbo_json::UIMode;
+use turborepo_types::{TaskDefinition, UIMode};
 
 /// Type alias for Engine specialized with TaskDefinition.
 /// This allows existing code to continue using `Engine` without type

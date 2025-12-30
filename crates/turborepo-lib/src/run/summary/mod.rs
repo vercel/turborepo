@@ -27,6 +27,7 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
+use turborepo_types::{DryRunMode, EnvMode};
 use turborepo_ui::{color, cprintln, cwriteln, ColorConfig, BOLD, BOLD_CYAN, GREY};
 
 use self::{
@@ -34,7 +35,6 @@ use self::{
 };
 use crate::{
     cli,
-    cli::{DryRunMode, EnvMode},
     engine::Engine,
     opts::RunOpts,
     run::summary::{

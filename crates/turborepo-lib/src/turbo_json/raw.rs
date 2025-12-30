@@ -7,9 +7,10 @@ use turbopath::AbsoluteSystemPath;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
 use turborepo_task_id::TaskName;
+use turborepo_types::UIMode;
 use turborepo_unescape::UnescapedString;
 
-use super::{FutureFlags, Pipeline, SpacesJson, UIMode};
+use super::{FutureFlags, Pipeline, SpacesJson};
 use crate::{
     boundaries::BoundariesConfig,
     cli::{EnvMode, OutputLogsMode},
