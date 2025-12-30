@@ -1,22 +1,75 @@
-use std::collections::HashMap;
+//! Raw turbo.json structures for parsing
+//!
+//! These structures represent the raw parsed form of turbo.json before
+//! any processing or validation has been applied.
+
+use std::collections::BTreeMap;
 
 use biome_deserialize_macros::Deserializable;
 use serde::Serialize;
 use struct_iterable::Iterable;
 use turbopath::AbsoluteSystemPath;
+use turborepo_boundaries::BoundariesConfig;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::ROOT_PKG_NAME;
 use turborepo_task_id::TaskName;
-use turborepo_types::UIMode;
+use turborepo_types::{EnvMode, OutputLogsMode, UIMode};
 use turborepo_unescape::UnescapedString;
 
-use super::{FutureFlags, Pipeline, SpacesJson};
-use crate::{
-    boundaries::BoundariesConfig,
-    cli::{EnvMode, OutputLogsMode},
-    config::Error,
-    run::task_access::TaskAccessTraceFile,
-};
+use crate::{error::Error, future_flags::FutureFlags};
+
+// Forward declarations for types that will be moved later
+// For now we define minimal versions here
+
+/// Spaces configuration (experimental)
+#[derive(Serialize, Debug, Default, PartialEq, Clone, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct SpacesJson {
+    pub id: Option<UnescapedString>,
+}
+
+/// Pipeline is a map of task names to their raw definitions
+#[derive(Serialize, Default, Debug, PartialEq, Clone)]
+#[serde(transparent)]
+pub struct Pipeline(pub BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>);
+
+impl Pipeline {
+    pub fn insert(&mut self, key: TaskName<'static>, value: Spanned<RawTaskDefinition>) {
+        self.0.insert(key, value);
+    }
+}
+
+impl std::ops::Deref for Pipeline {
+    type Target = BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Pipeline {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl IntoIterator for Pipeline {
+    type Item = (TaskName<'static>, Spanned<RawTaskDefinition>);
+    type IntoIter =
+        <BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>> as IntoIterator>::IntoIter;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+/// Trait to check if a task definition has any configuration beyond just the
+/// `extends` field. This is used to determine if a task definition with
+/// `extends: false` should actually skip inheritance or if it's just an
+/// empty marker.
+pub trait HasConfigBeyondExtends {
+    fn has_config_beyond_extends(&self) -> bool;
+}
 
 // Iterable is required to enumerate allowed keys
 #[derive(Clone, Debug, Default, Iterable, Serialize, Deserializable)]
@@ -45,51 +98,51 @@ pub struct RawRemoteCacheOptions {
 // Root turbo.json
 #[derive(Default, Debug, Clone, Iterable, Deserializable)]
 pub struct RawRootTurboJson {
-    pub(crate) span: Spanned<()>,
+    pub span: Spanned<()>,
 
     #[deserializable(rename = "$schema")]
-    pub(crate) schema: Option<UnescapedString>,
-    pub(crate) experimental_spaces: Option<SpacesJson>,
+    pub schema: Option<UnescapedString>,
+    pub experimental_spaces: Option<SpacesJson>,
 
     // Global root filesystem dependencies
-    pub(crate) global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
-    pub(crate) global_env: Option<Vec<Spanned<UnescapedString>>>,
-    pub(crate) global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
+    pub global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
+    pub global_env: Option<Vec<Spanned<UnescapedString>>>,
+    pub global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
     // Tasks is a map of task entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
-    pub(crate) tasks: Option<Pipeline>,
-    pub(crate) pipeline: Option<Spanned<Pipeline>>,
+    pub tasks: Option<Pipeline>,
+    pub pipeline: Option<Spanned<Pipeline>>,
     // Configuration options when interfacing with the remote cache
-    pub(crate) remote_cache: Option<RawRemoteCacheOptions>,
-    pub(crate) ui: Option<Spanned<UIMode>>,
+    pub remote_cache: Option<RawRemoteCacheOptions>,
+    pub ui: Option<Spanned<UIMode>>,
     #[deserializable(rename = "dangerouslyDisablePackageManagerCheck")]
-    pub(crate) allow_no_package_manager: Option<Spanned<bool>>,
-    pub(crate) daemon: Option<Spanned<bool>>,
-    pub(crate) env_mode: Option<Spanned<EnvMode>>,
-    pub(crate) no_update_notifier: Option<Spanned<bool>>,
-    pub(crate) cache_dir: Option<Spanned<UnescapedString>>,
-    pub(crate) concurrency: Option<Spanned<String>>,
-    pub(crate) tags: Option<Spanned<Vec<Spanned<String>>>>,
-    pub(crate) boundaries: Option<Spanned<BoundariesConfig>>,
+    pub allow_no_package_manager: Option<Spanned<bool>>,
+    pub daemon: Option<Spanned<bool>>,
+    pub env_mode: Option<Spanned<EnvMode>>,
+    pub no_update_notifier: Option<Spanned<bool>>,
+    pub cache_dir: Option<Spanned<UnescapedString>>,
+    pub concurrency: Option<Spanned<String>>,
+    pub tags: Option<Spanned<Vec<Spanned<String>>>>,
+    pub boundaries: Option<Spanned<BoundariesConfig>>,
 
-    pub(crate) future_flags: Option<Spanned<FutureFlags>>,
+    pub future_flags: Option<Spanned<FutureFlags>>,
     #[deserializable(rename = "//")]
-    pub(crate) _comment: Option<String>,
+    pub _comment: Option<String>,
 }
 
 // Package turbo.json
 #[derive(Default, Debug, Clone, Iterable, Deserializable)]
 pub struct RawPackageTurboJson {
-    pub(crate) span: Spanned<()>,
+    pub span: Spanned<()>,
     #[deserializable(rename = "$schema")]
-    pub(crate) schema: Option<UnescapedString>,
-    pub(crate) extends: Option<Spanned<Vec<UnescapedString>>>,
-    pub(crate) tasks: Option<Pipeline>,
-    pub(crate) pipeline: Option<Spanned<Pipeline>>,
-    pub(crate) tags: Option<Spanned<Vec<Spanned<String>>>>,
-    pub(crate) boundaries: Option<Spanned<BoundariesConfig>>,
+    pub schema: Option<UnescapedString>,
+    pub extends: Option<Spanned<Vec<UnescapedString>>>,
+    pub tasks: Option<Pipeline>,
+    pub pipeline: Option<Spanned<Pipeline>>,
+    pub tags: Option<Spanned<Vec<Spanned<String>>>>,
+    pub boundaries: Option<Spanned<BoundariesConfig>>,
     #[deserializable(rename = "//")]
-    pub(crate) _comment: Option<String>,
+    pub _comment: Option<String>,
 }
 
 // Unified structure that represents either root or package turbo.json
@@ -97,20 +150,20 @@ pub struct RawPackageTurboJson {
 #[serde(rename_all = "camelCase")]
 pub struct RawTurboJson {
     #[serde(skip)]
-    pub(crate) span: Spanned<()>,
+    pub span: Spanned<()>,
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
-    pub(crate) schema: Option<UnescapedString>,
+    pub schema: Option<UnescapedString>,
     #[serde(skip_serializing)]
     pub experimental_spaces: Option<SpacesJson>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) extends: Option<Spanned<Vec<UnescapedString>>>,
+    pub extends: Option<Spanned<Vec<UnescapedString>>>,
     // Global root filesystem dependencies
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
+    pub global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) global_env: Option<Vec<Spanned<UnescapedString>>>,
+    pub global_env: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
+    pub global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
     // Tasks is a map of task entries which define the task graph
     // and cache behavior on a per task or per package-task basis.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -145,7 +198,7 @@ pub struct RawTurboJson {
     pub future_flags: Option<Spanned<FutureFlags>>,
     #[deserializable(rename = "//")]
     #[serde(skip)]
-    pub(crate) _comment: Option<String>,
+    pub _comment: Option<String>,
 }
 
 #[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable, Deserializable)]
@@ -153,37 +206,37 @@ pub struct RawTurboJson {
 #[deserializable(unknown_fields = "deny")]
 pub struct RawTaskDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) extends: Option<Spanned<bool>>,
+    pub extends: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) cache: Option<Spanned<bool>>,
+    pub cache: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) depends_on: Option<Spanned<Vec<Spanned<UnescapedString>>>>,
+    pub depends_on: Option<Spanned<Vec<Spanned<UnescapedString>>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) env: Option<Vec<Spanned<UnescapedString>>>,
+    pub env: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) inputs: Option<Vec<Spanned<UnescapedString>>>,
+    pub inputs: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
+    pub pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) persistent: Option<Spanned<bool>>,
+    pub persistent: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) interruptible: Option<Spanned<bool>>,
+    pub interruptible: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) outputs: Option<Vec<Spanned<UnescapedString>>>,
+    pub outputs: Option<Vec<Spanned<UnescapedString>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) output_logs: Option<Spanned<OutputLogsMode>>,
+    pub output_logs: Option<Spanned<OutputLogsMode>>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) interactive: Option<Spanned<bool>>,
+    pub interactive: Option<Spanned<bool>>,
     // TODO: Remove this once we have the ability to load task definitions directly
     // instead of deriving them from a TurboJson
     #[serde(skip)]
-    pub(crate) env_mode: Option<Spanned<EnvMode>>,
+    pub env_mode: Option<Spanned<EnvMode>>,
     // This can currently only be set internally and isn't a part of turbo.json
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub(crate) with: Option<Vec<Spanned<UnescapedString>>>,
+    pub with: Option<Vec<Spanned<UnescapedString>>>,
 }
 
-impl super::HasConfigBeyondExtends for RawTaskDefinition {
+impl HasConfigBeyondExtends for RawTaskDefinition {
     fn has_config_beyond_extends(&self) -> bool {
         self.cache.is_some()
             || self.depends_on.is_some()
@@ -244,7 +297,7 @@ impl From<RawPackageTurboJson> for RawTurboJson {
 }
 
 impl RawTurboJson {
-    pub(super) fn read(
+    pub fn read(
         repo_root: &AbsoluteSystemPath,
         path: &AbsoluteSystemPath,
         is_root: bool,
@@ -283,40 +336,44 @@ impl RawTurboJson {
         this
     }
 
-    pub fn from_task_access_trace(trace: &HashMap<String, TaskAccessTraceFile>) -> Option<Self> {
-        if trace.is_empty() {
-            return None;
-        }
-
-        let mut pipeline = Pipeline::default();
-
-        for (task_name, trace_file) in trace {
-            let spanned_outputs: Vec<Spanned<UnescapedString>> = trace_file
-                .outputs
-                .iter()
-                .map(|output| Spanned::new(output.clone()))
-                .collect();
-            let task_definition = RawTaskDefinition {
-                outputs: Some(spanned_outputs),
-                env: Some(
-                    trace_file
-                        .accessed
-                        .env_var_keys
-                        .iter()
-                        .map(|unescaped_string| Spanned::new(unescaped_string.clone()))
-                        .collect(),
-                ),
-                ..Default::default()
-            };
-
-            let name = TaskName::from(task_name.as_str());
-            let root_task = name.into_root_task();
-            pipeline.insert(root_task, Spanned::new(task_definition.clone()));
-        }
-
-        Some(RawTurboJson {
-            tasks: Some(pipeline),
-            ..RawTurboJson::default()
-        })
-    }
+    // NOTE: This method depends on turborepo-lib types (TaskAccessTraceFile)
+    // and has been commented out for now. It will be re-enabled when the
+    // dependency structure is resolved.
+    //
+    // pub fn from_task_access_trace(trace: &HashMap<String, TaskAccessTraceFile>)
+    // -> Option<Self> {     if trace.is_empty() {
+    //         return None;
+    //     }
+    //
+    //     let mut pipeline = Pipeline::default();
+    //
+    //     for (task_name, trace_file) in trace {
+    //         let spanned_outputs: Vec<Spanned<UnescapedString>> = trace_file
+    //             .outputs
+    //             .iter()
+    //             .map(|output| Spanned::new(output.clone()))
+    //             .collect();
+    //         let task_definition = RawTaskDefinition {
+    //             outputs: Some(spanned_outputs),
+    //             env: Some(
+    //                 trace_file
+    //                     .accessed
+    //                     .env_var_keys
+    //                     .iter()
+    //                     .map(|unescaped_string|
+    // Spanned::new(unescaped_string.clone()))                     .collect(),
+    //             ),
+    //             ..Default::default()
+    //         };
+    //
+    //         let name = TaskName::from(task_name.as_str());
+    //         let root_task = name.into_root_task();
+    //         pipeline.insert(root_task, Spanned::new(task_definition.clone()));
+    //     }
+    //
+    //     Some(RawTurboJson {
+    //         tasks: Some(pipeline),
+    //         ..RawTurboJson::default()
+    //     })
+    // }
 }

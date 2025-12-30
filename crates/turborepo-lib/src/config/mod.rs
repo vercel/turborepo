@@ -265,6 +265,9 @@ pub enum Error {
     InvalidTuiScrollbackLength(#[source] std::num::ParseIntError),
     #[error("TURBO_SSO_LOGIN_CALLBACK_PORT: Invalid value. Use a number for the callback port.")]
     InvalidSsoLoginCallbackPort(#[source] std::num::ParseIntError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TurboJsonError(#[from] turborepo_turbo_json::Error),
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";

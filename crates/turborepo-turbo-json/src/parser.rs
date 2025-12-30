@@ -1,8 +1,13 @@
+//! Parser for turbo.json configuration files
+//!
+//! This module provides parsing functionality for turbo.json using biome's
+//! JSON parser with support for comments and trailing commas.
+
 use std::{backtrace, collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use biome_deserialize::{
-    json::deserialize_from_json_str, Deserializable, DeserializableValue,
-    DeserializationDiagnostic, DeserializationVisitor, VisitableType,
+    Deserializable, DeserializableValue, DeserializationDiagnostic, DeserializationVisitor,
+    VisitableType, json::deserialize_from_json_str,
 };
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
@@ -12,26 +17,48 @@ use miette::Diagnostic;
 use struct_iterable::Iterable;
 use thiserror::Error;
 use tracing::log::warn;
-use turborepo_errors::{ParseDiagnostic, WithMetadata};
+use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
 use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;
 
-use crate::turbo_json::{
+use crate::raw::{
     Pipeline, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson, RawTaskDefinition,
-    RawTurboJson, Spanned,
+    RawTurboJson,
 };
 
+/// Error type for turbo.json parsing failures using biome parser
 #[derive(Debug, Error, Diagnostic)]
 #[error("Failed to parse turbo.json.")]
 #[diagnostic(code(turbo_json_parse_error))]
-pub struct Error {
+pub struct BiomeParseError {
     #[related]
-    diagnostics: Vec<ParseDiagnostic>,
+    pub diagnostics: Vec<ParseDiagnostic>,
     #[backtrace]
-    backtrace: backtrace::Backtrace,
+    pub backtrace: backtrace::Backtrace,
 }
 
-fn create_unknown_key_diagnostic_from_struct<T: Iterable>(
+impl BiomeParseError {
+    /// Creates a new BiomeParseError with the given diagnostics
+    pub fn new(diagnostics: Vec<ParseDiagnostic>) -> Self {
+        Self {
+            diagnostics,
+            backtrace: backtrace::Backtrace::capture(),
+        }
+    }
+
+    /// Creates an empty error (for cases where deserialization fails without
+    /// diagnostics)
+    pub fn empty() -> Self {
+        Self {
+            diagnostics: vec![],
+            backtrace: backtrace::Backtrace::capture(),
+        }
+    }
+}
+
+/// Creates an unknown key diagnostic from a struct that implements Iterable
+#[allow(dead_code)]
+pub fn create_unknown_key_diagnostic_from_struct<T: Iterable>(
     struct_iterable: &T,
     unknown_key: &str,
     range: TextRange,
@@ -254,7 +281,7 @@ impl WithMetadata for RawPackageTurboJson {
 }
 
 impl RawRootTurboJson {
-    pub fn parse(text: &str, file_path: &str) -> Result<Self, Error> {
+    pub fn parse(text: &str, file_path: &str) -> Result<Self, BiomeParseError> {
         let turbo_json = parse_turbo_json::<RawRootTurboJson>(text, file_path)?;
 
         if turbo_json.experimental_spaces.is_some() {
@@ -266,25 +293,33 @@ impl RawRootTurboJson {
 }
 
 impl RawPackageTurboJson {
-    pub fn parse(text: &str, file_path: &str) -> Result<Self, Error> {
+    pub fn parse(text: &str, file_path: &str) -> Result<Self, BiomeParseError> {
         parse_turbo_json::<RawPackageTurboJson>(text, file_path)
     }
 }
 
 impl RawTurboJson {
-    // A simple helper for tests
-    #[cfg(test)]
-    pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, Error> {
+    /// Parse RawTurboJson from a serde_json::Value
+    ///
+    /// This is a convenience helper for constructing RawTurboJson from
+    /// serde_json::json! macro in tests.
+    pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, BiomeParseError> {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
         let raw_root = RawRootTurboJson::parse(&json_string, "turbo.json")?;
         Ok(Self::from(raw_root))
     }
 }
 
-fn parse_turbo_json<T: Deserializable + WithMetadata>(
+/// Generic function to parse turbo.json content using biome parser
+///
+/// This function handles the common logic for parsing turbo.json files:
+/// - Deserializes JSON with comments and trailing commas allowed
+/// - Collects and converts diagnostics to ParseDiagnostic
+/// - Adds source text and path metadata to the result
+pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
     text: &str,
     file_path: &str,
-) -> Result<T, Error> {
+) -> Result<T, BiomeParseError> {
     let result = deserialize_from_json_str::<T>(
         text,
         JsonParserOptions::default()
@@ -305,16 +340,12 @@ fn parse_turbo_json<T: Deserializable + WithMetadata>(
             })
             .collect();
 
-        return Err(Error {
-            diagnostics,
-            backtrace: backtrace::Backtrace::capture(),
-        });
+        return Err(BiomeParseError::new(diagnostics));
     }
 
-    let mut turbo_json = result.into_deserialized().ok_or_else(|| Error {
-        diagnostics: vec![],
-        backtrace: backtrace::Backtrace::capture(),
-    })?;
+    let mut turbo_json = result
+        .into_deserialized()
+        .ok_or_else(BiomeParseError::empty)?;
     turbo_json.add_text(Arc::from(text));
     turbo_json.add_path(Arc::from(file_path));
 
@@ -328,6 +359,24 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn test_biome_parse_error_new() {
+        let err = BiomeParseError::new(vec![]);
+        assert!(err.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_biome_parse_error_empty() {
+        let err = BiomeParseError::empty();
+        assert!(err.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn test_biome_parse_error_display() {
+        let err = BiomeParseError::empty();
+        assert_eq!(err.to_string(), "Failed to parse turbo.json.");
+    }
+
     #[test_case(r#"{"daemon": true}"#; "daemon in package turbo.json")]
     fn test_root_only_fields_in_package_turbo_json(json: &str) {
         let result = RawPackageTurboJson::parse(json, "packages/foo/turbo.json");
@@ -339,5 +388,17 @@ mod tests {
             .render_report(&mut msg, report.as_ref())
             .unwrap();
         assert_snapshot!(msg);
+    }
+
+    #[test]
+    fn test_unknown_key_in_task_definition() {
+        // Task definitions should reject unknown keys
+        let json = r#"{"tasks": {"build": {"lol": true}}}"#;
+        let result = RawPackageTurboJson::parse(json, "packages/foo/turbo.json");
+        assert!(
+            result.is_err(),
+            "expected parsing to fail due to unknown key 'lol' in task definition, but got: {:?}",
+            result
+        );
     }
 }

@@ -130,6 +130,9 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Config(#[from] crate::config::Error),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TurboJson(#[from] turborepo_turbo_json::Error),
     #[error("Invalid turbo.json configuration")]
     Validation {
         #[related]
@@ -937,7 +940,13 @@ impl<'a> EngineBuilder<'a> {
                     }
                 })?;
             if let Some(turbo_json) = turbo_json {
-                Error::from_validation(validator.validate_turbo_json(package_name, turbo_json))?;
+                Error::from_validation(
+                    validator
+                        .validate_turbo_json(package_name, turbo_json)
+                        .into_iter()
+                        .map(config::Error::from)
+                        .collect(),
+                )?;
                 turbo_jsons.push(turbo_json);
                 visited.insert(package_name.clone());
 
