@@ -14,7 +14,7 @@ use turborepo_scm::SCM;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
-use crate::turbo_json::RawTurboJson;
+use crate::turbo_json::{RawTurboJson, RawTurboJsonExt};
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location

@@ -152,15 +152,13 @@ impl ProcessedTaskDefinition {
 #[cfg(test)]
 mod test {
     use turborepo_errors::Spanned;
+    use turborepo_types::OutputLogsMode;
     use turborepo_unescape::UnescapedString;
 
     use super::*;
     use crate::{
-        cli::OutputLogsMode,
-        turbo_json::{
-            processed::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
-            FutureFlags,
-        },
+        future_flags::FutureFlags,
+        processed::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
     };
 
     // Shared test fixtures

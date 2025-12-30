@@ -178,7 +178,7 @@ impl TurboJsonLoader {
         let turbo_json = self.uncached_load(package)?;
         self.cache
             .insert(package, turbo_json)
-            .map_err(|_| Error::NoTurboJSON)
+            .map_err(|_| Error::TurboJsonError(turborepo_turbo_json::Error::NoTurboJSON))
     }
 
     fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
@@ -198,7 +198,9 @@ impl TurboJsonLoader {
                 packages,
                 micro_frontends_configs,
             } => {
-                let turbo_json_path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
+                let turbo_json_path = packages.get(package).ok_or_else(|| {
+                    Error::TurboJsonError(turborepo_turbo_json::Error::NoTurboJSON)
+                })?;
                 // Check if this package is at the repo root. This can happen when
                 // the workspace definition includes "." as a package. In that case,
                 // the package's turbo.json would be the root turbo.json, so we
@@ -232,7 +234,9 @@ impl TurboJsonLoader {
                 packages,
                 microfrontends_configs,
             } => {
-                let script_names = packages.get(package).ok_or(Error::NoTurboJSON)?;
+                let script_names = packages.get(package).ok_or(Error::TurboJsonError(
+                    turborepo_turbo_json::Error::NoTurboJSON,
+                ))?;
                 if matches!(package, PackageName::Root) {
                     root_turbo_json_from_scripts(script_names)
                 } else {
@@ -254,7 +258,9 @@ impl TurboJsonLoader {
                     load_task_access_trace_turbo_json(reader, root_turbo_json, package_json)
                 }
             }
-            Strategy::Noop => Err(Error::NoTurboJSON),
+            Strategy::Noop => Err(Error::TurboJsonError(
+                turborepo_turbo_json::Error::NoTurboJSON,
+            )),
         }
     }
 }
@@ -323,7 +329,9 @@ fn load_from_file(
     match result {
         // There was an error, and we don't have any chance of recovering
         Err(e) => Err(e),
-        Ok(None) => Err(Error::NoTurboJSON),
+        Ok(None) => Err(Error::TurboJsonError(
+            turborepo_turbo_json::Error::NoTurboJSON,
+        )),
         // We're not synthesizing anything and there was no error, we're done
         Ok(Some(turbo)) => Ok(turbo),
     }
@@ -345,11 +353,13 @@ fn load_from_root_package_json(
                 if task_name.is_package_task() {
                     let (span, text) = task_definition.span_and_text("turbo.json");
 
-                    return Err(Error::PackageTaskInSinglePackageMode {
-                        task_id: task_name.to_string(),
-                        span,
-                        text,
-                    });
+                    return Err(Error::TurboJsonError(
+                        turborepo_turbo_json::Error::PackageTaskInSinglePackageMode {
+                            task_id: task_name.to_string(),
+                            span,
+                            text,
+                        },
+                    ));
                 }
 
                 pipeline.insert(task_name.into_root_task(), task_definition);
@@ -389,9 +399,7 @@ fn load_from_root_package_json(
 }
 
 fn root_turbo_json_from_scripts(scripts: &[String]) -> Result<TurboJson, Error> {
-    let mut turbo_json = TurboJson {
-        ..Default::default()
-    };
+    let mut turbo_json = TurboJson::default();
     for script in scripts {
         let task_name = TaskName::from(script.as_str()).into_root_task();
         turbo_json.tasks.insert(
@@ -407,10 +415,8 @@ fn root_turbo_json_from_scripts(scripts: &[String]) -> Result<TurboJson, Error> 
 }
 
 fn workspace_turbo_json_from_scripts(scripts: &[String]) -> Result<TurboJson, Error> {
-    let mut turbo_json = TurboJson {
-        extends: Spanned::new(vec!["//".to_owned()]),
-        ..Default::default()
-    };
+    let mut turbo_json = TurboJson::default();
+    turbo_json.extends = Spanned::new(vec!["//".to_owned()]);
     for script in scripts {
         let task_name = TaskName::from(script.clone());
         turbo_json.tasks.insert(
@@ -457,9 +463,11 @@ fn select_turbo_json(
     );
     match (turbo_json, turbo_jsonc) {
         // If both paths contain valid turbo.json error
-        (Ok(Some(_)), Ok(Some(_))) => Err(Error::MultipleTurboConfigs {
-            directory: turbo_json_dir_path.to_string(),
-        }),
+        (Ok(Some(_)), Ok(Some(_))) => Err(Error::TurboJsonError(
+            turborepo_turbo_json::Error::MultipleTurboConfigs {
+                directory: turbo_json_dir_path.to_string(),
+            },
+        )),
         // If turbo.json is valid and turbo.jsonc is missing or invalid, use turbo.json
         (Ok(Some(turbo_json)), Ok(None)) | (Ok(Some(turbo_json)), Err(_)) => Ok(Some(turbo_json)),
         // If turbo.jsonc is valid and turbo.json is missing or invalid, use turbo.jsonc
@@ -493,7 +501,12 @@ impl TurboJsonReader {
         path: &AbsoluteSystemPath,
         is_root: bool,
     ) -> Result<Option<TurboJson>, Error> {
-        TurboJson::read(&self.repo_root, path, is_root, self.future_flags)
+        Ok(TurboJson::read(
+            &self.repo_root,
+            path,
+            is_root,
+            self.future_flags,
+        )?)
     }
 
     pub fn repo_root(&self) -> &AbsoluteSystemPath {
@@ -520,18 +533,35 @@ mod test {
         config::Error, task_graph::TaskDefinition, turbo_json::TaskDefinitionFromProcessed,
     };
 
+    /// Helper to create TurboJson with global_deps set
+    fn turbo_json_with_global_deps(deps: Vec<String>) -> TurboJson {
+        let mut tj = TurboJson::default();
+        tj.global_deps = deps;
+        tj
+    }
+
+    /// Helper to create TurboJson with global_pass_through_env set
+    fn turbo_json_with_pass_through_env(env: Vec<String>) -> TurboJson {
+        let mut tj = TurboJson::default();
+        tj.global_pass_through_env = Some(env);
+        tj
+    }
+
+    /// Helper to create TurboJson with tasks set
+    fn turbo_json_with_tasks(tasks: Pipeline) -> TurboJson {
+        let mut tj = TurboJson::default();
+        tj.tasks = tasks;
+        tj
+    }
+
     #[test_case(r"{}", TurboJson::default() ; "empty")]
-    #[test_case(r#"{ "globalDependencies": ["tsconfig.json", "jest.config.ts"] }"#,
-        TurboJson {
-            global_deps: vec!["jest.config.ts".to_string(), "tsconfig.json".to_string()],
-            ..TurboJson::default()
-        }
+    #[test_case(
+        r#"{ "globalDependencies": ["tsconfig.json", "jest.config.ts"] }"#,
+        turbo_json_with_global_deps(vec!["jest.config.ts".to_string(), "tsconfig.json".to_string()])
     ; "global dependencies (sorted)")]
-    #[test_case(r#"{ "globalPassThroughEnv": ["GITHUB_TOKEN", "AWS_SECRET_KEY"] }"#,
-        TurboJson {
-            global_pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()]),
-            ..TurboJson::default()
-        }
+    #[test_case(
+        r#"{ "globalPassThroughEnv": ["GITHUB_TOKEN", "AWS_SECRET_KEY"] }"#,
+        turbo_json_with_pass_through_env(vec!["AWS_SECRET_KEY".to_string(), "GITHUB_TOKEN".to_string()])
     )]
     #[test_case(r#"{ "//": "A comment"}"#, TurboJson::default() ; "faux comment")]
     #[test_case(r#"{ "//": "A comment", "//": "Another comment" }"#, TurboJson::default() ; "two faux comments")]
@@ -557,8 +587,7 @@ mod test {
 
         let mut turbo_json = loader.load(&PackageName::Root)?.clone();
 
-        turbo_json.text = None;
-        turbo_json.path = None;
+        turbo_json.clear_metadata();
         assert_eq!(turbo_json, expected_turbo_json);
 
         Ok(())
@@ -570,17 +599,14 @@ mod test {
              scripts: [("build".to_string(), Spanned::new("echo build".to_string()))].into_iter().collect(),
              ..PackageJson::default()
         },
-        TurboJson {
-            tasks: Pipeline([(
-                "//#build".into(),
-                Spanned::new(RawTaskDefinition {
-                    cache: Some(Spanned::new(false)),
-                    ..RawTaskDefinition::default()
-                })
-              )].into_iter().collect()
-            ),
-            ..TurboJson::default()
-        }
+        turbo_json_with_tasks(Pipeline([(
+            "//#build".into(),
+            Spanned::new(RawTaskDefinition {
+                cache: Some(Spanned::new(false)),
+                ..RawTaskDefinition::default()
+            })
+          )].into_iter().collect()
+        ))
     )]
     #[test_case(
         Some(r#"{
@@ -594,23 +620,20 @@ mod test {
              scripts: [("test".to_string(), Spanned::new("echo test".to_string()))].into_iter().collect(),
              ..PackageJson::default()
         },
-        TurboJson {
-            tasks: Pipeline([(
-                "//#build".into(),
-                Spanned::new(RawTaskDefinition {
-                    cache: Some(Spanned::new(true).with_range(81..85)),
-                    ..RawTaskDefinition::default()
-                }).with_range(50..103)
-            ),
-            (
-                "//#test".into(),
-                Spanned::new(RawTaskDefinition {
-                     cache: Some(Spanned::new(false)),
-                    ..RawTaskDefinition::default()
-                })
-            )].into_iter().collect()),
-            ..TurboJson::default()
-        }
+        turbo_json_with_tasks(Pipeline([(
+            "//#build".into(),
+            Spanned::new(RawTaskDefinition {
+                cache: Some(Spanned::new(true).with_range(81..85)),
+                ..RawTaskDefinition::default()
+            }).with_range(50..103)
+        ),
+        (
+            "//#test".into(),
+            Spanned::new(RawTaskDefinition {
+                 cache: Some(Spanned::new(false)),
+                ..RawTaskDefinition::default()
+            })
+        )].into_iter().collect()))
     )]
     fn test_get_root_turbo_with_synthesizing(
         turbo_json_content: Option<&str>,
@@ -628,8 +651,7 @@ mod test {
         let reader = TurboJsonReader::new(repo_root.to_owned());
         let loader = TurboJsonLoader::single_package(reader, root_turbo_json, root_package_json);
         let mut turbo_json = loader.load(&PackageName::Root)?.clone();
-        turbo_json.text = None;
-        turbo_json.path = None;
+        turbo_json.clear_metadata();
         for (_, task_definition) in turbo_json.tasks.iter_mut() {
             task_definition.path = None;
             task_definition.text = None;
@@ -754,7 +776,7 @@ mod test {
         };
         let result = loader.load(&PackageName::from("a"));
         assert!(
-            matches!(result.unwrap_err(), Error::NoTurboJSON),
+            result.unwrap_err().is_no_turbo_json(),
             "expected parsing to fail with missing turbo.json"
         );
 
@@ -854,7 +876,7 @@ mod test {
         }
         // Should get no turbo.json error if package wasn't declared
         let goose_err = loader.load(&PackageName::from("goose")).unwrap_err();
-        assert!(matches!(goose_err, Error::NoTurboJSON));
+        assert!(goose_err.is_no_turbo_json());
     }
 
     #[test]
@@ -979,7 +1001,10 @@ mod test {
         assert!(result.is_err());
         let mut err = result.unwrap_err();
         // Override tmpdir so we can snapshot the error message
-        if let Error::MultipleTurboConfigs { directory } = &mut err {
+        if let Error::TurboJsonError(turborepo_turbo_json::Error::MultipleTurboConfigs {
+            directory,
+        }) = &mut err
+        {
             *directory = "some-dir".to_owned()
         }
         assert_snapshot!(err, @r"
@@ -1124,7 +1149,7 @@ mod test {
         };
         let result = loader.load(&PackageName::from("a"));
         assert!(
-            matches!(result.unwrap_err(), Error::TurboJsonParseError(_)),
+            matches!(result.unwrap_err(), Error::TurboJsonError(_)),
             "expected parsing to fail due to unknown key"
         );
     }

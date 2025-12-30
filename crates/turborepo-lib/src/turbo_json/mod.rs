@@ -1,160 +1,105 @@
-use std::{
-    collections::{BTreeMap, HashSet},
-    ops::{Deref, DerefMut},
-    sync::Arc,
+//! turbo.json configuration
+//! Turbo.json module
+//!
+//! Re-exports from turborepo-turbo-json crate with loader code for
+//! turborepo-lib specific functionality (MFE, task_access).
+
+mod loader;
+
+// Re-export the main types from turborepo-turbo-json.
+// Some re-exports are used by other crates or in tests, not within this module.
+#[allow(unused_imports)]
+pub use turborepo_turbo_json::{
+    // Functions
+    task_outputs_from_processed,
+    // FutureFlags
+    FutureFlags,
+    // Raw types
+    HasConfigBeyondExtends,
+    Pipeline,
+    // Processed types
+    ProcessedOutputs,
+    ProcessedTaskDefinition,
+    RawPackageTurboJson,
+    RawRemoteCacheOptions,
+    RawRootTurboJson,
+    RawTaskDefinition,
+    RawTurboJson,
+    SpacesJson,
+    // Extension traits
+    TaskInputsFromProcessed,
+    // TurboJson itself
+    TurboJson,
+    // Validator
+    TOPOLOGICAL_PIPELINE_DELIMITER,
 };
 
-use biome_deserialize_macros::Deserializable;
-use camino::Utf8Path;
-use serde::{Deserialize, Serialize};
-use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
+// Re-export the parser module for types like parser::Error
+pub mod parser {
+    pub use turborepo_turbo_json::parser::BiomeParseError as Error;
+}
+
+// Re-export the validator module
+pub mod validator {
+    pub use turborepo_turbo_json::validator::*;
+}
+
+// Loader code stays in turborepo-lib (depends on MFE, task_access)
+use std::collections::HashMap;
+
+pub use loader::{TurboJsonLoader, TurboJsonReader};
+use turbopath::RelativeUnixPath;
 use turborepo_errors::Spanned;
-use turborepo_repository::package_graph::ROOT_PKG_NAME;
-use turborepo_task_id::{TaskId, TaskName};
-use turborepo_types::{EnvMode, TaskInputs, TaskOutputs};
+use turborepo_task_id::TaskName;
+use turborepo_types::TaskInputs;
 use turborepo_unescape::UnescapedString;
 
-use crate::{
-    config::{Error, InvalidEnvPrefixError},
-    task_graph::TaskDefinition,
-};
+use crate::{config::Error, run::task_access::TaskAccessTraceFile, task_graph::TaskDefinition};
 
-mod extend;
-pub mod future_flags;
-mod loader;
-pub mod parser;
-mod processed;
-mod raw;
-pub mod validator;
-
-pub use future_flags::FutureFlags;
-pub use loader::{TurboJsonLoader, TurboJsonReader};
-pub use processed::ProcessedTaskDefinition;
-pub use raw::{
-    RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson, RawTaskDefinition, RawTurboJson,
-};
-
-use crate::boundaries::BoundariesConfig;
-
-const ENV_PIPELINE_DELIMITER: &str = "$";
-const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
-
-/// Trait to check if a task definition has any configuration beyond just the
-/// `extends` field. This is used to determine if a task definition with
-/// `extends: false` should actually skip inheritance or if it's just an
-/// empty marker.
-pub trait HasConfigBeyondExtends {
-    fn has_config_beyond_extends(&self) -> bool;
+/// Extension trait for RawTurboJson with turborepo-lib specific functionality
+pub trait RawTurboJsonExt {
+    /// Create a RawTurboJson from a task access trace
+    fn from_task_access_trace(trace: &HashMap<String, TaskAccessTraceFile>)
+        -> Option<RawTurboJson>;
 }
 
-#[derive(Serialize, Deserialize, Debug, Default, PartialEq, Clone, Deserializable)]
-#[serde(rename_all = "camelCase")]
-pub struct SpacesJson {
-    pub id: Option<UnescapedString>,
-}
-
-// A turbo.json config that is synthesized but not yet resolved.
-// This means that we've done the work to synthesize the config from
-// package.json, but we haven't yet resolved the workspace
-// turbo.json files into a single definition. Therefore we keep the
-// `RawTaskDefinition` type so we can determine which fields are actually
-// set when we resolve the configuration.
-//
-// Note that the values here are limited to pipeline configuration.
-// Configuration that needs to account for flags, env vars, etc. is
-// handled via layered config.
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct TurboJson {
-    text: Option<Arc<str>>,
-    path: Option<Arc<str>>,
-    pub(crate) tags: Option<Spanned<Vec<Spanned<String>>>>,
-    pub(crate) boundaries: Option<Spanned<BoundariesConfig>>,
-    pub(crate) extends: Spanned<Vec<String>>,
-    pub(crate) global_deps: Vec<String>,
-    pub(crate) global_env: Vec<String>,
-    pub(crate) global_pass_through_env: Option<Vec<String>>,
-    pub(crate) tasks: Pipeline,
-    pub(crate) future_flags: FutureFlags,
-}
-
-#[derive(Serialize, Default, Debug, PartialEq, Clone)]
-#[serde(transparent)]
-pub struct Pipeline(BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>);
-
-impl IntoIterator for Pipeline {
-    type Item = (TaskName<'static>, Spanned<RawTaskDefinition>);
-    type IntoIter =
-        <BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>> as IntoIterator>::IntoIter;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
-    }
-}
-
-impl Deref for Pipeline {
-    type Target = BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Pipeline {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// Creates TaskOutputs from ProcessedOutputs with resolved paths
-fn task_outputs_from_processed(
-    outputs: processed::ProcessedOutputs,
-    turbo_root_path: &RelativeUnixPath,
-) -> Result<TaskOutputs, Error> {
-    let mut inclusions = Vec::new();
-    let mut exclusions = Vec::new();
-
-    // Resolve all globs with the turbo_root path
-    // Absolute path validation was already done during ProcessedGlob creation
-    let resolved = outputs.resolve(turbo_root_path);
-
-    for glob_str in resolved {
-        if let Some(stripped_glob) = glob_str.strip_prefix('!') {
-            exclusions.push(stripped_glob.to_string());
-        } else {
-            inclusions.push(glob_str);
+impl RawTurboJsonExt for RawTurboJson {
+    fn from_task_access_trace(
+        trace: &HashMap<String, TaskAccessTraceFile>,
+    ) -> Option<RawTurboJson> {
+        if trace.is_empty() {
+            return None;
         }
-    }
 
-    inclusions.sort();
-    exclusions.sort();
+        let mut pipeline = Pipeline::default();
 
-    Ok(TaskOutputs {
-        inclusions,
-        exclusions,
-    })
-}
+        for (task_name, trace_file) in trace {
+            let spanned_outputs: Vec<Spanned<UnescapedString>> = trace_file
+                .outputs
+                .iter()
+                .map(|output| Spanned::new(output.clone()))
+                .collect();
+            let task_definition = RawTaskDefinition {
+                outputs: Some(spanned_outputs),
+                env: Some(
+                    trace_file
+                        .accessed
+                        .env_var_keys
+                        .iter()
+                        .map(|unescaped_string| Spanned::new(unescaped_string.clone()))
+                        .collect(),
+                ),
+                ..Default::default()
+            };
 
-/// Extension trait for creating TaskInputs from ProcessedInputs.
-/// This is defined here rather than on the type itself to allow TaskInputs
-/// to live in turborepo-types without depending on turbo_json types.
-trait TaskInputsFromProcessed {
-    /// Creates TaskInputs from ProcessedInputs with resolved paths
-    fn from_processed(
-        inputs: processed::ProcessedInputs,
-        turbo_root_path: &RelativeUnixPath,
-    ) -> Result<TaskInputs, Error>;
-}
+            let name = TaskName::from(task_name.as_str());
+            let root_task = name.into_root_task();
+            pipeline.insert(root_task, Spanned::new(task_definition.clone()));
+        }
 
-impl TaskInputsFromProcessed for TaskInputs {
-    fn from_processed(
-        inputs: processed::ProcessedInputs,
-        turbo_root_path: &RelativeUnixPath,
-    ) -> Result<TaskInputs, Error> {
-        // Resolve all globs with the turbo_root path
-        // Absolute path validation was already done during ProcessedGlob creation
-        Ok(TaskInputs {
-            globs: inputs.resolve(turbo_root_path),
-            default: inputs.default,
+        Some(RawTurboJson {
+            tasks: Some(pipeline),
+            ..RawTurboJson::default()
         })
     }
 }
@@ -197,7 +142,9 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
         if let Some(interactive) = &processed.interactive {
             let (span, text) = interactive.span_and_text("turbo.json");
             if cache && interactive.value {
-                return Err(Error::InteractiveNoCacheable { span, text });
+                return Err(Error::TurboJsonError(
+                    turborepo_turbo_json::Error::InteractiveNoCacheable { span, text },
+                ));
             }
         }
 
@@ -205,7 +152,9 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
         let interruptible = processed.interruptible.unwrap_or_default();
         if *interruptible && !persistent {
             let (span, text) = interruptible.span_and_text("turbo.json");
-            return Err(Error::InterruptibleButNotPersistent { span, text });
+            return Err(Error::TurboJsonError(
+                turborepo_turbo_json::Error::InterruptibleButNotPersistent { span, text },
+            ));
         }
 
         let mut topological_dependencies: Vec<Spanned<TaskName>> = Vec::new();
@@ -233,7 +182,6 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
         let inputs = processed
             .inputs
             .map(|inputs| TaskInputs::from_processed(inputs, path_to_repo_root))
-            .transpose()?
             .unwrap_or_default();
 
         let pass_through_env = processed.pass_through_env.map(|env| env.vars);
@@ -271,224 +219,6 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
     }
 }
 
-impl TryFrom<RawTurboJson> for TurboJson {
-    type Error = Error;
-
-    fn try_from(raw_turbo: RawTurboJson) -> Result<Self, Error> {
-        if let Some(pipeline) = raw_turbo.pipeline {
-            let (span, text) = pipeline.span_and_text("turbo.json");
-            return Err(Error::PipelineField { span, text });
-        }
-
-        // `futureFlags` key is only allowed in root turbo.json
-        let is_workspace_config = raw_turbo.extends.is_some();
-        if is_workspace_config {
-            if let Some(future_flags) = raw_turbo.future_flags {
-                let (span, text) = future_flags.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInPackage { span, text });
-            }
-        }
-        let mut global_env = HashSet::new();
-        let mut global_file_dependencies = HashSet::new();
-
-        if let Some(global_env_from_turbo) = raw_turbo.global_env {
-            gather_env_vars(global_env_from_turbo, "globalEnv", &mut global_env)?;
-        }
-
-        for global_dep in raw_turbo.global_dependencies.into_iter().flatten() {
-            if global_dep.strip_prefix(ENV_PIPELINE_DELIMITER).is_some() {
-                let (span, text) = global_dep.span_and_text("turbo.json");
-                return Err(Error::InvalidDependsOnValue {
-                    field: "globalDependencies",
-                    span,
-                    text,
-                });
-            } else if Utf8Path::new(&global_dep.value).is_absolute() {
-                let (span, text) = global_dep.span_and_text("turbo.json");
-                return Err(Error::AbsolutePathInConfig {
-                    field: "globalDependencies",
-                    span,
-                    text,
-                });
-            } else {
-                global_file_dependencies.insert(global_dep.into_inner().into());
-            }
-        }
-
-        let tasks = raw_turbo.tasks.clone().unwrap_or_default();
-
-        Ok(TurboJson {
-            text: raw_turbo.span.text,
-            path: raw_turbo.span.path,
-            tags: raw_turbo.tags,
-            global_env: {
-                let mut global_env: Vec<_> = global_env.into_iter().collect();
-                global_env.sort();
-                global_env
-            },
-            global_pass_through_env: raw_turbo
-                .global_pass_through_env
-                .map(|env| -> Result<Vec<String>, Error> {
-                    let mut global_pass_through_env = HashSet::new();
-                    gather_env_vars(env, "globalPassThroughEnv", &mut global_pass_through_env)?;
-                    let mut global_pass_through_env: Vec<String> =
-                        global_pass_through_env.into_iter().collect();
-                    global_pass_through_env.sort();
-                    Ok(global_pass_through_env)
-                })
-                .transpose()?,
-            global_deps: {
-                let mut global_deps: Vec<_> = global_file_dependencies.into_iter().collect();
-                global_deps.sort();
-
-                global_deps
-            },
-            tasks,
-            // copy these over, we don't need any changes here.
-            extends: raw_turbo
-                .extends
-                .unwrap_or_default()
-                .map(|s| s.into_iter().map(|s| s.into()).collect()),
-            boundaries: raw_turbo.boundaries,
-            future_flags: raw_turbo
-                .future_flags
-                .map(|f| f.into_inner())
-                .unwrap_or_default(),
-            // Remote Cache config is handled through layered config
-        })
-    }
-}
-
-impl TurboJson {
-    fn has_task(&self, task_name: &TaskName) -> bool {
-        for key in self.tasks.keys() {
-            if key == task_name || (key.task() == task_name.task() && !task_name.is_package_task())
-            {
-                return true;
-            }
-        }
-
-        false
-    }
-
-    pub(super) fn is_root_config(&self) -> bool {
-        self.path
-            .as_ref()
-            .map(|p| {
-                let path_str = p.as_ref();
-                path_str == "turbo.json" || path_str == "turbo.jsonc"
-            })
-            .unwrap_or(false)
-    }
-
-    /// Reads a `RawTurboJson` from the given path
-    /// and then converts it into `TurboJson`
-    ///
-    /// Should never be called directly outside of this module.
-    /// `TurboJsonReader` should be used instead.
-    fn read(
-        repo_root: &AbsoluteSystemPath,
-        path: &AbsoluteSystemPath,
-        is_root: bool,
-        future_flags: FutureFlags,
-    ) -> Result<Option<TurboJson>, Error> {
-        let Some(raw_turbo_json) = RawTurboJson::read(repo_root, path, is_root)? else {
-            return Ok(None);
-        };
-
-        let mut turbo_json = TurboJson::try_from(raw_turbo_json)?;
-        // Override with root's future flags (only root turbo.json can define them)
-        turbo_json.future_flags = future_flags;
-        Ok(Some(turbo_json))
-    }
-
-    pub fn task(
-        &self,
-        task_id: &TaskId,
-        task_name: &TaskName,
-    ) -> Result<Option<ProcessedTaskDefinition>, Error> {
-        match self.tasks.get(&task_id.as_task_name()) {
-            Some(entry) => {
-                ProcessedTaskDefinition::from_raw(entry.value.clone(), &self.future_flags).map(Some)
-            }
-            None => self
-                .tasks
-                .get(task_name)
-                .map(|entry| {
-                    ProcessedTaskDefinition::from_raw(entry.value.clone(), &self.future_flags)
-                })
-                .transpose(),
-        }
-    }
-
-    pub fn has_root_tasks(&self) -> bool {
-        self.tasks
-            .iter()
-            .any(|(task_name, _)| task_name.package() == Some(ROOT_PKG_NAME))
-    }
-
-    /// Adds a local proxy task to a workspace TurboJson
-    pub fn with_proxy(&mut self, mfe_package_name: Option<&str>) {
-        if self.extends.is_empty() {
-            self.extends = Spanned::new(vec!["//".into()]);
-        }
-
-        self.tasks.insert(
-            TaskName::from("proxy"),
-            Spanned::new(RawTaskDefinition {
-                cache: Some(Spanned::new(false)),
-                depends_on: mfe_package_name.map(|mfe_package_name| {
-                    Spanned::new(vec![Spanned::new(UnescapedString::from(format!(
-                        "{mfe_package_name}#build"
-                    )))])
-                }),
-                persistent: Some(Spanned::new(true)),
-                env_mode: Some(Spanned::new(EnvMode::Loose)),
-                ..Default::default()
-            }),
-        );
-    }
-
-    /// Adds a "with" relationship from `task` to `with`
-    pub fn with_task(&mut self, task: TaskName<'static>, with: &TaskName) {
-        if self.extends.is_empty() {
-            self.extends = Spanned::new(vec!["//".into()]);
-        }
-
-        let task_definition = self.tasks.entry(task).or_default();
-
-        let with_tasks = task_definition.as_inner_mut().with.get_or_insert_default();
-
-        with_tasks.push(Spanned::new(UnescapedString::from(with.to_string())))
-    }
-}
-
-fn gather_env_vars(
-    vars: Vec<Spanned<impl Into<String>>>,
-    key: &str,
-    into: &mut HashSet<String>,
-) -> Result<(), Error> {
-    for value in vars {
-        let value: Spanned<String> = value.map(|v| v.into());
-        if value.starts_with(ENV_PIPELINE_DELIMITER) {
-            let (span, text) = value.span_and_text("turbo.json");
-            // Hard error to help people specify this correctly during migration.
-            // TODO: Remove this error after we have run summary.
-            return Err(Error::InvalidEnvPrefix(Box::new(InvalidEnvPrefixError {
-                key: key.to_string(),
-                value: value.into_inner(),
-                span,
-                text,
-                env_pipeline_delimiter: ENV_PIPELINE_DELIMITER,
-            })));
-        }
-
-        into.insert(value.into_inner());
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use anyhow::Result;
@@ -499,10 +229,10 @@ mod tests {
     use test_case::test_case;
     use turbopath::RelativeUnixPath;
     use turborepo_task_id::TaskName;
-    use turborepo_types::{OutputLogsMode, UIMode};
+    use turborepo_types::{OutputLogsMode, TaskInputs, UIMode};
     use turborepo_unescape::UnescapedString;
 
-    use super::{processed::*, *};
+    use super::*;
     use crate::{
         boundaries::BoundariesConfig,
         task_graph::{TaskDefinition, TaskOutputs},
@@ -776,8 +506,10 @@ mod tests {
         let processed_outputs = ProcessedOutputs::new(
             raw_task_outputs.into_iter().map(Spanned::new).collect(),
             &FutureFlags::default(),
-        )?;
-        let task_outputs = task_outputs_from_processed(processed_outputs, turbo_root)?;
+        )
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let task_outputs = task_outputs_from_processed(processed_outputs, turbo_root)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
         assert_eq!(task_outputs, expected_task_outputs);
 
         Ok(())
@@ -1178,10 +910,7 @@ mod tests {
 
     #[test]
     fn test_is_root_config_with_root_path() {
-        let turbo_json = TurboJson {
-            path: Some("turbo.json".into()),
-            ..Default::default()
-        };
+        let turbo_json = TurboJson::default().with_path("turbo.json");
         assert!(
             turbo_json.is_root_config(),
             "turbo.json should be detected as root config"
@@ -1190,10 +919,7 @@ mod tests {
 
     #[test]
     fn test_is_root_config_with_jsonc_extension() {
-        let turbo_json = TurboJson {
-            path: Some("turbo.jsonc".into()),
-            ..Default::default()
-        };
+        let turbo_json = TurboJson::default().with_path("turbo.jsonc");
         assert!(
             turbo_json.is_root_config(),
             "turbo.jsonc should be detected as root config"
@@ -1202,10 +928,7 @@ mod tests {
 
     #[test]
     fn test_is_root_config_with_package_path() {
-        let turbo_json = TurboJson {
-            path: Some("packages/my-app/turbo.json".into()),
-            ..Default::default()
-        };
+        let turbo_json = TurboJson::default().with_path("packages/my-app/turbo.json");
         assert!(
             !turbo_json.is_root_config(),
             "packages/my-app/turbo.json should NOT be detected as root config"

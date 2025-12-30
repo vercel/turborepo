@@ -1,16 +1,17 @@
 //! Processed task definition types with DSL token handling
+//! Processed turbo.json types
+//!
+//! This module contains types that represent processed/resolved turbo.json
+//! configuration after validation and normalization.
 
 use camino::Utf8Path;
 use turbopath::RelativeUnixPath;
 use turborepo_errors::Spanned;
 use turborepo_task_id::TaskName;
+use turborepo_types::{EnvMode, OutputLogsMode};
 use turborepo_unescape::UnescapedString;
 
-use super::{FutureFlags, RawTaskDefinition};
-use crate::{
-    cli::{EnvMode, OutputLogsMode},
-    config::Error,
-};
+use crate::{error::Error, future_flags::FutureFlags, raw::RawTaskDefinition};
 
 const TURBO_DEFAULT: &str = "$TURBO_DEFAULT$";
 const TURBO_ROOT: &str = "$TURBO_ROOT$";
@@ -49,7 +50,7 @@ impl ProcessedGlob {
     fn from_spanned_internal(
         value: Spanned<UnescapedString>,
         field: &'static str,
-    ) -> Result<Self, crate::config::Error> {
+    ) -> Result<Self, Error> {
         let mut negated = false;
         let mut turbo_root = false;
 
@@ -89,16 +90,12 @@ impl ProcessedGlob {
     }
 
     /// Creates a ProcessedGlob for outputs (validates as output field)
-    pub fn from_spanned_output(
-        value: Spanned<UnescapedString>,
-    ) -> Result<Self, crate::config::Error> {
+    pub fn from_spanned_output(value: Spanned<UnescapedString>) -> Result<Self, Error> {
         Self::from_spanned_internal(value, "outputs")
     }
 
     /// Creates a ProcessedGlob for inputs (validates as input field)
-    pub fn from_spanned_input(
-        value: Spanned<UnescapedString>,
-    ) -> Result<Self, crate::config::Error> {
+    pub fn from_spanned_input(value: Spanned<UnescapedString>) -> Result<Self, Error> {
         Self::from_spanned_internal(value, "inputs")
     }
 
@@ -239,7 +236,7 @@ fn extract_env_vars(
     raw_env: Vec<Spanned<UnescapedString>>,
     field_name: &str,
 ) -> Result<Vec<String>, Error> {
-    use crate::config::InvalidEnvPrefixError;
+    use crate::error::InvalidEnvPrefixError;
 
     let mut env_vars = Vec::with_capacity(raw_env.len());
     // Validate that no env var starts with ENV_PIPELINE_DELIMITER ($)
@@ -345,7 +342,7 @@ impl ProcessedTaskDefinition {
     pub fn from_raw(
         raw_task: RawTaskDefinition,
         future_flags: &FutureFlags,
-    ) -> Result<Self, crate::config::Error> {
+    ) -> Result<Self, Error> {
         Ok(ProcessedTaskDefinition {
             extends: raw_task.extends,
             cache: raw_task.cache,
@@ -380,10 +377,10 @@ impl ProcessedTaskDefinition {
                 .transpose()?,
         })
     }
-}
 
-impl super::HasConfigBeyondExtends for ProcessedTaskDefinition {
-    fn has_config_beyond_extends(&self) -> bool {
+    /// Check if a task definition has any configuration beyond just the
+    /// `extends` field.
+    pub fn has_config_beyond_extends(&self) -> bool {
         self.cache.is_some()
             || self.depends_on.is_some()
             || self.env.is_some()
@@ -407,7 +404,6 @@ mod tests {
     use turborepo_unescape::UnescapedString;
 
     use super::*;
-    use crate::turbo_json::FutureFlags;
 
     #[test]
     fn test_extract_turbo_extends_with_marker() {

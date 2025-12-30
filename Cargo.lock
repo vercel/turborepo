@@ -7139,6 +7139,7 @@ dependencies = [
  "turborepo-task-hash",
  "turborepo-task-id",
  "turborepo-telemetry",
+ "turborepo-turbo-json",
  "turborepo-types",
  "turborepo-ui",
  "turborepo-unescape",
@@ -7484,6 +7485,35 @@ dependencies = [
  "turborepo-vercel-api-mock",
  "url",
  "uuid",
+]
+
+[[package]]
+name = "turborepo-turbo-json"
+version = "0.1.0"
+dependencies = [
+ "biome_deserialize 0.6.0",
+ "biome_deserialize_macros 0.6.0",
+ "biome_diagnostics",
+ "biome_json_parser",
+ "biome_json_syntax",
+ "camino",
+ "convert_case 0.6.0",
+ "insta",
+ "miette",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "struct_iterable",
+ "test-case",
+ "thiserror 1.0.63",
+ "tracing",
+ "turbopath",
+ "turborepo-boundaries",
+ "turborepo-errors",
+ "turborepo-repository",
+ "turborepo-task-id",
+ "turborepo-types",
+ "turborepo-unescape",
 ]
 
 [[package]]
