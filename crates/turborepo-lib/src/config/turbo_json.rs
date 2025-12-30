@@ -58,7 +58,7 @@ impl<'a> TurboJsonReader<'a> {
             let cache_dir_str: &str = &cache_dir;
             let cache_dir_unix = RelativeUnixPath::new(cache_dir_str).map_err(|_| {
                 let (span, text) = cache_dir.span_and_text("turbo.json");
-                Error::AbsoluteCacheDir { span, text }
+                Error::TurboJsonError(turborepo_turbo_json::Error::AbsoluteCacheDir { span, text })
             })?;
             // Convert the relative unix path to an anchored system path
             // For unix/macos this is a no-op
@@ -94,9 +94,9 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
             |relative| relative.to_string(),
         );
         let turbo_json = match turbo_json_path.read_existing_to_string()? {
-            Some(contents) => {
-                RawRootTurboJson::parse(&contents, &root_relative_turbo_json_path)?.into()
-            }
+            Some(contents) => RawRootTurboJson::parse(&contents, &root_relative_turbo_json_path)
+                .map_err(turborepo_turbo_json::Error::from)?
+                .into(),
             None => RawTurboJson::default(),
         };
         Self::turbo_json_to_config_options(turbo_json)

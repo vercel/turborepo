@@ -623,9 +623,7 @@ impl<'a> EngineBuilder<'a> {
 
         let turbo_json = loader.load(workspace).map_or_else(
             |err| {
-                if matches!(err, config::Error::NoTurboJSON)
-                    && !matches!(workspace, PackageName::Root)
-                {
+                if err.is_no_turbo_json() && !matches!(workspace, PackageName::Root) {
                     Ok(None)
                 } else {
                     Err(err)
@@ -922,7 +920,7 @@ impl<'a> EngineBuilder<'a> {
                 .map(Some)
                 .or_else(|err| {
                     if let Some((span, text)) = read_req.required() {
-                        if matches!(err, config::Error::NoTurboJSON) {
+                        if err.is_no_turbo_json() {
                             Err(Error::MissingTurboJsonExtends(Box::new(
                                 MissingTurboJsonExtends {
                                     package_name: read_req.package_name().to_string(),
@@ -933,7 +931,7 @@ impl<'a> EngineBuilder<'a> {
                         } else {
                             Err(err.into())
                         }
-                    } else if matches!(err, config::Error::NoTurboJSON) {
+                    } else if err.is_no_turbo_json() {
                         Ok(None)
                     } else {
                         Err(err.into())
@@ -990,7 +988,7 @@ impl<'a> EngineBuilder<'a> {
 
 impl Error {
     fn is_missing_turbo_json(&self) -> bool {
-        matches!(self, Self::Config(crate::config::Error::NoTurboJSON))
+        matches!(self, Self::Config(err) if err.is_no_turbo_json())
     }
 
     fn from_validation(errors: Vec<config::Error>) -> Result<(), Self> {

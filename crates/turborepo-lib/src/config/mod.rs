@@ -6,12 +6,11 @@ mod turbo_json;
 use std::{collections::HashMap, ffi::OsString, io};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use convert_case::{Case, Casing};
 use derive_setters::Setters;
 use env::EnvVars;
 use file::{AuthFile, ConfigFile};
 use merge::Merge;
-use miette::{Diagnostic, NamedSource, SourceSpan};
+use miette::Diagnostic;
 use override_env::OverrideEnvVars;
 use serde::Deserialize;
 use struct_iterable::Iterable;
@@ -20,7 +19,6 @@ use tracing::debug;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_cache::CacheConfig;
-use turborepo_errors::TURBO_SITE;
 use turborepo_repository::package_graph::PackageName;
 pub use turborepo_types::{EnvMode, LogOrder, UIMode};
 
@@ -29,40 +27,17 @@ use crate::turbo_json::FutureFlags;
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 
-#[derive(Debug, Error, Diagnostic)]
-#[error("Environment variables should not be prefixed with \"{env_pipeline_delimiter}\"")]
-#[diagnostic(
-    code(invalid_env_prefix),
-    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-)]
-pub struct InvalidEnvPrefixError {
-    pub value: String,
-    pub key: String,
-    #[source_code]
-    pub text: NamedSource<String>,
-    #[label("variable with invalid prefix declared here")]
-    pub span: Option<SourceSpan>,
-    pub env_pipeline_delimiter: &'static str,
-}
-
-#[derive(Debug, Error, Diagnostic)]
-#[diagnostic(
-    code(unnecessary_package_task_syntax),
-    url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab))
-)]
-#[error("\"{actual}\". Use \"{wanted}\" instead.")]
-pub struct UnnecessaryPackageTaskSyntaxError {
-    pub actual: String,
-    pub wanted: String,
-    #[label("unnecessary package syntax found here")]
-    pub span: Option<SourceSpan>,
-    #[source_code]
-    pub text: NamedSource<String>,
-}
-
+/// Configuration errors for turborepo.
+///
+/// This enum contains errors related to configuration loading and validation.
+/// Turbo.json specific errors are in `turborepo_turbo_json::Error` and can be
+/// converted via the `TurboJsonError` variant.
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
+    // ============================================================
+    // Authentication and global config errors
+    // ============================================================
     #[error("Authentication error: {0}")]
     Auth(#[from] turborepo_auth::Error),
     #[error("Global config path not found.")]
@@ -71,18 +46,12 @@ pub enum Error {
     NoGlobalAuthFilePath,
     #[error("Global config directory not found.")]
     NoGlobalConfigDir,
+
+    // ============================================================
+    // File and IO errors
+    // ============================================================
     #[error(transparent)]
     PackageJson(#[from] turborepo_repository::package_json::Error),
-    #[error(
-        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turborepo.com/docs \
-         to create one."
-    )]
-    NoTurboJSON,
-    #[error(
-        "Found both turbo.json and turbo.jsonc in the same directory: {directory}\nRemove either \
-         turbo.json or turbo.jsonc so there is only one."
-    )]
-    MultipleTurboConfigs { directory: String },
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
@@ -103,103 +72,18 @@ pub enum Error {
     },
     #[error(transparent)]
     Cache(#[from] turborepo_cache::config::Error),
-    #[error(
-        "Package tasks (<package>#<task>) are not allowed in single-package repositories: found \
-         {task_id}"
-    )]
-    #[diagnostic(code(package_task_in_single_package_mode), url("{}/messages/{}", TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)))]
-    PackageTaskInSinglePackageMode {
-        task_id: String,
-        #[source_code]
-        text: NamedSource<String>,
-        #[label("package task found here")]
-        span: Option<SourceSpan>,
-    },
-    #[error("Interruptible tasks must be persistent.")]
-    InterruptibleButNotPersistent {
-        #[source_code]
-        text: NamedSource<String>,
-        #[label("`interruptible` set here")]
-        span: Option<SourceSpan>,
-    },
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    InvalidEnvPrefix(Box<InvalidEnvPrefixError>),
     #[error(transparent)]
     PathError(#[from] turbopath::PathError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    UnnecessaryPackageTaskSyntax(Box<UnnecessaryPackageTaskSyntaxError>),
-    #[error("You must extend from the root of the workspace first.")]
-    ExtendsRootFirst {
-        #[label("'//' should be first")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error(
-        "The \"extends\" key on task \"{task_name}\" can only be used in Package Configurations."
-    )]
-    TaskExtendsInRoot {
-        task_name: String,
-        #[label("\"extends\" found here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error(
-        "Cannot set \"extends\": false on task \"{task_name}\" because it is not defined in the \
-         extends chain."
-    )]
-    #[diagnostic(help("{extends_chain}"))]
-    TaskNotInExtendsChain {
-        task_name: String,
-        extends_chain: String,
-        #[label("task is not inherited")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error("`{field}` cannot contain an environment variable.")]
-    InvalidDependsOnValue {
-        field: &'static str,
-        #[label("environment variable found here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error("`{field}` cannot contain an absolute path.")]
-    AbsolutePathInConfig {
-        field: &'static str,
-        #[label("absolute path found here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error("No \"extends\" key found.")]
-    NoExtends {
-        #[label("add extends key here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error("Tasks cannot be marked as interactive and cacheable.")]
-    InteractiveNoCacheable {
-        #[label("marked interactive here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error("Found `pipeline` field instead of `tasks`.")]
-    #[diagnostic(help("Changed in 2.0: `pipeline` has been renamed to `tasks`."))]
-    PipelineField {
-        #[label("Rename `pipeline` field to `tasks`")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
+
+    // ============================================================
+    // API and network errors
+    // ============================================================
     #[error("Failed to create APIClient: {0}")]
     ApiClient(#[source] turborepo_api_client::Error),
+
+    // ============================================================
+    // Environment variable parsing errors
+    // ============================================================
     #[error("{0} is not UTF8.")]
     Encoding(String),
     #[error("TURBO_SIGNATURE should be either 1 or 0.")]
@@ -214,50 +98,6 @@ pub enum Error {
     InvalidPreflight,
     #[error("TURBO_LOG_ORDER should be one of: {0}")]
     InvalidLogOrder(String),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    TurboJsonParseError(#[from] crate::turbo_json::parser::Error),
-    #[error("found absolute path in `cacheDir`")]
-    #[diagnostic(help("If absolute paths are required, use `--cache-dir` or `TURBO_CACHE_DIR`."))]
-    AbsoluteCacheDir {
-        #[label("Make `cacheDir` value a relative unix path.")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error("Cannot load turbo.json for {0} in single package mode.")]
-    InvalidTurboJsonLoad(PackageName),
-    #[error("\"$TURBO_ROOT$\" must be used at the start of glob.")]
-    InvalidTurboRootUse {
-        #[label("\"$TURBO_ROOT$\" must be used at the start of glob.")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error("\"$TURBO_ROOT$\" must be followed by a '/'.")]
-    InvalidTurboRootNeedsSlash {
-        #[label("\"$TURBO_ROOT$\" must be followed by a '/'.")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error("`with` cannot use dependency relationships.")]
-    InvalidTaskWith {
-        #[label("Remove `^` from start of task name.")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error(
-        "The \"futureFlags\" key can only be used in the root turbo.json. Please remove it from \
-         Package Configurations."
-    )]
-    FutureFlagsInPackage {
-        #[label("futureFlags key found here")]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
     #[error(
         "TURBO_TUI_SCROLLBACK_LENGTH: Invalid value. Use a number for how many lines to keep in \
          scrollback."
@@ -265,9 +105,38 @@ pub enum Error {
     InvalidTuiScrollbackLength(#[source] std::num::ParseIntError),
     #[error("TURBO_SSO_LOGIN_CALLBACK_PORT: Invalid value. Use a number for the callback port.")]
     InvalidSsoLoginCallbackPort(#[source] std::num::ParseIntError),
+
+    // ============================================================
+    // Turbo.json loading errors (specific to loader, not in turbo_json crate)
+    // ============================================================
+    #[error("Cannot load turbo.json for {0} in single package mode.")]
+    InvalidTurboJsonLoad(PackageName),
+
+    // ============================================================
+    // Turbo.json errors (delegated to turborepo_turbo_json crate)
+    // ============================================================
     #[error(transparent)]
     #[diagnostic(transparent)]
     TurboJsonError(#[from] turborepo_turbo_json::Error),
+}
+
+impl Error {
+    /// Returns true if this error indicates that no turbo.json file was found.
+    pub fn is_no_turbo_json(&self) -> bool {
+        matches!(
+            self,
+            Error::TurboJsonError(turborepo_turbo_json::Error::NoTurboJSON)
+        )
+    }
+
+    /// Returns true if this error indicates that multiple turbo config files
+    /// were found.
+    pub fn is_multiple_turbo_configs(&self) -> bool {
+        matches!(
+            self,
+            Error::TurboJsonError(turborepo_turbo_json::Error::MultipleTurboConfigs { .. })
+        )
+    }
 }
 
 const DEFAULT_API_URL: &str = "https://vercel.com/api";
@@ -614,9 +483,11 @@ pub fn resolve_turbo_config_path(
     let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
 
     match (turbo_json_exists, turbo_jsonc_exists) {
-        (true, true) => Err(Error::MultipleTurboConfigs {
-            directory: dir_path.to_string(),
-        }),
+        (true, true) => Err(Error::TurboJsonError(
+            turborepo_turbo_json::Error::MultipleTurboConfigs {
+                directory: dir_path.to_string(),
+            },
+        )),
         (true, false) => Ok(turbo_json_path),
         (false, true) => Ok(turbo_jsonc_path),
         // Default to turbo.json if neither exists

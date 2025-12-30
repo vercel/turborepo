@@ -178,7 +178,7 @@ impl TurboJsonLoader {
         let turbo_json = self.uncached_load(package)?;
         self.cache
             .insert(package, turbo_json)
-            .map_err(|_| Error::NoTurboJSON)
+            .map_err(|_| Error::TurboJsonError(turborepo_turbo_json::Error::NoTurboJSON))
     }
 
     fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, Error> {
@@ -198,7 +198,9 @@ impl TurboJsonLoader {
                 packages,
                 micro_frontends_configs,
             } => {
-                let turbo_json_path = packages.get(package).ok_or_else(|| Error::NoTurboJSON)?;
+                let turbo_json_path = packages.get(package).ok_or_else(|| {
+                    Error::TurboJsonError(turborepo_turbo_json::Error::NoTurboJSON)
+                })?;
                 // Check if this package is at the repo root. This can happen when
                 // the workspace definition includes "." as a package. In that case,
                 // the package's turbo.json would be the root turbo.json, so we
@@ -232,7 +234,9 @@ impl TurboJsonLoader {
                 packages,
                 microfrontends_configs,
             } => {
-                let script_names = packages.get(package).ok_or(Error::NoTurboJSON)?;
+                let script_names = packages.get(package).ok_or(Error::TurboJsonError(
+                    turborepo_turbo_json::Error::NoTurboJSON,
+                ))?;
                 if matches!(package, PackageName::Root) {
                     root_turbo_json_from_scripts(script_names)
                 } else {
@@ -254,7 +258,9 @@ impl TurboJsonLoader {
                     load_task_access_trace_turbo_json(reader, root_turbo_json, package_json)
                 }
             }
-            Strategy::Noop => Err(Error::NoTurboJSON),
+            Strategy::Noop => Err(Error::TurboJsonError(
+                turborepo_turbo_json::Error::NoTurboJSON,
+            )),
         }
     }
 }
@@ -323,7 +329,9 @@ fn load_from_file(
     match result {
         // There was an error, and we don't have any chance of recovering
         Err(e) => Err(e),
-        Ok(None) => Err(Error::NoTurboJSON),
+        Ok(None) => Err(Error::TurboJsonError(
+            turborepo_turbo_json::Error::NoTurboJSON,
+        )),
         // We're not synthesizing anything and there was no error, we're done
         Ok(Some(turbo)) => Ok(turbo),
     }
@@ -345,11 +353,13 @@ fn load_from_root_package_json(
                 if task_name.is_package_task() {
                     let (span, text) = task_definition.span_and_text("turbo.json");
 
-                    return Err(Error::PackageTaskInSinglePackageMode {
-                        task_id: task_name.to_string(),
-                        span,
-                        text,
-                    });
+                    return Err(Error::TurboJsonError(
+                        turborepo_turbo_json::Error::PackageTaskInSinglePackageMode {
+                            task_id: task_name.to_string(),
+                            span,
+                            text,
+                        },
+                    ));
                 }
 
                 pipeline.insert(task_name.into_root_task(), task_definition);
@@ -453,9 +463,11 @@ fn select_turbo_json(
     );
     match (turbo_json, turbo_jsonc) {
         // If both paths contain valid turbo.json error
-        (Ok(Some(_)), Ok(Some(_))) => Err(Error::MultipleTurboConfigs {
-            directory: turbo_json_dir_path.to_string(),
-        }),
+        (Ok(Some(_)), Ok(Some(_))) => Err(Error::TurboJsonError(
+            turborepo_turbo_json::Error::MultipleTurboConfigs {
+                directory: turbo_json_dir_path.to_string(),
+            },
+        )),
         // If turbo.json is valid and turbo.jsonc is missing or invalid, use turbo.json
         (Ok(Some(turbo_json)), Ok(None)) | (Ok(Some(turbo_json)), Err(_)) => Ok(Some(turbo_json)),
         // If turbo.jsonc is valid and turbo.json is missing or invalid, use turbo.jsonc
@@ -764,7 +776,7 @@ mod test {
         };
         let result = loader.load(&PackageName::from("a"));
         assert!(
-            matches!(result.unwrap_err(), Error::NoTurboJSON),
+            result.unwrap_err().is_no_turbo_json(),
             "expected parsing to fail with missing turbo.json"
         );
 
@@ -864,7 +876,7 @@ mod test {
         }
         // Should get no turbo.json error if package wasn't declared
         let goose_err = loader.load(&PackageName::from("goose")).unwrap_err();
-        assert!(matches!(goose_err, Error::NoTurboJSON));
+        assert!(goose_err.is_no_turbo_json());
     }
 
     #[test]
@@ -989,7 +1001,10 @@ mod test {
         assert!(result.is_err());
         let mut err = result.unwrap_err();
         // Override tmpdir so we can snapshot the error message
-        if let Error::MultipleTurboConfigs { directory } = &mut err {
+        if let Error::TurboJsonError(turborepo_turbo_json::Error::MultipleTurboConfigs {
+            directory,
+        }) = &mut err
+        {
             *directory = "some-dir".to_owned()
         }
         assert_snapshot!(err, @r"

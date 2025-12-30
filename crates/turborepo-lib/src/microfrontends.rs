@@ -238,9 +238,12 @@ impl MicrofrontendsConfigs {
             }
 
             // We need to modify turbo.json, use default one if there isn't one present
-            let mut turbo_json = turbo_json.or_else(|err| match err {
-                config::Error::NoTurboJSON => Ok(TurboJson::default()),
-                err => Err(err),
+            let mut turbo_json = turbo_json.or_else(|err| {
+                if err.is_no_turbo_json() {
+                    Ok(TurboJson::default())
+                } else {
+                    Err(err)
+                }
             })?;
 
             // If the current package contains the proxy task, then add that definition

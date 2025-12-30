@@ -139,7 +139,9 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
         if let Some(interactive) = &processed.interactive {
             let (span, text) = interactive.span_and_text("turbo.json");
             if cache && interactive.value {
-                return Err(Error::InteractiveNoCacheable { span, text });
+                return Err(Error::TurboJsonError(
+                    turborepo_turbo_json::Error::InteractiveNoCacheable { span, text },
+                ));
             }
         }
 
@@ -147,7 +149,9 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
         let interruptible = processed.interruptible.unwrap_or_default();
         if *interruptible && !persistent {
             let (span, text) = interruptible.span_and_text("turbo.json");
-            return Err(Error::InterruptibleButNotPersistent { span, text });
+            return Err(Error::TurboJsonError(
+                turborepo_turbo_json::Error::InterruptibleButNotPersistent { span, text },
+            ));
         }
 
         let mut topological_dependencies: Vec<Spanned<TaskName>> = Vec::new();

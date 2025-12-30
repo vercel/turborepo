@@ -110,7 +110,7 @@ impl<'a> TaskInheritanceResolver<'a> {
 
         let turbo_json = match self.loader.load(workspace) {
             Ok(json) => json,
-            Err(config::Error::NoTurboJSON) if !matches!(workspace, PackageName::Root) => {
+            Err(err) if err.is_no_turbo_json() && !matches!(workspace, PackageName::Root) => {
                 // If no turbo.json for this workspace, check root
                 return self.collect_from_workspace(&PackageName::Root, state);
             }
@@ -247,12 +247,14 @@ impl<'a> TaskInheritanceResolver<'a> {
                 .unwrap()
                 .span_and_text("turbo.json");
             let extends_chain = Self::format_extends_chain(turbo_json, inherited_tasks);
-            return Err(Error::Config(config::Error::TaskNotInExtendsChain {
-                task_name: task_name.to_string(),
-                extends_chain,
-                span,
-                text,
-            }));
+            return Err(Error::Config(config::Error::TurboJsonError(
+                turborepo_turbo_json::Error::TaskNotInExtendsChain {
+                    task_name: task_name.to_string(),
+                    extends_chain,
+                    span,
+                    text,
+                },
+            )));
         }
 
         if task_def.has_config_beyond_extends() {
