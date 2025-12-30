@@ -233,23 +233,20 @@ mod tests {
 
     #[test]
     fn test_validator_new() {
-        let validator = Validator::new();
+        let _validator = Validator::new();
         // Just verify it can be created
-        drop(validator);
     }
 
     #[test]
     fn test_validator_default() {
-        let validator = Validator::default();
+        let _validator = Validator::default();
         // Just verify default works
-        drop(validator);
     }
 
     #[test]
     fn test_validator_with_future_flags() {
-        let validator = Validator::new().with_future_flags(crate::FutureFlags::default());
+        let _validator = Validator::new().with_future_flags(crate::FutureFlags::default());
         // Just verify the builder pattern works
-        drop(validator);
     }
 
     #[test]
