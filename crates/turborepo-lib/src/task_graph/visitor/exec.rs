@@ -4,7 +4,6 @@ use std::{
     time::{Duration, Instant},
 };
 
-use chrono;
 use console::StyledObject;
 use tokio::sync::oneshot;
 use tracing::{error, Instrument};
