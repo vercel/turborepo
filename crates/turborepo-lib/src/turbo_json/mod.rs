@@ -29,7 +29,7 @@ pub mod validator;
 
 pub use future_flags::FutureFlags;
 pub use loader::{TurboJsonLoader, TurboJsonReader};
-pub use processed::ProcessedTaskDefinition;
+pub use processed::{ProcessedPruneIncludes, ProcessedTaskDefinition};
 pub use raw::{
     RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson, RawTaskDefinition, RawTurboJson,
 };
@@ -73,6 +73,7 @@ pub struct TurboJson {
     pub(crate) global_deps: Vec<String>,
     pub(crate) global_env: Vec<String>,
     pub(crate) global_pass_through_env: Option<Vec<String>>,
+    pub(crate) prune_includes: Option<processed::ProcessedPruneIncludes>,
     pub(crate) tasks: Pipeline,
     pub(crate) future_flags: FutureFlags,
 }
@@ -317,6 +318,13 @@ impl TryFrom<RawTurboJson> for TurboJson {
 
         let tasks = raw_turbo.tasks.clone().unwrap_or_default();
 
+        // Process prune includes
+        let prune_includes = raw_turbo
+            .prune
+            .and_then(|prune_config| prune_config.includes)
+            .map(processed::ProcessedPruneIncludes::new)
+            .transpose()?;
+
         Ok(TurboJson {
             text: raw_turbo.span.text,
             path: raw_turbo.span.path,
@@ -343,6 +351,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
 
                 global_deps
             },
+            prune_includes,
             tasks,
             // copy these over, we don't need any changes here.
             extends: raw_turbo
@@ -1173,7 +1182,7 @@ mod tests {
         let deps = boundaries.dependencies.as_ref().unwrap();
         assert!(deps.allow.is_some());
         assert!(deps.deny.is_none()); // This should be None, not serialized as
-                                      // null
+        // null
     }
 
     #[test]

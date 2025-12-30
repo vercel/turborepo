@@ -59,6 +59,11 @@
           "description": "An allowlist of environment variables that should be made to all tasks, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#globalpassthroughenv",
           "default": null
         },
+        "prune": {
+          "$ref": "#/definitions/Prune",
+          "description": "Configuration for the `turbo prune` command.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#prune",
+          "default": {}
+        },
         "remoteCache": {
           "$ref": "#/definitions/RemoteCache",
           "description": "Configuration options that control how turbo interfaces with the remote cache.\n\nDocumentation: https://turborepo.com/docs/core-concepts/remote-caching",
@@ -213,6 +218,20 @@
         "errors-only",
         "none"
       ]
+    },
+    "Prune": {
+      "type": "object",
+      "properties": {
+        "includes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional files and directories to include in pruned output. Supports glob patterns with ! for exclusions and $TURBO_ROOT$/ for repo-relative paths. When specified in workspace configs, patterns are combined with root config patterns."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Prune configuration"
     },
     "RemoteCache": {
       "type": "object",
@@ -371,6 +390,11 @@
         "boundaries": {
           "$ref": "#/definitions/BoundariesConfig",
           "description": "Configuration for `turbo boundaries` that is specific to this package"
+        },
+        "prune": {
+          "$ref": "#/definitions/Prune",
+          "description": "Configuration for the `turbo prune` command.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#prune",
+          "default": {}
         }
       },
       "required": [

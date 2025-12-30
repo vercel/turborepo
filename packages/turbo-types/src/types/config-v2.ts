@@ -61,6 +61,14 @@ export interface WorkspaceSchema extends BaseSchema {
    * Configuration for `turbo boundaries` that is specific to this package
    */
   boundaries?: BoundariesConfig;
+  /**
+   * Configuration for the `turbo prune` command.
+   *
+   * Documentation: https://turborepo.com/docs/reference/configuration#prune
+   *
+   * @defaultValue `{}`
+   */
+  prune?: Prune;
 }
 
 export interface RootSchema extends BaseSchema {
@@ -104,6 +112,15 @@ export interface RootSchema extends BaseSchema {
    * @defaultValue `null`
    */
   globalPassThroughEnv?: null | Array<EnvWildcard>;
+
+  /**
+   * Configuration for the `turbo prune` command.
+   *
+   * Documentation: https://turborepo.com/docs/reference/configuration#prune
+   *
+   * @defaultValue `{}`
+   */
+  prune?: Prune;
 
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
@@ -464,6 +481,18 @@ export interface RootBoundariesConfig extends BoundariesConfig {
    * can import a tag and which packages a tag can import
    */
   tags?: BoundariesRulesMap;
+}
+
+/**
+ * Prune configuration
+ */
+export interface Prune {
+  /**
+   * Additional files and directories to include in pruned output.
+   * Supports glob patterns with ! for exclusions and $TURBO_ROOT$/ for repo-relative paths.
+   * When specified in workspace configs, patterns are combined with root config patterns.
+   */
+  includes?: string[];
 }
 
 export const isRootSchemaV2 = (schema: Schema): schema is RootSchema =>
