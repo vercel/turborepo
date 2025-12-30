@@ -2,6 +2,9 @@
 //!
 //! This module contains all error types specific to turbo.json configuration
 //! parsing, validation, and processing.
+//!
+//! Note: Many struct/enum fields in this module are read by miette's Diagnostic
+//! derive macro for error formatting and display, not directly by code.
 
 use std::backtrace;
 

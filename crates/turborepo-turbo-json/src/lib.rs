@@ -1,10 +1,15 @@
 //! Turborepo turbo.json parsing and validation
+//! Turbo.json configuration crate
 //!
 //! This crate provides functionality for parsing, validating, and processing
 //! turbo.json configuration files.
 
 #![feature(assert_matches)]
 #![feature(error_generic_member_access)]
+// Allow unused_assignments for error/diagnostic struct fields that are read by
+// miette's derive macros, not directly by code. The derive macros generate code
+// that reads these fields for error formatting and display.
+#![allow(unused_assignments)]
 
 use std::{collections::HashSet, sync::Arc};
 

@@ -1,4 +1,5 @@
 //! Parser for turbo.json configuration files
+//! Turbo.json parsing module
 //!
 //! This module provides parsing functionality for turbo.json using biome's
 //! JSON parser with support for comments and trailing commas.
