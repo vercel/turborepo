@@ -224,6 +224,12 @@ enum Event {
     Canceled,
 }
 
+impl Default for ExecutionTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ExecutionTracker {
     pub fn new() -> Self {
         // This buffer size is probably overkill, but since messages are only a byte
