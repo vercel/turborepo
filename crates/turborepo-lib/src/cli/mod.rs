@@ -13,7 +13,7 @@ use clap::{
 };
 use clap_complete::{generate, Shell};
 pub use error::Error;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::AnonAPIClient;
@@ -22,6 +22,7 @@ use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
     init_telemetry, track_usage, TelemetryHandle,
 };
+use turborepo_types::{DryRunMode, LogOrder, UIMode};
 use turborepo_ui::{ColorConfig, GREY};
 
 use crate::{
@@ -34,7 +35,6 @@ use crate::{
     run::watch::WatchClient,
     shim::TurboState,
     tracing::TurboSubscriber,
-    turbo_json::UIMode,
 };
 
 mod error;
@@ -49,56 +49,6 @@ const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
 
 // Re-export OutputLogsMode from turborepo-types for backward compatibility.
 // New code should import directly from `turborepo_types::OutputLogsMode`.
-#[deprecated(
-    since = "2.4.0",
-    note = "Import `OutputLogsMode` directly from `turborepo_types` instead"
-)]
-pub use turborepo_types::OutputLogsMode;
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
-pub enum LogOrder {
-    #[serde(rename = "auto")]
-    #[default]
-    Auto,
-    #[serde(rename = "stream")]
-    Stream,
-    #[serde(rename = "grouped")]
-    Grouped,
-}
-
-impl Display for LogOrder {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            LogOrder::Auto => "auto",
-            LogOrder::Stream => "stream",
-            LogOrder::Grouped => "grouped",
-        })
-    }
-}
-
-impl LogOrder {
-    pub fn compatible_with_tui(&self) -> bool {
-        // If the user requested a specific order to the logs, then this isn't
-        // compatible with the TUI and means we cannot use it.
-        matches!(self, Self::Auto)
-    }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, ValueEnum, Serialize)]
-pub enum DryRunMode {
-    Text,
-    Json,
-}
-
-impl Display for DryRunMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            DryRunMode::Text => "text",
-            DryRunMode::Json => "json",
-        })
-    }
-}
-
 // Re-export EnvMode from turborepo-types for backward compatibility.
 // New code should import directly from `turborepo_types::EnvMode`.
 #[deprecated(
@@ -106,6 +56,11 @@ impl Display for DryRunMode {
     note = "Import `EnvMode` directly from `turborepo_types` instead"
 )]
 pub use turborepo_types::EnvMode;
+#[deprecated(
+    since = "2.4.0",
+    note = "Import `OutputLogsMode` directly from `turborepo_types` instead"
+)]
+pub use turborepo_types::OutputLogsMode;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq, ValueEnum, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -1846,7 +1801,9 @@ mod test {
         }
     }
 
-    use crate::cli::{Args, Command, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode};
+    use turborepo_types::{DryRunMode, EnvMode, LogOrder, OutputLogsMode};
+
+    use crate::cli::{Args, Command, LogPrefix};
 
     #[test_case::test_case(
         &["turbo", "run", "build"],

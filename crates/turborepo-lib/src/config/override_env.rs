@@ -3,8 +3,9 @@ use std::{
     ffi::{OsStr, OsString},
 };
 
+use turborepo_types::UIMode;
+
 use super::{env::truth_env_var, ConfigurationOptions, Error, ResolvedConfigurationOptions};
-use crate::turbo_json::UIMode;
 
 /*
 Hi! If you're new here:

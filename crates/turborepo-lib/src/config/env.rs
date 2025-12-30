@@ -8,12 +8,9 @@ use itertools::Itertools;
 use tracing::warn;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_cache::CacheConfig;
+use turborepo_types::{EnvMode, LogOrder, UIMode};
 
 use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
-use crate::{
-    cli::{EnvMode, LogOrder},
-    turbo_json::UIMode,
-};
 
 const TURBO_MAPPING: &[(&str, &str)] = [
     ("turbo_api", "api_url"),
@@ -299,12 +296,10 @@ fn map_environment<'a>(
 #[cfg(test)]
 mod test {
     use camino::Utf8PathBuf;
+    use turborepo_types::LogOrder;
 
     use super::*;
-    use crate::{
-        cli::LogOrder,
-        config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TUI_SCROLLBACK_LENGTH},
-    };
+    use crate::config::{DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TUI_SCROLLBACK_LENGTH};
 
     #[test]
     fn test_env_setting() {

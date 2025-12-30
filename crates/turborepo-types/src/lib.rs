@@ -73,6 +73,103 @@ impl fmt::Display for OutputLogsMode {
     }
 }
 
+/// Dry run output mode.
+///
+/// Controls the format of dry run output:
+/// - `Text`: Human-readable text output
+/// - `Json`: Machine-readable JSON output
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum, Serialize)]
+pub enum DryRunMode {
+    Text,
+    Json,
+}
+
+impl fmt::Display for DryRunMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            DryRunMode::Text => "text",
+            DryRunMode::Json => "json",
+        })
+    }
+}
+
+/// UI mode for task execution output.
+///
+/// Controls how task output is displayed:
+/// - `Tui`: Use the terminal user interface
+/// - `Stream`: Use the standard output stream
+/// - `Web`: Use the web user interface (experimental)
+#[derive(
+    Serialize, Deserialize, Debug, Default, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum,
+)]
+#[serde(rename_all = "camelCase")]
+pub enum UIMode {
+    /// Use the terminal user interface
+    #[default]
+    Tui,
+    /// Use the standard output stream
+    Stream,
+    /// Use the web user interface (experimental)
+    Web,
+}
+
+impl fmt::Display for UIMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            UIMode::Tui => write!(f, "tui"),
+            UIMode::Stream => write!(f, "stream"),
+            UIMode::Web => write!(f, "web"),
+        }
+    }
+}
+
+impl UIMode {
+    pub fn use_tui(&self) -> bool {
+        matches!(self, Self::Tui)
+    }
+
+    /// Returns true if the UI mode has a sender,
+    /// i.e. web or tui but not stream
+    pub fn has_sender(&self) -> bool {
+        matches!(self, Self::Tui | Self::Web)
+    }
+}
+
+/// Log ordering mode for task output.
+///
+/// Controls the order in which task logs are displayed:
+/// - `Auto`: System decides based on context
+/// - `Stream`: Logs are streamed as they arrive
+/// - `Grouped`: Logs are grouped by task
+#[derive(Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq)]
+pub enum LogOrder {
+    #[serde(rename = "auto")]
+    #[default]
+    Auto,
+    #[serde(rename = "stream")]
+    Stream,
+    #[serde(rename = "grouped")]
+    Grouped,
+}
+
+impl fmt::Display for LogOrder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            LogOrder::Auto => "auto",
+            LogOrder::Stream => "stream",
+            LogOrder::Grouped => "grouped",
+        })
+    }
+}
+
+impl LogOrder {
+    pub fn compatible_with_tui(&self) -> bool {
+        // If the user requested a specific order to the logs, then this isn't
+        // compatible with the TUI and means we cannot use it.
+        matches!(self, Self::Auto)
+    }
+}
+
 /// TaskOutputs represents the patterns for including and excluding files from
 /// outputs.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]

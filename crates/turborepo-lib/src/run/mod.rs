@@ -36,6 +36,7 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode
 use turborepo_scm::SCM;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
+use turborepo_types::{EnvMode, UIMode};
 use turborepo_ui::{
     cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
     BOLD_GREY, GREY,
@@ -43,14 +44,13 @@ use turborepo_ui::{
 
 pub use crate::run::error::Error;
 use crate::{
-    cli::EnvMode,
     engine::{Engine, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
-    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
+    turbo_json::{TurboJson, TurboJsonLoader},
     DaemonClient, DaemonConnector,
 };
 
