@@ -3,15 +3,25 @@
 //! This crate contains types that are used across multiple crates in the
 //! turborepo ecosystem. It serves as a foundation layer to avoid circular
 //! dependencies between higher-level crates.
+//!
+//! # Traits for Cross-Crate Abstraction
+//!
+//! This crate defines traits that allow higher-level crates to depend on
+//! abstractions rather than concrete implementations:
+//!
+//! - [`EngineInfo`]: Provides access to task definitions and dependencies
+//! - [`RunOptsInfo`]: Provides access to run options
+//! - [`HashTrackerInfo`]: Provides access to task hash information
+//! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
-use std::fmt;
+use std::{collections::HashMap, fmt};
 
 use biome_deserialize_macros::Deserializable;
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};
-use turbopath::RelativeUnixPathBuf;
+use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
-use turborepo_task_id::TaskName;
+use turborepo_task_id::{TaskId, TaskName};
 
 /// Environment mode for task execution.
 ///
@@ -529,4 +539,153 @@ impl TaskDefinition {
 
         hashable
     }
+}
+
+// ============================================================================
+// Cross-Crate Abstraction Traits
+// ============================================================================
+//
+// These traits define interfaces that allow higher-level crates (like
+// turborepo-run-summary) to depend on abstractions rather than concrete
+// implementations from lower-level crates (like turborepo-engine,
+// turborepo-task-hash). This enables proper dependency direction where
+// infrastructure crates don't need to depend on reporting/presentation crates.
+
+/// Trait for accessing engine information (task definitions, dependencies).
+///
+/// This trait abstracts the task execution engine to allow crates like
+/// `turborepo-run-summary` to generate summaries without depending on the
+/// full engine implementation.
+///
+/// # Implementors
+/// - `Engine<Built, TaskDefinition>` from `turborepo-engine`
+///
+/// # Associated Types
+/// - `TaskIter`: An iterator over task IDs for dependencies/dependents.
+///
+/// # Example
+/// ```ignore
+/// impl EngineInfo for MyEngine {
+///     type TaskIter<'a> = /* iterator type */;
+///     fn task_definition(&self, task_id: &TaskId<'static>) -> Option<&TaskDefinition> { ... }
+///     fn dependencies(&self, task_id: &TaskId<'static>) -> Option<Self::TaskIter<'_>> { ... }
+///     fn dependents(&self, task_id: &TaskId<'static>) -> Option<Self::TaskIter<'_>> { ... }
+/// }
+/// ```
+pub trait EngineInfo {
+    /// Iterator type for task dependencies/dependents
+    type TaskIter<'a>: Iterator<Item = &'a TaskId<'static>>
+    where
+        Self: 'a;
+
+    /// Returns the task definition for a given task ID
+    fn task_definition(&self, task_id: &TaskId<'static>) -> Option<&TaskDefinition>;
+    /// Returns an iterator over the task's dependencies (tasks it depends on)
+    fn dependencies(&self, task_id: &TaskId<'static>) -> Option<Self::TaskIter<'_>>;
+    /// Returns an iterator over the task's dependents (tasks that depend on it)
+    fn dependents(&self, task_id: &TaskId<'static>) -> Option<Self::TaskIter<'_>>;
+}
+
+/// Trait for accessing run options.
+///
+/// This trait abstracts run configuration to allow summary generation
+/// without depending on the full opts implementation.
+///
+/// # Implementors
+/// - `RunOpts` from `turborepo-lib`
+pub trait RunOptsInfo {
+    /// Returns the dry run mode if running in dry mode, None otherwise
+    fn dry_run(&self) -> Option<DryRunMode>;
+    /// Returns true if this is a single-package (non-monorepo) run
+    fn single_package(&self) -> bool;
+    /// Returns Some("true") if run summary should be saved to disk
+    fn summarize(&self) -> Option<&str>;
+    /// Returns true if framework detection is enabled
+    fn framework_inference(&self) -> bool;
+    /// Returns arguments to pass through to task execution
+    fn pass_through_args(&self) -> &[String];
+    /// Returns the list of task names being run
+    fn tasks(&self) -> &[String];
+}
+
+/// Trait for accessing task hash tracking information.
+///
+/// Provides access to computed hashes, environment variables, cache status,
+/// and expanded inputs/outputs for tasks during run summary generation.
+///
+/// # Implementors
+/// - `TaskHashTracker` from `turborepo-task-hash`
+///
+/// # Note
+/// The `DetailedMap` type is from `turborepo-env`. Implementors should
+/// re-export or use a compatible type.
+pub trait HashTrackerInfo {
+    /// Returns the computed hash for a task
+    fn hash(&self, task_id: &TaskId) -> Option<String>;
+    /// Returns the detailed environment variable map for a task
+    fn env_vars(&self, task_id: &TaskId) -> Option<HashTrackerDetailedMap>;
+    /// Returns the cache hit metadata for a task
+    fn cache_status(&self, task_id: &TaskId) -> Option<HashTrackerCacheHitMetadata>;
+    /// Returns the expanded output paths for a task
+    fn expanded_outputs(&self, task_id: &TaskId) -> Option<Vec<AnchoredSystemPathBuf>>;
+    /// Returns the detected framework for a task
+    fn framework(&self, task_id: &TaskId) -> Option<String>;
+    /// Returns the expanded input file hashes for a task
+    fn expanded_inputs(&self, task_id: &TaskId) -> Option<HashMap<RelativeUnixPathBuf, String>>;
+}
+
+/// Detailed environment variable map for hash tracking.
+///
+/// This is a type alias placeholder - actual implementations should use
+/// their crate's DetailedMap type.
+#[derive(Debug, Clone, Default)]
+pub struct HashTrackerDetailedMap {
+    /// Environment variables from explicit configuration
+    pub explicit: Vec<String>,
+    /// Environment variables from framework inference
+    pub matching: Vec<String>,
+}
+
+/// Cache hit metadata for hash tracking.
+///
+/// Indicates where a cache hit was found (local or remote).
+#[derive(Debug, Clone)]
+pub struct HashTrackerCacheHitMetadata {
+    /// Whether the cache hit was from local cache
+    pub local: bool,
+    /// Whether the cache hit was from remote cache
+    pub remote: bool,
+    /// Time saved by the cache hit in milliseconds
+    pub time_saved: u64,
+}
+
+/// Trait for global hash inputs.
+///
+/// Provides access to global configuration that affects all task hashes.
+/// This includes environment variables, file dependencies, and dependency
+/// hashes.
+///
+/// # Implementors
+/// - `GlobalHashableInputs` from `turborepo-lib`
+pub trait GlobalHashInputs {
+    /// Returns the root cache key (currently always a constant magic string)
+    fn root_key(&self) -> &str;
+    /// Returns the global cache key (alias for root_key)
+    fn global_cache_key(&self) -> &str;
+    /// Returns the map of global file paths to their hashes
+    fn global_file_hash_map(&self) -> &HashMap<RelativeUnixPathBuf, String>;
+    /// Returns the hash of root external dependencies
+    fn root_external_deps_hash(&self) -> &str;
+    /// Returns the list of environment variable patterns
+    fn env(&self) -> &[String];
+    /// Returns the resolved environment variable map
+    fn resolved_env_vars(&self) -> Option<&HashMap<String, String>>;
+    /// Returns the list of pass-through environment variable patterns
+    fn pass_through_env(&self) -> Option<&[String]>;
+    /// Returns the environment mode (strict or loose)
+    fn env_mode(&self) -> EnvMode;
+    /// Returns whether framework inference is enabled
+    fn framework_inference(&self) -> bool;
+    /// Returns the list of dot-env files
+    fn dot_env(&self) -> Option<&[RelativeUnixPathBuf]>;
 }

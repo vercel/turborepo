@@ -5,12 +5,30 @@ use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{DetailedMap, EnvironmentVariableMap};
 use turborepo_task_id::TaskId;
-
-use super::{execution::TaskExecutionSummary, EnvMode};
-use crate::{
-    cli::OutputLogsMode,
-    task_graph::{TaskDefinition, TaskOutputs},
+use turborepo_types::{
+    EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, OutputLogsMode, TaskDefinition,
+    TaskOutputs,
 };
+
+use crate::execution::TaskSummaryInfo;
+
+#[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskExecutionSummary {
+    pub start_time: i64,
+    pub end_time: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+    pub exit_code: Option<i32>,
+}
+
+impl TaskExecutionSummary {
+    pub fn is_failure(&self) -> bool {
+        // We consider None as a failure as it indicates the task failed to start
+        // or was killed in a manner where we didn't collect an exit code.
+        !matches!(self.exit_code, Some(0))
+    }
+}
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -43,7 +61,7 @@ enum CacheSource {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct TaskSummary {
+pub struct TaskSummary {
     pub task_id: TaskId<'static>,
     pub task: String,
     pub package: String,
@@ -51,9 +69,15 @@ pub(crate) struct TaskSummary {
     pub shared: SharedTaskSummary<TaskId<'static>>,
 }
 
+impl TaskSummaryInfo for TaskSummary {
+    fn task_id(&self) -> &TaskId<'static> {
+        &self.task_id
+    }
+}
+
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SinglePackageTaskSummary {
+pub struct SinglePackageTaskSummary {
     pub task_id: String,
     pub task: String,
     #[serde(flatten)]
@@ -62,7 +86,7 @@ pub(crate) struct SinglePackageTaskSummary {
 
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct SharedTaskSummary<T> {
+pub struct SharedTaskSummary<T> {
     pub hash: String,
     pub inputs: BTreeMap<RelativeUnixPathBuf, String>,
     pub hash_of_external_dependencies: String,
@@ -163,6 +187,28 @@ impl From<Option<CacheHitMetadata>> for TaskCacheSummary {
     }
 }
 
+impl From<Option<HashTrackerCacheHitMetadata>> for TaskCacheSummary {
+    fn from(response: Option<HashTrackerCacheHitMetadata>) -> Self {
+        match response {
+            Some(metadata) => {
+                let source = if metadata.local {
+                    CacheSource::Local
+                } else {
+                    CacheSource::Remote
+                };
+                Self {
+                    local: metadata.local,
+                    remote: metadata.remote,
+                    status: CacheStatus::Hit,
+                    source: Some(source),
+                    time_saved: metadata.time_saved,
+                }
+            }
+            None => Self::cache_miss(),
+        }
+    }
+}
+
 impl From<turborepo_cache::CacheSource> for CacheSource {
     fn from(value: turborepo_cache::CacheSource) -> Self {
         match value {
@@ -198,6 +244,37 @@ impl TaskEnvVarSummary {
             },
             configured: env_vars.by_source.explicit.to_secret_hashable(),
             inferred: env_vars.by_source.matching.to_secret_hashable(),
+            pass_through,
+        })
+    }
+
+    /// Create a TaskEnvVarSummary from HashTrackerDetailedMap.
+    ///
+    /// This method is used when the env vars come from the HashTrackerInfo
+    /// trait (defined in turborepo-types) rather than directly from
+    /// turborepo-env.
+    pub fn from_hash_tracker(
+        task_definition: &TaskDefinition,
+        env_vars: HashTrackerDetailedMap,
+        env_at_execution_start: &EnvironmentVariableMap,
+    ) -> Result<Self, turborepo_env::Error> {
+        let pass_through = task_definition
+            .pass_through_env
+            .as_deref()
+            .map(|pass_through_env| -> Result<_, turborepo_env::Error> {
+                Ok(env_at_execution_start
+                    .from_wildcards(pass_through_env)?
+                    .to_secret_hashable())
+            })
+            .transpose()?;
+
+        Ok(Self {
+            specified: TaskEnvConfiguration {
+                env: task_definition.env.clone(),
+                pass_through_env: task_definition.pass_through_env.clone(),
+            },
+            configured: env_vars.explicit,
+            inferred: env_vars.matching,
             pass_through,
         })
     }

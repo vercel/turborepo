@@ -11,11 +11,11 @@ enum SCMType {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub(crate) struct SCMState {
+pub struct SCMState {
     #[serde(rename = "type")]
     ty: SCMType,
-    pub(crate) sha: Option<String>,
-    pub(crate) branch: Option<String>,
+    pub sha: Option<String>,
+    pub branch: Option<String>,
 }
 
 impl SCMState {

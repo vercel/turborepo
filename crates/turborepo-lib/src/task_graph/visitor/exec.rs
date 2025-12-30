@@ -10,6 +10,7 @@ use tracing::{error, Instrument};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_process::{ChildExit, Command, ProcessManager};
 use turborepo_repository::package_manager::PackageManager;
+use turborepo_run_summary::TaskTracker;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_types::ContinueMode;
@@ -24,7 +25,7 @@ use super::{
 use crate::{
     config::UIMode,
     engine::{Engine, StopExecution},
-    run::{summary::TaskTracker, task_access::TaskAccess, CacheOutput, TaskCache},
+    run::{task_access::TaskAccess, CacheOutput, TaskCache},
     task_hash::TaskHashTracker,
 };
 
@@ -211,7 +212,7 @@ impl ExecContext {
         callback: oneshot::Sender<Result<(), StopExecution>>,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<(), InternalError> {
-        let tracker = tracker.start().await;
+        let tracker: TaskTracker<chrono::DateTime<chrono::Local>> = tracker.start().await;
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         span.follows_from(parent_span_id);
         let mut result = self

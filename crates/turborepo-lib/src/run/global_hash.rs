@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     str::FromStr,
 };
 
@@ -14,6 +14,9 @@ use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
     package_graph::PackageInfo,
     package_manager::{self, PackageManager},
+};
+use turborepo_run_summary::{
+    GlobalEnvVarSummary, GlobalHashInputs as GlobalHashInputsTrait, GlobalHashSummary,
 };
 use turborepo_scm::SCM;
 
@@ -201,6 +204,109 @@ impl<'a> GlobalHashableInputs<'a> {
         };
 
         global_hashable.hash()
+    }
+}
+
+// Implement TryFrom for GlobalHashSummary from GlobalHashableInputs
+impl<'a> TryFrom<GlobalHashableInputs<'a>> for GlobalHashSummary<'a> {
+    type Error = turborepo_run_summary::Error;
+
+    fn try_from(global_hashable_inputs: GlobalHashableInputs<'a>) -> Result<Self, Self::Error> {
+        let GlobalHashableInputs {
+            global_cache_key,
+            global_file_hash_map,
+            root_external_dependencies_hash,
+            root_internal_dependencies_hash,
+            env,
+            resolved_env_vars,
+            pass_through_env,
+            env_at_execution_start,
+            engines,
+            ..
+        } = global_hashable_inputs;
+
+        let pass_through = pass_through_env
+            .map(
+                |pass_through_env| -> Result<
+                    turborepo_env::EnvironmentVariablePairs,
+                    turborepo_run_summary::Error,
+                > {
+                    Ok(env_at_execution_start
+                        .from_wildcards(pass_through_env)
+                        .map_err(turborepo_run_summary::Error::Env)?
+                        .to_secret_hashable())
+                },
+            )
+            .transpose()?;
+
+        let engines = engines.map(|engines| engines.into_iter().collect::<BTreeMap<_, _>>());
+
+        Ok(Self {
+            root_key: global_cache_key,
+            files: global_file_hash_map.into_iter().collect(),
+            // This can be empty in single package mode
+            hash_of_external_dependencies: root_external_dependencies_hash.unwrap_or_default(),
+            hash_of_internal_dependencies: root_internal_dependencies_hash.unwrap_or_default(),
+            environment_variables: GlobalEnvVarSummary {
+                specified: turborepo_run_summary::GlobalEnvConfiguration {
+                    env,
+                    pass_through_env,
+                },
+                configured: resolved_env_vars
+                    .as_ref()
+                    .map(|vars| vars.by_source.explicit.to_secret_hashable()),
+                inferred: resolved_env_vars
+                    .as_ref()
+                    .map(|vars| vars.by_source.matching.to_secret_hashable()),
+                pass_through,
+            },
+            engines,
+        })
+    }
+}
+
+// Implement GlobalHashInputs trait for use with turborepo-run-summary
+impl<'a> GlobalHashInputsTrait for GlobalHashableInputs<'a> {
+    fn root_key(&self) -> &str {
+        self.global_cache_key
+    }
+
+    fn global_cache_key(&self) -> &str {
+        self.global_cache_key
+    }
+
+    fn global_file_hash_map(&self) -> &HashMap<RelativeUnixPathBuf, String> {
+        &self.global_file_hash_map
+    }
+
+    fn root_external_deps_hash(&self) -> &str {
+        self.root_external_dependencies_hash.unwrap_or("")
+    }
+
+    fn env(&self) -> &[String] {
+        self.env
+    }
+
+    fn resolved_env_vars(&self) -> Option<&HashMap<String, String>> {
+        use std::ops::Deref;
+        self.resolved_env_vars.as_ref().map(|d| d.all.deref())
+    }
+
+    fn pass_through_env(&self) -> Option<&[String]> {
+        self.pass_through_env
+    }
+
+    fn env_mode(&self) -> turborepo_types::EnvMode {
+        self.env_mode
+    }
+
+    fn framework_inference(&self) -> bool {
+        self.framework_inference
+    }
+
+    fn dot_env(&self) -> Option<&[RelativeUnixPathBuf]> {
+        // GlobalHashableInputs doesn't track dot_env directly
+        None
     }
 }
 

@@ -13,7 +13,9 @@ use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+};
 use turborepo_cache::CacheHitMetadata;
 // Re-export turborepo_engine::TaskNode for convenience
 pub use turborepo_engine::TaskNode;
@@ -26,7 +28,10 @@ use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
 };
-use turborepo_types::{EnvMode, TaskDefinition, TaskInputs, TaskOutputs};
+use turborepo_types::{
+    EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, TaskDefinition,
+    TaskInputs, TaskOutputs,
+};
 
 /// Trait for types that provide task definition information needed for hashing.
 ///
@@ -745,6 +750,51 @@ impl TaskHashTracker {
             .package_task_inputs_expanded_hashes
             .get(task_id)
             .cloned()
+    }
+}
+
+// Implement HashTrackerInfo for TaskHashTracker to allow use with
+// turborepo-run-summary. The trait is defined in turborepo-types to enable
+// proper dependency direction (task-hash doesn't depend on run-summary).
+impl HashTrackerInfo for TaskHashTracker {
+    fn hash(&self, task_id: &TaskId) -> Option<String> {
+        TaskHashTracker::hash(self, task_id)
+    }
+
+    fn env_vars(&self, task_id: &TaskId) -> Option<HashTrackerDetailedMap> {
+        TaskHashTracker::env_vars(self, task_id).map(|detailed| HashTrackerDetailedMap {
+            explicit: detailed.by_source.explicit.to_secret_hashable(),
+            matching: detailed.by_source.matching.to_secret_hashable(),
+        })
+    }
+
+    fn cache_status(&self, task_id: &TaskId) -> Option<HashTrackerCacheHitMetadata> {
+        TaskHashTracker::cache_status(self, task_id).map(|status| {
+            let (local, remote) = match status.source {
+                turborepo_cache::CacheSource::Local => (true, false),
+                turborepo_cache::CacheSource::Remote => (false, true),
+            };
+            HashTrackerCacheHitMetadata {
+                local,
+                remote,
+                time_saved: status.time_saved,
+            }
+        })
+    }
+
+    fn expanded_outputs(&self, task_id: &TaskId) -> Option<Vec<AnchoredSystemPathBuf>> {
+        TaskHashTracker::expanded_outputs(self, task_id)
+    }
+
+    fn framework(&self, task_id: &TaskId) -> Option<String> {
+        TaskHashTracker::framework(self, task_id).map(|f| f.to_string())
+    }
+
+    fn expanded_inputs(
+        &self,
+        task_id: &TaskId,
+    ) -> Option<std::collections::HashMap<RelativeUnixPathBuf, String>> {
+        TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| file_hashes.0)
     }
 }
 
