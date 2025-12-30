@@ -149,24 +149,27 @@ pub fn validate_extends(_validator: &Validator, turbo_json: &TurboJson) -> Vec<E
         }];
     }
     // Root must always be first when extending from multiple packages
-    if let Some(package_name) = turbo_json.extends.first() {
-        if package_name != ROOT_PKG_NAME {
-            let path = turbo_json.path().map_or("turbo.json", |p| p.as_ref());
+    if let Some(package_name) = turbo_json
+        .extends
+        .first()
+        .filter(|name| *name != ROOT_PKG_NAME)
+    {
+        let _ = package_name; // Used for the filter condition
+        let path = turbo_json.path().map_or("turbo.json", |p| p.as_ref());
 
-            let (span, text) = match turbo_json.text() {
-                Some(text) => {
-                    let len = text.len();
-                    let span: SourceSpan = (0, len - 1).into();
-                    (Some(span), text.to_string())
-                }
-                None => (None, String::new()),
-            };
-            // Root needs to be first
-            return vec![Error::ExtendsRootFirst {
-                span,
-                text: NamedSource::new(path, text),
-            }];
-        }
+        let (span, text) = match turbo_json.text() {
+            Some(text) => {
+                let len = text.len();
+                let span: SourceSpan = (0, len - 1).into();
+                (Some(span), text.to_string())
+            }
+            None => (None, String::new()),
+        };
+        // Root needs to be first
+        return vec![Error::ExtendsRootFirst {
+            span,
+            text: NamedSource::new(path, text),
+        }];
     }
     vec![]
 }

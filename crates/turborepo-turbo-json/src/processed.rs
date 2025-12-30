@@ -1,4 +1,8 @@
 //! Processed task definition types with DSL token handling
+//! Processed turbo.json types
+//!
+//! This module contains types that represent processed/resolved turbo.json
+//! configuration after validation and normalization.
 
 use camino::Utf8Path;
 use turbopath::RelativeUnixPath;

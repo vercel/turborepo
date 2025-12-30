@@ -1,11 +1,14 @@
 //! turbo.json configuration
+//! Turbo.json module
 //!
 //! Re-exports from turborepo-turbo-json crate with loader code for
 //! turborepo-lib specific functionality (MFE, task_access).
 
 mod loader;
 
-// Re-export the main types from turborepo-turbo-json
+// Re-export the main types from turborepo-turbo-json.
+// Some re-exports are used by other crates or in tests, not within this module.
+#[allow(unused_imports)]
 pub use turborepo_turbo_json::{
     // Functions
     task_outputs_from_processed,

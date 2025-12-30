@@ -10,6 +10,10 @@
 // miette's derive macros, not directly by code. The derive macros generate code
 // that reads these fields for error formatting and display.
 #![allow(unused_assignments)]
+// The Error type is large due to miette diagnostic fields (NamedSource, SourceSpan).
+// This is intentional for rich error reporting. Boxing would add indirection overhead
+// for error paths that are not performance-critical.
+#![allow(clippy::result_large_err)]
 
 use std::{collections::HashSet, sync::Arc};
 
@@ -80,11 +84,10 @@ impl TryFrom<RawTurboJson> for TurboJson {
 
         // `futureFlags` key is only allowed in root turbo.json
         let is_workspace_config = raw_turbo.extends.is_some();
-        if is_workspace_config {
-            if let Some(future_flags) = raw_turbo.future_flags {
-                let (span, text) = future_flags.span_and_text("turbo.json");
-                return Err(Error::FutureFlagsInPackage { span, text });
-            }
+        if is_workspace_config && raw_turbo.future_flags.is_some() {
+            let future_flags = raw_turbo.future_flags.unwrap();
+            let (span, text) = future_flags.span_and_text("turbo.json");
+            return Err(Error::FutureFlagsInPackage { span, text });
         }
         let mut global_env = HashSet::new();
         let mut global_file_dependencies = HashSet::new();
