@@ -1,10 +1,4 @@
-use std::{
-    backtrace::Backtrace,
-    env,
-    ffi::OsString,
-    fmt::{self, Display},
-    io, mem, process,
-};
+use std::{backtrace::Backtrace, env, ffi::OsString, fmt, io, mem, process};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{
@@ -22,7 +16,7 @@ use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
     init_telemetry, track_usage, TelemetryHandle,
 };
-use turborepo_types::{DryRunMode, LogOrder, UIMode};
+use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, UIMode};
 use turborepo_ui::{ColorConfig, GREY};
 
 use crate::{
@@ -61,25 +55,6 @@ pub use turborepo_types::EnvMode;
     note = "Import `OutputLogsMode` directly from `turborepo_types` instead"
 )]
 pub use turborepo_types::OutputLogsMode;
-
-#[derive(Copy, Clone, Debug, Default, PartialEq, ValueEnum, Serialize)]
-#[serde(rename_all = "lowercase")]
-pub enum ContinueMode {
-    #[default]
-    Never,
-    DependenciesSuccessful,
-    Always,
-}
-
-impl fmt::Display for ContinueMode {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            ContinueMode::Never => "never",
-            ContinueMode::DependenciesSuccessful => "dependencies-successful",
-            ContinueMode::Always => "always",
-        })
-    }
-}
 
 /// The parsed arguments from the command line. In general we should avoid using
 /// or mutating this directly, and instead use the fully canonicalized `Opts`
@@ -1153,27 +1128,6 @@ impl RunArgs {
             // track the extension used only
             let extension = Utf8Path::new(graph).extension().unwrap_or("stdout");
             telemetry.track_arg_value("graph", extension, EventType::NonSensitive);
-        }
-    }
-}
-
-#[derive(ValueEnum, Clone, Copy, Debug, Default, PartialEq, Serialize)]
-pub enum LogPrefix {
-    #[serde(rename = "auto")]
-    #[default]
-    Auto,
-    #[serde(rename = "none")]
-    None,
-    #[serde(rename = "task")]
-    Task,
-}
-
-impl Display for LogPrefix {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            LogPrefix::Auto => write!(f, "auto"),
-            LogPrefix::None => write!(f, "none"),
-            LogPrefix::Task => write!(f, "task"),
         }
     }
 }

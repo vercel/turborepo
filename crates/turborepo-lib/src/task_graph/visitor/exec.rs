@@ -12,6 +12,7 @@ use turborepo_process::{ChildExit, Command, ProcessManager};
 use turborepo_repository::package_manager::PackageManager;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
+use turborepo_types::ContinueMode;
 use turborepo_ui::{ColorConfig, OutputWriter};
 
 use super::{
@@ -21,7 +22,6 @@ use super::{
     TaskOutput, Visitor,
 };
 use crate::{
-    cli::ContinueMode,
     config::UIMode,
     engine::{Engine, StopExecution},
     run::{summary::TaskTracker, task_access::TaskAccess, CacheOutput, TaskCache},

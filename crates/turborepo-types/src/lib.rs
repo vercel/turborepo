@@ -170,6 +170,58 @@ impl LogOrder {
     }
 }
 
+/// Continue mode for task execution.
+///
+/// Controls how task execution continues after failures:
+/// - `Never`: Stop on first failure
+/// - `DependenciesSuccessful`: Continue if dependencies succeeded
+/// - `Always`: Always continue regardless of failures
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ContinueMode {
+    #[default]
+    Never,
+    DependenciesSuccessful,
+    Always,
+}
+
+impl fmt::Display for ContinueMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            ContinueMode::Never => "never",
+            ContinueMode::DependenciesSuccessful => "dependencies-successful",
+            ContinueMode::Always => "always",
+        })
+    }
+}
+
+/// Log prefix mode for task output.
+///
+/// Controls how task output lines are prefixed:
+/// - `Auto`: System decides based on context
+/// - `None`: No prefix
+/// - `Task`: Prefix with task name
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Serialize)]
+pub enum LogPrefix {
+    #[serde(rename = "auto")]
+    #[default]
+    Auto,
+    #[serde(rename = "none")]
+    None,
+    #[serde(rename = "task")]
+    Task,
+}
+
+impl fmt::Display for LogPrefix {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            LogPrefix::Auto => "auto",
+            LogPrefix::None => "none",
+            LogPrefix::Task => "task",
+        })
+    }
+}
+
 /// TaskOutputs represents the patterns for including and excluding files from
 /// outputs.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
