@@ -18,9 +18,8 @@ use petgraph::Graph;
 use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::PackageName;
-use turborepo_run_summary::EngineInfo;
 use turborepo_task_id::TaskId;
-use turborepo_types::TaskDefinition;
+use turborepo_types::{EngineInfo, TaskDefinition};
 
 /// Trait for types that provide task definition information needed by the
 /// engine.

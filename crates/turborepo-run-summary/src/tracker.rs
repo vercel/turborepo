@@ -318,7 +318,7 @@ impl<'a> RunSummary<'a> {
         }
 
         if self.should_save {
-            if let Err(err) = self.save() {
+            if let Err(err) = self.save().await {
                 warn!("Error writing run summary: {}", err)
             }
         }
@@ -704,12 +704,23 @@ impl<'a> RunSummary<'a> {
             .collect()
     }
 
-    fn save(&mut self) -> Result<(), Error> {
+    /// Saves the run summary to disk asynchronously.
+    ///
+    /// Uses `tokio::task::spawn_blocking` to perform the file I/O on a
+    /// blocking thread pool, avoiding blocking the async runtime.
+    async fn save(&mut self) -> Result<(), Error> {
         let json = self.format_json()?;
-
         let summary_path = self.get_path();
-        summary_path.ensure_dir()?;
 
-        Ok(summary_path.create_with_contents(json)?)
+        // Perform file I/O in a blocking task to avoid blocking the async runtime
+        tokio::task::spawn_blocking(move || -> Result<(), Error> {
+            summary_path.ensure_dir()?;
+            summary_path.create_with_contents(json)?;
+            Ok(())
+        })
+        .await
+        .map_err(Error::StateThread)??;
+
+        Ok(())
     }
 }

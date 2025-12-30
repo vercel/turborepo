@@ -287,8 +287,9 @@ impl<'a> GlobalHashInputsTrait for GlobalHashableInputs<'a> {
         self.env
     }
 
-    fn resolved_env_vars(&self) -> Option<&EnvironmentVariableMap> {
-        self.resolved_env_vars.as_ref().map(|d| &d.all)
+    fn resolved_env_vars(&self) -> Option<&HashMap<String, String>> {
+        use std::ops::Deref;
+        self.resolved_env_vars.as_ref().map(|d| d.all.deref())
     }
 
     fn pass_through_env(&self) -> Option<&[String]> {

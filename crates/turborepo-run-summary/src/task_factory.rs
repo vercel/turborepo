@@ -8,7 +8,10 @@ use turborepo_task_id::TaskId;
 use turborepo_types::{task_log_filename, EnvMode, TaskDefinition, LOG_DIR};
 
 use crate::{
-    task::{SharedTaskSummary, SinglePackageTaskSummary, TaskEnvVarSummary, TaskSummary},
+    task::{
+        SharedTaskSummary, SinglePackageTaskSummary, TaskCacheSummary, TaskEnvVarSummary,
+        TaskSummary,
+    },
     EngineInfo, HashTrackerInfo, RunOptsInfo, TaskExecutionSummary,
 };
 
@@ -130,7 +133,7 @@ where
             .env_vars(task_id)
             .expect("env var map is inserted at the same time as hash");
 
-        let cache_summary = self.hash_tracker.cache_status(task_id).into();
+        let cache_summary = TaskCacheSummary::from(self.hash_tracker.cache_status(task_id));
 
         let (dependencies, dependents) = self.dependencies_and_dependents(task_id, display_task);
 
@@ -178,7 +181,7 @@ where
             dependents,
             with,
             env_mode: self.global_env_mode,
-            environment_variables: TaskEnvVarSummary::new(
+            environment_variables: TaskEnvVarSummary::from_hash_tracker(
                 task_definition,
                 env_vars,
                 self.env_at_start,
