@@ -499,12 +499,12 @@ mod tests {
     use test_case::test_case;
     use turbopath::RelativeUnixPath;
     use turborepo_task_id::TaskName;
+    use turborepo_types::{OutputLogsMode, UIMode};
     use turborepo_unescape::UnescapedString;
 
     use super::{processed::*, *};
     use crate::{
         boundaries::BoundariesConfig,
-        cli::OutputLogsMode,
         task_graph::{TaskDefinition, TaskOutputs},
         turbo_json::RawTaskDefinition,
     };

@@ -557,7 +557,7 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_task_id::TaskId;
-    use turborepo_types::UIMode;
+    use turborepo_types::{DryRunMode, UIMode};
     use turborepo_ui::ColorConfig;
 
     use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
