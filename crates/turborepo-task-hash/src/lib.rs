@@ -13,7 +13,9 @@ use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::{debug, Span};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+};
 use turborepo_cache::CacheHitMetadata;
 // Re-export turborepo_engine::TaskNode for convenience
 pub use turborepo_engine::TaskNode;
@@ -21,6 +23,7 @@ use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
 use turborepo_frameworks::{infer_framework, Slug as FrameworkSlug};
 use turborepo_hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
+use turborepo_run_summary::HashTrackerInfo;
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
@@ -745,6 +748,37 @@ impl TaskHashTracker {
             .package_task_inputs_expanded_hashes
             .get(task_id)
             .cloned()
+    }
+}
+
+// Implement HashTrackerInfo for TaskHashTracker to allow use with
+// turborepo-run-summary
+impl HashTrackerInfo for TaskHashTracker {
+    fn hash(&self, task_id: &TaskId) -> Option<String> {
+        TaskHashTracker::hash(self, task_id)
+    }
+
+    fn env_vars(&self, task_id: &TaskId) -> Option<DetailedMap> {
+        TaskHashTracker::env_vars(self, task_id)
+    }
+
+    fn cache_status(&self, task_id: &TaskId) -> Option<CacheHitMetadata> {
+        TaskHashTracker::cache_status(self, task_id)
+    }
+
+    fn expanded_outputs(&self, task_id: &TaskId) -> Option<Vec<AnchoredSystemPathBuf>> {
+        TaskHashTracker::expanded_outputs(self, task_id)
+    }
+
+    fn framework(&self, task_id: &TaskId) -> Option<String> {
+        TaskHashTracker::framework(self, task_id).map(|f| f.to_string())
+    }
+
+    fn expanded_inputs(
+        &self,
+        task_id: &TaskId,
+    ) -> Option<std::collections::HashMap<RelativeUnixPathBuf, String>> {
+        TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| file_hashes.0)
     }
 }
 

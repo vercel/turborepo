@@ -6,6 +6,7 @@ use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
+use turborepo_run_summary::RunOptsInfo;
 // Re-export ScopeOpts from turborepo-scope to avoid duplication
 pub use turborepo_scope::ScopeOpts;
 use turborepo_task_id::{TaskId, TaskName};
@@ -533,6 +534,33 @@ impl RunOpts {
         // If we're running on GitHub Actions, force everything to stdout
         // so as not to have out-of-order log lines
         matches!(self.log_order, ResolvedLogOrder::Grouped) && self.is_github_actions
+    }
+}
+
+// Implement RunOptsInfo for RunOpts to allow use with turborepo-run-summary
+impl RunOptsInfo for RunOpts {
+    fn dry_run(&self) -> Option<DryRunMode> {
+        self.dry_run
+    }
+
+    fn single_package(&self) -> bool {
+        self.single_package
+    }
+
+    fn summarize(&self) -> Option<&str> {
+        self.summarize.then_some("true")
+    }
+
+    fn framework_inference(&self) -> bool {
+        self.framework_inference
+    }
+
+    fn pass_through_args(&self) -> &[String] {
+        &self.pass_through_args
+    }
+
+    fn tasks(&self) -> &[String] {
+        &self.tasks
     }
 }
 

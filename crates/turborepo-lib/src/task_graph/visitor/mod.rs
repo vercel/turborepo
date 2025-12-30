@@ -26,6 +26,7 @@ use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
+use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
@@ -39,12 +40,7 @@ use crate::{
     engine::{Engine, ExecutionOptions},
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
-    run::{
-        global_hash::GlobalHashableInputs,
-        summary::{self, GlobalHashSummary, RunTracker},
-        task_access::TaskAccess,
-        RunCache,
-    },
+    run::{global_hash::GlobalHashableInputs, task_access::TaskAccess, RunCache},
     task_hash::{self, PackageInputsHashes, TaskHashTrackerState, TaskHasher},
 };
 
@@ -426,7 +422,7 @@ impl<'a> Visitor<'a> {
                 global_hash_summary,
                 global_env_mode,
                 engine,
-                task_hasher.task_hash_tracker(),
+                &task_hasher.task_hash_tracker(),
                 env_at_execution_start,
                 is_watch,
             )

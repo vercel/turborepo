@@ -1,29 +1,24 @@
 use std::collections::HashSet;
 
+use turbopath::AnchoredSystemPath;
 use turborepo_env::EnvironmentVariableMap;
+use turborepo_lockfiles::Package;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 use turborepo_task_id::TaskId;
+use turborepo_types::{task_log_filename, EnvMode, TaskDefinition, LOG_DIR};
 
-use super::{
-    execution::TaskExecutionSummary,
-    task::{SharedTaskSummary, TaskEnvVarSummary},
-    SinglePackageTaskSummary, TaskSummary,
-};
 use crate::{
-    cli,
-    engine::{Engine, TaskNode},
-    opts::RunOpts,
-    task_graph::{TaskDefinition, TaskDefinitionExt},
-    task_hash::{get_external_deps_hash, TaskHashTracker},
+    task::{SharedTaskSummary, SinglePackageTaskSummary, TaskEnvVarSummary, TaskSummary},
+    EngineInfo, HashTrackerInfo, RunOptsInfo, TaskExecutionSummary,
 };
 
-pub struct TaskSummaryFactory<'a> {
+pub struct TaskSummaryFactory<'a, E, H, R> {
     package_graph: &'a PackageGraph,
-    engine: &'a Engine,
-    hash_tracker: TaskHashTracker,
+    engine: &'a E,
+    hash_tracker: &'a H,
     env_at_start: &'a EnvironmentVariableMap,
-    run_opts: &'a RunOpts,
-    global_env_mode: cli::EnvMode,
+    run_opts: &'a R,
+    global_env_mode: EnvMode,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -34,14 +29,19 @@ pub enum Error {
     MissingTask(TaskId<'static>),
 }
 
-impl<'a> TaskSummaryFactory<'a> {
+impl<'a, E, H, R> TaskSummaryFactory<'a, E, H, R>
+where
+    E: EngineInfo,
+    H: HashTrackerInfo,
+    R: RunOptsInfo,
+{
     pub fn new(
         package_graph: &'a PackageGraph,
-        engine: &'a Engine,
-        hash_tracker: TaskHashTracker,
+        engine: &'a E,
+        hash_tracker: &'a H,
         env_at_start: &'a EnvironmentVariableMap,
-        run_opts: &'a RunOpts,
-        global_env_mode: cli::EnvMode,
+        run_opts: &'a R,
+        global_env_mode: EnvMode,
     ) -> Self {
         Self {
             package_graph,
@@ -59,15 +59,9 @@ impl<'a> TaskSummaryFactory<'a> {
         execution: Option<TaskExecutionSummary>,
     ) -> Result<TaskSummary, Error> {
         let workspace_info = self.workspace_info(&task_id)?;
-        let shared = self.shared(
-            &task_id,
-            execution,
-            workspace_info,
-            |task_node| match task_node {
-                crate::engine::TaskNode::Task(task) => Some(task.clone()),
-                crate::engine::TaskNode::Root => None,
-            },
-        )?;
+        let shared = self.shared(&task_id, execution, workspace_info, |dep_task_id| {
+            Some(dep_task_id.clone())
+        })?;
         let package = task_id.package().to_string();
         let task = task_id.task().to_string();
 
@@ -85,15 +79,9 @@ impl<'a> TaskSummaryFactory<'a> {
         execution: Option<TaskExecutionSummary>,
     ) -> Result<SinglePackageTaskSummary, Error> {
         let workspace_info = self.workspace_info(&task_id)?;
-        let shared = self.shared(
-            &task_id,
-            execution,
-            workspace_info,
-            |task_node| match task_node {
-                crate::engine::TaskNode::Task(task) => Some(task.task().to_string()),
-                crate::engine::TaskNode::Root => None,
-            },
-        )?;
+        let shared = self.shared(&task_id, execution, workspace_info, |dep_task_id| {
+            Some(dep_task_id.task().to_string())
+        })?;
 
         Ok(SinglePackageTaskSummary {
             task_id: task_id.task().to_string(),
@@ -107,7 +95,7 @@ impl<'a> TaskSummaryFactory<'a> {
         task_id: &TaskId<'static>,
         execution: Option<TaskExecutionSummary>,
         workspace_info: &PackageInfo,
-        display_task: impl Fn(&TaskNode) -> Option<T> + Copy,
+        display_task: impl Fn(&TaskId<'static>) -> Option<T> + Copy,
     ) -> Result<SharedTaskSummary<T>, Error> {
         // TODO: command should be optional
         let command = workspace_info
@@ -125,11 +113,8 @@ impl<'a> TaskSummaryFactory<'a> {
             .expanded_outputs(task_id)
             .unwrap_or_default();
 
-        let framework = self
-            .hash_tracker
-            .framework(task_id)
-            .map(|framework| framework.to_string())
-            .unwrap_or_default();
+        let framework = self.hash_tracker.framework(task_id).unwrap_or_default();
+
         let hash = self
             .hash_tracker
             .hash(task_id)
@@ -137,9 +122,8 @@ impl<'a> TaskSummaryFactory<'a> {
 
         let expanded_inputs = self
             .hash_tracker
-            .get_expanded_inputs(task_id)
-            .expect("inputs not found")
-            .0;
+            .expanded_inputs(task_id)
+            .expect("inputs not found");
 
         let env_vars = self
             .hash_tracker
@@ -152,7 +136,7 @@ impl<'a> TaskSummaryFactory<'a> {
 
         let log_file = task_definition.cache.then(|| {
             let path = workspace_info.package_path().to_owned();
-            let relative_log_file = TaskDefinition::workspace_relative_log_file(task_id.task());
+            let relative_log_file = workspace_relative_log_file(task_id.task());
             path.join(&relative_log_file).to_string()
         });
 
@@ -166,15 +150,17 @@ impl<'a> TaskSummaryFactory<'a> {
             })
             .unwrap_or_default();
 
+        // Compute external deps hash from workspace info
+        let hash_of_external_dependencies =
+            get_external_deps_hash(&workspace_info.transitive_dependencies);
+
         Ok(SharedTaskSummary {
             hash,
             inputs: expanded_inputs.into_iter().collect(),
-            hash_of_external_dependencies: get_external_deps_hash(
-                &workspace_info.transitive_dependencies,
-            ),
+            hash_of_external_dependencies,
             cache: cache_summary,
             command,
-            cli_arguments: self.run_opts.pass_through_args.to_vec(),
+            cli_arguments: self.run_opts.pass_through_args().to_vec(),
             outputs: match task_definition.outputs.inclusions.is_empty() {
                 false => Some(task_definition.outputs.inclusions.clone()),
                 true => None,
@@ -217,17 +203,45 @@ impl<'a> TaskSummaryFactory<'a> {
 
     fn dependencies_and_dependents<T>(
         &self,
-        task_id: &TaskId,
-        display_node: impl Fn(&TaskNode) -> Option<T> + Copy,
+        task_id: &TaskId<'static>,
+        display_node: impl Fn(&TaskId<'static>) -> Option<T> + Copy,
     ) -> (Vec<T>, Vec<T>) {
-        let collect_nodes = |set: Option<HashSet<&TaskNode>>| {
-            set.unwrap_or_default()
-                .into_iter()
-                .filter_map(display_node)
-                .collect::<Vec<_>>()
+        let collect_nodes = |iter: Option<E::TaskIter<'_>>| {
+            iter.map(|iter| iter.filter_map(display_node).collect::<Vec<_>>())
+                .unwrap_or_default()
         };
         let dependencies = collect_nodes(self.engine.dependencies(task_id));
         let dependents = collect_nodes(self.engine.dependents(task_id));
         (dependencies, dependents)
     }
+}
+
+/// Get the workspace-relative path to the log file for a task.
+fn workspace_relative_log_file(task_name: &str) -> turbopath::AnchoredSystemPathBuf {
+    let log_dir =
+        AnchoredSystemPath::new(LOG_DIR).expect("LOG_DIR should be a valid AnchoredSystemPath");
+    log_dir.join_component(&task_log_filename(task_name))
+}
+
+/// Computes a hash of external dependencies from transitive dependencies.
+/// This is a pure function that doesn't require any trait access.
+pub fn get_external_deps_hash(transitive_dependencies: &Option<HashSet<Package>>) -> String {
+    use turborepo_hash::{LockFilePackages, TurboHash};
+
+    let Some(transitive_dependencies) = transitive_dependencies else {
+        return "".into();
+    };
+
+    let mut transitive_deps = Vec::with_capacity(transitive_dependencies.len());
+
+    for dependency in transitive_dependencies.iter() {
+        transitive_deps.push(dependency.clone());
+    }
+
+    transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {
+        std::cmp::Ordering::Equal => a.version.cmp(&b.version),
+        other => other,
+    });
+
+    LockFilePackages(transitive_deps).hash()
 }

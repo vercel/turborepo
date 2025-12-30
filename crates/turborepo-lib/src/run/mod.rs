@@ -7,7 +7,6 @@ pub(crate) mod global_hash;
 mod graph_visualizer;
 pub(crate) mod package_discovery;
 pub(crate) mod scope;
-pub(crate) mod summary;
 pub mod task_access;
 mod ui;
 pub mod watch;
@@ -33,6 +32,7 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
+use turborepo_run_summary::RunTracker;
 use turborepo_scm::SCM;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
@@ -47,7 +47,7 @@ use crate::{
     engine::{Engine, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
+    run::{global_hash::get_global_hash_inputs, task_access::TaskAccess},
     task_graph::Visitor,
     task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
     turbo_json::{TurboJson, TurboJsonLoader},

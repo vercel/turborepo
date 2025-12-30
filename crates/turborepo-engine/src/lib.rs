@@ -18,7 +18,9 @@ use petgraph::Graph;
 use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::PackageName;
+use turborepo_run_summary::EngineInfo;
 use turborepo_task_id::TaskId;
+use turborepo_types::TaskDefinition;
 
 /// Trait for types that provide task definition information needed by the
 /// engine.
@@ -486,6 +488,42 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// Provides access to the task lookup map (task_id -> node index)
     pub fn task_lookup(&self) -> &HashMap<TaskId<'static>, petgraph::graph::NodeIndex> {
         &self.task_lookup
+    }
+}
+
+// Implement EngineInfo for Engine<Built, TaskDefinition> to allow use with
+// turborepo-run-summary. This implementation provides access to task
+// definitions and dependency information needed for run summaries.
+impl EngineInfo for Engine<Built, TaskDefinition> {
+    type TaskIter<'a> = std::iter::FilterMap<
+        std::collections::hash_set::IntoIter<&'a TaskNode>,
+        fn(&'a TaskNode) -> Option<&'a TaskId<'static>>,
+    >;
+
+    fn task_definition(&self, task_id: &TaskId<'static>) -> Option<&TaskDefinition> {
+        Engine::task_definition(self, task_id)
+    }
+
+    fn dependencies(&self, task_id: &TaskId<'static>) -> Option<Self::TaskIter<'_>> {
+        Engine::dependencies(self, task_id).map(|deps| {
+            deps.into_iter().filter_map(
+                (|node| match node {
+                    TaskNode::Task(id) => Some(id),
+                    TaskNode::Root => None,
+                }) as fn(&TaskNode) -> Option<&TaskId<'static>>,
+            )
+        })
+    }
+
+    fn dependents(&self, task_id: &TaskId<'static>) -> Option<Self::TaskIter<'_>> {
+        Engine::dependents(self, task_id).map(|deps| {
+            deps.into_iter().filter_map(
+                (|node| match node {
+                    TaskNode::Task(id) => Some(id),
+                    TaskNode::Root => None,
+                }) as fn(&TaskNode) -> Option<&TaskId<'static>>,
+            )
+        })
     }
 }
 

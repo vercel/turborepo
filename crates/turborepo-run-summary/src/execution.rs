@@ -7,8 +7,7 @@ use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_task_id::TaskId;
 use turborepo_ui::{color, cprintln, ColorConfig, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, YELLOW};
 
-use super::TurboDuration;
-use crate::run::summary::task::TaskSummary;
+use crate::{task::TaskExecutionSummary, TurboDuration};
 
 // Just used to make changing the type that gets passed to the state management
 // thread easy
@@ -39,11 +38,11 @@ pub struct ExecutionSummary<'a> {
     cached: usize,
     // number of tasks that started
     attempted: usize,
-    pub(crate) start_time: i64,
-    pub(crate) end_time: i64,
+    pub start_time: i64,
+    pub end_time: i64,
     #[serde(skip)]
     duration: TurboDuration,
-    pub(crate) exit_code: i32,
+    pub exit_code: i32,
 }
 
 impl<'a> ExecutionSummary<'a> {
@@ -73,11 +72,11 @@ impl<'a> ExecutionSummary<'a> {
 
     /// We implement this on `ExecutionSummary` and not `RunSummary` because
     /// the `execution` field is nullable (due to normalize).
-    pub fn print(
+    pub fn print<T: TaskSummaryInfo>(
         &self,
         ui: ColorConfig,
         path: AbsoluteSystemPathBuf,
-        failed_tasks: Vec<&TaskSummary>,
+        failed_tasks: Vec<&T>,
     ) {
         let maybe_full_turbo = if self.cached == self.attempted && self.attempted > 0 {
             match std::env::var("TERM_PROGRAM").as_deref() {
@@ -123,7 +122,7 @@ impl<'a> ExecutionSummary<'a> {
         if !failed_tasks.is_empty() {
             let mut formatted: Vec<_> = failed_tasks
                 .iter()
-                .map(|task| color!(ui, BOLD_RED, "{}", task.task_id).to_string())
+                .map(|task| color!(ui, BOLD_RED, "{}", task.task_id()).to_string())
                 .collect();
             formatted.sort();
             line_data.push(("Failed", formatted.join(", ")));
@@ -165,6 +164,11 @@ impl<'a> ExecutionSummary<'a> {
     fn successful(&self) -> usize {
         self.success + self.cached
     }
+}
+
+/// Trait for types that can provide task summary information for printing
+pub trait TaskSummaryInfo {
+    fn task_id(&self) -> &TaskId<'static>;
 }
 
 /// The final states of all task executions
@@ -218,24 +222,6 @@ enum Event {
     Built,
     // Canceled due to external signal or internal failure
     Canceled,
-}
-
-#[derive(Debug, Serialize, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct TaskExecutionSummary {
-    pub start_time: i64,
-    pub end_time: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub error: Option<String>,
-    pub exit_code: Option<i32>,
-}
-
-impl TaskExecutionSummary {
-    pub fn is_failure(&self) -> bool {
-        // We consider None as a failure as it indicates the task failed to start
-        // or was killed in a manner where we didn't collect an exit code.
-        !matches!(self.exit_code, Some(0))
-    }
 }
 
 impl ExecutionTracker {

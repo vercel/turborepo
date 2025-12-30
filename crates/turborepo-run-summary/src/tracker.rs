@@ -1,21 +1,12 @@
 //! Module for summarizing and tracking a run.
 //! We have two separate types of structs here: Trackers and Summaries.
 //! A tracker tracks the live data and then gets turned into a summary for
-//! displaying it We have this split because the tracker representation is not
+//! displaying it. We have this split because the tracker representation is not
 //! exactly what we want to display to the user.
-#[allow(dead_code)]
-mod duration;
-mod execution;
-mod global_hash;
-mod scm;
-mod task;
-mod task_factory;
+
 use std::{collections::HashSet, io, io::Write};
 
 use chrono::{DateTime, Local};
-pub use duration::TurboDuration;
-pub use execution::TaskTracker;
-pub use global_hash::GlobalHashSummary;
 use itertools::Itertools;
 use serde::Serialize;
 use svix_ksuid::{Ksuid, KsuidLike};
@@ -30,19 +21,11 @@ use turborepo_task_id::TaskId;
 use turborepo_types::{DryRunMode, EnvMode};
 use turborepo_ui::{color, cprintln, cwriteln, ColorConfig, BOLD, BOLD_CYAN, GREY};
 
-use self::{
-    execution::TaskState, task::SinglePackageTaskSummary, task_factory::TaskSummaryFactory,
-};
 use crate::{
-    cli,
-    engine::Engine,
-    opts::RunOpts,
-    run::summary::{
-        execution::{ExecutionSummary, ExecutionTracker},
-        scm::SCMState,
-        task::TaskSummary,
-    },
-    task_hash::TaskHashTracker,
+    execution::{ExecutionSummary, ExecutionTracker, TaskState},
+    task::{SinglePackageTaskSummary, TaskSummary},
+    task_factory::TaskSummaryFactory,
+    EngineInfo, GlobalHashSummary, HashTrackerInfo, RunOptsInfo, SCMState, TaskTracker,
 };
 
 #[derive(Debug, Error)]
@@ -60,7 +43,7 @@ pub enum Error {
     #[error("Failed to parse environment variables.")]
     Env(#[source] turborepo_env::Error),
     #[error("Failed to construct task summary: {0}")]
-    TaskSummary(#[from] task_factory::Error),
+    TaskSummary(#[from] crate::task_factory::Error),
 }
 
 // NOTE: When changing this, please ensure that the server side is updated to
@@ -143,22 +126,27 @@ impl RunTracker {
         global_hash_summary,
         task_factory,
     ))]
-    pub async fn to_summary<'a>(
+    pub async fn to_summary<'a, E, H, R>(
         self,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&'a AnchoredSystemPath>,
         exit_code: i32,
         end_time: DateTime<Local>,
-        run_opts: &'a RunOpts,
+        run_opts: &'a R,
         packages: &'a HashSet<PackageName>,
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: EnvMode,
-        task_factory: TaskSummaryFactory<'a>,
-    ) -> Result<RunSummary<'a>, Error> {
-        let single_package = run_opts.single_package;
-        let should_save = run_opts.summarize;
+        task_factory: TaskSummaryFactory<'a, E, H, R>,
+    ) -> Result<RunSummary<'a>, Error>
+    where
+        E: EngineInfo,
+        H: HashTrackerInfo,
+        R: RunOptsInfo,
+    {
+        let single_package = run_opts.single_package();
+        let should_save = run_opts.summarize().is_some();
 
-        let run_type = match run_opts.dry_run {
+        let run_type = match run_opts.dry_run() {
             None => RunType::Real,
             Some(DryRunMode::Json) => RunType::DryJson,
             Some(DryRunMode::Text) => RunType::DryText,
@@ -171,7 +159,7 @@ impl RunTracker {
             .iter()
             .cloned()
             .map(|TaskState { task_id, execution }| task_factory.task_summary(task_id, execution))
-            .collect::<Result<Vec<_>, task_factory::Error>>()?;
+            .collect::<Result<Vec<_>, crate::task_factory::Error>>()?;
         let execution_summary = ExecutionSummary::new(
             self.synthesized_command.clone(),
             summary_state,
@@ -188,7 +176,7 @@ impl RunTracker {
             packages: packages.iter().sorted().collect(),
             execution: Some(execution_summary),
             env_mode: global_env_mode,
-            framework_inference: run_opts.framework_inference,
+            framework_inference: run_opts.framework_inference(),
             tasks,
             global_hash_summary,
             scm: self.scm,
@@ -211,22 +199,27 @@ impl RunTracker {
         env_at_execution_start
     ))]
     #[allow(clippy::too_many_arguments)]
-    pub async fn finish<'a>(
+    pub async fn finish<'a, E, H, R>(
         self,
         exit_code: i32,
         pkg_dep_graph: &PackageGraph,
         ui: ColorConfig,
         repo_root: &'a AbsoluteSystemPath,
         package_inference_root: Option<&AnchoredSystemPath>,
-        run_opts: &'a RunOpts,
+        run_opts: &'a R,
         packages: &'a HashSet<PackageName>,
         global_hash_summary: GlobalHashSummary<'a>,
-        global_env_mode: cli::EnvMode,
-        engine: &'a Engine,
-        hash_tracker: TaskHashTracker,
+        global_env_mode: EnvMode,
+        engine: &'a E,
+        hash_tracker: &'a H,
         env_at_execution_start: &'a EnvironmentVariableMap,
         is_watch: bool,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Error>
+    where
+        E: EngineInfo,
+        H: HashTrackerInfo,
+        R: RunOptsInfo,
+    {
         let end_time = Local::now();
 
         let task_factory = TaskSummaryFactory::new(
@@ -269,7 +262,7 @@ impl RunTracker {
 // not be used anywhere else.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct SinglePackageRunSummary<'a> {
+pub struct SinglePackageRunSummary<'a> {
     id: Ksuid,
     version: &'a str,
     turbo_version: &'a str,
@@ -341,6 +334,7 @@ impl<'a> RunSummary<'a> {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn print_errors(errors: &[Error]) {
         if errors.is_empty() {
             return;

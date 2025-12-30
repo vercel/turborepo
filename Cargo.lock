@@ -6877,6 +6877,7 @@ dependencies = [
  "turborepo-errors",
  "turborepo-graph-utils",
  "turborepo-repository",
+ "turborepo-run-summary",
  "turborepo-task-id",
  "turborepo-types",
 ]
@@ -7131,6 +7132,7 @@ dependencies = [
  "turborepo-microfrontends-proxy",
  "turborepo-process",
  "turborepo-repository",
+ "turborepo-run-summary",
  "turborepo-scm",
  "turborepo-scope",
  "turborepo-shim",
@@ -7309,6 +7311,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-run-summary"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "itertools 0.10.5",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "svix-ksuid",
+ "tabwriter",
+ "test-case",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-cache",
+ "turborepo-ci",
+ "turborepo-env",
+ "turborepo-hash",
+ "turborepo-lockfiles",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-task-id",
+ "turborepo-types",
+ "turborepo-ui",
+]
+
+[[package]]
 name = "turborepo-scm"
 version = "0.1.0"
 dependencies = [
@@ -7412,6 +7442,7 @@ dependencies = [
  "turborepo-hash",
  "turborepo-lockfiles",
  "turborepo-repository",
+ "turborepo-run-summary",
  "turborepo-scm",
  "turborepo-task-id",
  "turborepo-telemetry",
