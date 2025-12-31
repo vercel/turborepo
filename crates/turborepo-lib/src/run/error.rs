@@ -1,10 +1,10 @@
 use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_daemon::{DaemonConnectorError, DaemonError};
+use turborepo_engine::GraphVisualizerError;
 use turborepo_repository::package_graph;
 use turborepo_ui::tui;
 
-use super::graph_visualizer;
 use crate::{
     config, engine,
     engine::ValidateError,
@@ -18,7 +18,7 @@ pub enum Error {
     #[error("Invalid task configuration")]
     EngineValidation(#[related] Vec<ValidateError>),
     #[error(transparent)]
-    Graph(#[from] graph_visualizer::Error),
+    Graph(#[from] GraphVisualizerError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Builder(#[from] engine::BuilderError),

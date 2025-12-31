@@ -7,6 +7,7 @@ use std::{
 use console::StyledObject;
 use tokio::sync::oneshot;
 use tracing::{error, Instrument};
+use turborepo_engine::{TaskError, TaskErrorCause, TaskWarning};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_process::{ChildExit, Command, ProcessManager};
 use turborepo_repository::package_manager::PackageManager;
@@ -18,7 +19,6 @@ use turborepo_ui::{ColorConfig, OutputWriter};
 
 use super::{
     command::{CommandFactory, MicroFrontendProxyProvider, PackageGraphCommandProvider},
-    error::{TaskError, TaskErrorCause, TaskWarning},
     output::TaskCacheOutput,
     TaskOutput, Visitor,
 };
