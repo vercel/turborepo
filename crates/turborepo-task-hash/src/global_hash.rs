@@ -22,6 +22,7 @@ use turborepo_run_summary::{
 use turborepo_scm::SCM;
 use turborepo_types::EnvMode;
 
+#[allow(dead_code)]
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
 const GLOBAL_CACHE_KEY: &str = "I can’t see ya, but I know you’re here";
@@ -57,7 +58,7 @@ pub struct GlobalHashableInputs<'a> {
     pub env_at_execution_start: &'a EnvironmentVariableMap,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::result_large_err)]
 pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     root_external_dependencies_hash: Option<&'a str>,
     root_internal_dependencies_hash: Option<&'a str>,
@@ -121,6 +122,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     })
 }
 
+#[allow(clippy::result_large_err)]
 fn collect_global_deps(
     package_manager: &PackageManager,
     root_path: &AbsoluteSystemPath,
