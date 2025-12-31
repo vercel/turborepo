@@ -13,9 +13,10 @@ use turborepo_repository::{
     package_manager::PackageManager,
 };
 use turborepo_task_id::TaskId;
+use turborepo_types::TaskArgs;
 
 use super::Error;
-use crate::{microfrontends::MicrofrontendsConfigs, opts::TaskArgs};
+use crate::microfrontends::MicrofrontendsConfigs;
 
 pub trait CommandProvider {
     fn command(
