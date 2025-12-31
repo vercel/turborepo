@@ -233,6 +233,94 @@ impl fmt::Display for LogPrefix {
     }
 }
 
+/// Resolved log ordering mode for task output.
+///
+/// This is the resolved version of [`LogOrder`] after the `Auto` variant
+/// has been resolved to a concrete value based on the execution context.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+pub enum ResolvedLogOrder {
+    Stream,
+    Grouped,
+}
+
+/// Resolved log prefix mode for task output.
+///
+/// This is the resolved version of [`LogPrefix`] after the `Auto` variant
+/// has been resolved to a concrete value based on the execution context.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub enum ResolvedLogPrefix {
+    Task,
+    None,
+}
+
+impl From<LogPrefix> for ResolvedLogPrefix {
+    fn from(value: LogPrefix) -> Self {
+        match value {
+            // We default to task-prefixed logs
+            LogPrefix::Auto | LogPrefix::Task => ResolvedLogPrefix::Task,
+            LogPrefix::None => ResolvedLogPrefix::None,
+        }
+    }
+}
+
+/// Options for graph output.
+///
+/// Controls where the task graph is written:
+/// - `Stdout`: Print to standard output
+/// - `File`: Write to the specified file path
+#[derive(Clone, Debug, Serialize)]
+pub enum GraphOpts {
+    Stdout,
+    File(String),
+}
+
+/// Projection of run options that only includes information necessary to
+/// compute pass through args for tasks.
+///
+/// This struct provides a lightweight view into the run configuration
+/// specifically for determining which arguments should be passed through
+/// to individual tasks.
+#[derive(Debug)]
+pub struct TaskArgs<'a> {
+    pass_through_args: &'a [String],
+    tasks: &'a [String],
+}
+
+impl<'a> TaskArgs<'a> {
+    /// Creates a new TaskArgs instance.
+    pub fn new(pass_through_args: &'a [String], tasks: &'a [String]) -> Self {
+        TaskArgs {
+            pass_through_args,
+            tasks,
+        }
+    }
+
+    /// Returns the pass-through arguments for a specific task if applicable.
+    ///
+    /// Arguments are returned if:
+    /// 1. There are pass-through arguments configured
+    /// 2. The task is one of the explicitly requested tasks
+    ///
+    /// # Arguments
+    /// * `task_id` - The task ID to get arguments for
+    ///
+    /// # Returns
+    /// `Some(&[String])` if arguments should be passed through, `None`
+    /// otherwise
+    pub fn args_for_task(&self, task_id: &TaskId) -> Option<&'a [String]> {
+        if !self.pass_through_args.is_empty()
+            && self
+                .tasks
+                .iter()
+                .any(|task| TaskName::from(task.as_str()).task() == task_id.task())
+        {
+            Some(self.pass_through_args)
+        } else {
+            None
+        }
+    }
+}
+
 /// TaskOutputs represents the patterns for including and excluding files from
 /// outputs.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]

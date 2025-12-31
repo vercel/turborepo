@@ -31,6 +31,7 @@ use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
+use turborepo_types::{ResolvedLogOrder, ResolvedLogPrefix};
 use turborepo_ui::{
     sender::UISender, ColorConfig, ColorSelector, OutputClient, OutputSink, PrefixedUI,
 };
@@ -444,10 +445,8 @@ impl<'a> Visitor<'a> {
         vendor_behavior: Option<&VendorBehavior>,
     ) -> OutputClient<impl std::io::Write> {
         let behavior = match self.run_opts.log_order {
-            crate::opts::ResolvedLogOrder::Stream => {
-                turborepo_ui::OutputClientBehavior::Passthrough
-            }
-            crate::opts::ResolvedLogOrder::Grouped => turborepo_ui::OutputClientBehavior::Grouped,
+            ResolvedLogOrder::Stream => turborepo_ui::OutputClientBehavior::Passthrough,
+            ResolvedLogOrder::Grouped => turborepo_ui::OutputClientBehavior::Grouped,
         };
 
         let mut logger = self.sink.logger(behavior);
@@ -478,13 +477,9 @@ impl<'a> Visitor<'a> {
 
     fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
         match self.run_opts.log_prefix {
-            crate::opts::ResolvedLogPrefix::Task if self.run_opts.single_package => {
-                task_id.task().into()
-            }
-            crate::opts::ResolvedLogPrefix::Task => {
-                format!("{}:{}", task_id.package(), task_id.task()).into()
-            }
-            crate::opts::ResolvedLogPrefix::None => "".into(),
+            ResolvedLogPrefix::Task if self.run_opts.single_package => task_id.task().into(),
+            ResolvedLogPrefix::Task => format!("{}:{}", task_id.package(), task_id.task()).into(),
+            ResolvedLogPrefix::None => "".into(),
         }
     }
 

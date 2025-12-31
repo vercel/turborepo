@@ -6,10 +6,11 @@ use std::{
 
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_types::GraphOpts;
 use turborepo_ui::{cprintln, cwrite, cwriteln, ColorConfig, BOLD, BOLD_YELLOW_REVERSE, YELLOW};
 use which::which;
 
-use crate::{engine::Engine, opts::GraphOpts, spawn_child};
+use crate::{engine::Engine, spawn_child};
 
 #[derive(Debug, Error)]
 pub enum Error {
