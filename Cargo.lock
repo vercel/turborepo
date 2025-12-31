@@ -7491,9 +7491,13 @@ dependencies = [
 name = "turborepo-task-hash"
 version = "0.1.0"
 dependencies = [
+ "either",
+ "globwalk",
+ "itertools 0.10.5",
  "rayon",
  "regex",
  "serde",
+ "tempfile",
  "thiserror 1.0.63",
  "tokio",
  "tracing",
@@ -7506,6 +7510,7 @@ dependencies = [
  "turborepo-hash",
  "turborepo-lockfiles",
  "turborepo-repository",
+ "turborepo-run-summary",
  "turborepo-scm",
  "turborepo-task-id",
  "turborepo-telemetry",
