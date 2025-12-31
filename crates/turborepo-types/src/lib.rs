@@ -14,12 +14,13 @@
 //! - [`HashTrackerInfo`]: Provides access to task hash information
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
-use std::{collections::HashMap, fmt};
+use std::{collections::HashMap, fmt, str::FromStr};
 
 use biome_deserialize_macros::Deserializable;
 use clap::ValueEnum;
+use globwalk::{GlobError, ValidatedGlob};
 use serde::{Deserialize, Serialize};
-use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_task_id::{TaskId, TaskName};
 
@@ -403,6 +404,59 @@ mod tests {
             .inclusions
             .contains(&".turbo/turbo-build$colon$prod.log".to_string()));
     }
+
+    #[test]
+    fn test_task_definition_ext_workspace_relative_log_file() {
+        let path = TaskDefinition::workspace_relative_log_file("build");
+        #[cfg(not(windows))]
+        assert_eq!(path.as_str(), ".turbo/turbo-build.log");
+        #[cfg(windows)]
+        assert_eq!(path.as_str(), ".turbo\\turbo-build.log");
+
+        let path = TaskDefinition::workspace_relative_log_file("build:prod");
+        #[cfg(not(windows))]
+        assert_eq!(path.as_str(), ".turbo/turbo-build$colon$prod.log");
+        #[cfg(windows)]
+        assert_eq!(path.as_str(), ".turbo\\turbo-build$colon$prod.log");
+    }
+
+    #[test]
+    fn test_task_outputs_ext_is_empty() {
+        // Empty outputs (only log file)
+        let outputs = TaskOutputs {
+            inclusions: vec![".turbo/turbo-build.log".to_string()],
+            exclusions: vec![],
+        };
+        assert!(outputs.is_empty());
+
+        // Non-empty outputs
+        let outputs = TaskOutputs {
+            inclusions: vec![".turbo/turbo-build.log".to_string(), "dist/**".to_string()],
+            exclusions: vec![],
+        };
+        assert!(!outputs.is_empty());
+
+        // Has exclusions
+        let outputs = TaskOutputs {
+            inclusions: vec![".turbo/turbo-build.log".to_string()],
+            exclusions: vec!["node_modules".to_string()],
+        };
+        assert!(!outputs.is_empty());
+    }
+
+    #[test]
+    fn test_task_outputs_ext_validated_globs() {
+        let outputs = TaskOutputs {
+            inclusions: vec!["dist/**".to_string(), "build/**/*.js".to_string()],
+            exclusions: vec!["dist/temp".to_string()],
+        };
+
+        let inclusions = outputs.validated_inclusions().unwrap();
+        assert_eq!(inclusions.len(), 2);
+
+        let exclusions = outputs.validated_exclusions().unwrap();
+        assert_eq!(exclusions.len(), 1);
+    }
 }
 
 /// Constructed from a RawTaskDefinition, this represents the fully resolved
@@ -538,6 +592,106 @@ impl TaskDefinition {
         hashable.exclusions.sort();
 
         hashable
+    }
+}
+
+// ============================================================================
+// Extension Traits for TaskDefinition and TaskOutputs
+// ============================================================================
+//
+// These extension traits provide additional functionality for TaskDefinition
+// and TaskOutputs that requires dependencies not available in the core type
+// definitions. They are defined here in turborepo-types so they can be used
+// across multiple crates.
+
+/// Extension trait for TaskDefinition providing path and output methods.
+pub trait TaskDefinitionExt {
+    /// Get the workspace-relative path to the log file for a task
+    fn workspace_relative_log_file(task_name: &str) -> AnchoredSystemPathBuf;
+
+    /// Get the hashable outputs for a task (delegates to the inherent method)
+    fn hashable_outputs_for_task(&self, task_name: &TaskId) -> TaskOutputs;
+
+    /// Get the repo-relative hashable outputs for a task
+    fn repo_relative_hashable_outputs(
+        &self,
+        task_name: &TaskId,
+        workspace_dir: &AnchoredSystemPath,
+    ) -> TaskOutputs;
+}
+
+impl TaskDefinitionExt for TaskDefinition {
+    fn workspace_relative_log_file(task_name: &str) -> AnchoredSystemPathBuf {
+        let log_dir = AnchoredSystemPath::new(LOG_DIR)
+            .expect("LOG_DIR should be a valid AnchoredSystemPathBuf");
+        log_dir.join_component(&task_log_filename(task_name))
+    }
+
+    fn hashable_outputs_for_task(&self, task_name: &TaskId) -> TaskOutputs {
+        // Delegate to the canonical implementation in TaskDefinition
+        TaskDefinition::hashable_outputs(self, task_name.task())
+    }
+
+    fn repo_relative_hashable_outputs(
+        &self,
+        task_name: &TaskId,
+        workspace_dir: &AnchoredSystemPath,
+    ) -> TaskOutputs {
+        let make_glob_repo_relative = |glob: &str| -> String {
+            let mut repo_relative_glob = workspace_dir.to_string();
+            repo_relative_glob.push(std::path::MAIN_SEPARATOR);
+            repo_relative_glob.push_str(glob);
+            repo_relative_glob
+        };
+
+        // At this point repo_relative_globs are still workspace relative, but
+        // the processing in the rest of the function converts this to be repo
+        // relative.
+        let mut repo_relative_globs = self.hashable_outputs_for_task(task_name);
+
+        for input in repo_relative_globs.inclusions.iter_mut() {
+            let relative_input = make_glob_repo_relative(input.as_str());
+            *input = relative_input;
+        }
+
+        for output in repo_relative_globs.exclusions.iter_mut() {
+            let relative_output = make_glob_repo_relative(output.as_str());
+            *output = relative_output;
+        }
+
+        repo_relative_globs
+    }
+}
+
+/// Extension trait for TaskOutputs providing glob validation methods.
+pub trait TaskOutputsExt {
+    /// We consider an empty outputs to be a log output and nothing else
+    fn is_empty(&self) -> bool;
+
+    fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError>;
+
+    fn validated_exclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError>;
+}
+
+impl TaskOutputsExt for TaskOutputs {
+    fn is_empty(&self) -> bool {
+        self.inclusions.len() == 1
+            && self.inclusions[0].ends_with(".log")
+            && self.exclusions.is_empty()
+    }
+
+    fn validated_inclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
+        self.inclusions
+            .iter()
+            .map(|i| ValidatedGlob::from_str(i))
+            .collect()
+    }
+
+    fn validated_exclusions(&self) -> Result<Vec<ValidatedGlob>, GlobError> {
+        self.exclusions
+            .iter()
+            .map(|e| ValidatedGlob::from_str(e))
+            .collect()
     }
 }
 

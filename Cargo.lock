@@ -7167,6 +7167,7 @@ dependencies = [
  "turborepo-microfrontends-proxy",
  "turborepo-process",
  "turborepo-repository",
+ "turborepo-run-cache",
  "turborepo-run-summary",
  "turborepo-scm",
  "turborepo-scope",
@@ -7344,6 +7345,28 @@ dependencies = [
  "turborepo-unescape",
  "wax",
  "which",
+]
+
+[[package]]
+name = "turborepo-run-cache"
+version = "0.1.0"
+dependencies = [
+ "globwalk",
+ "itertools 0.10.5",
+ "serde",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-cache",
+ "turborepo-daemon",
+ "turborepo-hash",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-task-id",
+ "turborepo-telemetry",
+ "turborepo-types",
+ "turborepo-ui",
 ]
 
 [[package]]
@@ -7559,6 +7582,7 @@ dependencies = [
  "biome_deserialize 0.6.0",
  "biome_deserialize_macros 0.6.0",
  "clap",
+ "globwalk",
  "serde",
  "turbopath",
  "turborepo-errors",
