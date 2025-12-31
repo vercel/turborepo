@@ -40,8 +40,10 @@ use crate::{
     engine::{Engine, ExecutionOptions},
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
-    run::{global_hash::GlobalHashableInputs, task_access::TaskAccess, RunCache},
-    task_hash::{self, PackageInputsHashes, TaskHashTrackerState, TaskHasher},
+    run::{task_access::TaskAccess, RunCache},
+    task_hash::{
+        self, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState, TaskHasher,
+    },
 };
 
 // This holds the whole world

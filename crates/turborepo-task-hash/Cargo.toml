@@ -6,6 +6,9 @@ license = "MIT"
 description = "Task hashing utilities for Turborepo cache invalidation"
 
 [dependencies]
+either = { workspace = true }
+globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
+itertools = { workspace = true }
 rayon = "1.7.0"
 regex = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -21,12 +24,16 @@ turborepo-frameworks = { workspace = true }
 turborepo-hash = { workspace = true }
 turborepo-lockfiles = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
+turborepo-run-summary = { workspace = true }
 turborepo-scm = { workspace = true }
 turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-types = { workspace = true }
 
 tokio = { workspace = true, features = ["time", "rt"] }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [features]
 default = []

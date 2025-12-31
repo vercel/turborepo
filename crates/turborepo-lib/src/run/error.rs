@@ -5,13 +5,7 @@ use turborepo_engine::GraphVisualizerError;
 use turborepo_repository::package_graph;
 use turborepo_ui::tui;
 
-use crate::{
-    config, engine,
-    engine::ValidateError,
-    opts,
-    run::{global_hash, scope},
-    task_graph, task_hash,
-};
+use crate::{config, engine, engine::ValidateError, opts, run::scope, task_graph, task_hash};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -47,7 +41,7 @@ pub enum Error {
     #[error(transparent)]
     Scope(#[from] scope::ResolutionError),
     #[error(transparent)]
-    GlobalHash(#[from] global_hash::Error),
+    GlobalHash(#[from] task_hash::global_hash::Error),
     #[error(transparent)]
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]

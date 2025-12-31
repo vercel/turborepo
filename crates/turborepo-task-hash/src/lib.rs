@@ -4,11 +4,14 @@
 //! hashes for tasks based on their inputs (files, environment variables,
 //! dependencies) to determine cache invalidation.
 
+pub mod global_hash;
+
 use std::{
     collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
+pub use global_hash::*;
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;

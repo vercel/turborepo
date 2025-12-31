@@ -10,6 +10,7 @@ use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_env::{get_global_hashable_env_vars, DetailedMap, EnvironmentVariableMap};
+use turborepo_hash::{GlobalHashable, TurboHash};
 use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
     package_graph::PackageInfo,
@@ -19,11 +20,7 @@ use turborepo_run_summary::{
     GlobalEnvVarSummary, GlobalHashInputs as GlobalHashInputsTrait, GlobalHashSummary,
 };
 use turborepo_scm::SCM;
-
-use crate::{
-    cli::EnvMode,
-    hash::{GlobalHashable, TurboHash},
-};
+use turborepo_types::EnvMode;
 
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
@@ -317,9 +314,9 @@ mod tests {
     use turborepo_lockfiles::Lockfile;
     use turborepo_repository::{package_graph::PackageInfo, package_manager::PackageManager};
     use turborepo_scm::SCM;
+    use turborepo_types::EnvMode;
 
-    use super::get_global_hash_inputs;
-    use crate::{cli::EnvMode, run::global_hash::collect_global_deps};
+    use super::{collect_global_deps, get_global_hash_inputs};
 
     #[test]
     fn test_absolute_path() {
