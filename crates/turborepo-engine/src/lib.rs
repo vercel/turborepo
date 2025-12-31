@@ -4,22 +4,41 @@
 //! monorepo. It handles task graph construction, dependency resolution, and
 //! parallel execution.
 
+// Allow large error types - boxing would be a significant refactor and these
+// errors are already established patterns in the codebase
+#![allow(clippy::result_large_err)]
+
+mod builder;
+mod builder_error;
+mod builder_errors;
 mod dot;
 mod execute;
+mod loader;
 mod mermaid;
+mod task_definition;
+mod validate;
 
 use std::{
     collections::{HashMap, HashSet},
     fmt,
 };
 
+pub use builder::{EngineBuilder, TaskInheritanceResolver, ValidationMode};
+pub use builder_error::Error as BuilderError;
+pub use builder_errors::{
+    CyclicExtends, InvalidTaskNameError, MissingPackageFromTaskError, MissingPackageTaskError,
+    MissingRootTaskInTurboJsonError, MissingTaskError, MissingTurboJsonExtends,
+};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
+pub use loader::TurboJsonLoader;
 use petgraph::Graph;
+pub use task_definition::TaskDefinitionFromProcessed;
 use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::PackageName;
 use turborepo_task_id::TaskId;
 use turborepo_types::{EngineInfo, TaskDefinition};
+pub use validate::{TaskDefinitionResult, validate_task_name};
 
 /// Trait for types that provide task definition information needed by the
 /// engine.

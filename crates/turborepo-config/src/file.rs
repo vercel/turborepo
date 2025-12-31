@@ -2,7 +2,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_auth::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE};
 use turborepo_dirs::{config_dir, vercel_config_dir};
 
-use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
+use crate::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
 
 pub struct ConfigFile {
     path: AbsoluteSystemPathBuf,

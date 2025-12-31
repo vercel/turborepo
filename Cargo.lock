@@ -6774,6 +6774,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-config"
+version = "0.1.0"
+dependencies = [
+ "atty",
+ "camino",
+ "clap",
+ "derive_setters",
+ "itertools 0.10.5",
+ "merge",
+ "miette",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "struct_iterable",
+ "tempfile",
+ "test-case",
+ "thiserror 1.0.63",
+ "tracing",
+ "turbopath",
+ "turborepo-api-client",
+ "turborepo-auth",
+ "turborepo-cache",
+ "turborepo-ci",
+ "turborepo-dirs",
+ "turborepo-repository",
+ "turborepo-turbo-json",
+ "turborepo-types",
+]
+
+[[package]]
 name = "turborepo-daemon"
 version = "0.1.0"
 dependencies = [
@@ -6865,19 +6895,24 @@ dependencies = [
 name = "turborepo-engine"
 version = "0.1.0"
 dependencies = [
+ "convert_case 0.6.0",
  "futures",
  "itertools 0.10.5",
  "miette",
  "petgraph",
  "pretty_assertions",
  "rand 0.8.5",
+ "test-case",
  "thiserror 1.0.63",
  "tokio",
  "tracing",
+ "turbopath",
+ "turborepo-config",
  "turborepo-errors",
  "turborepo-graph-utils",
  "turborepo-repository",
  "turborepo-task-id",
+ "turborepo-turbo-json",
  "turborepo-types",
 ]
 
@@ -7111,6 +7146,7 @@ dependencies = [
  "turborepo-boundaries",
  "turborepo-cache",
  "turborepo-ci",
+ "turborepo-config",
  "turborepo-daemon",
  "turborepo-devtools",
  "turborepo-diagnostics",

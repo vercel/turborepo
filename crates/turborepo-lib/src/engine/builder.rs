@@ -1,1028 +1,15 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-
-use convert_case::{Case, Casing};
-use itertools::Itertools;
-use miette::{Diagnostic, NamedSource, SourceSpan};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
-use turborepo_errors::{Spanned, TURBO_SITE};
-use turborepo_graph_utils as graph;
-use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode, ROOT_PKG_NAME};
-use turborepo_task_id::{TaskId, TaskName};
-
-use super::{task_inheritance::TaskInheritanceResolver, Engine};
-use crate::{
-    config,
-    task_graph::TaskDefinition,
-    turbo_json::{
-        validator::Validator, FutureFlags, HasConfigBeyondExtends, ProcessedTaskDefinition,
-        RawTaskDefinition, TaskDefinitionFromProcessed, TurboJson, TurboJsonLoader,
-    },
-};
-
-#[derive(Debug, thiserror::Error, Diagnostic)]
-pub enum MissingTaskError {
-    #[error("Could not find task `{name}` in project")]
-    MissingTaskDefinition {
-        name: String,
-        #[label]
-        span: Option<SourceSpan>,
-        #[source_code]
-        text: NamedSource<String>,
-    },
-    #[error("Could not find package `{name}` in project")]
-    MissingPackage { name: String },
-}
-
-#[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("Could not find \"{task_id}\" in root turbo.json or \"{task_name}\" in package")]
-pub struct MissingPackageTaskError {
-    #[label]
-    pub span: Option<SourceSpan>,
-    #[source_code]
-    pub text: NamedSource<String>,
-    pub task_id: String,
-    pub task_name: String,
-}
-
-#[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("Could not find package \"{package}\" referenced by task \"{task_id}\" in project")]
-pub struct MissingPackageFromTaskError {
-    #[label]
-    pub span: Option<SourceSpan>,
-    #[source_code]
-    pub text: NamedSource<String>,
-    pub package: String,
-    pub task_id: String,
-}
-
-#[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("Invalid task name: {reason}")]
-pub struct InvalidTaskNameError {
-    #[label]
-    span: Option<SourceSpan>,
-    #[source_code]
-    text: NamedSource<String>,
-    task_name: String,
-    reason: String,
-}
-
-#[derive(Debug, thiserror::Error, Diagnostic)]
-#[error(
-    "{task_id} requires an entry in turbo.json before it can be depended on because it is a task \
-     declared in the root package.json"
-)]
-#[diagnostic(
-    code(missing_root_task_in_turbo_json),
-    url(
-            "{}/messages/{}",
-            TURBO_SITE, self.code().unwrap().to_string().to_case(Case::Kebab)
-    )
-)]
-pub struct MissingRootTaskInTurboJsonError {
-    task_id: String,
-    #[label("Add an entry in turbo.json for this task")]
-    span: Option<SourceSpan>,
-    #[source_code]
-    text: NamedSource<String>,
-}
-
-#[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("Cannot extend from '{package_name}' without a package 'turbo.json'.")]
-pub struct MissingTurboJsonExtends {
-    package_name: String,
-    #[label("Extended from here")]
-    span: Option<SourceSpan>,
-    #[source_code]
-    text: NamedSource<String>,
-}
-
-#[derive(Debug, thiserror::Error, Diagnostic)]
-#[error("Cyclic \"extends\" detected: {}", cycle.join(" -> "))]
-pub struct CyclicExtends {
-    cycle: Vec<String>,
-    #[label("Cycle detected here")]
-    span: Option<SourceSpan>,
-    #[source_code]
-    text: NamedSource<String>,
-}
-
-#[derive(Debug, thiserror::Error, Diagnostic)]
-pub enum Error {
-    #[error("Missing tasks in project")]
-    MissingTasks(#[related] Vec<MissingTaskError>),
-    #[error("No package.json found for {workspace}")]
-    MissingPackageJson { workspace: PackageName },
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    MissingRootTaskInTurboJson(Box<MissingRootTaskInTurboJsonError>),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    MissingPackageFromTask(Box<MissingPackageFromTaskError>),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    MissingPackageTask(Box<MissingPackageTaskError>),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    MissingTurboJsonExtends(Box<MissingTurboJsonExtends>),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    CyclicExtends(Box<CyclicExtends>),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Config(#[from] crate::config::Error),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    TurboJson(#[from] turborepo_turbo_json::Error),
-    #[error("Invalid turbo.json configuration")]
-    Validation {
-        #[related]
-        errors: Vec<config::Error>,
-    },
-    #[error(transparent)]
-    Graph(#[from] graph::Error),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    InvalidTaskName(Box<InvalidTaskNameError>),
-}
-
-/// Result of checking if a task has a definition in the current run.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct TaskDefinitionResult {
-    /// True if the task has a valid definition.
-    has_definition: bool,
-    /// True if the task was excluded via `extends: false` somewhere in the
-    /// chain.
-    is_excluded: bool,
-}
-
-impl TaskDefinitionResult {
-    fn new(has_definition: bool, is_excluded: bool) -> Self {
-        Self {
-            has_definition,
-            is_excluded,
-        }
-    }
-
-    /// Creates a result indicating no definition was found.
-    fn not_found() -> Self {
-        Self::new(false, false)
-    }
-
-    /// Creates a result indicating the task was explicitly excluded.
-    fn excluded() -> Self {
-        Self::new(false, true)
-    }
-
-    /// Creates a result indicating a definition was found.
-    fn found() -> Self {
-        Self::new(true, false)
-    }
-}
-
-pub struct EngineBuilder<'a> {
-    repo_root: &'a AbsoluteSystemPath,
-    package_graph: &'a PackageGraph,
-    turbo_json_loader: Option<&'a TurboJsonLoader>,
-    is_single: bool,
-    workspaces: Vec<PackageName>,
-    tasks: Vec<Spanned<TaskName<'static>>>,
-    root_enabled_tasks: HashSet<TaskName<'static>>,
-    tasks_only: bool,
-    add_all_tasks: bool,
-    should_validate_engine: bool,
-    validator: Validator,
-}
-
-impl<'a> EngineBuilder<'a> {
-    pub fn new(
-        repo_root: &'a AbsoluteSystemPath,
-        package_graph: &'a PackageGraph,
-        turbo_json_loader: &'a TurboJsonLoader,
-        is_single: bool,
-    ) -> Self {
-        Self {
-            repo_root,
-            package_graph,
-            turbo_json_loader: Some(turbo_json_loader),
-            is_single,
-            workspaces: Vec::new(),
-            tasks: Vec::new(),
-            root_enabled_tasks: HashSet::new(),
-            tasks_only: false,
-            add_all_tasks: false,
-            should_validate_engine: true,
-            validator: Validator::new(),
-        }
-    }
-
-    pub fn with_future_flags(mut self, future_flags: FutureFlags) -> Self {
-        self.validator = self.validator.with_future_flags(future_flags);
-        self
-    }
-
-    pub fn with_tasks_only(mut self, tasks_only: bool) -> Self {
-        self.tasks_only = tasks_only;
-        self
-    }
-
-    pub fn with_root_tasks<I: IntoIterator<Item = TaskName<'static>>>(mut self, tasks: I) -> Self {
-        self.root_enabled_tasks = tasks
-            .into_iter()
-            .filter(|name| name.package() == Some(ROOT_PKG_NAME))
-            .map(|name| name.into_non_workspace_task())
-            .collect();
-        self
-    }
-
-    pub fn with_workspaces(mut self, workspaces: Vec<PackageName>) -> Self {
-        self.workspaces = workspaces;
-        self
-    }
-
-    pub fn with_tasks<I: IntoIterator<Item = Spanned<TaskName<'static>>>>(
-        mut self,
-        tasks: I,
-    ) -> Self {
-        self.tasks = tasks.into_iter().collect();
-        self
-    }
-
-    /// If set, we will include all tasks in the graph, even if they are not
-    /// specified
-    pub fn add_all_tasks(mut self) -> Self {
-        self.add_all_tasks = true;
-        self
-    }
-
-    pub fn do_not_validate_engine(mut self) -> Self {
-        self.should_validate_engine = false;
-        self
-    }
-
-    // Returns the set of allowed tasks that can be run if --only is used
-    // The set is exactly the product of the packages in filter and tasks specified
-    // by CLI
-    fn allowed_tasks(&self) -> Option<HashSet<TaskId<'static>>> {
-        if self.tasks_only {
-            Some(
-                self.workspaces
-                    .iter()
-                    .cartesian_product(self.tasks.iter())
-                    .map(|(package, task_name)| {
-                        task_name
-                            .task_id()
-                            .unwrap_or(TaskId::new(package.as_ref(), task_name.task()))
-                            .into_owned()
-                    })
-                    .collect(),
-            )
-        } else {
-            None
-        }
-    }
-
-    pub fn build(mut self) -> Result<super::Engine, Error> {
-        // If there are no affected packages, we don't need to go through all this work
-        // we can just exit early.
-        // TODO(mehulkar): but we still need to validate bad task names?
-        if self.workspaces.is_empty() {
-            return Ok(Engine::default().seal());
-        }
-
-        let turbo_json_loader = self
-            .turbo_json_loader
-            .take()
-            .expect("engine builder cannot be constructed without TurboJsonLoader");
-        let mut missing_tasks: HashMap<&TaskName<'_>, Spanned<()>> =
-            HashMap::from_iter(self.tasks.iter().map(|spanned| spanned.as_ref().split()));
-        let mut traversal_queue = VecDeque::with_capacity(1);
-        let tasks: Vec<Spanned<TaskName<'static>>> = if self.add_all_tasks {
-            let mut tasks_set = HashSet::new();
-
-            // Collect tasks from root and its extends chain
-            let root_tasks =
-                TaskInheritanceResolver::new(turbo_json_loader).resolve(&PackageName::Root)?;
-            tasks_set.extend(root_tasks);
-
-            // Collect tasks from each workspace and its extends chain
-            for workspace in self.workspaces.iter() {
-                let workspace_tasks =
-                    TaskInheritanceResolver::new(turbo_json_loader).resolve(workspace)?;
-                tasks_set.extend(workspace_tasks);
-            }
-
-            tasks_set.into_iter().map(Spanned::new).collect()
-        } else {
-            self.tasks.clone()
-        };
-
-        for (workspace, task) in self.workspaces.iter().cartesian_product(tasks.iter()) {
-            let task_id = task
-                .task_id()
-                .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
-
-            if Self::has_task_definition_in_run(turbo_json_loader, workspace, task, &task_id)? {
-                missing_tasks.remove(task.as_inner());
-
-                // Even if a task definition was found, we _only_ want to add it as an entry
-                // point to the task graph (i.e. the traversalQueue), if
-                // it's:
-                // - A task from the non-root workspace (i.e. tasks from every other workspace)
-                // - A task that we *know* is rootEnabled task (in which case, the root
-                //   workspace is acceptable)
-                if !matches!(workspace, PackageName::Root) || self.root_enabled_tasks.contains(task)
-                {
-                    let task_id = task.to(task_id);
-                    traversal_queue.push_back(task_id);
-                }
-            }
-        }
-
-        {
-            // We can encounter IO errors trying to load turbo.jsons which prevents using
-            // `retain` in the standard way. Instead we store the possible error
-            // outside of the loop and short circuit checks if we've encountered an error.
-            let mut error = None;
-            missing_tasks.retain(|task_name, _| {
-                // If we've already encountered an error skip checking the rest.
-                if error.is_some() {
-                    return true;
-                }
-                match Self::has_task_definition_in_repo(
-                    turbo_json_loader,
-                    self.package_graph,
-                    task_name,
-                ) {
-                    Ok(has_defn) => !has_defn,
-                    Err(e) => {
-                        error.get_or_insert(e);
-                        true
-                    }
-                }
-            });
-            if let Some(err) = error {
-                return Err(err);
-            }
-        }
-
-        if !missing_tasks.is_empty() {
-            let missing_pkgs: HashMap<_, _> = missing_tasks
-                .iter()
-                .filter_map(|(task, _)| {
-                    let pkg = task.package()?;
-                    let missing_pkg = self
-                        .package_graph
-                        .package_info(&PackageName::from(pkg))
-                        .is_none();
-                    missing_pkg.then(|| (task.to_string(), pkg.to_string()))
-                })
-                .collect();
-            let mut missing_tasks = missing_tasks
-                .into_iter()
-                .map(|(task_name, span)| (task_name.to_string(), span))
-                .collect::<Vec<_>>();
-            // We sort the tasks mostly to keep it deterministic for our tests
-            missing_tasks.sort_by(|a, b| a.0.cmp(&b.0));
-            let errors = missing_tasks
-                .into_iter()
-                .map(|(name, span)| {
-                    if let Some(pkg) = missing_pkgs.get(&name) {
-                        MissingTaskError::MissingPackage { name: pkg.clone() }
-                    } else {
-                        let (span, text) = span.span_and_text("turbo.json");
-                        MissingTaskError::MissingTaskDefinition { name, span, text }
-                    }
-                })
-                .collect();
-
-            return Err(Error::MissingTasks(errors));
-        }
-
-        let allowed_tasks = self.allowed_tasks();
-
-        let mut visited = HashSet::new();
-        let mut engine = Engine::default();
-
-        while let Some(task_id) = traversal_queue.pop_front() {
-            {
-                let (task_id, span) = task_id.clone().split();
-                engine.add_task_location(task_id.into_owned(), span);
-            }
-
-            // For root tasks, verify they are either explicitly enabled OR (when using
-            // add_all_tasks mode like devtools) have a definition in root turbo.json.
-            // Tasks defined without the //#  prefix (like "transit") in root turbo.json
-            // are valid root tasks when referenced as dependencies in add_all_tasks mode.
-            if task_id.package() == ROOT_PKG_NAME
-                && !self
-                    .root_enabled_tasks
-                    .contains(&task_id.as_non_workspace_task_name())
-            {
-                // In add_all_tasks mode (devtools), allow root tasks that have a definition
-                // in turbo.json even if not explicitly in root_enabled_tasks
-                let should_allow = if self.add_all_tasks {
-                    let task_name: TaskName<'static> =
-                        TaskName::from(task_id.task().to_string()).into_owned();
-                    let task_id_owned = task_id.as_inner().clone().into_owned();
-                    Self::has_task_definition_in_run(
-                        turbo_json_loader,
-                        &PackageName::Root,
-                        &task_name,
-                        &task_id_owned,
-                    )?
-                } else {
-                    false
-                };
-
-                if !should_allow {
-                    let (span, text) = task_id.span_and_text("turbo.json");
-                    return Err(Error::MissingRootTaskInTurboJson(Box::new(
-                        MissingRootTaskInTurboJsonError {
-                            span,
-                            text,
-                            task_id: task_id.to_string(),
-                        },
-                    )));
-                }
-            }
-
-            validate_task_name(task_id.to(task_id.task()))?;
-
-            if task_id.package() != ROOT_PKG_NAME
-                && self
-                    .package_graph
-                    .package_json(&PackageName::from(task_id.package()))
-                    .is_none()
-            {
-                // If we have a pkg it should be in PackageGraph.
-                // If we're hitting this error something has gone wrong earlier when building
-                // PackageGraph or the package really doesn't exist and
-                // turbo.json is misconfigured.
-                let (span, text) = task_id.span_and_text("turbo.json");
-                return Err(Error::MissingPackageFromTask(Box::new(
-                    MissingPackageFromTaskError {
-                        span,
-                        text,
-                        package: task_id.package().to_string(),
-                        task_id: task_id.to_string(),
-                    },
-                )));
-            }
-
-            let task_definition = self.task_definition(
-                turbo_json_loader,
-                &task_id,
-                &task_id.as_non_workspace_task_name(),
-            )?;
-
-            // Skip this iteration of the loop if we've already seen this taskID
-            if visited.contains(task_id.as_inner()) {
-                continue;
-            }
-
-            visited.insert(task_id.as_inner().clone());
-
-            // Note that the Go code has a whole if/else statement for putting stuff into
-            // deps or calling e.AddDep the bool is cannot be true so we skip to
-            // just doing deps
-            let deps = task_definition
-                .task_dependencies
-                .iter()
-                .map(|spanned| spanned.as_ref().split())
-                .collect::<HashMap<_, _>>();
-            let topo_deps = task_definition
-                .topological_dependencies
-                .iter()
-                .map(|spanned| spanned.as_ref().split())
-                .collect::<HashMap<_, _>>();
-
-            // Don't ask why, but for some reason we refer to the source as "to"
-            // and the target node as "from"
-            let to_task_id = task_id.as_inner().clone().into_owned();
-            let to_task_index = engine.get_index(&to_task_id);
-
-            let dep_pkgs = self
-                .package_graph
-                .immediate_dependencies(&PackageNode::Workspace(to_task_id.package().into()));
-
-            let mut has_deps = false;
-            let mut has_topo_deps = false;
-
-            topo_deps
-                .iter()
-                .cartesian_product(dep_pkgs.iter().flatten())
-                .for_each(|((from, span), dependency_workspace)| {
-                    // We don't need to add an edge from the root node if we're in this branch
-                    if let PackageNode::Workspace(dependency_workspace) = dependency_workspace {
-                        let from_task_id = TaskId::from_graph(dependency_workspace, from);
-                        if let Some(allowed_tasks) = &allowed_tasks {
-                            if !allowed_tasks.contains(&from_task_id) {
-                                return;
-                            }
-                        }
-                        let from_task_index = engine.get_index(&from_task_id);
-                        has_topo_deps = true;
-                        engine
-                            .task_graph_mut()
-                            .add_edge(to_task_index, from_task_index, ());
-                        let from_task_id = span.to(from_task_id);
-                        traversal_queue.push_back(from_task_id);
-                    }
-                });
-
-            for (sibling, span) in task_definition
-                .with
-                .iter()
-                .flatten()
-                .map(|s| s.as_ref().split())
-            {
-                let sibling_task_id = sibling
-                    .task_id()
-                    .unwrap_or_else(|| TaskId::new(to_task_id.package(), sibling.task()))
-                    .into_owned();
-                traversal_queue.push_back(span.to(sibling_task_id));
-            }
-
-            for (dep, span) in deps {
-                let from_task_id = dep
-                    .task_id()
-                    .unwrap_or_else(|| TaskId::new(to_task_id.package(), dep.task()))
-                    .into_owned();
-                if let Some(allowed_tasks) = &allowed_tasks {
-                    if !allowed_tasks.contains(&from_task_id) {
-                        continue;
-                    }
-                }
-                has_deps = true;
-                let from_task_index = engine.get_index(&from_task_id);
-                engine
-                    .task_graph_mut()
-                    .add_edge(to_task_index, from_task_index, ());
-                let from_task_id = span.to(from_task_id);
-                traversal_queue.push_back(from_task_id);
-            }
-
-            engine.add_definition(task_id.as_inner().clone().into_owned(), task_definition);
-            if !has_deps && !has_topo_deps {
-                engine.connect_to_root(&to_task_id);
-            }
-        }
-
-        graph::validate_graph(engine.task_graph_mut())?;
-
-        Ok(engine.seal())
-    }
-
-    // Helper methods used when building the engine
-    /// Checks if there's a task definition somewhere in the repository
-    fn has_task_definition_in_repo(
-        loader: &TurboJsonLoader,
-        package_graph: &PackageGraph,
-        task_name: &TaskName<'static>,
-    ) -> Result<bool, Error> {
-        for (package, _) in package_graph.packages() {
-            let task_id = task_name
-                .task_id()
-                .unwrap_or_else(|| TaskId::new(package.as_str(), task_name.task()));
-            if Self::has_task_definition_in_run(loader, package, task_name, &task_id)? {
-                return Ok(true);
-            }
-        }
-        Ok(false)
-    }
-
-    /// Checks if there's a task definition in the current run
-    fn has_task_definition_in_run(
-        loader: &TurboJsonLoader,
-        workspace: &PackageName,
-        task_name: &TaskName<'static>,
-        task_id: &TaskId,
-    ) -> Result<bool, Error> {
-        let result = Self::has_task_definition_in_run_inner(
-            loader,
-            workspace,
-            task_name,
-            task_id,
-            &mut HashSet::new(),
-        )?;
-        Ok(result.has_definition)
-    }
-
-    fn has_task_definition_in_run_inner(
-        loader: &TurboJsonLoader,
-        workspace: &PackageName,
-        task_name: &TaskName<'static>,
-        task_id: &TaskId,
-        visited: &mut HashSet<PackageName>,
-    ) -> Result<TaskDefinitionResult, Error> {
-        // Avoid infinite loops from cyclic extends
-        if visited.contains(workspace) {
-            return Ok(TaskDefinitionResult::not_found());
-        }
-        visited.insert(workspace.clone());
-
-        let turbo_json = loader.load(workspace).map_or_else(
-            |err| {
-                if err.is_no_turbo_json() && !matches!(workspace, PackageName::Root) {
-                    Ok(None)
-                } else {
-                    Err(err)
-                }
-            },
-            |turbo_json| Ok(Some(turbo_json)),
-        )?;
-
-        let Some(turbo_json) = turbo_json else {
-            // If there was no turbo.json in the workspace, fallback to the root turbo.json
-            return Self::has_task_definition_in_run_inner(
-                loader,
-                &PackageName::Root,
-                task_name,
-                task_id,
-                visited,
-            );
-        };
-
-        let task_id_as_name = task_id.as_task_name();
-
-        // Helper to check task definition status based on extends configuration
-        let check_task_def = |task_def: &RawTaskDefinition| -> TaskDefinitionResult {
-            let has_extends_false = task_def
-                .extends
-                .as_ref()
-                .map(|e| !*e.as_inner())
-                .unwrap_or(false);
-
-            if has_extends_false && !task_def.has_config_beyond_extends() {
-                // Task is explicitly excluded via `extends: false` with no config
-                TaskDefinitionResult::excluded()
-            } else {
-                // Task exists (either with `extends: false` + config, or normal definition)
-                TaskDefinitionResult::found()
-            }
-        };
-
-        // Check if this package's turbo.json has the task defined under various key
-        // formats
-        let base_task_name = TaskName::from(task_name.task());
-        let check_base_task = matches!(workspace, PackageName::Root)
-            || workspace == &PackageName::from(task_id.package());
-
-        // Try task keys in order of specificity: task_id, task_name, base_task_name
-        let task_def = turbo_json
-            .tasks
-            .get(&task_id_as_name)
-            .or_else(|| turbo_json.tasks.get(task_name))
-            .or_else(|| {
-                if check_base_task {
-                    turbo_json.tasks.get(&base_task_name)
-                } else {
-                    None
-                }
-            });
-
-        if let Some(task_def) = task_def {
-            return Ok(check_task_def(task_def));
-        }
-
-        // Check the extends chain for the task definition
-        // Track if any package in the chain excluded this task
-        for extend in turbo_json.extends.as_inner().iter() {
-            let extend_package = PackageName::from(extend.as_str());
-            let result = Self::has_task_definition_in_run_inner(
-                loader,
-                &extend_package,
-                task_name,
-                task_id,
-                visited,
-            )?;
-            // If any package in the chain excluded this task, propagate that exclusion
-            if result.is_excluded {
-                return Ok(TaskDefinitionResult::excluded());
-            }
-            if result.has_definition {
-                return Ok(TaskDefinitionResult::found());
-            }
-        }
-
-        // This fallback only applies when there's no explicit `extends` field.
-        // If `extends` is present (even if it only contains non-root packages),
-        // we don't implicitly fall back to root since the validator ensures
-        // the extends chain will eventually reach root.
-        if turbo_json.extends.is_empty() && !matches!(workspace, PackageName::Root) {
-            return Self::has_task_definition_in_run_inner(
-                loader,
-                &PackageName::Root,
-                task_name,
-                task_id,
-                visited,
-            );
-        }
-
-        Ok(TaskDefinitionResult::not_found())
-    }
-
-    /// Collects all task names from a turbo.json and its extends chain.
-    ///
-    /// This is a convenience wrapper around `TaskInheritanceResolver` that
-    /// maintains the original API for compatibility with existing code and
-    /// tests.
-    #[cfg(test)]
-    fn collect_tasks_from_extends_chain(
-        loader: &TurboJsonLoader,
-        workspace: &PackageName,
-        tasks: &mut HashSet<TaskName<'static>>,
-        _visited: &mut HashSet<PackageName>,
-    ) -> Result<(), Error> {
-        let resolved_tasks = TaskInheritanceResolver::new(loader).resolve(workspace)?;
-        tasks.extend(resolved_tasks);
-        Ok(())
-    }
-
-    fn task_definition(
-        &self,
-        turbo_json_loader: &TurboJsonLoader,
-        task_id: &Spanned<TaskId>,
-        task_name: &TaskName,
-    ) -> Result<TaskDefinition, Error> {
-        let processed_task_definition = ProcessedTaskDefinition::from_iter(
-            self.task_definition_chain(turbo_json_loader, task_id, task_name)?,
-        );
-        let path_to_root = self.path_to_root(task_id.as_inner())?;
-        Ok(TaskDefinition::from_processed(
-            processed_task_definition,
-            &path_to_root,
-        )?)
-    }
-
-    fn task_definition_chain(
-        &self,
-        turbo_json_loader: &TurboJsonLoader,
-        task_id: &Spanned<TaskId>,
-        task_name: &TaskName,
-    ) -> Result<Vec<ProcessedTaskDefinition>, Error> {
-        let package_name = PackageName::from(task_id.package());
-        let turbo_json_chain = self.turbo_json_chain(turbo_json_loader, &package_name)?;
-        let mut task_definitions = Vec::new();
-
-        // Find the first package in the chain (iterating in reverse from leaf to root)
-        // that has `extends: false` for this task. This stops inheritance from earlier
-        // packages.
-        let mut extends_false_index: Option<usize> = None;
-        for (index, turbo_json) in turbo_json_chain.iter().enumerate().rev() {
-            if let Some(task_def) = turbo_json.tasks.get(task_name) {
-                if task_def
-                    .extends
-                    .as_ref()
-                    .map(|e| !*e.as_inner())
-                    .unwrap_or(false)
-                {
-                    // Found `extends: false` for this task in this package
-                    extends_false_index = Some(index);
-                    break;
-                }
-            }
-        }
-
-        // If we found extends: false, only process from that point onwards
-        if let Some(index) = extends_false_index {
-            if let Some(turbo_json) = turbo_json_chain.get(index) {
-                if let Some(local_def) = turbo_json.task(task_id, task_name)? {
-                    if local_def.has_config_beyond_extends() {
-                        task_definitions.push(local_def);
-                    }
-                }
-            }
-            // Process any packages after this one (towards the leaf)
-            for turbo_json in turbo_json_chain.iter().skip(index + 1) {
-                if let Some(workspace_def) = turbo_json.task(task_id, task_name)? {
-                    task_definitions.push(workspace_def);
-                }
-            }
-            return Ok(task_definitions);
-        }
-
-        // Normal inheritance path
-        let mut turbo_json_chain = turbo_json_chain.into_iter();
-
-        if let Some(root_definition) = turbo_json_chain
-            .next()
-            .expect("root turbo.json is always in chain")
-            .task(task_id, task_name)?
-        {
-            task_definitions.push(root_definition)
-        }
-
-        if self.is_single {
-            return match task_definitions.is_empty() {
-                true => {
-                    let (span, text) = task_id.span_and_text("turbo.json");
-                    Err(Error::MissingRootTaskInTurboJson(Box::new(
-                        MissingRootTaskInTurboJsonError {
-                            span,
-                            text,
-                            task_id: task_id.to_string(),
-                        },
-                    )))
-                }
-                false => Ok(task_definitions),
-            };
-        }
-
-        for turbo_json in turbo_json_chain {
-            if let Some(workspace_def) = turbo_json.task(task_id, task_name)? {
-                task_definitions.push(workspace_def);
-            }
-        }
-
-        if task_definitions.is_empty() && self.should_validate_engine {
-            let (span, text) = task_id.span_and_text("turbo.json");
-            return Err(Error::MissingPackageTask(Box::new(
-                MissingPackageTaskError {
-                    span,
-                    text,
-                    task_id: task_id.to_string(),
-                    task_name: task_name.to_string(),
-                },
-            )));
-        }
-
-        Ok(task_definitions)
-    }
-
-    // Provide the chain of turbo.json's to load to fully resolve all extends for a
-    // package turbo.json.
-    fn turbo_json_chain<'b>(
-        &self,
-        turbo_json_loader: &'b TurboJsonLoader,
-        package_name: &PackageName,
-    ) -> Result<Vec<&'b TurboJson>, Error> {
-        let validator = &self.validator;
-        let mut turbo_jsons = Vec::with_capacity(2);
-
-        enum ReadReq {
-            // An inferred check we perform for each package to see if there is a package specific
-            // turbo.json
-            Infer(PackageName),
-            // A specifically requested read from a package name being present in `extends`
-            Request(Spanned<PackageName>),
-        }
-
-        impl ReadReq {
-            fn package_name(&self) -> &PackageName {
-                match self {
-                    ReadReq::Infer(package_name) => package_name,
-                    ReadReq::Request(package_name) => package_name.as_inner(),
-                }
-            }
-
-            fn required(&self) -> Option<(Option<SourceSpan>, NamedSource<String>)> {
-                match self {
-                    ReadReq::Infer(_) => None,
-                    ReadReq::Request(spanned) => Some(spanned.span_and_text("turbo.json")),
-                }
-            }
-        }
-
-        let mut read_stack = vec![(ReadReq::Infer(package_name.clone()), vec![])];
-        let mut visited = std::collections::HashSet::new();
-
-        while let Some((read_req, mut path)) = read_stack.pop() {
-            let package_name = read_req.package_name();
-
-            // Check for cycle by seeing if this package is already in the current path
-            if let Some(cycle_index) = path.iter().position(|p: &PackageName| p == package_name) {
-                // Found a cycle - build the cycle portion for error
-                let mut cycle = path[cycle_index..]
-                    .iter()
-                    .map(|p| p.to_string())
-                    .collect::<Vec<_>>();
-                cycle.push(package_name.to_string());
-
-                let (span, text) = read_req
-                    .required()
-                    .unwrap_or_else(|| (None, NamedSource::new("turbo.json", String::new())));
-
-                return Err(Error::CyclicExtends(Box::new(CyclicExtends {
-                    cycle,
-                    span,
-                    text,
-                })));
-            }
-
-            // Skip if we've already fully processed this package
-            if visited.contains(package_name) {
-                continue;
-            }
-
-            let turbo_json = turbo_json_loader
-                .load(package_name)
-                .map(Some)
-                .or_else(|err| {
-                    if let Some((span, text)) = read_req.required() {
-                        if err.is_no_turbo_json() {
-                            Err(Error::MissingTurboJsonExtends(Box::new(
-                                MissingTurboJsonExtends {
-                                    package_name: read_req.package_name().to_string(),
-                                    span,
-                                    text,
-                                },
-                            )))
-                        } else {
-                            Err(err.into())
-                        }
-                    } else if err.is_no_turbo_json() {
-                        Ok(None)
-                    } else {
-                        Err(err.into())
-                    }
-                })?;
-            if let Some(turbo_json) = turbo_json {
-                Error::from_validation(
-                    validator
-                        .validate_turbo_json(package_name, turbo_json)
-                        .into_iter()
-                        .map(config::Error::from)
-                        .collect(),
-                )?;
-                turbo_jsons.push(turbo_json);
-                visited.insert(package_name.clone());
-
-                // Add current package to path for cycle detection
-                path.push(package_name.clone());
-
-                // Add the new turbo.json we are extending from
-                let (extends, span) = turbo_json.extends.clone().split();
-                for extend_package in extends {
-                    let extend_package_name = PackageName::from(extend_package);
-                    read_stack.push((
-                        ReadReq::Request(span.clone().to(extend_package_name)),
-                        path.clone(),
-                    ));
-                }
-            } else if turbo_jsons.is_empty() {
-                // If there is no package turbo.json extend from root by default
-                read_stack.push((ReadReq::Infer(PackageName::Root), path));
-            }
-        }
-
-        Ok(turbo_jsons.into_iter().rev().collect())
-    }
-
-    // Returns that path from a task's package directory to the repo root
-    fn path_to_root(&self, task_id: &TaskId) -> Result<RelativeUnixPathBuf, Error> {
-        let package_name = PackageName::from(task_id.package());
-        let pkg_path = self
-            .package_graph
-            .package_dir(&package_name)
-            .ok_or_else(|| Error::MissingPackageJson {
-                workspace: package_name,
-            })?;
-        Ok(AnchoredSystemPathBuf::relative_path_between(
-            &self.repo_root.resolve(pkg_path),
-            self.repo_root,
-        )
-        .to_unix())
-    }
-}
-
-impl Error {
-    fn is_missing_turbo_json(&self) -> bool {
-        matches!(self, Self::Config(err) if err.is_no_turbo_json())
-    }
-
-    fn from_validation(errors: Vec<config::Error>) -> Result<(), Self> {
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(Error::Validation { errors })
-        }
-    }
-}
-
-// If/when we decide to be stricter about task names,
-// we can expand the patterns here.
-const INVALID_TOKENS: &[&str] = &["$colon$"];
-
-fn validate_task_name(task: Spanned<&str>) -> Result<(), Error> {
-    INVALID_TOKENS
-        .iter()
-        .find(|token| task.contains(**token))
-        .map(|found_token| {
-            let (span, text) = task.span_and_text("turbo.json");
-            Err(Error::InvalidTaskName(Box::new(InvalidTaskNameError {
-                span,
-                text,
-                task_name: task.to_string(),
-                reason: format!("task contains invalid string '{found_token}'"),
-            })))
-        })
-        .unwrap_or(Ok(()))
-}
+//! Engine builder tests for turborepo-lib.
+//!
+//! The actual EngineBuilder implementation lives in turborepo-engine.
+//! This module contains integration tests that use turborepo-lib specific
+//! types.
 
 #[cfg(test)]
 mod test {
-    use std::assert_matches::assert_matches;
+    use std::{
+        assert_matches::assert_matches,
+        collections::{HashMap, HashSet},
+    };
 
     use insta::{assert_json_snapshot, assert_snapshot};
     use pretty_assertions::assert_eq;
@@ -1030,15 +17,23 @@ mod test {
     use tempfile::TempDir;
     use test_case::test_case;
     use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_engine::{BuilderError, CyclicExtends, EngineBuilder, TaskInheritanceResolver};
+    use turborepo_errors::Spanned;
     use turborepo_lockfiles::Lockfile;
     use turborepo_repository::{
-        discovery::PackageDiscovery, package_json::PackageJson, package_manager::PackageManager,
+        discovery::PackageDiscovery,
+        package_graph::{PackageGraph, PackageName},
+        package_json::PackageJson,
+        package_manager::PackageManager,
     };
+    use turborepo_task_id::{TaskId, TaskName};
+    use turborepo_turbo_json::FutureFlags;
 
-    use super::*;
     use crate::{
         engine::TaskNode,
-        turbo_json::{RawPackageTurboJson, RawRootTurboJson, RawTurboJson, TurboJson},
+        turbo_json::{
+            RawPackageTurboJson, RawRootTurboJson, RawTurboJson, TurboJson, TurboJsonLoader,
+        },
     };
 
     // Only used to prevent package graph construction from attempting to read
@@ -1123,7 +118,7 @@ mod test {
     }
 
     fn mock_package_graph(
-        repo_root: &AbsoluteSystemPath,
+        repo_root: &turbopath::AbsoluteSystemPath,
         jsons: HashMap<AbsoluteSystemPathBuf, PackageJson>,
     ) -> PackageGraph {
         let rt = tokio::runtime::Builder::new_current_thread()
@@ -1150,6 +145,19 @@ mod test {
             RawRootTurboJson::parse(&json_text, "").unwrap().into()
         };
         TurboJson::try_from(raw).unwrap()
+    }
+
+    /// Helper function to collect tasks from extends chain using
+    /// TaskInheritanceResolver
+    fn collect_tasks_from_extends_chain(
+        loader: &TurboJsonLoader,
+        workspace: &PackageName,
+        tasks: &mut HashSet<TaskName<'static>>,
+        _visited: &mut HashSet<PackageName>,
+    ) -> Result<(), BuilderError> {
+        let resolved_tasks = TaskInheritanceResolver::new(loader).resolve(workspace)?;
+        tasks.extend(resolved_tasks);
+        Ok(())
     }
 
     #[test_case(PackageName::Root, "build", "//#build", true ; "root task")]
@@ -1224,7 +232,9 @@ mod test {
         };
     }
 
-    fn all_dependencies(engine: &Engine) -> HashMap<TaskId<'static>, HashSet<TaskNode>> {
+    fn all_dependencies(
+        engine: &crate::engine::Engine,
+    ) -> HashMap<TaskId<'static>, HashSet<TaskNode>> {
         engine
             .task_lookup()
             .keys()
@@ -1498,7 +508,7 @@ mod test {
             .with_root_tasks(vec![TaskName::from("libA#build"), TaskName::from("build")])
             .build();
 
-        assert_matches!(engine, Err(Error::MissingRootTaskInTurboJson(_)));
+        assert_matches!(engine, Err(BuilderError::MissingRootTaskInTurboJson(_)));
     }
 
     #[test]
@@ -1582,7 +592,7 @@ mod test {
             ])
             .build();
 
-        assert_matches!(engine, Err(Error::MissingRootTaskInTurboJson(_)));
+        assert_matches!(engine, Err(BuilderError::MissingRootTaskInTurboJson(_)));
     }
 
     #[test]
@@ -1712,22 +722,8 @@ mod test {
         assert_eq!(all_dependencies(&engine), expected);
     }
 
-    #[allow(clippy::duplicated_attributes)]
-    #[test_case("build", None)]
-    #[test_case("build:prod", None)]
-    #[test_case("build$colon$prod", Some("task contains invalid string '$colon$'"))]
-    fn test_validate_task_name(task_name: &str, reason: Option<&str>) {
-        let result = validate_task_name(Spanned::new(task_name))
-            .map_err(|e| {
-                if let Error::InvalidTaskName(box InvalidTaskNameError { reason, .. }) = e {
-                    reason
-                } else {
-                    panic!("invalid error encountered {e:?}")
-                }
-            })
-            .err();
-        assert_eq!(result.as_deref(), reason);
-    }
+    // Note: test_validate_task_name has been moved to turborepo-engine crate
+    // See: crates/turborepo-engine/src/validate.rs
 
     #[test]
     fn test_run_package_task_exact() {
@@ -2043,7 +1039,7 @@ mod test {
             .build();
 
         assert!(engine_result.is_err());
-        if let Err(Error::CyclicExtends(box CyclicExtends { cycle, .. })) = engine_result {
+        if let Err(BuilderError::CyclicExtends(box CyclicExtends { cycle, .. })) = engine_result {
             // The cycle should contain root (//) since it's a self-reference
             assert!(cycle.contains(&"//".to_string()));
             // Should have at least 2 entries to show the cycle (// -> //)
@@ -2186,7 +1182,7 @@ mod test {
         // Test collect_tasks_from_extends_chain
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app"),
             &mut tasks,
@@ -2260,7 +1256,7 @@ mod test {
         // and that we still collect all reachable tasks.
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("pkg-a"),
             &mut tasks,
@@ -2368,7 +1364,7 @@ mod test {
         // Test that pkg-a can discover all tasks from the entire chain
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("pkg-a"),
             &mut tasks,
@@ -2481,7 +1477,7 @@ mod test {
         // Test that tasks are deduplicated
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app"),
             &mut tasks,
@@ -2569,7 +1565,7 @@ mod test {
         // Test collect_tasks_from_extends_chain for workspace without turbo.json
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app-without-config"),
             &mut tasks,
@@ -2657,7 +1653,7 @@ mod test {
         // Collect tasks for app
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app"),
             &mut tasks,
@@ -2722,7 +1718,7 @@ mod test {
         // Collect tasks for app - should still have build (as fresh definition)
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app"),
             &mut tasks,
@@ -2767,7 +1763,7 @@ mod test {
         // Should error because "nonexistent" is not in the extends chain
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        let result = EngineBuilder::collect_tasks_from_extends_chain(
+        let result = collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app"),
             &mut tasks,
@@ -2815,7 +1811,7 @@ mod test {
         // Should have build task (inherited normally)
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app"),
             &mut tasks,
@@ -3007,7 +2003,7 @@ mod test {
         // pkg-a should NOT see lint because exclusions propagate through extends chain
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("pkg-a"),
             &mut tasks,
@@ -3028,7 +2024,7 @@ mod test {
         // pkg-b itself should also NOT see lint
         let mut tasks_b = HashSet::new();
         let mut visited_b = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("pkg-b"),
             &mut tasks_b,
@@ -3104,7 +2100,7 @@ mod test {
         // pkg-a should see lint because it explicitly defines it
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("pkg-a"),
             &mut tasks,
@@ -3156,7 +2152,7 @@ mod test {
 
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app"),
             &mut tasks,
@@ -3239,7 +2235,7 @@ mod test {
 
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("pkg-a"),
             &mut tasks,
@@ -3316,7 +2312,7 @@ mod test {
 
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("pkg-a"),
             &mut tasks,
@@ -3686,7 +2682,7 @@ mod test {
         // Tasks should be discovered from both - deduplication happens by task name
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app"),
             &mut tasks,
@@ -3733,7 +2729,7 @@ mod test {
 
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        let result = EngineBuilder::collect_tasks_from_extends_chain(
+        let result = collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app"),
             &mut tasks,
@@ -3785,7 +2781,7 @@ mod test {
 
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app"),
             &mut tasks,
@@ -3861,7 +2857,7 @@ mod test {
         // app-with-config should have both root-build and shared-build
         let mut tasks1 = HashSet::new();
         let mut visited1 = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app-with-config"),
             &mut tasks1,
@@ -3875,7 +2871,7 @@ mod test {
         // app-without-config should fallback to root (only root-build)
         let mut tasks2 = HashSet::new();
         let mut visited2 = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app-without-config"),
             &mut tasks2,
@@ -3939,7 +2935,7 @@ mod test {
         // app1 should NOT have lint
         let mut tasks1 = HashSet::new();
         let mut visited1 = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app1"),
             &mut tasks1,
@@ -3952,7 +2948,7 @@ mod test {
         // app2 SHOULD have lint (exclusion is package-specific)
         let mut tasks2 = HashSet::new();
         let mut visited2 = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("app2"),
             &mut tasks2,
@@ -4083,7 +3079,7 @@ mod test {
         // Should handle cycle gracefully even with task exclusion
         let mut tasks = HashSet::new();
         let mut visited = HashSet::new();
-        EngineBuilder::collect_tasks_from_extends_chain(
+        collect_tasks_from_extends_chain(
             &loader,
             &PackageName::from("pkg-a"),
             &mut tasks,
