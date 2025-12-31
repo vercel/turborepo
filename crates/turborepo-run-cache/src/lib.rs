@@ -7,6 +7,12 @@
 //! - Integration with the daemon for output tracking
 //! - Task definition-aware output glob handling
 
+// Allow large error types - boxing would be a significant refactor and these
+// errors are already established patterns in the codebase
+#![allow(clippy::result_large_err)]
+// Allow dead code - some fields are stored for future use or API consistency
+#![allow(dead_code)]
+
 use std::{
     io::Write,
     sync::{Arc, Mutex},
