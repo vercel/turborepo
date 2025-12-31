@@ -1,5 +1,4 @@
 mod command;
-mod error;
 mod exec;
 mod output;
 use std::{
@@ -11,7 +10,6 @@ use std::{
 
 use console::{Style, StyledObject};
 use convert_case::{Case, Casing};
-use error::{TaskError, TaskWarning};
 use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
@@ -22,6 +20,7 @@ use tokio::sync::mpsc;
 use tracing::{debug, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
+use turborepo_engine::{TaskError, TaskWarning};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
 use turborepo_process::ProcessManager;

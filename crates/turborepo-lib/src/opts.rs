@@ -3,7 +3,7 @@ use std::backtrace;
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 // Re-export RunCacheOpts from turborepo-run-cache
@@ -11,6 +11,8 @@ pub use turborepo_run_cache::RunCacheOpts;
 use turborepo_run_summary::RunOptsInfo;
 // Re-export ScopeOpts from turborepo-scope to avoid duplication
 pub use turborepo_scope::ScopeOpts;
+// Re-export opts types from turborepo-types
+pub use turborepo_types::{APIClientOpts, RepoOpts, TuiOpts};
 use turborepo_types::{
     ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix, ResolvedLogOrder,
     ResolvedLogPrefix, TaskArgs, UIMode,
@@ -48,26 +50,6 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     Config(#[from] crate::config::Error),
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct APIClientOpts {
-    pub api_url: String,
-    pub timeout: u64,
-    pub upload_timeout: u64,
-    pub token: Option<String>,
-    pub team_id: Option<String>,
-    pub team_slug: Option<String>,
-    pub login_url: String,
-    pub preflight: bool,
-    pub sso_login_callback_port: Option<u16>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct RepoOpts {
-    pub root_turbo_json_path: AbsoluteSystemPathBuf,
-    pub allow_no_package_manager: bool,
-    pub allow_no_turbo_json: bool,
 }
 
 /// The fully resolved options for Turborepo. This is the combination of config,
@@ -505,11 +487,6 @@ impl RunOptsInfo for RunOpts {
     fn tasks(&self) -> &[String] {
         &self.tasks
     }
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub struct TuiOpts {
-    pub(crate) scrollback_length: u64,
 }
 
 impl<'a> From<OptsInputs<'a>> for TuiOpts {

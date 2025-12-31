@@ -1,3 +1,13 @@
+//! Graph visualization output for task graphs.
+//!
+//! This module provides functionality to render task graphs in various formats:
+//! - DOT format (Graphviz)
+//! - Mermaid format
+//! - HTML with embedded Viz.js
+//!
+//! The `write_graph` function orchestrates graph output based on `GraphOpts`,
+//! supporting stdout, file output, and graphviz binary execution.
+
 use std::{
     fs::OpenOptions,
     io::{self, Write},
@@ -7,11 +17,11 @@ use std::{
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_types::GraphOpts;
-use turborepo_ui::{cprintln, cwrite, cwriteln, ColorConfig, BOLD, BOLD_YELLOW_REVERSE, YELLOW};
 use which::which;
 
-use crate::{engine::Engine, spawn_child};
+use crate::{Built, Engine, TaskDefinitionInfo};
 
+/// Errors that can occur during graph visualization.
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Failed to produce graph output: {0}")]
@@ -25,12 +35,76 @@ pub enum Error {
     Graphviz(io::Error),
 }
 
-pub(crate) fn write_graph(
-    ui: ColorConfig,
+/// Trait for spawning child processes, allowing callers to provide their own
+/// implementation (e.g., for process management integration).
+pub trait ChildSpawner {
+    /// The type representing a spawned child process.
+    type Child: ChildProcess;
+
+    /// Spawn a command and return a handle to the child process.
+    fn spawn(&self, command: Command) -> Result<Self::Child, io::Error>;
+}
+
+/// Trait for interacting with a spawned child process.
+pub trait ChildProcess {
+    /// Take ownership of the child's stdin.
+    fn take_stdin(&self) -> Option<Box<dyn Write + Send>>;
+
+    /// Wait for the child process to exit.
+    fn wait(&self) -> Result<(), io::Error>;
+}
+
+/// A no-op child spawner that returns an error.
+/// Used when graphviz integration is not available.
+pub struct NoOpSpawner;
+
+impl ChildSpawner for NoOpSpawner {
+    type Child = NoOpChild;
+
+    fn spawn(&self, _command: Command) -> Result<Self::Child, io::Error> {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Child spawning not supported in this context",
+        ))
+    }
+}
+
+/// A no-op child process (never actually created).
+pub struct NoOpChild;
+
+impl ChildProcess for NoOpChild {
+    fn take_stdin(&self) -> Option<Box<dyn Write + Send>> {
+        None
+    }
+
+    fn wait(&self) -> Result<(), io::Error> {
+        Ok(())
+    }
+}
+
+/// Callback type for printing graphviz warning.
+pub type GraphvizWarningFn = Box<dyn Fn() -> Result<(), io::Error>>;
+
+/// Write the task graph to the specified output.
+///
+/// # Arguments
+/// * `graph_opts` - The output target (stdout, file, or auto-detect)
+/// * `engine` - The task engine containing the graph
+/// * `single_package` - Whether this is a single-package repository
+/// * `cwd` - The current working directory for resolving relative paths
+/// * `spawner` - A child spawner for running graphviz
+/// * `graphviz_warning` - Optional callback to print a warning when graphviz is
+///   not installed
+/// * `on_file_written` - Optional callback invoked when a file is successfully
+///   written
+pub fn write_graph<T: TaskDefinitionInfo + Clone, S: ChildSpawner>(
     graph_opts: &GraphOpts,
-    engine: &Engine,
+    engine: &Engine<Built, T>,
     single_package: bool,
     cwd: &AbsoluteSystemPath,
+    spawner: &S,
+    graphviz_warning: Option<GraphvizWarningFn>,
+    on_file_written: Option<&dyn Fn(&AbsoluteSystemPath)>,
 ) -> Result<(), Error> {
     match graph_opts {
         GraphOpts::Stdout => render_dot_graph(std::io::stdout(), engine, single_package)?,
@@ -52,31 +126,27 @@ pub(crate) fn write_graph(
                 cmd.stdin(Stdio::piped())
                     .args(["-T", extension.as_str(), "-o", filename.as_str()])
                     .current_dir(cwd);
-                let child = spawn_child(cmd).map_err(Error::Graphviz)?;
+                let child = spawner.spawn(cmd).map_err(Error::Graphviz)?;
                 let stdin = child.take_stdin().expect("graphviz should have a stdin");
                 render_dot_graph(stdin, engine, single_package)?;
                 child.wait().map_err(Error::Graphviz)?;
             } else {
-                write_graphviz_warning(ui).map_err(Error::GraphOutput)?;
+                if let Some(warning_fn) = graphviz_warning {
+                    warning_fn().map_err(Error::GraphOutput)?;
+                }
                 render_dot_graph(std::io::stdout(), engine, single_package)?;
             }
-            print!("\n✓ Generated task graph in ");
-            cprintln!(ui, BOLD, "{filename}");
+            if let Some(callback) = on_file_written {
+                callback(&filename);
+            }
         }
     }
     Ok(())
 }
 
-fn write_graphviz_warning(color_config: ColorConfig) -> Result<(), io::Error> {
-    let stderr = io::stderr();
-    cwrite!(&stderr, color_config, BOLD_YELLOW_REVERSE, " WARNING ")?;
-    cwriteln!(&stderr, color_config, YELLOW, " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn the meantime, you can use this string output with an\nonline Dot graph viewer.")?;
-    Ok(())
-}
-
-fn render_mermaid_graph(
+fn render_mermaid_graph<T: TaskDefinitionInfo + Clone>(
     filename: &AbsoluteSystemPath,
-    engine: &Engine,
+    engine: &Engine<Built, T>,
     single_package: bool,
 ) -> Result<(), Error> {
     let mut opts = OpenOptions::new();
@@ -89,9 +159,9 @@ fn render_mermaid_graph(
         .map_err(Error::GraphOutput)
 }
 
-fn render_dot_graph<W: io::Write>(
+fn render_dot_graph<W: io::Write, T: TaskDefinitionInfo + Clone>(
     writer: W,
-    engine: &Engine,
+    engine: &Engine<Built, T>,
     single_package: bool,
 ) -> Result<(), Error> {
     engine
@@ -117,9 +187,9 @@ const HTML_SUFFIX: &str = r#"
 </html>
 "#;
 
-fn render_html(
+fn render_html<T: TaskDefinitionInfo + Clone>(
     filename: &AbsoluteSystemPath,
-    engine: &Engine,
+    engine: &Engine<Built, T>,
     single_package: bool,
 ) -> Result<(), Error> {
     let mut opts = OpenOptions::new();

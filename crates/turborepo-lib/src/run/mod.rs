@@ -3,7 +3,6 @@
 pub mod builder;
 mod error;
 pub(crate) mod global_hash;
-mod graph_visualizer;
 pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub mod task_access;
@@ -12,7 +11,8 @@ pub mod watch;
 
 use std::{
     collections::{BTreeMap, HashSet},
-    io::Write,
+    io::{self, Write},
+    process::Command,
     sync::Arc,
     time::Duration,
 };
@@ -21,6 +21,7 @@ use chrono::{DateTime, Local};
 use futures::StreamExt;
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
+use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -38,8 +39,8 @@ use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
 use turborepo_ui::{
-    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
-    BOLD_GREY, GREY,
+    cprint, cprintln, cwrite, cwriteln, sender::UISender, tui, tui::TuiSender,
+    wui::sender::WebUISender, ColorConfig, BOLD, BOLD_GREY, BOLD_YELLOW_REVERSE, GREY, YELLOW,
 };
 
 pub use crate::run::error::Error;
@@ -730,12 +731,21 @@ impl Run {
         }
 
         if let Some(graph_opts) = &self.opts.run_opts.graph {
-            graph_visualizer::write_graph(
-                self.color_config,
+            let spawner = SharedChildSpawner;
+            let color_config = self.color_config;
+            let graphviz_warning: turborepo_engine::GraphvizWarningFn =
+                Box::new(move || write_graphviz_warning(color_config));
+            turborepo_engine::write_graph(
                 graph_opts,
                 &self.engine,
                 self.opts.run_opts.single_package,
                 &self.repo_root,
+                &spawner,
+                Some(graphviz_warning),
+                Some(&|filename: &AbsoluteSystemPath| {
+                    print!("\n✓ Generated task graph in ");
+                    cprintln!(color_config, BOLD, "{filename}");
+                }),
             )?;
             return Ok(0);
         }
@@ -758,4 +768,46 @@ impl RunStopper {
     pub async fn stop_tasks(&self, task_ids: &[turborepo_task_id::TaskId<'static>]) {
         self.manager.stop_tasks(task_ids).await;
     }
+}
+
+// Graph visualizer helper types and functions
+
+/// Implementation of `ChildSpawner` for graph visualizer using `SharedChild`.
+struct SharedChildSpawner;
+
+impl turborepo_engine::ChildSpawner for SharedChildSpawner {
+    type Child = SharedChildWrapper;
+
+    fn spawn(&self, command: Command) -> Result<Self::Child, io::Error> {
+        crate::spawn_child(command).map(SharedChildWrapper)
+    }
+}
+
+/// Wrapper around `Arc<SharedChild>` to implement `ChildProcess` trait.
+struct SharedChildWrapper(Arc<SharedChild>);
+
+impl turborepo_engine::ChildProcess for SharedChildWrapper {
+    fn take_stdin(&self) -> Option<Box<dyn Write + Send>> {
+        self.0
+            .take_stdin()
+            .map(|s| Box::new(s) as Box<dyn Write + Send>)
+    }
+
+    fn wait(&self) -> Result<(), io::Error> {
+        self.0.wait().map(|_| ())
+    }
+}
+
+fn write_graphviz_warning(color_config: ColorConfig) -> Result<(), io::Error> {
+    let stderr = io::stderr();
+    cwrite!(&stderr, color_config, BOLD_YELLOW_REVERSE, " WARNING ")?;
+    cwriteln!(
+        &stderr,
+        color_config,
+        YELLOW,
+        " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed \
+         on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn \
+         the meantime, you can use this string output with an\nonline Dot graph viewer."
+    )?;
+    Ok(())
 }

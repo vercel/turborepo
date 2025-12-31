@@ -20,7 +20,9 @@ use biome_deserialize_macros::Deserializable;
 use clap::ValueEnum;
 use globwalk::{GlobError, ValidatedGlob};
 use serde::{Deserialize, Serialize};
-use turbopath::{AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+};
 use turborepo_errors::Spanned;
 use turborepo_task_id::{TaskId, TaskName};
 
@@ -272,6 +274,55 @@ impl From<LogPrefix> for ResolvedLogPrefix {
 pub enum GraphOpts {
     Stdout,
     File(String),
+}
+
+/// API client configuration options.
+///
+/// Contains all settings needed to connect to the Turborepo remote cache API,
+/// including authentication, timeouts, and server URLs.
+#[derive(Debug, Clone, Serialize)]
+pub struct APIClientOpts {
+    /// Base URL for the Turborepo API
+    pub api_url: String,
+    /// Request timeout in seconds
+    pub timeout: u64,
+    /// Upload-specific timeout in seconds
+    pub upload_timeout: u64,
+    /// Authentication token (if authenticated)
+    pub token: Option<String>,
+    /// Team ID for the remote cache
+    pub team_id: Option<String>,
+    /// Team slug for the remote cache
+    pub team_slug: Option<String>,
+    /// Login URL for authentication flow
+    pub login_url: String,
+    /// Whether to use preflight requests
+    pub preflight: bool,
+    /// Port for SSO login callback
+    pub sso_login_callback_port: Option<u16>,
+}
+
+/// Repository options.
+///
+/// Contains settings that control how Turborepo interacts with the repository,
+/// including configuration file paths and package manager requirements.
+#[derive(Debug, Clone, Serialize)]
+pub struct RepoOpts {
+    /// Path to the root turbo.json configuration file
+    pub root_turbo_json_path: AbsoluteSystemPathBuf,
+    /// Allow running without a package manager
+    pub allow_no_package_manager: bool,
+    /// Allow running without a turbo.json file
+    pub allow_no_turbo_json: bool,
+}
+
+/// TUI (Terminal User Interface) options.
+///
+/// Contains settings for the terminal UI display.
+#[derive(Clone, Debug, Serialize)]
+pub struct TuiOpts {
+    /// Number of lines to keep in the scrollback buffer
+    pub scrollback_length: u64,
 }
 
 /// Projection of run options that only includes information necessary to
