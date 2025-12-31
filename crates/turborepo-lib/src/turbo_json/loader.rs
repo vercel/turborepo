@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_engine::BuilderError;
 use turborepo_errors::Spanned;
 use turborepo_fixed_map::FixedMap;
 use turborepo_repository::{
@@ -480,6 +481,13 @@ fn select_turbo_json(
         (Err(e), Ok(None)) | (Ok(None), Err(e)) => Err(e),
         // If both fail then just return error for `turbo.json`
         (Err(e), Err(_)) => Err(e),
+    }
+}
+
+// Implement the TurboJsonLoader trait from turborepo-engine
+impl turborepo_engine::TurboJsonLoader for TurboJsonLoader {
+    fn load(&self, package: &PackageName) -> Result<&TurboJson, BuilderError> {
+        TurboJsonLoader::load(self, package).map_err(BuilderError::from)
     }
 }
 

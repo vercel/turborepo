@@ -5,7 +5,7 @@ use std::{
 
 use turborepo_types::UIMode;
 
-use super::{env::truth_env_var, ConfigurationOptions, Error, ResolvedConfigurationOptions};
+use crate::{env::truth_env_var, ConfigurationOptions, Error, ResolvedConfigurationOptions};
 
 /*
 Hi! If you're new here:
@@ -31,6 +31,7 @@ struct Input {
 }
 
 impl Input {
+    #[cfg(test)]
     fn new() -> Self {
         Self::default()
     }
@@ -71,6 +72,7 @@ struct Output {
 }
 
 impl Output {
+    #[cfg(test)]
     fn new() -> Self {
         Self {
             team_id: None,

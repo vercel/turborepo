@@ -1,8 +1,8 @@
 use camino::Utf8PathBuf;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
+use turborepo_turbo_json::{RawRemoteCacheOptions, RawRootTurboJson, RawTurboJson};
 
-use super::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
-use crate::turbo_json::{RawRemoteCacheOptions, RawRootTurboJson, RawTurboJson};
+use crate::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
 
 pub struct TurboJsonReader<'a> {
     repo_root: &'a AbsoluteSystemPath,
@@ -110,7 +110,7 @@ mod test {
     use test_case::test_case;
 
     use super::*;
-    use crate::config::CONFIG_FILE;
+    use crate::CONFIG_FILE;
 
     #[test]
     fn test_reads_from_default() {

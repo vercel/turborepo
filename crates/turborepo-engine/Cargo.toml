@@ -8,6 +8,7 @@ license = "MIT"
 workspace = true
 
 [dependencies]
+convert_case = "0.6.0"
 futures = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
@@ -16,11 +17,15 @@ rand = { workspace = true, features = ["small_rng"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
+turbopath = { workspace = true }
+turborepo-config = { path = "../turborepo-config" }
 turborepo-errors = { workspace = true }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-task-id = { path = "../turborepo-task-id" }
+turborepo-turbo-json = { path = "../turborepo-turbo-json" }
 turborepo-types = { workspace = true }
 
 [dev-dependencies]
 pretty_assertions = { workspace = true }
+test-case = { workspace = true }
