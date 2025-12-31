@@ -1,5 +1,3 @@
-mod builder;
-
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;
 // Building state is used for engine construction

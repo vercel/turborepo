@@ -70,7 +70,13 @@ impl From<ValidateError> for Error {
 impl Error {
     /// Checks if the error is a missing turbo.json configuration error
     pub fn is_missing_turbo_json(&self) -> bool {
-        matches!(self, Self::Config(err) if err.is_no_turbo_json())
+        matches!(
+            self,
+            Self::Config(err) if err.is_no_turbo_json()
+        ) || matches!(
+            self,
+            Self::TurboJson(turborepo_turbo_json::Error::NoTurboJSON)
+        )
     }
 
     /// Alias for `is_missing_turbo_json` to match the naming in
