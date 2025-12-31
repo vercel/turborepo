@@ -6,13 +6,13 @@ use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
+// Re-export RunCacheOpts from turborepo-run-cache
+pub use turborepo_run_cache::RunCacheOpts;
 use turborepo_run_summary::RunOptsInfo;
 // Re-export ScopeOpts from turborepo-scope to avoid duplication
 pub use turborepo_scope::ScopeOpts;
 use turborepo_task_id::{TaskId, TaskName};
-use turborepo_types::{
-    ContinueMode, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, UIMode,
-};
+use turborepo_types::{ContinueMode, DryRunMode, EnvMode, LogOrder, LogPrefix, UIMode};
 
 use crate::{
     cli::{Command, ExecutionArgs, RunArgs},
@@ -206,11 +206,6 @@ struct OptsInputs<'a> {
     execution_args: &'a ExecutionArgs,
     config: &'a ConfigurationOptions,
     api_auth: &'a Option<APIAuth>,
-}
-
-#[derive(Clone, Copy, Debug, Default, Serialize)]
-pub struct RunCacheOpts {
-    pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
 
 impl<'a> From<OptsInputs<'a>> for RunCacheOpts {

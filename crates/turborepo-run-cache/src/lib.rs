@@ -1,3 +1,12 @@
+//! Task-aware caching for Turborepo runs
+//!
+//! This crate provides the `RunCache` and `TaskCache` types that wrap the
+//! lower-level `AsyncCache` from turborepo-cache with task-specific semantics,
+//! including:
+//! - Log file handling and output mode management
+//! - Integration with the daemon for output tracking
+//! - Task definition-aware output glob handling
+
 use std::{
     io::Write,
     sync::{Arc, Mutex},
@@ -5,6 +14,7 @@ use std::{
 };
 
 use itertools::Itertools;
+use serde::Serialize;
 use tokio::sync::oneshot;
 use tracing::{debug, error, log::warn};
 use turbopath::{
@@ -14,19 +24,24 @@ use turborepo_cache::{
     http::UploadMap, AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheSource,
 };
 use turborepo_daemon::{DaemonClient, DaemonConnector};
+use turborepo_hash::{FileHashes, TurboHash};
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
+use turborepo_types::{
+    OutputLogsMode, TaskDefinition, TaskDefinitionExt, TaskOutputs, TaskOutputsExt,
+};
 use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, ColorSelector, LogWriter, GREY};
 
-use crate::{
-    cli::OutputLogsMode,
-    hash::{FileHashes, TurboHash},
-    opts::RunCacheOpts,
-    task_graph::{TaskDefinition, TaskDefinitionExt, TaskOutputs, TaskOutputsExt},
-};
+/// Options for configuring the run cache behavior.
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct RunCacheOpts {
+    /// Override for task output logs mode
+    pub task_output_logs_override: Option<OutputLogsMode>,
+}
 
+/// Errors that can occur during cache operations.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("Failed to replay logs: {0}")]
@@ -47,6 +62,13 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
 }
 
+/// The run cache wraps an AsyncCache with task-aware semantics.
+///
+/// It manages:
+/// - Output log mode overrides
+/// - Cache read/write enable states
+/// - Warning collection for missing outputs
+/// - Color selection for task output
 pub struct RunCache {
     task_output_logs: Option<OutputLogsMode>,
     cache: AsyncCache,
@@ -146,6 +168,12 @@ impl RunCache {
     }
 }
 
+/// Cache state for a specific task execution.
+///
+/// Created by `RunCache::task_cache()`, this handles:
+/// - Checking and restoring cached outputs
+/// - Saving outputs after task execution
+/// - Log file writing and replay
 pub struct TaskCache {
     expanded_outputs: Vec<AnchoredSystemPathBuf>,
     run_cache: Arc<RunCache>,
@@ -432,6 +460,7 @@ impl TaskCache {
     }
 }
 
+/// Cache for configuration files (like task access tracing config).
 #[derive(Clone)]
 pub struct ConfigCache {
     hash: String,
@@ -518,6 +547,7 @@ impl ConfigCache {
 }
 
 // attempt to write message to writer, swallowing any errors encountered
+#[allow(dead_code)]
 fn fallible_write(mut writer: impl Write, message: &str) {
     if let Err(err) = writer.write_all(message.as_bytes()) {
         error!("cannot write to logs: {:?}", err);
