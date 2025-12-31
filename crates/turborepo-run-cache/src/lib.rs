@@ -7,12 +7,6 @@
 //! - Integration with the daemon for output tracking
 //! - Task definition-aware output glob handling
 
-// Allow large error types - boxing would be a significant refactor and these
-// errors are already established patterns in the codebase
-#![allow(clippy::result_large_err)]
-// Allow dead code - some fields are stored for future use or API consistency
-#![allow(dead_code)]
-
 use std::{
     io::Write,
     sync::{Arc, Mutex},
@@ -22,7 +16,7 @@ use std::{
 use itertools::Itertools;
 use serde::Serialize;
 use tokio::sync::oneshot;
-use tracing::{debug, error, log::warn};
+use tracing::{debug, log::warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
@@ -38,7 +32,7 @@ use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_types::{
     OutputLogsMode, TaskDefinition, TaskDefinitionExt, TaskOutputs, TaskOutputsExt,
 };
-use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, ColorSelector, LogWriter, GREY};
+use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, LogWriter, GREY};
 
 /// Options for configuring the run cache behavior.
 #[derive(Clone, Copy, Debug, Default, Serialize)]
@@ -59,7 +53,7 @@ pub enum Error {
     #[error("Invalid globwalk pattern: {0}")]
     Glob(#[from] globwalk::GlobError),
     #[error("Error with daemon: {0}")]
-    Daemon(#[from] turborepo_daemon::DaemonError),
+    Daemon(Box<turborepo_daemon::DaemonError>),
     #[error("No connection to daemon")]
     NoDaemon,
     #[error(transparent)]
@@ -68,13 +62,18 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
 }
 
+impl From<turborepo_daemon::DaemonError> for Error {
+    fn from(err: turborepo_daemon::DaemonError) -> Self {
+        Error::Daemon(Box::new(err))
+    }
+}
+
 /// The run cache wraps an AsyncCache with task-aware semantics.
 ///
 /// It manages:
 /// - Output log mode overrides
 /// - Cache read/write enable states
 /// - Warning collection for missing outputs
-/// - Color selection for task output
 pub struct RunCache {
     task_output_logs: Option<OutputLogsMode>,
     cache: AsyncCache,
@@ -82,7 +81,6 @@ pub struct RunCache {
     reads_disabled: bool,
     writes_disabled: bool,
     repo_root: AbsoluteSystemPathBuf,
-    color_selector: ColorSelector,
     daemon_client: Option<DaemonClient<DaemonConnector>>,
     ui: ColorConfig,
 }
@@ -95,13 +93,11 @@ pub trait CacheOutput {
 }
 
 impl RunCache {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         cache: AsyncCache,
         repo_root: &AbsoluteSystemPath,
         run_cache_opts: RunCacheOpts,
         cache_opts: &CacheOpts,
-        color_selector: ColorSelector,
         daemon_client: Option<DaemonClient<DaemonConnector>>,
         ui: ColorConfig,
         is_dry_run: bool,
@@ -118,7 +114,6 @@ impl RunCache {
             reads_disabled: !cache_opts.cache.remote.read && !cache_opts.cache.local.read,
             writes_disabled: !cache_opts.cache.remote.write && !cache_opts.cache.local.write,
             repo_root: repo_root.to_owned(),
-            color_selector,
             daemon_client,
             ui,
         }
@@ -549,13 +544,5 @@ impl ConfigCache {
 
         // return the hash
         Ok(FileHashes(hash_object).hash())
-    }
-}
-
-// attempt to write message to writer, swallowing any errors encountered
-#[allow(dead_code)]
-fn fallible_write(mut writer: impl Write, message: &str) {
-    if let Err(err) = writer.write_all(message.as_bytes()) {
-        error!("cannot write to logs: {:?}", err);
     }
 }

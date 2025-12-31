@@ -30,7 +30,7 @@ use turborepo_telemetry::events::{
     EventBuilder, TrackedErrors,
 };
 use turborepo_types::{DryRunMode, UIMode};
-use turborepo_ui::{ColorConfig, ColorSelector};
+use turborepo_ui::ColorConfig;
 #[cfg(feature = "daemon-package-discovery")]
 use {
     crate::run::package_discovery::DaemonPackageDiscovery,
@@ -466,14 +466,11 @@ impl RunBuilder {
             )?;
         }
 
-        let color_selector = ColorSelector::default();
-
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
             self.opts.runcache_opts,
             &self.opts.cache_opts,
-            color_selector,
             daemon.clone(),
             self.color_config,
             self.opts.run_opts.dry_run.is_some(),
