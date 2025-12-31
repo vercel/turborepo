@@ -2,7 +2,6 @@
 
 pub mod builder;
 mod error;
-pub(crate) mod global_hash;
 pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub mod task_access;
@@ -48,9 +47,11 @@ use crate::{
     engine::{Engine, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{global_hash::get_global_hash_inputs, task_access::TaskAccess},
+    run::task_access::TaskAccess,
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
+    task_hash::{
+        get_external_deps_hash, get_global_hash_inputs, get_internal_deps_hash, PackageInputsHashes,
+    },
     turbo_json::{TurboJson, TurboJsonLoader},
     DaemonClient, DaemonConnector,
 };
