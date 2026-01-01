@@ -669,3 +669,79 @@ mod task_error_tests {
         assert_eq!(warning.missing_platform_env(), &["MY_VAR".to_owned()]);
     }
 }
+
+use std::sync::{Arc, Mutex};
+
+/// A wrapper around `Arc<Mutex<Vec<TaskError>>>` that implements
+/// `TaskErrorCollector`.
+#[derive(Clone)]
+pub struct TaskErrorCollectorWrapper(pub Arc<Mutex<Vec<TaskError>>>);
+
+impl TaskErrorCollectorWrapper {
+    pub fn new() -> Self {
+        Self(Arc::new(Mutex::new(Vec::new())))
+    }
+
+    pub fn from_arc(arc: Arc<Mutex<Vec<TaskError>>>) -> Self {
+        Self(arc)
+    }
+
+    pub fn into_inner(self) -> Arc<Mutex<Vec<TaskError>>> {
+        self.0
+    }
+}
+
+impl Default for TaskErrorCollectorWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl turborepo_task_executor::TaskErrorCollector for TaskErrorCollectorWrapper {
+    fn push_spawn_error(&self, task_id: String, error: std::io::Error) {
+        self.0
+            .lock()
+            .expect("lock poisoned")
+            .push(TaskError::from_spawn(task_id, error));
+    }
+
+    fn push_execution_error(&self, task_id: String, command: String, exit_code: i32) {
+        self.0
+            .lock()
+            .expect("lock poisoned")
+            .push(TaskError::from_execution(task_id, command, exit_code));
+    }
+}
+
+/// A wrapper around `Arc<Mutex<Vec<TaskWarning>>>` that implements
+/// `TaskWarningCollector`.
+#[derive(Clone)]
+pub struct TaskWarningCollectorWrapper(pub Arc<Mutex<Vec<TaskWarning>>>);
+
+impl TaskWarningCollectorWrapper {
+    pub fn new() -> Self {
+        Self(Arc::new(Mutex::new(Vec::new())))
+    }
+
+    pub fn from_arc(arc: Arc<Mutex<Vec<TaskWarning>>>) -> Self {
+        Self(arc)
+    }
+
+    pub fn into_inner(self) -> Arc<Mutex<Vec<TaskWarning>>> {
+        self.0
+    }
+}
+
+impl Default for TaskWarningCollectorWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl turborepo_task_executor::TaskWarningCollector for TaskWarningCollectorWrapper {
+    fn push_platform_env_warning(&self, task_id: &str, missing_vars: Vec<String>) {
+        if let Some(warning) = TaskWarning::new(task_id, missing_vars) {
+            self.0.lock().expect("lock poisoned").push(warning);
+        }
+    }
+}

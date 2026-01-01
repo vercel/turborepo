@@ -7,7 +7,7 @@ pub use turborepo_engine::Building;
 pub use turborepo_engine::{BuilderError, EngineBuilder};
 // Re-export core types from turborepo-engine
 pub use turborepo_engine::{
-    Built, ExecuteError, ExecutionOptions, Message, StopExecution, TaskDefinitionInfo, TaskNode,
+    Built, ExecuteError, ExecutionOptions, Message, TaskDefinitionInfo, TaskNode,
 };
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_types::{TaskDefinition, UIMode};

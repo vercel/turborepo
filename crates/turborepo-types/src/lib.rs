@@ -51,6 +51,19 @@ impl fmt::Display for EnvMode {
     }
 }
 
+/// Signals that task execution should stop.
+///
+/// This is used to communicate back to the engine whether dependent tasks
+/// should continue or stop after a task completes or fails.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StopExecution {
+    /// Stop all tasks (used for hard failures)
+    AllTasks,
+    /// Stop only dependent tasks (used for soft failures with
+    /// continue-on-error)
+    DependentTasks,
+}
+
 /// Output log mode for task execution.
 ///
 /// Controls how task output logs are displayed and persisted:

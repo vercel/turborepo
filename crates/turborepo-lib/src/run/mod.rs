@@ -30,8 +30,7 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
-// Re-export from turborepo-run-cache for backward compatibility
-pub use turborepo_run_cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
+pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
 use turborepo_run_summary::RunTracker;
 use turborepo_scm::SCM;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
