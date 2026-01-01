@@ -19,8 +19,7 @@ use turborepo_ui::{ColorConfig, OutputWriter};
 
 use super::{
     command::{CommandFactory, MicroFrontendProxyProvider, PackageGraphCommandProvider},
-    output::TaskCacheOutput,
-    TaskOutput, Visitor,
+    TaskCacheOutput, TaskOutput, Visitor,
 };
 use crate::{
     config::UIMode,

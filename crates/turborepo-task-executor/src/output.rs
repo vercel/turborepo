@@ -1,12 +1,16 @@
+//! Output handling for task execution.
+//!
+//! This module provides types for handling task output to both the terminal
+//! and the TUI.
+
 use std::io::Write;
 
 use either::Either;
 use turbopath::AbsoluteSystemPath;
+use turborepo_run_cache::CacheOutput;
 use turborepo_ui::{
-    sender::TaskSender, tui::event::CacheResult, OutputClient, OutputWriter, PrefixedUI,
+    OutputClient, OutputWriter, PrefixedUI, sender::TaskSender, tui::event::CacheResult,
 };
-
-use crate::run::CacheOutput;
 
 /// Small wrapper over our two output types that defines a shared interface for
 /// interacting with them.
