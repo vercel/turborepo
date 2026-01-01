@@ -11,6 +11,7 @@ use turbopath::{AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
 use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_scm::SCM;
+use turborepo_task_executor::TaskAccessProvider;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
@@ -267,5 +268,25 @@ impl TaskAccess {
         }
 
         Ok(())
+    }
+}
+
+// Implement the TaskAccessProvider trait from turborepo-task-executor
+// This allows TaskAccess to be used with the generic executor infrastructure
+impl TaskAccessProvider for TaskAccess {
+    fn is_enabled(&self) -> bool {
+        TaskAccess::is_enabled(self)
+    }
+
+    fn get_env_var(&self, task_hash: &str) -> (String, AbsoluteSystemPathBuf) {
+        TaskAccess::get_env_var(self, task_hash)
+    }
+
+    fn can_cache(&self, task_hash: &str, task_id: &str) -> Option<bool> {
+        TaskAccess::can_cache(self, task_hash, task_id)
+    }
+
+    async fn save(&self) {
+        TaskAccess::save(self).await
     }
 }

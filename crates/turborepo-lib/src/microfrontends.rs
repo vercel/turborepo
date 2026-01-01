@@ -5,6 +5,7 @@ use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Error, TurborepoMfeConfig as MfeConfig, MICROFRONTENDS_PACKAGE};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_task_executor::MfeConfigProvider;
 use turborepo_task_id::{TaskId, TaskName};
 
 use crate::{config, turbo_json::TurboJson};
@@ -324,6 +325,31 @@ impl MicrofrontendsConfigs {
                 Some(path.as_str().to_string())
             })
             .collect()
+    }
+}
+
+// Implement the MfeConfigProvider trait from turborepo-task-executor
+// This allows MicrofrontendsConfigs to be used with the generic executor
+// infrastructure
+impl MfeConfigProvider for MicrofrontendsConfigs {
+    fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool {
+        MicrofrontendsConfigs::task_has_mfe_proxy(self, task_id)
+    }
+
+    fn dev_task_port(&self, task_id: &TaskId) -> Option<u16> {
+        MicrofrontendsConfigs::dev_task_port(self, task_id)
+    }
+
+    fn task_uses_turborepo_proxy(&self, task_id: &TaskId) -> bool {
+        MicrofrontendsConfigs::task_uses_turborepo_proxy(self, task_id)
+    }
+
+    fn has_dev_task<'a>(&self, task_ids: impl Iterator<Item = &'a TaskId<'static>>) -> bool {
+        MicrofrontendsConfigs::has_dev_task(self, task_ids)
+    }
+
+    fn should_use_turborepo_proxy(&self) -> bool {
+        MicrofrontendsConfigs::should_use_turborepo_proxy(self)
     }
 }
 
