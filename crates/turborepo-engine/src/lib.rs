@@ -670,10 +670,6 @@ mod task_error_tests {
     }
 }
 
-// =============================================================================
-// Collector Wrappers for turborepo-task-executor traits
-// =============================================================================
-
 use std::sync::{Arc, Mutex};
 
 /// A wrapper around `Arc<Mutex<Vec<TaskError>>>` that implements
