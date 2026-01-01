@@ -12,6 +12,8 @@ use turborepo_cache::AsyncCache;
 use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_scm::SCM;
 use turborepo_task_executor::TaskAccessProvider;
+// Re-export from turborepo-turbo-json
+pub use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
@@ -22,8 +24,6 @@ use crate::turbo_json::{RawTurboJson, RawTurboJsonExt};
 const TASK_ACCESS_ENV_KEY: &str = "TURBOREPO_TRACE_FILE";
 /// File name where the task is expected to leave a trace result
 const TASK_ACCESS_TRACE_NAME: &str = "trace.json";
-// Path to the config file that will be used to store the trace results
-pub const TASK_ACCESS_CONFIG_PATH: [&str; 2] = [".turbo", "traced-config.json"];
 /// File name where the task is expected to leave a trace result
 const TURBO_CONFIG_FILE: &str = "turbo.json";
 
