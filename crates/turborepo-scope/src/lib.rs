@@ -23,32 +23,14 @@ use std::collections::HashMap;
 pub use change_detector::{GitChangeDetector, ScopeChangeDetector};
 pub use filter::{FilterResolver, PackageInference, ResolutionError};
 pub use target_selector::{GitRange, InvalidSelectorError, TargetSelector};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turbopath::AbsoluteSystemPath;
 use turborepo_repository::{
     change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
-
-/// Options for scope resolution.
-#[derive(Debug, Clone, Default, serde::Serialize)]
-pub struct ScopeOpts {
-    /// Root for package inference (from cwd)
-    pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
-    /// Global dependencies that affect all packages
-    pub global_deps: Vec<String>,
-    /// Filter patterns from --filter flag
-    pub filter_patterns: Vec<String>,
-    /// Git range for affected detection (from_ref, to_ref)
-    pub affected_range: Option<(Option<String>, Option<String>)>,
-}
-
-impl ScopeOpts {
-    /// Get the filter patterns.
-    pub fn get_filters(&self) -> Vec<String> {
-        self.filter_patterns.clone()
-    }
-}
+// Re-export ScopeOpts for backwards compatibility
+pub use turborepo_types::ScopeOpts;
 
 /// Resolve which packages should be included in the run based on scope options.
 ///

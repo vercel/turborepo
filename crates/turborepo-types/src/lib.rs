@@ -325,6 +325,33 @@ pub struct TuiOpts {
     pub scrollback_length: u64,
 }
 
+/// Options for configuring the run cache behavior.
+#[derive(Clone, Copy, Debug, Default, Serialize)]
+pub struct RunCacheOpts {
+    /// Override for task output logs mode
+    pub task_output_logs_override: Option<OutputLogsMode>,
+}
+
+/// Options for scope resolution.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct ScopeOpts {
+    /// Root for package inference (from cwd)
+    pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
+    /// Global dependencies that affect all packages
+    pub global_deps: Vec<String>,
+    /// Filter patterns from --filter flag
+    pub filter_patterns: Vec<String>,
+    /// Git range for affected detection (from_ref, to_ref)
+    pub affected_range: Option<(Option<String>, Option<String>)>,
+}
+
+impl ScopeOpts {
+    /// Get the filter patterns.
+    pub fn get_filters(&self) -> Vec<String> {
+        self.filter_patterns.clone()
+    }
+}
+
 /// Projection of run options that only includes information necessary to
 /// compute pass through args for tasks.
 ///
@@ -950,6 +977,64 @@ pub struct HashTrackerCacheHitMetadata {
     pub remote: bool,
     /// Time saved by the cache hit in milliseconds
     pub time_saved: u64,
+}
+
+/// Trait for types that provide task definition information needed for hashing.
+///
+/// This allows task_hash to be decoupled from the full TaskDefinition type
+/// while still having access to the fields it needs for hash computation.
+///
+/// # Implementors
+/// - `TaskDefinition` (implemented below)
+pub trait TaskDefinitionHashInfo {
+    /// Returns the list of environment variable patterns for this task
+    fn env(&self) -> &[String];
+    /// Returns the pass-through environment variables
+    fn pass_through_env(&self) -> Option<&[String]>;
+    /// Returns the task inputs configuration
+    fn inputs(&self) -> &TaskInputs;
+    /// Returns the task outputs configuration
+    fn outputs(&self) -> &TaskOutputs;
+    /// Returns the hashable outputs for this task (includes log file)
+    fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs;
+}
+
+impl TaskDefinitionHashInfo for TaskDefinition {
+    fn env(&self) -> &[String] {
+        &self.env
+    }
+
+    fn pass_through_env(&self) -> Option<&[String]> {
+        self.pass_through_env.as_deref()
+    }
+
+    fn inputs(&self) -> &TaskInputs {
+        &self.inputs
+    }
+
+    fn outputs(&self) -> &TaskOutputs {
+        &self.outputs
+    }
+
+    fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs {
+        // Delegate to the canonical implementation in TaskDefinition
+        TaskDefinition::hashable_outputs(self, task_id.task())
+    }
+}
+
+/// Trait for run options needed by the task hasher.
+///
+/// This allows task_hash to be decoupled from the full RunOpts type.
+///
+/// # Implementors
+/// - `RunOpts` from `turborepo-lib`
+pub trait RunOptsHashInfo {
+    /// Whether to infer the framework for each workspace
+    fn framework_inference(&self) -> bool;
+    /// Whether this is a single-package repo (not a monorepo)
+    fn single_package(&self) -> bool;
+    /// Arguments to pass through to tasks
+    fn pass_through_args(&self) -> &[String];
 }
 
 /// Trait for global hash inputs.
