@@ -271,8 +271,6 @@ impl TaskAccess {
     }
 }
 
-// Implement the TaskAccessProvider trait from turborepo-task-executor
-// This allows TaskAccess to be used with the generic executor infrastructure
 impl TaskAccessProvider for TaskAccess {
     fn is_enabled(&self) -> bool {
         TaskAccess::is_enabled(self)
