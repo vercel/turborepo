@@ -20,7 +20,7 @@
 
 use std::{
     collections::HashMap,
-    ffi::CStr,
+    ffi::{CStr, CString},
     fmt,
     io::ErrorKind,
     os::{raw, unix::prelude::MetadataExt},
@@ -82,6 +82,7 @@ pub struct FsEventWatcher {
     runloop: Option<(cf::CFRunLoopRef, thread::JoinHandle<()>)>,
     recursive_info: HashMap<PathBuf, bool>,
     device: Option<i32>,
+    device_path: Option<PathBuf>,
 }
 
 impl fmt::Debug for FsEventWatcher {
@@ -259,6 +260,7 @@ fn translate_flags(flags: StreamFlags, precise: bool) -> Vec<Event> {
 struct StreamContextInfo {
     event_handler: Arc<Mutex<dyn EventHandler>>,
     recursive_info: HashMap<PathBuf, bool>,
+    device_path: PathBuf,
 }
 
 // Free the context when the stream created by `FSEventStreamCreate` is
@@ -285,6 +287,44 @@ unsafe extern "C" {
 // CoreFoundation false value
 const FALSE: Boolean = 0x0;
 
+/// Get the effective mount point for path manipulation purposes.
+///
+/// This uses the statfs system call to get filesystem information.
+/// If the reported mount point is not a prefix of the path (which can happen
+/// on macOS with APFS firmlinks, e.g., `/private/var` reports mount point
+/// `/System/Volumes/Data` but the path doesn't have that prefix), we fall
+/// back to `/` as the effective mount point.
+fn get_mount_point(path: &Path) -> Result<PathBuf> {
+    let c_path = CString::new(
+        path.to_str()
+            .ok_or_else(|| Error::generic("path contains invalid UTF-8"))?,
+    )
+    .map_err(|_| Error::generic("path contains null byte"))?;
+
+    let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
+
+    let result = unsafe { libc::statfs(c_path.as_ptr(), &mut stat) };
+
+    if result != 0 {
+        return Err(Error::io(std::io::Error::last_os_error()));
+    }
+
+    let mount_point = unsafe {
+        CStr::from_ptr(stat.f_mntonname.as_ptr())
+            .to_str()
+            .map_err(|_| Error::generic("mount point contains invalid UTF-8"))?
+    };
+
+    // If the path doesn't start with the reported mount point, it means
+    // the mount point is virtualized (e.g., via APFS firmlinks). In this
+    // case, use "/" as the effective mount point for path manipulation.
+    if !path.starts_with(mount_point) {
+        return Ok(PathBuf::from("/"));
+    }
+
+    Ok(PathBuf::from(mount_point))
+}
+
 impl FsEventWatcher {
     fn from_event_handler(event_handler: Arc<Mutex<dyn EventHandler>>) -> Result<Self> {
         Ok(FsEventWatcher {
@@ -300,6 +340,7 @@ impl FsEventWatcher {
             runloop: None,
             recursive_info: HashMap::new(),
             device: None,
+            device_path: None,
         })
     }
 
@@ -391,17 +432,27 @@ impl FsEventWatcher {
             Err(e) => Err(Error::io(e)),
             Ok(metadata) => Ok(metadata.dev() as i32),
         }?;
+        let canonical_path = path.to_path_buf().canonicalize()?;
 
         if self.device.is_none() {
             self.device = Some(device);
+            self.device_path = Some(get_mount_point(&canonical_path)?);
         } else if self.device != Some(device) {
             return Err(Error::generic("cannot watch multiple devices"));
         }
-        let canonical_path = path.to_path_buf().canonicalize()?;
-        let str_path = path.to_str().unwrap();
+
+        let device_path = self.device_path.as_ref().unwrap();
+        let relative_path = canonical_path.strip_prefix(device_path).map_err(|_| {
+            Error::generic(&format!(
+                "path {:?} is not under device mount point {:?}",
+                canonical_path, device_path
+            ))
+        })?;
+        let str_path = format!("/{}", relative_path.to_str().unwrap());
+
         unsafe {
             let mut err: cf::CFErrorRef = ptr::null_mut();
-            let cf_path = cf::str_path_to_cfstring_ref(str_path, &mut err);
+            let cf_path = cf::str_path_to_cfstring_ref(&str_path, &mut err);
             if cf_path.is_null() {
                 // Most likely the directory was deleted, or permissions changed,
                 // while the above code was running.
@@ -424,6 +475,10 @@ impl FsEventWatcher {
         let device = self
             .device
             .ok_or_else(|| Error::generic("no device set for stream"))?;
+        let device_path = self
+            .device_path
+            .clone()
+            .ok_or_else(|| Error::generic("no device path set for stream"))?;
 
         // We need to associate the stream context with our callback in order to
         // propagate events to the rest of the system. This will be owned by the
@@ -433,6 +488,7 @@ impl FsEventWatcher {
         let stream_context_info = Box::into_raw(Box::new(StreamContextInfo {
             event_handler: self.event_handler.clone(),
             recursive_info: self.recursive_info.clone(),
+            device_path,
         }));
 
         let stream_context = fs::FSEventStreamContext {
@@ -544,12 +600,13 @@ unsafe fn callback_impl(
     let event_paths = event_paths as *const *const libc::c_char;
     let info = info as *const StreamContextInfo;
     let event_handler = unsafe { &(*info).event_handler };
+    let device_path = unsafe { &(*info).device_path };
 
     for p in 0..num_events {
         let raw_path = unsafe { CStr::from_ptr(*event_paths.add(p)) }
             .to_str()
             .expect("Invalid UTF8 string.");
-        let path = PathBuf::from(format!("/{raw_path}"));
+        let path = device_path.join(raw_path);
 
         let flag = unsafe { *event_flags.add(p) };
         let flag = StreamFlags::from_bits(flag).unwrap_or_else(|| {
