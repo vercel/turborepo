@@ -328,9 +328,6 @@ impl MicrofrontendsConfigs {
     }
 }
 
-// Implement the MfeConfigProvider trait from turborepo-task-executor
-// This allows MicrofrontendsConfigs to be used with the generic executor
-// infrastructure
 impl MfeConfigProvider for MicrofrontendsConfigs {
     fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool {
         MicrofrontendsConfigs::task_has_mfe_proxy(self, task_id)
