@@ -55,6 +55,16 @@ pub enum StopExecution {
     DependentTasks,
 }
 
+impl turborepo_task_executor::StopExecutionProvider for StopExecution {
+    fn dependent_tasks() -> Self {
+        StopExecution::DependentTasks
+    }
+
+    fn all_tasks() -> Self {
+        StopExecution::AllTasks
+    }
+}
+
 impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
     /// Execute a task graph by sending task ids to the visitor
     /// while respecting concurrency limits.

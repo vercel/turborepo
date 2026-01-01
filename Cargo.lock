@@ -6915,6 +6915,7 @@ dependencies = [
  "turborepo-graph-utils",
  "turborepo-lockfiles",
  "turborepo-repository",
+ "turborepo-task-executor",
  "turborepo-task-id",
  "turborepo-turbo-json",
  "turborepo-types",
@@ -7493,16 +7494,25 @@ dependencies = [
 name = "turborepo-task-executor"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "console",
  "either",
  "serde",
+ "thiserror 1.0.63",
  "tokio",
+ "tracing",
  "turbopath",
+ "turborepo-cache",
  "turborepo-env",
  "turborepo-process",
+ "turborepo-repository",
  "turborepo-run-cache",
+ "turborepo-run-summary",
  "turborepo-task-id",
+ "turborepo-telemetry",
  "turborepo-types",
  "turborepo-ui",
+ "which",
 ]
 
 [[package]]
@@ -7530,6 +7540,7 @@ dependencies = [
  "turborepo-repository",
  "turborepo-run-summary",
  "turborepo-scm",
+ "turborepo-task-executor",
  "turborepo-task-id",
  "turborepo-telemetry",
  "turborepo-types",

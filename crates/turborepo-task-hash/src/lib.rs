@@ -749,6 +749,23 @@ impl HashTrackerInfo for TaskHashTracker {
     }
 }
 
+// Implement TaskHashTrackerProvider for TaskHashTracker to allow use with
+// turborepo-task-executor. The trait is defined in turborepo-task-executor
+// to enable proper dependency direction.
+impl turborepo_task_executor::TaskHashTrackerProvider for TaskHashTracker {
+    fn insert_cache_status(&self, task_id: TaskId<'static>, status: CacheHitMetadata) {
+        TaskHashTracker::insert_cache_status(self, task_id, status)
+    }
+
+    fn insert_expanded_outputs(
+        &self,
+        task_id: TaskId<'static>,
+        outputs: Vec<AnchoredSystemPathBuf>,
+    ) {
+        TaskHashTracker::insert_expanded_outputs(self, task_id, outputs)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

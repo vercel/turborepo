@@ -12,6 +12,7 @@ use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_process::{ChildExit, Command, ProcessManager};
 use turborepo_repository::package_manager::PackageManager;
 use turborepo_run_summary::TaskTracker;
+use turborepo_task_executor::{ExecOutcome, SuccessOutcome};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
 use turborepo_types::ContinueMode;
@@ -175,24 +176,7 @@ pub struct ExecContext {
     platform_env: PlatformEnv,
 }
 
-enum ExecOutcome {
-    // All operations during execution succeeded
-    Success(SuccessOutcome),
-    // An error with the task execution
-    Task {
-        exit_code: Option<i32>,
-        message: String,
-    },
-    // Task didn't execute normally due to a shutdown being initiated by another task
-    Shutdown,
-    // Task was stopped to be restarted
-    Restarted,
-}
-
-enum SuccessOutcome {
-    CacheHit,
-    Run,
-}
+// ExecOutcome and SuccessOutcome are imported from turborepo_task_executor
 
 impl ExecContext {
     pub async fn execute_dry_run(&mut self, tracker: TaskTracker<()>) {
@@ -390,7 +374,8 @@ impl ExecContext {
             .output_writer(prefixed_ui.task_writer())
             .inspect_err(|_| {
                 telemetry.track_error(TrackedErrors::FailedToCaptureOutputs);
-            })?;
+            })
+            .map_err(InternalError::Logs)?;
 
         let exit_status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
             Ok(Some(exit_status)) => exit_status,
@@ -421,7 +406,7 @@ impl ExecContext {
                 {
                     if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await {
                         error!("error caching output: {e}");
-                        return Err(e.into());
+                        return Err(InternalError::Logs(e));
                     } else {
                         // If no errors, update hash tracker with expanded outputs
                         self.hash_tracker.insert_expanded_outputs(
@@ -484,6 +469,7 @@ pub struct DryRunExecContext {
     hash_tracker: TaskHashTracker,
 }
 
+/// Internal errors that can occur during task execution.
 #[derive(Debug, thiserror::Error)]
 pub enum InternalError {
     #[error(transparent)]

@@ -13,19 +13,28 @@
 //!   RunOpts)
 //! - [`MfeConfigProvider`]: Abstraction for microfrontends configuration
 //! - [`TaskAccessProvider`]: Abstraction for task access tracing
+//! - [`TaskCacheProvider`]: Abstraction for task caching operations
+//! - [`TaskHashTrackerProvider`]: Abstraction for hash tracking
 //!
 //! This allows the executor to be tested independently and reused in different
 //! contexts.
 
 mod command;
+mod exec;
 mod output;
 
 pub use command::{CommandFactory, CommandProvider};
+pub use exec::{
+    CacheOutput, ExecOutcome, InternalError, StopExecutionProvider, SuccessOutcome,
+    TaskCacheProvider, TaskErrorProvider, TaskHashTrackerProvider, TaskWarningProvider,
+};
 pub use output::{StdWriter, TaskCacheOutput, TaskOutput};
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_task_id::TaskId;
-use turborepo_types::{ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, UIMode};
+// Re-export UIMode for use in exec module and external users
+pub use turborepo_types::UIMode;
+use turborepo_types::{ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
 
 /// Configuration for task execution.
 ///

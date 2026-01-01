@@ -11,6 +11,7 @@ turborepo-task-id = { path = "../turborepo-task-id" }
 turborepo-types = { path = "../turborepo-types" }
 
 # Cache output trait
+turborepo-cache = { path = "../turborepo-cache" }
 turborepo-run-cache = { path = "../turborepo-run-cache" }
 turborepo-ui = { path = "../turborepo-ui" }
 
@@ -18,11 +19,36 @@ turborepo-ui = { path = "../turborepo-ui" }
 turborepo-env = { workspace = true }
 turborepo-process = { workspace = true }
 
+# Run summary for task tracking
+turborepo-run-summary = { path = "../turborepo-run-summary" }
+
+# Telemetry
+turborepo-telemetry = { path = "../turborepo-telemetry" }
+
+# Repository types (for PackageManager)
+turborepo-repository = { path = "../turborepo-repository" }
+
 # Used for output types
 either = { workspace = true }
+
+# Console for styled output
+console = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+which = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true }
 
+# Tracing
+tracing = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
 # Serialization (for config)
 serde = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros"] }
