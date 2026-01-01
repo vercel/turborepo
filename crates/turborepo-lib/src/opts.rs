@@ -497,6 +497,24 @@ impl<'a> From<OptsInputs<'a>> for TuiOpts {
     }
 }
 
+// Convert RunOpts to ExecutorConfig for use with the generic task executor
+impl From<&RunOpts> for turborepo_task_executor::ExecutorConfig {
+    fn from(opts: &RunOpts) -> Self {
+        Self {
+            env_mode: opts.env_mode,
+            log_order: opts.log_order,
+            log_prefix: opts.log_prefix,
+            single_package: opts.single_package,
+            is_github_actions: opts.is_github_actions,
+            concurrency: opts.concurrency,
+            ui_mode: opts.ui_mode,
+            continue_on_error: opts.continue_on_error,
+            redirect_stderr_to_stdout: opts.should_redirect_stderr_to_stdout(),
+            framework_inference: opts.framework_inference,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use clap::Parser;
