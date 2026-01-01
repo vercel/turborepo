@@ -32,61 +32,9 @@ use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
 };
 use turborepo_types::{
-    EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, TaskDefinition,
-    TaskInputs, TaskOutputs,
+    EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
+    TaskDefinitionHashInfo, TaskInputs,
 };
-
-/// Trait for types that provide task definition information needed for hashing.
-///
-/// This allows task_hash to be decoupled from the full TaskDefinition type
-/// while still having access to the fields it needs for hash computation.
-pub trait TaskDefinitionHashInfo {
-    /// Returns the list of environment variable patterns for this task
-    fn env(&self) -> &[String];
-    /// Returns the pass-through environment variables
-    fn pass_through_env(&self) -> Option<&[String]>;
-    /// Returns the task inputs configuration
-    fn inputs(&self) -> &TaskInputs;
-    /// Returns the task outputs configuration
-    fn outputs(&self) -> &TaskOutputs;
-    /// Returns the hashable outputs for this task (includes log file)
-    fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs;
-}
-
-impl TaskDefinitionHashInfo for TaskDefinition {
-    fn env(&self) -> &[String] {
-        &self.env
-    }
-
-    fn pass_through_env(&self) -> Option<&[String]> {
-        self.pass_through_env.as_deref()
-    }
-
-    fn inputs(&self) -> &TaskInputs {
-        &self.inputs
-    }
-
-    fn outputs(&self) -> &TaskOutputs {
-        &self.outputs
-    }
-
-    fn hashable_outputs(&self, task_id: &TaskId) -> TaskOutputs {
-        // Delegate to the canonical implementation in turborepo-types
-        TaskDefinition::hashable_outputs(self, task_id.task())
-    }
-}
-
-/// Trait for run options needed by the task hasher.
-///
-/// This allows task_hash to be decoupled from the full RunOpts type.
-pub trait RunOptsHashInfo {
-    /// Whether to infer the framework for each workspace
-    fn framework_inference(&self) -> bool;
-    /// Whether this is a single-package repo (not a monorepo)
-    fn single_package(&self) -> bool;
-    /// Arguments to pass through to tasks
-    fn pass_through_args(&self) -> &[String];
-}
 
 /// Trait for daemon client operations needed for file hashing.
 pub trait DaemonFileHasher: Clone + Send {

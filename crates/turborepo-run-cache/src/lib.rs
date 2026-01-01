@@ -14,7 +14,6 @@ use std::{
 };
 
 use itertools::Itertools;
-use serde::Serialize;
 use tokio::sync::oneshot;
 use tracing::{debug, log::warn};
 use turbopath::{
@@ -29,17 +28,12 @@ use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{task::PackageTaskEventBuilder, TrackedErrors};
+// Re-export for backwards compatibility
+pub use turborepo_types::RunCacheOpts;
 use turborepo_types::{
     OutputLogsMode, TaskDefinition, TaskDefinitionExt, TaskOutputs, TaskOutputsExt,
 };
 use turborepo_ui::{color, tui::event::CacheResult, ColorConfig, LogWriter, GREY};
-
-/// Options for configuring the run cache behavior.
-#[derive(Clone, Copy, Debug, Default, Serialize)]
-pub struct RunCacheOpts {
-    /// Override for task output logs mode
-    pub task_output_logs_override: Option<OutputLogsMode>,
-}
 
 /// Errors that can occur during cache operations.
 #[derive(Debug, thiserror::Error)]
