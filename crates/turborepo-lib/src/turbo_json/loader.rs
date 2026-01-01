@@ -157,3 +157,200 @@ impl turborepo_engine::TurboJsonLoader for UnifiedTurboJsonLoader {
         UnifiedTurboJsonLoader::load(self, package).map_err(BuilderError::from)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::collections::{BTreeMap, HashSet};
+
+    use tempfile::tempdir;
+    use test_case::test_case;
+    use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
+    use turborepo_engine::TaskDefinitionFromProcessed;
+    use turborepo_errors::Spanned;
+    use turborepo_repository::package_json::PackageJson;
+    use turborepo_task_id::TaskName;
+    use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
+    use turborepo_unescape::UnescapedString;
+
+    use super::*;
+    use crate::task_graph::TaskDefinition;
+
+    #[test_case(
+        Some(r#"{ "tasks": {"//#build": {"env": ["SPECIAL_VAR"]}} }"#),
+        Some(r#"{ "tasks": {"build": {"env": ["EXPLICIT_VAR"]}} }"#),
+        TaskDefinition { env: vec!["EXPLICIT_VAR".to_string()], .. Default::default() }
+    ; "both present")]
+    #[test_case(
+        None,
+        Some(r#"{ "tasks": {"build": {"env": ["EXPLICIT_VAR"]}} }"#),
+        TaskDefinition { env: vec!["EXPLICIT_VAR".to_string()], .. Default::default() }
+    ; "no trace")]
+    #[test_case(
+        Some(r#"{ "tasks": {"//#build": {"env": ["SPECIAL_VAR"]}} }"#),
+        None,
+        TaskDefinition { env: vec!["SPECIAL_VAR".to_string()], .. Default::default() }
+    ; "no turbo.json")]
+    #[test_case(
+        None,
+        None,
+        TaskDefinition { cache: false, .. Default::default() }
+    ; "both missing")]
+    fn test_task_access_loading(
+        trace_contents: Option<&str>,
+        turbo_json_content: Option<&str>,
+        expected_root_build: TaskDefinition,
+    ) {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+        let root_turbo_json = repo_root.join_component("turbo.json");
+
+        if let Some(content) = turbo_json_content {
+            root_turbo_json
+                .create_with_contents(content.as_bytes())
+                .unwrap();
+        }
+        if let Some(content) = trace_contents {
+            let trace_path = repo_root.join_components(&TASK_ACCESS_CONFIG_PATH);
+            trace_path.ensure_dir().unwrap();
+            trace_path.create_with_contents(content.as_bytes()).unwrap();
+        }
+
+        let mut scripts = BTreeMap::new();
+        scripts.insert("build".into(), Spanned::new("echo building".into()));
+        let root_package_json = PackageJson {
+            scripts,
+            ..Default::default()
+        };
+
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+        let loader =
+            UnifiedTurboJsonLoader::task_access(reader, root_turbo_json, root_package_json);
+        let turbo_json = loader.load(&PackageName::Root).unwrap();
+        let root_build = turbo_json
+            .tasks
+            .get(&TaskName::from("//#build"))
+            .expect("root build should always exist")
+            .as_inner();
+
+        assert_eq!(
+            expected_root_build,
+            TaskDefinition::from_raw(root_build.clone(), RelativeUnixPath::new(".").unwrap())
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_no_turbo_json_with_mfe() {
+        let root_dir = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
+
+        // Create stub package info with scripts
+        let root_pkg_json = PackageJson::default();
+        let root_info = turborepo_repository::package_graph::PackageInfo {
+            package_json: root_pkg_json,
+            ..turborepo_repository::package_graph::PackageInfo::default()
+        };
+
+        let web_pkg_json = PackageJson {
+            scripts: BTreeMap::from([
+                ("dev".to_string(), Spanned::new("echo dev".to_string())),
+                ("build".to_string(), Spanned::new("echo build".to_string())),
+            ]),
+            ..PackageJson::default()
+        };
+        let web_info = turborepo_repository::package_graph::PackageInfo {
+            package_json: web_pkg_json,
+            ..turborepo_repository::package_graph::PackageInfo::default()
+        };
+
+        let docs_pkg_json = PackageJson {
+            scripts: BTreeMap::from([
+                ("dev".to_string(), Spanned::new("echo dev".to_string())),
+                ("build".to_string(), Spanned::new("echo build".to_string())),
+            ]),
+            ..PackageJson::default()
+        };
+        let docs_info = turborepo_repository::package_graph::PackageInfo {
+            package_json: docs_pkg_json,
+            ..turborepo_repository::package_graph::PackageInfo::default()
+        };
+
+        let microfrontends_configs = MicrofrontendsConfigs::from_configs(
+            HashSet::from_iter(["web", "docs"].iter().copied()),
+            vec![
+                (
+                    "web",
+                    turborepo_microfrontends::TurborepoMfeConfig::from_str(
+                        r#"{"version": "1", "applications": {"web": {}, "docs": {"routing": [{"paths": ["/docs"]}]}}}"#,
+                        "mfe.json",
+                    )
+                    .map(Some),
+                ),
+                (
+                    "docs",
+                    Err(turborepo_microfrontends::Error::ChildConfig {
+                        reference: "web".into(),
+                    }),
+                ),
+            ]
+            .into_iter(),
+            {
+                let mut deps = std::collections::HashMap::new();
+                deps.insert("web", true);
+                deps
+            },
+        )
+        .unwrap();
+
+        let reader = TurboJsonReader::new(repo_root.to_owned());
+        let loader = UnifiedTurboJsonLoader::workspace_no_turbo_json(
+            reader,
+            vec![
+                (&PackageName::Root, &root_info),
+                (&PackageName::from("web"), &web_info),
+                (&PackageName::from("docs"), &docs_info),
+            ]
+            .into_iter(),
+            microfrontends_configs,
+        );
+
+        {
+            let web_json = loader.load(&PackageName::from("web")).unwrap();
+            for task_name in ["dev", "build", "proxy"] {
+                if let Some(def) = web_json.tasks.get(&TaskName::from(task_name)) {
+                    assert_eq!(
+                        def.cache.as_ref().map(|cache| *cache.as_inner()),
+                        Some(false)
+                    );
+                    // Make sure proxy is in there
+                    if task_name == "dev" {
+                        assert_eq!(
+                            def.with.as_ref().unwrap().first().unwrap().as_inner(),
+                            &UnescapedString::from("web#proxy")
+                        )
+                    }
+                } else {
+                    panic!("didn't find {task_name}");
+                }
+            }
+        }
+
+        {
+            let docs_json = loader.load(&PackageName::from("docs")).unwrap();
+            for task_name in ["dev"] {
+                if let Some(def) = docs_json.tasks.get(&TaskName::from(task_name)) {
+                    assert_eq!(
+                        def.cache.as_ref().map(|cache| *cache.as_inner()),
+                        Some(false)
+                    );
+                    assert_eq!(
+                        def.with.as_ref().unwrap().first().unwrap().as_inner(),
+                        &UnescapedString::from("web#proxy")
+                    )
+                } else {
+                    panic!("didn't find {task_name}");
+                }
+            }
+        }
+    }
+}
