@@ -10,14 +10,14 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 use turborepo_task_id::TaskName;
+// Re-export TurboJsonReader from turborepo-turbo-json
+pub use turborepo_turbo_json::TurboJsonReader;
+use turborepo_turbo_json::{CONFIG_FILE, CONFIG_FILE_JSONC};
 
 use super::{Pipeline, RawTaskDefinition, TurboJson};
 use crate::{
-    cli::EnvMode,
-    config::{Error, CONFIG_FILE, CONFIG_FILE_JSONC},
-    microfrontends::MicrofrontendsConfigs,
+    cli::EnvMode, config::Error, microfrontends::MicrofrontendsConfigs,
     run::task_access::TASK_ACCESS_CONFIG_PATH,
-    turbo_json::FutureFlags,
 };
 
 /// Structure for loading TurboJson structures.
@@ -51,14 +51,6 @@ enum Strategy {
         package_json: PackageJson,
     },
     Noop,
-}
-
-// A helper structure configured with all settings related to reading a
-// `turbo.json` file from disk.
-#[derive(Debug, Clone)]
-pub struct TurboJsonReader {
-    repo_root: AbsoluteSystemPathBuf,
-    future_flags: FutureFlags,
 }
 
 impl TurboJsonLoader {
@@ -329,7 +321,7 @@ fn load_from_file(
     // Handle errors or success
     match result {
         // There was an error, and we don't have any chance of recovering
-        Err(e) => Err(e),
+        Err(e) => Err(Error::TurboJsonError(e)),
         Ok(None) => Err(Error::TurboJsonError(
             turborepo_turbo_json::Error::NoTurboJSON,
         )),
@@ -374,7 +366,7 @@ fn load_from_root_package_json(
         Ok(None) => TurboJson::default(),
         // some other happened, we can't recover
         Err(e) => {
-            return Err(e);
+            return Err(Error::TurboJsonError(e));
         }
     };
 
@@ -453,9 +445,9 @@ fn load_task_access_trace_turbo_json(
 // Helper for selecting the correct turbo.json read result
 fn select_turbo_json(
     turbo_json_dir_path: &AbsoluteSystemPath,
-    turbo_json: Result<Option<TurboJson>, Error>,
-    turbo_jsonc: Result<Option<TurboJson>, Error>,
-) -> Result<Option<TurboJson>, Error> {
+    turbo_json: Result<Option<TurboJson>, turborepo_turbo_json::Error>,
+    turbo_jsonc: Result<Option<TurboJson>, turborepo_turbo_json::Error>,
+) -> Result<Option<TurboJson>, turborepo_turbo_json::Error> {
     debug!(
         "path: {}, turbo_json: {:?}, turbo_jsonc: {:?}",
         turbo_json_dir_path.as_str(),
@@ -464,11 +456,9 @@ fn select_turbo_json(
     );
     match (turbo_json, turbo_jsonc) {
         // If both paths contain valid turbo.json error
-        (Ok(Some(_)), Ok(Some(_))) => Err(Error::TurboJsonError(
-            turborepo_turbo_json::Error::MultipleTurboConfigs {
-                directory: turbo_json_dir_path.to_string(),
-            },
-        )),
+        (Ok(Some(_)), Ok(Some(_))) => Err(turborepo_turbo_json::Error::MultipleTurboConfigs {
+            directory: turbo_json_dir_path.to_string(),
+        }),
         // If turbo.json is valid and turbo.jsonc is missing or invalid, use turbo.json
         (Ok(Some(turbo_json)), Ok(None)) | (Ok(Some(turbo_json)), Err(_)) => Ok(Some(turbo_json)),
         // If turbo.jsonc is valid and turbo.json is missing or invalid, use turbo.jsonc
@@ -488,37 +478,6 @@ fn select_turbo_json(
 impl turborepo_engine::TurboJsonLoader for TurboJsonLoader {
     fn load(&self, package: &PackageName) -> Result<&TurboJson, BuilderError> {
         TurboJsonLoader::load(self, package).map_err(BuilderError::from)
-    }
-}
-
-impl TurboJsonReader {
-    pub fn new(repo_root: AbsoluteSystemPathBuf) -> Self {
-        Self {
-            repo_root,
-            future_flags: Default::default(),
-        }
-    }
-
-    pub fn with_future_flags(mut self, future_flags: FutureFlags) -> Self {
-        self.future_flags = future_flags;
-        self
-    }
-
-    pub fn read(
-        &self,
-        path: &AbsoluteSystemPath,
-        is_root: bool,
-    ) -> Result<Option<TurboJson>, Error> {
-        Ok(TurboJson::read(
-            &self.repo_root,
-            path,
-            is_root,
-            self.future_flags,
-        )?)
-    }
-
-    pub fn repo_root(&self) -> &AbsoluteSystemPath {
-        &self.repo_root
     }
 }
 
