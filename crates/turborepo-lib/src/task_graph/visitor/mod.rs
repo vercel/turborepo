@@ -1,6 +1,7 @@
 mod command;
 mod exec;
-mod output;
+
+// Re-export output types from turborepo-task-executor
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -14,7 +15,6 @@ use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use output::{StdWriter, TaskOutput};
 use regex::Regex;
 use tokio::sync::mpsc;
 use tracing::{debug, warn, Span};
@@ -26,6 +26,7 @@ use turborepo_errors::TURBO_SITE;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker};
+pub use turborepo_task_executor::{StdWriter, TaskCacheOutput, TaskOutput};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,

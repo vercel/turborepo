@@ -7178,6 +7178,7 @@ dependencies = [
  "turborepo-scope",
  "turborepo-shim",
  "turborepo-signals",
+ "turborepo-task-executor",
  "turborepo-task-hash",
  "turborepo-task-id",
  "turborepo-telemetry",
@@ -7492,11 +7493,14 @@ dependencies = [
 name = "turborepo-task-executor"
 version = "0.1.0"
 dependencies = [
+ "either",
  "serde",
  "tokio",
  "turbopath",
+ "turborepo-run-cache",
  "turborepo-task-id",
  "turborepo-types",
+ "turborepo-ui",
 ]
 
 [[package]]

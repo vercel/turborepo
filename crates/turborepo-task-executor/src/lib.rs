@@ -17,8 +17,11 @@
 //! This allows the executor to be tested independently and reused in different
 //! contexts.
 
+mod output;
+
 use std::future::Future;
 
+pub use output::{StdWriter, TaskCacheOutput, TaskOutput};
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_task_id::TaskId;
