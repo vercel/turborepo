@@ -1,0 +1,17 @@
+[package]
+name = "turborepo-task-executor"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+# Foundation crates
+turbopath = { path = "../turborepo-paths" }
+turborepo-task-id = { path = "../turborepo-task-id" }
+turborepo-types = { path = "../turborepo-types" }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Serialization (for config)
+serde = { workspace = true }

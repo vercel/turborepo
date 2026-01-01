@@ -7489,6 +7489,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-task-executor"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tokio",
+ "turbopath",
+ "turborepo-task-id",
+ "turborepo-types",
+]
+
+[[package]]
 name = "turborepo-task-hash"
 version = "0.1.0"
 dependencies = [
