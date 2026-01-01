@@ -13,18 +13,31 @@
 //!   RunOpts)
 //! - [`MfeConfigProvider`]: Abstraction for microfrontends configuration
 //! - [`TaskAccessProvider`]: Abstraction for task access tracing
+//! - [`HashTrackerProvider`]: Abstraction for hash tracking
+//! - [`TaskErrorCollector`]: Abstraction for error collection
+//! - [`TaskWarningCollector`]: Abstraction for warning collection
 //!
-//! This allows the executor to be tested independently and reused in different
-//! contexts.
+//! The main execution logic is in [`TaskExecutor`], which handles:
+//! - Cache checking and restoration
+//! - Process spawning and output handling
+//! - Cache saving on success
+//! - Error and warning collection
 
 mod command;
+mod exec;
 mod output;
 
 pub use command::{CommandFactory, CommandProvider};
+pub use exec::{
+    DryRunExecutor, ExecOutcome, HashTrackerProvider, InternalError, SuccessOutcome,
+    TaskErrorCollector, TaskExecutor, TaskWarningCollector, prefixed_ui,
+};
 pub use output::{StdWriter, TaskCacheOutput, TaskOutput};
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_task_id::TaskId;
+// Re-export StopExecution from turborepo-types for convenience
+pub use turborepo_types::StopExecution;
 use turborepo_types::{ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, UIMode};
 
 /// Configuration for task execution.

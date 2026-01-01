@@ -10,13 +10,22 @@ turbopath = { path = "../turborepo-paths" }
 turborepo-task-id = { path = "../turborepo-task-id" }
 turborepo-types = { path = "../turborepo-types" }
 
-# Cache output trait
+# Cache
+turborepo-cache = { path = "../turborepo-cache" }
 turborepo-run-cache = { path = "../turborepo-run-cache" }
+
+# UI
 turborepo-ui = { path = "../turborepo-ui" }
 
 # Command execution
 turborepo-env = { workspace = true }
 turborepo-process = { workspace = true }
+
+# Run summary for TaskTracker
+turborepo-run-summary = { path = "../turborepo-run-summary" }
+
+# Telemetry
+turborepo-telemetry = { path = "../turborepo-telemetry" }
 
 # Used for output types
 either = { workspace = true }
@@ -26,3 +35,18 @@ tokio = { workspace = true }
 
 # Serialization (for config)
 serde = { workspace = true }
+
+# Console styling
+console = { workspace = true }
+
+# Error handling
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# Binary lookup
+which = { workspace = true }
