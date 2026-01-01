@@ -11,9 +11,6 @@ pub use turborepo_task_hash::{
 
 use crate::opts::RunOpts;
 
-// Note: TaskDefinitionHashInfo is now implemented for TaskDefinition
-// directly in turborepo-task-hash crate.
-
 // Implement RunOptsHashInfo for RunOpts
 impl turborepo_types::RunOptsHashInfo for RunOpts {
     fn framework_inference(&self) -> bool {
