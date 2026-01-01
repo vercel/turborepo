@@ -161,6 +161,19 @@ impl Error {
     }
 }
 
+// Conversion from LoaderError to config::Error
+// This is needed for TurboJsonLoader's generic update mechanism
+impl From<turborepo_turbo_json::LoaderError> for Error {
+    fn from(err: turborepo_turbo_json::LoaderError) -> Self {
+        match err {
+            turborepo_turbo_json::LoaderError::TurboJson(e) => Error::TurboJsonError(e),
+            turborepo_turbo_json::LoaderError::InvalidTurboJsonLoad(pkg) => {
+                Error::InvalidTurboJsonLoad(pkg)
+            }
+        }
+    }
+}
+
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
 // want to display and what fields they want to include.

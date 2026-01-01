@@ -48,7 +48,7 @@ pub mod validator {
 // Loader code stays in turborepo-lib (depends on MFE, task_access)
 use std::collections::HashMap;
 
-pub use loader::{TurboJsonLoader, TurboJsonReader};
+pub use loader::{TurboJsonReader, UnifiedTurboJsonLoader};
 // Re-export TaskDefinitionFromProcessed from turborepo-engine (used by dependent crates)
 #[allow(unused_imports)]
 pub use turborepo_engine::TaskDefinitionFromProcessed;

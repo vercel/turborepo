@@ -36,7 +36,10 @@ pub mod validator;
 
 pub use error::{Error, InvalidEnvPrefixError, ParseError, UnnecessaryPackageTaskSyntaxError};
 pub use future_flags::FutureFlags;
-pub use loader::{CONFIG_FILE, CONFIG_FILE_JSONC, TurboJsonPath, TurboJsonReader, load_from_path};
+pub use loader::{
+    CONFIG_FILE, CONFIG_FILE_JSONC, LoaderError, NoOpUpdater, TASK_ACCESS_CONFIG_PATH,
+    TurboJsonLoader, TurboJsonPath, TurboJsonReader, TurboJsonUpdater, load_from_path,
+};
 pub use parser::{BiomeParseError, parse_turbo_json};
 pub use processed::{
     ProcessedDependsOn, ProcessedEnv, ProcessedGlob, ProcessedInputs, ProcessedOutputs,
