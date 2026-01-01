@@ -712,3 +712,114 @@ fn test_steam_context_info_send_and_sync() {
     fn check_send<T: Send + Sync>() {}
     check_send::<StreamContextInfo>();
 }
+
+#[cfg(test)]
+struct TestVolume {
+    path: PathBuf,
+}
+
+#[cfg(test)]
+impl TestVolume {
+    fn new() -> Option<Self> {
+        use std::process::Command;
+
+        use tempfile::TempDir;
+
+        let temp = TempDir::with_prefix("Turbo").ok()?;
+        let name = temp.path().file_name()?.to_str()?;
+
+        // Create RAM disk (20480 sectors * 512 bytes = 10MB)
+        let output = Command::new("hdiutil")
+            .args(["attach", "-nomount", "ram://20480"])
+            .output()
+            .ok()?;
+
+        if !output.status.success() {
+            return None;
+        }
+
+        let disk = String::from_utf8_lossy(&output.stdout).trim().to_string();
+
+        let status = Command::new("diskutil")
+            .args(["erasevolume", "APFS", name, &disk])
+            .status()
+            .ok()?;
+
+        if !status.success() {
+            // Try to detach the disk if formatting failed
+            let _ = Command::new("hdiutil").args(["detach", &disk]).output();
+            return None;
+        }
+
+        let path = PathBuf::from(format!("/Volumes/{}", name));
+        if path.exists() {
+            Some(Self { path })
+        } else {
+            None
+        }
+    }
+
+    fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
+#[cfg(test)]
+impl Drop for TestVolume {
+    fn drop(&mut self) {
+        use std::process::Command;
+        // Best effort cleanup - ignore errors
+        let _ = Command::new("diskutil")
+            .args(["eject", self.path.to_str().unwrap()])
+            .status();
+    }
+}
+
+/// Test that file paths are reported correctly on non-root volumes.
+///
+/// This creates a temporary RAM disk to ensure we're testing on a non-root
+/// volume where FSEventStreamCreateRelativeToDevice returns device-relative
+/// paths that must be correctly resolved to absolute paths.
+#[test]
+fn test_fsevent_reports_correct_absolute_paths() {
+    use std::time::{Duration, Instant};
+
+    // Create a RAM disk to guarantee we're testing on a non-root volume
+    let volume = match TestVolume::new() {
+        Some(v) => v,
+        None => {
+            eprintln!(
+                "Skipping test: unable to create RAM disk (may require elevated permissions)"
+            );
+            return;
+        }
+    };
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut watcher = FsEventWatcher::new(tx, Default::default()).unwrap();
+    watcher
+        .watch(&volume.path(), RecursiveMode::Recursive)
+        .unwrap();
+
+    thread::sleep(Duration::from_millis(1000)); // FSEvents init time
+
+    let test_file = volume.path().join("test_file.txt");
+    std::fs::write(&test_file, b"test").unwrap();
+
+    // Wait for event with correct path
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut received = Vec::new();
+    while Instant::now() < deadline {
+        if let Ok(Ok(event)) = rx.recv_timeout(Duration::from_millis(100)) {
+            received.extend(event.paths.clone());
+            if event.paths.contains(&test_file) {
+                return; // Success
+            }
+        }
+    }
+
+    panic!(
+        "Expected event for {:?}, received: {:?}",
+        test_file, received
+    );
+}
