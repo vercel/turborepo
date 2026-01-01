@@ -12,55 +12,15 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageInfo, PackageName},
     package_manager::PackageManager,
 };
+use turborepo_task_executor::CommandProvider;
 use turborepo_task_id::TaskId;
 use turborepo_types::TaskArgs;
 
 use super::Error;
 use crate::microfrontends::MicrofrontendsConfigs;
 
-pub trait CommandProvider {
-    fn command(
-        &self,
-        task_id: &TaskId,
-        environment: EnvironmentVariableMap,
-    ) -> Result<Option<Command>, Error>;
-}
-
-/// A collection of command providers.
-///
-/// Will attempt to find a command from any of the providers it contains.
-/// Ordering of the providers matters as the first present command will be
-/// returned. Any errors returned by the providers will be immediately returned.
-pub struct CommandFactory<'a> {
-    providers: Vec<Box<dyn CommandProvider + 'a + Send>>,
-}
-
-impl<'a> CommandFactory<'a> {
-    pub fn new() -> Self {
-        Self {
-            providers: Vec::new(),
-        }
-    }
-
-    pub fn add_provider(&mut self, provider: impl CommandProvider + 'a + Send) -> &mut Self {
-        self.providers.push(Box::new(provider));
-        self
-    }
-
-    pub fn command(
-        &self,
-        task_id: &TaskId,
-        environment: EnvironmentVariableMap,
-    ) -> Result<Option<Command>, Error> {
-        for provider in self.providers.iter() {
-            let cmd = provider.command(task_id, environment.clone())?;
-            if cmd.is_some() {
-                return Ok(cmd);
-            }
-        }
-        Ok(None)
-    }
-}
+// Re-export CommandFactory from turborepo-task-executor with our Error type
+pub type CommandFactory<'a> = turborepo_task_executor::CommandFactory<'a, Error>;
 
 #[derive(Debug)]
 pub struct PackageGraphCommandProvider<'a> {
@@ -98,7 +58,7 @@ impl<'a> PackageGraphCommandProvider<'a> {
     }
 }
 
-impl<'a> CommandProvider for PackageGraphCommandProvider<'a> {
+impl<'a> CommandProvider<Error> for PackageGraphCommandProvider<'a> {
     fn command(
         &self,
         task_id: &TaskId,
@@ -214,7 +174,7 @@ impl<'a, T: PackageInfoProvider> MicroFrontendProxyProvider<'a, T> {
     }
 }
 
-impl<'a, T: PackageInfoProvider> CommandProvider for MicroFrontendProxyProvider<'a, T> {
+impl<'a, T: PackageInfoProvider> CommandProvider<Error> for MicroFrontendProxyProvider<'a, T> {
     fn command(
         &self,
         task_id: &TaskId,
@@ -345,7 +305,7 @@ mod test {
 
     struct EchoCmdFactory;
 
-    impl CommandProvider for EchoCmdFactory {
+    impl CommandProvider<Error> for EchoCmdFactory {
         fn command(
             &self,
             _task_id: &TaskId,
@@ -357,7 +317,7 @@ mod test {
 
     struct ErrProvider;
 
-    impl CommandProvider for ErrProvider {
+    impl CommandProvider<Error> for ErrProvider {
         fn command(
             &self,
             _task_id: &TaskId,
@@ -369,7 +329,7 @@ mod test {
 
     struct NoneProvider;
 
-    impl CommandProvider for NoneProvider {
+    impl CommandProvider<Error> for NoneProvider {
         fn command(
             &self,
             _task_id: &TaskId,
