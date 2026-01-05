@@ -348,6 +348,23 @@ impl MfeConfigProvider for MicrofrontendsConfigs {
     fn should_use_turborepo_proxy(&self) -> bool {
         MicrofrontendsConfigs::should_use_turborepo_proxy(self)
     }
+
+    fn dev_tasks(&self, package_name: &str) -> Option<Vec<(TaskId<'static>, String)>> {
+        self.configs.get(package_name).map(|info| {
+            info.tasks
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
+        })
+    }
+
+    fn config_filename(&self, package_name: &str) -> Option<String> {
+        self.configs
+            .get(package_name)?
+            .path
+            .as_ref()
+            .map(|p| p.to_string())
+    }
 }
 
 // Internal struct used to capture the results of checking the package graph

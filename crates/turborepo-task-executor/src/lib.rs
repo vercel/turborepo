@@ -25,8 +25,8 @@ mod output;
 mod visitor;
 
 pub use command::{
-    CommandFactory, CommandProvider, CommandProviderError, PackageGraphCommandProvider,
-    PackageInfoProvider,
+    CommandFactory, CommandProvider, CommandProviderError, MicroFrontendProxyProvider,
+    PackageGraphCommandProvider, PackageInfoProvider,
 };
 pub use exec::{
     DryRunExecutor, ExecOutcome, HashTrackerProvider, InternalError, SuccessOutcome,
@@ -94,6 +94,13 @@ pub trait MfeConfigProvider: Send + Sync {
 
     /// Returns true if all configs should use the Turborepo proxy
     fn should_use_turborepo_proxy(&self) -> bool;
+
+    /// Returns the dev tasks for a package, as a map from task ID to
+    /// application name
+    fn dev_tasks(&self, package_name: &str) -> Option<Vec<(TaskId<'static>, String)>>;
+
+    /// Returns the config filename path for a package
+    fn config_filename(&self, package_name: &str) -> Option<String>;
 }
 
 /// Trait for task access tracing provider.
@@ -146,6 +153,14 @@ impl MfeConfigProvider for NoMfeConfig {
 
     fn should_use_turborepo_proxy(&self) -> bool {
         false
+    }
+
+    fn dev_tasks(&self, _package_name: &str) -> Option<Vec<(TaskId<'static>, String)>> {
+        None
+    }
+
+    fn config_filename(&self, _package_name: &str) -> Option<String> {
+        None
     }
 }
 

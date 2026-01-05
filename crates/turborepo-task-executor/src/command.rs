@@ -3,10 +3,10 @@
 //! This module provides the trait and factory for creating commands to execute
 //! tasks.
 
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use tracing::debug;
-use turbopath::AbsoluteSystemPath;
+use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_process::Command;
 use turborepo_repository::{
@@ -242,6 +242,170 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         cmd.open_stdin();
 
         Ok(Some(cmd))
+    }
+}
+
+/// Command provider for microfrontends proxy tasks.
+///
+/// This provider handles the `proxy` task for microfrontends configurations,
+/// creating commands to start the proxy server.
+#[derive(Debug)]
+pub struct MicroFrontendProxyProvider<'a, T, M> {
+    repo_root: &'a AbsoluteSystemPath,
+    package_graph: &'a T,
+    tasks_in_graph: HashSet<TaskId<'a>>,
+    mfe_configs: &'a M,
+}
+
+impl<'a, T: PackageInfoProvider, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, T, M> {
+    /// Creates a new `MicroFrontendProxyProvider`.
+    ///
+    /// # Arguments
+    /// * `repo_root` - The root of the repository
+    /// * `package_graph` - The package graph provider
+    /// * `tasks_in_graph` - Iterator of tasks that are part of the current
+    ///   execution graph
+    /// * `micro_frontends_configs` - The microfrontends configuration
+    pub fn new<'b>(
+        repo_root: &'a AbsoluteSystemPath,
+        package_graph: &'a T,
+        tasks_in_graph: impl Iterator<Item = &'b TaskId<'static>>,
+        micro_frontends_configs: &'a M,
+    ) -> Self {
+        Self {
+            repo_root,
+            package_graph,
+            tasks_in_graph: tasks_in_graph.cloned().collect(),
+            mfe_configs: micro_frontends_configs,
+        }
+    }
+
+    fn dev_tasks(&self, task_id: &TaskId) -> Option<Vec<(TaskId<'static>, String)>> {
+        (task_id.task() == "proxy").then(|| self.mfe_configs.dev_tasks(task_id.package()))?
+    }
+
+    fn package_info(&self, task_id: &TaskId) -> Result<&PackageInfo, CommandProviderError> {
+        self.package_graph
+            .package_info(&PackageName::from(task_id.package()))
+            .ok_or_else(|| CommandProviderError::MissingPackage {
+                package_name: task_id.package().into(),
+                task_id: task_id.clone().into_owned(),
+            })
+    }
+
+    fn has_custom_proxy(&self, task_id: &TaskId) -> Result<bool, CommandProviderError> {
+        let package_info = self.package_info(task_id)?;
+        Ok(package_info.package_json.scripts.contains_key("proxy"))
+    }
+}
+
+impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<CommandProviderError>>
+    CommandProvider<E> for MicroFrontendProxyProvider<'a, T, M>
+{
+    fn command(
+        &self,
+        task_id: &TaskId,
+        _environment: EnvironmentVariableMap,
+    ) -> Result<Option<Command>, E> {
+        debug!(
+            "MicroFrontendProxyProvider::command - called for task: {}",
+            task_id
+        );
+
+        let Some(dev_tasks) = self.dev_tasks(task_id) else {
+            debug!(
+                "MicroFrontendProxyProvider::command - no dev tasks found for {}",
+                task_id
+            );
+            return Ok(None);
+        };
+
+        debug!(
+            "MicroFrontendProxyProvider::command - found {} dev tasks for {}",
+            dev_tasks.len(),
+            task_id
+        );
+
+        let has_custom_proxy = self.has_custom_proxy(task_id)?;
+        let package_info = self.package_info(task_id)?;
+
+        // Check if package depends on @vercel/microfrontends
+        const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
+        let has_mfe_dependency = package_info
+            .package_json
+            .all_dependencies()
+            .any(|(package, _version)| package.as_str() == MICROFRONTENDS_PACKAGE);
+
+        debug!(
+            "MicroFrontendProxyProvider::command - has_custom_proxy: {}, has_mfe_dependency: {}",
+            has_custom_proxy, has_mfe_dependency
+        );
+
+        let local_apps: Vec<&str> = dev_tasks
+            .iter()
+            .filter_map(|(task, app_name)| {
+                self.tasks_in_graph
+                    .contains(task)
+                    .then_some(app_name.as_str())
+            })
+            .collect();
+        let package_dir = self.repo_root.resolve(package_info.package_path());
+        let mfe_config_filename = self
+            .mfe_configs
+            .config_filename(task_id.package())
+            .expect("every microfrontends default application should have configuration path");
+        let mfe_path = self.repo_root.join_unix_path(
+            RelativeUnixPath::new(&mfe_config_filename)
+                .expect("config_filename should return a valid relative unix path"),
+        );
+
+        let cmd = if has_custom_proxy {
+            debug!("MicroFrontendProxyProvider::command - using custom proxy script");
+            let package_manager = self.package_graph.package_manager();
+            let mut proxy_args: Vec<&str> = vec![mfe_path.as_str(), "--names"];
+            proxy_args.extend(local_apps);
+            let mut args = vec!["run", "proxy"];
+            if let Some(sep) = package_manager.arg_separator(&proxy_args) {
+                args.push(sep);
+            }
+            args.extend(proxy_args);
+
+            let program =
+                which::which(package_manager.command()).map_err(CommandProviderError::from)?;
+            let mut cmd = Command::new(&program);
+            cmd.current_dir(package_dir).args(args).open_stdin();
+            Some(cmd)
+        } else if has_mfe_dependency {
+            debug!("MicroFrontendProxyProvider::command - using @vercel/microfrontends proxy");
+            let mut args: Vec<&str> = vec!["proxy", mfe_path.as_str(), "--names"];
+            args.extend(local_apps);
+
+            // On Windows, a package manager will rework the binary to be a .cmd extension
+            // since that's what Windows needs
+            let bin_name = if cfg!(windows) {
+                "microfrontends.cmd"
+            } else {
+                "microfrontends"
+            };
+
+            // TODO: leverage package manager to find the local proxy
+            let program = package_dir.join_components(&["node_modules", ".bin", bin_name]);
+            let mut cmd = Command::new(program.as_std_path());
+            cmd.current_dir(package_dir).args(args).open_stdin();
+            Some(cmd)
+        } else {
+            debug!("MicroFrontendProxyProvider::command - using Turborepo built-in proxy");
+            // No custom proxy and no @vercel/microfrontends dependency.
+            // The Turborepo proxy will be started separately.
+            None
+        };
+
+        debug!(
+            "MicroFrontendProxyProvider::command - returning command: {}",
+            if cmd.is_some() { "Some" } else { "None" }
+        );
+
+        Ok(cmd)
     }
 }
 
