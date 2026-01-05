@@ -147,17 +147,20 @@ pub struct TaskEnvVarSummary {
 
 impl TaskCacheSummary {
     // Used in observability/otel.rs to populate TaskMetricsPayload.cache_status
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
     pub(crate) fn status(&self) -> CacheStatus {
         self.status
     }
 
     // Used in observability/otel.rs to populate
     // TaskMetricsPayload.cache_time_saved_ms
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
     pub(crate) fn time_saved(&self) -> u64 {
         self.time_saved
     }
 
     // Used in observability/otel.rs to populate TaskMetricsPayload.cache_source
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
     pub(crate) fn cache_source_label(&self) -> Option<&'static str> {
         self.source.map(|source| match source {
             CacheSource::Local => "LOCAL",
