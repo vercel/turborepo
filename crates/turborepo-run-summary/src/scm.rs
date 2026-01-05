@@ -52,11 +52,13 @@ impl SCMState {
     }
 
     // Used in observability/otel.rs to populate RunMetricsPayload.scm_branch
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
     pub(crate) fn branch(&self) -> Option<&str> {
         self.branch.as_deref()
     }
 
     // Used in observability/otel.rs to populate RunMetricsPayload.scm_revision
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
     pub(crate) fn sha(&self) -> Option<&str> {
         self.sha.as_deref()
     }
