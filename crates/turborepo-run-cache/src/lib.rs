@@ -243,18 +243,20 @@ impl TaskCache {
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
-            if !matches!(
+            // Always send the cache miss status so TUI knows to start rendering.
+            // The message is only shown based on output_logs setting.
+            let message = if matches!(
                 self.task_output_logs,
                 OutputLogsMode::None | OutputLogsMode::ErrorsOnly
             ) {
-                terminal_output.status(
-                    &format!(
-                        "cache bypass, force executing {}",
-                        color!(self.ui, GREY, "{}", self.hash)
-                    ),
-                    CacheResult::Miss,
-                );
-            }
+                String::new()
+            } else {
+                format!(
+                    "cache bypass, force executing {}",
+                    color!(self.ui, GREY, "{}", self.hash)
+                )
+            };
+            terminal_output.status(&message, CacheResult::Miss);
 
             return Ok(None);
         }
@@ -294,18 +296,20 @@ impl TaskCache {
                 .await?;
 
             let Some((cache_hit_metadata, restored_files)) = cache_status else {
-                if !matches!(
+                // Always send the cache miss status so TUI knows to start rendering.
+                // The message is only shown based on output_logs setting.
+                let message = if matches!(
                     self.task_output_logs,
                     OutputLogsMode::None | OutputLogsMode::ErrorsOnly
                 ) {
-                    terminal_output.status(
-                        &format!(
-                            "cache miss, executing {}",
-                            color!(self.ui, GREY, "{}", self.hash)
-                        ),
-                        CacheResult::Miss,
-                    );
-                }
+                    String::new()
+                } else {
+                    format!(
+                        "cache miss, executing {}",
+                        color!(self.ui, GREY, "{}", self.hash)
+                    )
+                };
+                terminal_output.status(&message, CacheResult::Miss);
 
                 return Ok(None);
             };
