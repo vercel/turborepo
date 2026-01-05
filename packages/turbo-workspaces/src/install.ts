@@ -129,6 +129,9 @@ export async function install(args: InstallArgs) {
         cwd: args.project.paths.root,
         preferLocal: true,
         shell: process.platform === "win32",
+        // Prevents the child process from inheriting stdin, which can cause
+        // hangs when running via bunx (e.g., `bunx create-turbo`)
+        stdin: "ignore",
       });
       if (spinner) {
         spinner.stop();
