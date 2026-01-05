@@ -282,13 +282,17 @@ The `package.json` for each package where you'd like to run ESLint should look l
 
 With your scripts prepared, you can then create your Turborepo task:
 
-```bash title="./turbo.json"
+```json title="./turbo.json"
 {
   "tasks": {
-    "lint": {}
+    "lint": {
+      "dependsOn": ["^lint"]
+    }
   }
 }
 ```
+
+Using `dependsOn` with `^lint` ensures that changes to dependencies like `@repo/eslint-config` will invalidate the cache for your `lint` task, even though the configuration package doesn't have a `lint` script itself.
 
 You can now run `turbo lint` with [global `turbo`](/docs/getting-started/installation#global-installation) or create a script in your root `package.json`:
 
