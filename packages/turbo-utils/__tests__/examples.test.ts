@@ -64,6 +64,35 @@ describe("examples", () => {
         expect.objectContaining({ method: "HEAD" })
       );
     });
+
+    it("uses proxy agent when https_proxy is set", async () => {
+      const originalEnv = process.env.https_proxy;
+      process.env.https_proxy = "http://proxy.example.com:8080";
+
+      try {
+        global.fetch = jest.fn(() =>
+          Promise.resolve({ ok: true } as Response)
+        ) as typeof fetch;
+
+        const url = "https://github.com/vercel/turborepo/";
+        await isUrlOk(url);
+
+        // Verify that fetch was called with a dispatcher option
+        expect(global.fetch).toHaveBeenCalledWith(
+          url,
+          expect.objectContaining({
+            method: "HEAD",
+            dispatcher: expect.anything(),
+          })
+        );
+      } finally {
+        if (originalEnv === undefined) {
+          delete process.env.https_proxy;
+        } else {
+          process.env.https_proxy = originalEnv;
+        }
+      }
+    });
   });
 
   describe("getRepoInfo", () => {
@@ -445,6 +474,94 @@ describe("examples", () => {
       expect(
         readFileSync(join(testDir, "a", "b", "c", "deep.txt"), "utf-8")
       ).toBe("Deep file");
+    });
+
+    it("uses proxy agent when HTTPS_PROXY is set", async () => {
+      const originalEnv = process.env.HTTPS_PROXY;
+      process.env.HTTPS_PROXY = "http://proxy.example.com:8080";
+
+      try {
+        const mockBody = await createMockTarballBody([
+          { path: "file.txt", content: "Hello" },
+        ]);
+
+        global.fetch = jest.fn(() =>
+          Promise.resolve({
+            ok: true,
+            body: mockBody,
+          } as Response)
+        ) as typeof fetch;
+
+        await streamingExtract({
+          url: "https://example.com/tarball.tar.gz",
+          root: testDir,
+          strip: 1,
+          filter: () => true,
+        });
+
+        // Verify that fetch was called with a dispatcher option
+        expect(global.fetch).toHaveBeenCalledWith(
+          "https://example.com/tarball.tar.gz",
+          expect.objectContaining({
+            dispatcher: expect.anything(),
+          })
+        );
+      } finally {
+        if (originalEnv === undefined) {
+          delete process.env.HTTPS_PROXY;
+        } else {
+          process.env.HTTPS_PROXY = originalEnv;
+        }
+      }
+    });
+
+    it("does not use proxy agent when no proxy env vars are set", async () => {
+      const originalHttpsProxy = process.env.HTTPS_PROXY;
+      const originalHttpProxy = process.env.HTTP_PROXY;
+      const originalHttpsProxyLower = process.env.https_proxy;
+      const originalHttpProxyLower = process.env.http_proxy;
+
+      delete process.env.HTTPS_PROXY;
+      delete process.env.HTTP_PROXY;
+      delete process.env.https_proxy;
+      delete process.env.http_proxy;
+
+      try {
+        const mockBody = await createMockTarballBody([
+          { path: "file.txt", content: "Hello" },
+        ]);
+
+        global.fetch = jest.fn(() =>
+          Promise.resolve({
+            ok: true,
+            body: mockBody,
+          } as Response)
+        ) as typeof fetch;
+
+        await streamingExtract({
+          url: "https://example.com/tarball.tar.gz",
+          root: testDir,
+          strip: 1,
+          filter: () => true,
+        });
+
+        // Verify that fetch was called with undefined dispatcher
+        expect(global.fetch).toHaveBeenCalledWith(
+          "https://example.com/tarball.tar.gz",
+          expect.objectContaining({
+            dispatcher: undefined,
+          })
+        );
+      } finally {
+        if (originalHttpsProxy !== undefined)
+          process.env.HTTPS_PROXY = originalHttpsProxy;
+        if (originalHttpProxy !== undefined)
+          process.env.HTTP_PROXY = originalHttpProxy;
+        if (originalHttpsProxyLower !== undefined)
+          process.env.https_proxy = originalHttpsProxyLower;
+        if (originalHttpProxyLower !== undefined)
+          process.env.http_proxy = originalHttpProxyLower;
+      }
     });
   });
 });
