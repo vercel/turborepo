@@ -5,6 +5,7 @@
 
 use std::sync::{Arc, Mutex};
 
+use console::StyledObject;
 use turborepo_engine::{TaskError, TaskErrorCollectorWrapper, TaskWarningCollectorWrapper};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_process::ProcessManager;
@@ -32,11 +33,15 @@ pub type ExecContext = TaskExecutor<
 /// Type alias for the concrete DryRunExecutor used in turborepo-lib.
 pub type DryRunExecContext = DryRunExecutor<TaskHashTracker>;
 
+/// Factory for creating task execution contexts.
+///
+/// This struct wraps the visitor and provides methods to create TaskExecutor
+/// and DryRunExecutor instances.
 pub struct ExecContextFactory<'a> {
     visitor: &'a Visitor<'a>,
     errors: Arc<Mutex<Vec<TaskError>>>,
     manager: ProcessManager,
-    #[allow(dead_code)] // engine is stored but only used for task_ids during factory construction
+    #[allow(dead_code)]
     engine: &'a Arc<Engine>,
     command_factory: CommandFactory<'a>,
 }
@@ -85,8 +90,8 @@ impl<'a> ExecContextFactory<'a> {
         task_access: TaskAccess,
     ) -> Result<Option<ExecContext>, super::Error> {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
-        let task_id_string = &task_id.to_string();
         self.populate_env(&mut execution_env, &task_hash, &task_access);
+
         let Some(cmd) = self
             .command_factory
             .command(&task_id, execution_env.clone())?
@@ -94,10 +99,7 @@ impl<'a> ExecContextFactory<'a> {
             return Ok(None);
         };
 
-        let pretty_prefix = self
-            .visitor
-            .color_cache
-            .prefix_with_color(task_id_string, &self.visitor.prefix(&task_id));
+        let pretty_prefix = self.prefix_with_color(&task_id);
 
         Ok(Some(TaskExecutor {
             task_id,
@@ -133,7 +135,15 @@ impl<'a> ExecContextFactory<'a> {
         }
     }
 
-    // Add any env vars that `turbo` provides to the task environment
+    /// Get a colored prefix for the task.
+    fn prefix_with_color(&self, task_id: &TaskId) -> StyledObject<String> {
+        let task_id_string = &task_id.to_string();
+        self.visitor
+            .color_cache
+            .prefix_with_color(task_id_string, &self.visitor.prefix(task_id))
+    }
+
+    /// Add turbo-specific env vars to the task environment.
     fn populate_env(
         &self,
         execution_env: &mut EnvironmentVariableMap,

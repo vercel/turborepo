@@ -1,16 +1,12 @@
 //! Task execution for Turborepo
 //!
-//! This crate provides the task execution infrastructure for Turborepo,
-//! including the visitor pattern for traversing the task graph and executing
-//! tasks.
+//! This crate provides the task execution infrastructure for Turborepo.
 //!
 //! # Architecture
 //!
 //! The executor is designed to be decoupled from the rest of turborepo-lib
 //! through trait abstractions:
 //!
-//! - [`ExecutorConfig`]: Configuration for task execution (extracted from
-//!   RunOpts)
 //! - [`MfeConfigProvider`]: Abstraction for microfrontends configuration
 //! - [`TaskAccessProvider`]: Abstraction for task access tracing
 //! - [`HashTrackerProvider`]: Abstraction for hash tracking
@@ -26,8 +22,12 @@
 mod command;
 mod exec;
 mod output;
+mod visitor;
 
-pub use command::{CommandFactory, CommandProvider};
+pub use command::{
+    CommandFactory, CommandProvider, CommandProviderError, PackageGraphCommandProvider,
+    PackageInfoProvider,
+};
 pub use exec::{
     DryRunExecutor, ExecOutcome, HashTrackerProvider, InternalError, SuccessOutcome,
     TaskErrorCollector, TaskExecutor, TaskWarningCollector, prefixed_ui,
@@ -39,6 +39,9 @@ use turborepo_task_id::TaskId;
 // Re-export StopExecution from turborepo-types for convenience
 pub use turborepo_types::StopExecution;
 use turborepo_types::{ContinueMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, UIMode};
+pub use visitor::{
+    EngineExecutor, EngineMessage, EngineProvider, TaskCallback, TaskHashProvider, turbo_regex,
+};
 
 /// Configuration for task execution.
 ///
