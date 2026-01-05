@@ -46,7 +46,8 @@ pub use processed::{
     ProcessedPassThroughEnv, ProcessedTaskDefinition, ProcessedWith,
 };
 pub use raw::{
-    HasConfigBeyondExtends, Pipeline, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson,
+    HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawObservabilityOtel,
+    RawObservabilityOtelMetrics, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson,
     RawTaskDefinition, RawTurboJson, SpacesJson,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};

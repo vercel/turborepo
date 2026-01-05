@@ -20,7 +20,9 @@
 
 use std::sync::Arc;
 
-use crate::{config::ExperimentalObservabilityOptions, run::summary::RunSummary};
+use turborepo_config::ExperimentalObservabilityOptions;
+
+use crate::RunSummary;
 
 #[cfg(feature = "otel")]
 mod otel;
@@ -43,7 +45,7 @@ pub(crate) trait RunObserver: Send + Sync {
 
 /// A generic handle to an observability backend.
 ///
-/// This is the only type that the rest of turborepo-lib needs to know about.
+/// This is the only type that callers need to know about.
 /// The concrete backend implementation is hidden behind the `RunObserver`
 /// trait.
 #[derive(Clone)]
@@ -64,7 +66,7 @@ impl Handle {
     }
 
     /// Shutdown the observer, flushing any pending metrics.
-    pub fn shutdown(self) {
+    pub fn shutdown(&self) {
         // We only have an Arc<dyn RunObserver>, so we delegate shutdown to the trait
         // and let the concrete implementation handle any shared references.
         self.inner.shutdown();
@@ -79,7 +81,7 @@ impl Handle {
     /// `experimentalObservability.otel` in turbo.json or via environment
     /// variables/CLI flags). In the future, this may dispatch to different
     /// backends based on the configuration provided.
-    pub(crate) fn try_init(
+    pub fn try_init(
         options: &ExperimentalObservabilityOptions,
         token: Option<&str>,
     ) -> Option<Self> {

@@ -47,8 +47,7 @@ pub struct TaskCacheSummary {
 
 #[derive(Debug, Serialize, Copy, Clone)]
 #[serde(rename_all = "UPPERCASE")]
-// Used below and in observability/otel.rs to map to TaskCacheStatus
-pub(crate) enum CacheStatus {
+pub enum CacheStatus {
     Hit,
     Miss,
 }

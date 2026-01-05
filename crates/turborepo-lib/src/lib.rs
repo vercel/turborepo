@@ -22,7 +22,6 @@ mod engine;
 
 mod boundaries;
 mod microfrontends;
-mod observability;
 mod opts;
 mod package_changes_watcher;
 mod panic_handler;
