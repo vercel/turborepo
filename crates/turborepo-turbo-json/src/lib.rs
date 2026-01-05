@@ -394,13 +394,16 @@ pub fn task_outputs_from_processed(
 
 #[cfg(test)]
 mod tests {
+    use anyhow::Result;
     use biome_deserialize::json::deserialize_from_json_str;
     use biome_json_parser::JsonParserOptions;
     use pretty_assertions::assert_eq;
     use serde_json::json;
     use test_case::test_case;
+    use turbopath::RelativeUnixPath;
+    use turborepo_boundaries::BoundariesConfig;
     use turborepo_task_id::TaskName;
-    use turborepo_types::UIMode;
+    use turborepo_types::{OutputLogsMode, TaskOutputs, UIMode};
     use turborepo_unescape::UnescapedString;
 
     use super::*;
@@ -632,5 +635,314 @@ mod tests {
             !turbo_json.is_root_config(),
             "packages/my-app/turbo.json should NOT be detected as root config"
         );
+    }
+
+    // Tests moved from turborepo-lib/turbo_json/mod.rs during consolidation
+
+    #[test_case("{}", "empty boundaries")]
+    #[test_case(r#"{"tags": {} }"#, "empty tags")]
+    #[test_case(
+        r#"{"tags": { "my-tag": { "dependencies": { "allow": ["my-package"] } } }"#,
+        "tags and dependencies"
+    )]
+    #[test_case(
+        r#"{
+        "tags": {
+            "my-tag": {
+                "dependencies": {
+                    "allow": ["my-package"],
+                    "deny": ["my-other-package"]
+                }
+            }
+        }
+    }"#,
+        "tags and dependencies 2"
+    )]
+    #[test_case(
+        r#"{
+        "tags": {
+            "my-tag": {
+                "dependents": {
+                    "allow": ["my-package"],
+                    "deny": ["my-other-package"]
+                }
+            }
+        }
+    }"#,
+        "tags and dependents"
+    )]
+    #[test_case(
+        r#"{
+            "implicitDependencies": ["my-package"],
+        }"#,
+        "implicit dependencies"
+    )]
+    #[test_case(
+        r#"{
+            "implicitDependencies": ["my-package"],
+            "tags": {
+                "my-tag": {
+                    "dependents": {
+                        "allow": ["my-package"],
+                        "deny": ["my-other-package"]
+                    }
+                }
+            },
+        }"#,
+        "implicit dependencies and tags"
+    )]
+    #[test_case(
+        r#"{
+          "dependencies": {
+              "allow": ["my-package"]
+          }
+      }"#,
+        "package rule"
+    )]
+    fn test_deserialize_boundaries(json: &str, name: &str) {
+        let deserialized_result = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        let raw_boundaries_config: BoundariesConfig =
+            deserialized_result.into_deserialized().unwrap();
+        insta::assert_json_snapshot!(name.replace(' ', "_"), raw_boundaries_config);
+    }
+
+    #[test_case("[]", TaskOutputs::default() ; "empty")]
+    #[test_case(r#"["target/**"]"#, TaskOutputs { inclusions: vec!["target/**".to_string()], exclusions: vec![] })]
+    #[test_case(
+        r#"[".next/**", "!.next/cache/**"]"#,
+        TaskOutputs {
+             inclusions: vec![".next/**".to_string()],
+             exclusions: vec![".next/cache/**".to_string()]
+        }
+        ; "with .next"
+    )]
+    #[test_case(
+        r#"[".next\\**", "!.next\\cache\\**"]"#,
+        TaskOutputs {
+            inclusions: vec![".next\\**".to_string()],
+            exclusions: vec![".next\\cache\\**".to_string()]
+        }
+        ; "with .next (windows)"
+    )]
+    fn test_deserialize_task_outputs(
+        task_outputs_str: &str,
+        expected_task_outputs: TaskOutputs,
+    ) -> Result<()> {
+        let raw_task_outputs: Vec<UnescapedString> = serde_json::from_str(task_outputs_str)?;
+        let turbo_root = RelativeUnixPath::new("../..")?;
+        let processed_outputs = ProcessedOutputs::new(
+            raw_task_outputs.into_iter().map(Spanned::new).collect(),
+            &FutureFlags::default(),
+        )
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
+        let task_outputs = task_outputs_from_processed(processed_outputs, turbo_root)
+            .map_err(|e| anyhow::anyhow!("{}", e))?;
+        assert_eq!(task_outputs, expected_task_outputs);
+
+        Ok(())
+    }
+
+    #[test_case("full", Some(OutputLogsMode::Full) ; "full")]
+    #[test_case("hash-only", Some(OutputLogsMode::HashOnly) ; "hash-only")]
+    #[test_case("new-only", Some(OutputLogsMode::NewOnly) ; "new-only")]
+    #[test_case("errors-only", Some(OutputLogsMode::ErrorsOnly) ; "errors-only")]
+    #[test_case("none", Some(OutputLogsMode::None) ; "none")]
+    #[test_case("junk", None ; "invalid value")]
+    fn test_parsing_output_logs_mode(output_logs: &str, expected: Option<OutputLogsMode>) {
+        let json: Result<RawTurboJson, _> = RawTurboJson::parse_from_serde(json!({
+            "tasks": {
+                "build": {
+                    "outputLogs": output_logs,
+                }
+            }
+        }));
+
+        let actual: Option<OutputLogsMode> = json
+            .as_ref()
+            .ok()
+            .and_then(|j| j.tasks.as_ref())
+            .and_then(|pipeline| pipeline.0.get(&TaskName::from("build")))
+            .and_then(|build| build.value.output_logs.clone())
+            .map(|mode| mode.into_inner());
+        assert_eq!(actual, expected);
+    }
+
+    #[test_case(r#"{ "daemon": true }"#, r#"{"daemon":true}"# ; "daemon_on")]
+    #[test_case(r#"{ "daemon": false }"#, r#"{"daemon":false}"# ; "daemon_off")]
+    fn test_daemon(json: &str, expected: &str) {
+        let parsed: RawTurboJson = RawRootTurboJson::parse(json, "").unwrap().into();
+        let actual = serde_json::to_string(&parsed).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test_case(r#"{ "ui": "tui" }"#, r#"{"ui":"tui"}"# ; "tui")]
+    #[test_case(r#"{ "ui": "stream" }"#, r#"{"ui":"stream"}"# ; "stream")]
+    fn test_ui_serialization(input: &str, expected: &str) {
+        let parsed: RawTurboJson = RawRootTurboJson::parse(input, "").unwrap().into();
+        let actual = serde_json::to_string(&parsed).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":true}"#, Some(true) ; "t")]
+    #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":false}"#, Some(false) ; "f")]
+    #[test_case(r#"{}"#, None ; "missing")]
+    fn test_allow_no_package_manager_serde(json_str: &str, expected: Option<bool>) {
+        let json: RawTurboJson = RawRootTurboJson::parse(json_str, "").unwrap().into();
+        assert_eq!(
+            json.allow_no_package_manager
+                .as_ref()
+                .map(|allow| *allow.as_inner()),
+            expected
+        );
+        let serialized = serde_json::to_string(&json).unwrap();
+        assert_eq!(serialized, json_str);
+    }
+
+    #[test_case(
+        r#"{"extends": ["//"], "tasks": {"build": {}}}"#,
+        false ; "root config with extends should fail"
+    )]
+    #[test_case(
+        r#"{"globalEnv": ["NODE_ENV"], "globalDependencies": ["package.json"], "tasks": {"build": {}}}"#,
+        true ; "root config with global fields should succeed"
+    )]
+    #[test_case(
+        r#"{"futureFlags": {}, "tasks": {"build": {}}}"#,
+        true ; "root config with futureFlags should succeed"
+    )]
+    #[test_case(
+        r#"{"remoteCache": {"enabled": true}, "tasks": {"build": {}}}"#,
+        true ; "root config with remoteCache should succeed"
+    )]
+    fn test_root_config_validation(json: &str, should_succeed: bool) {
+        let result = RawRootTurboJson::parse(json, "turbo.json");
+        assert_eq!(result.is_ok(), should_succeed);
+
+        if should_succeed {
+            let raw_config = RawTurboJson::from(result.unwrap());
+            assert!(raw_config.extends.is_none());
+        }
+    }
+
+    #[test_case(
+        r#"{"extends": ["//"], "tasks": {"build": {}}, "tags": ["frontend"]}"#,
+        true ; "package config with extends and tags should succeed"
+    )]
+    #[test_case(
+        r#"{"extends": ["//"], "boundaries": {}, "tasks": {"test": {}}}"#,
+        true ; "package config with extends and boundaries should succeed"
+    )]
+    #[test_case(
+        r#"{"globalEnv": ["NODE_ENV"], "tasks": {"test": {}}}"#,
+        false ; "package config with globalEnv should fail"
+    )]
+    #[test_case(
+        r#"{"extends": ["//"], "globalDependencies": ["package.json"], "tasks": {"test": {}}}"#,
+        false ; "package config with globalDependencies should fail"
+    )]
+    #[test_case(
+        r#"{"extends": ["//"], "futureFlags": {}, "tasks": {"test": {}}}"#,
+        false ; "package config with futureFlags should fail"
+    )]
+    #[test_case(
+        r#"{"extends": ["//"], "remoteCache": {"enabled": true}, "tasks": {"test": {}}}"#,
+        false ; "package config with remoteCache should fail"
+    )]
+    #[test_case(
+        r#"{"extends": ["//"], "ui": "tui", "tasks": {"test": {}}}"#,
+        false ; "package config with ui should fail"
+    )]
+    fn test_package_config_validation(json: &str, should_succeed: bool) {
+        let result = RawPackageTurboJson::parse(json, "packages/foo/turbo.json");
+        assert_eq!(result.is_ok(), should_succeed);
+
+        if should_succeed {
+            let package_config = result.unwrap();
+            let raw_config = RawTurboJson::from(package_config);
+            assert!(raw_config.extends.is_some());
+            // Verify root-only fields are None
+            assert!(raw_config.global_env.is_none());
+            assert!(raw_config.global_dependencies.is_none());
+            assert!(raw_config.future_flags.is_none());
+        }
+    }
+
+    #[test]
+    fn test_boundaries_permissions_serialization_skip_none() {
+        let json_with_partial_permissions = r#"{
+            "boundaries": {
+                "dependencies": {
+                    "allow": ["package-a"]
+                }
+            }
+        }"#;
+
+        let parsed: RawTurboJson =
+            RawRootTurboJson::parse(json_with_partial_permissions, "turbo.json")
+                .unwrap()
+                .into();
+
+        let serialized = serde_json::to_string(&parsed).unwrap();
+
+        // The serialized JSON should not contain "deny":null
+        let reparsed: RawTurboJson = RawRootTurboJson::parse(&serialized, "turbo.json")
+            .unwrap()
+            .into();
+
+        // Verify the structure is preserved
+        assert!(reparsed.boundaries.is_some());
+        let boundaries = reparsed.boundaries.as_ref().unwrap();
+        assert!(boundaries.dependencies.is_some());
+        let deps = boundaries.dependencies.as_ref().unwrap();
+        assert!(deps.allow.is_some());
+        assert!(deps.deny.is_none()); // This should be None, not null
+    }
+
+    #[test]
+    fn test_prune_tasks_preserves_boundaries_structure() {
+        let json_with_boundaries = r#"{
+            "tasks": {
+                "build": {},
+                "app-a#build": {}
+            },
+            "boundaries": {
+                "dependencies": {
+                    "allow": []
+                }
+            }
+        }"#;
+
+        let parsed: RawTurboJson = RawRootTurboJson::parse(json_with_boundaries, "turbo.json")
+            .unwrap()
+            .into();
+
+        // Simulate the prune operation
+        let pruned = parsed.prune_tasks(&["app-a"]);
+
+        // Serialize the pruned config
+        let serialized = serde_json::to_string_pretty(&pruned).unwrap();
+
+        // Parse the serialized config to ensure it's valid
+        let reparsed_result = RawRootTurboJson::parse(&serialized, "turbo.json");
+        assert!(
+            reparsed_result.is_ok(),
+            "Failed to parse pruned config: {:?}",
+            reparsed_result.err()
+        );
+
+        let reparsed: RawTurboJson = reparsed_result.unwrap().into();
+
+        // Verify boundaries structure is preserved
+        assert!(reparsed.boundaries.is_some());
+        let boundaries = reparsed.boundaries.as_ref().unwrap();
+        assert!(boundaries.dependencies.is_some());
+        let deps = boundaries.dependencies.as_ref().unwrap();
+        assert!(deps.allow.is_some());
+        assert!(deps.deny.is_none()); // This should be None, not serialized as
+        // null
     }
 }
