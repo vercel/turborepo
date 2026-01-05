@@ -16,7 +16,9 @@ use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
     init_telemetry, track_usage, TelemetryHandle,
 };
-use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, UIMode};
+use turborepo_types::{
+    ContinueMode, DryRunMode, EnvMode, LogOrder, LogPrefix, OutputLogsMode, UIMode,
+};
 use turborepo_ui::{ColorConfig, GREY};
 
 use crate::{
@@ -40,21 +42,6 @@ pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 const DEFAULT_NUM_WORKERS: u32 = 10;
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
-
-// Re-export OutputLogsMode from turborepo-types for backward compatibility.
-// New code should import directly from `turborepo_types::OutputLogsMode`.
-// Re-export EnvMode from turborepo-types for backward compatibility.
-// New code should import directly from `turborepo_types::EnvMode`.
-#[deprecated(
-    since = "2.4.0",
-    note = "Import `EnvMode` directly from `turborepo_types` instead"
-)]
-pub use turborepo_types::EnvMode;
-#[deprecated(
-    since = "2.4.0",
-    note = "Import `OutputLogsMode` directly from `turborepo_types` instead"
-)]
-pub use turborepo_types::OutputLogsMode;
 
 /// The parsed arguments from the command line. In general we should avoid using
 /// or mutating this directly, and instead use the fully canonicalized `Opts`
