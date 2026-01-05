@@ -78,7 +78,12 @@ impl<W: Write> TaskCacheOutput<W> {
 impl<W: Write> CacheOutput for TaskCacheOutput<W> {
     fn status(&mut self, message: &str, result: CacheResult) {
         match self {
-            TaskCacheOutput::Direct(direct) => direct.output(message),
+            TaskCacheOutput::Direct(direct) => {
+                // Only output if there's a message to display
+                if !message.is_empty() {
+                    direct.output(message);
+                }
+            }
             TaskCacheOutput::UI(task) => task.status(message, result),
         }
     }
