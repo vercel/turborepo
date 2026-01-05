@@ -490,11 +490,11 @@ impl RunBuilder {
             .should_print_prelude_override
             .unwrap_or_else(|| self.will_execute_tasks());
 
-        let observability_handle = match (
-            self.opts.future_flags.experimental_observability,
-            self.opts.experimental_observability.as_ref(),
-        ) {
-            (true, Some(opts)) => {
+        let observability_handle = self
+            .opts
+            .experimental_observability
+            .as_ref()
+            .and_then(|opts| {
                 let token = opts
                     .otel
                     .as_ref()
@@ -503,9 +503,7 @@ impl RunBuilder {
                     .then(|| self.api_auth.as_ref().map(|auth| auth.token.as_str()))
                     .flatten();
                 observability::Handle::try_init(opts, token)
-            }
-            _ => None,
-        };
+            });
 
         Ok(Run {
             version: self.version,
