@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = { workspace = true }
 license = "MIT"
 
+[features]
+default = []
+otel = ["dep:turborepo-otel"]
+
 [dependencies]
 chrono = { workspace = true }
 itertools = { workspace = true }
@@ -17,9 +21,11 @@ tracing = { workspace = true }
 turbopath = { workspace = true }
 turborepo-cache = { workspace = true }
 turborepo-ci = { workspace = true }
+turborepo-config = { path = "../turborepo-config" }
 turborepo-env = { workspace = true }
 turborepo-hash = { workspace = true }
 turborepo-lockfiles = { workspace = true }
+turborepo-otel = { workspace = true, optional = true }
 turborepo-repository = { workspace = true }
 turborepo-scm = { workspace = true }
 turborepo-task-id = { workspace = true }

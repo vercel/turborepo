@@ -1,4 +1,4 @@
-use crate::config::ExperimentalOtelOptions;
+use turborepo_config::ExperimentalOtelOptions;
 
 /// Initialize an OpenTelemetry observability handle from configuration options.
 /// Returns `None` when OTel is disabled at compile time.

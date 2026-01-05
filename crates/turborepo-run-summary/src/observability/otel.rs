@@ -1,11 +1,14 @@
 use std::{sync::Arc, time::Duration};
 
+use turborepo_config::{
+    ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
+};
 use turborepo_otel::{RunMetricsPayload, TaskCacheStatus, TaskMetricsPayload};
 
 use super::{Handle, RunObserver};
 use crate::{
-    config::{ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol},
-    run::summary::{CacheStatus, RunSummary, TaskSummary},
+    task::{CacheStatus, TaskSummary},
+    RunSummary,
 };
 
 /// OpenTelemetry-based observer implementation.

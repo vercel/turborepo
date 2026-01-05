@@ -20,6 +20,7 @@ use turborepo_repository::{
     package_json,
     package_json::PackageJson,
 };
+use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::TaskName;
@@ -45,7 +46,6 @@ use crate::{
     config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
-    observability,
     opts::Opts,
     run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,

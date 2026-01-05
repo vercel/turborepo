@@ -6,6 +6,7 @@
 mod duration;
 mod execution;
 mod global_hash;
+pub mod observability;
 mod scm;
 mod task;
 mod task_factory;
@@ -16,6 +17,7 @@ pub use execution::{
     ExecutionSummary, ExecutionTracker, SummaryState, TaskState, TaskSummaryInfo, TaskTracker,
 };
 pub use global_hash::{GlobalEnvConfiguration, GlobalEnvVarSummary, GlobalHashSummary};
+pub use observability::Handle as ObservabilityHandle;
 pub use scm::SCMState;
 pub use task::{
     SharedTaskSummary, SinglePackageTaskSummary, TaskCacheSummary, TaskEnvConfiguration,

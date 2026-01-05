@@ -13,7 +13,7 @@ rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 
 daemon-package-discovery = []
 daemon-file-hashing = []
-otel = ["dep:turborepo-otel"]
+otel = ["turborepo-run-summary/otel"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
@@ -126,7 +126,6 @@ turborepo-json-rewrite = { path = "../turborepo-json-rewrite" }
 turborepo-lockfiles = { workspace = true }
 turborepo-microfrontends = { workspace = true }
 turborepo-microfrontends-proxy = { workspace = true }
-turborepo-otel = { workspace = true, optional = true }
 turborepo-process = { workspace = true }
 turborepo-profile-md = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
