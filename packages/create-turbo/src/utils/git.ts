@@ -71,7 +71,7 @@ export function tryGitInit(root: string): boolean {
 
     execSync("git checkout -b main", { stdio: "ignore", cwd: root });
     execSync("git add -A", { stdio: "ignore", cwd: root });
-    execSync('git commit -m "Initial commit from Create Turbo"', {
+    execSync('git commit -m "Initial commit from create-turbo"', {
       stdio: "ignore",
       cwd: root,
     });

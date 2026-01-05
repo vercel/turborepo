@@ -49,7 +49,7 @@ describe("git", () => {
         "git init",
         "git checkout -b main",
         "git add -A",
-        'git commit -m "Initial commit from Create Turbo"',
+        'git commit -m "Initial commit from create-turbo"',
       ];
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length);
       calls.forEach((call) => {
@@ -63,7 +63,7 @@ describe("git", () => {
 
     it("creates exactly one commit with all changes", async () => {
       const { root } = useFixture({ fixture: `git` });
-      const commitCalls: string[] = [];
+      const commitCalls: Array<string> = [];
       const mockExecSync = jest
         .spyOn(childProcess, "execSync")
         .mockImplementation((command) => {
@@ -87,19 +87,19 @@ describe("git", () => {
       // Should have exactly one commit call
       expect(commitCalls).toHaveLength(1);
       expect(commitCalls[0]).toBe(
-        'git commit -m "Initial commit from Create Turbo"'
+        'git commit -m "Initial commit from create-turbo"'
       );
       mockExecSync.mockRestore();
     });
 
     it("runs all git commands in the project root directory", async () => {
       const { root } = useFixture({ fixture: `git` });
-      const cwdValues: (string | undefined)[] = [];
+      const cwdValues: Array<string | undefined> = [];
       const mockExecSync = jest
         .spyOn(childProcess, "execSync")
         .mockImplementation((command, options) => {
           const opts = options as { cwd?: string };
-          cwdValues.push(opts?.cwd);
+          cwdValues.push(opts.cwd);
           const cmd = command.toString();
           if (cmd === GIT_REPO_COMMAND) {
             throw new Error("not in git repo");
@@ -160,7 +160,11 @@ describe("git", () => {
       const result = tryGitInit(root);
       expect(result).toBe(false);
 
-      const calls: string[] = [GIT_REPO_COMMAND, HG_REPO_COMMAND, "git init"];
+      const calls: Array<string> = [
+        GIT_REPO_COMMAND,
+        HG_REPO_COMMAND,
+        "git init",
+      ];
 
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length);
       calls.forEach((call) => {
