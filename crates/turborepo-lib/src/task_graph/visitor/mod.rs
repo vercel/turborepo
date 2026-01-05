@@ -30,13 +30,12 @@ use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
-use turborepo_types::{ResolvedLogOrder, ResolvedLogPrefix};
+use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
 use turborepo_ui::{
     sender::UISender, ColorConfig, ColorSelector, OutputClient, OutputSink, PrefixedUI,
 };
 
 use crate::{
-    cli::EnvMode,
     engine::{Engine, ExecutionOptions},
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,

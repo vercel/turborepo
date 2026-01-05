@@ -1,37 +1,15 @@
 //! turbo.json configuration
-//! Turbo.json module
 //!
 //! Re-exports from turborepo-turbo-json crate with loader code for
 //! turborepo-lib specific functionality (MFE, task_access).
 
 mod loader;
 
-// Re-export the main types from turborepo-turbo-json.
-// Some re-exports are used by other crates or in tests, not within this module.
-#[allow(unused_imports)]
+// Re-export types from turborepo-turbo-json that are used within turborepo-lib.
+// Note: This module is private to turborepo-lib, so we only re-export what's
+// needed internally.
 pub use turborepo_turbo_json::{
-    // Functions
-    task_outputs_from_processed,
-    // FutureFlags
-    FutureFlags,
-    // Raw types
-    HasConfigBeyondExtends,
-    Pipeline,
-    // Processed types
-    ProcessedOutputs,
-    ProcessedTaskDefinition,
-    RawPackageTurboJson,
-    RawRemoteCacheOptions,
-    RawRootTurboJson,
-    RawTaskDefinition,
-    RawTurboJson,
-    SpacesJson,
-    // Extension traits
-    TaskInputsFromProcessed,
-    // TurboJson itself
-    TurboJson,
-    // Validator
-    TOPOLOGICAL_PIPELINE_DELIMITER,
+    FutureFlags, Pipeline, RawRootTurboJson, RawTaskDefinition, RawTurboJson, TurboJson,
 };
 
 // Re-export the parser module for types like parser::Error
@@ -39,19 +17,10 @@ pub mod parser {
     pub use turborepo_turbo_json::parser::BiomeParseError as Error;
 }
 
-// Re-export the validator module
-pub mod validator {
-    #[allow(unused_imports)]
-    pub use turborepo_turbo_json::validator::*;
-}
-
 // Loader code stays in turborepo-lib (depends on MFE, task_access)
 use std::collections::HashMap;
 
 pub use loader::{TurboJsonReader, UnifiedTurboJsonLoader};
-// Re-export TaskDefinitionFromProcessed from turborepo-engine (used by dependent crates)
-#[allow(unused_imports)]
-pub use turborepo_engine::TaskDefinitionFromProcessed;
 use turborepo_errors::Spanned;
 use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;

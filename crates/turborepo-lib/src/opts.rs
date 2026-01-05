@@ -526,7 +526,7 @@ mod test {
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_task_id::TaskId;
     use turborepo_types::{
-        ContinueMode, DryRunMode, ResolvedLogOrder, ResolvedLogPrefix, TaskArgs, UIMode,
+        ContinueMode, DryRunMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, TaskArgs, UIMode,
     };
     use turborepo_ui::ColorConfig;
 
@@ -643,7 +643,7 @@ mod test {
             tasks: opts_input.tasks,
             concurrency: 10,
             parallel: opts_input.parallel,
-            env_mode: crate::cli::EnvMode::Loose,
+            env_mode: EnvMode::Loose,
             cache_dir: camino::Utf8PathBuf::new(),
             framework_inference: true,
             profile: None,

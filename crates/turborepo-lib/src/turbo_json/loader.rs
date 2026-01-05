@@ -43,9 +43,6 @@ fn loader_error_to_config_error(err: LoaderError) -> Error {
     }
 }
 
-/// Type alias for TurboJsonLoader with MicrofrontendsConfigs updater
-pub type MfeTurboJsonLoader = TurboJsonLoader<MicrofrontendsConfigs>;
-
 /// A unified TurboJson loader that can handle both MFE and non-MFE cases.
 ///
 /// This enum wraps the generic `TurboJsonLoader` to provide a single type
@@ -170,10 +167,10 @@ mod test {
     use turborepo_repository::package_json::PackageJson;
     use turborepo_task_id::TaskName;
     use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
+    use turborepo_types::TaskDefinition;
     use turborepo_unescape::UnescapedString;
 
     use super::*;
-    use crate::task_graph::TaskDefinition;
 
     #[test_case(
         Some(r#"{ "tasks": {"//#build": {"env": ["SPECIAL_VAR"]}} }"#),

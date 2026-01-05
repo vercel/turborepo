@@ -1,9 +1,10 @@
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::CacheClient;
 use turborepo_auth::Token;
+use turborepo_json_rewrite::set_path;
 
 use super::{write_token, Error};
-use crate::{commands::CommandBase, opts::APIClientOpts, rewrite_json};
+use crate::{commands::CommandBase, opts::APIClientOpts};
 
 #[derive(Default, Debug, PartialEq)]
 struct ManualLoginOptions<'a> {
@@ -151,7 +152,7 @@ fn write_remote(
     let turbo_json_before = root_turbo_json
         .read_existing_to_string()?
         .unwrap_or_else(|| r#"{}"#.to_string());
-    let with_api_url = rewrite_json::set_path(
+    let with_api_url = set_path(
         &turbo_json_before,
         &["remoteCache", "apiUrl"],
         &serde_json::to_string(api_url).unwrap(),
@@ -160,7 +161,7 @@ fn write_remote(
         TeamIdentifier::Id(id) => ("teamId", id),
         TeamIdentifier::Slug(slug) => ("teamSlug", slug),
     };
-    let with_team = rewrite_json::set_path(
+    let with_team = set_path(
         &with_api_url,
         &["remoteCache", key],
         &serde_json::to_string(&value).unwrap(),
