@@ -1,12 +1,11 @@
 mod command;
 mod exec;
 
-// Re-export output types from turborepo-task-executor
 use std::{
     borrow::Cow,
     collections::HashSet,
     io::Write,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, Mutex},
 };
 
 use console::{Style, StyledObject};
@@ -15,7 +14,6 @@ use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use regex::Regex;
 use tokio::sync::mpsc;
 use tracing::{debug, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
@@ -26,7 +24,8 @@ use turborepo_errors::TURBO_SITE;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker};
-pub use turborepo_task_executor::{StdWriter, TaskOutput};
+// Re-export output types and shared functions from turborepo-task-executor
+pub use turborepo_task_executor::{turbo_regex, StdWriter, TaskOutput};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
@@ -112,6 +111,8 @@ pub enum Error {
     InternalErrors(String),
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
+    #[error(transparent)]
+    CommandProvider(#[from] turborepo_task_executor::CommandProviderError),
 }
 
 impl<'a> Visitor<'a> {
@@ -477,7 +478,7 @@ impl<'a> Visitor<'a> {
         logger
     }
 
-    fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
+    pub(crate) fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
         match self.run_opts.log_prefix {
             ResolvedLogPrefix::Task if self.run_opts.single_package => task_id.task().into(),
             ResolvedLogPrefix::Task => format!("{}:{}", task_id.package(), task_id.task()).into(),
@@ -486,7 +487,7 @@ impl<'a> Visitor<'a> {
     }
 
     // Task ID as displayed in error messages
-    fn display_task_id(&self, task_id: &TaskId) -> String {
+    pub(crate) fn display_task_id(&self, task_id: &TaskId) -> String {
         match self.run_opts.single_package {
             true => task_id.task().to_string(),
             false => task_id.to_string(),
@@ -526,9 +527,4 @@ impl<'a> Visitor<'a> {
         // No need to start a UI on dry run
         self.ui_sender = None;
     }
-}
-
-fn turbo_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?:^|\s)turbo(?:$|\s)").unwrap())
 }
