@@ -277,7 +277,7 @@ describe("create-turbo", () => {
     mockExecSync.mockRestore();
   });
 
-  it("removes .git directory when --no-git flag is used", async () => {
+  it("does not initialize git and removes .git directory when --no-git flag is used", async () => {
     const { root } = useFixture({ fixture: "create-turbo-no-git" });
     const packageManager = "npm";
 
@@ -313,6 +313,10 @@ describe("create-turbo", () => {
         return "success";
       });
 
+    const mockTryGitInit = jest
+      .spyOn(gitUtils, "tryGitInit")
+      .mockReturnValue(true);
+
     const mockRemoveGitDirectory = jest
       .spyOn(gitUtils, "removeGitDirectory")
       .mockReturnValue(true);
@@ -321,20 +325,22 @@ describe("create-turbo", () => {
       packageManager,
       skipInstall: true,
       example: "default",
-      noGit: true,
+      git: false,
       telemetry,
     });
 
+    expect(mockTryGitInit).not.toHaveBeenCalled();
     expect(mockRemoveGitDirectory).toHaveBeenCalledWith(root);
 
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
     mockExecSync.mockRestore();
+    mockTryGitInit.mockRestore();
     mockRemoveGitDirectory.mockRestore();
   });
 
-  it("does not remove .git directory when --no-git flag is not used", async () => {
+  it("initializes git and does not remove .git directory when --no-git flag is not used", async () => {
     const { root } = useFixture({ fixture: "create-turbo-with-git" });
     const packageManager = "npm";
 
@@ -370,6 +376,10 @@ describe("create-turbo", () => {
         return "success";
       });
 
+    const mockTryGitInit = jest
+      .spyOn(gitUtils, "tryGitInit")
+      .mockReturnValue(true);
+
     const mockRemoveGitDirectory = jest
       .spyOn(gitUtils, "removeGitDirectory")
       .mockReturnValue(true);
@@ -378,16 +388,18 @@ describe("create-turbo", () => {
       packageManager,
       skipInstall: true,
       example: "default",
-      noGit: false,
+      git: true,
       telemetry,
     });
 
+    expect(mockTryGitInit).toHaveBeenCalledWith(root);
     expect(mockRemoveGitDirectory).not.toHaveBeenCalled();
 
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
     mockExecSync.mockRestore();
+    mockTryGitInit.mockRestore();
     mockRemoveGitDirectory.mockRestore();
   });
 });

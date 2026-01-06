@@ -13,12 +13,7 @@ import {
   DownloadError,
   logger,
 } from "@turbo/utils";
-import {
-  tryGitCommit,
-  tryGitInit,
-  tryGitAdd,
-  removeGitDirectory,
-} from "../../utils/git";
+import { tryGitInit, removeGitDirectory } from "../../utils/git";
 import { isOnline } from "../../utils/isOnline";
 import { transforms } from "../../transforms";
 import { TransformError } from "../../transforms/errors";
@@ -83,7 +78,7 @@ export async function create(
 
   let isMaintainedByCoreTeam = false;
 
-  const { packageManager, skipInstall, skipTransforms, noGit } = opts;
+  const { packageManager, skipInstall, skipTransforms, git } = opts;
 
   const [online, availablePackageManagers] = await Promise.all([
     isOnline(),
@@ -129,9 +124,6 @@ export async function create(
 
   const { hasPackageJson, availableScripts, repoInfo } = projectData;
 
-  // create a new git repo after creating the project
-  tryGitInit(root, `feat(create-turbo): create ${exampleName}`);
-
   // read the project after creating it to get details about workspaces, package manager, etc.
   let project: Project = {} as Project;
   try {
@@ -158,14 +150,6 @@ export async function create(
           },
           opts,
         });
-
-        if (transformResult.result === "success") {
-          // add first to ensure any transforms that add new files are included
-          tryGitAdd();
-          tryGitCommit(
-            `feat(create-turbo): apply ${transformResult.name} transform`
-          );
-        }
 
         if (transformResult.metaJson?.maintainedByCoreTeam) {
           isMaintainedByCoreTeam = true;
@@ -252,7 +236,6 @@ export async function create(
         },
       });
 
-      tryGitCommit("feat(create-turbo): install dependencies");
       loader.stop();
     }
   }
@@ -312,11 +295,17 @@ export async function create(
     logger.log("- Run a command twice to hit cache");
   }
 
-  // remove .git directory if --no-git flag is used
-  if (noGit) {
-    if (!removeGitDirectory(root)) {
-      logger.warn("Failed to remove '.git' directory");
+  // Initialize git repository with a single commit containing all changes
+  // This is done at the end so all files (including transforms and installed deps) are in one commit
+  // Note: git defaults to true, --no-git sets it to false
+  if (git !== false) {
+    if (tryGitInit(root)) {
+      info("Initialized a git repository.");
     }
+  } else {
+    // User explicitly doesn't want git - remove any .git directory
+    // (e.g., if the example template came with one)
+    removeGitDirectory(root);
   }
 
   opts.telemetry?.trackCommandStatus({ command: "create", status: "end" });
