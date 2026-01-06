@@ -10,17 +10,17 @@ describe("raw", () => {
       command: "run",
       options: { config: "../config.ts", root: "../" },
       target: "run",
-      calledWith: { config: "../config.ts", root: "../" },
+      calledWith: { config: "../config.ts", root: "../" }
     },
     {
       command: "run",
       options: {
         generator_name: "thisOne",
         config: "../config.ts",
-        root: "../",
+        root: "../"
       },
       target: "run",
-      calledWith: { config: "../config.ts", root: "../" },
+      calledWith: { config: "../config.ts", root: "../" }
     },
     {
       command: "run",
@@ -28,14 +28,14 @@ describe("raw", () => {
         generator_name: "thisOne",
         config: "../config.ts",
         root: "../",
-        args: ["cool name", "packages/cool-name"],
+        args: ["cool name", "packages/cool-name"]
       },
       target: "run",
       calledWith: {
         config: "../config.ts",
         root: "../",
-        args: ["cool name", "packages/cool-name"],
-      },
+        args: ["cool name", "packages/cool-name"]
+      }
     },
     // workspace
     {
@@ -45,33 +45,33 @@ describe("raw", () => {
       calledWith: {
         empty: true,
         copy: false,
-        showAllDependencies: false,
-      },
+        showAllDependencies: false
+      }
     },
     {
       command: "workspace",
       options: {
-        copy: "",
+        copy: ""
       },
       target: "workspace",
       calledWith: {
         empty: false,
         copy: true,
-        showAllDependencies: false,
-      },
+        showAllDependencies: false
+      }
     },
     {
       command: "workspace",
       options: {
         copy: "some-workspace",
-        show_all_dependencies: false,
+        show_all_dependencies: false
       },
       target: "workspace",
       calledWith: {
         copy: "some-workspace",
         empty: false,
-        showAllDependencies: false,
-      },
+        showAllDependencies: false
+      }
     },
     {
       command: "workspace",
@@ -79,7 +79,7 @@ describe("raw", () => {
         type: "package",
         name: "cool-name",
         copy: true,
-        show_all_dependencies: true,
+        show_all_dependencies: true
       },
       target: "workspace",
       calledWith: {
@@ -87,8 +87,8 @@ describe("raw", () => {
         name: "cool-name",
         copy: true,
         empty: false,
-        showAllDependencies: true,
-      },
+        showAllDependencies: true
+      }
     },
     {
       command: "workspace",
@@ -99,7 +99,7 @@ describe("raw", () => {
         copy: "tailwind-css",
         destination: "../../",
         show_all_dependencies: true,
-        example_path: "packages/cool-name",
+        example_path: "packages/cool-name"
       },
       target: "workspace",
       calledWith: {
@@ -109,8 +109,8 @@ describe("raw", () => {
         copy: "tailwind-css",
         destination: "../../",
         showAllDependencies: true,
-        examplePath: "packages/cool-name",
-      },
+        examplePath: "packages/cool-name"
+      }
     },
     // different casing
     {
@@ -122,7 +122,7 @@ describe("raw", () => {
         copy: "tailwind-css",
         destination: "../../",
         "show-all-dependencies": true,
-        "example-path": "packages/cool-name",
+        "example-path": "packages/cool-name"
       },
       target: "workspace",
       calledWith: {
@@ -132,9 +132,9 @@ describe("raw", () => {
         copy: "tailwind-css",
         destination: "../../",
         showAllDependencies: true,
-        examplePath: "packages/cool-name",
-      },
-    },
+        examplePath: "packages/cool-name"
+      }
+    }
   ];
   it.each(testMatrix)(
     "$command and $options calls $target with $calledWith",

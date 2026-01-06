@@ -12,7 +12,7 @@ const notifyUpdate = createNotifyUpdate({
   upgradeCommand: async () => {
     try {
       const { packageManager } = await getWorkspaceDetails({
-        root: process.cwd(),
+        root: process.cwd()
       });
       if (packageManager === "yarn") {
         return "yarn global add @turbo/codemod";
@@ -23,7 +23,7 @@ const notifyUpdate = createNotifyUpdate({
     } catch {
       return "npm i -g @turbo/codemod";
     }
-  },
+  }
 });
 
 const codemodCli = new Command();

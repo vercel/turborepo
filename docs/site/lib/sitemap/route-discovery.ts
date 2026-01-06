@@ -17,7 +17,7 @@ import { join } from "node:path";
 
 /** Routes that should be excluded from the sitemap */
 const EXCLUDED_ROUTES = new Set([
-  "/confirm", // Thank you page, not meant for SEO indexing
+  "/confirm" // Thank you page, not meant for SEO indexing
 ]);
 
 /**

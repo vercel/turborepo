@@ -10,14 +10,14 @@ export const { GET } = createSearchAPI("advanced", {
       description: page.data.description,
       url: page.url,
       id: page.url,
-      structuredData: page.data.structuredData,
+      structuredData: page.data.structuredData
     })),
     ...openapiPages.getPages().map((page) => ({
       title: page.data.title,
       description: page.data.description,
       url: page.url,
       id: page.url,
-      structuredData: page.data.structuredData,
-    })),
-  ],
+      structuredData: page.data.structuredData
+    }))
+  ]
 });

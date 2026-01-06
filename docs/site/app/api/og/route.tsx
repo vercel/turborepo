@@ -29,7 +29,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
         await fetch(new URL("./bg.jpeg", import.meta.url)).then((res) =>
           res.arrayBuffer()
         )
-      ),
+      )
     ]);
 
     // Default to empty string if URL is not available
@@ -44,74 +44,72 @@ export async function GET(req: NextApiRequest): Promise<Response> {
     }
 
     return new ImageResponse(
-      (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "100%",
+          height: "100%",
+          fontFamily: "Geist Mono",
+          fontWeight: 700,
+          fontSize: 60,
+          backgroundImage: `url(data:image/jpeg;base64,${bg})`,
+          backgroundSize: "1200px 630px",
+          color: "#fff"
+        }}
+      >
         <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
-            height: "100%",
-            fontFamily: "Geist Mono",
-            fontWeight: 700,
-            fontSize: 60,
-            backgroundImage: `url(data:image/jpeg;base64,${bg})`,
-            backgroundSize: "1200px 630px",
-            color: "#fff",
-          }}
+          style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}
         >
-          <div
-            style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}
-          >
-            <RepoLogo />
-          </div>
-          {title ? (
-            <div
-              style={{
-                fontFamily: "Geist Mono",
-                fontSize: 36,
-                letterSpacing: -1.5,
-                padding: "40px 20px 30px",
-                textAlign: "center",
-                backgroundImage: "linear-gradient(to bottom, #fff, #aaa)",
-                backgroundClip: "text",
-                color: "transparent",
-              }}
-            >
-              {title}
-            </div>
-          ) : null}
+          <RepoLogo />
+        </div>
+        {title ? (
           <div
             style={{
               fontFamily: "Geist Mono",
-              fontSize: 18,
-              marginTop: 80,
-              display: "flex",
-              color: "#fff",
-              alignItems: "center",
+              fontSize: 36,
+              letterSpacing: -1.5,
+              padding: "40px 20px 30px",
+              textAlign: "center",
+              backgroundImage: "linear-gradient(to bottom, #fff, #aaa)",
+              backgroundClip: "text",
+              color: "transparent"
             }}
           >
-            <div style={{ marginRight: 12 }}>by</div>
-            <VercelLogo fill="white" height={25} />
+            {title}
           </div>
+        ) : null}
+        <div
+          style={{
+            fontFamily: "Geist Mono",
+            fontSize: 18,
+            marginTop: 80,
+            display: "flex",
+            color: "#fff",
+            alignItems: "center"
+          }}
+        >
+          <div style={{ marginRight: 12 }}>by</div>
+          <VercelLogo fill="white" height={25} />
         </div>
-      ),
+      </div>,
       {
         fonts: [
           {
             name: "Geist Mono",
             data: geistMono,
             weight: 700 as const,
-            style: "normal" as const,
+            style: "normal" as const
           },
           {
             name: "Geist Sans",
             data: geist,
             weight: 400 as const,
-            style: "normal" as const,
-          },
-        ],
+            style: "normal" as const
+          }
+        ]
       }
     );
   } catch (err: unknown) {
@@ -120,14 +118,14 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       return new Response(undefined, {
         status: 302,
         headers: {
-          Location: "https://turborepo.com/og-image.png",
-        },
+          Location: "https://turborepo.com/og-image.png"
+        }
       });
     }
 
     // We want to see the 500s everywhere else.
     return new Response(undefined, {
-      status: 500,
+      status: 500
     });
   }
 }

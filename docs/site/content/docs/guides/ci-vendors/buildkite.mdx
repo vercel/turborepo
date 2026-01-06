@@ -3,7 +3,7 @@ title: Buildkite
 description: Learn how to use Buildkite with Turborepo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 
 The following example shows how to use Turborepo with [Buildkite](https://buildkite.com/).
 
@@ -125,7 +125,7 @@ To create your pipeline in the Buildkite dashboard, you'll need to first upload 
 
 ```yaml title=".buildkite/pipeline.yml"
 steps:
-  - label: ':pipeline:'
+  - label: ":pipeline:"
     command: buildkite-agent pipeline upload
 ```
 
@@ -154,7 +154,7 @@ To use Vercel Remote Caching, you can get the value of these variables in a few 
 
    ```yaml title=".buildkite/pipeline.yml"
    steps:
-     - label: ':test_tube: Test'
+     - label: ":test_tube: Test"
        command: |
          npm install
          npm test
@@ -164,7 +164,7 @@ To use Vercel Remote Caching, you can get the value of these variables in a few 
                TURBO_TOKEN: TURBO_TOKEN
                TURBO_TEAM: TURBO_TEAM
 
-     - label: ':hammer: Build'
+     - label: ":hammer: Build"
        command: |
          npm install
          npm run build

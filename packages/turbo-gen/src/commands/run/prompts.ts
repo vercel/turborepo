@@ -4,7 +4,7 @@ import type { Generator } from "../../utils/plop";
 
 export async function customGenerators({
   generators,
-  generator,
+  generator
 }: {
   generators: Array<Generator | Separator>;
   generator?: string;
@@ -14,7 +14,7 @@ export async function customGenerators({
       generators.find((g) => !(g instanceof Separator) && g.name === generator)
     ) {
       return {
-        selectedGenerator: generator,
+        selectedGenerator: generator
       };
     }
 
@@ -36,9 +36,9 @@ export async function customGenerators({
         name: gen.description
           ? `  ${gen.name}: ${gen.description}`
           : `  ${gen.name}`,
-        value: gen.name,
+        value: gen.name
       };
-    }),
+    })
   });
 
   return generatorAnswer;
@@ -53,13 +53,13 @@ export async function chooseGeneratorTemplate() {
     choices: [
       {
         name: "JavaScript",
-        value: "js",
+        value: "js"
       },
       {
         name: "TypeScript",
-        value: "ts",
-      },
-    ],
+        value: "ts"
+      }
+    ]
   });
 }
 
@@ -67,6 +67,6 @@ export async function confirm({ message }: { message: string }) {
   return prompt<{ answer: boolean }>({
     type: "confirm",
     name: "answer",
-    message,
+    message
   });
 }

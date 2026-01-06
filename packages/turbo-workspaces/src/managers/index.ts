@@ -9,5 +9,5 @@ export const MANAGERS: Record<PackageManager, ManagerHandler> = {
   pnpm,
   yarn,
   npm,
-  bun,
+  bun
 };

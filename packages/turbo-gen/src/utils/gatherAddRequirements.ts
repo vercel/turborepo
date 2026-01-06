@@ -5,7 +5,7 @@ import { getWorkspaceList } from "./getWorkspaceList";
 
 export async function gatherAddRequirements({
   project,
-  opts,
+  opts
 }: TurboGeneratorArguments) {
   let source: Workspace | undefined;
 
@@ -20,13 +20,13 @@ export async function gatherAddRequirements({
     message:
       opts.method === "copy" && opts.copy.source === "external" && suggestion
         ? `What type of workspace should "${suggestion}" be created as?`
-        : undefined,
+        : undefined
   });
 
   const { answer: name } = await prompts.name({
     override: opts.name,
     workspaceType: type,
-    suggestion,
+    suggestion
   });
 
   // if we're copying an internal workspace, we need to know which one
@@ -34,7 +34,7 @@ export async function gatherAddRequirements({
     const { answer } = await prompts.source({
       override: opts.copy.source,
       workspaces: getWorkspaceList({ project, type }),
-      workspaceName: name,
+      workspaceName: name
     });
     source = answer;
   }
@@ -43,14 +43,14 @@ export async function gatherAddRequirements({
     workspaceType: type,
     workspaceName: name,
     project,
-    destination: opts.destination,
+    destination: opts.destination
   });
 
   const dependencies = await prompts.dependencies({
     workspaceName: name,
     project,
     workspaceSource: source,
-    showAllDependencies: opts.showAllDependencies,
+    showAllDependencies: opts.showAllDependencies
   });
 
   return {
@@ -58,6 +58,6 @@ export async function gatherAddRequirements({
     name,
     location,
     source,
-    dependencies,
+    dependencies
   };
 }

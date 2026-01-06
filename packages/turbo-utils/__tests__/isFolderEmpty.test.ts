@@ -8,8 +8,8 @@ describe("isFolderEmpty", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
     options: {
-      emptyFixture: true,
-    },
+      emptyFixture: true
+    }
   });
 
   it("correctly identifies an empty directory", async () => {

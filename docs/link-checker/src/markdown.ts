@@ -39,7 +39,7 @@ const EXCLUDED_HASHES: string[] = [
   // Start: hashlinks created by Fumadocs
   "create-turbo-config",
   "add-package-manager",
-  "set-default-outputs",
+  "set-default-outputs"
   // End: hashlinks created by Fumadocs
 ];
 
@@ -197,7 +197,7 @@ const validateInternalLink =
       errors.push({
         type: "link",
         href,
-        doc,
+        doc
       });
     } else if (hash && !EXCLUDED_HASHES.includes(hash)) {
       // Check if the hash link points to an existing section within the document
@@ -207,7 +207,7 @@ const validateInternalLink =
         errors.push({
           type: "hash",
           href,
-          doc,
+          doc
         });
       }
     }
@@ -254,7 +254,7 @@ const validateHashLink = (doc: Document, href: string) => {
   let linkError: LinkError = {
     type: "hash",
     href,
-    doc,
+    doc
   };
   return [linkError];
 };

@@ -11,12 +11,12 @@ import { writeFile } from "node:fs/promises";
 const FILES_TO_WRITE = [
   {
     path: "./lib/site-analytics/index.ts",
-    envVarKey: "SITE_ANALYTICS_MODULE_CODE",
+    envVarKey: "SITE_ANALYTICS_MODULE_CODE"
   },
   {
     path: "./lib/site-analytics/index.ts",
-    envVarKey: "SITE_ANALYTICS_MODULE_CODE",
-  },
+    envVarKey: "SITE_ANALYTICS_MODULE_CODE"
+  }
 ];
 
 async function modifyFiles(): Promise<void> {

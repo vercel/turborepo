@@ -5,7 +5,7 @@ describe("get-transforms-for-migration", () => {
   it("ordering", () => {
     const results = getTransformsForMigration({
       fromVersion: "1.0.0",
-      toVersion: "1.10.0",
+      toVersion: "1.10.0"
     });
 
     expect(results.map((transform) => transform.name)).toEqual([
@@ -14,7 +14,7 @@ describe("get-transforms-for-migration", () => {
       "migrate-env-var-dependencies",
       "set-default-outputs",
       "stabilize-env-mode",
-      "transform-env-literals-to-wildcards",
+      "transform-env-literals-to-wildcards"
     ]);
   });
 });

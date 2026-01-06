@@ -1,7 +1,7 @@
 export const PRODUCT_SLOGANS = {
   turbo:
     "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.",
-  repo: "The build system that makes ship happen.",
+  repo: "The build system that makes ship happen."
 } as const;
 
 export const gitHubRepoUrl = "https://github.com/vercel/turborepo";

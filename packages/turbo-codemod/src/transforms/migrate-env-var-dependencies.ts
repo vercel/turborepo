@@ -23,7 +23,7 @@ export function hasLegacyEnvVarDependencies(config: SchemaV1) {
     "extends" in config ? [] : config.globalDependencies,
     Object.values(config.pipeline).flatMap(
       (pipeline) => pipeline.dependsOn ?? []
-    ),
+    )
   ].flat();
   const envVars = dependsOn.filter((dep) => dep?.startsWith("$"));
   return { hasKeys: Boolean(envVars.length), envVars };
@@ -31,7 +31,7 @@ export function hasLegacyEnvVarDependencies(config: SchemaV1) {
 
 export function migrateDependencies({
   env,
-  deps,
+  deps
 }: {
   env?: Array<string>;
   deps?: Array<string>;
@@ -48,7 +48,7 @@ export function migrateDependencies({
   if (envDeps.size) {
     return {
       deps: otherDeps,
-      env: Array.from(envDeps),
+      env: Array.from(envDeps)
     };
   }
   return { env, deps };
@@ -57,7 +57,7 @@ export function migrateDependencies({
 export function migratePipeline(pipeline: Pipeline) {
   const { deps: dependsOn, env } = migrateDependencies({
     env: pipeline.env,
-    deps: pipeline.dependsOn,
+    deps: pipeline.dependsOn
   });
   const migratedPipeline = { ...pipeline };
   if (dependsOn) {
@@ -81,7 +81,7 @@ export function migrateGlobal(config: SchemaV1) {
 
   const { deps: globalDependencies, env } = migrateDependencies({
     env: config.globalEnv,
-    deps: config.globalDependencies,
+    deps: config.globalDependencies
   });
   const migratedConfig = { ...config };
   if (globalDependencies?.length) {
@@ -108,7 +108,7 @@ export function migrateConfig(config: SchemaV1) {
       const pipeline = migratedConfig.pipeline[pipelineKey];
       migratedConfig.pipeline[pipelineKey] = {
         ...pipeline,
-        ...migratePipeline(pipeline),
+        ...migratePipeline(pipeline)
       };
     }
   });
@@ -117,12 +117,12 @@ export function migrateConfig(config: SchemaV1) {
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   log.info(
@@ -141,7 +141,7 @@ export function transformer({
   if ("turbo" in packageJSON) {
     return runner.abortTransform({
       reason:
-        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first',
+        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first'
     });
   }
 
@@ -149,7 +149,7 @@ export function transformer({
   const turboConfigPath = path.join(root, "turbo.json");
   if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`,
+      reason: `No turbo.json found at ${root}. Is the path correct?`
     });
   }
 
@@ -160,7 +160,7 @@ export function transformer({
 
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: turboJson,
+    after: turboJson
   });
 
   // find and migrate any workspace configs
@@ -170,7 +170,7 @@ export function transformer({
     if ("pipeline" in config && hasLegacyEnvVarDependencies(config).hasKeys) {
       runner.modifyFile({
         filePath,
-        after: migrateConfig(config),
+        after: migrateConfig(config)
       });
     }
   });
@@ -182,7 +182,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

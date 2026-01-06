@@ -59,7 +59,7 @@ interface Testable {
 const NO_PATTERNS = {
   test(_: string): boolean {
     return false;
-  },
+  }
 };
 
 export interface WildcardTests {
@@ -104,6 +104,6 @@ export function wildcardTests(
 
   return {
     inclusions,
-    exclusions,
+    exclusions
   };
 }

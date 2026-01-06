@@ -4,7 +4,7 @@ import { RULES } from "../../../../lib/constants";
 import rule from "../../../../lib/rules/no-undeclared-env-vars";
 
 const ruleTester = new RuleTester({
-  parserOptions: { ecmaVersion: 2020 },
+  parserOptions: { ecmaVersion: 2020 }
 });
 
 const cwd = path.join(__dirname, "../../../../__fixtures__/configs/single");
@@ -12,9 +12,9 @@ const options = (extra: Record<string, unknown> = {}) => ({
   options: [
     {
       cwd,
-      ...extra,
-    },
-  ],
+      ...extra
+    }
+  ]
 });
 
 ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
@@ -23,52 +23,52 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       code: `
           const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = process.env;
         `,
-      ...options(),
+      ...options()
     },
     {
       code: `
           const { NEW_STYLE_ENV_KEY, TASK_ENV_KEY } = process.env;
         `,
-      ...options(),
+      ...options()
     },
     {
       code: `
           const { NEW_STYLE_GLOBAL_ENV_KEY, TASK_ENV_KEY } = process.env;
         `,
-      ...options(),
+      ...options()
     },
     {
       code: `
           const val = process.env["NEW_STYLE_GLOBAL_ENV_KEY"];
         `,
-      ...options(),
+      ...options()
     },
     {
       code: `
           const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = process.env;
         `,
-      ...options(),
+      ...options()
     },
     {
       code: `
           const x = process.env.GLOBAL_ENV_KEY;
           const { TASK_ENV_KEY, GLOBAL_ENV_KEY: renamedX } = process.env;
         `,
-      ...options(),
+      ...options()
     },
     {
       code: "var x = process.env.GLOBAL_ENV_KEY;",
-      ...options(),
+      ...options()
     },
     {
       code: "let x = process.env.TASK_ENV_KEY;",
-      ...options(),
+      ...options()
     },
     {
       code: "const x = process.env.ANOTHER_KEY_VALUE;",
       ...options({
-        allowList: ["^ANOTHER_KEY_[A-Z]+$"],
-      }),
+        allowList: ["^ANOTHER_KEY_[A-Z]+$"]
+      })
     },
     {
       code: `
@@ -76,8 +76,8 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
           var y = process.env.ENV_VAR_TWO;
         `,
       ...options({
-        allowList: ["^ENV_VAR_[A-Z]+$"],
-      }),
+        allowList: ["^ENV_VAR_[A-Z]+$"]
+      })
     },
     {
       code: `
@@ -85,8 +85,8 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
           var y = process.env.ENV_VAR_TWO;
         `,
       ...options({
-        allowList: ["^ENV_VAR_O[A-Z]+$", "ENV_VAR_TWO"],
-      }),
+        allowList: ["^ENV_VAR_O[A-Z]+$", "ENV_VAR_TWO"]
+      })
     },
     {
       code: `
@@ -94,8 +94,8 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
           var oneOrTwo = process.env.ENV_VAR_ONE || process.env.ENV_VAR_TWO;
         `,
       ...options({
-        allowList: ["^ENV_VAR_[A-Z]+$"],
-      }),
+        allowList: ["^ENV_VAR_[A-Z]+$"]
+      })
     },
     {
       code: `
@@ -104,8 +104,8 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
           () => { return process.env.ENV_VAR_ALLOWED }
         `,
       ...options({
-        allowList: ["^ENV_VAR_[A-Z]+$"],
-      }),
+        allowList: ["^ENV_VAR_[A-Z]+$"]
+      })
     },
     {
       code: `
@@ -114,8 +114,8 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
           var foo = process?.env.ENV_VAR_ALLOWED
         `,
       ...options({
-        allowList: ["^ENV_VAR_[A-Z]+$"],
-      }),
+        allowList: ["^ENV_VAR_[A-Z]+$"]
+      })
     },
     {
       code: `
@@ -124,8 +124,8 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
           function test(arg1 = process.env.ENV_VAR_ALLOWED) {};
         `,
       ...options({
-        allowList: ["^ENV_VAR_[A-Z]+$"],
-      }),
+        allowList: ["^ENV_VAR_[A-Z]+$"]
+      })
     },
     {
       code: `
@@ -134,27 +134,27 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
           (arg1 = process.env.ENV_VAR_ALLOWED) => {}
         `,
       ...options({
-        allowList: ["^ENV_VAR_[A-Z]+$"],
-      }),
+        allowList: ["^ENV_VAR_[A-Z]+$"]
+      })
     },
     {
       code: "const getEnv = (key) => process.env[key];",
-      ...options(),
+      ...options()
     },
     {
       code: "function getEnv(key) { return process.env[key]; }",
-      ...options(),
+      ...options()
     },
     {
       code: "for (let x of ['ONE', 'TWO', 'THREE']) { console.log(process.env[x]); }",
-      ...options(),
-    },
+      ...options()
+    }
   ],
   invalid: [
     {
       code: "let { X } = process.env;",
       ...options(),
-      errors: [{ message: "X is not listed as a dependency in turbo.json" }],
+      errors: [{ message: "X is not listed as a dependency in turbo.json" }]
     },
     {
       code: "const { X, Y, Z } = process.env;",
@@ -162,8 +162,8 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         { message: "X is not listed as a dependency in turbo.json" },
         { message: "Y is not listed as a dependency in turbo.json" },
-        { message: "Z is not listed as a dependency in turbo.json" },
-      ],
+        { message: "Z is not listed as a dependency in turbo.json" }
+      ]
     },
     {
       code: "const { X, Y: NewName, Z } = process.env;",
@@ -171,25 +171,25 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         { message: "X is not listed as a dependency in turbo.json" },
         { message: "Y is not listed as a dependency in turbo.json" },
-        { message: "Z is not listed as a dependency in turbo.json" },
-      ],
+        { message: "Z is not listed as a dependency in turbo.json" }
+      ]
     },
     {
       code: "var x = process.env.NOT_THERE;",
       ...options(),
       errors: [
         {
-          message: "NOT_THERE is not listed as a dependency in turbo.json",
-        },
-      ],
+          message: "NOT_THERE is not listed as a dependency in turbo.json"
+        }
+      ]
     },
     {
       code: "var x = process.env.KEY;",
       ...options({
-        allowList: ["^ANOTHER_KEY_[A-Z]+$"],
+        allowList: ["^ANOTHER_KEY_[A-Z]+$"]
       }),
 
-      errors: [{ message: "KEY is not listed as a dependency in turbo.json" }],
+      errors: [{ message: "KEY is not listed as a dependency in turbo.json" }]
     },
     {
       code: `
@@ -200,19 +200,19 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         {
           message:
-            "TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json"
         },
         {
           message:
-            "GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json"
         },
         {
-          message: "ENV_VAR_ONE is not listed as a dependency in turbo.json",
+          message: "ENV_VAR_ONE is not listed as a dependency in turbo.json"
         },
         {
-          message: "ENV_VAR_TWO is not listed as a dependency in turbo.json",
-        },
-      ],
+          message: "ENV_VAR_TWO is not listed as a dependency in turbo.json"
+        }
+      ]
     },
     {
       code: `
@@ -224,17 +224,17 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         {
           message:
-            "GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json"
         },
         {
           message:
-            "TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json"
         },
         {
           message:
-            "ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
-        },
-      ],
+            "ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json"
+        }
+      ]
     },
     {
       code: `
@@ -246,17 +246,17 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         {
           message:
-            "GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json"
         },
         {
           message:
-            "TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json"
         },
         {
           message:
-            "ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
-        },
-      ],
+            "ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json"
+        }
+      ]
     },
     {
       code: `
@@ -268,17 +268,17 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         {
           message:
-            "GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json"
         },
         {
           message:
-            "TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json"
         },
         {
           message:
-            "ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
-        },
-      ],
+            "ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json"
+        }
+      ]
     },
     {
       code: `
@@ -290,17 +290,17 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         {
           message:
-            "GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "GLOBAL_ENV_KEY_NEW is not listed as a dependency in turbo.json"
         },
         {
           message:
-            "TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json",
+            "TASK_ENV_KEY_NEW is not listed as a dependency in turbo.json"
         },
         {
           message:
-            "ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json",
-        },
-      ],
-    },
-  ],
+            "ENV_VAR_NOT_ALLOWED is not listed as a dependency in turbo.json"
+        }
+      ]
+    }
+  ]
 });

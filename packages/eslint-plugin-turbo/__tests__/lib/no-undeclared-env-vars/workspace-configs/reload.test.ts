@@ -8,7 +8,7 @@ import rule from "../../../../lib/rules/no-undeclared-env-vars";
 import { Project } from "../../../../lib/utils/calculate-inputs";
 
 const ruleTester = new RuleTester({
-  parserOptions: { ecmaVersion: 2020, sourceType: "module" },
+  parserOptions: { ecmaVersion: 2020, sourceType: "module" }
 });
 
 // Use a dedicated fixture directory for reload tests to avoid conflicts
@@ -73,9 +73,9 @@ describe("Project reload functionality", () => {
       pipeline: {
         ...(JSON.parse(originalTurboJson) as SchemaV1).pipeline,
         newTask: {
-          outputs: [],
-        },
-      },
+          outputs: []
+        }
+      }
     };
     fs.writeFileSync(turboJsonPath, JSON.stringify(modifiedConfig, null, 2));
 
@@ -126,8 +126,8 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
         const { ENV_2 } = import.meta.env;
       `,
       options: [{ cwd }],
-      filename: webFilename,
-    },
+      filename: webFilename
+    }
   ],
   invalid: [
     {
@@ -139,9 +139,9 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         {
           message:
-            "ENV_3 is not listed as a dependency in the root turbo.json or workspace (apps/web) turbo.json",
-        },
-      ],
-    },
-  ],
+            "ENV_3 is not listed as a dependency in the root turbo.json or workspace (apps/web) turbo.json"
+        }
+      ]
+    }
+  ]
 });

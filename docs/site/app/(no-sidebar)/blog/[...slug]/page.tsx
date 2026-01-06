@@ -9,7 +9,7 @@ import { mdxComponents } from "#mdx-components.tsx";
 
 export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return blog.getPages().map((page) => ({
-    slug: page.slugs,
+    slug: page.slugs
   }));
 }
 
@@ -40,15 +40,15 @@ export async function generateMetadata(props: {
     ...createMetadata({
       title: page.data.title,
       description: page.data.description,
-      canonicalPath: `/blog/${params.slug?.join("/") ?? ""}`,
+      canonicalPath: `/blog/${params.slug?.join("/") ?? ""}`
     }),
     openGraph: {
       images: [
         {
-          url: page.data.ogImage ?? createOgUrl(),
-        },
-      ],
-    },
+          url: page.data.ogImage ?? createOgUrl()
+        }
+      ]
+    }
   };
 }
 

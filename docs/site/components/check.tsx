@@ -1,6 +1,6 @@
 export const Check = ({
   size,
-  className,
+  className
 }: {
   size?: number;
   className?: string;

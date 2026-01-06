@@ -22,7 +22,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
             return "Version must be in the form of major.minor.patch";
           }
           return true;
-        },
+        }
       },
       {
         type: "input",
@@ -34,7 +34,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
             return "Version must be in the form of major.minor.patch";
           }
           return true;
-        },
+        }
       },
       {
         type: "checkbox",
@@ -47,33 +47,33 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
           "mehulkar",
           "chrisolszewski",
           "nicholasyang",
-          "alexanderlyon",
+          "alexanderlyon"
         ],
         name: "authors",
         pageSize: 20,
-        message: "Select all authors for the release blog post.",
+        message: "Select all authors for the release blog post."
       },
       {
         type: "input",
         name: "tagline",
         message:
-          'What is the tagline for the release (example: "focuses on improving observability for your task runs to better understand your caching behavior")',
+          'What is the tagline for the release (example: "focuses on improving observability for your task runs to better understand your caching behavior")'
       },
       {
         type: "input",
         name: "headlineTitle1",
-        message: "What is the first headline feature?",
+        message: "What is the first headline feature?"
       },
       {
         type: "input",
         name: "headlineTitle2",
-        message: "What is the second headline feature?",
+        message: "What is the second headline feature?"
       },
       {
         type: "input",
         name: "headlineTitle3",
-        message: "What is the third headline feature?",
-      },
+        message: "What is the third headline feature?"
+      }
     ],
     actions: [
       // extend answers with data fetched asynchronously
@@ -81,9 +81,9 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
       {
         type: "add",
         path: "content/blog/turbo-{{dashCase version}}.mdx",
-        templateFile: "templates/release-blog-post.hbs",
-      },
-    ],
+        templateFile: "templates/release-blog-post.hbs"
+      }
+    ]
   });
 
   plop.setGenerator("blog - update release post stats", {
@@ -105,11 +105,11 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
                   .replace("turbo-", "")
                   .replace(".mdx", "")
                   .replace(/-/g, "."),
-                value: f,
+                value: f
               }))
           );
-        },
-      },
+        }
+      }
     ],
     actions: [
       // extend answers with data fetched asynchronously
@@ -120,7 +120,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         path: "content/blog/{{ post }}",
         pattern: /^-\s\[.*?\sGitHub\sStars\].*$/gm,
         template:
-          "- [{{ turboStars }}+ GitHub Stars](https://github.com/vercel/turbo)",
+          "- [{{ turboStars }}+ GitHub Stars](https://github.com/vercel/turbo)"
       },
       // update weekly npm downloads
       {
@@ -128,7 +128,7 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         path: "content/blog/{{ post }}",
         pattern: /^-\s\[.*?\sweekly\sNPM\sdownloads\].*$/gm,
         template:
-          "- [{{ turboDownloads }}+ weekly NPM downloads](https://www.npmjs.com/package/turbo)",
+          "- [{{ turboDownloads }}+ weekly NPM downloads](https://www.npmjs.com/package/turbo)"
       },
       // update years saved
       {
@@ -136,8 +136,8 @@ export default function generator(plop: PlopTypes.NodePlopAPI): void {
         path: "content/blog/{{ post }}",
         pattern: /^-\s.*?years of compute time saved.*$/gm,
         template:
-          "- {{ turboYearsSaved }} years of compute time saved through [Remote Caching on Vercel](https://vercel.com/docs/concepts/monorepos/remote-caching)",
-      },
-    ],
+          "- {{ turboYearsSaved }} years of compute time saved through [Remote Caching on Vercel](https://vercel.com/docs/concepts/monorepos/remote-caching)"
+      }
+    ]
   });
 }

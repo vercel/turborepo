@@ -7,7 +7,7 @@ import { Logger } from "./logger";
 import type {
   RequestedPackageManagerDetails,
   PackageManagerInstallDetails,
-  InstallArgs,
+  InstallArgs
 } from "./types";
 
 export const PACKAGE_MANAGERS: Record<
@@ -23,8 +23,8 @@ export const PACKAGE_MANAGERS: Record<
       version: "latest",
       executable: "npx",
       semver: "*",
-      default: true,
-    },
+      default: true
+    }
   ],
   pnpm: [
     {
@@ -34,7 +34,7 @@ export const PACKAGE_MANAGERS: Record<
       installArgs: ["install"],
       version: "latest-6",
       executable: "pnpx",
-      semver: "6.x",
+      semver: "6.x"
     },
     {
       name: "pnpm",
@@ -44,8 +44,8 @@ export const PACKAGE_MANAGERS: Record<
       version: "latest",
       executable: "pnpm dlx",
       semver: ">=7",
-      default: true,
-    },
+      default: true
+    }
   ],
   yarn: [
     {
@@ -56,7 +56,7 @@ export const PACKAGE_MANAGERS: Record<
       version: "1.x",
       executable: "npx",
       semver: "<2",
-      default: true,
+      default: true
     },
     {
       name: "berry",
@@ -65,8 +65,8 @@ export const PACKAGE_MANAGERS: Record<
       installArgs: ["install", "--no-immutable"],
       version: "stable",
       executable: "yarn dlx",
-      semver: ">=2",
-    },
+      semver: ">=2"
+    }
   ],
   bun: [
     {
@@ -77,9 +77,9 @@ export const PACKAGE_MANAGERS: Record<
       version: "latest",
       executable: "bunx",
       semver: "^1.0.1",
-      default: true,
-    },
-  ],
+      default: true
+    }
+  ]
 };
 
 export function getPackageManagerMeta(
@@ -104,7 +104,7 @@ export async function install(args: InstallArgs) {
 
   if (!packageManager) {
     throw new ConvertError("Unsupported package manager version.", {
-      type: "package_manager-unsupported_version",
+      type: "package_manager-unsupported_version"
     });
   }
 
@@ -119,8 +119,8 @@ export async function install(args: InstallArgs) {
       spinner = ora({
         text: "installing dependencies...",
         spinner: {
-          frames: installLogger.installerFrames(),
-        },
+          frames: installLogger.installerFrames()
+        }
       }).start();
     }
 
@@ -131,7 +131,7 @@ export async function install(args: InstallArgs) {
         shell: process.platform === "win32",
         // Prevents the child process from inheriting stdin, which can cause
         // hangs when running via bunx (e.g., `bunx create-turbo`)
-        stdin: "ignore",
+        stdin: "ignore"
       });
       if (spinner) {
         spinner.stop();

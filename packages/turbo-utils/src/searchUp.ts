@@ -9,7 +9,7 @@ import path from "node:path";
 export function searchUp({
   target,
   cwd,
-  contentCheck,
+  contentCheck
 }: {
   /** The name of the file we're looking for */
   target: string;

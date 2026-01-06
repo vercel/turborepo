@@ -11,7 +11,7 @@ rustflags = [
   "tokio_unstable",
   "-Zshare-generics=y", # make the current crate share its generic instantiations
   "-Zthreads=8", # parallel frontend https://blog.rust-lang.org/2023/11/09/parallel-rustc.html
-  "-Csymbol-mangling-version=v0",
+  "-Csymbol-mangling-version=v0"
 ]
 rustdocflags = ["-Znormalize-docs"]
 
@@ -31,7 +31,7 @@ rustflags = [
   "-Zshare-generics=y",
   "-Zthreads=8",
   "-Csymbol-mangling-version=v0",
-  "-Clink-arg=-fuse-ld=lld",
+  "-Clink-arg=-fuse-ld=lld"
 ]
 
 

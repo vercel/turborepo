@@ -9,7 +9,7 @@ const supportedPlatforms: Array<Platform> = [
   { os: "linux", arch: "x64" },
   { os: "linux", arch: "arm64" },
   { os: "windows", arch: "x64" },
-  { os: "windows", arch: "arm64" },
+  { os: "windows", arch: "arm64" }
 ];
 
 const turboReleaser = new Command();
@@ -30,7 +30,7 @@ async function main(options: { skipPublish: boolean; versionPath: string }) {
       platforms: supportedPlatforms,
       version,
       skipPublish: options.skipPublish as boolean,
-      npmTag,
+      npmTag
     });
     console.log("Packaging and publishing completed successfully");
   } catch (error) {

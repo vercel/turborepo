@@ -7,15 +7,15 @@ const config = {
   modulePathIgnorePatterns: [
     "<rootDir>/node_modules",
     "<rootDir>/dist",
-    "<rootDir>/__tests__/__fixtures__",
+    "<rootDir>/__tests__/__fixtures__"
   ],
   testPathIgnorePatterns: [
     "__tests__/__fixtures__/",
-    "/__tests__/test-utils.ts",
+    "/__tests__/test-utils.ts"
   ],
   coveragePathIgnorePatterns: [
     "__tests__/__fixtures__/",
-    "/__tests__/test-utils.ts",
+    "/__tests__/test-utils.ts"
   ],
   collectCoverage: true,
   coverageThreshold: {
@@ -23,11 +23,11 @@ const config = {
       branches: 85,
       functions: 93,
       lines: 92,
-      statements: 92,
-    },
+      statements: 92
+    }
   },
   verbose: process.env.RUNNER_DEBUG === "1",
-  silent: process.env.RUNNER_DEBUG !== "1",
+  silent: process.env.RUNNER_DEBUG !== "1"
 } as const satisfies Config;
 
 export default config;

@@ -13,7 +13,7 @@ export function getCurrentVersion(
 
   // try global first
   const turboVersionFromGlobal = exec(`turbo --version`, {
-    cwd: project.paths.root,
+    cwd: project.paths.root
   });
 
   if (turboVersionFromGlobal) {

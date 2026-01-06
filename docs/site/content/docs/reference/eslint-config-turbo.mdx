@@ -3,7 +3,7 @@ title: eslint-config-turbo
 description: Learn more about eslint-config-turbo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 
 [The `eslint-config-turbo` package](https://www.npmjs.com/package/eslint-config-turbo) helps you find environment variables that are used in your code that are not a part of Turborepo's hashing. Environment variables used in your source code that are not accounted for in `turbo.json` will be highlighted in your editor and errors will show as ESLint output.
 
@@ -49,7 +49,7 @@ Install `eslint-config-turbo` into the location where your ESLint configuration 
 ## Usage (Flat Config `eslint.config.js`)
 
 ```js title="./packages/eslint-config/base.js"
-import turboConfig from 'eslint-config-turbo/flat';
+import turboConfig from "eslint-config-turbo/flat";
 
 export default [
   ...turboConfig,
@@ -60,17 +60,17 @@ export default [
 You can also configure rules available in the configuration:
 
 ```js title="./packages/eslint-config/base.js"
-import turboConfig from 'eslint-config-turbo/flat';
+import turboConfig from "eslint-config-turbo/flat";
 
 export default [
   ...turboConfig,
   // Other configuration
   {
     rules: {
-      'turbo/no-undeclared-env-vars': [
-        'error',
+      "turbo/no-undeclared-env-vars": [
+        "error",
         {
-          allowList: ['^ENV_[A-Z]+$'],
+          allowList: ["^ENV_[A-Z]+$"],
         },
       ],
     },

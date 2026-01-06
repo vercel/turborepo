@@ -30,7 +30,7 @@ async function generate(): Promise<void> {
     description: "Turborepo news, updates, and announcements.",
     site_url: "https://turborepo.com",
     feed_url: "https://turborepo.com/feed.xml",
-    image_url: "https://turborepo.com/api/og",
+    image_url: "https://turborepo.com/api/og"
   });
 
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -84,8 +84,8 @@ async function generate(): Promise<void> {
         url: `https://turborepo.com${
           frontmatter.data.ogImage ?? createOgUrl()
         }`, // intentionally omitting slash here
-        type: "image/png",
-      },
+        type: "image/png"
+      }
     });
   }
 

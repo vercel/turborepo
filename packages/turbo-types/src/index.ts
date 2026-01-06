@@ -24,7 +24,7 @@ export {
   type WorkspaceSchema,
   type WorkspaceSchema as WorkspaceSchemaV2,
   isRootSchemaV2,
-  isWorkspaceSchemaV2,
+  isWorkspaceSchemaV2
 } from "./types/config-v2";
 
 export {
@@ -37,7 +37,7 @@ export {
   type SchemaV1,
   type WorkspaceSchemaV1,
   isRootSchemaV1,
-  isWorkspaceSchemaV1,
+  isWorkspaceSchemaV1
 } from "./types/config-v1";
 
 export type { DryRun } from "./types/dry";

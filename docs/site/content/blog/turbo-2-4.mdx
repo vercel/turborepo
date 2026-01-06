@@ -1,23 +1,23 @@
 ---
 title: Turborepo 2.4
 date: 2025/1/31
-description: 'Experimental Boundaries, Terminal UI improvements, experimental Watch Mode caching, and more.'
-tag: 'web development'
+description: "Experimental Boundaries, Terminal UI improvements, experimental Watch Mode caching, and more."
+tag: "web development"
 ---
 
 <h1 className="text-center">Turborepo 2.4</h1>
 
-import { Authors } from '#components/authors';
-import { Date } from '#components/blog/date';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Accordions, Accordion } from '#components/accordion';
-import { ExperimentalBadge } from '#components/experimental-badge';
-import { Kbd } from '#components/kbd';
-import { Callout } from '#components/callout';
+import { Authors } from "#components/authors";
+import { Date } from "#components/blog/date";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Accordions, Accordion } from "#components/accordion";
+import { ExperimentalBadge } from "#components/experimental-badge";
+import { Kbd } from "#components/kbd";
+import { Callout } from "#components/callout";
 
 <Date>Friday, January 31st, 2025</Date>
 
-<Authors authors={['nicholasyang', 'anthonyshew', 'chrisolszewski']} />
+<Authors authors={["nicholasyang", "anthonyshew", "chrisolszewski"]} />
 
 Turborepo 2.4 includes a number of improvements to enhance your repository:
 
@@ -165,7 +165,7 @@ Turborepo 2.4 introduces support for ESLint v9 in `eslint-config-turbo` and `esl
 <Tab value="eslint-config-turbo">
 
 ```ts title="./packages/eslint-config/index.js"
-import turboConfig from 'eslint-config-turbo/flat';
+import turboConfig from "eslint-config-turbo/flat";
 
 export default [
   ...turboConfig,
@@ -178,7 +178,7 @@ export default [
 <Tab value="eslint-plugin-turbo">
 
 ```ts title="./packages/eslint-config/index.js"
-import turbo from 'eslint-plugin-turbo';
+import turbo from "eslint-plugin-turbo";
 
 export default [
   {
@@ -186,7 +186,7 @@ export default [
       turbo,
     },
     rules: {
-      'turbo/no-undeclared-env-vars': 'error',
+      "turbo/no-undeclared-env-vars": "error",
     },
   },
   // Other configuration

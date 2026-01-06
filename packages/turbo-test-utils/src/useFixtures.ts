@@ -6,7 +6,7 @@ import {
   existsSync,
   copySync,
   writeFileSync,
-  readFileSync,
+  readFileSync
 } from "fs-extra";
 import yaml from "js-yaml";
 import { parse as JSON5Parse } from "json5";
@@ -23,7 +23,7 @@ interface SetupTextFixtures {
 export function setupTestFixtures({
   directory,
   test = "",
-  options = {},
+  options = {}
 }: SetupTextFixtures) {
   const fixtures: Array<string> = [];
   const parentDirectory = path.join(directory, test ? test : randomUUID());
@@ -35,7 +35,7 @@ export function setupTestFixtures({
           retryDelay: 50,
           maxRetries: 5,
           recursive: true,
-          force: true,
+          force: true
         })
       )
     );
@@ -46,7 +46,7 @@ export function setupTestFixtures({
       retryDelay: 50,
       maxRetries: 5,
       recursive: true,
-      force: true,
+      force: true
     });
   });
 
@@ -63,7 +63,7 @@ export function setupTestFixtures({
     if (!options.emptyFixture) {
       const fixturePath = path.join(directory, "__fixtures__", test, fixture);
       copySync(fixturePath, testDirectory, {
-        recursive: true,
+        recursive: true
       });
     }
 
@@ -109,7 +109,7 @@ export function setupTestFixtures({
       readYaml,
       write,
       exists,
-      directoryName,
+      directoryName
     };
   };
 

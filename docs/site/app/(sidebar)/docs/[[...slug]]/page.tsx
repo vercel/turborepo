@@ -18,13 +18,13 @@ export async function generateMetadata(props: {
   return createMetadata({
     title: page.data.title,
     description: page.data.description,
-    canonicalPath: page.url,
+    canonicalPath: page.url
   });
 }
 
 export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return repoDocsPages.getPages().map((page) => ({
-    slug: page.slugs,
+    slug: page.slugs
   }));
 }
 

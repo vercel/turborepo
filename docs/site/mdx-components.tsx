@@ -20,8 +20,8 @@ const iconAdder = (title?: string): JSX.Element | null => {
             src: "/images/product-icons/repo-light-32x32.png",
             alt: "Turborepo logo",
             width: size,
-            height: size,
-          },
+            height: size
+          }
         }}
         dark={{
           src: "/images/product-icons/repo-dark-32x32.png",
@@ -31,8 +31,8 @@ const iconAdder = (title?: string): JSX.Element | null => {
             src: "/images/product-icons/repo-dark-32x32.png",
             alt: "Turborepo logo",
             width: size,
-            height: size,
-          },
+            height: size
+          }
         }}
       />
     );
@@ -86,5 +86,5 @@ export const mdxComponents: MDXComponents = {
         <Pre {...preProps} />
       </CodeBlock>
     );
-  },
+  }
 };

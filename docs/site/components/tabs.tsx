@@ -82,8 +82,8 @@ export function PackageManagerTabs({
           ...child,
           props: {
             ...child.props,
-            value: packageManagers[index],
-          },
+            value: packageManagers[index]
+          }
         };
       })}
     </FumaTabs>
@@ -121,7 +121,7 @@ export function PlatformTabs({
         // about spreading, so we need to cast to a more general type
         const newProps = {
           ...(child.props as Record<string, unknown>),
-          value: items[index],
+          value: items[index]
         };
 
         return cloneElement(child, newProps);

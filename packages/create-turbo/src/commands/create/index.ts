@@ -5,13 +5,13 @@ import {
   getWorkspaceDetails,
   install,
   getPackageManagerMeta,
-  ConvertError,
+  ConvertError
 } from "@turbo/workspaces";
 import {
   getAvailablePackageManagers,
   createProject,
   DownloadError,
-  logger,
+  logger
 } from "@turbo/utils";
 import { tryGitInit, removeGitDirectory } from "../../utils/git";
 import { isOnline } from "../../utils/isOnline";
@@ -64,7 +64,7 @@ const SCRIPTS_TO_DISPLAY: Record<string, string> = {
   build: "Build",
   dev: "Develop",
   test: "Test",
-  lint: "Lint",
+  lint: "Lint"
 };
 
 export async function create(
@@ -82,7 +82,7 @@ export async function create(
 
   const [online, availablePackageManagers] = await Promise.all([
     isOnline(),
-    getAvailablePackageManagers(),
+    getAvailablePackageManagers()
   ]);
 
   if (!online) {
@@ -98,7 +98,7 @@ export async function create(
   // selected package manager can be undefined if the user chooses to skip transforms
   const selectedPackageManagerDetails = await prompts.packageManager({
     manager: packageManager,
-    skipTransforms,
+    skipTransforms
   });
 
   if (packageManager && opts.skipTransforms) {
@@ -116,7 +116,7 @@ export async function create(
       appPath: root,
       example: exampleName,
       isDefaultExample: isDefaultExample(exampleName),
-      examplePath,
+      examplePath
     });
   } catch (err) {
     handleErrors(err, opts.telemetry);
@@ -140,15 +140,15 @@ export async function create(
         const transformResult = await transform({
           example: {
             repo: repoInfo,
-            name: exampleName,
+            name: exampleName
           },
           project,
           prompts: {
             projectName,
             root,
-            packageManager: selectedPackageManagerDetails,
+            packageManager: selectedPackageManagerDetails
           },
-          opts,
+          opts
         });
 
         if (transformResult.metaJson?.maintainedByCoreTeam) {
@@ -165,7 +165,7 @@ export async function create(
     skipTransforms || !selectedPackageManagerDetails
       ? {
           name: project.packageManager,
-          version: availablePackageManagers[project.packageManager],
+          version: availablePackageManagers[project.packageManager]
         }
       : selectedPackageManagerDetails;
 
@@ -190,7 +190,7 @@ export async function create(
             path.relative(root, w.paths.root).split(path.sep)[0] || ""
           ),
           title: path.relative(root, w.paths.root),
-          description: w.description,
+          description: w.description
         };
       })
       .sort((a, b) => a.title.localeCompare(b.title));
@@ -232,8 +232,8 @@ export async function create(
         project,
         to: projectPackageManager,
         options: {
-          interactive: false,
-        },
+          interactive: false
+        }
       });
 
       loader.stop();

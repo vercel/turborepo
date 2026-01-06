@@ -22,7 +22,7 @@ describe("utils", () => {
       const result1 = utils.oneWayHashWithSalt({ input, salt });
       const result2 = utils.oneWayHashWithSalt({
         input: `${input}-${input}`,
-        salt,
+        salt
       });
 
       assert.equal(result1.length, result2.length);

@@ -33,7 +33,7 @@ export function getTurboRoot(cwd?: string, opts?: Options): string | null {
   let root = searchUp({
     target: "turbo.json",
     cwd: currentDir,
-    contentCheck,
+    contentCheck
   });
 
   if (!root) {

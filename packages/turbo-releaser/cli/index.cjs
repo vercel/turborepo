@@ -10,7 +10,7 @@ const cliPath = path.resolve(__dirname, PATH_TO_DIST, "index.js");
 
 try {
   const result = spawnSync("node", [cliPath, ...process.argv.slice(2)], {
-    stdio: "inherit",
+    stdio: "inherit"
   });
 
   process.exit(result.status);

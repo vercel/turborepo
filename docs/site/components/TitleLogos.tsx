@@ -29,8 +29,8 @@ export const TitleLogos = () => {
             src: "/images/product-icons/repo-light-32x32.png",
             alt: "Turborepo logo",
             width: size,
-            height: size,
-          },
+            height: size
+          }
         }}
         dark={{
           src: "/images/product-icons/repo-dark-32x32.png",
@@ -39,8 +39,8 @@ export const TitleLogos = () => {
             src: "/images/product-icons/repo-dark-32x32.png",
             alt: "Turborepo logo",
             width: size,
-            height: size,
-          },
+            height: size
+          }
         }}
       />
     </div>

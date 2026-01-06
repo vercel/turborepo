@@ -5,7 +5,7 @@ import { DevtoolsClientComponent } from "./devtools-client";
 
 export const metadata: Metadata = {
   title: "Turborepo Devtools",
-  description: "Visualize your Turborepo package and task graphs",
+  description: "Visualize your Turborepo package and task graphs"
 };
 
 export default async function ToolsPage() {

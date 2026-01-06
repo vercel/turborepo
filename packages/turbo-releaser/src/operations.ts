@@ -17,7 +17,7 @@ export interface PackOptions {
 async function packPlatform({
   platform,
   version,
-  srcDir = process.cwd(),
+  srcDir = process.cwd()
 }: PackOptions): Promise<string> {
   const { os, arch } = platform;
   console.log(`Packing platform: ${os}-${arch}`);
@@ -29,7 +29,7 @@ async function packPlatform({
   await native.generateNativePackage({
     platform,
     version,
-    outputDir: scaffoldDir,
+    outputDir: scaffoldDir
   });
 
   console.log("Moving prebuilt binary...");
@@ -51,7 +51,7 @@ async function packPlatform({
     {
       gzip: true,
       file: tarPath,
-      cwd: tarballDir,
+      cwd: tarballDir
     },
     [npmDirName]
   );

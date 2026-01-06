@@ -15,12 +15,12 @@ import { FaviconHandler } from "./_components/favicon-handler";
 export function generateMetadata(): Metadata {
   return createMetadata({
     description: PRODUCT_SLOGANS.turbo,
-    canonicalPath: "/",
+    canonicalPath: "/"
   });
 }
 
 export default function Layout({
-  children,
+  children
 }: {
   children: ReactNode;
 }): JSX.Element {

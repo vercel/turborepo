@@ -27,7 +27,7 @@ export default async function Page(props: {
 
 export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return extraPages.getPages().map((page) => ({
-    slug: page.slugs,
+    slug: page.slugs
   }));
 }
 
@@ -42,6 +42,6 @@ export async function generateMetadata(props: {
   return createMetadata({
     title: page.data.title,
     description: page.data.description,
-    canonicalPath: params.slug?.join("/") ?? "",
+    canonicalPath: params.slug?.join("/") ?? ""
   });
 }

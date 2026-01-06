@@ -157,5 +157,5 @@ export {
   NavigationMenuListItem,
   NavigationMenuTrigger,
   NavigationMenuViewport,
-  navigationMenuTriggerStyle,
+  navigationMenuTriggerStyle
 };

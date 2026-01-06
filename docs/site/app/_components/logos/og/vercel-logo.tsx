@@ -1,6 +1,6 @@
 export function VercelLogo({
   fill = "none",
-  height = 20,
+  height = 20
 }: {
   fill?: string;
   height?: number;

@@ -5,12 +5,10 @@
 ### Release Turborepo CLI
 
 1. Create a release by triggering the [Turborepo Release][1] workflow
-
    - Specify the semver increment using the SemVer Increment field (start with `prerelease`)
    - Check the "Dry Run" box to run the full release workflow without publishing any packages. Artifacts will be created that you can test with locally.
 
 2. A PR is automatically opened to merge the release branch created in step 1 back into `main`
-
    - ⚠️ Merge this in! You don't need to wait for tests to pass (because they won't pass until after this PR is merged in). It's important to merge this branch soon after the publish is successful.
 
 ### Release `@turbo/repository`
@@ -341,7 +339,6 @@ The Turborepo release publishes **15 npm packages** (6 native + 9 JavaScript):
 The `turbo` package is unique:
 
 1. **Doesn't contain the binary** - it's a JavaScript wrapper that:
-
    - Detects the current platform and architecture
    - Requires the appropriate platform-specific package
    - Falls back to x64 on ARM64 for macOS/Windows (Rosetta/emulation support)

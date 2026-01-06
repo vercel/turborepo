@@ -5,28 +5,28 @@ import { transformer } from "../src/transforms/update-schema-json-url";
 describe("update-schema-url", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "update-schema-url",
+    test: "update-schema-url"
   });
 
   it("updates schema URL from v1 to current version", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "v1-schema",
+      fixture: "v1-schema"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turborepo.com/schema.v2.json",
       tasks: {
         build: {
-          outputs: ["dist/**"],
-        },
-      },
+          outputs: ["dist/**"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -44,22 +44,22 @@ describe("update-schema-url", () => {
   it("does nothing if schema URL is already updated", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "current-schema",
+      fixture: "current-schema"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turborepo.com/schema.json",
       tasks: {
         build: {
-          outputs: ["dist/**"],
-        },
-      },
+          outputs: ["dist/**"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();

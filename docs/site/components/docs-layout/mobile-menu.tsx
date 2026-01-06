@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import {
   Collapsible,
   CollapsibleContent,
-  CollapsibleTrigger,
+  CollapsibleTrigger
 } from "#components/ui/collapsible.tsx";
 import { ChevronRight } from "../icons/chevron-right";
 import { cn } from "../cn";

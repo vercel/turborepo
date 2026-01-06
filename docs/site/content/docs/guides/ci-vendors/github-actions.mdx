@@ -3,9 +3,9 @@ title: GitHub Actions
 description: Learn how to use GitHub Actions with Turborepo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Steps, Step } from '#components/steps';
-import { Callout } from '#components/callout';
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Steps, Step } from "#components/steps";
+import { Callout } from "#components/callout";
 
 The following example shows how to use Turborepo with [GitHub Actions](https://github.com/features/actions).
 
@@ -350,7 +350,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm install

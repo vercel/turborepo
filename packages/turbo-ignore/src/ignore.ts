@@ -39,7 +39,7 @@ export function turboIgnore(
 
   const inputs = {
     workspace: workspaceArg,
-    ...opts,
+    ...opts
   };
 
   info(
@@ -117,7 +117,7 @@ export function turboIgnore(
     "run",
     task,
     `--filter=${filterArg}`,
-    "--dry=json",
+    "--dry=json"
   ];
   // For logging, format task with quotes if it contains special characters (like #)
   const displayTask = task.includes("#") ? `"${task}"` : task;
@@ -125,7 +125,7 @@ export function turboIgnore(
   info(`Analyzing results of \`${command}\``);
 
   const execOptions: { cwd: string; maxBuffer?: number } = {
-    cwd: root,
+    cwd: root
   };
 
   if (opts.maxBuffer) {

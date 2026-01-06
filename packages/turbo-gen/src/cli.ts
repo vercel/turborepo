@@ -82,7 +82,7 @@ turboGenCli
   .addOption(
     new Option("-t, --type <type>", "The type of workspace to create").choices([
       "app",
-      "package",
+      "package"
     ])
   )
   .addOption(

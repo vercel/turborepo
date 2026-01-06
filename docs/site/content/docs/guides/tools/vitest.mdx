@@ -3,10 +3,10 @@ title: Vitest
 description: Learn how to use Vitest in a monorepo.
 ---
 
-import { Callout } from '#components/callout';
-import { File, Folder, Files } from '#components/files';
-import { CreateTurboCallout } from './create-turbo-callout.tsx';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Callout } from "#components/callout";
+import { File, Folder, Files } from "#components/files";
+import { CreateTurboCallout } from "./create-turbo-callout.tsx";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 
 [Vitest](https://vitest.dev/) is a test runner from the Vite ecosystem. Integrating it with Turborepo will lead to enormous speed-ups.
 
@@ -262,8 +262,8 @@ First, create a shared configuration package since individual projects can't ext
 export const sharedConfig = {
   test: {
     globals: true,
-    environment: 'jsdom',
-    setupFiles: ['./src/test/setup.ts'],
+    environment: "jsdom",
+    setupFiles: ["./src/test/setup.ts"],
     // Other shared configuration
   },
 };
@@ -272,15 +272,15 @@ export const sharedConfig = {
 Then, create your root Vitest configuration using projects:
 
 ```ts title="./vitest.config.ts"
-import { defineConfig } from 'vitest/config';
-import { sharedConfig } from '@repo/vitest-config';
+import { defineConfig } from "vitest/config";
+import { sharedConfig } from "@repo/vitest-config";
 
 export default defineConfig({
   ...sharedConfig,
   projects: [
     {
-      name: 'packages',
-      root: './packages/*',
+      name: "packages",
+      root: "./packages/*",
       test: {
         ...sharedConfig.test,
         // Project-specific configuration
@@ -308,8 +308,8 @@ In this setup, your packages maintain their individual Vitest configurations tha
 Then create the Vitest configuration:
 
 ```ts title="./packages/ui/vitest.config.ts"
-import { defineConfig } from 'vitest/config';
-import { sharedConfig } from '@repo/vitest-config';
+import { defineConfig } from "vitest/config";
+import { sharedConfig } from "@repo/vitest-config";
 
 export default defineConfig({
   ...sharedConfig,

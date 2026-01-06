@@ -11,7 +11,7 @@ export function useTurborepoMinutesSaved(): TurborepoMinutesSaved | undefined {
     {
       revalidateOnMount: true,
       revalidateIfStale: true,
-      refreshInterval: 10000,
+      refreshInterval: 10000
     }
   );
 

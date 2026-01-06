@@ -7,7 +7,7 @@ import { Badge } from "./badge";
  * component in MDX linkable headings.
  */
 export function ExperimentalBadge({
-  children,
+  children
 }: {
   isLink?: boolean;
   children?: string;

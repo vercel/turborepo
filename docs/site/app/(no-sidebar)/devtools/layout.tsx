@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 export default function ToolsLayout({
-  children,
+  children
 }: {
   children: ReactNode;
 }): JSX.Element {

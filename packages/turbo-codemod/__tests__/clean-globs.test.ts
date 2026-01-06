@@ -5,19 +5,19 @@ import { transformer, fixGlobPattern } from "../src/transforms/clean-globs";
 describe("clean-globs", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "clean-globs",
+    test: "clean-globs"
   });
 
   it("basic", () => {
     // load the fixture for the test
     const { root } = useFixture({
-      fixture: "clean-globs",
+      fixture: "clean-globs"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // result should be correct
@@ -40,7 +40,7 @@ describe("clean-globs", () => {
       ["**/**/**/**", "**"],
       ["**/foo/**/**/bar/**", "**/foo/**/bar/**"],
       ["**/foo/**/**/**/bar/**/**", "**/foo/**/bar/**"],
-      ["**/foo/**/**/**/**/bar/**/**/**", "**/foo/**/bar/**"],
+      ["**/foo/**/**/**/**/bar/**/**/**", "**/foo/**/bar/**"]
     ];
 
     // Now let's test the function
@@ -62,7 +62,7 @@ describe("clean-globs", () => {
       ["src/types/generated/**.ts", "src/types/generated/**/*.ts"],
       ["**md", "**/*md"],
       ["**txt", "**/*txt"],
-      ["**html", "**/*html"],
+      ["**html", "**/*html"]
     ];
 
     // Now let's test the function
@@ -77,7 +77,7 @@ describe("clean-globs", () => {
       ["pre**/foo", "pre*/**/foo"],
       ["pre**/foo/bar", "pre*/**/foo/bar"],
       ["pre**/foo/bar/baz", "pre*/**/foo/bar/baz"],
-      ["pre**/foo/bar/baz/qux", "pre*/**/foo/bar/baz/qux"],
+      ["pre**/foo/bar/baz/qux", "pre*/**/foo/bar/baz/qux"]
     ];
 
     // Now let's test the function

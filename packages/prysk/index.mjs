@@ -31,7 +31,7 @@ if (!tests) {
 const flags = [
   "--shell=bash",
   process.env.PRYSK_INTERACTIVE === "true" ? "--interactive" : "",
-  isWindows ? "--dos2unix" : "",
+  isWindows ? "--dos2unix" : ""
 ].join(" ");
 
 const cmd = [getVenvBin("prysk"), flags, tests].join(" ");

@@ -74,7 +74,7 @@ async function fetchWithTimeout(
       ...options,
       signal: controller.signal,
       // @ts-expect-error - dispatcher is a valid option for undici's fetch
-      dispatcher,
+      dispatcher
     });
   } finally {
     clearTimeout(timeoutId);
@@ -129,7 +129,7 @@ export async function getRepoInfo(
         username,
         name,
         branch: info.default_branch,
-        filePath,
+        filePath
       } as RepoInfo;
     } catch {
       return;
@@ -153,7 +153,7 @@ export function hasRepo({
   username,
   name,
   branch,
-  filePath,
+  filePath
 }: RepoInfo): Promise<boolean> {
   const contentsUrl = `https://api.github.com/repos/${username}/${name}/contents`;
   const packagePath = `${filePath ? `/${filePath}` : ""}/package.json`;
@@ -233,7 +233,7 @@ export async function streamingExtract({
   url,
   root,
   strip,
-  filter,
+  filter
 }: StreamingExtractOptions) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
@@ -258,7 +258,7 @@ export async function streamingExtract({
     const response = await fetch(url, {
       signal: controller.signal,
       // @ts-expect-error - dispatcher is a valid option for undici's fetch
-      dispatcher,
+      dispatcher
     });
     if (!response.ok || !response.body) {
       throw new Error(`Failed to download: ${response.status}`);
@@ -334,7 +334,7 @@ export async function streamingExtract({
         } else {
           entry.resume();
         }
-      },
+      }
     });
 
     await pipeline(body, createGunzip(), parser);
@@ -378,7 +378,7 @@ export async function downloadAndExtractRepo(
           rootPath = pathSegments.length ? pathSegments[0] : null;
         }
         return p.startsWith(`${rootPath}${filePath ? `/${filePath}/` : "/"}`);
-      },
+      }
     });
   } finally {
     await unlink(tempFile);
@@ -400,7 +400,7 @@ export async function downloadAndExtractExample(root: string, name: string) {
         "1",
         "--sparse",
         "https://github.com/vercel/turborepo.git",
-        tempDir,
+        tempDir
       ],
       { stdio: "pipe" }
     );
@@ -408,13 +408,13 @@ export async function downloadAndExtractExample(root: string, name: string) {
     // Set up sparse checkout for just the example we want
     execFileSync("git", ["sparse-checkout", "set", `examples/${name}`], {
       cwd: tempDir,
-      stdio: "pipe",
+      stdio: "pipe"
     });
 
     // Checkout the files
     execFileSync("git", ["checkout"], {
       cwd: tempDir,
-      stdio: "pipe",
+      stdio: "pipe"
     });
 
     // Copy the example files to the root
@@ -436,7 +436,7 @@ export async function downloadAndExtractExample(root: string, name: string) {
       strip: 3,
       filter: (p: string, rootPath: string | null) => {
         return p.startsWith(`${rootPath}/examples/${name}/`);
-      },
+      }
     });
 
     return;

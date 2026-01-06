@@ -8,7 +8,7 @@ import type { TurboGeneratorArguments } from "./types";
 export async function generate({ project, opts }: TurboGeneratorArguments) {
   const { name, location, dependencies } = await gatherAddRequirements({
     project,
-    opts,
+    opts
   });
 
   const packageJson: PackageJson = {
@@ -19,8 +19,8 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
       dev: "echo 'Add dev script here'",
       build: "echo 'Add build script here'",
       test: "echo 'Add test script here'",
-      lint: "echo 'Add lint script here'",
-    },
+      lint: "echo 'Add lint script here'"
+    }
   };
 
   // update dependencies

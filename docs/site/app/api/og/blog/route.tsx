@@ -24,7 +24,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
         await fetch(new URL("./bg.jpg", import.meta.url)).then((res) =>
           res.arrayBuffer()
         )
-      ),
+      )
     ]);
 
     const reqUrl = req.url || "";
@@ -33,47 +33,45 @@ export async function GET(req: NextApiRequest): Promise<Response> {
     const version = searchParams.get("version") || "▲";
 
     return new ImageResponse(
-      (
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "100%",
+          height: "100%",
+          fontFamily: "Geist Mono",
+          fontWeight: 600,
+          fontSize: 60,
+          backgroundImage: `url(data:image/jpeg;base64,${bg})`,
+          backgroundSize: "1200px 630px",
+          color: "#fff"
+        }}
+      >
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            width: "100%",
-            height: "100%",
-            fontFamily: "Geist Mono",
-            fontWeight: 600,
-            fontSize: 60,
-            backgroundImage: `url(data:image/jpeg;base64,${bg})`,
-            backgroundSize: "1200px 630px",
-            color: "#fff",
+            fontFamily: "Geist Semibold",
+            fontSize: 52,
+            marginTop: "-40",
+            marginLeft: "-76",
+            fontWeight: "600",
+            color: "#fff"
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              fontFamily: "Geist Semibold",
-              fontSize: 52,
-              marginTop: "-40",
-              marginLeft: "-76",
-              fontWeight: "600",
-              color: "#fff",
-            }}
-          >
-            {version}
-          </div>
+          {version}
         </div>
-      ),
+      </div>,
       {
         fonts: [
           {
             name: "Geist Semibold",
             data: geistSemiBold,
             weight: 400 as const,
-            style: "normal" as const,
-          },
-        ],
+            style: "normal" as const
+          }
+        ]
       }
     );
   } catch (err: unknown) {
@@ -81,13 +79,13 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       return new Response(undefined, {
         status: 302,
         headers: {
-          Location: "https://turborepo.com/og-image.png",
-        },
+          Location: "https://turborepo.com/og-image.png"
+        }
       });
     }
 
     return new Response(undefined, {
-      status: 500,
+      status: 500
     });
   }
 }

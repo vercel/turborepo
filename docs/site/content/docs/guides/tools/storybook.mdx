@@ -3,9 +3,9 @@ title: Storybook
 description: Learn how to use Storybook in a Turborepo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Callout } from '#components/callout';
-import { Steps, Step } from '#components/steps';
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "#components/callout";
+import { Steps, Step } from "#components/steps";
 
 [Storybook](https://storybook.js.org/) is a popular way to build UI components in an isolated environment. By putting Storybook into your Turborepo, you can easily develop your design system right alongside your applications.
 
@@ -205,13 +205,13 @@ Delete the stories and components found in `src/stories` that were created by th
 As an example, here is a story for the `Button` component from `@repo/ui/button`.
 
 ```tsx title="./apps/storybook/src/stories/Button.stories.tsx"
-import type { Meta, StoryObj } from '@storybook/react';
-import { Button } from '@repo/ui/button';
+import type { Meta, StoryObj } from "@storybook/react";
+import { Button } from "@repo/ui/button";
 
 const meta = {
-  title: 'Example/Button',
+  title: "Example/Button",
   component: Button,
-  tags: ['autodocs'],
+  tags: ["autodocs"],
 } satisfies Meta<typeof Button>;
 
 export default meta;
@@ -219,8 +219,8 @@ type Story = StoryObj<typeof meta>;
 
 export const Primary: Story = {
   args: {
-    appName: 'Button',
-    children: 'I am a primary button.',
+    appName: "Button",
+    children: "I am a primary button.",
   },
 };
 ```

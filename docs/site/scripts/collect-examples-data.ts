@@ -8,7 +8,7 @@ const ExampleMetaSchema = z
     name: z.string(),
     description: z.string(),
     template: z.string().optional(),
-    maintainedByCoreTeam: z.boolean(),
+    maintainedByCoreTeam: z.boolean()
   })
   .strict();
 
