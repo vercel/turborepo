@@ -1,12 +1,45 @@
+# Dependencies and build outputs
 node_modules/
 target/
 .next/
 build/
 dist/
+coverage/
 
-/examples/
+# Rust crates (not JS/TS)
+crates/
 
+# CLI (Rust)
+cli/
+
+# Examples (separate linting concerns)
+examples/
+
+# Test fixtures and templates
 packages/eslint-plugin-turbo/__fixtures__
 packages/create-turbo/templates
-crates/*/tests/**
-crates/*/js/src/compiled
+
+# Integration tests (separate concerns)
+turborepo-tests/
+
+# Build/CI infrastructure
+buildcontainer/
+scripts/
+.github/
+.devcontainer/
+
+# Docs tooling (separate from docs/site)
+docs/link-checker/
+
+# Config directories
+.cargo/
+.config/
+.cursor/
+.vscode/
+.vercel/
+.husky/
+.turbo/
+.conductor/
+.cram_env/
+.hive/
+.opencode/

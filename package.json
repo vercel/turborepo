@@ -6,7 +6,7 @@
     "build": "turbo run build",
     "build:turbo": "pnpm run --filter=cli build",
     "build:ts": "tsc -b tsconfig.project.json",
-    "lint": "pnpm exec oxlint --ignore-path .oxlintignore --deny-warnings !turborepo-tests",
+    "lint": "pnpm exec oxlint --ignore-path .oxlintignore --deny-warnings .",
     "lint:prettier": "turbo run lint:prettier",
     "check:toml": "taplo format --check",
     "docs:dev": "turbo run dev --filter=turborepo-docs",
