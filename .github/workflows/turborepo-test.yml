@@ -479,7 +479,6 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Run tests
-        # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
           TURBO_API= turbo run test --filter "turborepo-repository" --color --env-mode=strict
         env:
