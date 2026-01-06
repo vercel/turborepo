@@ -45,6 +45,7 @@ PR titles must follow the [Conventional Commits](https://www.conventionalcommits
   - `perf` - Performance improvements
   - `test` - Test changes
   - `style` - Code style changes
+  - `examples` - Example/sample code changes
 - **scope**: Optional, but `examples` and `example` are not allowed as scopes
 - **description**: A short summary of the change, must start with an uppercase letter
 
