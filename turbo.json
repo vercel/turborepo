@@ -43,6 +43,11 @@
       ]
     },
     "//#lint": {},
+    "//#lint:fix": {
+      "dependsOn": ["//#format:fix", "//#fix:toml"]
+    },
+    "//#format:fix": {},
+    "//#fix:toml": {},
     "//#format": {},
     "//#check:toml": {},
     "check-types": {
