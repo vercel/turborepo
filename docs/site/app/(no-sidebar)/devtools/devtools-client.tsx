@@ -7,7 +7,7 @@ import {
   useRef,
   useCallback,
   Suspense,
-  useMemo,
+  useMemo
 } from "react";
 import {
   ReactFlow,
@@ -19,7 +19,7 @@ import {
   useReactFlow,
   type Node,
   type Edge,
-  type NodeMouseHandler,
+  type NodeMouseHandler
 } from "reactflow";
 import { Package } from "lucide-react";
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
@@ -34,7 +34,7 @@ import { FunctionIcon } from "./function-icon";
 const theme = createCssVariablesTheme({
   name: "css-variables",
   variablePrefix: "--shiki-",
-  variableDefaults: {},
+  variableDefaults: {}
 });
 
 // Types matching Rust server
@@ -88,15 +88,15 @@ type SelectionMode = "none" | "direct" | "blocks" | "dependsOn";
 
 // Turbo node and edge types
 const nodeTypes = {
-  turbo: TurboNode,
+  turbo: TurboNode
 };
 
 const edgeTypes = {
-  turbo: TurboEdge,
+  turbo: TurboEdge
 };
 
 const defaultEdgeOptions = {
-  type: "turbo",
+  type: "turbo"
 };
 
 // Constants for node sizing
@@ -327,10 +327,10 @@ function getLayoutedElements(
       const pos = positions.get(node.id) ?? { x: 0, y: 0 };
       return {
         ...node,
-        position: pos,
+        position: pos
       };
     }),
-    edges,
+    edges
   };
 }
 
@@ -480,7 +480,7 @@ function SetupInstructions() {
         className="max-w-md p-8 rounded-lg shadow-[10px_0_15px_rgba(42,138,246,0.2),-10px_0_15px_rgba(233,42,103,0.2)]"
         style={{
           backgroundColor: "var(--ds-background-200)",
-          border: "1px solid var(--ds-gray-400)",
+          border: "1px solid var(--ds-gray-400)"
         }}
       >
         <h1
@@ -500,8 +500,8 @@ function SetupInstructions() {
             {
               themes: {
                 light: theme,
-                dark: theme,
-              },
+                dark: theme
+              }
             } as Parameters<typeof DynamicCodeBlock>[0]["options"]
           }
         />
@@ -519,7 +519,7 @@ function SetupInstructions() {
               className="px-1.5 py-0.5 rounded text-xs"
               style={{
                 backgroundColor: "var(--ds-gray-200)",
-                color: "var(--ds-gray-1000)",
+                color: "var(--ds-gray-1000)"
               }}
             >
               ?port=&lt;your-port&gt;
@@ -553,7 +553,7 @@ function DisconnectedOverlay({ port }: { port: string }) {
           className="p-3 rounded-md text-sm border border-[#95679e]"
           style={{
             backgroundColor: "var(--ds-background-100)",
-            color: "var(--ds-gray-1000)",
+            color: "var(--ds-gray-1000)"
           }}
         >
           turbo devtools --port {port}
@@ -580,7 +580,7 @@ function ConnectionStatus({ isConnected }: { isConnected: boolean }) {
 
 function GraphViewToggle({
   view,
-  onViewChange,
+  onViewChange
 }: {
   view: GraphView;
   onViewChange: (view: GraphView) => void;
@@ -590,7 +590,7 @@ function GraphViewToggle({
       className="flex gap-1 rounded-lg p-1"
       style={{
         backgroundColor: "var(--ds-gray-200)",
-        border: "1px solid var(--ds-gray-400)",
+        border: "1px solid var(--ds-gray-400)"
       }}
     >
       <button
@@ -602,7 +602,7 @@ function GraphViewToggle({
           color:
             view === "packages" ? "var(--ds-gray-1000)" : "var(--ds-gray-900)",
           backgroundColor:
-            view === "packages" ? "var(--ds-background-100)" : "transparent",
+            view === "packages" ? "var(--ds-background-100)" : "transparent"
         }}
       >
         Packages
@@ -616,7 +616,7 @@ function GraphViewToggle({
           color:
             view === "tasks" ? "var(--ds-gray-1000)" : "var(--ds-gray-900)",
           backgroundColor:
-            view === "tasks" ? "var(--ds-background-100)" : "transparent",
+            view === "tasks" ? "var(--ds-background-100)" : "transparent"
         }}
       >
         Tasks
@@ -635,32 +635,32 @@ function getModeOptions(view: GraphView): Array<{
     return [
       {
         mode: "direct",
-        getLabel: () => ({ prefix: "Direct neighbors of", suffix: "" }),
+        getLabel: () => ({ prefix: "Direct neighbors of", suffix: "" })
       },
       {
         mode: "blocks",
-        getLabel: () => ({ prefix: "Blocked by", suffix: "" }),
+        getLabel: () => ({ prefix: "Blocked by", suffix: "" })
       },
       {
         mode: "dependsOn",
-        getLabel: () => ({ prefix: "", suffix: "depends on..." }),
-      },
+        getLabel: () => ({ prefix: "", suffix: "depends on..." })
+      }
     ];
   }
   // Package graph
   return [
     {
       mode: "direct",
-      getLabel: () => ({ prefix: "Direct neighbors of", suffix: "" }),
+      getLabel: () => ({ prefix: "Direct neighbors of", suffix: "" })
     },
     {
       mode: "blocks",
-      getLabel: () => ({ prefix: "", suffix: "affects..." }),
+      getLabel: () => ({ prefix: "", suffix: "affects..." })
     },
     {
       mode: "dependsOn",
-      getLabel: () => ({ prefix: "Packages that affect", suffix: "" }),
-    },
+      getLabel: () => ({ prefix: "Packages that affect", suffix: "" })
+    }
   ];
 }
 
@@ -671,7 +671,7 @@ function SelectionIndicator({
   isOpen,
   onToggleOpen,
   onModeChange,
-  onClear,
+  onClear
 }: {
   selectedNode: string | null;
   selectionMode: SelectionMode;
@@ -687,7 +687,7 @@ function SelectionIndicator({
   const currentOption = modeOptions.find((opt) => opt.mode === selectionMode);
   const { prefix, suffix } = currentOption?.getLabel() ?? {
     prefix: "",
-    suffix: "",
+    suffix: ""
   };
 
   return (
@@ -743,7 +743,7 @@ function SelectionIndicator({
                 }}
                 className="w-full px-3 py-1.5 text-left text-sm hover:bg-[#2a8af6]/20"
                 style={{
-                  color: isSelected ? "#2a8af6" : "var(--ds-gray-1000)",
+                  color: isSelected ? "#2a8af6" : "var(--ds-gray-1000)"
                 }}
               >
                 {optPrefix}
@@ -826,8 +826,8 @@ function DevtoolsContent() {
         selected: isSelected,
         style: {
           ...(node.style as React.CSSProperties),
-          opacity: isHighlighted ? 1 : 0.2,
-        },
+          opacity: isHighlighted ? 1 : 0.2
+        }
       };
     });
 
@@ -847,8 +847,8 @@ function DevtoolsContent() {
         markerEnd: undefined,
         style: {
           ...(edge.style as React.CSSProperties),
-          opacity: isHighlighted ? 1 : 0.1,
-        },
+          opacity: isHighlighted ? 1 : 0.1
+        }
       };
     });
 
@@ -864,7 +864,7 @@ function DevtoolsContent() {
     selectedNode,
     selectionMode,
     setNodes,
-    setEdges,
+    setEdges
   ]);
 
   // Clear selection and reset viewport to show all nodes
@@ -944,9 +944,9 @@ function DevtoolsContent() {
           data: {
             icon: <Package size={14} />,
             title: pkg.name,
-            subtitle: pkg.path || ".",
+            subtitle: pkg.path || "."
           },
-          position: { x: 0, y: 0 },
+          position: { x: 0, y: 0 }
         })
       );
 
@@ -955,7 +955,7 @@ function DevtoolsContent() {
           id: `e${i}`,
           source: edge.source,
           target: edge.target,
-          type: "turbo",
+          type: "turbo"
         })
       );
 
@@ -989,9 +989,9 @@ function DevtoolsContent() {
           data: {
             icon: <FunctionIcon />,
             title: task.task,
-            subtitle: task.package,
+            subtitle: task.package
           },
-          position: { x: 0, y: 0 },
+          position: { x: 0, y: 0 }
         })
       );
 
@@ -999,7 +999,7 @@ function DevtoolsContent() {
         id: `e${i}`,
         source: edge.source,
         target: edge.target,
-        type: "turbo",
+        type: "turbo"
       }));
 
       const { nodes: layoutedNodes, edges: layoutedEdges } =
@@ -1134,12 +1134,12 @@ function DevtoolsContent() {
         ? graphState.packageGraph.nodes.map((pkg) => ({
             id: pkg.id,
             name: pkg.name,
-            subtitle: pkg.path,
+            subtitle: pkg.path
           }))
         : graphState.taskGraph.nodes.map((task) => ({
             id: task.id,
             name: task.id, // package#task format
-            subtitle: task.script,
+            subtitle: task.script
           }));
 
     const connected: typeof allNodes = [];
@@ -1159,7 +1159,7 @@ function DevtoolsContent() {
 
     return {
       connectedNodes: connected.sort(sortFn),
-      disconnectedNodes: disconnected.sort(sortFn),
+      disconnectedNodes: disconnected.sort(sortFn)
     };
   }, [graphState, view, connectedNodeIds]);
 
@@ -1242,7 +1242,7 @@ function DevtoolsContent() {
           x: minX - padding,
           y: minY - padding,
           width: maxX - minX + padding * 2,
-          height: maxY - minY + padding * 2,
+          height: maxY - minY + padding * 2
         },
         { duration: 0 }
       );
@@ -1311,7 +1311,7 @@ function DevtoolsContent() {
       className="fixed left-0 right-0 bottom-0 flex"
       style={{
         top: "var(--nav-height)",
-        backgroundColor: "var(--ds-background-100)",
+        backgroundColor: "var(--ds-background-100)"
       }}
     >
       {/* Disconnected overlay */}
@@ -1329,7 +1329,7 @@ function DevtoolsContent() {
         className="w-64 flex flex-col"
         style={{
           borderRight: "1px solid var(--ds-gray-400)",
-          backgroundColor: "var(--ds-background-100)",
+          backgroundColor: "var(--ds-background-100)"
         }}
       >
         {/* Toggle */}
@@ -1356,7 +1356,7 @@ function DevtoolsContent() {
             style={{
               backgroundColor: "var(--ds-gray-200)",
               border: "1px solid var(--ds-gray-400)",
-              color: "var(--ds-gray-1000)",
+              color: "var(--ds-gray-1000)"
             }}
           />
         </div>
@@ -1387,7 +1387,7 @@ function DevtoolsContent() {
                   borderBottom: "1px solid var(--ds-gray-400)",
                   backgroundColor: isSelected
                     ? "var(--ds-gray-200)"
-                    : "transparent",
+                    : "transparent"
                 }}
               >
                 <div

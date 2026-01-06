@@ -8,7 +8,7 @@ import type { CustomGeneratorArguments } from "./types";
 export async function generate({
   generator,
   project,
-  opts,
+  opts
 }: CustomGeneratorArguments) {
   let isOnboarding = false;
   let generators = getCustomGenerators({ project, configPath: opts.config });
@@ -17,7 +17,7 @@ export async function generate({
     logger.log();
 
     const { answer } = await prompts.confirm({
-      message: `Would you like to add a config with a sample custom generator to ${project.name}?`,
+      message: `Would you like to add a config with a sample custom generator to ${project.name}?`
     });
 
     if (answer) {
@@ -57,7 +57,7 @@ export async function generate({
   }
   const { selectedGenerator } = await prompts.customGenerators({
     generators,
-    generator,
+    generator
   });
 
   try {
@@ -65,7 +65,7 @@ export async function generate({
       project,
       generator: selectedGenerator,
       bypassArgs: opts.args,
-      configPath: opts.config,
+      configPath: opts.config
     });
   } catch (err) {
     // pass any GeneratorErrors through to root
@@ -80,7 +80,7 @@ export async function generate({
     }
 
     throw new GeneratorError(message, {
-      type: "plop_error_running_generator",
+      type: "plop_error_running_generator"
     });
   } finally {
     if (isOnboarding) {

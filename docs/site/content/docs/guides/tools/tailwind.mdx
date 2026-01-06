@@ -3,9 +3,9 @@ title: Tailwind CSS
 description: Learn how to use Tailwind CSS in a Turborepo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Callout } from '#components/callout';
-import { Steps, Step } from '#components/steps';
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "#components/callout";
+import { Steps, Step } from "#components/steps";
 
 [Tailwind CSS](https://tailwindcss.com/) is a CSS framework that allows you to rapidly build modern websites without ever leaving your HTML.
 
@@ -142,7 +142,7 @@ This `package.json` installs Tailwind CSS so we can create the file shared style
 This `shared-styles.css` file will be shared to the libraries and applications in the repository. The variables shown will be available anywhere that the file is included.
 
 ```css title="./packages/tailwind-config/shared-styles.css"
-@import 'tailwindcss';
+@import "tailwindcss";
 
 @theme {
   --blue-1000: #2a8af6;
@@ -160,7 +160,7 @@ If your frontends need a PostCSS configuration file, you can create one to share
 ```js title="./packages/tailwind-config/postcss.config.js"
 export const postcssConfig = {
   plugins: {
-    '@tailwindcss/postcss': {},
+    "@tailwindcss/postcss": {},
   },
 };
 ```
@@ -254,7 +254,7 @@ This `styles.css` contains component-level styles for the shared UI library.
 
 ```css title="./packages/ui/src/styles.css"
 /* Component-level styles for the UI package */
-@import 'tailwindcss' prefix(ui);
+@import "tailwindcss" prefix(ui);
 ```
 
 <Callout type="info">
@@ -317,8 +317,8 @@ Then, configure the files in your application so the styles from the UI package 
 <Tab value="globals.css">
 
 ```css title="./apps/web/app/globals.css"
-@import 'tailwindcss';
-@import '@repo/tailwind-config';
+@import "tailwindcss";
+@import "@repo/tailwind-config";
 ```
 
 </Tab>
@@ -326,8 +326,8 @@ Then, configure the files in your application so the styles from the UI package 
 <Tab value="layout.tsx">
 
 ```tsx title="./apps/web/app/layout.tsx"
-import '@repo/ui/styles.css';
-import './globals.css';
+import "@repo/ui/styles.css";
+import "./globals.css";
 ```
 
 </Tab>
@@ -335,7 +335,7 @@ import './globals.css';
 <Tab value="postcss.config.js (Optional)">
 
 ```js title="./apps/web/postcss.config.js"
-import { postcssConfig } from '@repo/tailwind-config/postcss';
+import { postcssConfig } from "@repo/tailwind-config/postcss";
 
 export default postcssConfig;
 ```

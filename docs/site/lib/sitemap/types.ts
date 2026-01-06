@@ -62,11 +62,11 @@ export const DEFAULT_CONTENT_OPTIONS: ContentExtractionOptions = {
     ".content",
     "#content",
     ".docs-content",
-    ".markdown-body",
+    ".markdown-body"
   ],
   includeImages: true,
   normalizeWhitespace: true,
-  stripNumbers: true,
+  stripNumbers: true
 };
 
 const vercelEnv = process.env.VERCEL_ENV || "development";
@@ -83,5 +83,5 @@ export const SITEMAP_CONFIG = {
   /** Redis key for sitemap state (namespaced by environment) */
   redisKey: `sitemap:state:${vercelEnv}`,
   /** Current state version */
-  stateVersion: 1,
+  stateVersion: 1
 } as const;

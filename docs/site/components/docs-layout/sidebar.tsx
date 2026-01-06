@@ -8,7 +8,7 @@ import {
   useContext,
   useLayoutEffect,
   useMemo,
-  useState,
+  useState
 } from "react";
 import { cva } from "class-variance-authority";
 import type { ScrollAreaProps } from "@radix-ui/react-scroll-area";
@@ -18,12 +18,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
-  SidebarProvider,
+  SidebarProvider
 } from "#components/ui/sidebar.tsx";
 import {
   Collapsible,
   CollapsibleTrigger,
-  CollapsibleContent,
+  CollapsibleContent
 } from "#components/ui/collapsible.tsx";
 import { ScrollArea, ScrollViewport } from "../ui/scroll-area";
 import { cn } from "../cn";
@@ -89,13 +89,13 @@ function useInternalContext(): InternalContext {
 export const Sidebar = ({
   defaultOpenLevel = 0,
   prefetch = true,
-  children,
+  children
 }: SidebarProps) => {
   const context = useMemo<InternalContext>(() => {
     return {
       defaultOpenLevel,
       prefetch,
-      level: 1,
+      level: 1
     };
   }, [defaultOpenLevel, prefetch]);
 
@@ -108,7 +108,7 @@ export const Sidebar = ({
 
 export const SidebarFolder = ({
   defaultOpen,
-  children,
+  children
 }: {
   defaultOpen: boolean;
   children: React.ReactNode;
@@ -142,7 +142,7 @@ export function SidebarViewport(props: ScrollAreaProps) {
           maskImage:
             "linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent 100%)",
           WebkitMaskImage:
-            "linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent 100%)",
+            "linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent 100%)"
         }}
       >
         {props.children}
@@ -152,7 +152,7 @@ export function SidebarViewport(props: ScrollAreaProps) {
 }
 
 export const SidebarFolderTrigger = ({
-  children,
+  children
 }: {
   children: React.ReactNode;
 }) => {
@@ -227,7 +227,7 @@ export const SidebarFolderLink = ({
 };
 
 export const SidebarFolderContent = ({
-  children,
+  children
 }: {
   children: React.ReactNode;
 }) => {
@@ -242,7 +242,7 @@ export const SidebarFolderContent = ({
 
 export const SidebarItem = ({
   href,
-  children,
+  children
 }: LinkProps & {
   children: React.ReactNode;
 }) => {

@@ -16,7 +16,7 @@ describe("getWorkspace()", () => {
   it("getTask returns the task unquoted if user-supplied", () => {
     expect(
       getTask({
-        task: "workspace#task",
+        task: "workspace#task"
       })
     ).toEqual("workspace#task");
 

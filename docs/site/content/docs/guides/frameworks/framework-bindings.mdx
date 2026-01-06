@@ -3,8 +3,8 @@ title: Framework bindings in libraries
 description: Learn how to create framework bindings in packages.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Callout } from '#components/callout';
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "#components/callout";
 
 Framework bindings in a [Library Package](/docs/core-concepts/package-types#library-packages) integrate your library's code more deeply with a framework by leveraging APIs from the framework directly in the library.
 
@@ -39,8 +39,8 @@ Add a `peerDependency` to your library for the dependency that you intend to cre
 This will make the dependency available in your library, allowing you to write code like below. Note the `className` prop, which sets a default styling for this component in the monorepo and can be overridden in the `props` object.
 
 ```tsx title="./packages/ui/src/link.tsx"
-import Link from 'next/link';
-import type { ComponentProps } from 'react';
+import Link from "next/link";
+import type { ComponentProps } from "react";
 
 type CustomLinkProps = ComponentProps<typeof Link>;
 

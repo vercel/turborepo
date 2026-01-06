@@ -1,4 +1,4 @@
-.next/
+**/.next
 build/
 dist
 
@@ -16,9 +16,18 @@ __generated__/
 /packages/eslint-plugin-turbo/__tests__/fixtures/
 /packages/turbo-codemod/templates/
 /docs/components/pages/pack-home/benchmark-data/data.json
-/examples/with-svelte
 
+# Examples have their own formatting setup
+/examples/
 
-# crates
+# Integration test fixtures
+/turborepo-tests/
+
+# crates (test fixtures)
+/crates/
+
 # generators
 *.hbs
+
+# TOML files (formatted by taplo)
+*.toml

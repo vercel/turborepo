@@ -7,7 +7,7 @@ import type {
   FileResult,
   ModifyFileArgs,
   AbortTransformArgs,
-  TransformerResults,
+  TransformerResults
 } from "./types";
 
 export class Runner {
@@ -30,7 +30,7 @@ export class Runner {
     this.logger.error(args.reason);
     return {
       fatalError: new Error(args.reason),
-      changes: args.changes || {},
+      changes: args.changes || {}
     };
   }
 
@@ -38,7 +38,7 @@ export class Runner {
   modifyFile(args: ModifyFileArgs): void {
     this.modifications[args.filePath] = new FileTransform({
       rootPath: this.rootPath,
-      ...args,
+      ...args
     });
   }
 
@@ -51,7 +51,7 @@ export class Runner {
       const result: FileResult = {
         action: "unchanged",
         additions: mod.additions(),
-        deletions: mod.deletions(),
+        deletions: mod.deletions()
       };
 
       if (mod.hasChanges()) {
@@ -91,7 +91,7 @@ export class Runner {
     if (encounteredError) {
       return this.abortTransform({
         reason: "Encountered an error while transforming files",
-        changes: results.changes,
+        changes: results.changes
       });
     }
 
@@ -119,7 +119,7 @@ export class Runner {
           action: fileChanges.action,
           additions: fileChanges.additions,
           deletions: fileChanges.deletions,
-          error: fileChanges.error?.message || "None",
+          error: fileChanges.error?.message || "None"
         };
       });
 

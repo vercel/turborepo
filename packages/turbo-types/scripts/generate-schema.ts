@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,6 +8,7 @@ import { createGenerator } from "ts-json-schema-generator";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const packageRoot = join(__dirname, "..", "src");
+const schemasDir = join(__dirname, "..", "schemas");
 
 /**
  * post-process the schema recursively to:
@@ -41,7 +43,7 @@ const create = (fileName: string, typeName: string) => {
     path: join(packageRoot, "index.ts"),
     tsconfig: join(__dirname, "../tsconfig.json"),
     type: "Schema",
-    extraTags: ["defaultValue"],
+    extraTags: ["defaultValue"]
   });
   const schema = postProcess(generator.createSchema(typeName));
   const filePath = join(__dirname, "..", "schemas", fileName);
@@ -51,3 +53,9 @@ const create = (fileName: string, typeName: string) => {
 create("schema.v1.json", "SchemaV1");
 create("schema.v2.json", "Schema");
 create("schema.json", "Schema");
+
+// Format generated schemas with oxfmt
+execSync(
+  `pnpm exec oxfmt ${join(schemasDir, "schema.json")} ${join(schemasDir, "schema.v1.json")} ${join(schemasDir, "schema.v2.json")}`,
+  { stdio: "inherit" }
+);

@@ -14,7 +14,7 @@ const ConfigSchema = z.object({
   telemetry_enabled: z.boolean(),
   telemetry_id: z.string(),
   telemetry_salt: z.string(),
-  telemetry_alerted: z.string().optional(),
+  telemetry_alerted: z.string().optional()
 });
 
 type Config = z.infer<typeof ConfigSchema>;
@@ -67,7 +67,7 @@ export class TelemetryConfig {
   }
 
   static create({
-    configPath,
+    configPath
   }: {
     configPath: string;
   }): TelemetryConfig | undefined {
@@ -75,7 +75,7 @@ export class TelemetryConfig {
     const telemetrySalt = randomUUID();
     const telemetryId = utils.oneWayHashWithSalt({
       input: RawTelemetryId,
-      salt: telemetrySalt,
+      salt: telemetrySalt
     });
 
     const config = new TelemetryConfig({
@@ -83,8 +83,8 @@ export class TelemetryConfig {
       config: {
         telemetry_enabled: true,
         telemetry_id: telemetryId,
-        telemetry_salt: telemetrySalt,
-      },
+        telemetry_salt: telemetrySalt
+      }
     });
 
     const saved = config.tryWrite();
@@ -107,7 +107,7 @@ export class TelemetryConfig {
   static tryRemove({ configPath }: { configPath: string }): boolean {
     try {
       rmSync(configPath, {
-        force: true,
+        force: true
       });
       return true;
     } catch (e) {
@@ -196,7 +196,7 @@ export class TelemetryConfig {
   oneWayHash(input: string): string {
     return utils.oneWayHashWithSalt({
       input,
-      salt: this.config.telemetry_salt,
+      salt: this.config.telemetry_salt
     });
   }
 

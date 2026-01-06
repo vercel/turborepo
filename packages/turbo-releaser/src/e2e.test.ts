@@ -27,7 +27,7 @@ test("produces installable archive", async () => {
   const tarPath = await operations.packPlatform({
     platform: { os, arch },
     version: "0.1.2",
-    srcDir: tempDir,
+    srcDir: tempDir
   });
   assert.ok(path.isAbsolute(tarPath));
 
@@ -38,14 +38,14 @@ test("produces installable archive", async () => {
     path.join(fakeRepo, "package.json"),
     JSON.stringify({
       name: "fake-repo",
-      scripts: { "test-turbo-install": "turbo" },
+      scripts: { "test-turbo-install": "turbo" }
     })
   );
   execSync(`npm install ${tarPath}`, { cwd: fakeRepo });
   const output = execSync("npm run test-turbo-install", {
     stdio: "pipe",
     cwd: fakeRepo,
-    encoding: "utf-8",
+    encoding: "utf-8"
   });
   assert.equal(
     output,

@@ -8,7 +8,7 @@ import { logger, createNotifyUpdate } from "@turbo/utils";
 import {
   type CreateTurboTelemetry,
   initTelemetry,
-  withTelemetryCommand,
+  withTelemetryCommand
 } from "@turbo/telemetry";
 import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
@@ -35,8 +35,8 @@ createTurboCli
     const { telemetry } = await initTelemetry<"create-turbo">({
       packageInfo: {
         name: "create-turbo",
-        version: cliPkg.version,
-      },
+        version: cliPkg.version
+      }
     });
     // inject telemetry into the action as an option
     thisAction.addOption(

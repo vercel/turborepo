@@ -3,13 +3,13 @@ import { Separator } from "inquirer";
 import type { WorkspaceType } from "../generators/types";
 import {
   getWorkspaceStructure,
-  getGroupFromWorkspace,
+  getGroupFromWorkspace
 } from "./getWorkspaceStructure";
 
 export function getWorkspaceList({
   project,
   type,
-  showAllDependencies,
+  showAllDependencies
 }: {
   project: Project;
   type: WorkspaceType;

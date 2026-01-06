@@ -3,10 +3,10 @@ title: Creating an Internal Package
 description: Learn how to create an Internal Package for your monorepo.
 ---
 
-import { Callout } from '#components/callout';
-import { Steps, Step } from '#components/steps';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Files, File, Folder } from '#components/files';
+import { Callout } from "#components/callout";
+import { Steps, Step } from "#components/steps";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Files, File, Folder } from "#components/files";
 
 [Internal Packages](/docs/core-concepts/internal-packages) are the building blocks of your workspace, giving you a powerful way to share code and functionality across your repo. Turborepo automatically understands the relationships between Internal Packages using the dependencies in `package.json`, creating a [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph) under the hood to optimize your repository's workflows.
 
@@ -294,7 +294,7 @@ You're ready to use your new package in an application. Let's add it to the `web
 `@repo/math` is now available in the `web` application, you can use it in your code:
 
 ```tsx title="apps/web/src/app/page.tsx"
-import { add } from '@repo/math/add';
+import { add } from "@repo/math/add";
 
 function Page() {
   return <div>{add(1, 2)}</div>;

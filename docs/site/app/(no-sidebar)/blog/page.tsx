@@ -8,7 +8,7 @@ export function generateMetadata(): Metadata {
   const rawMetadata = createMetadata({
     title: "Blog",
     description: "Get the latest news and updates from the Turboverse.",
-    canonicalPath: "/blog",
+    canonicalPath: "/blog"
   });
 
   return {
@@ -17,9 +17,9 @@ export function generateMetadata(): Metadata {
       ...rawMetadata.alternates,
       types: {
         ...rawMetadata.alternates?.types,
-        "application/rss+xml": `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/feed.xml`,
-      },
-    },
+        "application/rss+xml": `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/feed.xml`
+      }
+    }
   };
 }
 

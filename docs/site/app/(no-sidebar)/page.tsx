@@ -18,25 +18,25 @@ import { DottedLines } from "./graphics/dotted-lines";
 const theme = createCssVariablesTheme({
   name: "css-variables",
   variablePrefix: "--shiki-",
-  variableDefaults: {},
+  variableDefaults: {}
 });
 
 const FEATURES = [
   {
     title: "Works with any provider",
     description: "Integrate with any CI provider for speed at all scales",
-    illustration: <CiProviders />,
+    illustration: <CiProviders />
   },
   {
     title: "Remote Caching",
     description: "Never do the same work twice",
-    illustration: <RemoteCachingGraphic />,
+    illustration: <RemoteCachingGraphic />
   },
   {
     title: "Effortless monorepos",
     description: "Easily define your workflows for local development and CI",
-    illustration: <EffortlessGraphic />,
-  },
+    illustration: <EffortlessGraphic />
+  }
 ];
 
 const simpleTurboJson = `{
@@ -56,7 +56,7 @@ turbo link
 turbo run build`;
 
 export const metadata: Metadata = {
-  alternates: { canonical: "https://turbo.build" },
+  alternates: { canonical: "https://turbo.build" }
 };
 
 export default function HomePage() {
@@ -65,7 +65,7 @@ export default function HomePage() {
       <Grid
         columns={{
           sm: 1,
-          md: 2,
+          md: 2
         }}
         className="relative border border-gray-400"
       >
@@ -159,8 +159,8 @@ export default function HomePage() {
                   {
                     themes: {
                       light: theme,
-                      dark: theme,
-                    },
+                      dark: theme
+                    }
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Types are fixed in a higher version of Fumadocs than we are on
                   } as any
                 }
@@ -178,8 +178,8 @@ export default function HomePage() {
                   {
                     themes: {
                       light: theme,
-                      dark: theme,
-                    },
+                      dark: theme
+                    }
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Types are fixed in a higher version of Fumadocs than we are on
                   } as any
                 }

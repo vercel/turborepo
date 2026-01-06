@@ -7,7 +7,7 @@ export interface SpyExit {
 
 export function spyExit() {
   const spy: SpyExit = {
-    exit: undefined,
+    exit: undefined
   };
 
   beforeEach(() => {

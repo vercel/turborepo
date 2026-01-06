@@ -27,26 +27,26 @@ function migrateConfig(config: ExperimentalSchema): RootSchema {
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   log.info(`Renaming \`experimentalUI\` key in turbo.json to \`ui\``);
   const turboConfigPath = path.join(root, "turbo.json");
   if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`,
+      reason: `No turbo.json found at ${root}. Is the path correct?`
     });
   }
 
   const turboJson: RootSchema = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: migrateConfig(turboJson),
+    after: migrateConfig(turboJson)
   });
 
   return runner.finish();
@@ -56,7 +56,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

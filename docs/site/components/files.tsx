@@ -1,6 +1,6 @@
 import {
   File as FumaFile,
-  Folder as FumaFolder,
+  Folder as FumaFolder
 } from "fumadocs-ui/components/files";
 import { cn } from "#components/cn.ts";
 

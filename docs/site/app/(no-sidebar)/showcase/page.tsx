@@ -7,7 +7,7 @@ export function generateMetadata(): Metadata {
   return createMetadata({
     title: "Showcase",
     canonicalPath: "/showcase",
-    description: PRODUCT_SLOGANS.turbo,
+    description: PRODUCT_SLOGANS.turbo
   });
 }
 

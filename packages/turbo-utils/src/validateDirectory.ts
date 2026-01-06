@@ -21,7 +21,7 @@ export function validateDirectory(directory: string): {
       projectName,
       error: `${picocolors.dim(
         projectName
-      )} is not a directory - please try a different location`,
+      )} is not a directory - please try a different location`
     };
   }
 
@@ -36,7 +36,7 @@ export function validateDirectory(directory: string): {
           conflicts.length
         } conflicting ${
           conflicts.length === 1 ? "file" : "files"
-        } - please try a different location`,
+        } - please try a different location`
       };
     }
   }

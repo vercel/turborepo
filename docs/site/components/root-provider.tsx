@@ -6,7 +6,7 @@ import { SearchDialog } from "#components/search-dialog.tsx";
 import { TopLevelMobileMenuProvider } from "./docs-layout/use-mobile-menu-context";
 
 export function RootProvider({
-  children,
+  children
 }: {
   children: ReactNode;
 }): JSX.Element {

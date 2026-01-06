@@ -19,7 +19,7 @@ export function FeedbackWidget() {
     { emoji: "🤩", component: <FaceSmile />, label: "Love it" },
     { emoji: "🙂", component: <FaceHappy />, label: "Like it" },
     { emoji: "😕", component: <FaceUnhappy />, label: "Dislike it" },
-    { emoji: "😭", component: <FaceSad />, label: "Hate it" },
+    { emoji: "😭", component: <FaceSad />, label: "Hate it" }
   ];
 
   const handleSubmit = (e?: React.MouseEvent<HTMLButtonElement>): void => {
@@ -30,7 +30,7 @@ export function FeedbackWidget() {
     void fetch("/api/feedback", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         url:
@@ -42,8 +42,8 @@ export function FeedbackWidget() {
         label: "turbo-site",
         ua: `turbo-site ${process.env.NEXT_PUBLIC_VERCEL_ENV || ""} + ${
           navigator.userAgent
-        } (${navigator.language || "unknown language"})`,
-      }),
+        } (${navigator.language || "unknown language"})`
+      })
     })
       .then(() => {
         setFeedback("");

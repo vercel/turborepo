@@ -5,7 +5,7 @@ import {
   existsSync,
   readFileSync,
   rmSync,
-  writeFile,
+  writeFile
 } from "fs-extra";
 import { sync as globSync } from "fast-glob";
 import yaml from "js-yaml";
@@ -17,7 +17,7 @@ import { ConvertError } from "./errors";
 const PACKAGE_MANAGER_REGEX = /^(?!_)(?<manager>.+)@(?<version>.+)$/;
 
 function getPackageJson({
-  workspaceRoot,
+  workspaceRoot
 }: {
   workspaceRoot: string;
 }): PackageJson {
@@ -28,14 +28,14 @@ function getPackageJson({
     if (err && typeof err === "object" && "code" in err) {
       if (err.code === "ENOENT") {
         throw new ConvertError(`no "package.json" found at ${workspaceRoot}`, {
-          type: "package_json-missing",
+          type: "package_json-missing"
         });
       }
       if (err.code === "EJSONPARSE") {
         throw new ConvertError(
           `failed to parse "package.json" at ${workspaceRoot}`,
           {
-            type: "package_json-parse_error",
+            type: "package_json-parse_error"
           }
         );
       }
@@ -47,7 +47,7 @@ function getPackageJson({
 }
 
 function getWorkspacePackageManager({
-  workspaceRoot,
+  workspaceRoot
 }: {
   workspaceRoot: string;
 }): string | undefined {
@@ -67,7 +67,7 @@ function getWorkspacePackageManager({
 }
 
 function getWorkspaceInfo({
-  workspaceRoot,
+  workspaceRoot
 }: {
   workspaceRoot: string;
 }): WorkspaceInfo {
@@ -78,12 +78,12 @@ function getWorkspaceInfo({
 
   return {
     name,
-    description,
+    description
   };
 }
 
 function getPnpmWorkspaces({
-  workspaceRoot,
+  workspaceRoot
 }: {
   workspaceRoot: string;
 }): Array<string> {
@@ -101,7 +101,7 @@ function getPnpmWorkspaces({
       }
     } catch (err) {
       throw new ConvertError(`failed to parse ${workspaceFile}`, {
-        type: "pnpm-workspace_parse_error",
+        type: "pnpm-workspace_parse_error"
       });
     }
   }
@@ -112,7 +112,7 @@ function getPnpmWorkspaces({
 function expandPaths({
   root,
   lockFile,
-  workspaceConfig,
+  workspaceConfig
 }: {
   root: string;
   lockFile: string;
@@ -123,7 +123,7 @@ function expandPaths({
     root,
     lockfile: fromRoot(lockFile),
     packageJson: fromRoot("package.json"),
-    nodeModules: fromRoot("node_modules"),
+    nodeModules: fromRoot("node_modules")
   };
 
   if (workspaceConfig) {
@@ -134,7 +134,7 @@ function expandPaths({
 }
 
 function parseWorkspacePackages({
-  workspaces,
+  workspaces
 }: {
   workspaces: PackageJson["workspaces"];
 }): Array<string> {
@@ -155,7 +155,7 @@ function parseWorkspacePackages({
 
 function expandWorkspaces({
   workspaceRoot,
-  workspaceGlobs,
+  workspaceGlobs
 }: {
   workspaceRoot: string;
   workspaceGlobs?: Array<string>;
@@ -175,7 +175,7 @@ function expandWorkspaces({
         onlyFiles: true,
         absolute: true,
         cwd: workspaceRoot,
-        ignore: ["**/node_modules/**", ...ignoredGlobs],
+        ignore: ["**/node_modules/**", ...ignoredGlobs]
       });
     })
     .map((workspacePackageJson) => {
@@ -187,8 +187,8 @@ function expandWorkspaces({
         paths: {
           root,
           packageJson: workspacePackageJson,
-          nodeModules: path.join(root, "node_modules"),
-        },
+          nodeModules: path.join(root, "node_modules")
+        }
       };
     });
 }
@@ -201,7 +201,7 @@ function directoryInfo({ directory }: { directory: string }) {
 function getMainStep({
   packageManager,
   action,
-  project,
+  project
 }: {
   packageManager: PackageManager;
   action: "create" | "remove";
@@ -223,7 +223,7 @@ function getMainStep({
  * This function matches the behavior of bun's glob validation: https://github.com/oven-sh/bun/blob/92e95c86dd100f167fb4cf8da1db202b5211d2c1/src/install/lockfile.zig#L2889
  */
 function isCompatibleWithBunWorkspaces({
-  project,
+  project
 }: {
   project: Project;
 }): boolean {
@@ -253,7 +253,7 @@ function isCompatibleWithBunWorkspaces({
 
 function removeLockFile({
   project,
-  options,
+  options
 }: {
   project: Project;
   options?: Options;
@@ -266,7 +266,7 @@ function removeLockFile({
 
 async function bunLockToYarnLock({
   project,
-  options,
+  options
 }: {
   project: Project;
   options?: Options;
@@ -277,7 +277,7 @@ async function bunLockToYarnLock({
         stdin: "ignore",
         cwd: project.paths.root,
         preferLocal: true,
-        shell: process.platform === "win32",
+        shell: process.platform === "win32"
       });
       // write the yarn lockfile
       await writeFile(path.join(project.paths.root, "yarn.lock"), stdout);
@@ -302,5 +302,5 @@ export {
   getMainStep,
   isCompatibleWithBunWorkspaces,
   removeLockFile,
-  bunLockToYarnLock,
+  bunLockToYarnLock
 };

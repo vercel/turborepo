@@ -29,7 +29,7 @@ export const getRemoteCacheSavedMinutes =
       return {
         total: 100000000,
         remoteCacheMinutesSaved: 50000000,
-        localCacheMinutesSaved: 50000000,
+        localCacheMinutesSaved: 50000000
       };
     }
 
@@ -42,7 +42,7 @@ export const getRemoteCacheSavedMinutes =
     return {
       total: data.remote_cache_minutes_saved + data.local_cache_minutes_saved,
       remoteCacheMinutesSaved: data.remote_cache_minutes_saved,
-      localCacheMinutesSaved: data.local_cache_minutes_saved,
+      localCacheMinutesSaved: data.local_cache_minutes_saved
     };
   };
 

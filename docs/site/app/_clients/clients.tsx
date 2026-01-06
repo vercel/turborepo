@@ -27,7 +27,7 @@ function LogoWrapper({ className, children, staticWidth }: LogoWrapperProps) {
 export function Clients({
   linked,
   staticWidth,
-  companyList,
+  companyList
 }: {
   linked?: boolean;
   staticWidth?: boolean;

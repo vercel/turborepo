@@ -13,7 +13,7 @@ async function exec(command: string, args: Array<string> = [], opts?: Options) {
     cwd: os.tmpdir(),
     env: { COREPACK_ENABLE_STRICT: "0" },
     timeout: EXEC_TIMEOUT,
-    ...opts,
+    ...opts
   };
   try {
     const { stdout } = await execa(command, args, execOptions);
@@ -32,14 +32,14 @@ export async function getAvailablePackageManagers(): Promise<
     exec("yarnpkg", ["--version"], { cwd: "." }),
     exec("npm", ["--version"]),
     exec("pnpm", ["--version"]),
-    exec("bun", ["--version"]),
+    exec("bun", ["--version"])
   ]);
 
   return {
     yarn,
     pnpm,
     npm,
-    bun,
+    bun
   };
 }
 
@@ -58,13 +58,13 @@ export async function getPackageManagersBinPaths(): Promise<
     }),
     exec("npm", ["config", "get", "prefix"]),
     exec("pnpm", ["bin", "--global"]),
-    exec("bun", ["pm", "--g", "bin"]),
+    exec("bun", ["pm", "--g", "bin"])
   ]);
 
   return {
     yarn,
     pnpm,
     npm,
-    bun,
+    bun
   };
 }

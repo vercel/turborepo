@@ -5,14 +5,14 @@ import type { TurboUser } from "./users";
 
 const DEFAULT_SIZE = {
   width: 100,
-  height: 75,
+  height: 75
 };
 
 export function Logo({
   user,
   theme,
   isLink,
-  className,
+  className
 }: {
   user: TurboUser;
   theme: "dark" | "light";
@@ -21,7 +21,7 @@ export function Logo({
 }): JSX.Element {
   const styles = {
     ...DEFAULT_SIZE,
-    ...user.style,
+    ...user.style
   };
 
   // Initialize with default values

@@ -66,12 +66,12 @@ export function migrateTaskConfigs(config: SchemaV1) {
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   // If `turbo` key is detected in package.json, require user to run the other codemod first.
@@ -88,7 +88,7 @@ export function transformer({
   if ("turbo" in packageJSON) {
     return runner.abortTransform({
       reason:
-        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first',
+        '"turbo" key detected in package.json. Run `npx @turbo/codemod transform create-turbo-config` first'
     });
   }
 
@@ -96,14 +96,14 @@ export function transformer({
   const turboConfigPath = path.join(root, "turbo.json");
   if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`,
+      reason: `No turbo.json found at ${root}. Is the path correct?`
     });
   }
 
   const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: migrateRootConfig(turboJson),
+    after: migrateRootConfig(turboJson)
   });
 
   // find and migrate any workspace configs
@@ -113,7 +113,7 @@ export function transformer({
     if (!isRootConfig && "pipeline" in config) {
       runner.modifyFile({
         filePath,
-        after: migrateTaskConfigs(config),
+        after: migrateTaskConfigs(config)
       });
     }
   });
@@ -125,7 +125,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

@@ -4,7 +4,7 @@ import { gitHubRepoUrl } from "#lib/constants.ts";
 import { Turborepo } from "./turborepo";
 
 export function NotFoundTemplate({
-  content,
+  content
 }: {
   content?: ReactNode;
 }): JSX.Element {

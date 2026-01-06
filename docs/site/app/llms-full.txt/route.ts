@@ -4,7 +4,7 @@ import {
   scanDocumentationFiles,
   parseFileContent,
   processMarkdownContent,
-  formatFilePath,
+  formatFilePath
 } from "../lib/llms-utils";
 
 export const revalidate = false;

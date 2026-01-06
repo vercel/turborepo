@@ -20,12 +20,12 @@ import {
   SidebarItem,
   SidebarFolderContent,
   SidebarFolderTrigger,
-  SidebarSeparator,
+  SidebarSeparator
 } from "./sidebar";
 
 export const LayoutBody = ({
   children,
-  isOpenApiSpec,
+  isOpenApiSpec
 }: {
   children: React.ReactNode;
   isOpenApiSpec?: boolean;
@@ -86,7 +86,7 @@ export const SidebarItems = () => {
 
 const PageTreeFolder = ({
   item,
-  children,
+  children
 }: {
   item: PageTree.Folder;
   children: React.ReactNode;

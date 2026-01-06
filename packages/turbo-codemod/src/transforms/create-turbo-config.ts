@@ -14,12 +14,12 @@ const INTRODUCED_IN = "1.1.0";
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   log.info(`Migrating "package.json" "turbo" key to "turbo.json" file...`);
@@ -27,7 +27,7 @@ export function transformer({
   const rootPackageJsonPath = path.join(root, "package.json");
   if (!fs.existsSync(rootPackageJsonPath)) {
     return runner.abortTransform({
-      reason: `No package.json found at ${root}. Is the path correct?`,
+      reason: `No package.json found at ${root}. Is the path correct?`
     });
   }
 
@@ -51,11 +51,11 @@ export function transformer({
 
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: transformedTurboConfig,
+    after: transformedTurboConfig
   });
   runner.modifyFile({
     filePath: rootPackageJsonPath,
-    after: transformedPackageJson,
+    after: transformedPackageJson
   });
 
   return runner.finish();
@@ -65,7 +65,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

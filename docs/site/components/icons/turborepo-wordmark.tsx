@@ -1,5 +1,5 @@
 export const TurborepoWordmarkDark = ({
-  className,
+  className
 }: {
   className?: string;
 }) => {
@@ -75,7 +75,7 @@ export const TurborepoWordmarkDark = ({
 };
 
 export const TurborepoWordmarkLight = ({
-  className,
+  className
 }: {
   className?: string;
 }) => {

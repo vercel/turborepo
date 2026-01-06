@@ -18,7 +18,7 @@ export function ThemedImage({
   title,
   light,
   dark,
-  priority = false,
+  priority = false
 }: ThemedImageProps): JSX.Element {
   return (
     <>

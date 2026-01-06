@@ -11,7 +11,7 @@ interface WorkspaceStructure {
 
 export function getGroupFromWorkspace({
   project,
-  workspace,
+  workspace
 }: {
   project: Project;
   workspace: Workspace;
@@ -22,7 +22,7 @@ export function getGroupFromWorkspace({
 }
 
 export function getWorkspaceStructure({
-  project,
+  project
 }: {
   project: Project;
 }): WorkspaceStructure {
@@ -51,6 +51,6 @@ export function getWorkspaceStructure({
     hasRootApps,
     hasRootPackages,
     workspacesByGroup,
-    nonAppWorkspaces,
+    nonAppWorkspaces
   };
 }

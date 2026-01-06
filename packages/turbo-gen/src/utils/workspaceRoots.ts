@@ -5,7 +5,7 @@ import type { Project } from "@turbo/workspaces";
 // Given a list of workspace globs, it aims to return a selectable list of paths that are valid workspace locations.
 // This current naive approach does not work with globs that contain nested wildcards, for example: `packages/*/utils` will not work.
 export function getWorkspaceRoots({
-  project,
+  project
 }: {
   project: Project;
 }): Array<string> {

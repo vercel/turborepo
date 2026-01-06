@@ -2,7 +2,7 @@ import type { CSSProperties } from "react";
 
 export const Moon = ({
   className,
-  style,
+  style
 }: {
   className?: string;
   style: CSSProperties;

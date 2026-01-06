@@ -6,7 +6,7 @@ export function shutdownDaemon({ project }: { project: Project }) {
   try {
     const execOpts: ExecSyncOptions = {
       cwd: project.paths.root,
-      stdio: "ignore",
+      stdio: "ignore"
     };
     // see if we have a global install
     const turboBinaryPathFromGlobal = exec(`turbo bin`, execOpts);

@@ -51,7 +51,7 @@ function getNodeIntersection(
   if (dx === 0) {
     return {
       x: nodeCenter.x,
-      y: dy > 0 ? nodeCenter.y + h : nodeCenter.y - h,
+      y: dy > 0 ? nodeCenter.y + h : nodeCenter.y - h
     };
   }
 
@@ -121,6 +121,6 @@ export function getEdgeParams(
     tx: targetIntersection.x,
     ty: targetIntersection.y,
     sourcePos,
-    targetPos,
+    targetPos
   };
 }

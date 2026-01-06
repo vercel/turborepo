@@ -17,7 +17,7 @@ const CACHE_DURATION = 5 * 60 * 1000;
 
 export async function InVersion({
   version,
-  children,
+  children
 }: {
   version: string;
   children: JSX.Element;

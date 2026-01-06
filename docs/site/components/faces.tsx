@@ -1,6 +1,6 @@
 export const FaceHappy = ({
   size,
-  className,
+  className
 }: {
   size?: number;
   className?: string;
@@ -25,7 +25,7 @@ export const FaceHappy = ({
 
 export const FaceSad = ({
   size,
-  className,
+  className
 }: {
   size?: number;
   className?: string;
@@ -56,7 +56,7 @@ export const FaceSad = ({
 
 export const FaceSmile = ({
   size,
-  className,
+  className
 }: {
   size?: number;
   className?: string;
@@ -87,7 +87,7 @@ export const FaceSmile = ({
 
 export const FaceUnhappy = ({
   size,
-  className,
+  className
 }: {
   size?: number;
   className?: string;

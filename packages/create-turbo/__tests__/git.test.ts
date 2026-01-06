@@ -8,7 +8,7 @@ import {
   GIT_REPO_COMMAND,
   HG_REPO_COMMAND,
   tryGitInit,
-  removeGitDirectory,
+  removeGitDirectory
 } from "../src/utils/git";
 
 describe("git", () => {
@@ -20,7 +20,7 @@ describe("git", () => {
   describe("tryGitInit", () => {
     const { useFixture } = setupTestFixtures({
       directory: path.join(__dirname, "../"),
-      options: { emptyFixture: true },
+      options: { emptyFixture: true }
     });
 
     it("inits a repo with a single commit", async () => {
@@ -49,13 +49,13 @@ describe("git", () => {
         "git init",
         "git checkout -b main",
         "git add -A",
-        'git commit -m "Initial commit from create-turbo"',
+        'git commit -m "Initial commit from create-turbo"'
       ];
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length);
       calls.forEach((call) => {
         expect(mockExecSync).toHaveBeenCalledWith(call, {
           stdio: "ignore",
-          cwd: root,
+          cwd: root
         });
       });
       mockExecSync.mockRestore();
@@ -119,7 +119,7 @@ describe("git", () => {
 
     it("skips init if already in a git repo", async () => {
       const { root } = useFixture({
-        fixture: `git`,
+        fixture: `git`
       });
       const mockExecSync = jest
         .spyOn(childProcess, "execSync")
@@ -133,7 +133,7 @@ describe("git", () => {
       expect(mockExecSync).toHaveBeenCalledTimes(1);
       expect(mockExecSync).toHaveBeenCalledWith(GIT_REPO_COMMAND, {
         stdio: "ignore",
-        cwd: root,
+        cwd: root
       });
       mockExecSync.mockRestore();
     });
@@ -163,14 +163,14 @@ describe("git", () => {
       const calls: Array<string> = [
         GIT_REPO_COMMAND,
         HG_REPO_COMMAND,
-        "git init",
+        "git init"
       ];
 
       expect(mockExecSync).toHaveBeenCalledTimes(calls.length);
       calls.forEach((call) => {
         expect(mockExecSync).toHaveBeenCalledWith(call, {
           stdio: "ignore",
-          cwd: root,
+          cwd: root
         });
       });
       mockExecSync.mockRestore();
@@ -203,7 +203,7 @@ describe("git", () => {
       // Should clean up the .git directory
       expect(mockRmSync).toHaveBeenCalledWith(path.join(root, ".git"), {
         recursive: true,
-        force: true,
+        force: true
       });
       mockExecSync.mockRestore();
       mockRmSync.mockRestore();
@@ -240,7 +240,7 @@ describe("git", () => {
       // Should clean up the .git directory since init succeeded but commit failed
       expect(mockRmSync).toHaveBeenCalledWith(path.join(root, ".git"), {
         recursive: true,
-        force: true,
+        force: true
       });
       mockExecSync.mockRestore();
       mockRmSync.mockRestore();
@@ -248,7 +248,7 @@ describe("git", () => {
 
     it("skips init if already in a mercurial repo", async () => {
       const { root } = useFixture({
-        fixture: `git`,
+        fixture: `git`
       });
       const mockExecSync = jest
         .spyOn(childProcess, "execSync")
@@ -268,11 +268,11 @@ describe("git", () => {
       expect(mockExecSync).toHaveBeenCalledTimes(2);
       expect(mockExecSync).toHaveBeenCalledWith(GIT_REPO_COMMAND, {
         stdio: "ignore",
-        cwd: root,
+        cwd: root
       });
       expect(mockExecSync).toHaveBeenCalledWith(HG_REPO_COMMAND, {
         stdio: "ignore",
-        cwd: root,
+        cwd: root
       });
       mockExecSync.mockRestore();
     });
@@ -281,7 +281,7 @@ describe("git", () => {
   describe("removeGitDirectory", () => {
     const { useFixture } = setupTestFixtures({
       directory: path.join(__dirname, "../"),
-      options: { emptyFixture: true },
+      options: { emptyFixture: true }
     });
 
     it("attempts to remove .git directory", async () => {
@@ -293,7 +293,7 @@ describe("git", () => {
 
       expect(mockRmSync).toHaveBeenCalledWith(path.join(root, ".git"), {
         recursive: true,
-        force: true,
+        force: true
       });
       mockRmSync.mockRestore();
     });
@@ -309,7 +309,7 @@ describe("git", () => {
 
       expect(mockRmSync).toHaveBeenCalledWith(path.join(root, ".git"), {
         recursive: true,
-        force: true,
+        force: true
       });
       mockRmSync.mockRestore();
     });

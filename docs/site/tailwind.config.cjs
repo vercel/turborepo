@@ -9,7 +9,7 @@ module.exports = {
     "./content/**/*.{md,mdx}",
     "./mdx-components.{ts,tsx}",
     "./node_modules/fumadocs-ui/dist/**/*.js",
-    "./node_modules/fumadocs-openapi/dist/**/*.js",
+    "./node_modules/fumadocs-openapi/dist/**/*.js"
   ],
   theme: {
     screens: {
@@ -18,7 +18,7 @@ module.exports = {
       md: "768px",
       lg: "1024px",
       xl: "1280px",
-      "2xl": "1536px",
+      "2xl": "1536px"
     },
     colors: {
       transparent: "transparent",
@@ -44,7 +44,7 @@ module.exports = {
         "alpha-700": "var(--ds-gray-alpha-700)",
         "alpha-800": "var(--ds-gray-alpha-800)",
         "alpha-900": "var(--ds-gray-alpha-900)",
-        "alpha-1000": "var(--ds-gray-alpha-1000)",
+        "alpha-1000": "var(--ds-gray-alpha-1000)"
       },
       blue: {
         100: "var(--ds-blue-100)",
@@ -56,7 +56,7 @@ module.exports = {
         700: "var(--ds-blue-700)",
         800: "var(--ds-blue-800)",
         900: "var(--ds-blue-900)",
-        1000: "var(--ds-blue-1000)",
+        1000: "var(--ds-blue-1000)"
       },
       red: {
         100: "var(--ds-red-100)",
@@ -68,7 +68,7 @@ module.exports = {
         700: "var(--ds-red-700)",
         800: "var(--ds-red-800)",
         900: "var(--ds-red-900)",
-        1000: "var(--ds-red-1000)",
+        1000: "var(--ds-red-1000)"
       },
       amber: {
         100: "var(--ds-amber-100)",
@@ -80,7 +80,7 @@ module.exports = {
         700: "var(--ds-amber-700)",
         800: "var(--ds-amber-800)",
         900: "var(--ds-amber-900)",
-        1000: "var(--ds-amber-1000)",
+        1000: "var(--ds-amber-1000)"
       },
       green: {
         100: "var(--ds-green-100)",
@@ -92,7 +92,7 @@ module.exports = {
         700: "var(--ds-green-700)",
         800: "var(--ds-green-800)",
         900: "var(--ds-green-900)",
-        1000: "var(--ds-green-1000)",
+        1000: "var(--ds-green-1000)"
       },
       teal: {
         100: "var(--ds-teal-100)",
@@ -104,7 +104,7 @@ module.exports = {
         700: "var(--ds-teal-700)",
         800: "var(--ds-teal-800)",
         900: "var(--ds-teal-900)",
-        1000: "var(--ds-teal-1000)",
+        1000: "var(--ds-teal-1000)"
       },
       purple: {
         100: "var(--ds-purple-100)",
@@ -116,7 +116,7 @@ module.exports = {
         700: "var(--ds-purple-700)",
         800: "var(--ds-purple-800)",
         900: "var(--ds-purple-900)",
-        1000: "var(--ds-purple-1000)",
+        1000: "var(--ds-purple-1000)"
       },
       pink: {
         100: "var(--ds-pink-100)",
@@ -128,7 +128,7 @@ module.exports = {
         700: "var(--ds-pink-700)",
         800: "var(--ds-pink-800)",
         900: "var(--ds-pink-900)",
-        1000: "var(--ds-pink-1000)",
+        1000: "var(--ds-pink-1000)"
       },
       boxShadow: {
         none: "none",
@@ -144,53 +144,53 @@ module.exports = {
         modal: "var(--ds-shadow-modal)",
         fullscreen: "var(--ds-shadow-fullscreen)",
         "focus-ring": "var(--ds-focus-ring)",
-        "focus-border": "var(--ds-focus-border)",
-      },
+        "focus-border": "var(--ds-focus-border)"
+      }
     },
     extend: {
       fontFamily: {
         sans: "var(--font-geist-sans)",
-        mono: "var(--font-geist-mono)",
+        mono: "var(--font-geist-mono)"
       },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        sm: "calc(var(--radius) - 4px)"
       },
       colors: {
         foreground: "hsl(var(--foreground))",
         background: {
           DEFAULT: "hsl(var(--ds-background))",
           100: "hsla(var(--ds-background-100-value), <alpha-value>)",
-          200: "hsla(var(--ds-background-200-value), <alpha-value>)",
+          200: "hsla(var(--ds-background-200-value), <alpha-value>)"
         },
         card: {
           DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
+          foreground: "hsl(var(--card-foreground))"
         },
         popover: {
           DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
+          foreground: "hsl(var(--popover-foreground))"
         },
         primary: {
           DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
+          foreground: "hsl(var(--primary-foreground))"
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
+          foreground: "hsl(var(--secondary-foreground))"
         },
         muted: {
           DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
+          foreground: "hsl(var(--muted-foreground))"
         },
         accent: {
           DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
+          foreground: "hsl(var(--accent-foreground))"
         },
         destructive: {
           DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
+          foreground: "hsl(var(--destructive-foreground))"
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -200,10 +200,10 @@ module.exports = {
           2: "hsl(var(--chart-2))",
           3: "hsl(var(--chart-3))",
           4: "hsl(var(--chart-4))",
-          5: "hsl(var(--chart-5))",
-        },
-      },
-    },
+          5: "hsl(var(--chart-5))"
+        }
+      }
+    }
   },
-  presets: [createPreset(), require("./typography-plugin.cjs")],
+  presets: [createPreset(), require("./typography-plugin.cjs")]
 };

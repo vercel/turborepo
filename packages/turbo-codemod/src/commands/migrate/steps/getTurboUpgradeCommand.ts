@@ -6,7 +6,7 @@ import {
   getPackageManagersBinPaths,
   logger,
   type PackageManager,
-  type PackageJson,
+  type PackageJson
 } from "@turbo/utils";
 import type { Project } from "@turbo/workspaces";
 import { exec } from "../utils";
@@ -34,7 +34,7 @@ function getLocalUpgradeCommand({
   packageManagerVersion,
   installType,
   isUsingWorkspaces,
-  to = "latest",
+  to = "latest"
 }: {
   packageManager: PackageManager;
   packageManagerVersion: string;
@@ -54,7 +54,7 @@ function getLocalUpgradeCommand({
           "yarn",
           "add",
           `turbo@${to}`,
-          installType === "devDependencies" && "--dev",
+          installType === "devDependencies" && "--dev"
         ]);
       }
       // yarn 1.x
@@ -63,7 +63,7 @@ function getLocalUpgradeCommand({
         "add",
         `turbo@${to}`,
         installType === "devDependencies" && "--dev",
-        isUsingWorkspaces && "-W",
+        isUsingWorkspaces && "-W"
       ]);
 
     case "npm":
@@ -71,7 +71,7 @@ function getLocalUpgradeCommand({
         "npm",
         "install",
         `turbo@${to}`,
-        installType === "devDependencies" && "--save-dev",
+        installType === "devDependencies" && "--save-dev"
       ]);
     case "pnpm":
       return renderCommand([
@@ -79,14 +79,14 @@ function getLocalUpgradeCommand({
         "add",
         `turbo@${to}`,
         installType === "devDependencies" && "--save-dev",
-        isUsingWorkspaces && "-w",
+        isUsingWorkspaces && "-w"
       ]);
     case "bun":
       return renderCommand([
         "bun",
         "add",
         `turbo@${to}`,
-        installType === "devDependencies" && "--dev",
+        installType === "devDependencies" && "--dev"
       ]);
   }
 }
@@ -121,14 +121,14 @@ function getInstallType({ root }: { root: string }): InstallType | undefined {
 **/
 export async function getTurboUpgradeCommand({
   project,
-  to,
+  to
 }: {
   project: Project;
   to?: string;
 }) {
   const turboBinaryPathFromGlobal = exec("turbo bin", {
     cwd: project.paths.root,
-    stdio: "pipe",
+    stdio: "pipe"
   });
   const packageManagerGlobalBinaryPaths = await getPackageManagersBinPaths();
   const globalPackageManager = Object.keys(
@@ -160,7 +160,7 @@ export async function getTurboUpgradeCommand({
       packageManagerVersion: version,
       installType,
       isUsingWorkspaces,
-      to,
+      to
     });
   }
 

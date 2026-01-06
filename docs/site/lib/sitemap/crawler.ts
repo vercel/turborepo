@@ -23,16 +23,16 @@ export async function crawlPage(
   try {
     const response = await fetch(fullUrl, {
       headers: {
-        "User-Agent": SITEMAP_CONFIG.userAgent,
+        "User-Agent": SITEMAP_CONFIG.userAgent
       },
-      signal: AbortSignal.timeout(SITEMAP_CONFIG.timeout),
+      signal: AbortSignal.timeout(SITEMAP_CONFIG.timeout)
     });
 
     if (!response.ok) {
       return {
         url,
         success: false,
-        error: `HTTP ${response.status}: ${response.statusText}`,
+        error: `HTTP ${response.status}: ${response.statusText}`
       };
     }
 
@@ -42,7 +42,7 @@ export async function crawlPage(
       return {
         url,
         success: false,
-        error: `Not HTML: ${contentType}`,
+        error: `Not HTML: ${contentType}`
       };
     }
 
@@ -52,13 +52,13 @@ export async function crawlPage(
     return {
       url,
       success: true,
-      contentHash,
+      contentHash
     };
   } catch (error) {
     return {
       url,
       success: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error)
     };
   }
 }

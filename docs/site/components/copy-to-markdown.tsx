@@ -5,7 +5,7 @@ import { Copy, Check } from "lucide-react";
 import { Button } from "./button";
 
 export const CopyToMarkdown = ({
-  markdownContent,
+  markdownContent
 }: {
   markdownContent: string;
 }) => {

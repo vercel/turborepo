@@ -8,7 +8,7 @@ import remarkMdx from "remark-mdx";
 export const DEFAULT_IGNORED_FILES = [
   "!./content/docs/acknowledgments.mdx",
   "!./content/docs/community.mdx",
-  "!./content/docs/telemetry.mdx",
+  "!./content/docs/telemetry.mdx"
 ];
 
 export async function scanDocumentationFiles(

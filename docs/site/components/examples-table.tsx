@@ -1,7 +1,7 @@
 import data from "../content/examples-data.json";
 
 export function ExamplesTable({
-  coreMaintained,
+  coreMaintained
 }: {
   coreMaintained?: boolean;
 }): JSX.Element {

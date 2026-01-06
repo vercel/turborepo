@@ -4,13 +4,13 @@ import type { SchemaV2 } from "@turbo/types";
 import {
   transformer,
   migrateTaskConfigs,
-  migrateRootConfig,
+  migrateRootConfig
 } from "../src/transforms/transform-env-literals-to-wildcards";
 
 describe.only("transform-env-literals-to-wildcards", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "transform-env-literals-to-wildcards",
+    test: "transform-env-literals-to-wildcards"
   });
 
   it("skips migrateTaskConfigs when no pipeline key", () => {
@@ -20,19 +20,19 @@ describe.only("transform-env-literals-to-wildcards", () => {
       tasks: {
         test: {
           outputs: ["coverage/**/*"],
-          dependsOn: ["^build"],
+          dependsOn: ["^build"]
         },
         lint: {
-          outputs: [],
+          outputs: []
         },
         dev: {
-          cache: false,
+          cache: false
         },
         build: {
           outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
-          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
-        },
-      },
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"]
+        }
+      }
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- Testing a situation outside of types that users can get themselves into at runtime
@@ -48,19 +48,19 @@ describe.only("transform-env-literals-to-wildcards", () => {
       tasks: {
         test: {
           outputs: ["coverage/**/*"],
-          dependsOn: ["^build"],
+          dependsOn: ["^build"]
         },
         lint: {
-          outputs: [],
+          outputs: []
         },
         dev: {
-          cache: false,
+          cache: false
         },
         build: {
           outputs: ["dist/**/*", ".next/**/*", "!.next/cache/**"],
-          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"],
-        },
-      },
+          dependsOn: ["^build", "$TASK_ENV_KEY", "$ANOTHER_ENV_KEY"]
+        }
+      }
     };
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument -- Testing a situation outside of types that users can get themselves into at runtime
@@ -72,13 +72,13 @@ describe.only("transform-env-literals-to-wildcards", () => {
   it("migrates wildcards has-empty", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "has-empty",
+      fixture: "has-empty"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -88,9 +88,9 @@ describe.only("transform-env-literals-to-wildcards", () => {
       pipeline: {
         build: {
           env: [],
-          passThroughEnv: [],
-        },
-      },
+          passThroughEnv: []
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -108,20 +108,20 @@ describe.only("transform-env-literals-to-wildcards", () => {
   it("migrates env-mode has-nothing", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "has-nothing",
+      fixture: "has-nothing"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turborepo.com/schema.json",
       pipeline: {
-        build: {},
-      },
+        build: {}
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -139,13 +139,13 @@ describe.only("transform-env-literals-to-wildcards", () => {
   it("migrates env-mode needs-rewriting", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "needs-rewriting",
+      fixture: "needs-rewriting"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -155,9 +155,9 @@ describe.only("transform-env-literals-to-wildcards", () => {
       pipeline: {
         build: {
           env: ["PLAIN", "SMALL_PRINT\\*"],
-          passThroughEnv: ["PASSWORD", "\\*\\*\\*\\*\\*"],
-        },
-      },
+          passThroughEnv: ["PASSWORD", "\\*\\*\\*\\*\\*"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -175,13 +175,13 @@ describe.only("transform-env-literals-to-wildcards", () => {
   it("migrates env-mode workspace-configs", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "workspace-configs",
+      fixture: "workspace-configs"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -191,9 +191,9 @@ describe.only("transform-env-literals-to-wildcards", () => {
       pipeline: {
         build: {
           env: ["NO_ROOT_ENV", "\\!\\*!\\*ROOT"],
-          passThroughEnv: ["NO_ROOT_PASSTHROUGH_ENV", "\\!\\*!\\*ROOT"],
-        },
-      },
+          passThroughEnv: ["NO_ROOT_PASSTHROUGH_ENV", "\\!\\*!\\*ROOT"]
+        }
+      }
     });
 
     expect(JSON.parse(read("apps/docs/turbo.json") || "{}")).toStrictEqual({
@@ -201,9 +201,9 @@ describe.only("transform-env-literals-to-wildcards", () => {
       pipeline: {
         build: {
           env: ["NO_DOCS_ENV", "\\!\\*!\\*DOCS"],
-          passThroughEnv: ["NO_DOCS_PASSTHROUGH_ENV", "\\!\\*!\\*DOCS"],
-        },
-      },
+          passThroughEnv: ["NO_DOCS_PASSTHROUGH_ENV", "\\!\\*!\\*DOCS"]
+        }
+      }
     });
 
     expect(JSON.parse(read("apps/website/turbo.json") || "{}")).toStrictEqual({
@@ -211,9 +211,9 @@ describe.only("transform-env-literals-to-wildcards", () => {
       pipeline: {
         build: {
           env: ["NO_WEBSITE_ENV", "\\!\\*!\\*WEBSITE"],
-          passThroughEnv: ["NO_WEBSITE_PASSTHROUGH_ENV", "\\!\\*!\\*WEBSITE"],
-        },
-      },
+          passThroughEnv: ["NO_WEBSITE_PASSTHROUGH_ENV", "\\!\\*!\\*WEBSITE"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -241,7 +241,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
   it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "no-turbo-json",
+      fixture: "no-turbo-json"
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -249,7 +249,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -262,13 +262,13 @@ describe.only("transform-env-literals-to-wildcards", () => {
   it("errors if package.json config exists and has not been migrated", () => {
     // load the fixture for the test
     const { root } = useFixture({
-      fixture: "old-config",
+      fixture: "old-config"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(result.fatalError).toBeDefined();

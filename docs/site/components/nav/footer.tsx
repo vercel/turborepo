@@ -12,23 +12,23 @@ const FOOTER_ITEMS = {
     { href: "https://vercel.com/legal/privacy-policy", label: "Privacy" },
     { href: "/terms", label: "Terms" },
     { href: "/governance", label: "Governance" },
-    { href: "/docs/telemetry", label: "Telemetry" },
+    { href: "/docs/telemetry", label: "Telemetry" }
   ],
   resources: [
     { href: "/blog", label: "Blog" },
     { href: "https://github.com/vercel/turborepo/releases", label: "Releases" },
-    { href: "/docs", label: "Docs" },
+    { href: "/docs", label: "Docs" }
   ],
   company: [
     { href: "https://vercel.com/about", label: "About" },
-    { href: "https://vercel.com/oss", label: "Open source" },
+    { href: "https://vercel.com/oss", label: "Open source" }
   ],
   community: [
     { href: "https://github.com/vercel/turborepo", label: "GitHub" },
     { href: "https://community.vercel.com/tag/turborepo", label: "Community" },
     { href: "https://bsky.app/profile/turborepo.com", label: "Bluesky" },
-    { href: "https://x.com/turborepo", label: "X" },
-  ],
+    { href: "https://x.com/turborepo", label: "X" }
+  ]
 };
 
 const NavItems = ({ category }: { category: Array<FooterItem> }) => {

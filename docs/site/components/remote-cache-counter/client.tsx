@@ -6,7 +6,7 @@ import { cn } from "#components/cn.ts";
 import { useTurborepoMinutesSaved } from "./use-turborepo-minutes-saved";
 
 const counterFormatter = Intl.NumberFormat(undefined, {
-  maximumFractionDigits: 0,
+  maximumFractionDigits: 0
 });
 
 // A number to start the counter at that is lower than the actual time saved
@@ -14,7 +14,7 @@ const counterFormatter = Intl.NumberFormat(undefined, {
 const ARBITRARY_START_NUMBER = 240000000 / 60;
 
 export function RemoteCacheCounterClient({
-  className,
+  className
 }: {
   className?: string;
 }): JSX.Element {
@@ -35,7 +35,7 @@ export function RemoteCacheCounterClient({
   const spring = useSpring({
     val: timeSaved ? timeSaved / 60 : ARBITRARY_START_NUMBER,
     from: { val: dur },
-    config: { mass: 1, tension: 170, friction: 60, clamp: true },
+    config: { mass: 1, tension: 170, friction: 60, clamp: true }
   });
 
   return (

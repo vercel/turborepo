@@ -3,8 +3,8 @@ title: Nuxt
 description: Learn more about using Nuxt in your monorepo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Callout } from '#components/callout';
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "#components/callout";
 
 [Nuxt](https://nuxt.com/) is an open source framework that makes web development intuitive and powerful.
 
@@ -156,9 +156,9 @@ By default, the new application will use the tasks defined in the root `turbo.js
 When using Nuxt with [Turborepo's microfrontends](/docs/guides/microfrontends), make sure to set the `base` property for child applications. This ensures the assets like images and CSS will be routed to the correct application.
 
 ```ts title="./apps/my-app/vite.config.ts"
-import { defineConfig } from 'vite';
+import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: '/admin',
+  base: "/admin",
 });
 ```

@@ -3,7 +3,7 @@
 import {
   scanDocumentationFiles,
   parseFileContent,
-  formatFilePath,
+  formatFilePath
 } from "../lib/llms-utils";
 import { PRODUCT_SLOGANS } from "../../lib/constants";
 

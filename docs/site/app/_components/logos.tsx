@@ -127,7 +127,7 @@ export function NodeJsLogo({ className }: { className: string }): JSX.Element {
 }
 
 export function TurborepoLogo({
-  className,
+  className
 }: {
   className?: string;
 }): JSX.Element {
@@ -249,7 +249,7 @@ export function NextJSLogo({ className }: { className?: string }): JSX.Element {
 }
 
 export function DesignSystemLogo({
-  className,
+  className
 }: {
   className?: string;
 }): JSX.Element {

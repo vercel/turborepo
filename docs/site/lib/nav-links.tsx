@@ -1,7 +1,7 @@
 import {
   BookOpenIcon,
   ExternalLinkIcon,
-  StarIcon,
+  StarIcon
 } from "@heroicons/react/outline";
 import type { LinkItemType } from "fumadocs-ui/layouts/links";
 
@@ -12,6 +12,6 @@ export const navLinks: Array<LinkItemType> = [
   {
     url: "https://vercel.com/contact/sales?utm_source=turborepo.com&utm_medium=referral&utm_campaign=header-enterpriseLink",
     text: "Enterprise",
-    icon: <ExternalLinkIcon />,
-  },
+    icon: <ExternalLinkIcon />
+  }
 ];

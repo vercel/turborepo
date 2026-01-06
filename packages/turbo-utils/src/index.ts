@@ -4,12 +4,12 @@ export {
   getTurboConfigs,
   getWorkspaceConfigs,
   forEachTaskDef,
-  clearConfigCaches,
+  clearConfigCaches
 } from "./getTurboConfigs";
 export { searchUp } from "./searchUp";
 export {
   getAvailablePackageManagers,
-  getPackageManagersBinPaths,
+  getPackageManagersBinPaths
 } from "./managers";
 export { isFolderEmpty } from "./isFolderEmpty";
 export { validateDirectory } from "./validateDirectory";
@@ -19,7 +19,7 @@ export {
   hasRepo,
   existsInRepo,
   downloadAndExtractRepo,
-  downloadAndExtractExample,
+  downloadAndExtractExample
 } from "./examples";
 export { isWriteable } from "./isWriteable";
 export { createProject, DownloadError } from "./createProject";
@@ -33,6 +33,6 @@ export type { RepoInfo } from "./examples";
 export type {
   TurboConfig,
   TurboConfigs,
-  WorkspaceConfig,
+  WorkspaceConfig
 } from "./getTurboConfigs";
 export * from "./types";

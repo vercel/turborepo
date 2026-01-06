@@ -6,7 +6,7 @@ interface GetProjectArguments {
 }
 
 export async function getProject({
-  root,
+  root
 }: GetProjectArguments): Promise<Project> {
   const directory = root || process.cwd();
   const repoRoot = getTurboRoot(directory);

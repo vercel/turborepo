@@ -3,7 +3,7 @@ title: Internal Packages
 description: Learn how to build Internal Packages in your monorepo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 
 Internal Packages are libraries whose source code is inside your Workspace. You can quickly make Internal Packages to share code within your monorepo and choose to [publish them to the npm registry](/docs/guides/publishing-libraries) if you need to later.
 
@@ -57,7 +57,7 @@ In the [Creating an Internal Package guide](/docs/crafting-your-repository/creat
 You can then import the package into your code like you're used to doing with an external package:
 
 ```tsx title="./apps/web/app/page.tsx"
-import { Button } from '@repo/ui'; // [!code highlight]
+import { Button } from "@repo/ui"; // [!code highlight]
 
 export default function Page() {
   return <Button>Submit</Button>;

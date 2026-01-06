@@ -5,10 +5,10 @@ import plugin from "eslint-plugin-turbo";
 export default [
   {
     plugins: {
-      turbo: plugin,
+      turbo: plugin
     },
     rules: {
-      "turbo/no-undeclared-env-vars": "error",
-    },
-  },
+      "turbo/no-undeclared-env-vars": "error"
+    }
+  }
 ] satisfies Array<Linter.FlatConfig>;

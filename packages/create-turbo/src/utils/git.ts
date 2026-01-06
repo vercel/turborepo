@@ -73,7 +73,7 @@ export function tryGitInit(root: string): boolean {
     execSync("git add -A", { stdio: "ignore", cwd: root });
     execSync('git commit -m "Initial commit from create-turbo"', {
       stdio: "ignore",
-      cwd: root,
+      cwd: root
     });
 
     return true;

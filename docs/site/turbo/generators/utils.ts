@@ -19,7 +19,7 @@ export async function releasePostStats(answers: Answers): Promise<string> {
       fetch("https://api.npmjs.org/versions/turbo/last-week"),
       fetch(
         `https://api.us-east.tinybird.co/v0/pipes/turborepo_time_saved_ticker.json?token=${TB_TOKEN}`
-      ),
+      )
     ]);
 
   const [starsData, downloadsData, timeSavedData] = await Promise.all([
@@ -34,7 +34,7 @@ export async function releasePostStats(answers: Answers): Promise<string> {
           local_cache_minutes_saved: number;
         }
       ];
-    },
+    }
   ]);
 
   const totalMinutesSaved: number =
