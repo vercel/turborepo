@@ -34,15 +34,15 @@
 
     // docs lint task runs fumadocs-mdx to generate types before oxlint
     "turborepo-docs#lint": {},
-    "//#lint": {
+    "//#quality": {
       "dependsOn": [
-        "//#lint:oxlint",
+        "//#lint",
         "//#format",
         "//#check:toml",
         "turborepo-docs#lint"
       ]
     },
-    "//#lint:oxlint": {},
+    "//#lint": {},
     "//#format": {},
     "//#check:toml": {},
     "check-types": {

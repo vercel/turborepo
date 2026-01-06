@@ -141,7 +141,7 @@ jobs:
       - name: Lint
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          TURBO_API= turbo run lint --env-mode=strict
+          TURBO_API= turbo run quality --env-mode=strict
 
   cleanup:
     name: Cleanup
