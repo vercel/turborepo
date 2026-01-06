@@ -37,13 +37,13 @@
     "//#lint": {
       "dependsOn": [
         "//#lint:oxlint",
-        "//#lint:format",
+        "//#format",
         "//#check:toml",
         "turborepo-docs#lint"
       ]
     },
     "//#lint:oxlint": {},
-    "//#lint:format": {},
+    "//#format": {},
     "//#check:toml": {},
     "check-types": {
       "dependsOn": ["^build"]
