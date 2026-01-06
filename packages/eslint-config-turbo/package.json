@@ -15,7 +15,6 @@
   },
   "scripts": {
     "build": "bunchee",
-    "lint": "eslint src",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore",
     "package:types": "attw --profile node16 --pack"
   },
@@ -62,7 +61,6 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
-    "@turbo/eslint-config": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@types/eslint": "8.56.12",
     "@types/node": "20.11.30",

@@ -104,7 +104,6 @@ export function migrateConfig(config: SchemaV1) {
 
   const migratedConfig = migrateGlobal(config);
   Object.keys(config.pipeline).forEach((pipelineKey) => {
-    config.pipeline;
     if (pipelineKey in config.pipeline) {
       const pipeline = migratedConfig.pipeline[pipelineKey];
       migratedConfig.pipeline[pipelineKey] = {

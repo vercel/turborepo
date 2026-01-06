@@ -187,7 +187,7 @@ export function activate(context: ExtensionContext) {
   );
 
   context.subscriptions.push(
-    commands.registerCommand("turbo.install", (args) => {
+    commands.registerCommand("turbo.install", () => {
       const terminal = window.createTerminal({
         name: "Install Turbo",
         isTransient: true,

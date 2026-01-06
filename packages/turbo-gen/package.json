@@ -18,7 +18,6 @@
   "scripts": {
     "build": "tsup",
     "test": "jest",
-    "lint": "eslint src/",
     "check-types": "tsc --noEmit",
     "package:types": "attw --profile node16 --pack"
   },
@@ -38,7 +37,6 @@
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
     "@jest/globals": "29.7.0",
-    "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@turbo/utils": "workspace:*",

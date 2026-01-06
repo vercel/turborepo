@@ -147,8 +147,6 @@ jobs:
 
       - name: "Setup Node"
         uses: ./.github/actions/setup-node
-        with:
-          extra-flags: --no-optional
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo

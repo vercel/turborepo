@@ -17,7 +17,6 @@
   "types": "src/index.ts",
   "scripts": {
     "build": "tsc && pnpm generate-schema",
-    "lint": "eslint src/",
     "lint:prettier": "prettier -c . --cache",
     "generate-schema": "tsx scripts/generate-schema.ts",
     "copy-schema": "cp schemas/schema.json ../turbo/schema.json",
@@ -25,7 +24,6 @@
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
-    "@turbo/eslint-config": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@types/node": "20.11.30",
     "ts-json-schema-generator": "2.3.0",
