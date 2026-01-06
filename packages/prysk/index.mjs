@@ -32,7 +32,7 @@ const args = [
   "--shell=bash",
   ...(process.env.PRYSK_INTERACTIVE === "true" ? ["--interactive"] : []),
   ...(isWindows ? ["--dos2unix"] : []),
-  tests,
+  tests
 ];
 
 const pryskExecutable = getVenvBin("prysk");
