@@ -43,13 +43,14 @@
       ]
     },
     "//#lint": {},
-    "//#lint:fix": {
-      "dependsOn": ["//#format:fix", "//#fix:toml"]
-    },
-    "//#format:fix": {},
-    "//#fix:toml": {},
+    "//#lint:fix": {},
     "//#format": {},
+    "//#format:fix": {},
     "//#check:toml": {},
+    "//#fix:toml": {},
+    "//#quality:fix": {
+      "dependsOn": ["//#lint:fix", "//#format:fix", "//#fix:toml"]
+    },
     "check-types": {
       "dependsOn": ["^build"]
     },
