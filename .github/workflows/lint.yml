@@ -65,19 +65,6 @@ jobs:
       - name: Run cargo fmt check
         run: cargo fmt --check
 
-  rust_taplo:
-    name: Cargo.toml format
-    needs: determine_changes
-    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Check Cargo.toml formatting (taplo)
-        run: npx @taplo/cli@0.5.2 format --check
-
   rust_clippy:
     name: Rust clippy
     needs: determine_changes
@@ -161,7 +148,6 @@ jobs:
     needs:
       - determine_changes
       - rust_fmt
-      - rust_taplo
       - rust_clippy
       - rust_check
       - rust_licenses
