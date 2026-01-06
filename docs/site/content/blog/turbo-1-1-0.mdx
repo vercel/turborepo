@@ -99,9 +99,9 @@ You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/docs/craf
           // env vars that will impact the hash of "build" task for only "web" app
           "$STRIPE_SECRET_KEY",
           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
-          "$NEXT_PUBLIC_ANALYTICS_ID",
+          "$NEXT_PUBLIC_ANALYTICS_ID"
       ],
-      "outputs": [".next/**", "!.next/cache/**"],
+      "outputs": [".next/**", "!.next/cache/**"]
     },
     "docs#build": { // override settings for the "build" task for the "docs" app
       "dependsOn": [
@@ -109,15 +109,15 @@ You can now control `turbo`'s [cache fingerprinting (a.k.a. hashing)](/docs/craf
           // env vars that will impact the hash of "build" task for only "web" app
           "$STRIPE_SECRET_KEY",
           "$NEXT_PUBLIC_STRIPE_PUBLIC_KEY",
-          "$NEXT_PUBLIC_ANALYTICS_ID",
+          "$NEXT_PUBLIC_ANALYTICS_ID"
       ],
-      "outputs": [".next/**", "!.next/cache/**"],
+      "outputs": [".next/**", "!.next/cache/**"]
     }
   },
   "globalDependencies": [
     "$GITHUB_TOKEN"// env var that will impact the hashes of all tasks,
     "tsconfig.json" // file contents will impact the hashes of all tasks,
-    ".env.*" // glob file contents will impact the hashes of all tasks,
+    ".env.*" // glob file contents will impact the hashes of all tasks
   ]
 }
 ```
