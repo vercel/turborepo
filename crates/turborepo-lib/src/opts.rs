@@ -3,18 +3,25 @@ use std::backtrace;
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
-use turborepo_task_id::{TaskId, TaskName};
+// Re-export RunCacheOpts from turborepo-run-cache
+pub use turborepo_run_cache::RunCacheOpts;
+use turborepo_run_summary::RunOptsInfo;
+// Re-export ScopeOpts from turborepo-scope to avoid duplication
+pub use turborepo_scope::ScopeOpts;
+// Re-export opts types from turborepo-types
+pub use turborepo_types::{APIClientOpts, RepoOpts, TuiOpts};
+use turborepo_types::{
+    ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix, ResolvedLogOrder,
+    ResolvedLogPrefix, TaskArgs, UIMode,
+};
 
 use crate::{
-    cli::{
-        Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
-        OutputLogsMode, RunArgs,
-    },
+    cli::{Command, ExecutionArgs, RunArgs},
     config::{ConfigurationOptions, CONFIG_FILE},
-    turbo_json::{FutureFlags, UIMode},
+    turbo_json::FutureFlags,
     Args,
 };
 
@@ -43,26 +50,6 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     Config(#[from] crate::config::Error),
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct APIClientOpts {
-    pub api_url: String,
-    pub timeout: u64,
-    pub upload_timeout: u64,
-    pub token: Option<String>,
-    pub team_id: Option<String>,
-    pub team_slug: Option<String>,
-    pub login_url: String,
-    pub preflight: bool,
-    pub sso_login_callback_port: Option<u16>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct RepoOpts {
-    pub root_turbo_json_path: AbsoluteSystemPathBuf,
-    pub allow_no_package_manager: bool,
-    pub allow_no_turbo_json: bool,
 }
 
 /// The fully resolved options for Turborepo. This is the combination of config,
@@ -176,7 +163,7 @@ impl Opts {
         };
         let run_opts = RunOpts::try_from(inputs)?;
         let cache_opts = CacheOpts::try_from(inputs)?;
-        let scope_opts = ScopeOpts::try_from(inputs)?;
+        let scope_opts = scope_opts_from_inputs(inputs)?;
         let runcache_opts = RunCacheOpts::from(inputs);
         let api_client_opts = APIClientOpts::from(inputs);
         let repo_opts = RepoOpts::from(inputs);
@@ -203,11 +190,6 @@ struct OptsInputs<'a> {
     execution_args: &'a ExecutionArgs,
     config: &'a ConfigurationOptions,
     api_auth: &'a Option<APIAuth>,
-}
-
-#[derive(Clone, Copy, Debug, Default, Serialize)]
-pub struct RunCacheOpts {
-    pub(crate) task_output_logs_override: Option<OutputLogsMode>,
 }
 
 impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
@@ -242,54 +224,10 @@ pub struct RunOpts {
     pub ui_mode: UIMode,
 }
 
-/// Projection of `RunOpts` that only includes information necessary to compute
-/// pass through args.
-#[derive(Debug)]
-pub struct TaskArgs<'a> {
-    pass_through_args: &'a [String],
-    tasks: &'a [String],
-}
-
 impl RunOpts {
     pub fn task_args(&self) -> TaskArgs<'_> {
-        TaskArgs {
-            pass_through_args: &self.pass_through_args,
-            tasks: &self.tasks,
-        }
+        TaskArgs::new(&self.pass_through_args, &self.tasks)
     }
-}
-
-impl<'a> TaskArgs<'a> {
-    pub fn args_for_task(&self, task_id: &TaskId) -> Option<&'a [String]> {
-        if !self.pass_through_args.is_empty()
-            && self
-                .tasks
-                .iter()
-                .any(|task| TaskName::from(task.as_str()).task() == task_id.task())
-        {
-            Some(self.pass_through_args)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub enum GraphOpts {
-    Stdout,
-    File(String),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub enum ResolvedLogOrder {
-    Stream,
-    Grouped,
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-pub enum ResolvedLogPrefix {
-    Task,
-    None,
 }
 
 impl<'a> From<OptsInputs<'a>> for RepoOpts {
@@ -396,51 +334,33 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
     }
 }
 
-impl From<LogPrefix> for ResolvedLogPrefix {
-    fn from(value: LogPrefix) -> Self {
-        match value {
-            // We default to task-prefixed logs
-            LogPrefix::Auto | LogPrefix::Task => ResolvedLogPrefix::Task,
-            LogPrefix::None => ResolvedLogPrefix::None,
-        }
-    }
-}
+/// Create ScopeOpts from OptsInputs.
+///
+/// This is a helper function since we can't implement `TryFrom` for a foreign
+/// type.
+fn scope_opts_from_inputs(inputs: OptsInputs<'_>) -> Result<ScopeOpts, Error> {
+    let pkg_inference_root = inputs
+        .execution_args
+        .pkg_inference_root
+        .as_ref()
+        .map(AnchoredSystemPathBuf::from_raw)
+        .transpose()?;
 
-#[derive(Clone, Debug, Serialize)]
-pub struct ScopeOpts {
-    pub pkg_inference_root: Option<AnchoredSystemPathBuf>,
-    pub global_deps: Vec<String>,
-    pub filter_patterns: Vec<String>,
-    pub affected_range: Option<(Option<String>, Option<String>)>,
-}
+    let affected_range = inputs.execution_args.affected.then(|| {
+        let scm_base = inputs.config.scm_base();
+        let scm_head = inputs.config.scm_head();
+        (
+            scm_base.map(|b| b.to_owned()),
+            scm_head.map(|h| h.to_string()),
+        )
+    });
 
-impl<'a> TryFrom<OptsInputs<'a>> for ScopeOpts {
-    type Error = self::Error;
-
-    fn try_from(inputs: OptsInputs<'a>) -> Result<Self, Self::Error> {
-        let pkg_inference_root = inputs
-            .execution_args
-            .pkg_inference_root
-            .as_ref()
-            .map(AnchoredSystemPathBuf::from_raw)
-            .transpose()?;
-
-        let affected_range = inputs.execution_args.affected.then(|| {
-            let scm_base = inputs.config.scm_base();
-            let scm_head = inputs.config.scm_head();
-            (
-                scm_base.map(|b| b.to_owned()),
-                scm_head.map(|h| h.to_string()),
-            )
-        });
-
-        Ok(Self {
-            global_deps: inputs.execution_args.global_deps.clone(),
-            pkg_inference_root,
-            affected_range,
-            filter_patterns: inputs.execution_args.filter.clone(),
-        })
-    }
+    Ok(ScopeOpts {
+        global_deps: inputs.execution_args.global_deps.clone(),
+        pkg_inference_root,
+        affected_range,
+        filter_patterns: inputs.execution_args.filter.clone(),
+    })
 }
 
 impl<'a> From<OptsInputs<'a>> for APIClientOpts {
@@ -542,21 +462,55 @@ impl RunOpts {
     }
 }
 
-impl ScopeOpts {
-    pub fn get_filters(&self) -> Vec<String> {
-        self.filter_patterns.clone()
+// Implement RunOptsInfo for RunOpts to allow use with turborepo-run-summary
+impl RunOptsInfo for RunOpts {
+    fn dry_run(&self) -> Option<DryRunMode> {
+        self.dry_run
     }
-}
 
-#[derive(Clone, Debug, Serialize)]
-pub struct TuiOpts {
-    pub(crate) scrollback_length: u64,
+    fn single_package(&self) -> bool {
+        self.single_package
+    }
+
+    fn summarize(&self) -> Option<&str> {
+        self.summarize.then_some("true")
+    }
+
+    fn framework_inference(&self) -> bool {
+        self.framework_inference
+    }
+
+    fn pass_through_args(&self) -> &[String] {
+        &self.pass_through_args
+    }
+
+    fn tasks(&self) -> &[String] {
+        &self.tasks
+    }
 }
 
 impl<'a> From<OptsInputs<'a>> for TuiOpts {
     fn from(inputs: OptsInputs) -> Self {
         TuiOpts {
             scrollback_length: inputs.config.tui_scrollback_length(),
+        }
+    }
+}
+
+// Convert RunOpts to ExecutorConfig for use with the generic task executor
+impl From<&RunOpts> for turborepo_task_executor::ExecutorConfig {
+    fn from(opts: &RunOpts) -> Self {
+        Self {
+            env_mode: opts.env_mode,
+            log_order: opts.log_order,
+            log_prefix: opts.log_prefix,
+            single_package: opts.single_package,
+            is_github_actions: opts.is_github_actions,
+            concurrency: opts.concurrency,
+            ui_mode: opts.ui_mode,
+            continue_on_error: opts.continue_on_error,
+            redirect_stderr_to_stdout: opts.should_redirect_stderr_to_stdout(),
+            framework_inference: opts.framework_inference,
         }
     }
 }
@@ -571,15 +525,17 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_task_id::TaskId;
+    use turborepo_types::{
+        ContinueMode, DryRunMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, TaskArgs, UIMode,
+    };
     use turborepo_ui::ColorConfig;
 
-    use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
+    use super::{APIClientOpts, RepoOpts, RunOpts};
     use crate::{
-        cli::{Command, ContinueMode, DryRunMode, RunArgs},
+        cli::{Command, RunArgs},
         commands::CommandBase,
         config::{ConfigurationOptions, CONFIG_FILE},
         opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
-        turbo_json::UIMode,
         Args,
     };
 
@@ -687,7 +643,7 @@ mod test {
             tasks: opts_input.tasks,
             concurrency: 10,
             parallel: opts_input.parallel,
-            env_mode: crate::cli::EnvMode::Loose,
+            env_mode: EnvMode::Loose,
             cache_dir: camino::Utf8PathBuf::new(),
             framework_inference: true,
             profile: None,
@@ -698,8 +654,8 @@ mod test {
             graph: None,
             ui_mode: UIMode::Stream,
             single_package: false,
-            log_prefix: crate::opts::ResolvedLogPrefix::Task,
-            log_order: crate::opts::ResolvedLogOrder::Stream,
+            log_prefix: ResolvedLogPrefix::Task,
+            log_order: ResolvedLogOrder::Stream,
             summarize: false,
             is_github_actions: false,
             daemon: None,
@@ -948,10 +904,7 @@ mod test {
         expected_task: TaskId<'static>,
         expected_args: Option<Vec<String>>,
     ) -> Result<(), anyhow::Error> {
-        let task_opts = TaskArgs {
-            tasks: &tasks,
-            pass_through_args: &pass_through_args,
-        };
+        let task_opts = TaskArgs::new(&pass_through_args, &tasks);
 
         assert_eq!(
             task_opts.args_for_task(&expected_task),

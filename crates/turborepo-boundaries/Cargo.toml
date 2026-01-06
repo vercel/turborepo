@@ -1,0 +1,43 @@
+[package]
+name = "turborepo-boundaries"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+biome_deserialize = { workspace = true }
+biome_deserialize_macros = { workspace = true }
+biome_diagnostics = { workspace = true }
+camino = "1.1.4"
+git2 = { workspace = true, default-features = false, optional = true }
+globwalk = { path = "../turborepo-globwalk" }
+indicatif = { workspace = true }
+itertools = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
+oxc_resolver = { workspace = true }
+regex = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+struct_iterable = "0.1.1"
+swc_common = { workspace = true }
+swc_ecma_ast = { workspace = true }
+swc_ecma_parser = { workspace = true }
+swc_ecma_visit = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+turbo-trace = { workspace = true }
+turbopath = { workspace = true }
+turborepo-errors = { workspace = true }
+turborepo-lockfiles = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository" }
+turborepo-ui = { workspace = true }
+
+[dev-dependencies]
+test-case = { workspace = true }
+
+[features]
+default = ["git2"]
+git2 = ["dep:git2"]

@@ -1,0 +1,34 @@
+[package]
+name = "turborepo-run-summary"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+chrono = { workspace = true }
+itertools = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+svix-ksuid = { version = "0.7.0", features = ["serde"] }
+tabwriter = "1.3.0"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time", "rt"] }
+tracing = { workspace = true }
+turbopath = { workspace = true }
+turborepo-cache = { workspace = true }
+turborepo-ci = { workspace = true }
+turborepo-env = { workspace = true }
+turborepo-hash = { workspace = true }
+turborepo-lockfiles = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-scm = { workspace = true }
+turborepo-task-id = { workspace = true }
+turborepo-types = { workspace = true }
+turborepo-ui = { workspace = true }
+
+[dev-dependencies]
+pretty_assertions = { workspace = true }
+test-case = { workspace = true }
+
+[lints]
+workspace = true

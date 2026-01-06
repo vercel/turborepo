@@ -1,51 +1,48 @@
 mod command;
-mod error;
 mod exec;
-mod output;
+
 use std::{
     borrow::Cow,
     collections::HashSet,
     io::Write,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, Mutex},
 };
 
 use console::{Style, StyledObject};
 use convert_case::{Case, Casing};
-use error::{TaskError, TaskWarning};
 use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use output::{StdWriter, TaskOutput};
-use regex::Regex;
 use tokio::sync::mpsc;
 use tracing::{debug, warn, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
+use turborepo_engine::{TaskError, TaskWarning};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
+use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker};
+// Re-export output types and shared functions from turborepo-task-executor
+pub use turborepo_task_executor::{turbo_regex, StdWriter, TaskOutput};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
+use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
 use turborepo_ui::{
     sender::UISender, ColorConfig, ColorSelector, OutputClient, OutputSink, PrefixedUI,
 };
 
 use crate::{
-    cli::EnvMode,
     engine::{Engine, ExecutionOptions},
     microfrontends::MicrofrontendsConfigs,
     opts::RunOpts,
-    run::{
-        global_hash::GlobalHashableInputs,
-        summary::{self, GlobalHashSummary, RunTracker},
-        task_access::TaskAccess,
-        RunCache,
+    run::{task_access::TaskAccess, RunCache},
+    task_hash::{
+        self, GlobalHashableInputs, PackageInputsHashes, TaskHashTrackerState, TaskHasher,
     },
-    task_hash::{self, PackageInputsHashes, TaskHashTrackerState, TaskHasher},
 };
 
 // This holds the whole world
@@ -113,6 +110,8 @@ pub enum Error {
     InternalErrors(String),
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
+    #[error(transparent)]
+    CommandProvider(#[from] turborepo_task_executor::CommandProviderError),
 }
 
 impl<'a> Visitor<'a> {
@@ -426,7 +425,7 @@ impl<'a> Visitor<'a> {
                 global_hash_summary,
                 global_env_mode,
                 engine,
-                task_hasher.task_hash_tracker(),
+                &task_hasher.task_hash_tracker(),
                 env_at_execution_start,
                 is_watch,
             )
@@ -448,10 +447,8 @@ impl<'a> Visitor<'a> {
         vendor_behavior: Option<&VendorBehavior>,
     ) -> OutputClient<impl std::io::Write> {
         let behavior = match self.run_opts.log_order {
-            crate::opts::ResolvedLogOrder::Stream => {
-                turborepo_ui::OutputClientBehavior::Passthrough
-            }
-            crate::opts::ResolvedLogOrder::Grouped => turborepo_ui::OutputClientBehavior::Grouped,
+            ResolvedLogOrder::Stream => turborepo_ui::OutputClientBehavior::Passthrough,
+            ResolvedLogOrder::Grouped => turborepo_ui::OutputClientBehavior::Grouped,
         };
 
         let mut logger = self.sink.logger(behavior);
@@ -480,20 +477,16 @@ impl<'a> Visitor<'a> {
         logger
     }
 
-    fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
+    pub(crate) fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
         match self.run_opts.log_prefix {
-            crate::opts::ResolvedLogPrefix::Task if self.run_opts.single_package => {
-                task_id.task().into()
-            }
-            crate::opts::ResolvedLogPrefix::Task => {
-                format!("{}:{}", task_id.package(), task_id.task()).into()
-            }
-            crate::opts::ResolvedLogPrefix::None => "".into(),
+            ResolvedLogPrefix::Task if self.run_opts.single_package => task_id.task().into(),
+            ResolvedLogPrefix::Task => format!("{}:{}", task_id.package(), task_id.task()).into(),
+            ResolvedLogPrefix::None => "".into(),
         }
     }
 
     // Task ID as displayed in error messages
-    fn display_task_id(&self, task_id: &TaskId) -> String {
+    pub(crate) fn display_task_id(&self, task_id: &TaskId) -> String {
         match self.run_opts.single_package {
             true => task_id.task().to_string(),
             false => task_id.to_string(),
@@ -533,9 +526,4 @@ impl<'a> Visitor<'a> {
         // No need to start a UI on dry run
         self.ui_sender = None;
     }
-}
-
-fn turbo_regex() -> &'static Regex {
-    static RE: OnceLock<Regex> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"(?:^|\s)turbo(?:$|\s)").unwrap())
 }

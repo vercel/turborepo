@@ -19,20 +19,16 @@ mod child;
 mod cli;
 mod commands;
 mod config;
-mod daemon;
 pub mod devtools;
 mod diagnostics;
 mod engine;
 
 mod boundaries;
-mod gitignore;
-mod hash;
 mod microfrontends;
 mod opts;
 mod package_changes_watcher;
 mod panic_handler;
 mod query;
-mod rewrite_json;
 mod run;
 mod shim;
 mod task_graph;
@@ -40,15 +36,13 @@ mod task_hash;
 mod tracing;
 mod turbo_json;
 
-pub use crate::{
-    child::spawn_child,
-    cli::Args,
-    daemon::{
-        DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths as DaemonPaths,
-    },
-    panic_handler::panic_handler,
-    run::package_discovery::DaemonPackageDiscovery,
+pub use run::package_discovery::DaemonPackageDiscovery;
+// Re-export daemon types from the new crate location
+pub use turborepo_daemon::{
+    DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths as DaemonPaths,
 };
+
+pub use crate::{child::spawn_child, cli::Args, panic_handler::panic_handler};
 
 pub fn get_version() -> &'static str {
     include_str!("../../../version.txt")

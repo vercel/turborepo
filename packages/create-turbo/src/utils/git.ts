@@ -32,41 +32,50 @@ yarn-error.log*
 export const GIT_REPO_COMMAND = "git rev-parse --is-inside-work-tree";
 export const HG_REPO_COMMAND = "hg --cwd . root";
 
-export function isInGitRepository(): boolean {
+function isInGitRepository(root: string): boolean {
   try {
-    execSync(GIT_REPO_COMMAND, { stdio: "ignore" });
+    execSync(GIT_REPO_COMMAND, { stdio: "ignore", cwd: root });
     return true;
   } catch (_) {
-    // do nothing
+    return false;
   }
-  return false;
 }
 
-export function isInMercurialRepository(): boolean {
+function isInMercurialRepository(root: string): boolean {
   try {
-    execSync(HG_REPO_COMMAND, { stdio: "ignore" });
+    execSync(HG_REPO_COMMAND, { stdio: "ignore", cwd: root });
     return true;
   } catch (_) {
-    // do nothing
+    return false;
   }
-  return false;
 }
 
-export function tryGitInit(root: string, message: string): boolean {
+/**
+ * Initialize a git repository in the given directory with a single commit.
+ * This should be called once at the end of the create process, after all
+ * files have been created and transforms have been applied.
+ *
+ * @param root - The absolute path to the directory where the git repository should be initialized
+ * @returns true if the repository was initialized successfully, false otherwise
+ */
+export function tryGitInit(root: string): boolean {
+  // Skip if already in a git or mercurial repository
+  if (isInGitRepository(root) || isInMercurialRepository(root)) {
+    return false;
+  }
+
   let didInit = false;
   try {
-    if (isInGitRepository() || isInMercurialRepository()) {
-      return false;
-    }
-
-    execSync("git init", { stdio: "ignore" });
-    execSync("git add -A", { stdio: "ignore" });
-
+    execSync("git init", { stdio: "ignore", cwd: root });
     didInit = true;
 
-    execSync("git checkout -b main", { stdio: "ignore" });
+    execSync("git checkout -b main", { stdio: "ignore", cwd: root });
+    execSync("git add -A", { stdio: "ignore", cwd: root });
+    execSync('git commit -m "Initial commit from create-turbo"', {
+      stdio: "ignore",
+      cwd: root,
+    });
 
-    gitCommit(message);
     return true;
   } catch (err) {
     if (didInit) {
@@ -78,36 +87,6 @@ export function tryGitInit(root: string, message: string): boolean {
     }
     return false;
   }
-}
-
-export function tryGitCommit(message: string): boolean {
-  try {
-    gitCommit(message);
-    return true;
-  } catch (err) {
-    return false;
-  }
-}
-
-export function tryGitAdd(): void {
-  try {
-    gitAddAll();
-  } catch (err) {
-    // do nothing
-  }
-}
-
-function gitAddAll() {
-  execSync("git add -A", { stdio: "ignore" });
-}
-
-function gitCommit(message: string) {
-  execSync(
-    `git commit --author="Turbobot <turbobot@vercel.com>" -am "${message}"`,
-    {
-      stdio: "ignore",
-    }
-  );
 }
 
 export function removeGitDirectory(root: string): boolean {

@@ -1,0 +1,72 @@
+[package]
+name = "turborepo-task-executor"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+# Foundation crates
+turbopath = { path = "../turborepo-paths" }
+turborepo-errors = { workspace = true }
+turborepo-task-id = { path = "../turborepo-task-id" }
+turborepo-types = { path = "../turborepo-types" }
+
+# Package graph types for command providers
+turborepo-repository = { path = "../turborepo-repository" }
+
+# Cache
+turborepo-cache = { path = "../turborepo-cache" }
+turborepo-run-cache = { path = "../turborepo-run-cache" }
+
+# UI
+turborepo-ui = { path = "../turborepo-ui" }
+
+# Command execution
+turborepo-env = { workspace = true }
+turborepo-process = { workspace = true }
+
+# CI detection for output
+turborepo-ci = { workspace = true }
+
+# Run summary for TaskTracker
+turborepo-run-summary = { path = "../turborepo-run-summary" }
+
+# Telemetry
+turborepo-telemetry = { path = "../turborepo-telemetry" }
+
+# Used for output types
+either = { workspace = true }
+
+# Async runtime
+tokio = { workspace = true }
+
+# Async utilities
+futures = { workspace = true }
+
+# Serialization (for config)
+serde = { workspace = true }
+
+# Console styling
+console = { workspace = true }
+
+# Error handling
+miette = { workspace = true }
+thiserror = { workspace = true }
+
+# Logging
+tracing = { workspace = true }
+
+# Time
+chrono = { workspace = true }
+
+# Binary lookup
+which = { workspace = true }
+
+# Regex for turbo detection
+regex = { workspace = true }
+
+# Case conversion for error codes
+convert_case = "0.6.0"
+
+# Iteration utilities
+itertools = { workspace = true }

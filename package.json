@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "pnpm -- turbo run build",
+    "build": "turbo run build",
     "build:turbo": "pnpm run --filter=cli build",
     "build:ts": "tsc -b tsconfig.project.json",
     "lint": "turbo run lint --env-mode=strict",

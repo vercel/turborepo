@@ -64,6 +64,7 @@ describe("Node entrypoint", () => {
         cwd: root,
         preferLocal: true,
         shell: true,
+        stdin: "ignore",
       });
 
       Object.defineProperty(process, "platform", {
@@ -107,12 +108,77 @@ describe("Node entrypoint", () => {
         cwd: root,
         preferLocal: true,
         shell: false,
+        stdin: "ignore",
       });
 
       Object.defineProperty(process, "platform", {
         value: originalPlatform,
       });
     });
+
+    it.each([
+      {
+        manager: "npm" as const,
+        version: "8.19.2",
+        lockfile: "package-lock.json",
+        installArgs: ["install"],
+      },
+      {
+        manager: "pnpm" as const,
+        version: "7.29.1",
+        lockfile: "pnpm-lock.yaml",
+        installArgs: ["install", "--fix-lockfile"],
+      },
+      {
+        manager: "yarn" as const,
+        version: "1.22.19",
+        lockfile: "yarn.lock",
+        installArgs: ["install"],
+      },
+      {
+        manager: "bun" as const,
+        version: "1.0.1",
+        lockfile: "bun.lockb",
+        installArgs: ["install"],
+      },
+    ])(
+      "should use stdin: ignore for $manager to prevent hanging in non-interactive environments",
+      async ({ manager, version, lockfile, installArgs }) => {
+        const { root } = useFixture({
+          fixture: `./${manager}/monorepo`,
+        });
+
+        const mockProject = {
+          name: "test-project",
+          description: undefined,
+          packageManager: manager,
+          paths: {
+            root,
+            packageJson: path.join(root, "package.json"),
+            lockfile: path.join(root, lockfile),
+            nodeModules: path.join(root, "node_modules"),
+          },
+          workspaceData: {
+            globs: ["apps/*", "packages/*"],
+            workspaces: [],
+          },
+        };
+
+        await install({
+          project: mockProject,
+          to: { name: manager, version },
+          options: { dry: false },
+        });
+
+        expect(execa).toHaveBeenCalledWith(
+          manager,
+          installArgs,
+          expect.objectContaining({
+            stdin: "ignore",
+          })
+        );
+      }
+    );
   });
 
   describe("convert", () => {

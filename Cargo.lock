@@ -1363,18 +1363,18 @@ dependencies = [
 
 [[package]]
 name = "const_format"
-version = "0.2.30"
+version = "0.2.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7309d9b4d3d2c0641e018d449232f2e28f1b22933c137f157d3dbc14228b8c0e"
+checksum = "7faa7469a93a566e9ccc1c73fe783b4a65c274c5ace346038dca9c39fe0030ad"
 dependencies = [
  "const_format_proc_macros",
 ]
 
 [[package]]
 name = "const_format_proc_macros"
-version = "0.2.29"
+version = "0.2.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d897f47bf7270cf70d370f8f98c1abb6d2d4cf60a6845d30e05bfb90c6568650"
+checksum = "1d57c2eccfb16dbac1f4e61e206105db5820c9d26c3c472bc17c774259ef7744"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6693,6 +6693,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-boundaries"
+version = "0.1.0"
+dependencies = [
+ "biome_deserialize 0.6.0",
+ "biome_deserialize_macros 0.6.0",
+ "biome_diagnostics",
+ "camino",
+ "git2",
+ "globwalk",
+ "indicatif",
+ "itertools 0.10.5",
+ "miette",
+ "oxc_resolver 4.2.0",
+ "regex",
+ "serde",
+ "struct_iterable",
+ "swc_common",
+ "swc_ecma_ast",
+ "swc_ecma_parser",
+ "swc_ecma_visit",
+ "test-case",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbo-trace",
+ "turbopath",
+ "turborepo-errors",
+ "turborepo-lockfiles",
+ "turborepo-repository",
+ "turborepo-ui",
+]
+
+[[package]]
 name = "turborepo-cache"
 version = "0.1.0"
 dependencies = [
@@ -6741,6 +6774,76 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-config"
+version = "0.1.0"
+dependencies = [
+ "atty",
+ "camino",
+ "clap",
+ "derive_setters",
+ "itertools 0.10.5",
+ "merge",
+ "miette",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "struct_iterable",
+ "tempfile",
+ "test-case",
+ "thiserror 1.0.63",
+ "tracing",
+ "turbopath",
+ "turborepo-api-client",
+ "turborepo-auth",
+ "turborepo-cache",
+ "turborepo-ci",
+ "turborepo-dirs",
+ "turborepo-repository",
+ "turborepo-turbo-json",
+ "turborepo-types",
+]
+
+[[package]]
+name = "turborepo-daemon"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-io",
+ "async-stream",
+ "command-group",
+ "futures",
+ "futures-core",
+ "globwalk",
+ "hex",
+ "miette",
+ "notify",
+ "pidlock",
+ "prost 0.12.3",
+ "semver 1.0.23",
+ "serde_json",
+ "sha2",
+ "sysinfo",
+ "tempfile",
+ "test-case",
+ "thiserror 1.0.63",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tonic",
+ "tonic-build",
+ "tower 0.4.13",
+ "tracing",
+ "tracing-test",
+ "turbopath",
+ "turborepo-filewatch",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-types",
+ "uds_windows",
+]
+
+[[package]]
 name = "turborepo-devtools"
 version = "0.1.0"
 dependencies = [
@@ -6765,12 +6868,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "futures",
+ "pidlock",
+ "semver 1.0.23",
+ "tokio",
+ "tonic",
+ "turbo-updater",
+ "turbopath",
+ "turborepo-daemon",
+ "turborepo-scm",
+]
+
+[[package]]
 name = "turborepo-dirs"
 version = "0.1.0"
 dependencies = [
  "dirs-next",
  "thiserror 1.0.63",
  "turbopath",
+]
+
+[[package]]
+name = "turborepo-engine"
+version = "0.1.0"
+dependencies = [
+ "convert_case 0.6.0",
+ "futures",
+ "insta",
+ "itertools 0.10.5",
+ "miette",
+ "petgraph",
+ "pretty_assertions",
+ "rand 0.8.5",
+ "serde_json",
+ "tempfile",
+ "test-case",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-config",
+ "turborepo-errors",
+ "turborepo-graph-utils",
+ "turborepo-lockfiles",
+ "turborepo-repository",
+ "turborepo-task-executor",
+ "turborepo-task-id",
+ "turborepo-turbo-json",
+ "turborepo-types",
+ "which",
 ]
 
 [[package]]
@@ -6852,6 +7001,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-gitignore"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "tempfile",
+ "turbopath",
+]
+
+[[package]]
 name = "turborepo-graph-utils"
 version = "0.1.0"
 dependencies = [
@@ -6863,6 +7021,29 @@ dependencies = [
  "thiserror 1.0.63",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "turborepo-hash"
+version = "0.1.0"
+dependencies = [
+ "capnp 0.17.2",
+ "capnpc",
+ "hex",
+ "test-case",
+ "turbopath",
+ "turborepo-lockfiles",
+ "turborepo-types",
+ "twox-hash",
+]
+
+[[package]]
+name = "turborepo-json-rewrite"
+version = "0.1.0"
+dependencies = [
+ "jsonc-parser 0.21.0",
+ "pretty_assertions",
+ "thiserror 1.0.63",
 ]
 
 [[package]]
@@ -6884,7 +7065,6 @@ dependencies = [
  "biome_json_syntax",
  "camino",
  "capnp 0.17.2",
- "capnpc",
  "chrono",
  "clap",
  "clap_complete",
@@ -6956,7 +7136,6 @@ dependencies = [
  "tokio-stream",
  "tokio-util",
  "tonic",
- "tonic-build",
  "tower 0.4.13",
  "tower-http",
  "tracing",
@@ -6970,26 +7149,42 @@ dependencies = [
  "turborepo-analytics",
  "turborepo-api-client",
  "turborepo-auth",
+ "turborepo-boundaries",
  "turborepo-cache",
  "turborepo-ci",
+ "turborepo-config",
+ "turborepo-daemon",
  "turborepo-devtools",
+ "turborepo-diagnostics",
  "turborepo-dirs",
+ "turborepo-engine",
  "turborepo-env",
  "turborepo-errors",
  "turborepo-filewatch",
  "turborepo-fixed-map",
  "turborepo-frameworks",
  "turborepo-fs",
+ "turborepo-gitignore",
  "turborepo-graph-utils",
+ "turborepo-hash",
+ "turborepo-json-rewrite",
  "turborepo-lockfiles",
  "turborepo-microfrontends",
  "turborepo-microfrontends-proxy",
  "turborepo-process",
  "turborepo-repository",
+ "turborepo-run-cache",
+ "turborepo-run-summary",
  "turborepo-scm",
+ "turborepo-scope",
+ "turborepo-shim",
  "turborepo-signals",
+ "turborepo-task-executor",
+ "turborepo-task-hash",
  "turborepo-task-id",
  "turborepo-telemetry",
+ "turborepo-turbo-json",
+ "turborepo-types",
  "turborepo-ui",
  "turborepo-unescape",
  "turborepo-vercel-api",
@@ -7160,6 +7355,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-run-cache"
+version = "0.1.0"
+dependencies = [
+ "globwalk",
+ "itertools 0.10.5",
+ "serde",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-cache",
+ "turborepo-daemon",
+ "turborepo-hash",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-task-id",
+ "turborepo-telemetry",
+ "turborepo-types",
+ "turborepo-ui",
+]
+
+[[package]]
+name = "turborepo-run-summary"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "itertools 0.10.5",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "svix-ksuid",
+ "tabwriter",
+ "test-case",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-cache",
+ "turborepo-ci",
+ "turborepo-env",
+ "turborepo-hash",
+ "turborepo-lockfiles",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-task-id",
+ "turborepo-types",
+ "turborepo-ui",
+]
+
+[[package]]
 name = "turborepo-scm"
 version = "0.1.0"
 dependencies = [
@@ -7184,12 +7429,128 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-scope"
+version = "0.1.0"
+dependencies = [
+ "miette",
+ "once_cell",
+ "path-clean",
+ "pretty_assertions",
+ "regex",
+ "serde",
+ "tempfile",
+ "test-case",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-errors",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-types",
+ "wax",
+]
+
+[[package]]
+name = "turborepo-shim"
+version = "0.1.0"
+dependencies = [
+ "camino",
+ "const_format",
+ "crossterm 0.27.0",
+ "ctrlc",
+ "dunce",
+ "itertools 0.10.5",
+ "libc",
+ "miette",
+ "pretty_assertions",
+ "semver 1.0.23",
+ "serde",
+ "serde_yaml",
+ "shared_child",
+ "tempfile",
+ "test-case",
+ "thiserror 1.0.63",
+ "tiny-gradient",
+ "tokio",
+ "tracing",
+ "turbo-updater",
+ "turbopath",
+ "turborepo-repository",
+ "turborepo-ui",
+ "which",
+]
+
+[[package]]
 name = "turborepo-signals"
 version = "0.1.0"
 dependencies = [
  "futures",
  "thiserror 1.0.63",
  "tokio",
+]
+
+[[package]]
+name = "turborepo-task-executor"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "console",
+ "convert_case 0.6.0",
+ "either",
+ "futures",
+ "itertools 0.10.5",
+ "miette",
+ "regex",
+ "serde",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-cache",
+ "turborepo-ci",
+ "turborepo-env",
+ "turborepo-errors",
+ "turborepo-process",
+ "turborepo-repository",
+ "turborepo-run-cache",
+ "turborepo-run-summary",
+ "turborepo-task-id",
+ "turborepo-telemetry",
+ "turborepo-types",
+ "turborepo-ui",
+ "which",
+]
+
+[[package]]
+name = "turborepo-task-hash"
+version = "0.1.0"
+dependencies = [
+ "either",
+ "globwalk",
+ "itertools 0.10.5",
+ "rayon",
+ "regex",
+ "serde",
+ "tempfile",
+ "thiserror 1.0.63",
+ "tokio",
+ "tracing",
+ "turbopath",
+ "turborepo-cache",
+ "turborepo-daemon",
+ "turborepo-engine",
+ "turborepo-env",
+ "turborepo-frameworks",
+ "turborepo-hash",
+ "turborepo-lockfiles",
+ "turborepo-repository",
+ "turborepo-run-summary",
+ "turborepo-scm",
+ "turborepo-task-executor",
+ "turborepo-task-id",
+ "turborepo-telemetry",
+ "turborepo-types",
 ]
 
 [[package]]
@@ -7232,6 +7593,52 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-turbo-json"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "biome_deserialize 0.6.0",
+ "biome_deserialize_macros 0.6.0",
+ "biome_diagnostics",
+ "biome_json_parser",
+ "biome_json_syntax",
+ "camino",
+ "convert_case 0.6.0",
+ "insta",
+ "miette",
+ "pretty_assertions",
+ "serde",
+ "serde_json",
+ "struct_iterable",
+ "tempfile",
+ "test-case",
+ "thiserror 1.0.63",
+ "tracing",
+ "turbopath",
+ "turborepo-boundaries",
+ "turborepo-errors",
+ "turborepo-fixed-map",
+ "turborepo-repository",
+ "turborepo-task-id",
+ "turborepo-types",
+ "turborepo-unescape",
+]
+
+[[package]]
+name = "turborepo-types"
+version = "0.1.0"
+dependencies = [
+ "biome_deserialize 0.6.0",
+ "biome_deserialize_macros 0.6.0",
+ "clap",
+ "globwalk",
+ "serde",
+ "turbopath",
+ "turborepo-errors",
+ "turborepo-task-id",
+]
+
+[[package]]
 name = "turborepo-ui"
 version = "0.1.0"
 dependencies = [
@@ -7261,6 +7668,7 @@ dependencies = [
  "tui-term",
  "turbopath",
  "turborepo-ci",
+ "turborepo-types",
  "turborepo-vt100",
  "which",
  "windows-sys 0.59.0",
