@@ -7,7 +7,7 @@ import { isWriteable } from "../src/isWriteable";
 describe("isWriteable", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
-    options: { emptyFixture: true },
+    options: { emptyFixture: true }
   });
 
   it("correctly identifies a writeable directory", async () => {

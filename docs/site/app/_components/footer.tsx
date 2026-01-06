@@ -36,7 +36,7 @@ const isError = (error: unknown): error is Error => {
 function FooterLink({
   href,
   children,
-  id,
+  id
 }: {
   id?: string;
   href: string;
@@ -66,43 +66,43 @@ const navigation = {
   general: [
     { name: "Blog", href: "/blog" },
     { name: "Releases", href: `${gitHubRepoUrl}/releases` },
-    { name: "Governance", href: "/governance" },
+    { name: "Governance", href: "/governance" }
   ],
   repo: [
     { name: "Documentation", href: "/docs" },
     {
       name: "API Reference",
-      href: "/docs/reference",
+      href: "/docs/reference"
     },
-    { name: "Telemetry", href: "/docs/telemetry" },
+    { name: "Telemetry", href: "/docs/telemetry" }
   ],
   support: [
     {
       name: "GitHub",
-      href: "https://github.com/vercel/turborepo",
+      href: "https://github.com/vercel/turborepo"
     },
     {
       name: "Community",
-      href: "https://community.vercel.com/tag/turborepo",
-    },
+      href: "https://community.vercel.com/tag/turborepo"
+    }
   ],
   company: [
     { name: "Vercel", href: "https://vercel.com" },
     {
       name: "Open Source Software",
-      href: "https://vercel.com/oss?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-ossLink",
+      href: "https://vercel.com/oss?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-ossLink"
     },
     {
       name: "Contact Sales",
-      href: "https://vercel.com/solutions/turborepo?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-enterpriseLink",
+      href: "https://vercel.com/solutions/turborepo?utm_source=turborepo.com&utm_medium=referral&utm_campaign=footer-enterpriseLink"
     },
-    { name: "X", href: "https://x.com/vercel" },
+    { name: "X", href: "https://x.com/vercel" }
   ],
   legal: [
     { name: "Privacy Policy", href: "/privacy" },
     { name: "Terms of Service", href: "/terms" },
-    { name: "Cookie Preferences", id: "fides-modal-link", href: "#" },
-  ],
+    { name: "Cookie Preferences", id: "fides-modal-link", href: "#" }
+  ]
 };
 
 function FooterContent(): JSX.Element {
@@ -211,9 +211,9 @@ function SubmitForm(): JSX.Element {
         fetch("/api/signup", {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
+            "Content-Type": "application/json"
           },
-          body: JSON.stringify({ email }),
+          body: JSON.stringify({ email })
         })
           .then((res) => res.json())
           .then(() => {

@@ -2,7 +2,7 @@ import {
   DocsPage,
   DocsBody,
   DocsTitle,
-  DocsDescription,
+  DocsDescription
 } from "fumadocs-ui/page";
 import { notFound } from "next/navigation";
 import defaultMdxComponents from "fumadocs-ui/mdx";
@@ -31,7 +31,7 @@ export default async function Page(props: {
           components={{
             ...defaultMdxComponents,
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Not typed properly?
-            APIPage: openapi.APIPage,
+            APIPage: openapi.APIPage
           }}
         />
       </DocsBody>

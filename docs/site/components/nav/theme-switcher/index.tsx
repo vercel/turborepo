@@ -16,7 +16,7 @@ interface ThemeProvider {
 export function ThemeSwitcher({
   className,
   size = 28,
-  short = false,
+  short = false
 }: {
   className?: string;
   size?: number;
@@ -48,7 +48,7 @@ export function ThemeSwitcher({
         data-active={theme === "light"}
         style={{
           height: `${size}px`,
-          width: `${size}px`,
+          width: `${size}px`
         }}
         data-theme-switcher
         onClick={(): void => {
@@ -65,7 +65,7 @@ export function ThemeSwitcher({
         className={styles.switch}
         style={{
           height: `${size}px`,
-          width: `${size}px`,
+          width: `${size}px`
         }}
         data-active={theme === "system"}
         data-theme-switcher
@@ -83,7 +83,7 @@ export function ThemeSwitcher({
         className={styles.switch}
         style={{
           height: `${size}px`,
-          width: `${size}px`,
+          width: `${size}px`
         }}
         data-active={theme === "dark"}
         data-theme-switcher

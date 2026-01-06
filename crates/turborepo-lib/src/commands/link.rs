@@ -17,17 +17,14 @@ use dirs_next::home_dir;
 use rand::Rng;
 use thiserror::Error;
 use turborepo_api_client::{CacheClient, Client};
+use turborepo_gitignore::ensure_turbo_is_gitignored;
+use turborepo_json_rewrite::{set_path, unset_path, RewriteError};
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{DialoguerTheme, BOLD, GREY};
 use turborepo_vercel_api::{CachingStatus, Team};
 
-use crate::{
-    commands::CommandBase,
-    config,
-    gitignore::ensure_turbo_is_gitignored,
-    rewrite_json::{self, set_path, unset_path},
-};
+use crate::{commands::CommandBase, config};
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -63,7 +60,7 @@ pub enum Error {
     #[error("Please re-run `link` after enabling caching.")]
     EnableCaching,
     #[error(transparent)]
-    Rewrite(#[from] rewrite_json::RewriteError),
+    Rewrite(#[from] RewriteError),
 }
 
 #[derive(Clone)]

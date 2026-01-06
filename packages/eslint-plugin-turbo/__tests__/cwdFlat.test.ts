@@ -7,12 +7,12 @@ import { describe, it, expect } from "@jest/globals";
 
 const env: NodeJS.ProcessEnv = {
   ...process.env,
-  ESLINT_USE_FLAT_CONFIG: "true",
+  ESLINT_USE_FLAT_CONFIG: "true"
 };
 
 describe("flat eslint settings check", () => {
   const { useFixture } = setupTestFixtures({
-    directory: path.join(__dirname, "../"),
+    directory: path.join(__dirname, "../")
   });
 
   it("does the right thing for peers", () => {
@@ -22,7 +22,7 @@ describe("flat eslint settings check", () => {
     const configString = execSync(`npm exec eslint -- --print-config peer.js`, {
       cwd,
       encoding: "utf8",
-      env,
+      env
     });
     const configJson: Record<string, unknown> = parse(configString);
 
@@ -36,39 +36,39 @@ describe("flat eslint settings check", () => {
             dotEnv: {
               filePaths: [".env", "missing.env"],
               hashes: {
-                ".env": "9ad6c5fd4d5bbe7c00e1f2b358ac7ef2aa3521d0",
-              },
-            },
+                ".env": "9ad6c5fd4d5bbe7c00e1f2b358ac7ef2aa3521d0"
+              }
+            }
           },
           globalTasks: {
             build: {
               legacyConfig: [],
               env: [],
               passThroughEnv: null,
-              dotEnv: null,
+              dotEnv: null
             },
             test: {
               legacyConfig: [],
               env: [],
               passThroughEnv: null,
-              dotEnv: null,
+              dotEnv: null
             },
             lint: {
               legacyConfig: [],
               env: [],
               passThroughEnv: null,
-              dotEnv: null,
+              dotEnv: null
             },
             deploy: {
               legacyConfig: [],
               env: [],
               passThroughEnv: null,
-              dotEnv: null,
-            },
+              dotEnv: null
+            }
           },
-          workspaceTasks: {},
-        },
-      },
+          workspaceTasks: {}
+        }
+      }
     });
   });
 
@@ -82,7 +82,7 @@ describe("flat eslint settings check", () => {
       {
         cwd,
         encoding: "utf8",
-        env,
+        env
       }
     );
     const configJson: Record<string, unknown> = parse(configString);
@@ -97,46 +97,46 @@ describe("flat eslint settings check", () => {
             dotEnv: {
               filePaths: [".env", "missing.env"],
               hashes: {
-                ".env": "9ad6c5fd4d5bbe7c00e1f2b358ac7ef2aa3521d0",
-              },
-            },
+                ".env": "9ad6c5fd4d5bbe7c00e1f2b358ac7ef2aa3521d0"
+              }
+            }
           },
           globalTasks: {
             build: {
               legacyConfig: [],
               env: [],
               passThroughEnv: null,
-              dotEnv: null,
+              dotEnv: null
             },
             test: {
               legacyConfig: [],
               env: [],
               passThroughEnv: null,
-              dotEnv: null,
+              dotEnv: null
             },
             lint: {
               legacyConfig: [],
               env: [],
               passThroughEnv: null,
-              dotEnv: null,
+              dotEnv: null
             },
             deploy: {
               legacyConfig: [],
               env: [],
               passThroughEnv: null,
-              dotEnv: null,
-            },
+              dotEnv: null
+            }
           },
-          workspaceTasks: {},
-        },
-      },
+          workspaceTasks: {}
+        }
+      }
     });
   });
 });
 
 describe("flat eslint cache is busted", () => {
   const { useFixture } = setupTestFixtures({
-    directory: path.join(__dirname, "../"),
+    directory: path.join(__dirname, "../")
   });
 
   it("catches a lint error after changing config", () => {
@@ -151,7 +151,7 @@ describe("flat eslint cache is busted", () => {
       execSync(`npm exec eslint -- --format=json child.js`, {
         cwd,
         encoding: "utf8",
-        env,
+        env
       });
     } catch (error: unknown) {
       const outputJson: Record<string, unknown> = parse(
@@ -161,11 +161,10 @@ describe("flat eslint cache is busted", () => {
         {
           messages: [
             {
-              message:
-                "NONEXISTENT is not listed as a dependency in turbo.json",
-            },
-          ],
-        },
+              message: "NONEXISTENT is not listed as a dependency in turbo.json"
+            }
+          ]
+        }
       ]);
     }
 
@@ -180,7 +179,7 @@ describe("flat eslint cache is busted", () => {
     const output = execSync(`npm exec eslint -- --format=json child.js`, {
       cwd,
       encoding: "utf8",
-      env,
+      env
     });
     const outputJson: Record<string, unknown> = parse(output);
     expect(outputJson).toMatchObject([{ errorCount: 0 }]);

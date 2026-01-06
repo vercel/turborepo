@@ -5,18 +5,18 @@ import type {
   HumanArch,
   Platform,
   SupportedOS,
-  NpmOs,
+  NpmOs
 } from "./types";
 
 export const archToHuman: Record<SupportedArch, HumanArch> = {
   x64: "64",
-  arm64: "arm64",
+  arm64: "arm64"
 };
 
 export const nodeOSLookup: Record<SupportedOS, NpmOs> = {
   darwin: "darwin",
   linux: "linux",
-  windows: "win32",
+  windows: "win32"
 };
 
 const templateDir = path.join(__dirname, "..", "template");
@@ -24,7 +24,7 @@ const templateDir = path.join(__dirname, "..", "template");
 async function generateNativePackage({
   platform,
   version,
-  outputDir,
+  outputDir
 }: {
   platform: Platform;
   version: string;
@@ -63,7 +63,7 @@ async function generateNativePackage({
     license: "MIT",
     os: [nodeOSLookup[os]],
     cpu: [arch],
-    preferUnplugged: true,
+    preferUnplugged: true
   };
   await writeFile(
     path.join(outputDir, "package.json"),

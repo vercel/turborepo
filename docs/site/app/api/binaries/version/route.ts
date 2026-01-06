@@ -19,7 +19,7 @@ interface FetchDistTags {
 }
 
 export async function fetchDistTags({
-  name,
+  name
 }: {
   name: string;
 }): Promise<FetchDistTags["dist-tags"]> {
@@ -30,17 +30,17 @@ export async function fetchDistTags({
 
 function errorResponse({
   status,
-  message,
+  message
 }: {
   status: 400 | 404 | 500;
   message: string;
 }): Response {
   return new Response(
     JSON.stringify({
-      error: message,
+      error: message
     }),
     {
-      status,
+      status
     }
   );
 }
@@ -80,7 +80,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (!SUPPORTED_METHODS.includes(req.method)) {
     return errorResponse({
       status: 404,
-      message: `unsupported method - ${req.method}`,
+      message: `unsupported method - ${req.method}`
     });
   }
 
@@ -93,7 +93,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     if (!SUPPORTED_PACKAGES.includes(name)) {
       return errorResponse({
         status: 400,
-        message: `unsupported package - ${name}`,
+        message: `unsupported package - ${name}`
       });
     }
 
@@ -101,7 +101,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     if (!versions[tag]) {
       return errorResponse({
         status: 404,
-        message: `unsupported tag - ${tag}`,
+        message: `unsupported tag - ${tag}`
       });
     }
 
@@ -109,15 +109,15 @@ export async function GET(req: NextRequest): Promise<Response> {
       JSON.stringify({
         name,
         version: versions[tag],
-        tag,
+        tag
       }),
       {
         status: 200,
         headers: {
           "content-type": "application/json",
           // cache for 15 minutes, and allow stale responses for 5 minutes
-          "cache-control": "public, s-maxage=900, stale-while-revalidate=300",
-        },
+          "cache-control": "public, s-maxage=900, stale-while-revalidate=300"
+        }
       }
     );
   } catch (e) {

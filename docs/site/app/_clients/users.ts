@@ -15,8 +15,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://vercel.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "AWS",
@@ -24,8 +24,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://aws.amazon.com/",
     pinned: true,
     style: {
-      width: 75,
-    },
+      width: 75
+    }
   },
   {
     caption: "Microsoft",
@@ -33,8 +33,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.microsoft.com/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
   {
     caption: "Netflix",
@@ -42,14 +42,14 @@ export const users: Array<TurboUser> = [
     infoLink: "https://netflix.com/",
     pinned: true,
     style: {
-      width: 110,
-    },
+      width: 110
+    }
   },
   {
     caption: "Disney",
     image: "/images/logos/disney.svg",
     infoLink: "https://www.disney.com/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "Github",
@@ -57,8 +57,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.github.com/",
     pinned: true,
     style: {
-      width: 110,
-    },
+      width: 110
+    }
   },
   {
     caption: "Linear",
@@ -66,8 +66,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.linear.app/",
     pinned: true,
     style: {
-      width: 110,
-    },
+      width: 110
+    }
   },
   {
     caption: "Alibaba",
@@ -75,8 +75,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.alibaba.com/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
   {
     caption: "Ant Group",
@@ -84,27 +84,27 @@ export const users: Array<TurboUser> = [
     infoLink: "https://antgroup.com/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
   {
     caption: "Adobe",
     image: "/images/logos/adobe.svg",
     infoLink: "https://www.adobe.com/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "PayPal",
     image: "/images/logos/paypal.svg",
     infoLink: "https://www.paypal.com/",
-    pinned: true,
+    pinned: true
   },
 
   {
     caption: "Snap",
     image: "/images/logos/snap.svg",
     infoLink: "https://snap.com/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "SAP",
@@ -112,8 +112,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.sap.com/",
     pinned: true,
     style: {
-      width: 75,
-    },
+      width: 75
+    }
   },
 
   {
@@ -122,8 +122,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.shopify.com/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
 
   {
@@ -132,14 +132,14 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.datadoghq.com/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
   {
     caption: "Twilio",
     image: "/images/logos/twilio.svg",
     infoLink: "https://www.twilio.com/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "Segment",
@@ -147,8 +147,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://segment.com/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
   {
     caption: "Twitch",
@@ -156,8 +156,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.twitch.tv/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
   {
     caption: "Xiaomi",
@@ -165,8 +165,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.mi.com/",
     pinned: true,
     style: {
-      width: 50,
-    },
+      width: 50
+    }
   },
   {
     caption: "Line",
@@ -174,8 +174,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://line.me/",
     pinned: true,
     style: {
-      width: 75,
-    },
+      width: 75
+    }
   },
   {
     caption: "ESPN",
@@ -183,8 +183,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.espn.com/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
   {
     caption: "Volvo",
@@ -192,8 +192,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.volvo.com/",
     pinned: true,
     style: {
-      width: 60,
-    },
+      width: 60
+    }
   },
   {
     caption: "Hearst",
@@ -201,8 +201,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.hearst.com/",
     pinned: true,
     style: {
-      width: 175,
-    },
+      width: 175
+    }
   },
   {
     caption: "The Washington Post",
@@ -210,8 +210,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.washingtonpost.com/",
     pinned: true,
     style: {
-      width: 175,
-    },
+      width: 175
+    }
   },
   {
     caption: "Wayfair",
@@ -219,14 +219,14 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.wayfair.com/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
   {
     caption: "Hulu",
     image: "/images/logos/hulu.svg",
     infoLink: "https://www.hulu.com/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "CrowdStrike",
@@ -235,8 +235,8 @@ export const users: Array<TurboUser> = [
     pinned: true,
     style: {
       width: 150,
-      marginTop: 20,
-    },
+      marginTop: 20
+    }
   },
   {
     caption: "Binance",
@@ -244,14 +244,14 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.binance.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "Plex",
     image: "/images/logos/plex.svg",
     infoLink: "https://www.plex.tv/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "Groupon",
@@ -259,14 +259,14 @@ export const users: Array<TurboUser> = [
     infoLink: "https://groupon.com/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
   {
     caption: "Vimeo",
     image: "/images/logos/vimeo.svg",
     infoLink: "https://vimeo.com/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "GoodRx",
@@ -274,8 +274,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.goodrx.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "Tripadvisor",
@@ -283,8 +283,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.tripadvisor.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "RapidAPI",
@@ -292,14 +292,14 @@ export const users: Array<TurboUser> = [
     infoLink: "https://rapidapi.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "Miro",
     image: "/images/logos/miro.svg",
     infoLink: "https://miro.com/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "Lattice",
@@ -307,8 +307,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://lattice.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "Watershed",
@@ -316,8 +316,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://watershed.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "N26",
@@ -325,8 +325,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://n26.com/",
     pinned: true,
     style: {
-      width: 75,
-    },
+      width: 75
+    }
   },
   {
     caption: "Sourcegraph",
@@ -334,8 +334,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://sourcegraph.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "Big Commerce",
@@ -343,14 +343,14 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.bigcommerce.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "Framer",
     image: "/images/logos/framer.svg",
     infoLink: "https://www.framer.com/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "Builder.io",
@@ -358,8 +358,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.builder.io/",
     pinned: true,
     style: {
-      width: 125,
-    },
+      width: 125
+    }
   },
   {
     caption: "Contentful",
@@ -367,20 +367,20 @@ export const users: Array<TurboUser> = [
     infoLink: "https://www.contentful.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "Xata",
     image: "/images/logos/xata.svg",
     infoLink: "https://xata.io/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "Cal.com",
     image: "/images/logos/calcom.svg",
     infoLink: "https://cal.com/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "Codesandbox",
@@ -388,8 +388,8 @@ export const users: Array<TurboUser> = [
     infoLink: "https://codesandbox.io/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "WooCommerce",
@@ -397,25 +397,25 @@ export const users: Array<TurboUser> = [
     infoLink: "https://woocommerce.com/",
     pinned: true,
     style: {
-      width: 150,
-    },
+      width: 150
+    }
   },
   {
     caption: "Expo",
     image: "/images/logos/expo.svg",
     infoLink: "https://expo.dev/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "Endear",
     image: "/images/logos/endear.svg",
     infoLink: "https://endearhq.com/",
-    pinned: true,
+    pinned: true
   },
   {
     caption: "Makeswift",
     image: "/images/logos/makeswift.svg",
     infoLink: "https://www.makeswift.com/",
-    pinned: true,
-  },
+    pinned: true
+  }
 ];

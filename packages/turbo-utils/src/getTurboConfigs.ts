@@ -8,7 +8,7 @@ import type {
   PipelineV1,
   SchemaV1,
   BaseSchemaV2,
-  PipelineV2,
+  PipelineV2
 } from "@turbo/types";
 import * as logger from "./logger";
 import { getTurboRoot, clearTurboRootCache } from "./getTurboRoot";
@@ -123,7 +123,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
       onlyFiles: true,
       followSymbolicLinks: false,
       // avoid throwing when encountering permission errors or unreadable paths
-      suppressErrors: true,
+      suppressErrors: true
     }).map((configPath) => path.join(turboRoot, configPath));
 
     // Check for both turbo.json and turbo.jsonc in the same directory
@@ -168,7 +168,7 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
           config: turboJsonContent,
           turboConfigPath: configPath,
           workspacePath: path.dirname(configPath),
-          isRootConfig,
+          isRootConfig
         });
       } catch (e) {
         // if we can't read or parse the config, just ignore it with a warning
@@ -208,7 +208,7 @@ export function getWorkspaceConfigs(
       onlyFiles: true,
       followSymbolicLinks: false,
       // avoid throwing when encountering permission errors or unreadable paths
-      suppressErrors: true,
+      suppressErrors: true
     }).map((configPath) => path.join(turboRoot, configPath));
 
     for (const configPath of configPaths) {
@@ -224,7 +224,7 @@ export function getWorkspaceConfigs(
         const {
           configPath: turboConfigPath,
           configExists,
-          error,
+          error
         } = resolveTurboConfigPath(workspacePath);
 
         let rawTurboJson = null;
@@ -264,7 +264,7 @@ export function getWorkspaceConfigs(
           workspaceName,
           workspacePath,
           isWorkspaceRoot,
-          turboConfig,
+          turboConfig
         });
       } catch (e) {
         // if we can't read or parse the config, just ignore it with a warning

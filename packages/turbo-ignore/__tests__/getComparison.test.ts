@@ -59,9 +59,9 @@ describe("getComparison()", () => {
     validateLogs(mockConsole.log, [
       [
         "≫  ",
-        'No previous deployments found for "test-workspace" on branch "my-branch"',
+        'No previous deployments found for "test-workspace" on branch "my-branch"'
       ],
-      ["≫  ", "Falling back to ref HEAD^2"],
+      ["≫  ", "Falling back to ref HEAD^2"]
     ]);
   });
 
@@ -77,7 +77,7 @@ describe("getComparison()", () => {
 
     validateLogs(mockConsole.log, [
       ["≫  ", 'No previous deployments found for "test-workspace"'],
-      ["≫  ", "Falling back to ref HEAD^2"],
+      ["≫  ", "Falling back to ref HEAD^2"]
     ]);
   });
 
@@ -127,9 +127,9 @@ describe("getComparison()", () => {
     validateLogs(mockConsole.log, [
       [
         "≫  ",
-        'Previous deployment ("mygitsha") for "test-workspace" on branch "my-branch" is unreachable.',
+        'Previous deployment ("mygitsha") for "test-workspace" on branch "my-branch" is unreachable.'
       ],
-      ["≫  ", "Falling back to ref HEAD^2"],
+      ["≫  ", "Falling back to ref HEAD^2"]
     ]);
 
     mockExec.mockRestore();

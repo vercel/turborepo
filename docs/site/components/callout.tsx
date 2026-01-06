@@ -22,23 +22,23 @@ const THEMES: Record<
   info: {
     background: "bg-blue-200 dark:bg-blue-200 dark:bg-opacity-20",
     text: "text-blue-900 dark:text-blue-100/100",
-    border: "border border-blue-400/40",
+    border: "border border-blue-400/40"
   },
   error: {
     background: "bg-red-200 dark:bg-red-200 dark:bg-opacity-20",
     text: "text-red-900 dark:text-red-100/100",
-    border: "border border-red-400/40",
+    border: "border border-red-400/40"
   },
   warn: {
     background: "bg-amber-200 dark:bg-amber-200 dark:bg-opacity-20",
     text: "text-amber-900 dark:text-amber-100/100",
-    border: "border border-amber-400/40",
+    border: "border border-amber-400/40"
   },
   "good-to-know": {
     background: "bg-transparent",
     text: "text-gray-900",
-    border: "border border-foreground/40",
-  },
+    border: "border border-foreground/40"
+  }
 };
 
 const iconStyles = "w-5 h-5 relative top-0.5";
@@ -113,7 +113,7 @@ const ICONS: Record<CalloutType, React.ReactNode> = {
       <path d="M12 17h.01" />
     </svg>
   ),
-  "good-to-know": null,
+  "good-to-know": null
 };
 
 export function Callout({
@@ -131,7 +131,7 @@ export function Callout({
     <p className="inline font-medium" key="good-to-know">
       Good to know:&nbsp;
     </p>,
-    ...childrenToArray,
+    ...childrenToArray
   ];
 
   // Safely access theme properties

@@ -1,23 +1,18 @@
 use miette::Diagnostic;
 use thiserror::Error;
+use turborepo_daemon::{DaemonConnectorError, DaemonError};
+use turborepo_engine::GraphVisualizerError;
 use turborepo_repository::package_graph;
 use turborepo_ui::tui;
 
-use super::graph_visualizer;
-use crate::{
-    config, daemon, engine,
-    engine::ValidateError,
-    opts,
-    run::{global_hash, scope},
-    task_graph, task_hash,
-};
+use crate::{config, engine, engine::ValidateError, opts, run::scope, task_graph, task_hash};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("Invalid task configuration")]
     EngineValidation(#[related] Vec<ValidateError>),
     #[error(transparent)]
-    Graph(#[from] graph_visualizer::Error),
+    Graph(#[from] GraphVisualizerError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Builder(#[from] engine::BuilderError),
@@ -38,7 +33,7 @@ pub enum Error {
     #[diagnostic(transparent)]
     PackageGraphBuilder(#[from] package_graph::builder::Error),
     #[error(transparent)]
-    DaemonConnector(#[from] daemon::DaemonConnectorError),
+    DaemonConnector(#[from] DaemonConnectorError),
     #[error(transparent)]
     Cache(#[from] turborepo_cache::CacheError),
     #[error(transparent)]
@@ -46,7 +41,7 @@ pub enum Error {
     #[error(transparent)]
     Scope(#[from] scope::ResolutionError),
     #[error(transparent)]
-    GlobalHash(#[from] global_hash::Error),
+    GlobalHash(#[from] task_hash::global_hash::Error),
     #[error(transparent)]
     TaskHash(#[from] task_hash::Error),
     #[error(transparent)]
@@ -55,7 +50,7 @@ pub enum Error {
     #[error(transparent)]
     SignalHandler(#[from] turborepo_signals::listeners::Error),
     #[error(transparent)]
-    Daemon(#[from] daemon::DaemonError),
+    Daemon(#[from] DaemonError),
     #[error(transparent)]
     UI(#[from] turborepo_ui::Error),
     #[error(transparent)]

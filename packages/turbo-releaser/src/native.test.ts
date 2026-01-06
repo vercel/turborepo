@@ -95,7 +95,7 @@ describe("generateNativePackage", () => {
     await native.generateNativePackage({
       platform: { os: "windows", arch: "x64" },
       version: "1.0.0",
-      outputDir,
+      outputDir
     });
 
     assert.equal(mockCopyFile.mock.calls.length, 3);
@@ -123,7 +123,7 @@ describe("generateNativePackage", () => {
       native.generateNativePackage({
         platform: { os: "linux", arch: "x64" },
         version: "1.2.0",
-        outputDir,
+        outputDir
       }),
       { message: "Failed to remove directory" }
     );

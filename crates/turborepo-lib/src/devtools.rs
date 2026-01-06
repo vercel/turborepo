@@ -17,7 +17,7 @@ use turborepo_task_id::TaskName;
 use crate::{
     config::resolve_turbo_config_path,
     engine::{EngineBuilder, TaskNode as EngineTaskNode},
-    turbo_json::{TurboJsonLoader, TurboJsonReader},
+    turbo_json::{TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
 /// Task graph builder that uses the proper `EngineBuilder` logic.
@@ -57,8 +57,11 @@ impl ProperTaskGraphBuilder {
         let root_turbo_json_path = resolve_turbo_config_path(&self.repo_root)
             .map_err(|e| TaskGraphError::BuildError(format!("{e}")))?;
         let reader = TurboJsonReader::new(self.repo_root.clone());
-        let loader =
-            TurboJsonLoader::workspace(reader, root_turbo_json_path.clone(), pkg_graph.packages());
+        let loader = UnifiedTurboJsonLoader::workspace(
+            reader,
+            root_turbo_json_path.clone(),
+            pkg_graph.packages(),
+        );
 
         // Determine if this is a single package repo
         let is_single = pkg_graph.len() == 1;

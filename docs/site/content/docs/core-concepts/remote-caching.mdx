@@ -3,9 +3,9 @@ title: Remote Caching
 description: Share cache artifacts across machines for even faster builds.
 ---
 
-import { Callout } from '#components/callout';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { ThemeAwareImage } from '#components/theme-aware-image';
+import { Callout } from "#components/callout";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { ThemeAwareImage } from "#components/theme-aware-image";
 
 Turborepo's [task cache](/docs/crafting-your-repository/caching) saves time by never doing the same work twice.
 
@@ -13,16 +13,16 @@ But there's a problem: **the cache is local to your machine**. When you're worki
 
 <ThemeAwareImage
   dark={{
-    alt: 'Local caching creates a cache on each system.',
-    src: '/images/docs/local-caching-dark.png',
+    alt: "Local caching creates a cache on each system.",
+    src: "/images/docs/local-caching-dark.png",
     props: {
       width: 896,
       height: 345,
     },
   }}
   light={{
-    alt: 'Local caching creates a cache on each system.',
-    src: '/images/docs/local-caching-light.png',
+    alt: "Local caching creates a cache on each system.",
+    src: "/images/docs/local-caching-light.png",
     props: {
       width: 896,
       height: 345,
@@ -44,16 +44,16 @@ What if you could share a single Turborepo cache across your entire team (and ev
 
 <ThemeAwareImage
   dark={{
-    alt: 'Remote caching creates a shared cache for your entire team.',
-    src: '/images/docs/remote-caching-dark.png',
+    alt: "Remote caching creates a shared cache for your entire team.",
+    src: "/images/docs/remote-caching-dark.png",
     props: {
       width: 896,
       height: 489,
     },
   }}
   light={{
-    alt: 'Remote caching creates a shared cache for your entire team.',
-    src: '/images/docs/remote-caching-light.png',
+    alt: "Remote caching creates a shared cache for your entire team.",
+    src: "/images/docs/remote-caching-light.png",
     props: {
       width: 896,
       height: 489,
@@ -174,7 +174,7 @@ To enable this feature, set the `remoteCache` options on your `turbo.json` confi
 ```jsonc title="./turbo.json"
 {
   "remoteCache": {
-    "signature": true // [!code highlight]
+    "signature": true, // [!code highlight]
   }
 }
 ```

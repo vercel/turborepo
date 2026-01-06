@@ -26,7 +26,7 @@ async function readPkgJson(
 
 export function getNewPkgName({
   pkgPath,
-  pkgName,
+  pkgName
 }: {
   pkgPath: string;
   pkgName?: string;
@@ -50,12 +50,12 @@ export function getNewPkgName({
 
 export async function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): Promise<TransformerResults> {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   log.info('Validating that each package has a unique "name"...');
@@ -65,13 +65,13 @@ export async function transformer({
     project = await getWorkspaceDetails({ root });
   } catch (e) {
     return runner.abortTransform({
-      reason: `Unable to determine package manager for ${root}`,
+      reason: `Unable to determine package manager for ${root}`
     });
   }
 
   const packagePaths: Array<string> = [project.paths.packageJson];
   const packagePromises: Array<Promise<PartialPackageJson | null>> = [
-    readPkgJson(project.paths.packageJson),
+    readPkgJson(project.paths.packageJson)
   ];
 
   // add all workspace package.json files
@@ -97,14 +97,14 @@ export async function transformer({
       if (!pkgJsonContent.name || names.has(pkgJsonContent.name)) {
         const newName = getNewPkgName({
           pkgPath: pkgJsonPath,
-          pkgName: pkgJsonContent.name,
+          pkgName: pkgJsonContent.name
         });
         runner.modifyFile({
           filePath: pkgJsonPath,
           after: {
             ...pkgJsonContent,
-            name: newName,
-          },
+            name: newName
+          }
         });
         names.add(newName);
       } else {
@@ -120,7 +120,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 export function Date({
   children,
-  update = undefined,
+  update = undefined
 }: {
   children: ReactNode;
   update?: string;

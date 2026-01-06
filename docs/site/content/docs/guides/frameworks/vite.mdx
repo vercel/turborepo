@@ -3,8 +3,8 @@ title: Vite
 description: Learn more about using Vite in your monorepo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Callout } from '#components/callout';
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Callout } from "#components/callout";
 
 [Vite](https://vitejs.dev/) is a build tool that aims to provide a faster and leaner development experience for modern web projects.
 
@@ -156,9 +156,9 @@ By default, the new application will use the tasks defined in the root `turbo.js
 When using Vite with [Turborepo's microfrontends](/docs/guides/microfrontends), make sure to set the `base` property for child applications. This ensures the assets like images and CSS will be routed to the correct application.
 
 ```ts title="./apps/my-app/vite.config.ts"
-import { defineConfig } from 'vite';
+import { defineConfig } from "vite";
 
 export default defineConfig({
-  base: '/admin',
+  base: "/admin",
 });
 ```

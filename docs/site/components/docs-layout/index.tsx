@@ -4,7 +4,7 @@ import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
-  SidebarInset,
+  SidebarInset
 } from "#components/ui/sidebar.tsx";
 import { LayoutBody, TableOfContents, SidebarItems } from "./docs.client";
 import { SidebarViewport } from "./sidebar";
@@ -21,7 +21,7 @@ interface DocsLayoutProps {
 export const DocsLayout = ({
   tree,
   children,
-  isOpenApiSpec,
+  isOpenApiSpec
 }: DocsLayoutProps) => {
   return (
     <TreeContextProvider tree={tree}>

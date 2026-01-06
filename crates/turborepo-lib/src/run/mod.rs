@@ -1,29 +1,26 @@
 #![allow(dead_code)]
 
 pub mod builder;
-mod cache;
 mod error;
-pub(crate) mod global_hash;
-mod graph_visualizer;
 pub(crate) mod package_discovery;
 pub(crate) mod scope;
-pub(crate) mod summary;
 pub mod task_access;
 mod ui;
 pub mod watch;
 
 use std::{
     collections::{BTreeMap, HashSet},
-    io::Write,
+    io::{self, Write},
+    process::Command,
     sync::Arc,
     time::Duration,
 };
 
-pub use cache::{CacheOutput, ConfigCache, Error as CacheError, RunCache, TaskCache};
 use chrono::{DateTime, Local};
 use futures::StreamExt;
 use itertools::Itertools;
 use rayon::iter::ParallelBridge;
+use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
@@ -33,24 +30,28 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
+pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
+use turborepo_run_summary::RunTracker;
 use turborepo_scm::SCM;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
+use turborepo_types::{EnvMode, UIMode};
 use turborepo_ui::{
-    cprint, cprintln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig,
-    BOLD_GREY, GREY,
+    cprint, cprintln, cwrite, cwriteln, sender::UISender, tui, tui::TuiSender,
+    wui::sender::WebUISender, ColorConfig, BOLD, BOLD_GREY, BOLD_YELLOW_REVERSE, GREY, YELLOW,
 };
 
 pub use crate::run::error::Error;
 use crate::{
-    cli::EnvMode,
-    engine::Engine,
+    engine::{Engine, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{global_hash::get_global_hash_inputs, summary::RunTracker, task_access::TaskAccess},
+    run::task_access::TaskAccess,
     task_graph::Visitor,
-    task_hash::{get_external_deps_hash, get_internal_deps_hash, PackageInputsHashes},
-    turbo_json::{TurboJson, TurboJsonLoader, UIMode},
+    task_hash::{
+        get_external_deps_hash, get_global_hash_inputs, get_internal_deps_hash, PackageInputsHashes,
+    },
+    turbo_json::{TurboJson, UnifiedTurboJsonLoader},
     DaemonClient, DaemonConnector,
 };
 
@@ -68,7 +69,7 @@ pub struct Run {
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
     pkg_dep_graph: Arc<PackageGraph>,
-    turbo_json_loader: TurboJsonLoader,
+    turbo_json_loader: UnifiedTurboJsonLoader,
     root_turbo_json: TurboJson,
     scm: SCM,
     run_cache: Arc<RunCache>,
@@ -125,7 +126,7 @@ impl Run {
         }
     }
 
-    pub fn turbo_json_loader(&self) -> &TurboJsonLoader {
+    pub fn turbo_json_loader(&self) -> &UnifiedTurboJsonLoader {
         &self.turbo_json_loader
     }
 
@@ -730,12 +731,21 @@ impl Run {
         }
 
         if let Some(graph_opts) = &self.opts.run_opts.graph {
-            graph_visualizer::write_graph(
-                self.color_config,
+            let spawner = SharedChildSpawner;
+            let color_config = self.color_config;
+            let graphviz_warning: turborepo_engine::GraphvizWarningFn =
+                Box::new(move || write_graphviz_warning(color_config));
+            turborepo_engine::write_graph(
                 graph_opts,
                 &self.engine,
                 self.opts.run_opts.single_package,
                 &self.repo_root,
+                &spawner,
+                Some(graphviz_warning),
+                Some(&|filename: &AbsoluteSystemPath| {
+                    print!("\n✓ Generated task graph in ");
+                    cprintln!(color_config, BOLD, "{filename}");
+                }),
             )?;
             return Ok(0);
         }
@@ -758,4 +768,46 @@ impl RunStopper {
     pub async fn stop_tasks(&self, task_ids: &[turborepo_task_id::TaskId<'static>]) {
         self.manager.stop_tasks(task_ids).await;
     }
+}
+
+// Graph visualizer helper types and functions
+
+/// Implementation of `ChildSpawner` for graph visualizer using `SharedChild`.
+struct SharedChildSpawner;
+
+impl turborepo_engine::ChildSpawner for SharedChildSpawner {
+    type Child = SharedChildWrapper;
+
+    fn spawn(&self, command: Command) -> Result<Self::Child, io::Error> {
+        crate::spawn_child(command).map(SharedChildWrapper)
+    }
+}
+
+/// Wrapper around `Arc<SharedChild>` to implement `ChildProcess` trait.
+struct SharedChildWrapper(Arc<SharedChild>);
+
+impl turborepo_engine::ChildProcess for SharedChildWrapper {
+    fn take_stdin(&self) -> Option<Box<dyn Write + Send>> {
+        self.0
+            .take_stdin()
+            .map(|s| Box::new(s) as Box<dyn Write + Send>)
+    }
+
+    fn wait(&self) -> Result<(), io::Error> {
+        self.0.wait().map(|_| ())
+    }
+}
+
+fn write_graphviz_warning(color_config: ColorConfig) -> Result<(), io::Error> {
+    let stderr = io::stderr();
+    cwrite!(&stderr, color_config, BOLD_YELLOW_REVERSE, " WARNING ")?;
+    cwriteln!(
+        &stderr,
+        color_config,
+        YELLOW,
+        " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed \
+         on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn \
+         the meantime, you can use this string output with an\nonline Dot graph viewer."
+    )?;
+    Ok(())
 }

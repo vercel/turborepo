@@ -17,7 +17,7 @@ export function Grid({
     sm: 1,
     md: 2,
     lg: 3,
-    xl: 4,
+    xl: 4
   },
   gap = "none",
   className,
@@ -27,7 +27,7 @@ export function Grid({
     none: "gap-0",
     small: "gap-2",
     medium: "gap-4",
-    large: "gap-8",
+    large: "gap-8"
   }[gap];
 
   const gridClass = cn(

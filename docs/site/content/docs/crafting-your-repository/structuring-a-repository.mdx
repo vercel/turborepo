@@ -3,11 +3,11 @@ title: Structuring a repository
 description: Start by creating a repository using the conventions of the ecosystem.
 ---
 
-import { Callout } from '#components/callout';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Step, Steps } from '#components/steps';
-import { File, Folder, Files } from '#components/files';
-import { LinkToDocumentation } from '#components/link-to-documentation';
+import { Callout } from "#components/callout";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Step, Steps } from "#components/steps";
+import { File, Folder, Files } from "#components/files";
+import { LinkToDocumentation } from "#components/link-to-documentation";
 
 `turbo` is built on top of [Workspaces](https://vercel.com/docs/vercel-platform/glossary#workspace), a feature of package managers in the JavaScript ecosystem that allows you to group multiple packages in one repository.
 
@@ -388,9 +388,9 @@ Note that this example uses the [Just-in-Time Package](/docs/core-concepts/inter
 This would allow you to import `add` and `subtract` functions from the `@repo/math` package like so:
 
 ```ts title="./apps/my-app/src/index.ts"
-import { GRAVITATIONAL_CONSTANT, SPEED_OF_LIGHT } from '@repo/math';
-import { add } from '@repo/math/add';
-import { subtract } from '@repo/math/subtract';
+import { GRAVITATIONAL_CONSTANT, SPEED_OF_LIGHT } from "@repo/math";
+import { add } from "@repo/math/add";
+import { subtract } from "@repo/math/subtract";
 ```
 
 Using exports this way provides three major benefits:

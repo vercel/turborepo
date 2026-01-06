@@ -17,7 +17,7 @@ export function Video(
         {...props}
         style={{
           aspectRatio: props.width / props.height,
-          margin: 0,
+          margin: 0
         }}
       />
       <figcaption>{props.caption}</figcaption>

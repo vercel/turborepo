@@ -4,7 +4,7 @@ import type { AuthorDetails } from "./team";
 export function Avatar({
   name,
   picture,
-  xUsername,
+  xUsername
 }: AuthorDetails): JSX.Element {
   return (
     <div className="not-prose flex flex-shrink-0 items-center md:justify-start">

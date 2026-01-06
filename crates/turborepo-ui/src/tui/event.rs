@@ -104,6 +104,18 @@ pub enum OutputLogs {
     ErrorsOnly,
 }
 
+impl From<turborepo_types::OutputLogsMode> for OutputLogs {
+    fn from(value: turborepo_types::OutputLogsMode) -> Self {
+        match value {
+            turborepo_types::OutputLogsMode::Full => OutputLogs::Full,
+            turborepo_types::OutputLogsMode::None => OutputLogs::None,
+            turborepo_types::OutputLogsMode::HashOnly => OutputLogs::HashOnly,
+            turborepo_types::OutputLogsMode::NewOnly => OutputLogs::NewOnly,
+            turborepo_types::OutputLogsMode::ErrorsOnly => OutputLogs::ErrorsOnly,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PaneSize {
     pub rows: u16,

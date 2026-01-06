@@ -1,7 +1,7 @@
 import {
   defineDocs,
   defineConfig,
-  frontmatterSchema,
+  frontmatterSchema
 } from "fumadocs-mdx/config";
 import { z } from "zod";
 import { createCssVariablesTheme } from "shiki";
@@ -9,17 +9,17 @@ import { createCssVariablesTheme } from "shiki";
 export const { docs: repoDocs, meta: repoMeta } = defineDocs({
   dir: "content/docs",
   docs: {
-    schema: frontmatterSchema,
-  },
+    schema: frontmatterSchema
+  }
 });
 
 export const { docs: extrasDocs, meta: extrasMeta } = defineDocs({
   dir: "content/extra",
   docs: {
     schema: frontmatterSchema.extend({
-      description: z.string(),
-    }),
-  },
+      description: z.string()
+    })
+  }
 });
 
 export const { docs: blogDocs, meta: blogMeta } = defineDocs({
@@ -34,10 +34,10 @@ export const { docs: blogDocs, meta: blogMeta } = defineDocs({
           .string()
           .startsWith("/images/blog/")
           .endsWith("x-card.png")
-          .optional(),
+          .optional()
       })
-      .strict(),
-  },
+      .strict()
+  }
 });
 
 export const { docs: externalBlogDocs, meta: externalBlogMeta } = defineDocs({
@@ -47,19 +47,19 @@ export const { docs: externalBlogDocs, meta: externalBlogMeta } = defineDocs({
       description: z.string(),
       date: z.string(),
       isExternal: z.literal(true),
-      href: z.string(),
-    }),
-  },
+      href: z.string()
+    })
+  }
 });
 
 export const { docs: openapiDocs, meta: openapiMeta } = defineDocs({
-  dir: "content/openapi",
+  dir: "content/openapi"
 });
 
 const theme = createCssVariablesTheme({
   name: "css-variables",
   variablePrefix: "--shiki-",
-  variableDefaults: {},
+  variableDefaults: {}
 });
 
 export default defineConfig({
@@ -67,8 +67,8 @@ export default defineConfig({
     rehypeCodeOptions: {
       themes: {
         light: theme,
-        dark: theme,
-      },
-    },
-  },
+        dark: theme
+      }
+    }
+  }
 });

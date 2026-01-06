@@ -7,7 +7,7 @@ import { directoryInfo } from "../../utils/directoryInfo";
 import { Runner } from "../../runner";
 import type {
   TransformCommandOptions,
-  TransformCommandArgument,
+  TransformCommandArgument
 } from "./types";
 
 export async function transform(
@@ -45,7 +45,7 @@ export async function transform(
         }
         return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
       },
-      filter: (d: string) => d.trim(),
+      filter: (d: string) => d.trim()
     },
     {
       type: "list",
@@ -57,18 +57,18 @@ export async function transform(
         name: `${picocolors.bold(t.name)} - ${picocolors.gray(
           t.description
         )} ${picocolors.gray(`(${t.introducedIn})`)}`,
-        value: t.name,
-      })),
-    },
+        value: t.name
+      }))
+    }
   ]);
 
   const {
     // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it exists because of the prompt
     directoryInput: selectedDirectory = directory!,
-    transformerInput: selectedTransformer = transformName,
+    transformerInput: selectedTransformer = transformName
   } = answers;
   const { exists, absolute: root } = directoryInfo({
-    directory: selectedDirectory,
+    directory: selectedDirectory
   });
   if (!exists) {
     logger.error(`Directory ${picocolors.dim(`(${root})`)} does not exist`);
@@ -92,7 +92,7 @@ export async function transform(
   // run the transform
   const result = await transformData.transformer({
     root,
-    options,
+    options
   });
 
   if (result.fatalError) {

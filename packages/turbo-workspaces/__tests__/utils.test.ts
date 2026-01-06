@@ -11,12 +11,12 @@ describe("utils", () => {
       { globs: ["workspaces/**/*"], expected: false },
       { globs: ["apps/*", "packages/**/*"], expected: false },
       { globs: ["apps/*", "packages/*/utils/*"], expected: false },
-      { globs: ["internal-*/*"], expected: false },
+      { globs: ["internal-*/*"], expected: false }
     ])("should return $result when given %globs", ({ globs, expected }) => {
       const result = isCompatibleWithBunWorkspaces({
         project: {
-          workspaceData: { globs },
-        } as Project,
+          workspaceData: { globs }
+        } as Project
       });
       expect(result).toEqual(expected);
     });

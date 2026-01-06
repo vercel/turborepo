@@ -4,7 +4,7 @@ import type {
   Project,
   Options,
   RequestedPackageManagerDetails,
-  AvailablePackageManagerDetails,
+  AvailablePackageManagerDetails
 } from "./types";
 import { install } from "./install";
 import type { Logger } from "./logger";
@@ -25,7 +25,7 @@ export async function convertProject({
   project,
   convertTo,
   logger,
-  options,
+  options
 }: {
   project: Project;
   convertTo: RequestedPackageManagerDetails;
@@ -39,7 +39,7 @@ export async function convertProject({
   if (!options?.ignoreUnchangedPackageManager) {
     if (project.packageManager === convertTo.name) {
       throw new ConvertError("You are already using this package manager", {
-        type: "package_manager-already_in_use",
+        type: "package_manager-already_in_use"
       });
     }
 
@@ -47,7 +47,7 @@ export async function convertProject({
       throw new ConvertError(
         `${convertTo.name} is not installed, or could not be located`,
         {
-          type: "package_manager-could_not_be_found",
+          type: "package_manager-could_not_be_found"
         }
       );
     }
@@ -62,7 +62,7 @@ export async function convertProject({
       project,
       to,
       logger,
-      options,
+      options
     });
   }
 

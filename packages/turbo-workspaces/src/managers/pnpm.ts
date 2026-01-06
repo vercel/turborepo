@@ -12,7 +12,7 @@ import type {
   CleanArgs,
   Project,
   ManagerHandler,
-  Manager,
+  Manager
 } from "../types";
 import {
   getMainStep,
@@ -23,12 +23,12 @@ import {
   getPackageJson,
   getWorkspacePackageManager,
   removeLockFile,
-  bunLockToYarnLock,
+  bunLockToYarnLock
 } from "../utils";
 
 const PACKAGE_MANAGER_DETAILS: Manager = {
   name: "pnpm",
-  lock: "pnpm-lock.yaml",
+  lock: "pnpm-lock.yaml"
 };
 
 /**
@@ -42,7 +42,7 @@ async function detect(args: DetectArgs): Promise<boolean> {
   const lockFile = path.join(args.workspaceRoot, PACKAGE_MANAGER_DETAILS.lock);
   const workspaceFile = path.join(args.workspaceRoot, "pnpm-workspace.yaml");
   const packageManager = getWorkspacePackageManager({
-    workspaceRoot: args.workspaceRoot,
+    workspaceRoot: args.workspaceRoot
   });
   return (
     fs.existsSync(lockFile) ||
@@ -58,7 +58,7 @@ async function read(args: ReadArgs): Promise<Project> {
   const isPnpm = await detect(args);
   if (!isPnpm) {
     throw new ConvertError("Not a pnpm project", {
-      type: "package_manager-unexpected",
+      type: "package_manager-unexpected"
     });
   }
 
@@ -70,15 +70,15 @@ async function read(args: ReadArgs): Promise<Project> {
     paths: expandPaths({
       root: args.workspaceRoot,
       lockFile: PACKAGE_MANAGER_DETAILS.lock,
-      workspaceConfig: "pnpm-workspace.yaml",
+      workspaceConfig: "pnpm-workspace.yaml"
     }),
     workspaceData: {
       globs: getPnpmWorkspaces(args),
       workspaces: expandWorkspaces({
         workspaceGlobs: getPnpmWorkspaces(args),
-        ...args,
-      }),
-    },
+        ...args
+      })
+    }
   };
 }
 
@@ -99,7 +99,7 @@ async function create(args: CreateArgs): Promise<void> {
     getMainStep({
       action: "create",
       packageManager: PACKAGE_MANAGER_DETAILS.name,
-      project,
+      project
     })
   );
 
@@ -132,7 +132,7 @@ async function create(args: CreateArgs): Promise<void> {
       project,
       to,
       logger,
-      options,
+      options
     });
 
     // workspace dependencies
@@ -159,7 +159,7 @@ async function remove(args: RemoveArgs): Promise<void> {
     getMainStep({
       action: "remove",
       packageManager: PACKAGE_MANAGER_DETAILS.name,
-      project,
+      project
     })
   );
   const packageJson = getPackageJson({ workspaceRoot: project.paths.root });
@@ -182,7 +182,7 @@ async function remove(args: RemoveArgs): Promise<void> {
     // collect all workspace node_modules directories
     const allModulesDirs = [
       project.paths.nodeModules,
-      ...project.workspaceData.workspaces.map((w) => w.paths.nodeModules),
+      ...project.workspaceData.workspaces.map((w) => w.paths.nodeModules)
     ];
 
     try {
@@ -194,7 +194,7 @@ async function remove(args: RemoveArgs): Promise<void> {
       );
     } catch (err) {
       throw new ConvertError("Failed to remove node_modules", {
-        type: "error_removing_node_modules",
+        type: "error_removing_node_modules"
       });
     }
   }
@@ -241,7 +241,7 @@ async function convertLock(args: ConvertArgs): Promise<void> {
           stdio: "ignore",
           cwd: project.paths.root,
           preferLocal: true,
-          shell: process.platform === "win32",
+          shell: process.platform === "win32"
         });
       } catch (err) {
         // do nothing
@@ -283,5 +283,5 @@ export const pnpm: ManagerHandler = {
   create,
   remove,
   clean,
-  convertLock,
+  convertLock
 };

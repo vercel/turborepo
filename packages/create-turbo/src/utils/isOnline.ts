@@ -10,7 +10,7 @@ function getProxy(): string | undefined {
 
   try {
     const httpsProxy = execSync("npm config get https-proxy", {
-      timeout: 3000,
+      timeout: 3000
     })
       .toString()
       .trim();

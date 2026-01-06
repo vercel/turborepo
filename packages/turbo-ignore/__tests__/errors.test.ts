@@ -4,7 +4,7 @@ import { shouldWarn, NON_FATAL_ERRORS } from "../src/errors";
 describe("shouldWarn()", () => {
   it("it detects errors when packageManager is missing", () => {
     const result = shouldWarn({
-      err: `run failed: We did not detect an in-use package manager for your project. Please set the "packageManager" property in your root package.json (https://nodejs.org/api/packages.html#packagemanager) or run \`npx @turbo/codemod add-package-manager\` in the root of your monorepo.`,
+      err: `run failed: We did not detect an in-use package manager for your project. Please set the "packageManager" property in your root package.json (https://nodejs.org/api/packages.html#packagemanager) or run \`npx @turbo/codemod add-package-manager\` in the root of your monorepo.`
     });
     expect(result.code).toBe("NO_PACKAGE_MANAGER");
     expect(result.level).toBe("warn");
@@ -13,7 +13,7 @@ describe("shouldWarn()", () => {
 
   it("it detects errors when yarn lockfile is missing", () => {
     const result = shouldWarn({
-      err: `* reading yarn.lock: open /test/../yarn.lock: no such file or directory`,
+      err: `* reading yarn.lock: open /test/../yarn.lock: no such file or directory`
     });
     expect(result.code).toBe("MISSING_LOCKFILE");
     expect(result.level).toBe("warn");
@@ -22,7 +22,7 @@ describe("shouldWarn()", () => {
 
   it("it detects errors when pnpm lockfile is missing", () => {
     const result = shouldWarn({
-      err: `* reading pnpm-lock.yaml: open /test/../pnpm-lock.yaml: no such file or directory`,
+      err: `* reading pnpm-lock.yaml: open /test/../pnpm-lock.yaml: no such file or directory`
     });
     expect(result.code).toBe("MISSING_LOCKFILE");
     expect(result.level).toBe("warn");
@@ -31,7 +31,7 @@ describe("shouldWarn()", () => {
 
   it("it detects errors when npm lockfile is missing", () => {
     const result = shouldWarn({
-      err: `* reading package-lock.json: open /test/../package-lock.json: no such file or directory`,
+      err: `* reading package-lock.json: open /test/../package-lock.json: no such file or directory`
     });
     expect(result.code).toBe("MISSING_LOCKFILE");
     expect(result.level).toBe("warn");

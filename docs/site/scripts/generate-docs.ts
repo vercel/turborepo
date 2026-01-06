@@ -85,7 +85,7 @@ function removeBillingRelated403Responses(spec: OpenAPISpec): OpenAPISpec {
   const billingPhrases = [
     "The customer has reached their spend cap limit and has been paused",
     "The Remote Caching usage limit has been reached for this account",
-    "Remote Caching has been disabled for this team or user",
+    "Remote Caching has been disabled for this team or user"
   ];
 
   // Process all paths
@@ -143,9 +143,9 @@ function addArtifactTagHeader(spec: OpenAPISpec): OpenAPISpec {
       // Add the x-artifact-tag header
       response.headers["x-artifact-tag"] = {
         schema: {
-          type: "string",
+          type: "string"
         },
-        description: "The signature of the artifact found",
+        description: "The signature of the artifact found"
       };
     }
   }
@@ -181,5 +181,5 @@ void generateFiles({
   input: ["./.openapi.json"],
   addGeneratedComment: true,
   output: out,
-  groupBy: "tag",
+  groupBy: "tag"
 });

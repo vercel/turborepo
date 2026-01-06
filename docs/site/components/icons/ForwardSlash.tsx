@@ -7,7 +7,7 @@ export const ForwardSlash = () => {
       style={{
         width: "16px",
         height: "16px",
-        color: "var(--ds-gray-alpha-400)",
+        color: "var(--ds-gray-alpha-400)"
       }}
       viewBox="0 0 16 16"
       width="16"

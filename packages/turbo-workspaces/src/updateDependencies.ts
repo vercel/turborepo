@@ -6,7 +6,7 @@ import type {
   Project,
   Workspace,
   AvailablePackageManagerDetails,
-  Options,
+  Options
 } from "./types";
 import type { Logger } from "./logger";
 import { getPackageJson } from "./utils";
@@ -14,7 +14,7 @@ import { getPackageJson } from "./utils";
 function updateDependencyList({
   dependencyList,
   project,
-  to,
+  to
 }: {
   dependencyList: DependencyList;
   project: Project;
@@ -46,7 +46,7 @@ export function updateDependencies({
   workspace,
   to,
   logger,
-  options,
+  options
 }: {
   workspace: Workspace;
   project: Project;
@@ -64,7 +64,7 @@ export function updateDependencies({
 
   // update all dependencies
   const workspacePackageJson = getPackageJson({
-    workspaceRoot: workspace.paths.root,
+    workspaceRoot: workspace.paths.root
   });
 
   // collect stats as we go for consolidated output at the end
@@ -72,14 +72,14 @@ export function updateDependencies({
     dependencies: [],
     devDependencies: [],
     peerDependencies: [],
-    optionalDependencies: [],
+    optionalDependencies: []
   };
 
   const allDependencyKeys: Array<keyof DependencyGroups> = [
     "dependencies",
     "devDependencies",
     "peerDependencies",
-    "optionalDependencies",
+    "optionalDependencies"
   ];
 
   allDependencyKeys.forEach((depKey) => {
@@ -88,7 +88,7 @@ export function updateDependencies({
       const { updated, dependencyList } = updateDependencyList({
         dependencyList: depList,
         project,
-        to,
+        to
       });
 
       workspacePackageJson[depKey] = dependencyList;
@@ -132,7 +132,7 @@ export function updateDependencies({
 
   if (!options?.dry) {
     fs.writeJSONSync(workspace.paths.packageJson, workspacePackageJson, {
-      spaces: 2,
+      spaces: 2
     });
   }
 }

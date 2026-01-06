@@ -1,0 +1,23 @@
+[package]
+name = "turborepo-hash"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Hashing utilities for Turborepo using Cap'n Proto for deterministic serialization"
+
+[lints]
+workspace = true
+
+[dependencies]
+capnp = "0.17.2"
+hex = "0.4.3"
+turbopath = { workspace = true }
+turborepo-lockfiles = { workspace = true }
+turborepo-types = { workspace = true }
+twox-hash = "1.6.3"
+
+[dev-dependencies]
+test-case = { workspace = true }
+
+[build-dependencies]
+capnpc = "0.18.0"

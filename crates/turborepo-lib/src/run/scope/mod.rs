@@ -1,21 +1,25 @@
-mod change_detector;
-pub mod filter;
-mod simple_glob;
-pub mod target_selector;
+//! Package scope resolution.
+//!
+//! This module delegates to the `turborepo_scope` crate for all scope
+//! resolution logic. Re-exports are provided for backward compatibility.
 
 use std::collections::HashMap;
 
-use filter::{FilterResolver, PackageInference};
 use turbopath::AbsoluteSystemPath;
 use turborepo_repository::{
     change_mapper::PackageInclusionReason,
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
+// Re-export modules and types from turborepo-scope crate for backward compatibility
+pub use turborepo_scope::filter;
+pub use turborepo_scope::{filter::ResolutionError, target_selector, ScopeOpts};
 
-pub use crate::run::scope::filter::ResolutionError;
-use crate::{opts::ScopeOpts, turbo_json::TurboJson};
+use crate::turbo_json::TurboJson;
 
+/// Resolve which packages should be included in the run based on scope options.
+///
+/// Delegates directly to `turborepo_scope::resolve_packages`.
 #[tracing::instrument(skip(opts, pkg_graph, scm))]
 pub fn resolve_packages(
     opts: &ScopeOpts,
@@ -24,17 +28,12 @@ pub fn resolve_packages(
     scm: &SCM,
     root_turbo_json: &TurboJson,
 ) -> Result<(HashMap<PackageName, PackageInclusionReason>, bool), ResolutionError> {
-    let pkg_inference = opts.pkg_inference_root.as_ref().map(|pkg_inference_path| {
-        PackageInference::calculate(turbo_root, pkg_inference_path, pkg_graph)
-    });
-
-    FilterResolver::new(
+    // Delegate to turborepo-scope, passing global_deps from turbo.json
+    turborepo_scope::resolve_packages(
         opts,
-        pkg_graph,
         turbo_root,
-        pkg_inference,
+        pkg_graph,
         scm,
-        root_turbo_json,
-    )?
-    .resolve(&opts.affected_range, &opts.get_filters())
+        &root_turbo_json.global_deps,
+    )
 }

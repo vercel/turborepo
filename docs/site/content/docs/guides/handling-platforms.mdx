@@ -18,11 +18,11 @@ First, create a script that accounts for the hash contributors that you are inte
 ```js title="./scripts/create-turbo-cache-key.js"
 #!/usr/bin/env node
 
-const { writeFileSync } = require('fs');
-const { join } = require('path');
+const { writeFileSync } = require("fs");
+const { join } = require("path");
 
 const { platform, arch } = process;
-const file = 'turbo-cache-key.json';
+const file = "turbo-cache-key.json";
 const str = JSON.stringify({ platform, arch });
 console.log(`Generating cache key: ${str}`);
 writeFileSync(file, str);

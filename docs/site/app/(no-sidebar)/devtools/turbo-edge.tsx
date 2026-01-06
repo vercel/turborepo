@@ -19,7 +19,7 @@ export function TurboEdge({
   target,
   style = {},
   markerStart,
-  markerEnd,
+  markerEnd
 }: EdgeProps) {
   const sourceNode = useStore((store) => store.nodeInternals.get(source));
   const targetNode = useStore((store) => store.nodeInternals.get(target));
@@ -34,7 +34,7 @@ export function TurboEdge({
     tx,
     ty,
     sourcePos,
-    targetPos,
+    targetPos
   } = getEdgeParams(
     sourceNode as unknown as InternalNodeType,
     targetNode as unknown as InternalNodeType
@@ -65,7 +65,7 @@ export function TurboEdge({
     sourcePosition: sourcePos,
     targetPosition: targetPos,
     targetX: tx,
-    targetY: ty,
+    targetY: ty
   });
 
   return (

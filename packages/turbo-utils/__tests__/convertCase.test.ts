@@ -12,7 +12,7 @@ describe("convertCase", () => {
     { input: "hello_world", expected: "helloWorld", to: "camel" },
     { input: "hello-world", expected: "helloWorld", to: "camel" },
     { input: "helloWorld", expected: "helloWorld", to: "camel" },
-    { input: "helloworld", expected: "helloworld", to: "camel" },
+    { input: "helloworld", expected: "helloworld", to: "camel" }
   ];
 
   it.each(testCases)(

@@ -4,12 +4,12 @@ import {
   IconType,
   NextJSLogo,
   TurborepoLogo,
-  VercelLogo,
+  VercelLogo
 } from "./logos";
 import type { ContextItem, ContextList } from "./types";
 
 export const PLATFORM_MENU_ITEMS = ({
-  theme,
+  theme
 }: ContextList): Array<ContextItem> => [
   {
     name: "copy-logo",
@@ -31,7 +31,7 @@ export const PLATFORM_MENU_ITEMS = ({
         }" />
       </svg>`
       );
-    },
+    }
   },
   {
     name: "copy-wordmark",
@@ -48,7 +48,7 @@ export const PLATFORM_MENU_ITEMS = ({
           <!-- With love, the ▲ team -->
         </svg>`
       );
-    },
+    }
   },
   {
     name: "brand-guidelines",
@@ -56,8 +56,8 @@ export const PLATFORM_MENU_ITEMS = ({
     children: "Brand Guidelines",
     prefix: <DesignSystemLogo className="mr-3 h-4 w-4" />,
     type: "external",
-    href: "https://vercel.com/design/brands",
-  },
+    href: "https://vercel.com/design/brands"
+  }
 ];
 
 export const PRODUCT_MENU_ITEMS = (): Array<ContextItem> => [
@@ -67,7 +67,7 @@ export const PRODUCT_MENU_ITEMS = (): Array<ContextItem> => [
     children: "Vercel",
     prefix: <VercelLogo className="mr-3 h-4 w-4" />,
     type: "external",
-    href: "https://vercel.com",
+    href: "https://vercel.com"
   },
   {
     name: "next-js",
@@ -75,7 +75,7 @@ export const PRODUCT_MENU_ITEMS = (): Array<ContextItem> => [
     children: "Next.js",
     prefix: <NextJSLogo className="mr-3 h-4 w-4" />,
     type: "external",
-    href: "https://nextjs.org",
+    href: "https://nextjs.org"
   },
   {
     name: "turborepo",
@@ -83,6 +83,6 @@ export const PRODUCT_MENU_ITEMS = (): Array<ContextItem> => [
     children: "Turborepo",
     prefix: <TurborepoLogo className="mr-3 h-4 w-4" />,
     type: "internal",
-    href: "/repo",
-  },
+    href: "/repo"
+  }
 ];

@@ -3,20 +3,13 @@ on:
   push:
     branches: [main]
   pull_request:
-    paths:
-      - ".github/actions/**"
-      - .github/workflows/lint.yml
-      - "**/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}"
-      - pnpm-lock.yaml
-      - package.json
-      - "Cargo.**"
-      - "crates/**"
-      - ".cargo/**"
-      - rust-toolchain
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  RUSTFLAGS: "-D warnings"
 
 permissions:
   actions: write
@@ -24,13 +17,45 @@ permissions:
   pull-requests: read
 
 jobs:
-  rust_lint:
-    name: Rust lints
+  determine_changes:
+    name: Determine changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+      formatting: ${{ steps.filter.outputs.formatting }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - ".github/actions/**"
+              - ".github/workflows/lint.yml"
+              - "Cargo.**"
+              - "crates/**"
+              - ".cargo/**"
+              - "rust-toolchain.toml"
+            formatting:
+              - "**/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}"
+              - "pnpm-lock.yaml"
+              - "package.json"
+
+  rust_fmt:
+    name: Rust format
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Rust
         uses: ./.github/actions/setup-rust
@@ -38,11 +63,55 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run cargo fmt check
-        run: |
-          cargo fmt --check
+        run: cargo fmt --check
 
-      - name: Check Cargo.toml formatting (taplo)
-        run: npx @taplo/cli@0.5.2 format --check
+  rust_clippy:
+    name: Rust clippy
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node: "false"
+
+      - name: Run cargo clippy
+        run: cargo lint
+
+  rust_check:
+    name: Rust check
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node: "false"
+
+      - name: Run cargo check
+        run: cargo check --workspace
+
+  rust_licenses:
+    name: Rust licenses
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Check licenses
         uses: EmbarkStudios/cargo-deny-action@v2
@@ -51,6 +120,8 @@ jobs:
 
   format_lint:
     name: Formatting
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.formatting == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -59,12 +130,10 @@ jobs:
       TURBO_CACHE: remote:rw
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: "Setup Node"
         uses: ./.github/actions/setup-node
-        with:
-          extra-flags: --no-optional
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -72,12 +141,16 @@ jobs:
       - name: Lint
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          TURBO_API= turbo run lint --env-mode=strict
+          TURBO_API= turbo run quality --env-mode=strict
 
   cleanup:
     name: Cleanup
     needs:
-      - rust_lint
+      - determine_changes
+      - rust_fmt
+      - rust_clippy
+      - rust_check
+      - rust_licenses
       - format_lint
     if: always()
     uses: ./.github/workflows/pr-clean-caches.yml

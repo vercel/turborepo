@@ -8,7 +8,7 @@ import { TransformError } from "./errors";
 const REPO_NAMES = ["turbo", "turborepo"];
 
 const meta = {
-  name: "official-starter",
+  name: "official-starter"
 };
 
 /**
@@ -53,7 +53,7 @@ export async function transform(args: TransformInput): TransformResult {
     } catch {
       throw new TransformError("Unable to read package.json", {
         transform: meta.name,
-        fatal: false,
+        fatal: false
       });
     }
 
@@ -78,12 +78,12 @@ export async function transform(args: TransformInput): TransformResult {
 
       try {
         fs.writeJsonSync(rootPackageJsonPath, packageJsonContent, {
-          spaces: 2,
+          spaces: 2
         });
       } catch (err) {
         throw new TransformError("Unable to write package.json", {
           transform: meta.name,
-          fatal: false,
+          fatal: false
         });
       }
     }

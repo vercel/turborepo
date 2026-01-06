@@ -10,7 +10,7 @@ import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
-  ...jest.requireActual("@turbo/workspaces"),
+  ...jest.requireActual("@turbo/workspaces")
 }));
 
 interface TestCase {
@@ -36,10 +36,10 @@ const TEST_CASES: Array<TestCase> = [
         "package.json": {
           action: "modified",
           additions: 1,
-          deletions: 0,
-        },
-      },
-    },
+          deletions: 0
+        }
+      }
+    }
   },
   {
     name: "dry",
@@ -53,10 +53,10 @@ const TEST_CASES: Array<TestCase> = [
         "package.json": {
           action: "skipped",
           additions: 1,
-          deletions: 0,
-        },
-      },
-    },
+          deletions: 0
+        }
+      }
+    }
   },
   {
     name: "print",
@@ -70,10 +70,10 @@ const TEST_CASES: Array<TestCase> = [
         "package.json": {
           action: "modified",
           additions: 1,
-          deletions: 0,
-        },
-      },
-    },
+          deletions: 0
+        }
+      }
+    }
   },
   {
     name: "print & dry",
@@ -87,10 +87,10 @@ const TEST_CASES: Array<TestCase> = [
         "package.json": {
           action: "skipped",
           additions: 1,
-          deletions: 0,
-        },
-      },
-    },
+          deletions: 0
+        }
+      }
+    }
   },
   {
     name: "basic",
@@ -100,8 +100,8 @@ const TEST_CASES: Array<TestCase> = [
     packageManagerVersion: "1.2.3",
     options: { force: false, dryRun: false, print: false },
     result: {
-      changes: {},
-    },
+      changes: {}
+    }
   },
   {
     name: "basic",
@@ -111,15 +111,15 @@ const TEST_CASES: Array<TestCase> = [
     packageManagerVersion: "1.2.3",
     options: { force: false, dryRun: false, print: false },
     result: {
-      changes: {},
-    },
-  },
+      changes: {}
+    }
+  }
 ];
 
 describe("add-package-manager-2", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "add-package-manager",
+    test: "add-package-manager"
   });
 
   it.each(TEST_CASES)(
@@ -130,7 +130,7 @@ describe("add-package-manager-2", () => {
       packageManager,
       packageManagerVersion,
       options,
-      result,
+      result
     }) => {
       // load the fixture for the test
       const { root, read } = useFixture({ fixture });
@@ -142,7 +142,7 @@ describe("add-package-manager-2", () => {
           pnpm: packageManager === "pnpm" ? packageManagerVersion : undefined,
           npm: packageManager === "npm" ? packageManagerVersion : undefined,
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
-          bun: packageManager === "bun" ? packageManagerVersion : undefined,
+          bun: packageManager === "bun" ? packageManagerVersion : undefined
         });
 
       const mockGetWorkspaceDetails = jest
@@ -150,7 +150,7 @@ describe("add-package-manager-2", () => {
         .mockResolvedValue(
           getWorkspaceDetailsMockReturnValue({
             root,
-            packageManager,
+            packageManager
           })
         );
 
@@ -162,7 +162,7 @@ describe("add-package-manager-2", () => {
       // run the transformer
       const transformerResult = await transformer({
         root,
-        options,
+        options
       });
 
       if (existingPackageManagerString === undefined) {
@@ -183,7 +183,7 @@ describe("add-package-manager-2", () => {
       // run the transformer again to ensure nothing changes on a second run
       const repeatResult = await transformer({
         root,
-        options,
+        options
       });
       expect(repeatResult.fatalError).toBeUndefined();
       expect(repeatResult.changes).toMatchObject({});
@@ -209,7 +209,7 @@ describe("add-package-manager-2", () => {
       // run the transformer
       const result = await transformer({
         root,
-        options: { force: false, dryRun: false, print: false },
+        options: { force: false, dryRun: false, print: false }
       });
 
       expect(mockGetWorkspaceDetails).toHaveBeenCalledTimes(1);
@@ -232,7 +232,7 @@ describe("add-package-manager-2", () => {
           pnpm: undefined,
           npm: undefined,
           yarn: undefined,
-          bun: undefined,
+          bun: undefined
         });
 
       const mockGetWorkspaceDetails = jest
@@ -240,7 +240,7 @@ describe("add-package-manager-2", () => {
         .mockResolvedValue(
           getWorkspaceDetailsMockReturnValue({
             root,
-            packageManager: "npm",
+            packageManager: "npm"
           })
         );
 
@@ -251,7 +251,7 @@ describe("add-package-manager-2", () => {
       // run the transformer
       const result = await transformer({
         root,
-        options: { force: false, dryRun: false, print: false },
+        options: { force: false, dryRun: false, print: false }
       });
 
       expect(mockGetAvailablePackageManagers).toHaveBeenCalledTimes(1);
@@ -280,7 +280,7 @@ describe("add-package-manager-2", () => {
           pnpm: packageManagerVersion,
           npm: undefined,
           yarn: undefined,
-          bun: undefined,
+          bun: undefined
         });
 
       const mockGetWorkspaceDetails = jest
@@ -288,7 +288,7 @@ describe("add-package-manager-2", () => {
         .mockResolvedValue(
           getWorkspaceDetailsMockReturnValue({
             root,
-            packageManager,
+            packageManager
           })
         );
 
@@ -305,7 +305,7 @@ describe("add-package-manager-2", () => {
       // run the transformer
       const result = await transformer({
         root,
-        options: { force: false, dryRun: false, print: false },
+        options: { force: false, dryRun: false, print: false }
       });
 
       // package manager should still not exist (we couldn't write it)

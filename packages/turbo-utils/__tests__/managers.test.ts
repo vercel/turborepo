@@ -3,7 +3,7 @@ import { describe, test, expect, beforeEach, jest } from "@jest/globals";
 import execa from "execa";
 import {
   getAvailablePackageManagers,
-  getPackageManagersBinPaths,
+  getPackageManagersBinPaths
 } from "../src/managers";
 
 // Mock dependencies
@@ -33,7 +33,7 @@ describe("managers", () => {
         yarn: "1.22.19",
         npm: "9.5.0",
         pnpm: "8.6.7",
-        bun: "1.0.0",
+        bun: "1.0.0"
       });
     });
 
@@ -50,7 +50,7 @@ describe("managers", () => {
         yarn: "1.22.19",
         npm: undefined,
         pnpm: "8.6.7",
-        bun: undefined,
+        bun: undefined
       });
     });
 
@@ -68,7 +68,7 @@ describe("managers", () => {
           yarn: ".yarn/releases/yarn-3.2.1.cjs",
           npm: "/usr/local/bin",
           pnpm: "/usr/local/pnpm",
-          bun: "/usr/local/bun",
+          bun: "/usr/local/bun"
         });
       });
 
@@ -101,7 +101,7 @@ describe("managers", () => {
           yarn: undefined,
           npm: undefined,
           pnpm: "/usr/local/pnpm",
-          bun: undefined,
+          bun: undefined
         });
       });
 
@@ -114,7 +114,7 @@ describe("managers", () => {
         expect(mockExeca).toHaveBeenCalledWith("yarnpkg", ["--version"], {
           cwd: ".",
           env: { COREPACK_ENABLE_STRICT: "0" },
-          timeout: 5000,
+          timeout: 5000
         });
 
         // Verify other package manager bin path commands
@@ -124,18 +124,18 @@ describe("managers", () => {
           {
             cwd: "/tmp",
             env: { COREPACK_ENABLE_STRICT: "0" },
-            timeout: 5000,
+            timeout: 5000
           }
         );
         expect(mockExeca).toHaveBeenCalledWith("pnpm", ["bin", "--global"], {
           cwd: "/tmp",
           env: { COREPACK_ENABLE_STRICT: "0" },
-          timeout: 5000,
+          timeout: 5000
         });
         expect(mockExeca).toHaveBeenCalledWith("bun", ["pm", "--g", "bin"], {
           cwd: "/tmp",
           env: { COREPACK_ENABLE_STRICT: "0" },
-          timeout: 5000,
+          timeout: 5000
         });
       });
     });

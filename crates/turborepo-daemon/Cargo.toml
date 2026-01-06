@@ -1,0 +1,53 @@
+[package]
+name = "turborepo-daemon"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+command-group = { version = "2.1.0", features = ["with-tokio"] }
+futures = { workspace = true }
+futures-core = "0.3.30"
+hex = { workspace = true }
+notify = { workspace = true }
+prost = "0.12.3"
+semver = { workspace = true }
+sha2 = { workspace = true }
+sysinfo = "0.27.7"
+thiserror = { workspace = true }
+time = "0.3.20"
+tokio = { workspace = true, features = ["full", "time"] }
+tokio-stream = { version = "0.1.12", features = ["net"] }
+tokio-util = { version = "0.7.7", features = ["compat"] }
+tonic = { version = "0.11.0", features = ["transport"] }
+tower = "0.4.13"
+tracing = { workspace = true }
+
+pidlock = { path = "../turborepo-pidlock" }
+turbopath = { workspace = true }
+turborepo-filewatch = { path = "../turborepo-filewatch" }
+turborepo-repository = { path = "../turborepo-repository" }
+turborepo-scm = { workspace = true }
+turborepo-types = { workspace = true }
+
+# Client dependencies
+globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
+miette = { workspace = true, features = ["fancy"] }
+serde_json = { workspace = true }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+uds_windows = "1.0.2"
+async-io = "1.12.0"
+
+[build-dependencies]
+tonic-build = "0.8.4"
+
+[dev-dependencies]
+anyhow = { workspace = true }
+async-stream = "0.3.4"
+tempfile = { workspace = true }
+test-case = { workspace = true }
+tracing-test = { version = "0.2.4", features = ["no-env-filter"] }

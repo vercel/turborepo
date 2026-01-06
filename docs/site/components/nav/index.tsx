@@ -7,7 +7,7 @@ import { VercelLogo } from "#app/_components/logos.tsx";
 import { LogoGitHub } from "#components/icons/logo-github.tsx";
 import {
   TurborepoWordmarkDark,
-  TurborepoWordmarkLight,
+  TurborepoWordmarkLight
 } from "#components/icons/turborepo-wordmark.tsx";
 import { MagnifyingGlass } from "#components/icons/magnifying-glass.tsx";
 import { cn } from "../cn";
@@ -20,30 +20,30 @@ import {
   NavigationMenuIndicator,
   NavigationMenuItem,
   NavigationMenuLink,
-  NavigationMenuList,
+  NavigationMenuList
 } from "./navigation-menu";
 
 export const PAGES = [
   {
     href: "/docs",
     tooltip: "Docs",
-    name: "docs",
+    name: "docs"
   },
   {
     href: "/blog",
     tooltip: "Blog",
-    name: "blog",
+    name: "blog"
   },
   {
     href: "/showcase",
     tooltip: "Showcase",
-    name: "showcase",
+    name: "showcase"
   },
   {
     href: "https://vercel.com/contact/sales?utm_source=turborepo.com&utm_medium=referral&utm_campaign=header-enterpriseLink",
     tooltip: "Enterprise",
-    name: "enterprise",
-  },
+    name: "enterprise"
+  }
 ] as const;
 export type Pages = typeof PAGES;
 

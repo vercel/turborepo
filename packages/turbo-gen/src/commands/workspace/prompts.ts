@@ -8,7 +8,7 @@ import {
   validateDirectory,
   logger,
   type DependencyGroups,
-  type PackageJson,
+  type PackageJson
 } from "@turbo/utils";
 import { getWorkspaceStructure } from "../../utils/getWorkspaceStructure";
 import type { WorkspaceType } from "../../generators/types";
@@ -17,7 +17,7 @@ import { getWorkspaceList } from "../../utils/getWorkspaceList";
 export async function name({
   override,
   suggestion,
-  workspaceType,
+  workspaceType
 }: {
   override?: string;
   suggestion?: string;
@@ -35,13 +35,13 @@ export async function name({
       const { validForNewPackages: isValid } = validName(input);
       return isValid || `Invalid ${workspaceType} name`;
     },
-    message: `What is the name of the ${workspaceType}?`,
+    message: `What is the name of the ${workspaceType}?`
   });
 }
 
 export async function type({
   override,
-  message,
+  message
 }: {
   override?: WorkspaceType;
   message?: string;
@@ -57,13 +57,13 @@ export async function type({
     choices: [
       {
         name: "app",
-        value: "app",
+        value: "app"
       },
       {
         name: "package",
-        value: "package",
-      },
-    ],
+        value: "package"
+      }
+    ]
   });
 }
 
@@ -71,7 +71,7 @@ export async function location({
   workspaceType,
   workspaceName,
   destination,
-  project,
+  project
 }: {
   workspaceType: WorkspaceType;
   workspaceName: string;
@@ -89,7 +89,7 @@ export async function location({
     if (valid) {
       return {
         absolute: root,
-        relative: path.relative(project.paths.root, root),
+        relative: path.relative(project.paths.root, root)
       };
     }
   }
@@ -132,19 +132,19 @@ export async function location({
       }
 
       return error;
-    },
+    }
   });
 
   return {
     absolute: path.join(project.paths.root, answer),
-    relative: answer,
+    relative: answer
   };
 }
 
 export async function source({
   override,
   workspaces,
-  workspaceName,
+  workspaceName
 }: {
   override?: string;
   workspaces: Array<Workspace | Separator>;
@@ -178,9 +178,9 @@ export async function source({
       }
       return {
         name: `  ${choice.name}`,
-        value: choice,
+        value: choice
       };
-    }),
+    })
   });
 
   return sourceAnswer;
@@ -190,7 +190,7 @@ export async function dependencies({
   workspaceName,
   project,
   workspaceSource,
-  showAllDependencies,
+  showAllDependencies
 }: {
   workspaceName: string;
   project: Project;
@@ -201,10 +201,10 @@ export async function dependencies({
     dependencies: {},
     devDependencies: {},
     peerDependencies: {},
-    optionalDependencies: {},
+    optionalDependencies: {}
   };
   const { answer: addDependencies } = await confirm({
-    message: `Add workspace dependencies to "${workspaceName}"?`,
+    message: `Add workspace dependencies to "${workspaceName}"?`
   });
   if (!addDependencies) {
     return selectedDependencies;
@@ -221,15 +221,15 @@ export async function dependencies({
       { name: "dependencies", value: "dependencies" },
       { name: "devDependencies", value: "devDependencies" },
       { name: "peerDependencies", value: "peerDependencies" },
-      { name: "optionalDependencies", value: "optionalDependencies" },
-    ],
+      { name: "optionalDependencies", value: "optionalDependencies" }
+    ]
   });
 
   // supported workspace dependencies (apps can never be dependencies)
   const depChoices = getWorkspaceList({
     project,
     type: "package",
-    showAllDependencies,
+    showAllDependencies
   });
 
   const sourcePackageJson = workspaceSource
@@ -253,9 +253,9 @@ export async function dependencies({
         }
         return {
           name: `  ${choice.name}`,
-          value: choice.name,
+          value: choice.name
         };
-      }),
+      })
     });
 
     const newDependencyGroup = sourcePackageJson?.[group] || {};
@@ -274,7 +274,7 @@ export async function dependencies({
       selectedDependencies[group] = selected.reduce(
         (acc, dep) => ({
           ...acc,
-          [dep]: project.packageManager === "pnpm" ? "workspace:*" : "*",
+          [dep]: project.packageManager === "pnpm" ? "workspace:*" : "*"
         }),
         {}
       );
@@ -288,6 +288,6 @@ export async function confirm({ message }: { message: string }) {
   return prompt<{ answer: boolean }>({
     type: "confirm",
     name: "answer",
-    message,
+    message
   });
 }

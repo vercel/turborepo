@@ -13,7 +13,7 @@ export async function packAndPublish({
   platforms,
   version,
   skipPublish,
-  npmTag,
+  npmTag
 }: PackAndPublishOptions) {
   console.log("Starting packAndPublish process...");
   const artifacts: Array<string> = [];

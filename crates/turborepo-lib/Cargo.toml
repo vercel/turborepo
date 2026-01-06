@@ -125,26 +125,42 @@ turbopath = { workspace = true }
 turborepo-analytics = { path = "../turborepo-analytics" }
 turborepo-api-client = { workspace = true }
 turborepo-auth = { path = "../turborepo-auth" }
+turborepo-boundaries = { workspace = true }
 turborepo-cache = { workspace = true }
 turborepo-ci = { workspace = true }
+turborepo-config = { path = "../turborepo-config" }
+turborepo-daemon = { workspace = true }
 turborepo-devtools = { path = "../turborepo-devtools" }
+turborepo-diagnostics = { workspace = true }
 turborepo-dirs = { path = "../turborepo-dirs" }
+turborepo-engine = { path = "../turborepo-engine" }
 turborepo-env = { workspace = true }
 turborepo-errors = { workspace = true }
 turborepo-filewatch = { path = "../turborepo-filewatch" }
 turborepo-fixed-map = { workspace = true }
 turborepo-frameworks = { workspace = true }
 turborepo-fs = { path = "../turborepo-fs" }
+turborepo-gitignore = { workspace = true }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
+turborepo-hash = { workspace = true }
+turborepo-json-rewrite = { path = "../turborepo-json-rewrite" }
 turborepo-lockfiles = { workspace = true }
 turborepo-microfrontends = { workspace = true }
 turborepo-microfrontends-proxy = { workspace = true }
 turborepo-process = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
+turborepo-run-cache = { path = "../turborepo-run-cache" }
+turborepo-run-summary = { workspace = true }
 turborepo-scm = { workspace = true, features = ["git2"] }
+turborepo-scope = { path = "../turborepo-scope" }
+turborepo-shim = { workspace = true }
 turborepo-signals = { workspace = true }
+turborepo-task-executor = { workspace = true }
+turborepo-task-hash = { workspace = true }
 turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
+turborepo-turbo-json = { path = "../turborepo-turbo-json" }
+turborepo-types = { workspace = true }
 turborepo-ui = { workspace = true }
 turborepo-unescape = { workspace = true }
 turborepo-vercel-api = { path = "../turborepo-vercel-api" }
@@ -158,7 +174,3 @@ which = { workspace = true }
 [target.'cfg(target_os = "windows")'.dependencies]
 uds_windows = "1.0.2"
 async-io = "1.12.0"
-
-[build-dependencies]
-capnpc = "0.18.0"
-tonic-build = "0.8.4"

@@ -15,7 +15,7 @@ const getBaseURL = (): URL => {
 const createOgImagePath = ({
   title,
   product,
-  canonicalPath,
+  canonicalPath
 }: {
   title?: string;
   product?: string;
@@ -45,7 +45,7 @@ const createOgImagePath = ({
 export const createMetadata = ({
   title,
   description,
-  canonicalPath,
+  canonicalPath
 }: {
   title?: string;
   description?: string;
@@ -66,13 +66,13 @@ export const createMetadata = ({
       images: [
         createOgImagePath({
           title: canonicalPath === "/" ? "" : title,
-          canonicalPath,
-        }),
+          canonicalPath
+        })
       ],
-      url: canonicalPath,
+      url: canonicalPath
     },
     alternates: {
-      canonical: canonicalPath,
-    },
+      canonical: canonicalPath
+    }
   };
 };

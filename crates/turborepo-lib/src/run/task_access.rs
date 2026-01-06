@@ -9,19 +9,21 @@ use serde::Deserialize;
 use tracing::{debug, error, warn};
 use turbopath::{AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
+use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_scm::SCM;
+use turborepo_task_executor::TaskAccessProvider;
+// Re-export from turborepo-turbo-json
+pub use turborepo_turbo_json::TASK_ACCESS_CONFIG_PATH;
 use turborepo_unescape::UnescapedString;
 
 use super::ConfigCache;
-use crate::{gitignore::ensure_turbo_is_gitignored, turbo_json::RawTurboJson};
+use crate::turbo_json::{RawTurboJson, RawTurboJsonExt};
 
 // Environment variable key that will be used to enable, and set the expected
 // trace location
 const TASK_ACCESS_ENV_KEY: &str = "TURBOREPO_TRACE_FILE";
 /// File name where the task is expected to leave a trace result
 const TASK_ACCESS_TRACE_NAME: &str = "trace.json";
-// Path to the config file that will be used to store the trace results
-pub const TASK_ACCESS_CONFIG_PATH: [&str; 2] = [".turbo", "traced-config.json"];
 /// File name where the task is expected to leave a trace result
 const TURBO_CONFIG_FILE: &str = "turbo.json";
 
@@ -266,5 +268,23 @@ impl TaskAccess {
         }
 
         Ok(())
+    }
+}
+
+impl TaskAccessProvider for TaskAccess {
+    fn is_enabled(&self) -> bool {
+        TaskAccess::is_enabled(self)
+    }
+
+    fn get_env_var(&self, task_hash: &str) -> (String, AbsoluteSystemPathBuf) {
+        TaskAccess::get_env_var(self, task_hash)
+    }
+
+    fn can_cache(&self, task_hash: &str, task_id: &str) -> Option<bool> {
+        TaskAccess::can_cache(self, task_hash, task_id)
+    }
+
+    async fn save(&self) {
+        TaskAccess::save(self).await
     }
 }

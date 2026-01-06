@@ -56,7 +56,7 @@ export const useTopLevelMobileMenuContext = (): MobileMenuContextProps => {
 };
 
 export const TopLevelMobileMenuProvider = ({
-  children,
+  children
 }: MobileMenuProviderProps) => {
   const [openMobileMenu, setOpenMobileMenu] = useState(false);
 

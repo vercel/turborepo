@@ -3,7 +3,7 @@ import {
   bold as pcBold,
   underline as pcUnderline,
   gray,
-  dim,
+  dim
 } from "picocolors";
 import ora from "ora";
 import gradient from "gradient-string";
@@ -26,8 +26,8 @@ export const turboLoader = (text: string) =>
   ora({
     text,
     spinner: {
-      frames: ["   ", turboBlue(">  "), turboBlue(">> "), turboBlue(">>>")],
-    },
+      frames: ["   ", turboBlue(">  "), turboBlue(">> "), turboBlue(">>>")]
+    }
   });
 
 export const info = (...args: Array<unknown>) => {

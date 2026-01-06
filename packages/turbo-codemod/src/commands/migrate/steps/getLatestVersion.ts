@@ -26,7 +26,7 @@ async function getPackageDetails({ packageName }: { packageName: string }) {
 }
 
 export async function getLatestVersion({
-  to,
+  to
 }: MigrateCommandOptions): Promise<string | undefined> {
   const packageDetails = await getPackageDetails({ packageName: "turbo" });
   const { "dist-tags": tags, versions } = packageDetails;

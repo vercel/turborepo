@@ -8,7 +8,7 @@ import { getTurboConfigs } from "../src/getTurboConfigs";
 describe("getTurboConfigs", () => {
   const { useFixture } = setupTestFixtures({
     directory: path.join(__dirname, "../"),
-    test: "common",
+    test: "common"
   });
 
   it("supports single-package repos", () => {
@@ -187,7 +187,7 @@ describe("JSON5 parsing for turbo.jsonc", () => {
       globalEnv: ["UNORDERED", "CI"],
       tasks: {
         build: {
-          dependsOn: ["^build"],
+          dependsOn: ["^build"]
         },
         test: {
           dependsOn: ["build"],
@@ -196,17 +196,17 @@ describe("JSON5 parsing for turbo.jsonc", () => {
             "src/**/*.tsx",
             "src/**/*.ts",
             "test/**/*.ts",
-            "test/**/*.tsx",
-          ],
+            "test/**/*.tsx"
+          ]
         },
         lint: {
-          outputs: [],
+          outputs: []
         },
         deploy: {
           dependsOn: ["build", "test", "lint"],
-          outputs: [],
-        },
-      },
+          outputs: []
+        }
+      }
     });
   });
 });
