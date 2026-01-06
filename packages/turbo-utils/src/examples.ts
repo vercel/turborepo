@@ -8,14 +8,51 @@ import { dirname, resolve, relative, join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { Parse, type ReadEntry, extract } from "tar";
+import { ProxyAgent, type Dispatcher } from "undici";
 import { error, warn } from "./logger";
 
 const REQUEST_TIMEOUT = 10000;
 const DOWNLOAD_TIMEOUT = 120000;
 
 /**
- * Performs a fetch request with an automatic timeout.
+ * Gets proxy URL from environment variables.
+ * Checks both lowercase and uppercase variants.
+ */
+function getProxyForUrl(url: string): string | undefined {
+  const parsedUrl = new URL(url);
+  const isHttps = parsedUrl.protocol === "https:";
+
+  if (isHttps) {
+    return (
+      process.env.https_proxy ||
+      process.env.HTTPS_PROXY ||
+      process.env.http_proxy ||
+      process.env.HTTP_PROXY
+    );
+  }
+  return process.env.http_proxy || process.env.HTTP_PROXY;
+}
+
+let cachedProxyAgent: ProxyAgent | undefined;
+let cachedProxyUrl: string | undefined;
+
+/**
+ * Gets or creates a ProxyAgent for the given proxy URL.
+ * Caches the agent to avoid creating multiple instances.
+ */
+function getProxyAgent(proxyUrl: string): ProxyAgent {
+  if (cachedProxyAgent && cachedProxyUrl === proxyUrl) {
+    return cachedProxyAgent;
+  }
+  cachedProxyUrl = proxyUrl;
+  cachedProxyAgent = new ProxyAgent(proxyUrl);
+  return cachedProxyAgent;
+}
+
+/**
+ * Performs a fetch request with an automatic timeout and proxy support.
  * Centralizes the AbortController + setTimeout pattern to avoid repetition.
+ * Automatically respects HTTP_PROXY/HTTPS_PROXY environment variables.
  */
 async function fetchWithTimeout(
   url: string,
@@ -28,9 +65,16 @@ async function fetchWithTimeout(
   }, timeoutMs);
 
   try {
+    const proxyUrl = getProxyForUrl(url);
+    const dispatcher: Dispatcher | undefined = proxyUrl
+      ? getProxyAgent(proxyUrl)
+      : undefined;
+
     return await fetch(url, {
       ...options,
       signal: controller.signal,
+      // @ts-expect-error - dispatcher is a valid option for undici's fetch
+      dispatcher,
     });
   } finally {
     clearTimeout(timeoutId);
@@ -206,7 +250,16 @@ export async function streamingExtract({
   const createdDirs = new Set<string>();
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const proxyUrl = getProxyForUrl(url);
+    const dispatcher: Dispatcher | undefined = proxyUrl
+      ? getProxyAgent(proxyUrl)
+      : undefined;
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      // @ts-expect-error - dispatcher is a valid option for undici's fetch
+      dispatcher,
+    });
     if (!response.ok || !response.body) {
       throw new Error(`Failed to download: ${response.status}`);
     }

@@ -837,6 +837,10 @@ importers:
         version: 4.19.1
 
   packages/turbo-utils:
+    dependencies:
+      undici:
+        specifier: ^6.21.0
+        version: 6.23.0
     devDependencies:
       '@arethetypeswrong/cli':
         specifier: 0.18.2
@@ -8377,6 +8381,10 @@ packages:
   undici@5.28.3:
     resolution: {integrity: sha512-3ItfzbrhDlINjaP0duwnNsKpDQk3acHI3gVJ1z4fmwMK31k5G9OVIAMLSIaP6w4FaGkaAkN6zaQO9LUvZ1t7VA==}
     engines: {node: '>=14.0'}
+
+  undici@6.23.0:
+    resolution: {integrity: sha512-VfQPToRA5FZs/qJxLIinmU59u0r7LXqoJkCzinq3ckNJp3vKEh7jTWN589YQ5+aoAC/TGRLyJLCPKcLQbM8r9g==}
+    engines: {node: '>=18.17'}
 
   unicode-emoji-modifier-base@1.0.0:
     resolution: {integrity: sha512-yLSH4py7oFH3oG/9K+XWrz1pSi3dfUrWEnInbxMfArOfc1+33BlGPQtLsOYwvdMy11AwUBetYuaRxSPqgkq+8g==}
@@ -17377,6 +17385,8 @@ snapshots:
   undici@5.28.3:
     dependencies:
       '@fastify/busboy': 2.1.0
+
+  undici@6.23.0: {}
 
   unicode-emoji-modifier-base@1.0.0: {}
 
