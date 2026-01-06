@@ -256,7 +256,6 @@ const validateHashLink = (doc: Document, href: string) => {
     href,
     doc,
   };
-  const { content, ...docWithoutContent } = doc;
   return [linkError];
 };
 
