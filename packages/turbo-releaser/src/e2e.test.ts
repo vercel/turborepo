@@ -3,7 +3,7 @@ import { test } from "node:test";
 import path from "node:path";
 import { tmpdir, arch as osArch, platform } from "node:os";
 import { mkdir, realpath, rm, writeFile } from "node:fs/promises";
-import { execSync } from "node:child_process";
+import { execSync, execFileSync } from "node:child_process";
 import operations from "./operations";
 import type { SupportedOS, SupportedArch } from "./types";
 
@@ -41,7 +41,7 @@ test("produces installable archive", async () => {
       scripts: { "test-turbo-install": "turbo" }
     })
   );
-  execSync(`npm install ${tarPath}`, { cwd: fakeRepo });
+  execFileSync("npm", ["install", tarPath], { cwd: fakeRepo });
   const output = execSync("npm run test-turbo-install", {
     stdio: "pipe",
     cwd: fakeRepo,
