@@ -14,7 +14,7 @@
     "fix:toml": "taplo format",
     "quality:fix": "turbo run quality:fix",
     "docs:dev": "turbo run dev --filter=turborepo-docs",
-    "turbo": "pnpm run build:turbo && pnpm -- turbo",
+    "turbo": "pnpm run build:turbo && ./target/debug/turbo",
     "turbo-prebuilt": "pnpm -- turbo",
     "prepare": "husky install",
     "test": "turbo run test",
