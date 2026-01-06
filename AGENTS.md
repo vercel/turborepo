@@ -4,13 +4,13 @@ Instructions for AI agents working on this repository.
 
 ## Architecture
 
-See [ARCHITECTURE.md](./ARCHITECTURE.md) for an overview of the `turbo run` command architecture.
+See [ARCHITECTURE.md](./crates/turborepo/ARCHITECTURE.md) for an overview of the `turbo run` command architecture.
 
 ## Keeping Documentation Up to Date
 
 When making changes to the codebase, check if the following docs need updates:
 
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - Update when changing core `turbo run` components:
+- **[ARCHITECTURE.md](./crates/turborepo/ARCHITECTURE.md)** - Update when changing core `turbo run` components:
   - Run builder, package graph, task graph/engine
   - Task visitor, caching system, task hashing
   - Run tracking and summary generation
