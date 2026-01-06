@@ -26,6 +26,7 @@ jobs:
       with-svelte-example: ${{ steps.filter.outputs.with-svelte-example }}
       with-tailwind-example: ${{ steps.filter.outputs.with-tailwind-example }}
       rest: ${{ steps.filter.outputs.rest }}
+      native-lib: ${{ steps.filter.outputs.native-lib }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -90,6 +91,7 @@ jobs:
           check_paths "non-monorepo-example" "examples/non-monorepo/,turborepo-tests/example-non-monorepo-*/,turborepo-tests/helpers/"
           check_paths "with-svelte-example" "examples/with-svelte/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
           check_paths "with-tailwind-example" "examples/with-tailwind/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
+          check_paths "native-lib" "packages/turbo-repository/,crates/"
 
           # Handle the "rest" pattern - files that are NOT in examples/ or docs/
           CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
@@ -432,6 +434,56 @@ jobs:
           turbo-team: "${{ vars.TURBO_TEAM }}"
           test-filter: "@turborepo-examples-tests/with-tailwind-*"
 
+  js_native_packages:
+    name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.native-lib == 'true' }}
+    timeout-minutes: 30
+    runs-on: ${{ matrix.os.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+        node-version:
+          - 18
+          - 20
+          - 22
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
+    steps:
+      - name: Determine fetch depth
+        id: fetch-depth
+        run: |
+          echo "depth=$(( ${{ github.event.pull_request.commits || 1 }} + 1 ))" >> $GITHUB_OUTPUT
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: ${{ steps.fetch-depth.outputs.depth  }}
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Run tests
+        run: |
+          TURBO_API= turbo run test --filter "turborepo-repository" --color --env-mode=strict
+        env:
+          NODE_VERSION: ${{ matrix.node-version }}
+
   summary:
     name: Test Summary
     runs-on: ubuntu-latest
@@ -447,6 +499,7 @@ jobs:
       - non-monorepo-example
       - with-svelte-example
       - with-tailwind-example
+      - js_native_packages
     steps:
       - name: Compute info
         id: info
@@ -472,6 +525,7 @@ jobs:
           subjob ${{needs.non-monorepo-example.result}}
           subjob ${{needs.with-svelte-example.result}}
           subjob ${{needs.with-tailwind-example.result}}
+          subjob ${{needs.js_native_packages.result}}
 
           if [ "$cancelled" = "true" ]; then
             echo "cancelled=true" >> $GITHUB_OUTPUT
