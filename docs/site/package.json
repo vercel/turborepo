@@ -10,8 +10,7 @@
   "scripts": {
     "build": "next build --turbopack",
     "dev": "next dev --turbopack",
-    "lint": "fumadocs-mdx && pnpm -w exec oxlint --ignore-path .oxlintignore docs/site",
-    "lint:fix": "fumadocs-mdx && pnpm -w exec oxlint --ignore-path .oxlintignore docs/site --fix",
+    "lint": "fumadocs-mdx",
     "lint:prettier": "prettier --write -c . --cache --ignore-path=../../.prettierignore",
     "rss": "node --experimental-strip-types scripts/generate-rss.ts",
     "schema": "node --experimental-strip-types  scripts/copy-json-schema.ts",

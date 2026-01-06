@@ -21,7 +21,6 @@
   "scripts": {
     "build": "tsup",
     "test": "jest",
-    "lint": "pnpm -w exec oxlint --ignore-path .oxlintignore packages/turbo-ignore/src packages/turbo-ignore/__tests__",
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },

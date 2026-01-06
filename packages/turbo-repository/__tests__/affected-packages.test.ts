@@ -1,7 +1,7 @@
-import { beforeEach, describe, it } from "node:test";
+import { describe, it } from "node:test";
 import { strict as assert } from "node:assert";
 import * as path from "node:path";
-import { Workspace, Package, PackageManager } from "../js/dist/index.js";
+import { Workspace, Package } from "../js/dist/index.js";
 
 type PackageReduced = Pick<Package, "name" | "relativePath">;
 

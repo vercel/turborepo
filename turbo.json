@@ -34,14 +34,14 @@
       "dependsOn": ["^build"]
     },
 
-    // run prettier check before oxlint
-    "lint": {
+    // docs lint task runs fumadocs-mdx to generate types before oxlint
+    "turborepo-docs#lint": {
       "dependsOn": ["lint:prettier"]
     },
 
-    // root lint task runs toml check
+    // root lint task runs oxlint after all package lint:prettier tasks and toml check complete
     "//#lint": {
-      "dependsOn": ["//#check:toml"]
+      "dependsOn": ["//#check:toml", "^lint:prettier", "turborepo-docs#lint"]
     },
 
     // run lint:prettier in all workspaces

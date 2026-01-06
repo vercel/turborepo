@@ -7,7 +7,6 @@ import {
   afterEach,
 } from "@jest/globals";
 import { Readable, PassThrough } from "node:stream";
-import { createGzip } from "node:zlib";
 import {
   mkdirSync,
   rmSync,

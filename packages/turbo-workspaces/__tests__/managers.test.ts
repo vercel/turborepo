@@ -192,13 +192,13 @@ describe("managers", () => {
         );
 
         if (fixtureManager === "pnpm") {
-          new RegExp(`^.*\/${directoryName}\/pnpm-lock.yaml$`);
+          new RegExp(`^.*/${directoryName}/pnpm-lock.yaml$`);
         } else if (fixtureManager === "yarn") {
-          new RegExp(`^.*\/${directoryName}\/yarn.lock$`);
+          new RegExp(`^.*/${directoryName}/yarn.lock$`);
         } else if (fixtureManager === "npm") {
-          new RegExp(`^.*\/${directoryName}\/package-lock.json$`);
+          new RegExp(`^.*/${directoryName}/package-lock.json$`);
         } else if (fixtureManager === "bun") {
-          new RegExp(`^.*\/${directoryName}\/bun.lockb$`);
+          new RegExp(`^.*/${directoryName}/bun.lockb$`);
         } else {
           throw new Error("Invalid fixtureManager");
         }
@@ -274,13 +274,13 @@ describe("managers", () => {
         );
 
         if (fixtureManager === "pnpm") {
-          new RegExp(`^.*\/${directoryName}\/pnpm-lock.yaml$`);
+          new RegExp(`^.*/${directoryName}/pnpm-lock.yaml$`);
         } else if (fixtureManager === "yarn") {
-          new RegExp(`^.*\/${directoryName}\/yarn.lock$`);
+          new RegExp(`^.*/${directoryName}/yarn.lock$`);
         } else if (fixtureManager === "npm") {
-          new RegExp(`^.*\/${directoryName}\/package-lock.json$`);
+          new RegExp(`^.*/${directoryName}/package-lock.json$`);
         } else if (fixtureManager === "bun") {
-          new RegExp(`^.*\/${directoryName}\/bun.lockb$`);
+          new RegExp(`^.*/${directoryName}/bun.lockb$`);
         } else {
           throw new Error("Invalid fixtureManager");
         }

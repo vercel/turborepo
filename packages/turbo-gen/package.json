@@ -18,7 +18,6 @@
   "scripts": {
     "build": "tsup",
     "test": "jest",
-    "lint": "pnpm -w exec oxlint --ignore-path .oxlintignore packages/turbo-gen/src",
     "check-types": "tsc --noEmit",
     "package:types": "attw --profile node16 --pack"
   },

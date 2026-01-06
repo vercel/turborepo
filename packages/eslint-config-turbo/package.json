@@ -15,7 +15,6 @@
   },
   "scripts": {
     "build": "bunchee",
-    "lint": "pnpm -w exec oxlint --ignore-path .oxlintignore packages/eslint-config-turbo/src",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore",
     "package:types": "attw --profile node16 --pack"
   },
