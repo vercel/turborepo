@@ -2,9 +2,15 @@ name: Native Library Tests
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "docs/**"
+    paths:
+      - "packages/turbo-repository/**"
+      - "crates/**"
+      - ".github/workflows/turborepo-native-lib-test.yml"
   pull_request:
+    paths:
+      - "packages/turbo-repository/**"
+      - "crates/**"
+      - ".github/workflows/turborepo-native-lib-test.yml"
 
 permissions:
   actions: write

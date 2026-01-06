@@ -38,4 +38,4 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Run docs specific checks
-        run: turbo run check-types lint
+        run: turbo run check-types --filter=turborepo-docs

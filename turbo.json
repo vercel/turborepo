@@ -26,9 +26,7 @@
   "tasks": {
     "test": {
       "outputs": ["coverage/**/*"],
-
       "env": ["NODE_VERSION"],
-
       // ^build is generically set here, we haven't fully enumerated which workspaces
       // actually need to build before running tests.
       "dependsOn": ["^build"]
@@ -36,14 +34,16 @@
 
     // docs lint task runs fumadocs-mdx to generate types before oxlint
     "turborepo-docs#lint": {},
-
-    // root lint task runs oxfmt format check and toml check
-    "//#lint": {
-      "dependsOn": ["//#check:toml", "//#lint:format", "turborepo-docs#lint"]
+    "//#quality": {
+      "dependsOn": [
+        "//#lint",
+        "//#format",
+        "//#check:toml",
+        "turborepo-docs#lint"
+      ]
     },
-
-    // run oxfmt format check from root (covers entire repo)
-    "//#lint:format": {},
+    "//#lint": {},
+    "//#format": {},
     "//#check:toml": {},
     "check-types": {
       "dependsOn": ["^build"]
