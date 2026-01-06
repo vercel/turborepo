@@ -333,9 +333,19 @@ export async function downloadAndExtractRepo(
 }
 
 export async function downloadAndExtractExample(root: string, name: string) {
+  // Validate example name to prevent path traversal and argument injection
+  // Only allow alphanumeric characters, hyphens, and underscores
+  if (!name || !/^[a-zA-Z0-9_-]+$/.test(name)) {
+    throw new Error(`Invalid example name: ${name}`);
+  }
+
   // Normalize and validate the root directory to prevent unsafe git arguments
   const normalizedRoot = resolve(root);
-  if (!normalizedRoot || normalizedRoot.includes("\0") || normalizedRoot.startsWith("-")) {
+  if (
+    !normalizedRoot ||
+    normalizedRoot.includes("\0") ||
+    normalizedRoot.startsWith("-")
+  ) {
     throw new Error(`Invalid project root: ${normalizedRoot}`);
   }
 
