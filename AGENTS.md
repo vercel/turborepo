@@ -2,6 +2,10 @@
 
 Instructions for AI agents working on this repository.
 
+## Architecture
+
+See [ARCHITECTURE.md](./ARCHITECTURE.md) for an overview of the `turbo run` command architecture.
+
 ## Pull Request Guidelines
 
 ### PR Title Format
