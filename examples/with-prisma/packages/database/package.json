@@ -18,11 +18,15 @@
     "studio": "prisma studio"
   },
   "dependencies": {
-    "@prisma/client": "latest"
+    "@prisma/client": "latest",
+    "@prisma/client-runtime-utils": "7.2.0",
+    "dotenv": "^17.2.3",
+    "pg": "^8.16.3"
   },
   "devDependencies": {
-    "@repo/eslint-config": "*",
-    "@repo/typescript-config": "*",
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/pg": "^8.16.0",
     "eslint": "^8.57.0",
     "prisma": "latest",
     "rimraf": "^5.0.5",
