@@ -1,15 +1,18 @@
-import { BookHeartIcon } from "lucide-react";
+import {
+  TurborepoWordmarkDark,
+  TurborepoWordmarkLight
+} from "@/components/logos";
 
 export const Logo = () => (
-  <div className="flex items-center gap-2">
-    <BookHeartIcon className="size-5" />
-    <p className="font-semibold text-xl tracking-tight">Geistdocs</p>
-  </div>
+  <>
+    <TurborepoWordmarkDark className="hidden h-6 w-auto dark:block" />
+    <TurborepoWordmarkLight className="h-6 w-auto dark:hidden" />
+  </>
 );
 
 export const github = {
-  owner: undefined as string | undefined,
-  repo: undefined as string | undefined
+  owner: "vercel",
+  repo: "turborepo"
 };
 
 export const nav = [
@@ -18,22 +21,54 @@ export const nav = [
     href: "/docs"
   },
   {
-    label: "Source",
-    href: `https://github.com/${github.owner}/${github.repo}/`
+    label: "Blog",
+    href: "/blog"
+  },
+  {
+    label: "Showcase",
+    href: "/showcase"
+  },
+  {
+    label: "Enterprise",
+    href: "https://vercel.com/contact/sales?utm_source=turborepo.com&utm_medium=referral&utm_campaign=header-enterpriseLink"
   }
 ];
 
+export const footerLinks = {
+  resources: [
+    { href: "/blog", label: "Blog" },
+    { href: "https://github.com/vercel/turborepo/releases", label: "Releases" },
+    { href: "/docs", label: "Docs" }
+  ],
+  community: [
+    { href: "https://github.com/vercel/turborepo", label: "GitHub" },
+    { href: "https://community.vercel.com/tag/turborepo", label: "Community" },
+    { href: "https://bsky.app/profile/turborepo.com", label: "Bluesky" },
+    { href: "https://x.com/turborepo", label: "X" }
+  ],
+  company: [
+    { href: "https://vercel.com/about", label: "About" },
+    { href: "https://vercel.com/oss", label: "Open source" }
+  ],
+  legal: [
+    { href: "https://vercel.com/legal/privacy-policy", label: "Privacy" },
+    { href: "/terms", label: "Terms" },
+    { href: "/governance", label: "Governance" },
+    { href: "/docs/telemetry", label: "Telemetry" }
+  ]
+};
+
 export const suggestions = [
-  "What is Vercel?",
-  "What can I deploy with Vercel?",
-  "What is Fluid Compute?",
-  "How much does Vercel cost?"
+  "What is Turborepo?",
+  "How do I set up a monorepo with Turborepo?",
+  "What is Remote Caching?",
+  "How do I configure tasks in turbo.json?"
 ];
 
-export const title = "Geistdocs Documentation";
+export const title = "Turborepo Documentation";
 
 export const prompt =
-  "You are a helpful assistant specializing in answering questions about Geistdocs, a modern documentation template built with Next.js and Fumadocs.";
+  "You are a helpful assistant specializing in answering questions about Turborepo, a high-performance build system for JavaScript and TypeScript monorepos. You help users understand caching, task configuration, and monorepo best practices.";
 
 export const translations = {
   en: {
