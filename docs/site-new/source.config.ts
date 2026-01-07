@@ -6,6 +6,7 @@ import {
   metaSchema
 } from "fumadocs-mdx/config";
 import lastModified from "fumadocs-mdx/plugins/last-modified";
+import { createCssVariablesTheme } from "shiki";
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -22,9 +23,21 @@ export const docs = defineDocs({
   }
 });
 
+const theme = createCssVariablesTheme({
+  name: "css-variables",
+  variablePrefix: "--shiki-",
+  variableDefaults: {}
+});
+
 export default defineConfig({
   mdxOptions: {
-    remarkPlugins: [remarkMdxMermaid]
+    remarkPlugins: [remarkMdxMermaid],
+    rehypeCodeOptions: {
+      themes: {
+        light: theme,
+        dark: theme
+      }
+    }
   },
   plugins: [lastModified()]
 });
