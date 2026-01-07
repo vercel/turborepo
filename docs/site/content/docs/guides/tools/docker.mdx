@@ -3,8 +3,6 @@ title: Docker
 description: Learn how to use Docker in a monorepo.
 ---
 
-import { Callout } from "#components/callout";
-import { File, Folder, Files } from "#components/files";
 import { CreateTurboCallout } from "./create-turbo-callout.tsx";
 
 Building a [Docker](https://www.docker.com/) image is a common way to deploy all sorts of applications. However, doing so from a monorepo has several challenges.
@@ -212,5 +210,5 @@ RUN yarn turbo run build
 `turbo` will now be able to hit your Remote Cache. To see a Turborepo cache hit for a non-cached Docker build image, run a command like this one from your project root:
 
 ```bash title="Terminal"
-docker build -f apps/web/Dockerfile . --build-arg TURBO_TEAM=“your-team-name” --build-arg TURBO_TOKEN=“your-token“ --no-cache
+docker build -f apps/web/Dockerfile . --build-arg TURBO_TEAM="your-team-name" --build-arg TURBO_TOKEN="your-token" --no-cache
 ```

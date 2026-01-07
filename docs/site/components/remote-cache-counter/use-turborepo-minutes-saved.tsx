@@ -1,19 +1,37 @@
-import useSWR from "swr";
-import type { TurborepoMinutesSaved } from "#app/api/remote-cache-minutes-saved/route.ts";
+"use client";
+
+import { useEffect, useState } from "react";
+
+export interface TurborepoMinutesSaved {
+  total: number;
+}
 
 export function useTurborepoMinutesSaved(): TurborepoMinutesSaved | undefined {
-  const swr = useSWR<TurborepoMinutesSaved, unknown>(
-    "/api/remote-cache-minutes-saved",
-    () =>
-      fetch("/api/remote-cache-minutes-saved").then(
-        (res) => res.json() as unknown as TurborepoMinutesSaved
-      ),
-    {
-      revalidateOnMount: true,
-      revalidateIfStale: true,
-      refreshInterval: 10000
-    }
+  const [data, setData] = useState<TurborepoMinutesSaved | undefined>(
+    undefined
   );
 
-  return swr.data;
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch("/api/remote-cache-minutes-saved");
+        const json = (await res.json()) as TurborepoMinutesSaved;
+        setData(json);
+      } catch (error) {
+        console.error("Failed to fetch minutes saved:", error);
+      }
+    };
+
+    // Initial fetch
+    void fetchData();
+
+    // Refresh every 10 seconds
+    const interval = setInterval(() => {
+      void fetchData();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  return data;
 }

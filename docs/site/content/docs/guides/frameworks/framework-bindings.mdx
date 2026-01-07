@@ -3,14 +3,11 @@ title: Framework bindings in libraries
 description: Learn how to create framework bindings in packages.
 ---
 
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Callout } from "#components/callout";
-
 Framework bindings in a [Library Package](/docs/core-concepts/package-types#library-packages) integrate your library's code more deeply with a framework by leveraging APIs from the framework directly in the library.
 
 To do this, use the `peerDependencies` field in `package.json` of the library, which makes the framework APIs available in your library without installing it directly in the package.
 
-<Callout type="good-to-know">
+<Callout type="info">
   On this page, we'll be using Next.js for examples, but the concepts below
   apply to any framework or other dependency.
 </Callout>
@@ -28,7 +25,7 @@ Add a `peerDependency` to your library for the dependency that you intend to cre
 }
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   In the example above, the `peerDependency` for `next` accepts any version. You
   may want to specify a range (for example, `">=15"`) according to your needs.
   Additionally, for older package managers, you may need to instruct your
@@ -77,7 +74,7 @@ The example below shows a library with two entrypoints, each for a different typ
 }
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   In the example above, the `peerDependency` for `next` accepts any version. You
   may want to specify a range (for example, `">=15"`) according to your needs.
 </Callout>

@@ -1,18 +1,30 @@
-content/openapi/artifacts/*
-!content/openapi/artifacts/index.mdx
-!content/openapi/index.mdx
+# deps
+node_modules
 
-# Generated data files
-content/examples-data.json
-.openapi.json
-
+# generated content
 .source
-/public/*.st
-/public/*.toml
-/public/schema.json
-/public/schema.v1.json
-/public/schema.v2.json
-/public/feed.xml
-.vercel
 
+# test & build
+coverage
+.next/
+out/
+build
+*.tsbuildinfo
+dist
+
+# misc
+.DS_Store
+*.pem
+.pnp
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# others
 .env*.local
+.vercel
+next-env.d.ts
+
+# Turborepo
+.turbo

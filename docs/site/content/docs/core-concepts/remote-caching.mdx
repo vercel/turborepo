@@ -3,9 +3,10 @@ title: Remote Caching
 description: Share cache artifacts across machines for even faster builds.
 ---
 
-import { Callout } from "#components/callout";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { ThemeAwareImage } from "#components/theme-aware-image";
+import LocalCachingDarkImage from "../../../public/images/docs/local-caching-dark.png";
+import LocalCachingLightImage from "../../../public/images/docs/local-caching-light.png";
+import RemoteCachingDarkImage from "../../../public/images/docs/remote-caching-dark.png";
+import RemoteCachingLightImage from "../../../public/images/docs/remote-caching-light.png";
 
 Turborepo's [task cache](/docs/crafting-your-repository/caching) saves time by never doing the same work twice.
 
@@ -14,7 +15,7 @@ But there's a problem: **the cache is local to your machine**. When you're worki
 <ThemeAwareImage
   dark={{
     alt: "Local caching creates a cache on each system.",
-    src: "/images/docs/local-caching-dark.png",
+    src: LocalCachingDarkImage,
     props: {
       width: 896,
       height: 345,
@@ -22,7 +23,7 @@ But there's a problem: **the cache is local to your machine**. When you're worki
   }}
   light={{
     alt: "Local caching creates a cache on each system.",
-    src: "/images/docs/local-caching-light.png",
+    src: LocalCachingLightImage,
     props: {
       width: 896,
       height: 345,
@@ -32,7 +33,7 @@ But there's a problem: **the cache is local to your machine**. When you're worki
 
 Since Turborepo only caches to the local filesystem by default, the same task (`turbo run build`) must be **re-executed on each machine** (by you, by your teammates, by your CI, by your PaaS, etc.) even when all of the task inputs are identical — which **wastes time and resources**.
 
-<Callout type="good-to-know">
+<Callout type="info">
   You don't have to use Remote Caching to use Turborepo. While Remote Caching
   will bring the most significant speedups, you can make your existing workflows
   faster without Remote Caching, too.
@@ -45,7 +46,7 @@ What if you could share a single Turborepo cache across your entire team (and ev
 <ThemeAwareImage
   dark={{
     alt: "Remote caching creates a shared cache for your entire team.",
-    src: "/images/docs/remote-caching-dark.png",
+    src: RemoteCachingDarkImage,
     props: {
       width: 896,
       height: 489,
@@ -53,7 +54,7 @@ What if you could share a single Turborepo cache across your entire team (and ev
   }}
   light={{
     alt: "Remote caching creates a shared cache for your entire team.",
-    src: "/images/docs/remote-caching-light.png",
+    src: RemoteCachingLightImage,
     props: {
       width: 896,
       height: 489,
@@ -65,7 +66,7 @@ Turborepo can securely communicate with a remote cache - a cloud server that sto
 
 Remote Caching is free and can be used with both [managed providers](https://turborepo.com/docs/core-concepts/remote-caching#managed-remote-cache-with-vercel) or as a [self-hosted cache](https://turborepo.com/docs/core-concepts/remote-caching#self-hosting).
 
-<Callout>
+<Callout type="info">
   Remote Caching is a powerful feature of Turborepo, but, with great power,
   comes great responsibility. Make sure you are caching correctly first and
   double check [handling of environment
@@ -123,7 +124,7 @@ bunx turbo login
 </Tab>
 </Tabs>
 
-<Callout>
+<Callout type="info">
   If your Remote Cache is configured to use single-sign-on you will need to run
   `npx turbo login --sso-team=team-name` in order to get a cache token with the
   correct privileges.
@@ -175,7 +176,7 @@ To enable this feature, set the `remoteCache` options on your `turbo.json` confi
 {
   "remoteCache": {
     "signature": true, // [!code highlight]
-  }
+  },
 }
 ```
 

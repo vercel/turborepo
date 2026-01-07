@@ -3,12 +3,6 @@ title: Structuring a repository
 description: Start by creating a repository using the conventions of the ecosystem.
 ---
 
-import { Callout } from "#components/callout";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Step, Steps } from "#components/steps";
-import { File, Folder, Files } from "#components/files";
-import { LinkToDocumentation } from "#components/link-to-documentation";
-
 `turbo` is built on top of [Workspaces](https://vercel.com/docs/vercel-platform/glossary#workspace), a feature of package managers in the JavaScript ecosystem that allows you to group multiple packages in one repository.
 
 Following these conventions is important because it allows you to:
@@ -176,7 +170,7 @@ First, your package manager needs to describe the locations of your packages. We
     - "apps/*"
     - "packages/*"
   ```
-  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml">pnpm workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml" text="pnpm workspace documentation" />
 
   </Tab>
 
@@ -190,7 +184,7 @@ First, your package manager needs to describe the locations of your packages. We
   }
   ```
 
-  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared">yarn workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared" text="yarn workspace documentation" />
    </Tab>
 
   <Tab value="npm">
@@ -203,7 +197,7 @@ First, your package manager needs to describe the locations of your packages. We
   }
   ```
 
-  <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces">npm workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces" text="npm workspace documentation" />
   </Tab>
 
   <Tab value="bun">
@@ -216,7 +210,7 @@ First, your package manager needs to describe the locations of your packages. We
   }
   ```
 
-  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">bun workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="bun workspace documentation" />
   </Tab>
 
 </Tabs>

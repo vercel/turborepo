@@ -3,14 +3,11 @@ title: Single-package workspaces
 description: Learn how to use Turborepo in a single-package workspace.
 ---
 
-import { Callout } from "#components/callout";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-
 While Turborepo is highly effective in [multi-package workspaces](https://vercel.com/docs/vercel-platform/glossary#multi-package-workspace) (commonly referred to as monorepos), it can also be used to make [single-package workspaces](https://vercel.com/docs/vercel-platform/glossary#single-package-workspace) faster.
 
 Turborepo's most important features work in single-package workspaces including local and [Remote Caching](/docs/core-concepts/remote-caching) and task parallelization. Features that don't work are ones that don't make sense in the context of a single package, like package tasks (`app#build`).
 
-<Callout type="good-to-know">
+<Callout type="info">
   Examples of single-package workspaces are the output of `npx create-next-app`
   or `npm create vite`.
 </Callout>

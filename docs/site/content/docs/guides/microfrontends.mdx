@@ -3,10 +3,6 @@ title: Microfrontends
 description: Learn how to use Turborepo's built-in microfrontends proxy for local development.
 ---
 
-import { Callout } from "#components/callout";
-import { File, Folder, Files } from "#components/files";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-
 Microfrontends are an architectural pattern where a web application is decomposed into smaller, independently developed and deployed applications that work together.
 
 Turborepo provides built-in support for running vertical microfrontends (sometimes called "zones") locally during development through an integrated proxy server. The proxy coordinates multiple applications and routes traffic between them.
@@ -44,7 +40,7 @@ In production, these applications might be deployed separately and composed toge
 
 Turborepo provides a built-in proxy server that automatically routes traffic between your microfrontend applications during development. The proxy reads a `microfrontends.json` configuration file and starts when you run `turbo dev`.
 
-<Callout>
+<Callout type="info">
   You can try the following instructions with the monorepo created by `npx
   create-turbo@latest -e with-microfrontends`.
 </Callout>

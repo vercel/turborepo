@@ -3,11 +3,6 @@ title: Creating an Internal Package
 description: Learn how to create an Internal Package for your monorepo.
 ---
 
-import { Callout } from "#components/callout";
-import { Steps, Step } from "#components/steps";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Files, File, Folder } from "#components/files";
-
 [Internal Packages](/docs/core-concepts/internal-packages) are the building blocks of your workspace, giving you a powerful way to share code and functionality across your repo. Turborepo automatically understands the relationships between Internal Packages using the dependencies in `package.json`, creating a [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph) under the hood to optimize your repository's workflows.
 
 ![Visual representation of a Package Graph in a Turborepo.](/images/docs/package-graph.png)
@@ -361,7 +356,7 @@ When you're creating [Application Packages](/docs/core-concepts/package-types#ap
 
 Additionally, Application Packages are not meant to be installed into other packages. Instead, they should be thought of as an entrypoint to your [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph).
 
-<Callout type="good-to-know">
+<Callout type="info">
   There are [rare
   exceptions](/docs/core-concepts/package-types#installing-an-applicaiton-package-into-another-package)
   to this rule.

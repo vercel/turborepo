@@ -3,10 +3,6 @@ title: Generating code
 description: Learn how to generate code using Turborepo.
 ---
 
-import { Callout } from "#components/callout";
-import { File, Folder, Files } from "#components/files";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-
 Splitting your monorepo into packages is a great way to organize your code, speed up tasks, and improve the local development
 experience. With Turborepo's code generation, it's easy to generate new source code for packages, modules,
 and even individual UI components in a structured way that integrates with the rest of your repository.
@@ -40,7 +36,7 @@ Create a new workspace in your monorepo by copying from a remote package.
 turbo gen workspace --copy https://github.com/vercel/turborepo/tree/main/examples/with-tailwind/packages/tailwind-config
 ```
 
-<Callout>
+<Callout type="info">
   **Note**: When adding from a remote source, Turborepo is unable to verify that your repo has all of the required dependencies, and is using the correct package manager. In this case, some manual modifications may be required to get the new workspace working as expected within your repository.
 
 </Callout>

@@ -3,10 +3,6 @@ title: Constructing CI
 description: Learn how Turborepo can help you efficiently complete all the necessary tasks and accelerate your development workflow.
 ---
 
-import { Callout } from "#components/callout";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Step, Steps } from "#components/steps";
-
 Turborepo speeds up builds, lints, tests, and any other tasks that you need to do in your Continuous Integration pipelines. Through parallelization and [Remote Caching](/docs/core-concepts/remote-caching), Turborepo makes your CI dramatically faster.
 
 For examples of how to connect your CI vendor to Remote Cache and run tasks, visit our [CI guides](/docs/guides/ci-vendors).
@@ -15,10 +11,10 @@ For examples of how to connect your CI vendor to Remote Cache and run tasks, vis
 
 To enable Remote Caching for your CI, setup the environment variables for Turborepo to access your Remote Cache.
 
-| Environment Variable | Description                                                                                                                                                                                                                                                                                                                  |
-| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `TURBO_TOKEN`        | The Bearer token to access the Remote Cache                                                                                                                                                                                                                                                                                  |
-| `TURBO_TEAM`         | The account name associated with your repository. When using{' '} <a href="https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache" rel="noreferrer noopener" target="_blank" >Vercel Remote Cache</a>, this is [your team's slug](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Get+team+slug). |
+| Environment Variable | Description                                                                                                                                                                                                                         |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TURBO_TOKEN`        | The Bearer token to access the Remote Cache                                                                                                                                                                                         |
+| `TURBO_TEAM`         | The account name associated with your repository. When using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching), this is [your team's slug](https://vercel.com/docs/accounts/create-a-team#find-your-team-id). |
 
 When you run tasks through `turbo`, your CI will be able to hit cache, speeding up your pipelines.
 
@@ -67,9 +63,9 @@ turbo run build --affected
 You'll want to use this flag in situations like:
 
 - You're running many tasks across packages in your monorepo, and only want to run those tasks in packages with code changes.
-- You’re _not_ using a Remote Cache, but still want to do as little work as possible in CI.
-- You _are_ using a Remote Cache, and you’re in a large repository. By minimizing the amount of tasks that will be restored from cache, there will be less data to send across the network, resulting in faster cache restoration.
-- You’re already using [advanced filtering techniques](/docs/reference/run#advanced-filtering-examples) or [`turbo-ignore`](/docs/reference/turbo-ignore) to create the same or similar behavior as `--affected`. You likely have the opportunity to simplify your scripting using this new flag.
+- You're _not_ using a Remote Cache, but still want to do as little work as possible in CI.
+- You _are_ using a Remote Cache, and you're in a large repository. By minimizing the amount of tasks that will be restored from cache, there will be less data to send across the network, resulting in faster cache restoration.
+- You're already using [advanced filtering techniques](/docs/reference/run#advanced-filtering-examples) or [`turbo-ignore`](/docs/reference/turbo-ignore) to create the same or similar behavior as `--affected`. You likely have the opportunity to simplify your scripting using this new flag.
   - `--affected` will can handle shallow clones more gracefully than bespoke filtering because it falls back to running all tasks.
 
 #### Using `--affected` in GitHub Actions
@@ -90,7 +86,7 @@ As your codebase and CI grow, you may start to look for more ways to get even fa
 
 Start by cloning your repository. Note that a clone with history to the cloning depth you plan on using is necessary for comparisons.
 
-<Callout type="good-to-know">
+<Callout type="info">
   By default, `turbo-ignore` uses the parent commit. To customize for more
   depth, see [the turbo-ignore reference](/docs/reference/turbo-ignore).
 </Callout>

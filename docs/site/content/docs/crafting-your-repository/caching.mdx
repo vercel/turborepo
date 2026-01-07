@@ -3,10 +3,6 @@ title: Caching
 description: Learn about caching in Turborepo.
 ---
 
-import { Step, Steps } from "#components/steps";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Callout } from "#components/callout";
-
 Turborepo uses caching to speed up builds, ensuring you **never do the same work twice**. When your task is cacheable, Turborepo will restore the results of your task from cache using a fingerprint from the first time the task ran.
 
 ![12 tasks are being ran in 3 packages, resulting in a ">>> FULL TURBO" cache hit. The total time it takes to restore these tasks from cache is 80 milliseconds.](/images/docs/why-turborepo-solution.png)
@@ -20,7 +16,7 @@ On this page, you'll learn:
 - [What Turborepo uses for the inputs and outputs to a hash](/docs/crafting-your-repository/caching#task-inputs)
 - [How to troubleshoot caching issues](#troubleshooting)
 
-<Callout type="good-to-know">
+<Callout type="info">
   Turborepo assumes that your tasks are **deterministic**. If a task is able to
   produce different outputs given the set of inputs that Turborepo is aware of,
   caching may not work as expected.
@@ -164,7 +160,7 @@ Under the hood, Turborepo creates two hashes: a global hash and a task hash. If 
 
 | Input                                                                                  | Example                                                                                                                                                                                                         |
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resolved task definition from root `turbo.json`<br /> and package `turbo.json`         | Changing [`outputs`](/docs/reference/configuration#outputs) in either root `turbo.json` or [Package Configuration](/docs/reference/package-configurations)                                                      |
+| Resolved task definition from root `turbo.json` and package `turbo.json`               | Changing [`outputs`](/docs/reference/configuration#outputs) in either root `turbo.json` or [Package Configuration](/docs/reference/package-configurations)                                                      |
 | Lockfile changes that affect the Workspace root                                        | Updating dependencies in root `package.json` will cause **all** tasks to miss cache                                                                                                                             |
 | [`globalDependencies`](/docs/reference/configuration#globaldependencies) file contents | Changing `./.env` when it is listed in `globalDependencies` will cause **all** tasks to miss cache                                                                                                              |
 | Values of variables listed in [`globalEnv`](/docs/reference/configuration#globalenv)   | Changing the value of `GITHUB_TOKEN` when it is listed in `globalEnv`                                                                                                                                           |

@@ -3,10 +3,6 @@ title: Storybook
 description: Learn how to use Storybook in a Turborepo.
 ---
 
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Callout } from "#components/callout";
-import { Steps, Step } from "#components/steps";
-
 [Storybook](https://storybook.js.org/) is a popular way to build UI components in an isolated environment. By putting Storybook into your Turborepo, you can easily develop your design system right alongside your applications.
 
 ## Quickstart
@@ -147,7 +143,7 @@ bun create storybook@latest
 
 Follow the prompts to create an application. For the rest of this guide, we'll assume React and TypeScript.
 
-<Callout type="good-to-know">
+<Callout type="info">
   After going through Storybook's onboarding, you can [uninstall the onboarding
   addon](https://github.com/storybookjs/addon-onboarding/blob/main/README.md).
 </Callout>
@@ -317,7 +313,7 @@ Update components imports so that they reference the now co-located modules. For
 + import { Button } from "./button";
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   You may also need to update [absolute
   imports](/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths)
   according to your changes and usage.
@@ -396,7 +392,7 @@ Additionally, create a [Package Configuration](/docs/reference/package-configura
 }
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   If you are using the [Compiled Package
   pattern](/docs/core-concepts/internal-packages#compiled-packages), you may
   also need to add `^build` to your `dependsOn`.

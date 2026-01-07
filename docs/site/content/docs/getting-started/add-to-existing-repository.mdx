@@ -3,11 +3,6 @@ title: Add to an existing repository
 description: Using Turborepo with your existing repository
 ---
 
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Callout } from "#components/callout";
-import { Step, Steps } from "#components/steps";
-import { LinkToDocumentation } from "#components/link-to-documentation";
-
 Turborepo can be incrementally adopted in **any repository, single or multi-package**, to speed up the developer and CI workflows of the repository.
 
 After installing `turbo` and configuring your tasks in `turbo.json`, you'll notice how [caching](/docs/crafting-your-repository/caching) helps you run tasks much faster.
@@ -22,7 +17,7 @@ To learn more about Turborepo in single-package workspaces, visit [the dedicated
 
 `turbo` is built on top of Workspaces, a feature of the major package managers in the JavaScript ecosystem. This makes it easy to adopt in your existing codebase.
 
-<Callout type="good-to-know">
+<Callout type="info">
   If you're finding that `turbo` is having issues like not being able to
   discover packages in your workspace or not following your dependency graph,
   visit our [Structuring a
@@ -239,7 +234,7 @@ Turborepo optimizes your repository using information from your package manager.
 
 </Tabs>
 
-<Callout type="good-to-know">
+<Callout type="info">
   Depending on your repository, you may need to use the
   [`dangerouslyDisablePackageManagerCheck`](/docs/reference/configuration#dangerouslydisablepackagemanagercheck)
   while migrating or in situations where you can't use the `packageManager` key
@@ -254,7 +249,7 @@ For [multi-package workspaces](https://vercel.com/docs/glossary#multi-package-wo
 
 The `workspaces` field tells your package manager which directories contain your packages. Common patterns include `apps/*` for applications and `packages/*` for shared libraries.
 
-<Callout type="good-to-know">
+<Callout type="info">
   If you're working with a single-package repository, you can skip this step as
   workspaces aren't needed.
 </Callout>
@@ -267,7 +262,7 @@ The `workspaces` field tells your package manager which directories contain your
     - "apps/*"
     - "packages/*"
   ```
-  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml">pnpm workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml" text="pnpm workspace documentation" />
 
   </Tab>
 
@@ -281,7 +276,7 @@ The `workspaces` field tells your package manager which directories contain your
   }
   ```
 
-  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared">yarn workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared" text="yarn workspace documentation" />
    </Tab>
 
   <Tab value="npm">
@@ -294,7 +289,7 @@ The `workspaces` field tells your package manager which directories contain your
   }
   ```
 
-  <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces">npm workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces" text="npm workspace documentation" />
   </Tab>
 
   <Tab value="bun">
@@ -307,7 +302,7 @@ The `workspaces` field tells your package manager which directories contain your
   }
   ```
 
-  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">bun workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="bun workspace documentation" />
   </Tab>
 
 </Tabs>
