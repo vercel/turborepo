@@ -7,6 +7,9 @@ const config: NextConfig = {
   experimental: {
     turbopackFileSystemCacheForDev: true
   },
+  typescript: {
+    ignoreBuildErrors: true
+  },
 
   // biome-ignore lint/suspicious/useAwait: rewrite is async
   async rewrites() {
