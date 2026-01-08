@@ -1,22 +1,28 @@
 import { type InferPageType, loader } from "fumadocs-core/source";
 import { lucideIconsPlugin } from "fumadocs-core/source/lucide-icons";
+import { createOpenAPI } from "fumadocs-openapi/server";
 import {
   docs,
   blogDocs,
   blogMeta,
   externalBlogDocs,
-  externalBlogMeta
+  externalBlogMeta,
+  openapiDocs,
+  openapiMeta
 } from "@/.source/server";
 import { basePath } from "@/geistdocs";
 import { i18n } from "./i18n";
 
 // Helper function to create source from doc and meta arrays
-function createSource(pages: typeof blogDocs, metas: typeof blogMeta) {
+function createSource<
+  TPages extends Array<{ info: { path: string; fullPath: string } }>,
+  TMetas extends Array<{ info: { path: string; fullPath: string } }>
+>(pages: TPages, metas: TMetas) {
   const files: Array<{
     type: "page" | "meta";
     path: string;
     absolutePath: string;
-    data: (typeof pages)[number] | (typeof metas)[number];
+    data: TPages[number] | TMetas[number];
   }> = [];
 
   for (const entry of pages) {
@@ -77,3 +83,11 @@ export const externalBlog = loader({
   baseUrl: "/blog",
   source: createSource(externalBlogDocs, externalBlogMeta)
 });
+
+// OpenAPI loaders
+export const openapiPages = loader({
+  baseUrl: "/docs/openapi",
+  source: createSource(openapiDocs, openapiMeta)
+});
+
+export const openapi = createOpenAPI();

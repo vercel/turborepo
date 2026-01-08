@@ -54,6 +54,10 @@ export const { docs: externalBlogDocs, meta: externalBlogMeta } = defineDocs({
   }
 });
 
+export const { docs: openapiDocs, meta: openapiMeta } = defineDocs({
+  dir: "content/openapi"
+});
+
 const theme = createCssVariablesTheme({
   name: "css-variables",
   variablePrefix: "--shiki-",

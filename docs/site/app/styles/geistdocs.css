@@ -183,6 +183,11 @@
   --fd-page-width: 100%;
 }
 
+/* Prevent TOC from being clipped on tablet displays */
+#nd-docs-layout {
+  overflow-x: visible;
+}
+
 /* Overlay should sit below the navbar */
 #nd-docs-layout > div[data-state] {
   @apply top-16;

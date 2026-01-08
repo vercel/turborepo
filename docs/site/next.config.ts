@@ -25,6 +25,23 @@ const config: NextConfig = {
     ];
   },
 
+  // biome-ignore lint/suspicious/useAwait: redirect is async
+  async redirects() {
+    return [
+      // OpenAPI redirects (until we have more content)
+      {
+        source: "/docs/openapi",
+        destination: "/docs/openapi/artifacts/artifact-exists",
+        permanent: false
+      },
+      {
+        source: "/docs/openapi/artifacts",
+        destination: "/docs/openapi/artifacts/artifact-exists",
+        permanent: false
+      }
+    ];
+  },
+
   images: {
     formats: ["image/avif", "image/webp"],
     remotePatterns: [
