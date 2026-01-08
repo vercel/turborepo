@@ -1,12 +1,7 @@
 {
   "$schema": "https://raw.githubusercontent.com/oxc-project/oxlint/main/npm/oxlint/configuration_schema.json",
   "ignorePatterns": [
-    "node_modules/",
-    "target/",
-    ".next/",
     "build/",
-    "dist/",
-    "coverage/",
     "crates/",
     "cli/",
     "examples/",
@@ -21,13 +16,8 @@
     ".config/",
     ".cursor/",
     ".vscode/",
-    ".vercel/",
     ".husky/",
-    ".turbo/",
-    ".conductor/",
-    ".cram_env/",
-    ".hive/",
-    ".opencode/"
+    ".conductor/"
   ],
   "rules": {
     "no-unused-vars": [
