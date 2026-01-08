@@ -10,6 +10,8 @@ tag: "web development"
 import { Authors } from "@/components/blog/authors";
 import { Date } from "@/components/blog/date";
 import { Callout } from "@/components/geistdocs/callout";
+import { ThemeAwareImage } from "@/components/geistdocs/theme-aware-image";
+import UiGif from "../../public/images/blog/turbo-2-0/interactive-ui.gif";
 
 <Date>Tuesday, June 4, 2024</Date>
 
@@ -32,11 +34,26 @@ In [Turborepo 1.13](https://turborepo.com/blog/turbo-1-13-0), we released an exp
 
 Today, we’re releasing the new UI as stable, along with the highly requested features that it enables.
 
-<Video
-  src="/images/blog/turbo-2-0/interactive-ui.mp4"
-  width="928"
-  height="522"
-  className="rounded"
+<ThemeAwareImage
+  className="my-4 flex justify-center"
+  light={{
+    alt: "The new terminal UI",
+    src: UiGif,
+    props: {
+      width: 928,
+      height: 522,
+      className: "dark:hidden block rounded",
+    },
+  }}
+  dark={{
+    alt: "The new terminal UI",
+    src: UiGif,
+    props: {
+      width: 928,
+      height: 522,
+      className: "hidden dark:block rounded",
+    },
+  }}
 />
 
 ### Improved clarity for logs

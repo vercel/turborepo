@@ -27,12 +27,12 @@ function Page() {
 
   return (
     <main className="mx-auto mt-8 flex w-full min-w-0 max-w-6xl flex-col gap-4 px-6 pt-14 md:px-12">
-      <div className="w-screen-lg mx-auto mb-16 w-full border-b border-gray-400 border-opacity-20 pb-8 pt-4">
+      <div className="w-screen-lg mx-auto mb-16 w-full border-b border-gray-100/10 border-opacity-20 pb-8 pt-4">
         <h1 className="mb-6 mt-2 text-center text-4xl font-bold leading-tight tracking-tight text-slate-900 dark:text-slate-100 lg:text-5xl">
           Blog
         </h1>
         <p className="text-center text-gray-900 dark:text-gray-400">
-          The latest updates and releases from the Turborepo team at Vercel.
+          The latest updates and releases from the Turborepo team.
         </p>
       </div>
       {posts.map((post) => {

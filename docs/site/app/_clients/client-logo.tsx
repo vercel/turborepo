@@ -41,10 +41,7 @@ export function Logo({
       className={cn("mx-8", className)}
       height={numericHeight}
       priority
-      src={user.image.replace(
-        "/logos",
-        theme === "light" ? "/logos/white" : "/logos/color"
-      )}
+      src={theme === "light" ? user.imageWhite : user.imageColor}
       style={styles}
       width={numericWidth}
     />
