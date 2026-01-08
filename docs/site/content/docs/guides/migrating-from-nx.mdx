@@ -159,7 +159,7 @@ Turborepo uses the .turbo directory to hold local caches and other information a
 
 Turborepo is built on top of package manager workspaces, a JavaScript ecosystem standard. Add the directory paths to the workspace that will contain packages.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -200,7 +200,7 @@ packages:
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ### Step 3: Add a package.json to the application
 
@@ -233,7 +233,7 @@ module.exports = nextConfig;
 
 The root package.json needs to have the `packageManager` field. This ensures developers in the repository use the correct package manager, and that Turborepo can optimize your package graph based on your lockfile.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -275,13 +275,13 @@ The root package.json needs to have the `packageManager` field. This ensures dev
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ### Step 6: Run you package manager's install command
 
 Update your lockfile by running your installation command.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -315,7 +315,7 @@ bun install
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 Once you've done this, you should see a lockfile diff, indicating that the package has been added to the package manager's workspace.
 
@@ -323,7 +323,7 @@ Once you've done this, you should see a lockfile diff, indicating that the packa
 
 Add Turborepo to the root `package.json` of the workspace.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -357,11 +357,11 @@ bun install turbo --dev
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 You can also optionally install `turbo` globally for added convenience when working with Turborepo.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -395,7 +395,7 @@ bun install turbo --global
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ### Step 8: Add a `turbo.json`
 
@@ -420,7 +420,7 @@ Create a `turbo.json` at the root to register your tasks and describe their task
 
 Build the application with Turborepo. Using global `turbo`, this would be `turbo build`. You can also run the command through your package manager:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -454,7 +454,7 @@ bunx turbo run build
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ### Step 10: Enable Remote Caching (optional)
 

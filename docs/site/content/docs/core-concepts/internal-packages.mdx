@@ -7,7 +7,7 @@ Internal Packages are libraries whose source code is inside your Workspace. You 
 
 Internal Packages are used in your repository by installing them in `package.json` similar to an external package coming from the npm registry. However, instead of marking a version to install, you can reference the package using your package manager's workspace installation syntax:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```json title="./apps/web/package.json"
@@ -48,7 +48,7 @@ Internal Packages are used in your repository by installing them in `package.jso
 }
 ```
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 In the [Creating an Internal Package guide](/docs/crafting-your-repository/creating-an-internal-package), you can build an Internal Package from the beginning using [the Compiled Package strategy](#compiled-packages). On this page, we'll describe other strategies for creating Internal Packages and their tradeoffs, including [publishing the package to the npm registry](#publishable-packages) to create an External Package.
 

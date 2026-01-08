@@ -44,7 +44,7 @@ If you have [`turbo` installed globally](/docs/getting-started/installation#glob
 
 Alternatively, you can run the `build` script in `package.json` using your package manager.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```bash title="Terminal"
@@ -75,7 +75,7 @@ bun run build
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 This will result in a cache miss, since you've never ran `turbo` before with this [set of inputs](/docs/crafting-your-repository/caching#task-inputs) in this repository. The inputs are turned into a hash to check for in your local filesystem cache or in [the Remote Cache](/docs/core-concepts/remote-caching).
 

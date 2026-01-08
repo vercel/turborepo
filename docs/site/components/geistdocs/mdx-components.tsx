@@ -1,7 +1,7 @@
 import { DynamicLink } from "fumadocs-core/dynamic-link";
 import { Heading } from "fumadocs-ui/components/heading";
-import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { TypeTable } from "fumadocs-ui/components/type-table";
+import { PackageManagerTabs, PlatformTabs, Tab, Tabs } from "./tabs";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
 import { cn } from "@/lib/utils";
@@ -81,6 +81,8 @@ export const getMDXComponents = (
     TypeTable,
     Tabs,
     Tab,
+    PackageManagerTabs,
+    PlatformTabs,
     Callout,
     CalloutContainer,
     CalloutTitle,

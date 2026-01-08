@@ -6,7 +6,7 @@ description: Learn how to manage dependencies in your monorepo's workspace.
 - **External dependencies** come from [the npm registry](https://www.npmjs.com/), allowing you to leverage valuable code from the ecosystem to build your applications and libraries faster.
 - **Internal dependencies** let you share functionality within your repository, dramatically improving discoverability and usability of shared code. We will discuss how to build an Internal Package in [the next guide](/docs/crafting-your-repository/creating-an-internal-package).
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```json title="./apps/web/package.json"
@@ -51,7 +51,7 @@ description: Learn how to manage dependencies in your monorepo's workspace.
 }
 ```
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ## Best practices for dependency installation
 
@@ -66,7 +66,7 @@ When you install a dependency in your repository, you should install it directly
 
 To quickly install dependencies in multiple packages, you can use your package manager:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -114,7 +114,7 @@ cd packages/ui && bun install jest --dev
 
 <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="bun documentation" />
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 This practice has several benefits:
 
@@ -170,7 +170,7 @@ Tools like [`syncpack`](https://www.npmjs.com/package/syncpack), [`manypkg`](htt
 
 You can use your package manager to update dependency versions in one command.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -213,7 +213,7 @@ No equivalent
 <small>[-> Bun documentation](https://bun.sh/docs/install/workspaces)</small>
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 #### pnpm catalogs
 

@@ -9,7 +9,7 @@ description: Learn more about using SvelteKit in your monorepo.
 
 To get started with SvelteKit in a Turborepo quickly, use [the `with-svelte` example](https://github.com/vercel/turborepo/tree/main/examples/with-svelte):
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -42,13 +42,13 @@ bunx create-turbo@latest -e with-svelte
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ## Adding a SvelteKit application to an existing repository
 
 Use [`npm create svelte`](https://kit.svelte.dev/docs/creating-a-project) to set up a new SvelteKit application in a package. From the root of your repository, run:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -81,13 +81,13 @@ bunx sv create
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ## Integrating with your repository
 
 To add [Internal Packages](/docs/core-concepts/internal-packages) to your new application, install them into the app with your package manager:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -140,7 +140,7 @@ To add [Internal Packages](/docs/core-concepts/internal-packages) to your new ap
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Make sure to run your package manager's install command. You also may need to update `scripts` in `package.json` to fit your use case in your repository.
 

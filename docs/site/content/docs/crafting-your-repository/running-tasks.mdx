@@ -34,7 +34,7 @@ For tasks that you run frequently, you can write your `turbo` commands directly 
 
 These scripts can then be run using your package manager.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
   ```bash title="Terminal"
@@ -66,7 +66,7 @@ bun run dev
 ```
 
   </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 <Callout type="warn">
 You only want to write `turbo` commands in your root `package.json`. Writing `turbo` commands into the `package.json` of packages can lead to recursively

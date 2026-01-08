@@ -9,7 +9,7 @@ description: Learn how to use Storybook in a Turborepo.
 
 If you'd rather use a template, this guide is walking through how to build [this Storybook/Turborepo template](https://vercel.com/templates/react/turborepo-design-system) on Vercel.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -42,7 +42,7 @@ bunx create-turbo@latest -e design-system
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ## Guide
 
@@ -53,7 +53,7 @@ bunx create-turbo@latest -e design-system
 
 If you don't have an existing project, use [create-turbo](/docs/getting-started/installation) to create a new monorepo:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -86,7 +86,7 @@ bunx create-turbo@latest
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 </Step>
 
@@ -107,7 +107,7 @@ cd apps/storybook
 
 In the `apps/storybook` directory, initialize a new Storybook application:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
 
@@ -139,7 +139,7 @@ bun create storybook@latest
 ```
 
   </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Follow the prompts to create an application. For the rest of this guide, we'll assume React and TypeScript.
 
@@ -155,7 +155,7 @@ Follow the prompts to create an application. For the rest of this guide, we'll a
 
 Now, install your UI package into Storybook.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -188,7 +188,7 @@ cd apps/storybook && bun install @repo/ui
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 </Step>
 
@@ -321,7 +321,7 @@ Update components imports so that they reference the now co-located modules. For
 
 You'll also need to install any Storybook packages required for writing stories. For example, moving the story from above would require that you install `@storybook/react` into your `@repo/ui` package.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -354,7 +354,7 @@ cd packages/ui && bun install @storybook/react --dev
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 </Step>
 

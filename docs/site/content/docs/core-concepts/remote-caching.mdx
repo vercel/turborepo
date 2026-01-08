@@ -89,7 +89,7 @@ turbo login
 
 You can also use your package manager if you do not have [global `turbo`](/docs/getting-started/installation#global-installation) installed:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -122,7 +122,7 @@ bunx turbo login
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 <Callout type="info">
   If your Remote Cache is configured to use single-sign-on you will need to run
@@ -141,22 +141,22 @@ Your cache artifacts will now be stored locally _and_ in your Remote Cache.
 
 To verify, delete your local Turborepo cache with:
 
-<Tabs groupId="platform-tabs" items={['UNIX', 'Windows']} persist>
-  <Tab value="UNIX">
+<PlatformTabs>
+  <Tab>
 
     ```bash title="Terminal"
     rm -rf ./.turbo/cache
     ```
 
   </Tab>
-  <Tab value="Windows">
+  <Tab>
 
     ```bash title="Terminal"
     rd /s /q "./.turbo/cache"
     ```
 
   </Tab>
-</Tabs>
+</PlatformTabs>
 
 Then, run the same build again. If things are working properly, `turbo` should not execute tasks locally. Instead, it will download the logs and artifacts from your Remote Cache and replay them back to you.
 

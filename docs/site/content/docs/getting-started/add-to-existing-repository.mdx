@@ -38,7 +38,7 @@ familiar with Turborepo.
 
 We recommend you install `turbo` both globally and into your repository's root for the best developer experience.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
   <Tab value="pnpm">
       Ensure you have created a `pnpm-workspace.yaml` file before you begin the installation. Failure to have this file will result in an error that says: ` --workspace-root may only be used inside a workspace`.
 
@@ -80,7 +80,7 @@ We recommend you install `turbo` both globally and into your repository's root f
     ```
 
   </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 To learn more about why we recommend both installations, visit the [Installation page](/docs/getting-started/installation).
 
@@ -190,7 +190,7 @@ Add `.turbo` to your `.gitignore` file. The `turbo` CLI uses these folders for p
 
 Turborepo optimizes your repository using information from your package manager. To declare which package manager you're using, add a [`packageManager`](https://nodejs.org/api/packages.html#packagemanager) field to your root `package.json` if you don't have one already.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -232,7 +232,7 @@ Turborepo optimizes your repository using information from your package manager.
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 <Callout type="info">
   Depending on your repository, you may need to use the
@@ -254,7 +254,7 @@ The `workspaces` field tells your package manager which directories contain your
   workspaces aren't needed.
 </Callout>
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
   ```json title="pnpm-workspace.yaml"
@@ -305,7 +305,7 @@ The `workspaces` field tells your package manager which directories contain your
   <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="bun workspace documentation" />
   </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 For more details on how to structure your repository, see [Structuring a Repository](/docs/crafting-your-repository/structuring-a-repository#declaring-directories-for-packages).
 

@@ -12,7 +12,7 @@ description: Learn how to upgrade `turbo` to get the latest improvements to your
 
 Get started upgrading from 1.x to 2.0 by running:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -46,7 +46,7 @@ bunx @turbo/codemod migrate
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 This will update your `turbo.json`(s) for many of the breaking changes from 1.x to 2.0.
 
@@ -67,7 +67,7 @@ Additionally, a `name` field will be added to any `package.json` in the Workspac
 
 Turborepo 2.0 requires that your Workspace define this field as a way to improve the stability and behavioral predictability of your codebase. If you do not have one already, add this field to your root `package.json`:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -108,7 +108,7 @@ Turborepo 2.0 requires that your Workspace define this field as a way to improve
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 </Step>
 <Step>

@@ -23,7 +23,7 @@ TypeScript's `tsconfig.json` sets the configuration for the TypeScript compiler 
 
 This guide will use [`create-turbo`](/docs/reference/create-turbo) as an example.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -56,7 +56,7 @@ bunx create-turbo@latest
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ### Use a base `tsconfig` file
 
@@ -99,7 +99,7 @@ Inside `package.json`, name the package so it can be referenced in the rest of t
 
 First, install the `@repo/typescript-config` package into your package:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```json title="./apps/web/package.json"
@@ -144,7 +144,7 @@ First, install the `@repo/typescript-config` package into your package:
 }
 ```
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Then, extend the `tsconfig.json` for the package from the `@repo/typescript-config` package. In this example, the `web` package is a Next.js application:
 

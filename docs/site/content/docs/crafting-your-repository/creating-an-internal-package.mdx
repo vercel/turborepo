@@ -46,7 +46,7 @@ Next, create the `package.json` for the package. By adding this file, you'll ful
   from '@repo/math/add'`).
 </Callout>
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```json title="./packages/math/package.json"
@@ -157,7 +157,7 @@ Next, create the `package.json` for the package. By adding this file, you'll ful
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Let's break down this `package.json` piece-by-piece:
 
@@ -234,7 +234,7 @@ These files map to the outputs that will be created by `tsc` when you run `turbo
 
 You're ready to use your new package in an application. Let's add it to the `web` application.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```diff title="apps/web/package.json"
@@ -279,7 +279,7 @@ You're ready to use your new package in an application. Let's add it to the `web
   },
 ```
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 <Callout type="warn">
   You just changed the dependencies in your repo. Make sure to run your package

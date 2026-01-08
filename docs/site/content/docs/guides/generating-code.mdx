@@ -85,7 +85,7 @@ manually at `turbo/generators/config.ts` (or `config.js`) at the root of your re
 
 For example, the following illustrates a monorepo with three locations for generators:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
   <Files>
@@ -243,7 +243,7 @@ For example, the following illustrates a monorepo with three locations for gener
     <File name="turbo.json" />
   </Files>
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Generators created within workspaces are automatically run from the workspace root, **not** the repo root, nor the location of the generator configuration.
 
