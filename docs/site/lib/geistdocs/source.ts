@@ -8,7 +8,9 @@ import {
   externalBlogDocs,
   externalBlogMeta,
   openapiDocs,
-  openapiMeta
+  openapiMeta,
+  extraDocs,
+  extraMeta
 } from "@/.source/server";
 import { basePath } from "@/geistdocs";
 import { i18n } from "./i18n";
@@ -91,3 +93,9 @@ export const openapiPages = loader({
 });
 
 export const openapi = createOpenAPI();
+
+// Extra pages (terms, governance, etc.)
+export const extraPages = loader({
+  baseUrl: "/",
+  source: createSource(extraDocs ?? [], extraMeta ?? [])
+});
