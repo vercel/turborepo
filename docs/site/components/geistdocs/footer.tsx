@@ -6,6 +6,7 @@ import { ThemeToggle } from "./theme-toggle";
 type FooterLink = {
   href: string;
   label: string;
+  id?: string;
 };
 
 const FooterSection = ({
@@ -20,15 +21,17 @@ const FooterSection = ({
     <ul className="flex flex-col gap-y-3 text-muted-foreground">
       {links.map((link) => (
         <li
-          key={link.href}
+          key={link.id ?? link.href}
           className="transition duration-100 hover:text-foreground"
         >
           {link.href.startsWith("http") ? (
-            <a href={link.href} rel="noopener" target="_blank">
+            <a href={link.href} id={link.id} rel="noopener" target="_blank">
               {link.label}
             </a>
           ) : (
-            <Link href={link.href}>{link.label}</Link>
+            <Link href={link.href} id={link.id}>
+              {link.label}
+            </Link>
           )}
         </li>
       ))}

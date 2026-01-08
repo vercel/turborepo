@@ -54,7 +54,8 @@ export const footerLinks = {
     { href: "https://vercel.com/legal/privacy-policy", label: "Privacy" },
     { href: "/terms", label: "Terms" },
     { href: "/governance", label: "Governance" },
-    { href: "/docs/telemetry", label: "Telemetry" }
+    { href: "/docs/telemetry", label: "Telemetry" },
+    { href: "#", label: "Cookie Preferences", id: "fides-modal-link" }
   ]
 };
 

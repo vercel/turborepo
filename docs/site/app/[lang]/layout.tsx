@@ -1,4 +1,5 @@
 import "../global.css";
+import { VercelToolbar } from "@vercel/toolbar/next";
 import { Footer } from "@/components/geistdocs/footer";
 import { Navbar } from "@/components/geistdocs/navbar";
 import { GeistdocsProvider } from "@/components/geistdocs/provider";
@@ -8,6 +9,7 @@ import { cn } from "@/lib/utils";
 
 const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
   const { lang } = await params;
+  const shouldInjectToolbar = process.env.NODE_ENV === "development";
 
   return (
     <html
@@ -21,6 +23,7 @@ const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
           {children}
           <Footer />
         </GeistdocsProvider>
+        {shouldInjectToolbar ? <VercelToolbar /> : null}
       </body>
     </html>
   );
