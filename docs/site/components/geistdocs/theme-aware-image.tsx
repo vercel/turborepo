@@ -1,15 +1,12 @@
-import type { StaticImageData } from "next/image";
+import type { ImageProps } from "next/image";
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 interface ImageAttrs {
-  src: StaticImageData;
+  src: string;
   alt: string;
   className?: string;
-  props?: {
-    width: number;
-    height: number;
-  };
+  props?: Omit<ImageProps, "src" | "alt">;
 }
 
 interface ThemeAwareImageProps {
@@ -21,7 +18,8 @@ interface ThemeAwareImageProps {
 export function ThemeAwareImage({
   className,
   light,
-  dark
+  dark,
+  ...other
 }: ThemeAwareImageProps) {
   const Images = (
     <>
@@ -29,15 +27,15 @@ export function ThemeAwareImage({
         alt={dark.alt}
         className={cn("hidden dark:block", dark.className)}
         src={dark.src}
-        width={dark.props?.width}
-        height={dark.props?.height}
+        {...dark.props}
+        {...other}
       />
       <Image
         alt={light.alt}
         className={cn("block dark:hidden", light.className)}
         src={light.src}
-        width={light.props?.width}
-        height={light.props?.height}
+        {...light.props}
+        {...other}
       />
     </>
   );

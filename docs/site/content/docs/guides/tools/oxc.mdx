@@ -90,31 +90,6 @@ Register the scripts to Turborepo as [Root Tasks](/docs/crafting-your-repository
 
 You can now run `turbo run lint` to lint your entire repository.
 
-### Using an ignore file
-
-For monorepos, you may want to exclude certain directories from linting. Create an `.oxlintignore` file at the root of your repository:
-
-```txt title="./.oxlintignore"
-# Dependencies and build outputs
-node_modules/
-.next/
-dist/
-
-# Test fixtures
-**/__fixtures__/
-```
-
-Then reference it in your scripts:
-
-```json title="./package.json"
-{
-  "scripts": {
-    "lint": "oxlint --ignore-path .oxlintignore .",
-    "lint:fix": "oxlint --ignore-path .oxlintignore --fix ."
-  }
-}
-```
-
 ## Setting up oxfmt
 
 oxfmt is a fast code formatter for JavaScript and TypeScript, designed to be a drop-in replacement for Prettier.

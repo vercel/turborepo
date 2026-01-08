@@ -7,6 +7,7 @@ import {
 } from "fumadocs-mdx/config";
 import lastModified from "fumadocs-mdx/plugins/last-modified";
 import { createCssVariablesTheme } from "shiki";
+import { z } from "zod";
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -20,6 +21,36 @@ export const docs = defineDocs({
   },
   meta: {
     schema: metaSchema
+  }
+});
+
+export const { docs: blogDocs, meta: blogMeta } = defineDocs({
+  dir: "content/blog",
+  docs: {
+    schema: frontmatterSchema
+      .extend({
+        description: z.string(),
+        date: z.string(),
+        tag: z.string(),
+        ogImage: z
+          .string()
+          .startsWith("/images/blog/")
+          .endsWith("x-card.png")
+          .optional()
+      })
+      .strict()
+  }
+});
+
+export const { docs: externalBlogDocs, meta: externalBlogMeta } = defineDocs({
+  dir: "content/external-blog",
+  docs: {
+    schema: frontmatterSchema.extend({
+      description: z.string(),
+      date: z.string(),
+      isExternal: z.literal(true),
+      href: z.string()
+    })
   }
 });
 

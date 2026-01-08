@@ -61,10 +61,6 @@ export default function HomePage() {
         }}
         className="relative border border-border/50"
       >
-        <div className="absolute -top-[2px]">
-          <div className="border-t-[1px] absolute w-[11px] h-[11px] -left-[6px] top-[1px] md:w-[21px] md:h-[21px] md:-left-[11px] md:top-[1px] border-border/50" />
-          <div className="border-l-[1px] absolute w-[11px] h-[11px] -top-[4px] -left-[1px] md:w-[21px] md:h-[21px] md:-top-[11px] md:-left-[1px] border-border/50" />
-        </div>
         <GridCell className="relative border-b border-border/50 col-span-2 px-6 py-12 xs:px-6 xs:py-12 md:p-16">
           <DottedLines className="absolute top-0 bottom-0 left-0 right-0 overflow-hidden text-center flex items-center justify-center" />
           <div className="relative z-1 flex flex-col justify-center">
@@ -78,7 +74,7 @@ export default function HomePage() {
             <div className="flex justify-center mt-2 mb-10">
               <div className="relative inline-flex w-full xs:w-auto">
                 <div className="absolute inset-0 rounded-lg xs:rounded-[22px] bg-gradient-to-r from-[#FF1E56] to-[#0196FF] w-full xs:w-auto"></div>
-                <div className="relative text-center rounded-md xs:rounded-[20px] m-[2px] bg-background-100 dark:bg-black px-4 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
+                <div className="relative text-center rounded-md xs:rounded-[20px] m-[2px] bg-background dark:bg-black px-4 py-1.5 md:px-5 md:py-0.5 w-full xs:w-auto">
                   <span className="flex flex-col gap-0 items-center xs:flex-row sm:gap-1 text-base sm:text-xl leading-tight bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text text-transparent">
                     <RemoteCacheCounterClient className="" />
                     <span>hours of compute saved</span>

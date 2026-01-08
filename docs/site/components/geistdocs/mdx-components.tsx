@@ -1,8 +1,10 @@
 import { DynamicLink } from "fumadocs-core/dynamic-link";
+import { Heading } from "fumadocs-ui/components/heading";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
 import { TypeTable } from "fumadocs-ui/components/type-table";
 import defaultMdxComponents from "fumadocs-ui/mdx";
 import type { MDXComponents } from "mdx/types";
+import { cn } from "@/lib/utils";
 import { Accordion, Accordions } from "./accordion";
 import {
   Callout,
@@ -28,68 +30,76 @@ import { Step, Steps } from "./steps";
 import { ThemeAwareImage } from "./theme-aware-image";
 import { Video } from "./video";
 
+interface GetMDXComponentsOptions {
+  components?: MDXComponents;
+  /** Use the old site's typography styling for H1 elements (centered, semibold) */
+  isBlog?: boolean;
+}
+
 export const getMDXComponents = (
-  components?: MDXComponents
-): MDXComponents => ({
-  ...defaultMdxComponents,
-  ...components,
+  options: GetMDXComponentsOptions = {}
+): MDXComponents => {
+  const { components, isBlog } = options;
 
-  pre: CodeBlock,
-
-  a: ({ href, ...props }) =>
-    href.startsWith("/") ? (
-      <DynamicLink
-        className="font-normal text-primary no-underline"
-        href={`/[lang]${href}`}
-        {...props}
-      />
-    ) : (
-      <a
-        href={href}
-        {...props}
-        className="font-normal text-primary no-underline"
-      />
-    ),
-
-  CodeBlockTabs,
-  CodeBlockTabsList,
-  CodeBlockTabsTrigger,
-  CodeBlockTab,
-
-  TypeTable,
-
-  Tabs,
-  Tab,
-
-  Callout,
-  CalloutContainer,
-  CalloutTitle,
-  CalloutDescription,
-
-  Mermaid,
-
-  Video,
-
-  LinkToDocumentation,
-
-  Cards,
-  Card,
-
-  Files,
-  File,
-  Folder,
-
-  Steps,
-  Step,
-
-  ExamplesTable,
-
-  Accordion,
-  Accordions,
-
-  ThemeAwareImage,
-
-  InVersion,
-
-  ExperimentalBadge
-});
+  return {
+    ...defaultMdxComponents,
+    ...components,
+    ...(isBlog && {
+      h1: (props: React.ComponentProps<"h1">) => {
+        const { className, ...rest } = props;
+        return (
+          <Heading
+            className={cn(
+              "font-semibold text-center text-4xl tracking-wide!",
+              className
+            )}
+            as="h1"
+            {...rest}
+          />
+        );
+      }
+    }),
+    pre: CodeBlock,
+    a: ({ href, ...props }) =>
+      href.startsWith("/") ? (
+        <DynamicLink
+          className="font-normal text-primary no-underline"
+          href={`/[lang]${href}`}
+          {...props}
+        />
+      ) : (
+        <a
+          href={href}
+          {...props}
+          className="font-normal text-primary no-underline"
+        />
+      ),
+    CodeBlockTabs,
+    CodeBlockTabsList,
+    CodeBlockTabsTrigger,
+    CodeBlockTab,
+    TypeTable,
+    Tabs,
+    Tab,
+    Callout,
+    CalloutContainer,
+    CalloutTitle,
+    CalloutDescription,
+    Mermaid,
+    Video,
+    LinkToDocumentation,
+    Cards,
+    Card,
+    Files,
+    File,
+    Folder,
+    Steps,
+    Step,
+    ExamplesTable,
+    Accordion,
+    Accordions,
+    ThemeAwareImage,
+    InVersion,
+    ExperimentalBadge
+  };
+};

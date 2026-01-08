@@ -6,7 +6,7 @@ const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
 
   return (
     <HomeLayout tree={source.pageTree[lang]}>
-      <div className="bg-sidebar pt-0 pb-32">{children}</div>
+      <div className="bg-background pt-0 pb-32">{children}</div>
     </HomeLayout>
   );
 };

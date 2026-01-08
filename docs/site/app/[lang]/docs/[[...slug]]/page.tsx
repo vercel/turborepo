@@ -52,9 +52,10 @@ const Page = async ({ params }: PageProps<"/[lang]/docs/[[...slug]]">) => {
       <DocsBody>
         <MDX
           components={getMDXComponents({
-            a: createRelativeLink(source, page)
-
-            // Add your custom components here
+            components: {
+              a: createRelativeLink(source, page)
+              // Add your custom components here
+            }
           })}
         />
       </DocsBody>
