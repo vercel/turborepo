@@ -3,6 +3,7 @@ import { DynamicLink } from "fumadocs-core/dynamic-link";
 import { basePath, Logo, nav, suggestions } from "@/geistdocs";
 import { Chat } from "./chat";
 import { DesktopMenu } from "./desktop-menu";
+import { GitHubButton } from "./github-button";
 import { SlashIcon } from "./icons";
 import { MobileMenu } from "./mobile-menu";
 import { SearchButton } from "./search";
@@ -23,6 +24,7 @@ export const Navbar = () => (
       <div className="ml-auto flex flex-1 items-center justify-end gap-2">
         <SearchButton className="hidden md:flex" />
         <Chat basePath={basePath} suggestions={suggestions} />
+        <GitHubButton />
         <MobileMenu />
       </div>
     </div>
