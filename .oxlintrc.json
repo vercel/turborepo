@@ -1,5 +1,24 @@
 {
   "$schema": "https://raw.githubusercontent.com/oxc-project/oxlint/main/npm/oxlint/configuration_schema.json",
+  "ignorePatterns": [
+    "build/",
+    "crates/",
+    "cli/",
+    "examples/",
+    "packages/eslint-plugin-turbo/__fixtures__",
+    "packages/create-turbo/templates",
+    "turborepo-tests/",
+    "buildcontainer/",
+    "scripts/",
+    ".github/",
+    ".devcontainer/",
+    ".cargo/",
+    ".config/",
+    ".cursor/",
+    ".vscode/",
+    ".husky/",
+    ".conductor/"
+  ],
   "rules": {
     "no-unused-vars": [
       "warn",
