@@ -108,12 +108,6 @@ For monorepos, you may want to exclude certain directories from linting. Add an 
 }
 ```
 
-Using `ignorePatterns` in the configuration file is preferred over a separate `.oxlintignore` file because:
-
-- Developers running `oxlint` directly will have the same files ignored
-- Editor integrations will automatically pick up the ignore patterns
-- Files already in `.gitignore` are ignored by default
-
 ## Setting up oxfmt
 
 oxfmt is a fast code formatter for JavaScript and TypeScript, designed to be a drop-in replacement for Prettier.
