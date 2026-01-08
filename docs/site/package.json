@@ -5,9 +5,16 @@
   "private": true,
   "scripts": {
     "build": "next build",
+    "check-types": "fumadocs-mdx && tsc --noEmit",
+    "collect-examples-data": "node --experimental-strip-types ./scripts/collect-examples-data.ts",
     "dev": "next dev",
-    "start": "next start",
+    "generate-openapi": "node --experimental-strip-types ./scripts/generate-docs.ts",
+    "lint": "fumadocs-mdx",
+    "lint:prettier": "prettier --write -c . --cache --ignore-path=../../.prettierignore",
     "postinstall": "fumadocs-mdx",
+    "rss": "node --experimental-strip-types scripts/generate-rss.ts",
+    "schema": "node --experimental-strip-types scripts/copy-json-schema.ts",
+    "start": "next start",
     "translate": "npx @vercel/geistdocs translate"
   },
   "dependencies": {
@@ -29,6 +36,7 @@
     "feed": "^5.1.0",
     "fumadocs-core": "16.2.2",
     "fumadocs-mdx": "14.0.4",
+    "fumadocs-openapi": "^7.0.1",
     "fumadocs-ui": "16.2.2",
     "input-otp": "^1.4.2",
     "jotai": "^2.15.2",
@@ -59,10 +67,12 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
+    "@turbo/types": "workspace:*",
     "@types/mdx": "^2.0.13",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
+    "gray-matter": "^4.0.3",
     "postcss": "^8.5.6",
     "tailwindcss": "^4.1.17",
     "tw-animate-css": "^1.4.0",

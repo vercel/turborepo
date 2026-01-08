@@ -84,7 +84,7 @@ export const CodeBlock = ({
         <CodeBlockComponent />
         <Button
           className={cn(
-            "absolute top-[5px] right-[5px] bg-background/80 backdrop-blur-sm",
+            "absolute top-1.25 right-1.25 bg-background/80 backdrop-blur-sm",
             className
           )}
           onClick={copyToClipboard}

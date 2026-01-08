@@ -2,9 +2,48 @@
   "$schema": "https://turborepo.com/schema.json",
   "extends": ["//"],
   "tasks": {
+    "build": {
+      "env": [
+        "TINYBIRD_TIME_SAVED_TOKEN",
+        "ENABLE_EXPERIMENTAL_COREPACK",
+        "FLAGS",
+        "FLAGS_SECRET"
+      ],
+      "inputs": ["$TURBO_DEFAULT$", "content/**"],
+      "outputs": [".next/**", "!.next/cache/**"],
+      "dependsOn": [
+        "^build",
+        "rss",
+        "schema",
+        "collect-examples-data",
+        "generate-openapi"
+      ]
+    },
     "dev": {
-      // "dependsOn": ["schema", "collect-examples-data", "generate-openapi"],
+      "dependsOn": ["schema", "collect-examples-data", "generate-openapi"],
       "persistent": true,
+      "cache": false
+    },
+    "schema": {
+      "dependsOn": ["@turbo/types#build"],
+      "inputs": ["scripts/copy-json-schema.ts"],
+      "outputs": ["public/schema*.json"],
+      "env": []
+    },
+    "rss": {
+      "inputs": ["content/blog/**", "scripts/generate-rss.ts"],
+      "outputs": ["public/feed.xml"],
+      "env": []
+    },
+    "collect-examples-data": {
+      "cache": false
+    },
+    "check-types": {
+      "dependsOn": ["collect-examples-data", "generate-openapi"]
+    },
+    "generate-openapi": {
+      "env": ["BASE_URL", "PROTECTION_BYPASS_SECRET"],
+      "passThroughEnv": ["PORT"],
       "cache": false
     }
   }
