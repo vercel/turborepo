@@ -23,19 +23,13 @@ import {
 } from "reactflow";
 import { Package } from "lucide-react";
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
-import { createCssVariablesTheme } from "shiki";
 import "reactflow/dist/base.css";
 import "./turbo-flow.css";
 import { Callout } from "fumadocs-ui/components/callout";
+import { shikiTheme } from "@/lib/shiki-theme";
 import { TurboNode, type TurboNodeData } from "./turbo-node";
 import { TurboEdge } from "./turbo-edge";
 import { FunctionIcon } from "./function-icon";
-
-const theme = createCssVariablesTheme({
-  name: "css-variables",
-  variablePrefix: "--shiki-",
-  variableDefaults: {}
-});
 
 // Types matching Rust server
 interface PackageNode {
@@ -448,8 +442,8 @@ function SetupInstructions() {
           options={
             {
               themes: {
-                light: theme,
-                dark: theme
+                light: shikiTheme,
+                dark: shikiTheme
               }
             } as Parameters<typeof DynamicCodeBlock>[0]["options"]
           }

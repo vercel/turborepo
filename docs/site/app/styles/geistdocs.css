@@ -206,7 +206,6 @@
 /* Code syntax highlighting */
 /* copied from @vercel/geist/src/components/code-block/code-block.module.css */
 pre {
-  background: white;
   --shiki-color-text: var(--ds-gray-1000);
   --shiki-color-background: transparent;
   --shiki-token-constant: var(--ds-blue-900);
@@ -220,8 +219,4 @@ pre {
   --shiki-token-link: var(--ds-green-900);
   --shiki-token-inserted: var(--ds-green-900);
   --shiki-token-deleted: var(--ds-red-900);
-}
-
-.dark pre {
-  background: black;
 }

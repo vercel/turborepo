@@ -8,6 +8,7 @@ import { Testimonials } from "@/components/testimonials";
 import { ArrowRight } from "@/components/icons/arrow-right";
 import { RemoteCacheCounterClient } from "@/components/remote-cache-counter/client";
 import { createMetadata } from "@/lib/create-metadata";
+import { shikiTheme } from "@/lib/shiki-theme";
 import { CiProviders } from "./graphics/providers";
 import { RemoteCachingGraphic } from "./graphics/remote-caching";
 import { EffortlessGraphic } from "./graphics/effortless";
@@ -144,13 +145,21 @@ export default function HomePage() {
           </div>
           <div className="mt-6 grid w-full grid-cols-1 gap-x-4 md:grid-cols-2">
             <div className="mb-6 md:mb-0">
-              <DynamicCodeBlock lang="json" code={simpleTurboJson} />
+              <DynamicCodeBlock
+                lang="json"
+                code={simpleTurboJson}
+                options={{ themes: { light: shikiTheme, dark: shikiTheme } }}
+              />
               <span className="text-xs text-muted-foreground">
                 Declaring a build task
               </span>
             </div>
             <div>
-              <DynamicCodeBlock lang="bash" code={remoteCachingCommands} />
+              <DynamicCodeBlock
+                lang="bash"
+                code={remoteCachingCommands}
+                options={{ themes: { light: shikiTheme, dark: shikiTheme } }}
+              />
               <span className="text-xs text-muted-foreground">
                 Linking to Remote Cache and running tasks
               </span>
