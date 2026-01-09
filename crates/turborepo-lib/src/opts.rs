@@ -3,6 +3,7 @@ use std::backtrace;
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
@@ -20,7 +21,7 @@ use turborepo_types::{
 
 use crate::{
     cli::{Command, ExecutionArgs, RunArgs},
-    config::{ConfigurationOptions, CONFIG_FILE},
+    config::{CacheDirResult, ConfigurationOptions, CONFIG_FILE},
     turbo_json::FutureFlags,
     Args,
 };
@@ -154,12 +155,21 @@ impl Opts {
             _ => (&Box::default(), &Box::default()),
         };
 
+        // Resolve cache directory once to avoid duplicate git process spawning.
+        // This is used by both RunOpts and CacheOpts.
+        let cache_dir_result = config.resolve_cache_dir(repo_root);
+        debug!(
+            "Opts::new cache_dir_result: path={}, is_shared_worktree={}",
+            cache_dir_result.path, cache_dir_result.is_shared_worktree
+        );
+
         let inputs = OptsInputs {
             repo_root,
             run_args: run_args.as_ref(),
             execution_args: execution_args.as_ref(),
             config: &config,
             api_auth: &api_auth,
+            cache_dir_result: &cache_dir_result,
         };
         let run_opts = RunOpts::try_from(inputs)?;
         let cache_opts = CacheOpts::try_from(inputs)?;
@@ -190,6 +200,10 @@ struct OptsInputs<'a> {
     execution_args: &'a ExecutionArgs,
     config: &'a ConfigurationOptions,
     api_auth: &'a Option<APIAuth>,
+    /// Pre-computed cache directory result to avoid duplicate git process
+    /// spawning. This is computed once in `Opts::new()` and shared by
+    /// `RunOpts` and `CacheOpts`.
+    cache_dir_result: &'a CacheDirResult,
 }
 
 impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
@@ -207,6 +221,8 @@ pub struct RunOpts {
     pub(crate) parallel: bool,
     pub(crate) env_mode: EnvMode,
     pub(crate) cache_dir: Utf8PathBuf,
+    /// Whether using shared cache from main worktree (for user messaging).
+    pub(crate) is_shared_worktree_cache: bool,
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
     pub profile: Option<String>,
@@ -306,7 +322,9 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             graph,
             dry_run: inputs.run_args.dry_run,
             env_mode: inputs.config.env_mode(),
-            cache_dir: inputs.config.cache_dir().into(),
+            // Use pre-computed cache directory to avoid duplicate git process spawning
+            cache_dir: inputs.cache_dir_result.path.clone(),
+            is_shared_worktree_cache: inputs.cache_dir_result.is_shared_worktree,
             is_github_actions,
             ui_mode: inputs.config.ui(),
         })
@@ -445,12 +463,15 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
             signature,
         ));
 
-        Ok(CacheOpts {
-            cache_dir: inputs.config.cache_dir().into(),
+        let cache_opts = CacheOpts {
+            // Use pre-computed cache directory to avoid duplicate git process spawning
+            cache_dir: inputs.cache_dir_result.path.clone(),
             cache,
             workers: inputs.run_args.cache_workers,
             remote_cache_opts,
-        })
+        };
+        debug!("CacheOpts created with cache_dir={}", cache_opts.cache_dir);
+        Ok(cache_opts)
     }
 }
 
@@ -645,6 +666,7 @@ mod test {
             parallel: opts_input.parallel,
             env_mode: EnvMode::Loose,
             cache_dir: camino::Utf8PathBuf::new(),
+            is_shared_worktree_cache: false,
             framework_inference: true,
             profile: None,
             continue_on_error: opts_input.continue_on_error,
