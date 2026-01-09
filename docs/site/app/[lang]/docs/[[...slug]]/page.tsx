@@ -13,6 +13,7 @@ import { EditSource } from "@/components/geistdocs/edit-source";
 import { Feedback } from "@/components/geistdocs/feedback";
 import { getMDXComponents } from "@/components/geistdocs/mdx-components";
 import { OpenInChat } from "@/components/geistdocs/open-in-chat";
+import { RemoteCacheCounter } from "@/components/remote-cache-counter";
 import { ScrollTop } from "@/components/geistdocs/scroll-top";
 import { Separator } from "@/components/ui/separator";
 import { getLLMText, getPageImage, source } from "@/lib/geistdocs/source";
@@ -33,6 +34,7 @@ const Page = async ({ params }: PageProps<"/[lang]/docs/[[...slug]]">) => {
       full={page.data.full}
       tableOfContent={{
         style: "clerk",
+        header: <RemoteCacheCounter />,
         footer: (
           <div className="my-3 space-y-3">
             <Separator />

@@ -175,6 +175,7 @@ export const TableOfContents = () => {
 
   return (
     <>
+      <RemoteCacheCounter />
       <Base.AnchorProvider toc={data.toc}>
         <Base.ScrollProvider containerRef={ref}>
           <span className="-ms-0.5 flex mb-2 items-center gap-x-1.5 text-sm font-medium text-gray-1000">
@@ -190,7 +191,6 @@ export const TableOfContents = () => {
           </div>
         </Base.ScrollProvider>
       </Base.AnchorProvider>
-      <RemoteCacheCounter />
     </>
   );
 };
