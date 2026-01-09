@@ -1,12 +1,27 @@
 import "../global.css";
+import type { Metadata } from "next";
 import { VercelToolbar } from "@vercel/toolbar/next";
-import { FaviconHandler } from "@/components/geistdocs/favicon-handler";
 import { Footer } from "@/components/geistdocs/footer";
 import { Navbar } from "@/components/geistdocs/navbar";
 import { GeistdocsProvider } from "@/components/geistdocs/provider";
 import { basePath } from "@/geistdocs";
 import { mono, sans } from "@/lib/geistdocs/fonts";
 import { cn } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  icons: {
+    icon: [
+      {
+        url: "/images/product-icons/repo-light-32x32.png",
+        media: "(prefers-color-scheme: light)"
+      },
+      {
+        url: "/images/product-icons/repo-dark-32x32.png",
+        media: "(prefers-color-scheme: dark)"
+      }
+    ]
+  }
+};
 
 const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
   const { lang } = await params;
@@ -19,7 +34,6 @@ const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
       suppressHydrationWarning
     >
       <body>
-        <FaviconHandler />
         <GeistdocsProvider basePath={basePath} lang={lang}>
           <Navbar />
           {children}
