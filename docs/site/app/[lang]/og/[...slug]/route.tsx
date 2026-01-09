@@ -48,7 +48,7 @@ export const GET = async (
     readFile(join(process.cwd(), "app/[lang]/og/[...slug]/bg.jpeg"))
   ]);
 
-  const bg = arrayBufferToBase64(backgroundImage);
+  const bg = arrayBufferToBase64(backgroundImage.buffer as ArrayBuffer);
 
   return new ImageResponse(
     <div

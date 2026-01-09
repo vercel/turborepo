@@ -1,7 +1,11 @@
 import Image from "next/image";
 import type { AuthorDetails } from "./team";
 
-export function Avatar({ name, picture, xUsername }: AuthorDetails) {
+export function Avatar({
+  name,
+  picture,
+  xUsername
+}: AuthorDetails & { xUsername?: string }) {
   return (
     <div className="not-prose flex shrink-0 items-center md:justify-start">
       <div className="h-8 w-8">

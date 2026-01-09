@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
-import { blog } from "@/lib/geistdocs/source";
+import { blog, type BlogPage } from "@/lib/geistdocs/source";
 import { getMDXComponents } from "@/components/geistdocs/mdx-components";
 import { createSignedBlogOgUrl } from "@/lib/og/sign";
 

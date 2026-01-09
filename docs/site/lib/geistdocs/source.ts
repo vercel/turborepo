@@ -1,4 +1,11 @@
-import { type InferPageType, loader } from "fumadocs-core/source";
+import {
+  type InferPageType,
+  type InferMetaType,
+  type Source,
+  type PageData,
+  type MetaData,
+  loader
+} from "fumadocs-core/source";
 import { lucideIconsPlugin } from "fumadocs-core/source/lucide-icons";
 import { createOpenAPI } from "fumadocs-openapi/server";
 import {
@@ -16,17 +23,18 @@ import { basePath } from "@/geistdocs";
 import { createSignedDocsOgUrl } from "@/lib/og/sign";
 import { i18n } from "./i18n";
 
-// Helper function to create source from doc and meta arrays
+// Helper function to create source from doc and meta arrays with proper typing
 function createSource<
-  TPages extends Array<{ info: { path: string; fullPath: string } }>,
-  TMetas extends Array<{ info: { path: string; fullPath: string } }>
->(pages: TPages, metas: TMetas) {
-  const files: Array<{
-    type: "page" | "meta";
-    path: string;
-    absolutePath: string;
-    data: TPages[number] | TMetas[number];
-  }> = [];
+  TPage extends PageData & { info: { path: string; fullPath: string } },
+  TMeta extends MetaData & { info: { path: string; fullPath: string } }
+>(
+  pages: TPage[],
+  metas: TMeta[]
+): Source<{ pageData: TPage; metaData: TMeta }> {
+  const files: Array<
+    | { type: "page"; path: string; absolutePath: string; data: TPage }
+    | { type: "meta"; path: string; absolutePath: string; data: TMeta }
+  > = [];
 
   for (const entry of pages) {
     files.push({
@@ -98,3 +106,10 @@ export const extraPages = loader({
   baseUrl: "/",
   source: createSource(extraDocs ?? [], extraMeta ?? [])
 });
+
+// Export inferred page types for type-safe usage in components
+export type BlogPage = InferPageType<typeof blog>;
+export type ExternalBlogPage = InferPageType<typeof externalBlog>;
+export type OpenAPIPage = InferPageType<typeof openapiPages>;
+export type ExtraPage = InferPageType<typeof extraPages>;
+export type DocsPage = InferPageType<typeof source>;
