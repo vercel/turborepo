@@ -31,7 +31,7 @@ use override_env::OverrideEnvVars;
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
-use tracing::{debug, warn};
+use tracing::debug;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_cache::CacheConfig;
@@ -403,14 +403,13 @@ impl ConfigurationOptions {
                 );
                 if worktree_info.is_linked_worktree() {
                     // We're in a linked worktree - use the main worktree's cache
-                    // Use std::path to handle the multi-component path correctly
+                    // Use turbopath's join_component to ensure consistent path separators
                     let main_cache_path = worktree_info
                         .main_worktree_root
-                        .as_std_path()
-                        .join(".turbo")
-                        .join("cache");
+                        .join_component(".turbo")
+                        .join_component("cache");
                     let result = CacheDirResult {
-                        path: Utf8PathBuf::from(main_cache_path.to_string_lossy().as_ref()),
+                        path: Utf8PathBuf::from(main_cache_path.as_str()),
                         is_shared_worktree: true,
                     };
                     debug!("Using shared worktree cache at: {}", result.path);
@@ -428,8 +427,9 @@ impl ConfigurationOptions {
                 }
             }
             Err(e) => {
-                // Detection failed - warn and fall back to local cache
-                warn!(
+                // Detection failed - silently fall back to local cache
+                // This is expected for non-git directories, so we don't warn
+                debug!(
                     "Could not detect Git worktree configuration, using local cache: {}",
                     e
                 );
