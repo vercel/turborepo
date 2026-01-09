@@ -33,6 +33,10 @@
     "collect-examples-data": {
       "cache": false
     },
+    "check-links": {
+      "inputs": ["content/**/*.mdx", "../../link-checker/src/**"],
+      "cache": false
+    },
     "check-types": {
       "dependsOn": ["collect-examples-data", "generate-openapi"]
     },
