@@ -127,6 +127,39 @@ For information on how to connect your CI machines to Remote Cache, visit [the C
   documentation](/docs/core-concepts/remote-caching#self-hosting)
 </Callout>
 
+## Git Worktree Cache Sharing
+
+When working with [Git worktrees](https://git-scm.com/docs/git-worktree), Turborepo automatically shares the local filesystem cache between the main worktree and any linked worktrees. This enables:
+
+- **Cache hits across branches**: Work done on one branch is available when you switch to another branch in a different worktree
+- **Reduced disk usage**: Avoids duplicate cache entries across worktrees
+- **Faster iteration**: Switching between feature branches benefits from existing cache
+
+### How it works
+
+Git worktrees allow you to have multiple working directories attached to the same repository, each checked out to a different branch. When you create a linked worktree with `git worktree add`, Turborepo detects this configuration and automatically redirects the cache to the main worktree's `.turbo/cache` directory.
+
+```bash title="Terminal"
+# Create a linked worktree for a feature branch
+git worktree add ../my-feature feature-branch
+
+# Run turbo in the linked worktree - cache is shared with main worktree
+cd ../my-feature
+turbo build
+```
+
+When worktree cache sharing is active, you'll see a message in the output:
+
+```
+• Remote caching enabled, using shared worktree cache
+```
+
+<Callout type="info">
+  If you set an explicit [`cacheDir`](/docs/reference/configuration#cachedir) in
+  your `turbo.json`, worktree cache sharing is disabled and each worktree will
+  use its own cache directory as specified.
+</Callout>
+
 ## What gets cached?
 
 Turborepo caches two types of outputs: Task outputs and Logs.
