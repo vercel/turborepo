@@ -3,8 +3,6 @@ title: Buildkite
 description: Learn how to use Buildkite with Turborepo.
 ---
 
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-
 The following example shows how to use Turborepo with [Buildkite](https://buildkite.com/).
 
 For a given root `package.json`:
@@ -41,7 +39,7 @@ And a `turbo.json`:
 
 Create a file called `.buildkite/pipeline.yml` in your repository with the following contents:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
 
@@ -109,7 +107,7 @@ Create a file called `.buildkite/pipeline.yml` in your repository with the follo
     ```
 
   </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ## Create a Pipeline
 

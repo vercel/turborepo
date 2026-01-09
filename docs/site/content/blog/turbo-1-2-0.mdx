@@ -5,10 +5,12 @@ date: "2022/04/08"
 tag: "web development"
 ---
 
-<h1 className="text-center">Turborepo 1.2</h1>
+# Turborepo 1.2
 
-import { Date } from "#components/blog/date";
-import { Authors } from "#components/authors";
+import { Date } from "@/components/blog/date";
+import { Authors } from "@/components/blog/authors";
+
+import TurboDryRunImage from "../../public/images/blog/turbo-1-2-0/turbo-dry-run.png";
 
 <Date>Friday, April 8th, 2022</Date>
 
@@ -68,10 +70,19 @@ Dry runs are incredibly useful for two situations:
 - Debugging and testing run options
 - Using `turbo` filtering and task graphs for building automations
 
-{" "}
-
 <div className="overflow-hidden lg:rounded-xl">
-  ![Turborepo Dry Run](/images/blog/turbo-1-2-0/turbo-dry-run.png)
+  <ThemeAwareImage
+    light={{
+      alt: "Turborepo Dry Run output showing task information",
+      src: TurboDryRunImage,
+      props: { width: 800, height: 500 },
+    }}
+    dark={{
+      alt: "Turborepo Dry Run output showing task information",
+      src: TurboDryRunImage,
+      props: { width: 800, height: 500 },
+    }}
+  />
 </div>
 
 We hope that this will improve visibility into what `turbo` is doing, speeding up debugging, and make it easier to leverage `turbo` in dynamic CI/CD systems.
@@ -93,8 +104,8 @@ To enable this feature, set the `remoteCache` options in your `turbo.json` confi
   "$schema": "[https://turborepo.com/schema.json](https://turborepo.com/schema.json)",
   "remoteCache": {
     // Indicates if signature verification is enabled.
-    "signature": true
-  }
+    "signature": true,
+  },
 }
 ```
 

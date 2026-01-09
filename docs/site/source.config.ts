@@ -1,24 +1,26 @@
+import { remarkMdxMermaid } from "fumadocs-core/mdx-plugins";
 import {
-  defineDocs,
   defineConfig,
-  frontmatterSchema
+  defineDocs,
+  frontmatterSchema,
+  metaSchema
 } from "fumadocs-mdx/config";
-import { z } from "zod";
+import lastModified from "fumadocs-mdx/plugins/last-modified";
 import { createCssVariablesTheme } from "shiki";
+import { z } from "zod";
 
-export const { docs: repoDocs, meta: repoMeta } = defineDocs({
+// You can customise Zod schemas for frontmatter and `meta.json` here
+// see https://fumadocs.dev/docs/mdx/collections
+export const docs = defineDocs({
   dir: "content/docs",
   docs: {
-    schema: frontmatterSchema
-  }
-});
-
-export const { docs: extrasDocs, meta: extrasMeta } = defineDocs({
-  dir: "content/extra",
-  docs: {
-    schema: frontmatterSchema.extend({
-      description: z.string()
-    })
+    schema: frontmatterSchema,
+    postprocess: {
+      includeProcessedMarkdown: true
+    }
+  },
+  meta: {
+    schema: metaSchema
   }
 });
 
@@ -56,6 +58,15 @@ export const { docs: openapiDocs, meta: openapiMeta } = defineDocs({
   dir: "content/openapi"
 });
 
+export const { docs: extraDocs, meta: extraMeta } = defineDocs({
+  dir: "content/extra",
+  docs: {
+    schema: frontmatterSchema.extend({
+      description: z.string()
+    })
+  }
+});
+
 const theme = createCssVariablesTheme({
   name: "css-variables",
   variablePrefix: "--shiki-",
@@ -64,11 +75,13 @@ const theme = createCssVariablesTheme({
 
 export default defineConfig({
   mdxOptions: {
+    remarkPlugins: [remarkMdxMermaid],
     rehypeCodeOptions: {
       themes: {
         light: theme,
         dark: theme
       }
     }
-  }
+  },
+  plugins: [lastModified()]
 });

@@ -3,58 +3,17 @@ title: Configuring tasks
 description: Learn how to describe the workflows in your repository to get them done as fast as possible.
 ---
 
-import { LinkToDocumentation } from "#components/link-to-documentation";
-import { Callout } from "#components/callout";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Files, File, Folder } from "#components/files";
-import { ThemeAwareImage } from "#components/theme-aware-image";
-import { ExperimentalBadge } from "#components/experimental-badge";
-
 A task is a script that Turborepo runs. You can express relationships between tasks in your [`turbo.json` configuration](/docs/reference/configuration) and [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph).
 
 Turborepo will always parallelize any work that it can to ensure everything runs as fast as possible. This is faster than running tasks one at a time, and it's a part of what makes Turborepo so fast.
 
-For example, <code style={{textWrap: "wrap"}}>yarn workspaces run lint && yarn workspaces run build && yarn workspaces run test</code> would look like this:
+For example, `yarn workspaces run lint && yarn workspaces run build && yarn workspaces run test` would look like this:
 
-<ThemeAwareImage
-  dark={{
-    alt: "A graphical representation of `turbo run lint test build`. It shows all tasks running in parallel, with much less empty space where scripts are not being ran.",
-    src: "/images/docs/slow-tasks-dark.png",
-    props: {
-      width: 778,
-      height: 331,
-    },
-  }}
-  light={{
-    alt: "A graphical representation of `turbo run lint test build`. It shows all tasks running in parallel, with much less empty space where scripts are not being ran.",
-    src: "/images/docs/slow-tasks-light.png",
-    props: {
-      width: 778,
-      height: 331,
-    },
-  }}
-/>
+![A graphical representation of tasks running sequentially, with lots of empty space where scripts are not being ran.](/images/docs/slow-tasks-light.png)
 
 But, to get the same work done **faster** with Turborepo, you can use `turbo run lint build test`:
 
-<ThemeAwareImage
-  dark={{
-    alt: "A graphical representation of `turbo run lint test build`. It shows all tasks running in parallel, with much less empty space where scripts are not being ran.",
-    src: "/images/docs/turborepo-tasks-fast-dark.png",
-    props: {
-      width: 778,
-      height: 448,
-    },
-  }}
-  light={{
-    alt: "A graphical representation of `turbo run lint test build`. It shows all tasks running in parallel, with much less empty space where scripts are not being ran.",
-    src: "/images/docs/turborepo-tasks-fast-light.png",
-    props: {
-      width: 778,
-      height: 448,
-    },
-  }}
-/>
+![A graphical representation of `turbo run lint test build`. It shows all tasks running in parallel, with much less empty space where scripts are not being ran.](/images/docs/turborepo-tasks-fast-light.png)
 
 ## Getting started
 

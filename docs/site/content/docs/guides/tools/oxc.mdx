@@ -3,8 +3,6 @@ title: Oxc (oxlint and oxfmt)
 description: Learn how to use oxlint and oxfmt in your Turborepo projects.
 ---
 
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Callout } from "#components/callout";
 import { CreateTurboCallout } from "./create-turbo-callout.tsx";
 
 [Oxc](https://oxc.rs/) is a collection of high-performance JavaScript and TypeScript tools written in Rust, including [oxlint](https://oxc.rs/docs/guide/usage/linter) (a fast linter) and [oxfmt](https://oxc.rs/docs/guide/usage/formatter) (a fast formatter).
@@ -29,7 +27,7 @@ Similar to [Biome](/docs/guides/tools/biome), oxlint and oxfmt are **extraordina
 
 First, install oxlint in your repository:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -62,7 +60,7 @@ bun add --dev oxlint
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ### Create scripts
 
@@ -107,7 +105,7 @@ oxfmt is a fast code formatter for JavaScript and TypeScript, designed to be a d
 
 Install oxfmt as a dev dependency:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -140,7 +138,7 @@ bun add --dev oxfmt
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ### Create scripts
 

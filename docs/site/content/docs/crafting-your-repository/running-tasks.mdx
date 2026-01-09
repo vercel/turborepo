@@ -3,11 +3,6 @@ title: Running tasks
 description: Learn how to run tasks in your repository through the `turbo` CLI.
 ---
 
-import { Callout } from '#components/callout';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { LinkToDocumentation } from '#components/link-to-documentation';
-import { InVersion } from '#components/in-version';
-
 Turborepo optimizes the developer workflows in your repository by automatically parallelizing and caching tasks. Once a task is [registered in `turbo.json`](/docs/crafting-your-repository/configuring-tasks), you have a powerful new toolset for running the scripts in your repository:
 
 - [Use `scripts` in `package.json` for tasks you need to run often](#using-scripts-in-packagejson)
@@ -31,7 +26,7 @@ For tasks that you run frequently, you can write your `turbo` commands directly 
 }
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   `turbo` is an alias for `turbo run` - but we recommend using `turbo run` in
   `package.json` and CI workflows to avoid potential collisions with possible
   `turbo` subcommands that could be added in the future.
@@ -39,7 +34,7 @@ For tasks that you run frequently, you can write your `turbo` commands directly 
 
 These scripts can then be run using your package manager.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
   ```bash title="Terminal"
@@ -71,7 +66,7 @@ bun run dev
 ```
 
   </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 <Callout type="warn">
 You only want to write `turbo` commands in your root `package.json`. Writing `turbo` commands into the `package.json` of packages can lead to recursively
@@ -96,7 +91,7 @@ turbo build
 
 In the example above, the `turbo build` command will run the `build` task for the `docs` package using the `build` task registered in `turbo.json`.
 
-<Callout type="good-to-know">
+<Callout type="info">
   [Using a filter](#using-filters) will override Automatic Package Scoping.
 </Callout>
 

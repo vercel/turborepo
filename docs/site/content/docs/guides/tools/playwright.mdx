@@ -3,8 +3,6 @@ title: Playwright
 description: Learn how to use Playwright in a Turborepo.
 ---
 
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-
 [Playwright](https://playwright.dev/) enables reliable end-to-end testing for modern web apps.
 
 We recommend creating a Playwright package for each test suite that you'd like to run in your monorepo. This may mean suites broken up per-application, per-domain, or some other scheme, according to your needs. If you are unsure, start with creating a Playwright package per-application.
@@ -97,7 +95,7 @@ Later on, when you want to run your end-to-end tests, use [the `--only` flag](/d
 
 You can also create a common package for shared utilities that you need in your end-to-end test suites. We recommend using `peerDependencies` in this shared package so that you can get access to Playwright used in consumers without having to install Playwright into the shared package itself.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```json title="./packages/playwright-utilities/package.json"
@@ -144,4 +142,4 @@ You can also create a common package for shared utilities that you need in your 
 ```
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>

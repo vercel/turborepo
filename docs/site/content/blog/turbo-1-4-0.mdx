@@ -5,11 +5,11 @@ date: "2022/08/09"
 tag: "web development"
 ---
 
-<h1 className="text-center">Turborepo 1.4</h1>
+# Turborepo 1.4
 
-import { Authors } from "#components/authors";
-import { Date } from "#components/blog/date";
-import { Callout } from "#components/callout";
+import { Authors } from "@/components/blog/authors";
+import { Date } from "@/components/blog/date";
+import { Callout } from "@/components/geistdocs/callout";
 
 <Date>Tuesday, August 9th, 2022</Date>
 
@@ -61,9 +61,9 @@ For example, consider a monorepo with three workspaces: a Next.js project, a Cre
 {
   "pipeline": {
     "build": {
-      "dependsOn": ["^build"]
-    }
-  }
+      "dependsOn": ["^build"],
+    },
+  },
 }
 ```
 
@@ -80,7 +80,7 @@ To get started, extend from `eslint-config-turbo` in your root [`eslintrc`](http
 ```jsonc title=".eslint.config.js"
 {
   // Automatically flag env vars missing from turbo.json
-  "extends": ["next/core-web-vitals", "turbo"]
+  "extends": ["next/core-web-vitals", "turbo"],
 }
 ```
 
@@ -92,8 +92,8 @@ If you prefer more control over the rules - use can install and configure the `e
   "plugins": ["turbo"],
   "rules": {
     // Automatically flag env vars missing from turbo.json
-    "turbo/no-undeclared-env-vars": "error"
-  }
+    "turbo/no-undeclared-env-vars": "error",
+  },
 }
 ```
 

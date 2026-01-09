@@ -3,9 +3,7 @@ title: Package Configurations
 description: Learn how to use Package Configurations to bring greater task flexibility to your monorepo's package.
 ---
 
-import { Callout } from '#components/callout';
-import { ExperimentalBadge } from '#components/experimental-badge';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
 
 Many monorepos can declare a `turbo.json` in the root directory with a
 [task description](/docs/reference/configuration#tasks) that applies to all packages. But, sometimes, a monorepo can contain packages that need to configure their tasks differently.
@@ -25,12 +23,12 @@ key:
     "build": {
       // Custom configuration for the build task in this package
     },
-    "special-task": {} // New task specific to this package
-  }
+    "special-task": {}, // New task specific to this package
+  },
 }
 ```
 
-<Callout>
+<Callout type="info">
   The `extends` array must start with `["//"]`. `//` is a special name used to
   identify the root directory of the monorepo. You can also extend from other
   packages by adding them after `//` (e.g., `["//", "shared-config"]`).
@@ -55,9 +53,9 @@ Array fields like `outputs`, `env`, `inputs`, `dependsOn`, and `passThroughEnv` 
   "tasks": {
     "build": {
       "outputs": ["dist/**"],
-      "env": ["NODE_ENV"]
-    }
-  }
+      "env": ["NODE_ENV"],
+    },
+  },
 }
 ```
 
@@ -67,9 +65,9 @@ Array fields like `outputs`, `env`, `inputs`, `dependsOn`, and `passThroughEnv` 
   "tasks": {
     "build": {
       // This REPLACES the root outputs - "dist/**" is NOT included
-      "outputs": [".next/**"]
-    }
-  }
+      "outputs": [".next/**"],
+    },
+  },
 }
 ```
 
@@ -83,9 +81,9 @@ To **add** to inherited array values instead of replacing them, use the [`$TURBO
   "tasks": {
     "build": {
       // Inherits "dist/**" from root AND adds ".next/**"
-      "outputs": ["$TURBO_EXTENDS$", ".next/**"]
-    }
-  }
+      "outputs": ["$TURBO_EXTENDS$", ".next/**"],
+    },
+  },
 }
 ```
 
@@ -102,13 +100,13 @@ Extend from any package by using its `name` from `package.json` in your `extends
   "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**"],
     },
     "dev": {
       "cache": false,
-      "persistent": true
-    }
-  }
+      "persistent": true,
+    },
+  },
 }
 ```
 
@@ -120,9 +118,9 @@ Another Next.js app can extend from it to share the same configuration:
   "tasks": {
     "build": {
       // Additional customization specific to this package
-      "env": ["NEXT_PUBLIC_DOCS_URL"]
-    }
-  }
+      "env": ["NEXT_PUBLIC_DOCS_URL"],
+    },
+  },
 }
 ```
 
@@ -199,8 +197,8 @@ To completely exclude an inherited task from your package, set `extends: false` 
   "tasks": {
     "build": {},
     "lint": {},
-    "test": {}
-  }
+    "test": {},
+  },
 }
 ```
 
@@ -209,9 +207,9 @@ To completely exclude an inherited task from your package, set `extends: false` 
   "extends": ["//"],
   "tasks": {
     "lint": {
-      "extends": false // This package does not have a lint task
-    }
-  }
+      "extends": false, // This package does not have a lint task
+    },
+  },
 }
 ```
 
@@ -228,9 +226,9 @@ To create a new task definition that doesn't inherit any configuration from the 
     "build": {
       "extends": false, // Don't inherit from root
       "outputs": ["out/**"],
-      "env": ["SPECIAL_VAR"]
-    }
-  }
+      "env": ["SPECIAL_VAR"],
+    },
+  },
 }
 ```
 
@@ -245,9 +243,9 @@ When a package excludes a task, that exclusion propagates to packages that exten
   "extends": ["//"],
   "tasks": {
     "lint": {
-      "extends": false // Exclude lint from this config
-    }
-  }
+      "extends": false, // Exclude lint from this config
+    },
+  },
 }
 ```
 
@@ -256,7 +254,7 @@ When a package excludes a task, that exclusion propagates to packages that exten
   "extends": ["//", "base-config"],
   "tasks": {
     // web does not inherit lint from root because base-config excluded it
-  }
+  },
 }
 ```
 
@@ -279,9 +277,9 @@ with a single `turbo.json` at the root like this:
 {
   "tasks": {
     "build": {
-      "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"]
-    }
-  }
+      "outputs": [".next/**", "!.next/cache/**", ".svelte-kit/**"],
+    },
+  },
 }
 ```
 
@@ -297,9 +295,9 @@ configuration in the SvelteKit package in `apps/my-svelte-kit-app/turbo.json`:
   "extends": ["//"],
   "tasks": {
     "build": {
-      "outputs": [".svelte-kit/**"]
-    }
-  }
+      "outputs": [".svelte-kit/**"],
+    },
+  },
 }
 ```
 
@@ -427,8 +425,8 @@ Package Configuration for `my-nextjs-app`:
     },
     "build": {
       // Just use the task name!
-    }
-  }
+    },
+  },
 }
 ```
 
@@ -438,9 +436,9 @@ Note that the `build` task can still depend on a package-specific task:
 {
   "tasks": {
     "build": {
-      "dependsOn": ["some-pkg#compile"] // [!code highlight]
-    }
-  }
+      "dependsOn": ["some-pkg#compile"], // [!code highlight]
+    },
+  },
 }
 ```
 

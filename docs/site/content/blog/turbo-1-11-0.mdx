@@ -5,11 +5,13 @@ date: "2023/12/05"
 tag: "web development"
 ---
 
-<h1 className="text-center">Turborepo 1.11</h1>
+# Turborepo 1.11
 
-import { Authors } from "#components/authors";
-import { ThemeAwareImage } from "#components/theme-aware-image";
-import { Date } from "#components/blog/date";
+import { Authors } from "@/components/blog/authors";
+import { ThemeAwareImage } from "@/components/geistdocs/theme-aware-image";
+import { Date } from "@/components/blog/date";
+import LogOrderGroupsLight from "../../public/images/blog/turbo-1-11-0/log-order-groups-light.png";
+import LogOrderGroupsDark from "../../public/images/blog/turbo-1-11-0/log-order-groups-dark.png";
 
 <Date>Tuesday, December 5th, 2023</Date>
 
@@ -44,7 +46,7 @@ To make it easier to review your task logs, we've introduced the `--log-order` f
   className="my-4 flex justify-center"
   light={{
     alt: "Using `--log-order=grouped` to output task logs to the terminal as separated chunks separated by task.",
-    src: "/images/blog/turbo-1-11-0/log-order-groups-light.png",
+    src: LogOrderGroupsLight,
     props: {
       width: 682,
       height: 746.5,
@@ -53,7 +55,7 @@ To make it easier to review your task logs, we've introduced the `--log-order` f
   }}
   dark={{
     alt: "Using `--log-order=grouped` to output task logs to the terminal as separated chunks separated by task.",
-    src: "/images/blog/turbo-1-11-0/log-order-groups-dark.png",
+    src: LogOrderGroupsDark,
     props: {
       width: 682,
       height: 746.5,

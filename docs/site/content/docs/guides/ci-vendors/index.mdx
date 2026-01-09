@@ -3,8 +3,6 @@ title: Continuous Integration
 description: Recipes for using Turborepo with Vercel, GitHub Actions, and other continuous integration providers.
 ---
 
-import { Cards, Card } from "#components/card";
-
 Turborepo not only speeds up builds, but also the rest of your Continuous Integration pipeline by using [Remote Caching](/docs/core-concepts/remote-caching). Below are a few platform recipes to use Turborepo with your CI providers.
 
 <Cards>
@@ -34,7 +32,7 @@ To enable Remote Caching for your CI:
    | Variable | Description |
    | ----------- | ----------- |
    | `TURBO_TOKEN` | The Bearer token to access the Remote Cache |
-   | `TURBO_TEAM` | The account name associated with your repository. When using{' '} <a href="https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache" rel="noreferrer noopener" target="_blank" >Vercel Remote Cache</a>, this is [your team's slug](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Get+team+slug). |
+   | `TURBO_TEAM` | The account name associated with your repository. When using <a href="https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache" rel="noreferrer noopener" target="_blank">Vercel Remote Cache</a>, this is [your team's slug](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Get+team+slug). |
 2. Clone your repository.
 3. Install your dependencies through your package manager.
 4. Run your tasks through `turbo`.

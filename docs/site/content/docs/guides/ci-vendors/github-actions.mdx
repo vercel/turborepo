@@ -3,10 +3,6 @@ title: GitHub Actions
 description: Learn how to use GitHub Actions with Turborepo.
 ---
 
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Steps, Step } from "#components/steps";
-import { Callout } from "#components/callout";
-
 The following example shows how to use Turborepo with [GitHub Actions](https://github.com/features/actions).
 
 For a given root `package.json`:
@@ -43,7 +39,7 @@ And a `turbo.json`:
 
 Create a file called `.github/workflows/ci.yml` in your repository with the following contents:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
   <Tab value="pnpm">
     ```yaml title=".github/workflows/ci.yml"
     name: CI
@@ -227,7 +223,7 @@ Create a file called `.github/workflows/ci.yml` in your repository with the foll
 
   </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ## Remote Caching with Vercel Remote Cache
 
@@ -259,7 +255,7 @@ Go to your GitHub repository settings and click on the **Secrets** and then **Ac
 <Step>
 Create a new repository variable (click the **Variables** tab) called `TURBO_TEAM` and set it to your team slug - the part after `vercel.com/` in [your Team URL](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Find+Team+URL). For example, the slug for `vercel.com/acme` is `acme`.
 
-<Callout type="good-to-know">
+<Callout type="info">
   Using a repository variable rather than a secret will keep GitHub Actions from
   censoring your team name in log output.
 </Callout>

@@ -1,6 +1,6 @@
-import React from "react";
+import type { ReactElement } from "react";
 import Image from "next/image";
-import { cn } from "#components/cn.ts";
+import { cn } from "@/lib/utils";
 import type { TurboUser } from "./users";
 
 const DEFAULT_SIZE = {
@@ -18,7 +18,7 @@ export function Logo({
   theme: "dark" | "light";
   isLink: boolean;
   className?: string;
-}): JSX.Element {
+}): ReactElement {
   const styles = {
     ...DEFAULT_SIZE,
     ...user.style
@@ -41,10 +41,7 @@ export function Logo({
       className={cn("mx-8", className)}
       height={numericHeight}
       priority
-      src={user.image.replace(
-        "/logos",
-        theme === "light" ? "/logos/white" : "/logos/color"
-      )}
+      src={theme === "light" ? user.imageWhite : user.imageColor}
       style={styles}
       width={numericWidth}
     />

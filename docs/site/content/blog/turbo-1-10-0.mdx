@@ -5,12 +5,14 @@ date: "2023/06/01"
 tag: "web development"
 ---
 
-<h1 className="text-center">Turborepo 1.10</h1>
+# Turborepo 1.10
 
-import { Authors } from "#components/authors";
-import { Callout } from "#components/callout";
-import { ThemeAwareImage } from "#components/theme-aware-image";
-import { Date } from "#components/blog/date";
+import { Authors } from "@/components/blog/authors";
+import { Callout } from "@/components/geistdocs/callout";
+import { ThemeAwareImage } from "@/components/geistdocs/theme-aware-image";
+import { Date } from "@/components/blog/date";
+import TurboGenLight from "../../public/images/blog/turbo-1-10-0/turbo-gen-light.gif";
+import TurboGenDark from "../../public/images/blog/turbo-1-10-0/turbo-gen-dark.gif";
 
 <Date>Thursday, June 1st, 2023</Date>
 
@@ -36,7 +38,7 @@ npx @turbo/codemod migrate
   className="my-4 rounded-xl border-2 border-[#f3f7fd] p-4 dark:border-[#1c2428]"
   light={{
     alt: "turbo-gen",
-    src: "/images/blog/turbo-1-10-0/turbo-gen-light.gif",
+    src: TurboGenLight,
     props: {
       width: 600,
       height: 205,
@@ -44,7 +46,7 @@ npx @turbo/codemod migrate
   }}
   dark={{
     alt: "turbo-gen",
-    src: "/images/blog/turbo-1-10-0/turbo-gen-dark.gif",
+    src: TurboGenDark,
     props: {
       width: 600,
       height: 215,

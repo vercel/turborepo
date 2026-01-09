@@ -8,7 +8,7 @@ import {
   crawlPages,
   getAllPageUrls,
   SITEMAP_CONFIG
-} from "#lib/sitemap/index.ts";
+} from "@/lib/sitemap";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes max for crawling
