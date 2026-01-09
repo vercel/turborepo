@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getMDXComponents } from "@/components/geistdocs/mdx-components";
 import { extraPages } from "@/lib/geistdocs/source";
+import { createMetadata } from "@/lib/create-metadata";
 
 interface PageProps {
   params: Promise<{ slug?: string[]; lang: string }>;
@@ -41,19 +42,13 @@ export async function generateMetadata({
     notFound();
   }
 
-  const canonicalPath = slug?.join("/") ?? "";
+  const canonicalPath = `/${slug?.join("/") ?? ""}`;
 
-  return {
-    title: `${page.data.title} | Turborepo`,
+  return createMetadata({
+    title: page.data.title,
     description: page.data.description,
-    openGraph: {
-      siteName: "Turborepo",
-      url: `/${canonicalPath}`
-    },
-    alternates: {
-      canonical: `/${canonicalPath}`
-    }
-  };
+    canonicalPath
+  });
 }
 
 export default Page;

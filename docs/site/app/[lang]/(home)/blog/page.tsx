@@ -1,16 +1,19 @@
-import Link from "next/link";
 import type { Metadata } from "next/types";
+import Link from "next/link";
 import { blog, externalBlog } from "@/lib/geistdocs/source";
+import { createMetadata } from "@/lib/create-metadata";
 
 export function generateMetadata(): Metadata {
-  const rawMetadata = {
+  const baseMetadata = createMetadata({
     title: "Blog",
-    description: "Get the latest news and updates from the Turboverse."
-  };
+    description: "Get the latest news and updates from the Turboverse.",
+    canonicalPath: "/blog"
+  });
 
   return {
-    ...rawMetadata,
+    ...baseMetadata,
     alternates: {
+      ...baseMetadata.alternates,
       types: {
         "application/rss+xml": `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/feed.xml`
       }

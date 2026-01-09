@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
+import { verifyOgSignatureEdge } from "@/lib/og/sign-edge";
 
 export const runtime = "edge";
 
@@ -15,6 +16,17 @@ function _arrayBufferToBase64(buffer: ArrayBuffer): string {
 
 export async function GET(req: NextRequest): Promise<Response> {
   try {
+    const { searchParams } = new URL(req.url);
+
+    const version = searchParams.get("version") || "";
+    const sig = searchParams.get("sig") || "";
+
+    // Verify signature
+    const isValid = await verifyOgSignatureEdge({ version }, sig);
+    if (!isValid) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     const [geistSemiBold, bg] = await Promise.all([
       fetch(new URL("./Geist-SemiBold.ttf", import.meta.url)).then((res) =>
         res.arrayBuffer()
@@ -25,10 +37,6 @@ export async function GET(req: NextRequest): Promise<Response> {
         )
       )
     ]);
-
-    const { searchParams } = new URL(req.url);
-
-    const version = searchParams.get("version") || "";
 
     return new ImageResponse(
       <div

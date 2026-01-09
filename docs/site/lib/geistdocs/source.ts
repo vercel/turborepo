@@ -13,6 +13,7 @@ import {
   extraMeta
 } from "@/.source/server";
 import { basePath } from "@/geistdocs";
+import { createSignedDocsOgUrl } from "@/lib/og/sign";
 import { i18n } from "./i18n";
 
 // Helper function to create source from doc and meta arrays
@@ -61,9 +62,7 @@ export const getPageImage = (page: InferPageType<typeof source>) => {
 
   return {
     segments,
-    url: basePath
-      ? `${basePath}/og/${segments.join("/")}`
-      : `/og/${segments.join("/")}`
+    url: createSignedDocsOgUrl(segments, basePath)
   };
 };
 

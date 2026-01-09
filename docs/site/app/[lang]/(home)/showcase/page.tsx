@@ -1,13 +1,12 @@
-import type { Metadata } from "next/types";
 import { Clients } from "@/app/_clients/clients";
+import { createMetadata } from "@/lib/create-metadata";
 
-export function generateMetadata(): Metadata {
-  return {
-    title: "Showcase",
-    description:
-      "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust."
-  };
-}
+export const metadata = createMetadata({
+  title: "Showcase",
+  description:
+    "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.",
+  canonicalPath: "/showcase"
+});
 
 function Showcase() {
   return (

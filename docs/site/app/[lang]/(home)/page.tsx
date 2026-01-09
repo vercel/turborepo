@@ -1,5 +1,4 @@
 import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
-import type { Metadata } from "next";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Grid } from "@/components/grid/grid";
@@ -8,6 +7,7 @@ import { Snippet } from "@/components/snippet";
 import { Testimonials } from "@/components/testimonials";
 import { ArrowRight } from "@/components/icons/arrow-right";
 import { RemoteCacheCounterClient } from "@/components/remote-cache-counter/client";
+import { createMetadata } from "@/lib/create-metadata";
 import { CiProviders } from "./graphics/providers";
 import { RemoteCachingGraphic } from "./graphics/remote-caching";
 import { EffortlessGraphic } from "./graphics/effortless";
@@ -47,9 +47,11 @@ turbo link
 # Run tasks
 turbo run build`;
 
-export const metadata: Metadata = {
-  alternates: { canonical: "https://turbo.build" }
-};
+export const metadata = createMetadata({
+  description:
+    "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.",
+  canonicalPath: "/"
+});
 
 export default function HomePage() {
   return (

@@ -1,12 +1,13 @@
-import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { enableDevtools } from "../../../flags";
 import { DevtoolsClientComponent } from "./devtools-client";
+import { createMetadata } from "@/lib/create-metadata";
 
-export const metadata: Metadata = {
+export const metadata = createMetadata({
   title: "Turborepo Devtools",
-  description: "Visualize your Turborepo package and task graphs"
-};
+  description: "Visualize your Turborepo package and task graphs",
+  canonicalPath: "/devtools"
+});
 
 export default async function DevtoolsPage() {
   const showDevtools = await enableDevtools();

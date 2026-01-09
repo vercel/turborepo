@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import type { Metadata } from "next";
 import { blog } from "@/lib/geistdocs/source";
 import { getMDXComponents } from "@/components/geistdocs/mdx-components";
+import { createSignedBlogOgUrl } from "@/lib/og/sign";
 
 export function generateStaticParams(): Array<{ slug: Array<string> }> {
   return blog.getPages().map((page) => ({
@@ -28,7 +29,7 @@ export async function generateMetadata(props: {
         major: string;
         minor: string;
       };
-      return `/api/og/blog?version=${encodeURIComponent(`${major}.${minor}`)}`;
+      return createSignedBlogOgUrl(`${major}.${minor}`);
     }
 
     return "";

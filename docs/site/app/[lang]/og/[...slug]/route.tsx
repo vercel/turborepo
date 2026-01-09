@@ -2,81 +2,119 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
 import type { NextRequest } from "next/server";
+import { RepoLogo } from "@/components/logos/og/repo-logo";
+import { VercelLogo } from "@/components/logos/og/vercel-logo";
 import { getPageImage, source } from "@/lib/geistdocs/source";
+import { verifyOgSignature } from "@/lib/og/sign";
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = "";
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return Buffer.from(binary, "binary").toString("base64");
+}
 
 export const GET = async (
-  _request: NextRequest,
+  request: NextRequest,
   { params }: RouteContext<"/[lang]/og/[...slug]">
 ) => {
   const { slug, lang } = await params;
+
+  // Verify signature
+  const { searchParams } = new URL(request.url);
+  const sig = searchParams.get("sig");
+  const path = slug.join("/");
+
+  if (!sig || !verifyOgSignature({ path }, sig)) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
   const page = source.getPage(slug.slice(0, -1), lang);
 
   if (!page) {
     return new Response("Not found", { status: 404 });
   }
 
-  const { title, description } = page.data;
+  const { title } = page.data;
 
-  const regularFont = await readFile(
-    join(process.cwd(), "app/[lang]/og/[...slug]/geist-sans-regular.ttf")
-  );
+  const [geist, geistMono, backgroundImage] = await Promise.all([
+    readFile(join(process.cwd(), "app/[lang]/og/[...slug]/Geist-Regular.ttf")),
+    readFile(
+      join(process.cwd(), "app/[lang]/og/[...slug]/GeistMono-Regular.ttf")
+    ),
+    readFile(join(process.cwd(), "app/[lang]/og/[...slug]/bg.jpeg"))
+  ]);
 
-  const semiboldFont = await readFile(
-    join(process.cwd(), "app/[lang]/og/[...slug]/geist-sans-semibold.ttf")
-  );
-
-  const backgroundImage = await readFile(
-    join(process.cwd(), "app/[lang]/og/[...slug]/background.png")
-  );
-
-  const backgroundImageData = backgroundImage.buffer.slice(
-    backgroundImage.byteOffset,
-    backgroundImage.byteOffset + backgroundImage.byteLength
-  );
+  const bg = arrayBufferToBase64(backgroundImage);
 
   return new ImageResponse(
-    <div style={{ fontFamily: "Geist" }} tw="flex h-full w-full bg-black">
-      {/** biome-ignore lint/performance/noImgElement: "Required for Satori" */}
-      <img
-        alt="Vercel OpenGraph Background"
-        height={628}
-        src={backgroundImageData as never}
-        width={1200}
-      />
-      <div tw="flex flex-col absolute h-full w-[750px] justify-center left-[50px] pr-[50px] pt-[116px] pb-[86px]">
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+        height: "100%",
+        fontFamily: "Geist Mono",
+        fontWeight: 700,
+        fontSize: 60,
+        backgroundImage: `url(data:image/jpeg;base64,${bg})`,
+        backgroundSize: "1200px 630px",
+        color: "#fff"
+      }}
+    >
+      <div style={{ display: "flex", height: 97 * 1.1, alignItems: "center" }}>
+        <RepoLogo />
+      </div>
+      {title ? (
         <div
           style={{
-            textWrap: "balance"
+            fontFamily: "Geist Mono",
+            fontSize: 36,
+            letterSpacing: -1.5,
+            padding: "40px 20px 30px",
+            textAlign: "center",
+            backgroundImage: "linear-gradient(to bottom, #fff, #aaa)",
+            backgroundClip: "text",
+            color: "transparent"
           }}
-          tw="text-5xl font-medium text-white tracking-tight flex leading-[1.1] mb-4"
         >
           {title}
         </div>
-        <div
-          style={{
-            color: "#8B8B8B",
-            lineHeight: "44px",
-            textWrap: "balance"
-          }}
-          tw="text-[32px]"
-        >
-          {description}
-        </div>
+      ) : null}
+      <div
+        style={{
+          fontFamily: "Geist Mono",
+          fontSize: 18,
+          marginTop: 80,
+          display: "flex",
+          color: "#fff",
+          alignItems: "center"
+        }}
+      >
+        <div style={{ marginRight: 12 }}>by</div>
+        <VercelLogo fill="white" height={25} />
       </div>
     </div>,
     {
       width: 1200,
-      height: 628,
+      height: 630,
       fonts: [
         {
-          name: "Geist",
-          data: regularFont,
-          weight: 400
+          name: "Geist Mono",
+          data: geistMono,
+          weight: 700 as const,
+          style: "normal" as const
         },
         {
-          name: "Geist",
-          data: semiboldFont,
-          weight: 500
+          name: "Geist Sans",
+          data: geist,
+          weight: 400 as const,
+          style: "normal" as const
         }
       ]
     }
