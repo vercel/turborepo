@@ -6,7 +6,7 @@
   "scripts": {
     "build": "next build",
     "check-links": "cd content && node --experimental-strip-types ../../link-checker/src/validate-docs-links.ts",
-    "check-types": "fumadocs-mdx && tsc --noEmit",
+    "check-types": "next typegen && fumadocs-mdx && tsc --noEmit",
     "collect-examples-data": "node --experimental-strip-types ./scripts/collect-examples-data.ts",
     "dev": "next dev",
     "generate-openapi": "node --experimental-strip-types ./scripts/generate-docs.ts",
