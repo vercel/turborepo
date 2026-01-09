@@ -3,6 +3,8 @@ title: Caching
 description: Learn about caching in Turborepo.
 ---
 
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
 Turborepo uses caching to speed up builds, ensuring you **never do the same work twice**. When your task is cacheable, Turborepo will restore the results of your task from cache using a fingerprint from the first time the task ran.
 
 ![12 tasks are being ran in 3 packages, resulting in a ">>> FULL TURBO" cache hit. The total time it takes to restore these tasks from cache is 80 milliseconds.](/images/docs/why-turborepo-solution.png)
@@ -127,7 +129,7 @@ For information on how to connect your CI machines to Remote Cache, visit [the C
   documentation](/docs/core-concepts/remote-caching#self-hosting)
 </Callout>
 
-## Git Worktree Cache Sharing
+## Git Worktree Cache Sharing <ExperimentalBadge>Pre-release</ExperimentalBadge>
 
 When working with [Git worktrees](https://git-scm.com/docs/git-worktree), Turborepo automatically shares the local filesystem cache between the main worktree and any linked worktrees. This enables:
 
