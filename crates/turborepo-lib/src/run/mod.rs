@@ -119,10 +119,26 @@ impl Run {
         }
 
         let use_http_cache = self.opts.cache_opts.cache.remote.should_use();
-        if use_http_cache {
-            cprintln!(self.color_config, GREY, "• Remote caching enabled");
+        let remote_status = if use_http_cache {
+            "enabled"
         } else {
-            cprintln!(self.color_config, GREY, "• Remote caching disabled");
+            "disabled"
+        };
+
+        if self.opts.run_opts.is_shared_worktree_cache {
+            cprintln!(
+                self.color_config,
+                GREY,
+                "• Remote caching {}, using shared worktree cache",
+                remote_status
+            );
+        } else {
+            cprintln!(
+                self.color_config,
+                GREY,
+                "• Remote caching {}",
+                remote_status
+            );
         }
     }
 

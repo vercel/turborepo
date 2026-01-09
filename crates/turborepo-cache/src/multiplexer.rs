@@ -47,6 +47,10 @@ impl CacheMultiplexer {
             warn!("no caches are enabled");
         }
 
+        debug!(
+            "CacheMultiplexer::new creating FSCache with cache_dir={}, repo_root={}",
+            opts.cache_dir, repo_root
+        );
         let fs_cache = use_fs_cache
             .then(|| FSCache::new(&opts.cache_dir, repo_root, analytics_recorder.clone()))
             .transpose()?;

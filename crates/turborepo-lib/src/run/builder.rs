@@ -383,6 +383,10 @@ impl RunBuilder {
             };
 
         let scm = scm.await.expect("detecting scm panicked");
+        debug!(
+            "RunBuilder creating AsyncCache with cache_dir={}, repo_root={}",
+            self.opts.cache_opts.cache_dir, self.repo_root
+        );
         let async_cache = AsyncCache::new(
             &self.opts.cache_opts,
             &self.repo_root,

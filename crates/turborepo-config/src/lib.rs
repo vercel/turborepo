@@ -31,11 +31,12 @@ use override_env::OverrideEnvVars;
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
-use tracing::debug;
+use tracing::{debug, warn};
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_cache::CacheConfig;
 use turborepo_repository::package_graph::PackageName;
+use turborepo_scm::WorktreeInfo;
 pub use turborepo_turbo_json::FutureFlags;
 pub use turborepo_types::{EnvMode, LogOrder, UIMode};
 
@@ -48,6 +49,17 @@ pub const DEFAULT_LOGIN_URL: &str = "https://vercel.com";
 pub const DEFAULT_TIMEOUT: u64 = 30;
 pub const DEFAULT_UPLOAD_TIMEOUT: u64 = 60;
 pub const DEFAULT_TUI_SCROLLBACK_LENGTH: u64 = 2048;
+
+/// Result of resolving the cache directory, including worktree sharing status.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CacheDirResult {
+    /// The resolved cache directory path.
+    pub path: Utf8PathBuf,
+    /// True if using shared cache from main worktree.
+    /// This is used for messaging to inform users when worktree cache sharing
+    /// is active.
+    pub is_shared_worktree: bool,
+}
 
 /// Configuration errors for turborepo.
 ///
@@ -341,14 +353,92 @@ impl ConfigurationOptions {
         self.env_mode.unwrap_or_default()
     }
 
+    /// Returns the default cache directory path (relative to repo root).
+    const DEFAULT_CACHE_DIR: &'static str = if cfg!(windows) {
+        ".turbo\\cache"
+    } else {
+        ".turbo/cache"
+    };
+
+    /// Returns the configured cache directory path without worktree resolution.
+    /// Use `resolve_cache_dir()` for full worktree-aware resolution.
     pub fn cache_dir(&self) -> &Utf8Path {
-        self.cache_dir.as_deref().unwrap_or_else(|| {
-            Utf8Path::new(if cfg!(windows) {
-                ".turbo\\cache"
-            } else {
-                ".turbo/cache"
-            })
-        })
+        self.cache_dir
+            .as_deref()
+            .unwrap_or_else(|| Utf8Path::new(Self::DEFAULT_CACHE_DIR))
+    }
+
+    /// Resolves the cache directory, taking Git worktrees into account.
+    ///
+    /// If no explicit `cacheDir` is configured and we're in a linked Git
+    /// worktree, this returns the cache directory from the main worktree to
+    /// enable cache sharing.
+    ///
+    /// # Arguments
+    ///
+    /// * `repo_root` - The root of the current repository/worktree
+    ///
+    /// # Returns
+    ///
+    /// A `CacheDirResult` containing:
+    /// - `path`: The resolved cache directory path
+    /// - `is_shared_worktree`: True if using shared cache from main worktree
+    pub fn resolve_cache_dir(&self, repo_root: &AbsoluteSystemPath) -> CacheDirResult {
+        // If explicit cacheDir is configured, always use it (no worktree sharing)
+        if let Some(explicit_cache_dir) = &self.cache_dir {
+            return CacheDirResult {
+                path: explicit_cache_dir.clone(),
+                is_shared_worktree: false,
+            };
+        }
+
+        // Try to detect worktree configuration
+        match WorktreeInfo::detect(repo_root) {
+            Ok(worktree_info) => {
+                debug!(
+                    "Worktree detection: current={}, main={}, is_linked={}",
+                    worktree_info.worktree_root,
+                    worktree_info.main_worktree_root,
+                    worktree_info.is_linked_worktree()
+                );
+                if worktree_info.is_linked_worktree() {
+                    // We're in a linked worktree - use the main worktree's cache
+                    // Use std::path to handle the multi-component path correctly
+                    let main_cache_path = worktree_info
+                        .main_worktree_root
+                        .as_std_path()
+                        .join(".turbo")
+                        .join("cache");
+                    let result = CacheDirResult {
+                        path: Utf8PathBuf::from(main_cache_path.to_string_lossy().as_ref()),
+                        is_shared_worktree: true,
+                    };
+                    debug!("Using shared worktree cache at: {}", result.path);
+                    result
+                } else {
+                    // We're in the main worktree - use local cache
+                    debug!(
+                        "Using local cache (main worktree): {}",
+                        Self::DEFAULT_CACHE_DIR
+                    );
+                    CacheDirResult {
+                        path: Utf8PathBuf::from(Self::DEFAULT_CACHE_DIR),
+                        is_shared_worktree: false,
+                    }
+                }
+            }
+            Err(e) => {
+                // Detection failed - warn and fall back to local cache
+                warn!(
+                    "Could not detect Git worktree configuration, using local cache: {}",
+                    e
+                );
+                CacheDirResult {
+                    path: Utf8PathBuf::from(Self::DEFAULT_CACHE_DIR),
+                    is_shared_worktree: false,
+                }
+            }
+        }
     }
 
     pub fn cache(&self) -> Option<CacheConfig> {
@@ -708,5 +798,154 @@ mod test {
         let result = config.root_turbo_json_path(repo_root);
 
         assert_eq!(result.unwrap(), repo_root.join_component(CONFIG_FILE));
+    }
+
+    #[test]
+    fn test_resolve_cache_dir_explicit_overrides_worktree() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        let config = ConfigurationOptions {
+            cache_dir: Some(camino::Utf8PathBuf::from("/explicit/cache")),
+            ..Default::default()
+        };
+
+        let result = config.resolve_cache_dir(repo_root);
+
+        assert_eq!(result.path, "/explicit/cache");
+        assert!(
+            !result.is_shared_worktree,
+            "Explicit cacheDir should not be marked as shared worktree"
+        );
+    }
+
+    #[test]
+    fn test_resolve_cache_dir_non_git_fallback() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        // Don't initialize git - just use the temp directory
+        let config = ConfigurationOptions::default();
+
+        let result = config.resolve_cache_dir(repo_root);
+
+        // Should fall back to default cache dir
+        assert_eq!(result.path, ConfigurationOptions::DEFAULT_CACHE_DIR);
+        assert!(
+            !result.is_shared_worktree,
+            "Non-git directory should not be marked as shared worktree"
+        );
+    }
+
+    #[test]
+    fn test_resolve_cache_dir_default_returns_relative_path() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        // Initialize git repo
+        std::process::Command::new("git")
+            .args(["init", "."])
+            .current_dir(&repo_root)
+            .output()
+            .expect("git init failed");
+
+        let config = ConfigurationOptions::default();
+        let result = config.resolve_cache_dir(&repo_root);
+
+        // In main worktree, should return relative default path
+        assert_eq!(result.path, ConfigurationOptions::DEFAULT_CACHE_DIR);
+        assert!(
+            !result.is_shared_worktree,
+            "Main worktree should not be marked as shared"
+        );
+    }
+
+    /// Integration test that verifies linked worktree returns absolute path to
+    /// main cache
+    #[test]
+    fn test_resolve_cache_dir_linked_worktree_returns_absolute_path() {
+        use std::process::Command;
+
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        // Initialize git repo with initial commit
+        Command::new("git")
+            .args(["init", "."])
+            .current_dir(&repo_root)
+            .output()
+            .expect("git init failed");
+        Command::new("git")
+            .args(["config", "--local", "user.name", "test"])
+            .current_dir(&repo_root)
+            .output()
+            .expect("git config failed");
+        Command::new("git")
+            .args(["config", "--local", "user.email", "test@example.com"])
+            .current_dir(&repo_root)
+            .output()
+            .expect("git config failed");
+
+        let readme = repo_root.join_component("README.md");
+        readme.create_with_contents("# Test").unwrap();
+
+        Command::new("git")
+            .args(["add", "."])
+            .current_dir(&repo_root)
+            .output()
+            .expect("git add failed");
+        Command::new("git")
+            .args(["commit", "-m", "Initial commit"])
+            .current_dir(&repo_root)
+            .output()
+            .expect("git commit failed");
+
+        // Create a linked worktree
+        let worktree_path = repo_root.join_component("linked-worktree");
+        let output = Command::new("git")
+            .args([
+                "worktree",
+                "add",
+                worktree_path.as_str(),
+                "-b",
+                "test-branch",
+            ])
+            .current_dir(&repo_root)
+            .output()
+            .expect("git worktree add failed");
+        assert!(
+            output.status.success(),
+            "git worktree add failed: {:?}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let config = ConfigurationOptions::default();
+
+        // Test from main worktree - should return relative path
+        let main_result = config.resolve_cache_dir(&repo_root);
+        assert_eq!(
+            main_result.path.as_str(),
+            ConfigurationOptions::DEFAULT_CACHE_DIR
+        );
+        assert!(!main_result.is_shared_worktree);
+
+        // Test from linked worktree - should return absolute path to main worktree's
+        // cache
+        let linked_result = config.resolve_cache_dir(&worktree_path);
+        let expected_cache_path = repo_root.join_component(".turbo").join_component("cache");
+        assert_eq!(
+            linked_result.path.as_str(),
+            expected_cache_path.as_str(),
+            "Linked worktree should use main worktree's cache. Got: {}, Expected: {}",
+            linked_result.path,
+            expected_cache_path
+        );
+        assert!(
+            linked_result.is_shared_worktree,
+            "Linked worktree should be marked as shared"
+        );
     }
 }
