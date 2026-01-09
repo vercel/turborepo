@@ -13,7 +13,6 @@
       "outputs": [".next/**", "!.next/cache/**"],
       "dependsOn": [
         "^build",
-        "rss",
         "schema",
         "collect-examples-data",
         "generate-openapi"
@@ -30,11 +29,7 @@
       "outputs": ["public/schema*.json"],
       "env": []
     },
-    "rss": {
-      "inputs": ["content/blog/**", "scripts/generate-rss.ts"],
-      "outputs": ["public/feed.xml"],
-      "env": []
-    },
+
     "collect-examples-data": {
       "cache": false
     },

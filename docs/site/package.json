@@ -12,7 +12,6 @@
     "lint": "fumadocs-mdx",
     "lint:prettier": "prettier --write -c . --cache --ignore-path=../../.prettierignore",
     "postinstall": "fumadocs-mdx",
-    "rss": "node --experimental-strip-types scripts/generate-rss.ts",
     "schema": "node --experimental-strip-types scripts/copy-json-schema.ts",
     "start": "next start",
     "translate": "npx @vercel/geistdocs translate"
