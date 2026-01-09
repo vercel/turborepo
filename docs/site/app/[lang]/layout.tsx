@@ -1,5 +1,6 @@
 import "../global.css";
 import { VercelToolbar } from "@vercel/toolbar/next";
+import { FaviconHandler } from "@/components/geistdocs/favicon-handler";
 import { Footer } from "@/components/geistdocs/footer";
 import { Navbar } from "@/components/geistdocs/navbar";
 import { GeistdocsProvider } from "@/components/geistdocs/provider";
@@ -18,6 +19,7 @@ const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
       suppressHydrationWarning
     >
       <body>
+        <FaviconHandler />
         <GeistdocsProvider basePath={basePath} lang={lang}>
           <Navbar />
           {children}
