@@ -57,7 +57,9 @@ export const useChatPersistence = () => {
   );
 
   const initialMessages =
-    storedMessages?.map(({ timestamp, sequence, ...message }) => message) ?? [];
+    storedMessages?.map(
+      ({ timestamp: _timestamp, sequence: _sequence, ...message }) => message
+    ) ?? [];
 
   const isLoading = storedMessages === undefined;
 

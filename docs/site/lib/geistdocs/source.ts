@@ -1,6 +1,5 @@
 import {
   type InferPageType,
-  type InferMetaType,
   type Source,
   type PageData,
   type MetaData,

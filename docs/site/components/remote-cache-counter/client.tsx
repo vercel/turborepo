@@ -19,7 +19,7 @@ export function RemoteCacheCounterClient({
   className?: string;
 }) {
   const timeSaved = useTurborepoMinutesSaved()?.total;
-  const [displayValue, setDisplayValue] = useState(ARBITRARY_START_NUMBER);
+  const [displayValue] = useState(ARBITRARY_START_NUMBER);
 
   const targetValue = timeSaved ? timeSaved / 60 : ARBITRARY_START_NUMBER;
 
