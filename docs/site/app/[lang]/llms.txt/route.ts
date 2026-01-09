@@ -1,15 +1,42 @@
 import type { NextRequest } from "next/server";
-import { getLLMText, source } from "@/lib/geistdocs/source";
+import { source } from "@/lib/geistdocs/source";
 
 export const revalidate = false;
+
+const TURBO_SLOGAN =
+  "Turborepo is a build system optimized for JavaScript and TypeScript, written in Rust.";
 
 export const GET = async (
   _req: NextRequest,
   { params }: RouteContext<"/[lang]/llms.txt">
 ) => {
   const { lang } = await params;
-  const scan = source.getPages(lang).map(getLLMText);
-  const scanned = await Promise.all(scan);
+  const pages = source.getPages(lang);
 
-  return new Response(scanned.join("\n\n"));
+  const links = pages
+    .sort((a, b) => a.url.localeCompare(b.url))
+    .map((page) => {
+      let mdPath = page.url.replace(/^\/docs/, "");
+      // Handle index pages
+      if (mdPath === "" || mdPath.endsWith("/")) {
+        mdPath = mdPath + "index.md";
+      } else {
+        mdPath = mdPath + ".md";
+      }
+      return `- [${page.data.title}](${mdPath}): ${page.data.description ?? ""}`;
+    });
+
+  const header = `# Turborepo documentation
+
+Generated at: ${new Date().toUTCString()}
+
+## Turborepo
+
+> ${TURBO_SLOGAN}
+
+## Docs
+
+`;
+
+  return new Response(header + links.join("\n"));
 };

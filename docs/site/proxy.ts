@@ -7,14 +7,29 @@ import {
 } from "next/server";
 import { i18n } from "@/lib/geistdocs/i18n";
 
-const { rewrite: rewriteLLM } = rewritePath("/docs/*path", "/llms.mdx/*path");
+const { rewrite: rewriteLLM } = rewritePath("/docs/*path", "/llms.md/*path");
 
 const internationalizer = createI18nMiddleware(i18n);
 
 const proxy = (request: NextRequest, context: NextFetchEvent) => {
-  // First, handle Markdown preference rewrites
+  const pathname = request.nextUrl.pathname;
+
+  // Handle .md extension in URL path (e.g., /docs/getting-started.md or /docs.md)
+  if (pathname === "/docs.md") {
+    return NextResponse.rewrite(new URL("/en/llms.md", request.nextUrl));
+  }
+  if (pathname.startsWith("/docs/") && pathname.endsWith(".md")) {
+    // Strip the .md extension and rewrite to llms.md route
+    const pathWithoutMd = pathname.slice(0, -3); // Remove .md
+    const docPath = pathWithoutMd.replace(/^\/docs\//, "");
+    return NextResponse.rewrite(
+      new URL(`/en/llms.md/${docPath}`, request.nextUrl)
+    );
+  }
+
+  // Handle Markdown preference via Accept header
   if (isMarkdownPreferred(request)) {
-    const result = rewriteLLM(request.nextUrl.pathname);
+    const result = rewriteLLM(pathname);
     if (result) {
       return NextResponse.rewrite(new URL(result, request.nextUrl));
     }

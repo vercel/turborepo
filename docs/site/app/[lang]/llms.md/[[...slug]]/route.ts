@@ -5,7 +5,7 @@ export const revalidate = false;
 
 export async function GET(
   _req: Request,
-  { params }: RouteContext<"/[lang]/llms.mdx/[[...slug]]">
+  { params }: RouteContext<"/[lang]/llms.md/[[...slug]]">
 ) {
   const { slug, lang } = await params;
   const page = source.getPage(slug, lang);
@@ -23,7 +23,7 @@ export async function GET(
 
 export const generateStaticParams = async ({
   params
-}: RouteContext<"/[lang]/llms.mdx/[[...slug]]">) => {
+}: RouteContext<"/[lang]/llms.md/[[...slug]]">) => {
   const { lang } = await params;
 
   return source.generateParams(lang);
