@@ -84,6 +84,9 @@ importers:
       '@chevrotain/regexp-to-ast':
         specifier: ^11.1.0
         version: 11.1.0
+      '@flags-sdk/vercel':
+        specifier: ^0.1.8
+        version: 0.1.8(@opentelemetry/api@1.9.0)(flags@4.0.2(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
       '@hookform/resolvers':
         specifier: ^5.2.2
         version: 5.2.2(react-hook-form@7.70.0(react@19.2.3))
@@ -129,6 +132,9 @@ importers:
       feed:
         specifier: ^5.1.0
         version: 5.1.0
+      flags:
+        specifier: ^4.0.2
+        version: 4.0.2(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       fumadocs-core:
         specifier: 16.2.2
         version: 16.2.2(@types/react@19.2.7)(lucide-react@0.555.0(react@19.2.3))(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -10891,6 +10897,18 @@ snapshots:
       - '@opentelemetry/api'
       - next
 
+  '@flags-sdk/vercel@0.1.8(@opentelemetry/api@1.9.0)(flags@4.0.2(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))':
+    dependencies:
+      '@vercel/edge-config': 1.4.3(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
+      '@vercel/flags-core': 0.1.8(@opentelemetry/api@1.9.0)(flags@4.0.2(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
+      flags: 4.0.2(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      jose: 5.2.1
+      js-xxhash: 4.0.0
+    transitivePeerDependencies:
+      - '@openfeature/server-sdk'
+      - '@opentelemetry/api'
+      - next
+
   '@floating-ui/core@1.6.9':
     dependencies:
       '@floating-ui/utils': 0.2.9
@@ -14332,10 +14350,27 @@ snapshots:
       '@opentelemetry/api': 1.9.0
       next: 15.5.9(@opentelemetry/api@1.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
 
+  '@vercel/edge-config@1.4.3(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))':
+    dependencies:
+      '@vercel/edge-config-fs': 0.1.0
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.0
+      next: 16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+
   '@vercel/flags-core@0.1.8(@opentelemetry/api@1.9.0)(flags@4.0.2(@opentelemetry/api@1.9.0)(next@15.5.9(@opentelemetry/api@1.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(next@15.5.9(@opentelemetry/api@1.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))':
     dependencies:
       '@vercel/edge-config': 1.4.3(@opentelemetry/api@1.9.0)(next@15.5.9(@opentelemetry/api@1.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))
       flags: 4.0.2(@opentelemetry/api@1.9.0)(next@15.5.9(@opentelemetry/api@1.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0))(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      jose: 5.2.1
+      js-xxhash: 4.0.0
+    transitivePeerDependencies:
+      - '@opentelemetry/api'
+      - next
+
+  '@vercel/flags-core@0.1.8(@opentelemetry/api@1.9.0)(flags@4.0.2(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))':
+    dependencies:
+      '@vercel/edge-config': 1.4.3(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))
+      flags: 4.0.2(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       jose: 5.2.1
       js-xxhash: 4.0.0
     transitivePeerDependencies:
@@ -16166,6 +16201,16 @@ snapshots:
       next: 15.5.9(@opentelemetry/api@1.9.0)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
       react: 19.0.0
       react-dom: 19.0.0(react@19.0.0)
+
+  flags@4.0.2(@opentelemetry/api@1.9.0)(next@16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(react-dom@19.2.3(react@19.2.3))(react@19.2.3):
+    dependencies:
+      '@edge-runtime/cookies': 5.0.2
+      jose: 5.10.0
+    optionalDependencies:
+      '@opentelemetry/api': 1.9.0
+      next: 16.0.10(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react: 19.2.3
+      react-dom: 19.2.3(react@19.2.3)
 
   flat-cache@3.0.4:
     dependencies:
