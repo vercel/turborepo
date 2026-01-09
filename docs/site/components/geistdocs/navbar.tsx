@@ -24,7 +24,7 @@ export const Navbar = () => (
       <div className="ml-auto flex flex-1 items-center justify-end gap-2">
         <SearchButton className="hidden md:flex" />
         <Chat basePath={basePath} suggestions={suggestions} />
-        <GitHubButton />
+        <GitHubButton className="hidden md:flex" />
         <MobileMenu />
       </div>
     </div>

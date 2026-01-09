@@ -12,6 +12,7 @@ import {
 } from "fumadocs-ui/components/sidebar/base";
 import type { SidebarPageTreeComponents } from "fumadocs-ui/components/sidebar/page-tree";
 import { useTreeContext, useTreePath } from "fumadocs-ui/contexts/tree";
+import { SiGithub } from "@icons-pack/react-simple-icons";
 import { ExternalLinkIcon } from "lucide-react";
 import { Fragment } from "react";
 import {
@@ -21,7 +22,7 @@ import {
   SheetHeader,
   SheetTitle
 } from "@/components/ui/sheet";
-import { nav } from "@/geistdocs";
+import { github, nav } from "@/geistdocs";
 import { useSidebarContext } from "@/hooks/geistdocs/use-sidebar";
 import { SearchButton } from "./search";
 
@@ -88,6 +89,17 @@ export const Sidebar = () => {
                 </DynamicLink>
               )
             )}
+            {github.owner && github.repo ? (
+              <a
+                className="flex items-center gap-2 py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
+                href={`https://github.com/${github.owner}/${github.repo}`}
+                rel="noopener"
+                target="_blank"
+              >
+                <SiGithub className="size-4" />
+                GitHub
+              </a>
+            ) : null}
           </nav>
           <div className="px-4">{renderSidebarList(root.children)}</div>
         </SheetContent>
