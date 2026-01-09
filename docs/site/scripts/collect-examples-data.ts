@@ -13,7 +13,7 @@ const ExampleMetaSchema = z
   .strict();
 
 // Collect metadata from each example
-const EXAMPLES = [];
+const EXAMPLES: z.infer<typeof ExampleMetaSchema>[] = [];
 
 // Get all directories in the examples folder
 const examplesDir = path.join(process.cwd(), "../../examples");

@@ -1,4 +1,4 @@
-import { PRODUCT_DOMAIN } from "#lib/constants.ts";
+const PRODUCT_DOMAIN = "turborepo.com";
 
 /**
  * State for a single page tracked in the sitemap

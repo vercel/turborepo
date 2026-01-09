@@ -6,9 +6,9 @@ export function Date({
 }: {
   children: ReactNode;
   update?: string;
-}): JSX.Element {
+}) {
   return (
-    <div className="mt-2 text-sm text-gray-900 dark:text-gray-900">
+    <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
       {children}
       {update !== undefined && (
         <div className="mt-1 text-center text-xs">Last updated {update}</div>

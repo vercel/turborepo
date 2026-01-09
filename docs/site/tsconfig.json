@@ -1,24 +1,37 @@
 {
-  "extends": "@turbo/tsconfig/base.json",
   "compilerOptions": {
-    "moduleResolution": "bundler",
-    "module": "preserve",
-    "jsx": "preserve",
-    "plugins": [
-      {
-        "name": "next",
-        "enabled": false
-      }
-    ],
-    "allowJs": true,
+    "baseUrl": ".",
     "target": "ESNext",
     "lib": ["dom", "dom.iterable", "esnext"],
-    "resolveJsonModule": true,
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "forceConsistentCasingInFileNames": true,
     "noEmit": true,
+    "esModuleInterop": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "react-jsx",
     "incremental": true,
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true
+    "paths": {
+      "@/*": ["./*"],
+      "@/.source": [".source"]
+    },
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    "strictNullChecks": true
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "turbo"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": ["node_modules"]
 }

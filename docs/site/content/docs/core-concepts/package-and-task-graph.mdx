@@ -3,9 +3,6 @@ title: Package and Task Graphs
 description: Turborepo builds a Task Graph based on your configuration and repository structure.
 ---
 
-import { File, Folder, Files } from "#components/files";
-import { Callout } from "#components/callout";
-
 ## Package Graph
 
 The Package Graph is the structure of your monorepo created by your package manager. When you install [Internal Packages](/docs/core-concepts/internal-packages) into each other, Turborepo will automatically identify those dependency relationships to build a foundational understanding of your Workspace.
@@ -17,7 +14,7 @@ This sets the groundwork for the Task Graph, where you'll define how **tasks** r
 In `turbo.json`, you express how tasks relate to each other. You can think of these relationships as
 dependencies between tasks, but we have a more formal name for them: the Task Graph.
 
-<Callout type="good-to-know">
+<Callout type="info">
   You can generate a visualization of the task graph for your tasks using [the
   `--graph` flag](/docs/reference/run#--graph-file-type).
 </Callout>

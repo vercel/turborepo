@@ -3,10 +3,7 @@ title: Configuring turbo.json
 description: Learn how to configure Turborepo through `turbo.json`.
 ---
 
-import { Callout } from '#components/callout';
-import { InVersion } from '#components/in-version';
-import { ExperimentalBadge } from '#components/experimental-badge';
-import Link from 'next/link';
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
 
 Configure the behavior of `turbo` by using a `turbo.json` file in your Workspace's root directory. You can also:
 
@@ -166,7 +163,7 @@ Turborepo runs a background process to pre-calculate some expensive operations. 
 }
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   When running in a CI environment the daemon is always disabled regardless of
   this setting.
 </Callout>
@@ -345,7 +342,7 @@ The list of environment variables a task depends on.
 }
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   Turborepo automatically includes environment variables prefixed by common
   frameworks through [Framework
   Inference](/docs/crafting-your-repository/using-environment-variables#framework-inference).

@@ -3,16 +3,11 @@ title: Vitest
 description: Learn how to use Vitest in a monorepo.
 ---
 
-import { Callout } from "#components/callout";
-import { File, Folder, Files } from "#components/files";
-import { CreateTurboCallout } from "./create-turbo-callout.tsx";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-
 [Vitest](https://vitest.dev/) is a test runner from the Vite ecosystem. Integrating it with Turborepo will lead to enormous speed-ups.
 
 [The Vitest documentation](https://vitest.dev/guide/workspace) shows how to create a "Vitest Projects" configuration that runs all tests in the monorepo from one root command, enabling behavior like merged coverage reports out-of-the-box. This feature doesn't follow modern best practices for monorepos, since its designed for compatibility with Jest (whose Workspace feature was built before [package manager Workspaces](/docs/crafting-your-repository/structuring-a-repository)).
 
-<Callout type="warning">
+<Callout type="warn">
   Vitest has deprecated workspaces in favor of projects. When using projects,
   individual project vitest configs can't extend the root config anymore since
   they would inherit the projects configuration. Instead, a separate shared file
@@ -28,7 +23,7 @@ Because of this you have two options, each with their own tradeoffs:
 
 To improve on cache hit rates and only run tests with changes, you can choose to configure tasks per-package, splitting up the Vitest command into separate, cacheable scripts in each package. This speed comes with the tradeoff that you'll need to create merged coverage reports yourself.
 
-<Callout>
+<Callout type="info">
   For a complete example, run `npx create-turbo@latest --example with-vitest` or
   [visit the example's source
   code](https://github.com/vercel/turborepo/tree/main/examples/with-vitest).
@@ -87,7 +82,7 @@ When you run your test suite in CI, it logs results and eventually exits upon co
 
 Because of this difference, we recommend specifying **two separate Turborepo tasks**: one for running your tests, and one for running them in watch mode.
 
-<Callout>
+<Callout type="info">
   This strategy below creates two tasks, one for local development and one for
   CI. You could choose to make the `test` task for local development and create
   some `test:ci` task instead.

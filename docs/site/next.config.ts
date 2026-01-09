@@ -1,58 +1,43 @@
-import type { NextConfig } from "next";
-import { createMDX } from "fumadocs-mdx/next";
 import { withVercelToolbar } from "@vercel/toolbar/plugins/next";
+import { createMDX } from "fumadocs-mdx/next";
+import type { NextConfig } from "next";
 import { REDIRECTS_FOR_V2_DOCS } from "./lib/redirects/v2-docs.mjs";
 
 const withMDX = createMDX();
 const vercelToolbar = withVercelToolbar();
 
-const llmMarkdownRedirects = {
-  source: "/docs/:path*.md",
-  destination: "/llms.md/:path*"
-};
-
 const config: NextConfig = {
-  reactStrictMode: true,
-  images: {
-    formats: ["image/avif", "image/webp"],
-    remotePatterns: [
-      {
-        protocol: "https",
-        hostname: "ufa25dqjajkmio0q.public.blob.vercel-storage.com"
-      },
-      {
-        protocol: "https",
-        hostname: "x.com"
-      }
-    ],
-    minimumCacheTTL: 1800
+  experimental: {
+    turbopackFileSystemCacheForDev: true
   },
   typescript: {
     ignoreBuildErrors: true
   },
-  eslint: {
-    ignoreDuringBuilds: true
-  },
-  // Next.js still expects these to return Promises even without await
-  // eslint-disable-next-line @typescript-eslint/require-await -- Purposeful.
+
+  // biome-ignore lint/suspicious/useAwait: rewrite is async
   async rewrites() {
-    return {
-      beforeFiles:
-        process.env.VERCEL_ENV === "production"
-          ? [
-              {
-                source: "/api/feedback",
-                destination: "https://vercel.com/api/feedback"
-              },
-              llmMarkdownRedirects
-            ]
-          : [llmMarkdownRedirects]
-    };
+    return [
+      {
+        source: "/docs/:path*.md",
+        destination: "/en/llms.md/:path*"
+      }
+    ];
   },
-  // Next.js still expects these to return Promises even without await
-  // eslint-disable-next-line @typescript-eslint/require-await -- Purposeful.
+
+  // biome-ignore lint/suspicious/useAwait: redirect is async
   async redirects() {
     return [
+      // OpenAPI redirects (until we have more content)
+      {
+        source: "/docs/openapi",
+        destination: "/docs/openapi/artifacts/artifact-exists",
+        permanent: false
+      },
+      {
+        source: "/docs/openapi/artifacts",
+        destination: "/docs/openapi/artifacts/artifact-exists",
+        permanent: false
+      },
       {
         source: "/usage",
         destination: "/repo/docs/reference/command-line-reference",
@@ -160,17 +145,6 @@ const config: NextConfig = {
         source: "/repo/docs/:slug*",
         destination: "/docs/:slug*",
         permanent: true
-      },
-      // OpenAPI redirects (until we have more content)
-      {
-        source: "/docs/openapi",
-        destination: "/repo/docs/openapi/artifacts/artifact-exists",
-        permanent: false
-      },
-      {
-        source: "/docs/openapi/artifacts",
-        destination: "/repo/docs/openapi/artifacts/artifact-exists",
-        permanent: false
       },
       {
         source: "/docs/getting-started/support-policy",
@@ -567,12 +541,6 @@ const config: NextConfig = {
         permanent: true
       },
       {
-        source: "/docs/platform-environment-variables",
-        destination:
-          "/docs/crafting-your-repository/using-environment-variables#platform-environment-variables",
-        permanent: true
-      },
-      {
         source: "/docs/handbook",
         destination: "/docs/crafting-your-repository",
         permanent: true
@@ -598,8 +566,21 @@ const config: NextConfig = {
         permanent: true
       }
     ];
+  },
+
+  images: {
+    formats: ["image/avif", "image/webp"],
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "placehold.co"
+      },
+      {
+        protocol: "https",
+        hostname: "ufa25dqjajkmio0q.public.blob.vercel-storage.com"
+      }
+    ]
   }
 };
 
-// Required by Next.js, but we've extracted the config into a named export as well
 export default withMDX(vercelToolbar(config));

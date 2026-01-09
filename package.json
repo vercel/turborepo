@@ -33,15 +33,9 @@
     "typescript": "5.5.4"
   },
   "lint-staged": {
-    "*.{js,jsx,ts,tsx,md,mdx,mjs,yml,yaml,css,json,jsonc}": [
-      "oxfmt"
-    ],
-    "*.toml": [
-      "taplo format"
-    ],
-    "*.rs": [
-      "bash -c 'cargo fmt'"
-    ]
+    "*.{js,jsx,ts,tsx,md,mdx,mjs,yml,yaml,css,json,jsonc}": "oxfmt --no-error-on-unmatched-pattern",
+    "*.toml": "taplo format",
+    "*.rs": "bash -c 'cargo fmt'"
   },
   "packageManager": "pnpm@10.25.0",
   "engines": {

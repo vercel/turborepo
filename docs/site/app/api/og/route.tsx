@@ -1,12 +1,12 @@
-import React from "react";
 import { ImageResponse } from "next/og";
-import type { NextApiRequest } from "next/index";
-import { RepoLogo } from "../../_components/logos/og/repo-logo";
-import { VercelLogo } from "../../_components/logos/og/vercel-logo";
+import type { NextRequest } from "next/server";
+import { RepoLogo } from "@/components/logos/og/repo-logo";
+import { VercelLogo } from "@/components/logos/og/vercel-logo";
+import { verifyOgSignatureEdge } from "@/lib/og/sign-edge";
 
 export const runtime = "edge";
 
-function _arrayBufferToBase64(buffer: ArrayBuffer): string {
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
   let binary = "";
   const bytes = new Uint8Array(buffer);
   const len = bytes.byteLength;
@@ -16,8 +16,19 @@ function _arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-export async function GET(req: NextApiRequest): Promise<Response> {
+export async function GET(req: NextRequest): Promise<Response> {
   try {
+    const { searchParams } = new URL(req.url);
+
+    const title = searchParams.get("title") || "";
+    const sig = searchParams.get("sig") || "";
+
+    // Verify signature - title can be empty for home page
+    const isValid = await verifyOgSignatureEdge({ title }, sig);
+    if (!isValid) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
     const [geist, geistMono, bg] = await Promise.all([
       fetch(new URL("./Geist-Regular.ttf", import.meta.url)).then((res) =>
         res.arrayBuffer()
@@ -25,23 +36,12 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       fetch(new URL("./GeistMono-Regular.ttf", import.meta.url)).then((res) =>
         res.arrayBuffer()
       ),
-      _arrayBufferToBase64(
+      arrayBufferToBase64(
         await fetch(new URL("./bg.jpeg", import.meta.url)).then((res) =>
           res.arrayBuffer()
         )
       )
     ]);
-
-    // Default to empty string if URL is not available
-    const reqUrl = req.url || "";
-    const { searchParams } = new URL(reqUrl);
-
-    let title: string | null = null;
-
-    if (searchParams.has("title")) {
-      // @ts-expect-error -- We just checked .has so we know its there.
-      title = searchParams.get("title").slice(0, 100);
-    }
 
     return new ImageResponse(
       <div
@@ -96,6 +96,8 @@ export async function GET(req: NextApiRequest): Promise<Response> {
         </div>
       </div>,
       {
+        width: 1200,
+        height: 630,
         fonts: [
           {
             name: "Geist Mono",
@@ -113,7 +115,7 @@ export async function GET(req: NextApiRequest): Promise<Response> {
       }
     );
   } catch (err: unknown) {
-    // Prevents us from have no OG image at all in production.
+    // Prevents us from having no OG image at all in production.
     if (process.env.VERCEL_ENV === "production") {
       return new Response(undefined, {
         status: 302,

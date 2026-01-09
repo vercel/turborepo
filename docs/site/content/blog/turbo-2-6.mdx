@@ -5,11 +5,15 @@ description: "Microfrontends, Bun package manager to stable, task search in TUI"
 tag: "web development"
 ---
 
-import { Authors } from "#components/authors";
+import { Authors } from "@/components/blog/authors";
 import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Date } from "#components/blog/date";
-import { Accordion, Accordions } from "#components/accordion";
-import { ThemeAwareImage } from "#components/theme-aware-image";
+import { Date } from "@/components/blog/date";
+import { Accordion, Accordions } from "@/components/geistdocs/accordion";
+import { ThemeAwareImage } from "@/components/geistdocs/theme-aware-image";
+import MicrofrontendsImageDark from "../../public/images/blog/turbo-2-6/microfrontends-dark.png";
+import MicrofrontendsImageLight from "../../public/images/blog/turbo-2-6/microfrontends-light.png";
+import TaskSearchImageDark from "../../public/images/blog/turbo-2-6/task-search-dark.png";
+import TaskSearchImageLight from "../../public/images/blog/turbo-2-6/task-search-light.png";
 
 # Turborepo 2.6
 
@@ -25,7 +29,7 @@ Turborepo 2.6 includes a number of improvements to developer experience for your
 
 Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -75,7 +79,7 @@ bunx create-turbo@latest
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ## Microfrontends
 
@@ -85,7 +89,7 @@ Vertical microfrontends are an architecture where multiple applications are serv
   className="my-4 flex justify-center"
   light={{
     alt: "",
-    src: "/images/blog/turbo-2-6/microfrontends-light.png",
+    src: MicrofrontendsImageLight,
     props: {
       width: 1600,
       height: 750,
@@ -94,7 +98,7 @@ Vertical microfrontends are an architecture where multiple applications are serv
   }}
   dark={{
     alt: "",
-    src: "/images/blog/turbo-2-6/microfrontends-dark.png",
+    src: MicrofrontendsImageDark,
     props: {
       width: 1600,
       height: 750,
@@ -173,7 +177,7 @@ Today, we’re improving on our task search to make it one of the fundamental wa
   className="my-4 flex justify-center"
   light={{
     alt: 'A terminal window showing Turborepo\'s terminal UI. The top bar shows a search query for "docs" and the task list has dimmed every task except the tasks containing the name "docs".',
-    src: "/images/blog/turbo-2-6/task-search-light.png",
+    src: TaskSearchImageLight,
     props: {
       width: 682,
       height: 746.5,
@@ -182,7 +186,7 @@ Today, we’re improving on our task search to make it one of the fundamental wa
   }}
   dark={{
     alt: 'A terminal window showing Turborepo\'s terminal UI. The top bar shows a search query for "docs" and the task list has dimmed every task except the tasks containing the name "docs".',
-    src: "/images/blog/turbo-2-6/task-search-dark.png",
+    src: TaskSearchImageDark,
     props: {
       width: 682,
       height: 746.5,

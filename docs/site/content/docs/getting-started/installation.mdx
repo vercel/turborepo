@@ -3,12 +3,9 @@ title: Installation
 description: Learn how to get started with Turborepo.
 ---
 
-import { Callout } from "#components/callout";
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-
 Get started with Turborepo in a few moments using:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```bash title="Terminal"
@@ -38,7 +35,7 @@ bunx create-turbo@latest
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 The starter repository will have:
 
@@ -55,7 +52,7 @@ For more details on the starter, [visit the README for the basic starter on GitH
 
 A global install of `turbo` brings flexibility and speed to your local workflows.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
   ```bash title="Terminal"
@@ -85,7 +82,7 @@ A global install of `turbo` brings flexibility and speed to your local workflows
 
   </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 Once installed globally, you can run your scripts through `turbo` from your terminal, quickly running one-off commands to use within your repository. For example:
 
@@ -94,7 +91,7 @@ Once installed globally, you can run your scripts through `turbo` from your term
 - `turbo generate`: Run [Generators](/docs/guides/generating-code) to add new code to your repository
 - `cd apps/docs && turbo build`: Run the `build` script in the `docs` package and its dependencies. For more, visit the [Automatic Package Scoping section](/docs/crafting-your-repository/running-tasks#automatic-package-scoping).
 
-<Callout type="good-to-know">
+<Callout type="info">
   `turbo` is an alias for [`turbo run`](/docs/reference/run). For example,
   `turbo build` and `turbo run build` will both run your `build` task.
 </Callout>
@@ -114,7 +111,7 @@ You can also take advantage of global `turbo` when creating your CI pipelines. V
 
 When collaborating with other developers in a repository, it's a good idea to pin versions of dependencies. You can do this with `turbo` by adding it as a `devDependency` in the root of your repository:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
     ```bash title="Terminal"
@@ -144,7 +141,7 @@ When collaborating with other developers in a repository, it's a good idea to pi
 
   </Tab>
 
-  </Tabs>
+  </PackageManagerTabs>
 
 You can continue to use your global installation of `turbo` to run commands. Global `turbo` will defer to the local version of your repository if it exists.
 

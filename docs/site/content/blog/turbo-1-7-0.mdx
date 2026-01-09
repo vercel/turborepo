@@ -5,13 +5,15 @@ date: "2023/01/11"
 tag: "web development"
 ---
 
-import { Tabs, Tab } from "../../components/tabs";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
 
-<h1 className="text-center">Turborepo 1.7</h1>
+import TurboInferenceImage from "../../public/images/blog/turbo-1-7-0/turbo-inference.png";
 
-import { Badge } from "#components/badge";
-import { Authors } from "#components/authors";
-import { Date } from "#components/blog/date";
+# Turborepo 1.7
+
+import { Badge } from "@/components/ui/badge";
+import { Authors } from "@/components/blog/authors";
+import { Date } from "@/components/blog/date";
 
 <Date>Wednesday, January 11th, 2023</Date>
 
@@ -92,7 +94,18 @@ pnpm add turbo --global
 
 Your globally installed version of `turbo` will only be used when a locally installed version of `turbo` does not exist or cannot be found.
 
-![turbo-inference](/images/blog/turbo-1-7-0/turbo-inference.png)
+<ThemeAwareImage
+  light={{
+    alt: "Turborepo inference diagram showing how turbo finds your local turbo version",
+    src: TurboInferenceImage,
+    props: { width: 800, height: 400 },
+  }}
+  dark={{
+    alt: "Turborepo inference diagram showing how turbo finds your local turbo version",
+    src: TurboInferenceImage,
+    props: { width: 800, height: 400 },
+  }}
+/>
 
 `turbo --version` and `turbo bin` will show you the version and binary location, respectively, of the copy of `turbo` that will execute your tasks.
 Additionally, running with `-vv` or `--verbosity=2` will always show if your local, or global `turbo` is being used.

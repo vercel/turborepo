@@ -1,4 +1,4 @@
-import { cn } from "../cn";
+import { cn } from "@/lib/utils";
 
 export interface GridProps extends React.HTMLAttributes<HTMLDivElement> {
   children: React.ReactNode;
@@ -33,7 +33,6 @@ export function Grid({
   const gridClass = cn(
     "grid w-full",
     gapClass,
-    // @ts-expect-error -- This works as expected
     columns.sm && `grid-cols-${columns.sm}`,
     columns.md && `md:grid-cols-${columns.md}`,
     columns.lg && `lg:grid-cols-${columns.lg}`,

@@ -1,6 +1,5 @@
-import { repoDocsPages, blog, extraPages } from "#app/source.ts";
-import { openapiPages } from "#app/(openapi)/docs/openapi/source.ts";
-import { discoverStaticRoutes, getAppDirectory } from "./route-discovery.ts";
+import { source, blog, openapiPages } from "@/lib/geistdocs/source";
+import { discoverStaticRoutes, getAppDirectory } from "./route-discovery";
 
 /**
  * Collect all page URLs from both automatic route discovery and fumadocs loaders.
@@ -25,17 +24,12 @@ export function getAllPageUrls(): Array<string> {
   // These handle content-driven pages with [...slug] patterns
 
   // Docs pages
-  for (const page of repoDocsPages.getPages()) {
+  for (const page of source.getPages()) {
     urlSet.add(page.url);
   }
 
   // Blog pages (exclude external blog posts - they link off-site)
   for (const page of blog.getPages()) {
-    urlSet.add(page.url);
-  }
-
-  // Extra pages (governance, terms, etc.)
-  for (const page of extraPages.getPages()) {
     urlSet.add(page.url);
   }
 

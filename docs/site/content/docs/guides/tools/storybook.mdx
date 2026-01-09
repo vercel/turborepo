@@ -3,17 +3,13 @@ title: Storybook
 description: Learn how to use Storybook in a Turborepo.
 ---
 
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Callout } from "#components/callout";
-import { Steps, Step } from "#components/steps";
-
 [Storybook](https://storybook.js.org/) is a popular way to build UI components in an isolated environment. By putting Storybook into your Turborepo, you can easily develop your design system right alongside your applications.
 
 ## Quickstart
 
 If you'd rather use a template, this guide is walking through how to build [this Storybook/Turborepo template](https://vercel.com/templates/react/turborepo-design-system) on Vercel.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -46,7 +42,7 @@ bunx create-turbo@latest -e design-system
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ## Guide
 
@@ -57,7 +53,7 @@ bunx create-turbo@latest -e design-system
 
 If you don't have an existing project, use [create-turbo](/docs/getting-started/installation) to create a new monorepo:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -90,7 +86,7 @@ bunx create-turbo@latest
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 </Step>
 
@@ -111,7 +107,7 @@ cd apps/storybook
 
 In the `apps/storybook` directory, initialize a new Storybook application:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
 
@@ -143,11 +139,11 @@ bun create storybook@latest
 ```
 
   </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Follow the prompts to create an application. For the rest of this guide, we'll assume React and TypeScript.
 
-<Callout type="good-to-know">
+<Callout type="info">
   After going through Storybook's onboarding, you can [uninstall the onboarding
   addon](https://github.com/storybookjs/addon-onboarding/blob/main/README.md).
 </Callout>
@@ -159,7 +155,7 @@ Follow the prompts to create an application. For the rest of this guide, we'll a
 
 Now, install your UI package into Storybook.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -192,7 +188,7 @@ cd apps/storybook && bun install @repo/ui
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 </Step>
 
@@ -317,7 +313,7 @@ Update components imports so that they reference the now co-located modules. For
 + import { Button } from "./button";
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   You may also need to update [absolute
   imports](/docs/guides/tools/typescript#use-nodejs-subpath-imports-instead-of-typescript-compiler-paths)
   according to your changes and usage.
@@ -325,7 +321,7 @@ Update components imports so that they reference the now co-located modules. For
 
 You'll also need to install any Storybook packages required for writing stories. For example, moving the story from above would require that you install `@storybook/react` into your `@repo/ui` package.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -358,7 +354,7 @@ cd packages/ui && bun install @storybook/react --dev
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 </Step>
 
@@ -396,7 +392,7 @@ Additionally, create a [Package Configuration](/docs/reference/package-configura
 }
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   If you are using the [Compiled Package
   pattern](/docs/core-concepts/internal-packages#compiled-packages), you may
   also need to add `^build` to your `dependsOn`.

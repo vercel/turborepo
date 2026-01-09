@@ -4,11 +4,8 @@
   "tasks": {
     "build": {
       "env": [
-        "TURBOREPO_SFDC_CAMPAIGN_ID",
-        "CONVERT_KIT_FORM_ID",
         "TINYBIRD_TIME_SAVED_TOKEN",
         "ENABLE_EXPERIMENTAL_COREPACK",
-        "TRAY_URL",
         "FLAGS",
         "FLAGS_SECRET"
       ],
@@ -16,9 +13,7 @@
       "outputs": [".next/**", "!.next/cache/**"],
       "dependsOn": [
         "^build",
-        "rss",
         "schema",
-        "write-private-files",
         "collect-examples-data",
         "generate-openapi"
       ]
@@ -30,20 +25,16 @@
     },
     "schema": {
       "dependsOn": ["@turbo/types#build"],
-      "inputs": ["scripts/copy-json-schema.mjs"],
+      "inputs": ["scripts/copy-json-schema.ts"],
       "outputs": ["public/schema*.json"],
       "env": []
     },
-    "rss": {
-      "inputs": ["content/blog/**", "scripts/generate-rss.js"],
-      "outputs": ["public/feed.xml"],
-      "env": []
-    },
-    "write-private-files": {
-      "cache": false,
-      "env": ["SITE_ANALYTICS_MODULE_CODE", "MIDDLEWARE_MODULE_CODE"]
-    },
+
     "collect-examples-data": {
+      "cache": false
+    },
+    "check-links": {
+      "inputs": ["content/**/*.mdx", "../../link-checker/src/**"],
       "cache": false
     },
     "check-types": {

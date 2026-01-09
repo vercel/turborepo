@@ -3,8 +3,6 @@ title: Editor integration
 description: Making the most of Turborepo
 ---
 
-import { Callout } from "#components/callout";
-
 To get the best experience with `turbo`, Turborepo provides a few utilities for integrating with your editor.
 
 ## JSON Schema for `turbo.json`
@@ -41,7 +39,7 @@ Starting in Turborepo 2.4, `schema.json` is available in `node_modules` once you
 }
 ```
 
-<Callout title="node_modules location">
+<Callout type="info" title="node_modules location">
   We recommend installing `turbo` at the root of your repository, so the path
   for the schema should point to `node_modules` at the root of your repository.
   In [Package Configurations](/docs/reference/package-configurations), you may

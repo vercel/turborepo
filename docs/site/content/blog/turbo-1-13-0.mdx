@@ -5,13 +5,17 @@ description: Turborepo 1.13 brings a new and improved local development experien
 tag: "web development"
 ---
 
-<h1 className="text-center">Turborepo 1.13</h1>
+# Turborepo 1.13
 
-import { Authors } from "#components/authors";
-import { Date } from "#components/blog/date";
-import { Callout } from "#components/callout";
-import { ThemeAwareImage } from "#components/theme-aware-image";
-import { ExperimentalBadge } from "#components/experimental-badge";
+import { Authors } from "@/components/blog/authors";
+import { Date } from "@/components/blog/date";
+import { Callout } from "@/components/geistdocs/callout";
+import { ThemeAwareImage } from "@/components/geistdocs/theme-aware-image";
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+import ExperimentalUiGif from "../../public/images/blog/turbo-1-13-0/experimental-ui.gif";
+import TurboScanDark from "../../public/images/blog/turbo-1-13-0/turbo-scan-dark.png";
+import TurboScanLight from "../../public/images/blog/turbo-1-13-0/turbo-scan-light.png";
+import GitHubActionImage from "../../public/images/blog/turbo-1-13-0/github-action.png";
 
 <Date>Thursday, March 21st, 2024</Date>
 
@@ -39,8 +43,8 @@ With this release, we’re shipping a new, experimental terminal UI, which allow
 <ThemeAwareImage
   className="my-4 flex justify-center"
   light={{
-    alt: "A screenshot of a terminal running `turbo scan`.",
-    src: "/images/blog/turbo-1-13-0/experimental-ui.gif",
+    alt: "The new experimental terminal UI",
+    src: ExperimentalUiGif,
     props: {
       width: 800,
       height: 350,
@@ -48,8 +52,8 @@ With this release, we’re shipping a new, experimental terminal UI, which allow
     },
   }}
   dark={{
-    alt: "A screenshot of a terminal running `turbo scan`.",
-    src: "/images/blog/turbo-1-13-0/experimental-ui.gif",
+    alt: "The new experimental terminal UI",
+    src: ExperimentalUiGif,
     props: {
       width: 800,
       height: 350,
@@ -78,21 +82,20 @@ Running `turbo scan` will inspect your machine for optimizations that make your 
   className="my-4 flex justify-center"
   light={{
     alt: "A screenshot of a terminal running `turbo scan`.",
-    src: "/images/blog/turbo-1-13-0/turbo-scan-light.png",
+    src: TurboScanLight,
     props: {
       width: 934,
       height: 869,
-      className: "dark:hidden block rounded-xl border border-2",
+      className: "dark:hidden block rounded-xl",
     },
   }}
   dark={{
     alt: "A screenshot of a terminal running `turbo scan`.",
-    src: "/images/blog/turbo-1-13-0/turbo-scan-dark.png",
+    src: TurboScanDark,
     props: {
       width: 1868,
       height: 1800,
-      className:
-        "hidden dark:block rounded-xl border border-2 dark:border-gray-700",
+      className: "hidden dark:block rounded-xl dark:border-gray-700",
     },
   }}
 />
@@ -120,7 +123,7 @@ Additionally, Turborepo now ungroups any tasks that did not complete successfull
   className="my-4 flex justify-center"
   light={{
     alt: "A screenshot of a GitHub Action that ran a `turbo` task. The logs for tasks that completed successfully are folded while the errored task shows it's logs in full with red highlighting.",
-    src: "/images/blog/turbo-1-13-0/github-action.png",
+    src: GitHubActionImage,
     props: {
       width: 3306,
       height: 2607,
@@ -129,7 +132,7 @@ Additionally, Turborepo now ungroups any tasks that did not complete successfull
   }}
   dark={{
     alt: "A screenshot of a GitHub Action that ran a `turbo` task. The logs for tasks that completed successfully are folded while the errored task shows it's logs in full with red highlighting.",
-    src: "/images/blog/turbo-1-13-0/github-action.png",
+    src: GitHubActionImage,
     props: {
       width: 3306,
       height: 2607,

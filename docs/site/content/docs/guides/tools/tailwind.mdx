@@ -3,17 +3,13 @@ title: Tailwind CSS
 description: Learn how to use Tailwind CSS in a Turborepo.
 ---
 
-import { Tabs, Tab } from "fumadocs-ui/components/tabs";
-import { Callout } from "#components/callout";
-import { Steps, Step } from "#components/steps";
-
 [Tailwind CSS](https://tailwindcss.com/) is a CSS framework that allows you to rapidly build modern websites without ever leaving your HTML.
 
 ## Quickstart
 
 If you'd rather use a template, this guide is walking through how to build [this Tailwind CSS + Turborepo template](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind).
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -46,7 +42,7 @@ bunx create-turbo@latest -e with-tailwind
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ## Guide
 
@@ -59,7 +55,7 @@ bunx create-turbo@latest -e with-tailwind
 
 If you don't have an existing project, use [create-turbo](/docs/getting-started/installation) to create a new monorepo:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -92,7 +88,7 @@ bunx create-turbo@latest
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 </Step>
 
@@ -206,7 +202,7 @@ The `package.json` installs the dependencies for the package, sets up scripts fo
 }
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   Above, we've only included the code related to setting up Tailwind. The full
   package.json is
   [here](https://github.com/vercel/turborepo/tree/main/examples/with-tailwind/packages/ui/package.json).
@@ -273,7 +269,7 @@ This `styles.css` contains component-level styles for the shared UI library.
 
 Install the packages you've created into your application.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -308,7 +304,7 @@ cd packages/ui && bun install @repo/ui @repo/tailwind-config --dev
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Then, configure the files in your application so the styles from the UI package are reflected in the application.
 

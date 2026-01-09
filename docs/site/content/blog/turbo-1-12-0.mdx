@@ -5,11 +5,15 @@ description: Turborepo 1.12 adds popular community-requested features and feedba
 tag: "web development"
 ---
 
-<h1 className="text-center">Turborepo 1.12</h1>
+# Turborepo 1.12
 
-import { Authors } from "#components/authors";
-import { Date } from "#components/blog/date";
-import { ThemeAwareImage } from "#components/theme-aware-image";
+import { Authors } from "@/components/blog/authors";
+import { Date } from "@/components/blog/date";
+import { ThemeAwareImage } from "@/components/geistdocs/theme-aware-image";
+import ColorsInLogsLight from "../../public/images/blog/turbo-1-12-0/log-colors-light.png";
+import ColorsInLogsDark from "../../public/images/blog/turbo-1-12-0/log-colors-dark.png";
+import ErrorsOverhaulLight from "../../public/images/blog/turbo-1-12-0/light-errors-overhaul.png";
+import ErrorsOverhaulDark from "../../public/images/blog/turbo-1-12-0/errors-overhaul-dark.png";
 
 <Date>Tuesday, January 30th, 2024</Date>
 
@@ -34,7 +38,7 @@ Color is a great way to quickly surface important information in user interfaces
   className="my-4 flex justify-center"
   light={{
     alt: "A screenshot of a terminal running a `turbo` task with colors from the underlying shell logs.",
-    src: "/images/blog/turbo-1-12-0/log-colors-light.png",
+    src: ColorsInLogsLight,
     props: {
       width: 625,
       height: 1000,
@@ -43,7 +47,7 @@ Color is a great way to quickly surface important information in user interfaces
   }}
   dark={{
     alt: "A screenshot of a terminal running a `turbo` task with colors from the underlying shell logs.",
-    src: "/images/blog/turbo-1-12-0/log-colors-dark.png",
+    src: ColorsInLogsDark,
     props: {
       width: 625,
       height: 1000,
@@ -62,7 +66,7 @@ An important part of developer experience is ensuring that, when things go wrong
   className="my-4 flex justify-center"
   light={{
     alt: "A screenshot of a terminal attempting to run a `turbo` task but receiving an informative error that an unknown key `output`, was found in the `turbo.json` file.",
-    src: "/images/blog/turbo-1-12-0/light-errors-overhaul.png",
+    src: ErrorsOverhaulLight,
     props: {
       width: 682,
       height: 746.5,
@@ -71,7 +75,7 @@ An important part of developer experience is ensuring that, when things go wrong
   }}
   dark={{
     alt: "A screenshot of a terminal attempting to run a `turbo` task but receiving an informative error that an unknown key `output`, was found in the `turbo.json` file.",
-    src: "/images/blog/turbo-1-12-0/errors-overhaul-dark.png",
+    src: ErrorsOverhaulDark,
     props: {
       width: 682,
       height: 746.5,
