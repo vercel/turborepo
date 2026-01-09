@@ -117,7 +117,10 @@ impl TurboSubscriber {
                 .from_env_lossy()
                 .add_directive("reqwest=error".parse().unwrap())
                 .add_directive("hyper=warn".parse().unwrap())
-                .add_directive("h2=warn".parse().unwrap());
+                .add_directive("h2=warn".parse().unwrap())
+                // Filter rustls warnings about invalid certificates (e.g. self-signed certs)
+                // These aren't actionable by users and create noise in corporate proxy environments
+                .add_directive("rustls=error".parse().unwrap());
 
             if let Some(max_level) = level_override {
                 filter.add_directive(max_level.into())
