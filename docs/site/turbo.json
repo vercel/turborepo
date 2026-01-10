@@ -11,15 +11,10 @@
       ],
       "inputs": ["$TURBO_DEFAULT$", "content/**"],
       "outputs": [".next/**", "!.next/cache/**"],
-      "dependsOn": [
-        "^build",
-        "schema",
-        "collect-examples-data",
-        "generate-openapi"
-      ]
+      "dependsOn": ["^build", "schema", "collect-examples-data"]
     },
     "dev": {
-      "dependsOn": ["schema", "collect-examples-data", "generate-openapi"],
+      "dependsOn": ["schema", "collect-examples-data"],
       "persistent": true,
       "cache": false
     },
@@ -38,12 +33,7 @@
       "cache": false
     },
     "check-types": {
-      "dependsOn": ["collect-examples-data", "generate-openapi"]
-    },
-    "generate-openapi": {
-      "env": ["BASE_URL", "PROTECTION_BYPASS_SECRET"],
-      "passThroughEnv": ["PORT"],
-      "cache": false
+      "dependsOn": ["collect-examples-data"]
     }
   }
 }

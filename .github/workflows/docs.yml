@@ -23,4 +23,4 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Run docs checks
-        run: turbo run check-types check-links --filter="./docs/*"
+        run: turbo run check-types check-links check-openapi --filter="./docs/*"

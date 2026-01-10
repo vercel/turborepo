@@ -1,8 +1,7 @@
-import { fetchOpenAPISpec } from "@/lib/openapi-spec";
+import spec from "@/lib/remote-cache-openapi.json";
 
 export const revalidate = 0;
 
 export async function GET(): Promise<Response> {
-  const spec = await fetchOpenAPISpec();
   return Response.json(spec);
 }
