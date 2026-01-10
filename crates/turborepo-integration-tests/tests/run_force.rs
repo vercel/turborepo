@@ -104,9 +104,6 @@ async fn test_baseline_cache_miss() -> Result<()> {
     Ok(())
 }
 
-// =============================================================================
-// TURBO_FORCE=true scenarios
-// =============================================================================
 
 #[test_case(ForceFlag::Missing, "env_true_flag_missing" ; "env_true_flag_missing_bypasses_cache")]
 #[test_case(ForceFlag::True, "env_true_flag_true" ; "env_true_flag_true_bypasses_cache")]
