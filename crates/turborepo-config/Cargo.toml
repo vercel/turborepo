@@ -1,0 +1,37 @@
+[package]
+name = "turborepo-config"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+atty = { workspace = true }
+camino = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+derive_setters = { workspace = true }
+itertools = { workspace = true }
+merge = { workspace = true }
+miette = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+struct_iterable = "0.1.1"
+thiserror = { workspace = true }
+tracing = { workspace = true }
+turbopath = { workspace = true }
+turborepo-api-client = { workspace = true }
+turborepo-auth = { path = "../turborepo-auth" }
+turborepo-cache = { workspace = true }
+turborepo-ci = { workspace = true }
+turborepo-dirs = { path = "../turborepo-dirs" }
+turborepo-repository = { path = "../turborepo-repository" }
+turborepo-scm = { path = "../turborepo-scm" }
+turborepo-turbo-json = { path = "../turborepo-turbo-json" }
+turborepo-types = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+test-case = { workspace = true }
+
+[lints]
+workspace = true

@@ -1,16 +1,18 @@
 ---
 title: Turborepo 0.4.0
 description: Turborepo 0.4.0 introduces 10x faster hashing, pruned workspaces with sparse installs, a new pipeline configuration API, and improved cache control.
-tag: 'web development'
-date: '2021/04/02'
-ogImage: '/images/blog/joining-vercel/x-card.png'
+tag: "web development"
+date: "2021/04/02"
+ogImage: "/images/blog/joining-vercel/x-card.png"
 ---
 
-<h1 className="text-center">Turborepo 0.4.0</h1>
+# Turborepo 0.4.0
 
-import { Authors } from '#components/authors';
+import { Authors } from "@/components/blog/authors";
 
-<Authors authors={['jaredpalmer']} />
+import TurboSchedulerImage from "../../public/images/blog/turbo-0-4-0/turbo-vs-lerna-execution.png";
+
+<Authors authors={["jaredpalmer"]} />
 
 I'm excited to announce the release of Turborepo v0.4.0!
 
@@ -157,7 +159,18 @@ The above config would then be interpreted by `turbo` to optimally schedule exec
 
 What's that actually mean? In the past (like Lerna and Nx), `turbo` could only run tasks in topological order. With the addition of pipelines, `turbo` now constructs a topological "action" graph in addition to the actual dependency graph which it uses to determine the order in which tasks should be executed with maximum concurrency. The end result is that you no longer waste idle CPU time waiting around for stuff to finish (i.e. no more waterfalls).
 
-![Turborepo scheduler](/images/blog/turbo-0-4-0/turbo-vs-lerna-execution.png)
+<ThemeAwareImage
+  light={{
+    alt: "Turborepo scheduler compared to Lerna execution",
+    src: TurboSchedulerImage,
+    props: { width: 800, height: 400 },
+  }}
+  dark={{
+    alt: "Turborepo scheduler compared to Lerna execution",
+    src: TurboSchedulerImage,
+    props: { width: 800, height: 400 },
+  }}
+/>
 
 ## Improved Cache Control
 
@@ -183,7 +196,7 @@ Building on the example from above, you can now set cache output conventions acr
         // Never cache the `dev` command
         "cache": false
       },
-      "lint": {},
+      "lint": {}
     }
   }
 }

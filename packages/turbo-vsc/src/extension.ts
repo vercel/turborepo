@@ -8,7 +8,7 @@ import {
   TextEditor,
   Range,
   Uri,
-  env,
+  env
 } from "vscode";
 import * as cp from "child_process";
 import * as path from "path";
@@ -17,7 +17,7 @@ import * as fs from "fs";
 import {
   LanguageClient,
   LanguageClientOptions,
-  ServerOptions,
+  ServerOptions
 } from "vscode-languageclient/node";
 
 import { visit } from "jsonc-parser";
@@ -53,7 +53,7 @@ function rainbowRgb(i: number) {
 
 const pipelineColors = [...Array(10).keys()].map(rainbowRgb).map((color) =>
   window.createTextEditorDecorationType({
-    color,
+    color
   })
 );
 
@@ -62,7 +62,7 @@ const refreshDecorations = useDebounce(updateJSONDecorations, 1000);
 export function activate(context: ExtensionContext) {
   const options: cp.ExecSyncOptionsWithStringEncoding = {
     cwd: workspace.workspaceFolders?.[0].uri.path,
-    encoding: "utf8",
+    encoding: "utf8"
   };
 
   const turboSettings = workspace.getConfiguration("turbo");
@@ -167,7 +167,7 @@ export function activate(context: ExtensionContext) {
       const terminal = window.createTerminal({
         name: `${args}`,
         isTransient: true,
-        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg"),
+        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg")
       });
       terminal.sendText(`${turboPath} run ${args}`);
       terminal.show();
@@ -179,7 +179,7 @@ export function activate(context: ExtensionContext) {
       const terminal = window.createTerminal({
         name: "Turbo Codemod",
         isTransient: true,
-        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg"),
+        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg")
       });
       terminal.sendText(`npx --yes @turbo/codemod ${args}`);
       terminal.show();
@@ -187,11 +187,11 @@ export function activate(context: ExtensionContext) {
   );
 
   context.subscriptions.push(
-    commands.registerCommand("turbo.install", (args) => {
+    commands.registerCommand("turbo.install", () => {
       const terminal = window.createTerminal({
         name: "Install Turbo",
         isTransient: true,
-        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg"),
+        iconPath: Uri.joinPath(context.extensionUri, "resources", "icon.svg")
       });
       terminal.sendText("npm i -g turbo && exit");
       terminal.show();
@@ -258,11 +258,11 @@ export function activate(context: ExtensionContext) {
 
   const serverOptions: ServerOptions = {
     run: {
-      command: lspPath,
+      command: lspPath
     },
     debug: {
-      command: lspPath,
-    },
+      command: lspPath
+    }
   };
 
   // Options to control the language client
@@ -270,8 +270,8 @@ export function activate(context: ExtensionContext) {
     // Register the server for turbo json documents
     documentSelector: [
       { scheme: "file", pattern: "**/turbo.json" },
-      { scheme: "file", pattern: "**/package.json" },
-    ],
+      { scheme: "file", pattern: "**/package.json" }
+    ]
   };
 
   // Create the language client and start the client.
@@ -321,7 +321,7 @@ function updateJSONDecorations(editor?: TextEditor) {
             new Range(
               editor.document.positionAt(index),
               editor.document.positionAt(index + 1)
-            ),
+            )
           ]);
         }
       }
@@ -339,7 +339,7 @@ function updateJSONDecorations(editor?: TextEditor) {
       } else {
         throw Error("imbalanced visitor");
       }
-    },
+    }
   });
 }
 
@@ -380,7 +380,7 @@ async function promptGlobalTurbo(useLocalTurbo: boolean) {
 function findLocalTurbo(): string | undefined {
   const options: cp.ExecSyncOptionsWithStringEncoding = {
     encoding: "utf8",
-    cwd: workspace.workspaceFolders?.[0].uri.path,
+    cwd: workspace.workspaceFolders?.[0].uri.path
   };
 
   const checks = [
@@ -417,7 +417,7 @@ function findLocalTurbo(): string | undefined {
       logs.appendLine("attempting to find local turbo using bun");
       const binFolder = cp.execSync("bun pm bin", options).trim();
       return path.join(binFolder, "turbo");
-    },
+    }
   ];
 
   for (const potentialPath of checks) {

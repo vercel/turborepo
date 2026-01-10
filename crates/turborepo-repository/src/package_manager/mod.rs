@@ -294,11 +294,16 @@ impl PackageManager {
             }
         };
 
+        // Normalize globs by stripping leading "./" since paths are relative to the
+        // root anyway and other parts of the codebase don't include the "./"
+        // prefix. See https://github.com/vercel/turborepo/issues/8599
         let (inclusions, exclusions) = globs.into_iter().partition_map(|glob| {
             if let Some(exclusion) = glob.strip_prefix('!') {
+                let exclusion = exclusion.strip_prefix("./").unwrap_or(exclusion);
                 Either::Right(exclusion.to_string())
             } else {
-                Either::Left(glob)
+                let glob = glob.strip_prefix("./").unwrap_or(&glob);
+                Either::Left(glob.to_string())
             }
         });
 
@@ -843,6 +848,42 @@ mod tests {
         let nested: PackageJsonWorkspaces =
             serde_json::from_str("{ \"workspaces\": {\"packages\": [\"packages/**\"]}}")?;
         assert_eq!(nested.workspaces.as_ref(), vec!["packages/**"]);
+        Ok(())
+    }
+
+    /// Test that workspace globs with leading "./" are normalized
+    /// See https://github.com/vercel/turborepo/issues/8599
+    #[test]
+    fn test_workspace_globs_leading_dot_slash_normalized() -> Result<(), Error> {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        let package_json_path = repo_root.join_component("package.json");
+
+        // Test with leading "./" in workspace globs
+        std::fs::write(
+            package_json_path.as_std_path(),
+            r#"{"workspaces": ["./packages/*", "!./packages/excluded"]}"#,
+        )?;
+
+        let pm = PackageManager::Npm;
+        let globs = pm.get_workspace_globs(repo_root)?;
+
+        // Verify the leading "./" is stripped from inclusions
+        assert_eq!(globs.raw_inclusions, vec!["packages/*"]);
+        // Exclusions include both the configured exclusion (normalized) and default
+        // exclusions
+        assert!(
+            globs
+                .raw_exclusions
+                .contains(&"packages/excluded".to_string())
+        );
+        // Make sure it's normalized (doesn't have leading "./")
+        assert!(
+            !globs
+                .raw_exclusions
+                .contains(&"./packages/excluded".to_string())
+        );
+
         Ok(())
     }
 

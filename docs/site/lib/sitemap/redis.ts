@@ -47,7 +47,7 @@ export function createEmptyState(): SitemapState {
   return {
     version: SITEMAP_CONFIG.stateVersion,
     lastCrawl: new Date().toISOString(),
-    pages: {},
+    pages: {}
   };
 }
 
@@ -83,7 +83,7 @@ export function updatePageState(
     url,
     contentHash,
     lastmod: now,
-    lastCrawled: now,
+    lastCrawled: now
   };
   return { updated: true, isNew: true };
 }

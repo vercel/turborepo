@@ -3,12 +3,6 @@ title: Structuring a repository
 description: Start by creating a repository using the conventions of the ecosystem.
 ---
 
-import { Callout } from '#components/callout';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Step, Steps } from '#components/steps';
-import { File, Folder, Files } from '#components/files';
-import { LinkToDocumentation } from '#components/link-to-documentation';
-
 `turbo` is built on top of [Workspaces](https://vercel.com/docs/vercel-platform/glossary#workspace), a feature of package managers in the JavaScript ecosystem that allows you to group multiple packages in one repository.
 
 Following these conventions is important because it allows you to:
@@ -22,7 +16,7 @@ In this guide, we'll walk through setting up a multi-package workspace (monorepo
 
 Setting up a workspace's structure can be tedious to do by hand. If you're new to monorepos, we recommend [using `create-turbo` to get started](/docs/getting-started/installation) with a valid workspace structure right away.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```bash title="Terminal"
@@ -52,7 +46,7 @@ bunx create-turbo@latest
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 You can then review the repository for the characteristics described in this guide.
 
@@ -62,7 +56,7 @@ In JavaScript, a workspace can either be [a single package](/docs/guides/single-
 
 Below, the structural elements of `create-turbo` that make it a valid workspace are highlighted.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
   <Files>
@@ -149,7 +143,7 @@ Below, the structural elements of `create-turbo` that make it a valid workspace 
   </Files>
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ### Minimum requirements
 
@@ -168,7 +162,7 @@ Below, the structural elements of `create-turbo` that make it a valid workspace 
 
 First, your package manager needs to describe the locations of your packages. We recommend starting with splitting your packages into `apps/` for applications and services and `packages/` for everything else, like libraries and tooling.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
   ```json title="pnpm-workspace.yaml"
@@ -176,7 +170,7 @@ First, your package manager needs to describe the locations of your packages. We
     - "apps/*"
     - "packages/*"
   ```
-  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml">pnpm workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml" text="pnpm workspace documentation" />
 
   </Tab>
 
@@ -190,7 +184,7 @@ First, your package manager needs to describe the locations of your packages. We
   }
   ```
 
-  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared">yarn workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared" text="yarn workspace documentation" />
    </Tab>
 
   <Tab value="npm">
@@ -203,7 +197,7 @@ First, your package manager needs to describe the locations of your packages. We
   }
   ```
 
-  <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces">npm workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces" text="npm workspace documentation" />
   </Tab>
 
   <Tab value="bun">
@@ -216,10 +210,10 @@ First, your package manager needs to describe the locations of your packages. We
   }
   ```
 
-  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">bun workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="bun workspace documentation" />
   </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 Using this configuration, every directory **with a `package.json`** in the `apps` or `packages` directories will be considered a package.
 
@@ -244,7 +238,7 @@ In the directory of the package, there must be a `package.json` to make the pack
 
 The root `package.json` is the base for your workspace. Below is a common example of what you would find in a root `package.json`:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -324,7 +318,7 @@ The root `package.json` is the base for your workspace. Below is a common exampl
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ### Root `turbo.json`
 
@@ -388,9 +382,9 @@ Note that this example uses the [Just-in-Time Package](/docs/core-concepts/inter
 This would allow you to import `add` and `subtract` functions from the `@repo/math` package like so:
 
 ```ts title="./apps/my-app/src/index.ts"
-import { GRAVITATIONAL_CONSTANT, SPEED_OF_LIGHT } from '@repo/math';
-import { add } from '@repo/math/add';
-import { subtract } from '@repo/math/subtract';
+import { GRAVITATIONAL_CONSTANT, SPEED_OF_LIGHT } from "@repo/math";
+import { add } from "@repo/math/add";
+import { subtract } from "@repo/math/subtract";
 ```
 
 Using exports this way provides three major benefits:

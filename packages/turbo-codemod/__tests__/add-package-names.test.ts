@@ -5,19 +5,19 @@ import { transformer } from "../src/transforms/add-package-names";
 describe("add-package-names", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "add-package-names",
+    test: "add-package-names"
   });
 
   it("missing names", async () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
-      fixture: "missing-names",
+      fixture: "missing-names"
     });
 
     // run the transformer
     const result = await transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // result should be correct
@@ -53,13 +53,13 @@ describe("add-package-names", () => {
   it("duplicate names", async () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
-      fixture: "duplicate-names",
+      fixture: "duplicate-names"
     });
 
     // run the transformer
     const result = await transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // result should be correct
@@ -90,13 +90,13 @@ describe("add-package-names", () => {
   it("correct names", async () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
-      fixture: "correct-names",
+      fixture: "correct-names"
     });
 
     // run the transformer
     const result = await transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // result should be correct
@@ -119,13 +119,13 @@ describe("add-package-names", () => {
   it("ignored packages", async () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
-      fixture: "ignored-packages",
+      fixture: "ignored-packages"
     });
 
     // run the transformer
     const result = await transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     // result should be correct

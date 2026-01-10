@@ -1,0 +1,38 @@
+[package]
+name = "turborepo-turbo-json"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+biome_deserialize = { workspace = true }
+biome_deserialize_macros = { workspace = true }
+biome_diagnostics = { workspace = true }
+biome_json_parser = { workspace = true }
+biome_json_syntax = { workspace = true }
+camino = { workspace = true }
+convert_case = "0.6.0"
+miette = { workspace = true, features = ["fancy"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+struct_iterable = "0.1.1"
+thiserror = { workspace = true }
+tracing = { workspace = true }
+turbopath = { workspace = true }
+turborepo-boundaries = { workspace = true }
+turborepo-errors = { workspace = true }
+turborepo-fixed-map = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository" }
+turborepo-task-id = { workspace = true }
+turborepo-types = { workspace = true }
+turborepo-unescape = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+insta = { workspace = true }
+pretty_assertions = { workspace = true }
+tempfile = { workspace = true }
+test-case = { workspace = true }

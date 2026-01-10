@@ -8,14 +8,51 @@ import { dirname, resolve, relative, join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { Parse, type ReadEntry, extract } from "tar";
+import { ProxyAgent, type Dispatcher } from "undici";
 import { error, warn } from "./logger";
 
 const REQUEST_TIMEOUT = 10000;
 const DOWNLOAD_TIMEOUT = 120000;
 
 /**
- * Performs a fetch request with an automatic timeout.
+ * Gets proxy URL from environment variables.
+ * Checks both lowercase and uppercase variants.
+ */
+function getProxyForUrl(url: string): string | undefined {
+  const parsedUrl = new URL(url);
+  const isHttps = parsedUrl.protocol === "https:";
+
+  if (isHttps) {
+    return (
+      process.env.https_proxy ||
+      process.env.HTTPS_PROXY ||
+      process.env.http_proxy ||
+      process.env.HTTP_PROXY
+    );
+  }
+  return process.env.http_proxy || process.env.HTTP_PROXY;
+}
+
+let cachedProxyAgent: ProxyAgent | undefined;
+let cachedProxyUrl: string | undefined;
+
+/**
+ * Gets or creates a ProxyAgent for the given proxy URL.
+ * Caches the agent to avoid creating multiple instances.
+ */
+function getProxyAgent(proxyUrl: string): ProxyAgent {
+  if (cachedProxyAgent && cachedProxyUrl === proxyUrl) {
+    return cachedProxyAgent;
+  }
+  cachedProxyUrl = proxyUrl;
+  cachedProxyAgent = new ProxyAgent(proxyUrl);
+  return cachedProxyAgent;
+}
+
+/**
+ * Performs a fetch request with an automatic timeout and proxy support.
  * Centralizes the AbortController + setTimeout pattern to avoid repetition.
+ * Automatically respects HTTP_PROXY/HTTPS_PROXY environment variables.
  */
 async function fetchWithTimeout(
   url: string,
@@ -28,9 +65,16 @@ async function fetchWithTimeout(
   }, timeoutMs);
 
   try {
+    const proxyUrl = getProxyForUrl(url);
+    const dispatcher: Dispatcher | undefined = proxyUrl
+      ? getProxyAgent(proxyUrl)
+      : undefined;
+
     return await fetch(url, {
       ...options,
       signal: controller.signal,
+      // @ts-expect-error - dispatcher is a valid option for undici's fetch
+      dispatcher
     });
   } finally {
     clearTimeout(timeoutId);
@@ -85,7 +129,7 @@ export async function getRepoInfo(
         username,
         name,
         branch: info.default_branch,
-        filePath,
+        filePath
       } as RepoInfo;
     } catch {
       return;
@@ -109,7 +153,7 @@ export function hasRepo({
   username,
   name,
   branch,
-  filePath,
+  filePath
 }: RepoInfo): Promise<boolean> {
   const contentsUrl = `https://api.github.com/repos/${username}/${name}/contents`;
   const packagePath = `${filePath ? `/${filePath}` : ""}/package.json`;
@@ -189,7 +233,7 @@ export async function streamingExtract({
   url,
   root,
   strip,
-  filter,
+  filter
 }: StreamingExtractOptions) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
@@ -206,7 +250,16 @@ export async function streamingExtract({
   const createdDirs = new Set<string>();
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
+    const proxyUrl = getProxyForUrl(url);
+    const dispatcher: Dispatcher | undefined = proxyUrl
+      ? getProxyAgent(proxyUrl)
+      : undefined;
+
+    const response = await fetch(url, {
+      signal: controller.signal,
+      // @ts-expect-error - dispatcher is a valid option for undici's fetch
+      dispatcher
+    });
     if (!response.ok || !response.body) {
       throw new Error(`Failed to download: ${response.status}`);
     }
@@ -281,7 +334,7 @@ export async function streamingExtract({
         } else {
           entry.resume();
         }
-      },
+      }
     });
 
     await pipeline(body, createGunzip(), parser);
@@ -325,7 +378,7 @@ export async function downloadAndExtractRepo(
           rootPath = pathSegments.length ? pathSegments[0] : null;
         }
         return p.startsWith(`${rootPath}${filePath ? `/${filePath}/` : "/"}`);
-      },
+      }
     });
   } finally {
     await unlink(tempFile);
@@ -333,7 +386,26 @@ export async function downloadAndExtractRepo(
 }
 
 export async function downloadAndExtractExample(root: string, name: string) {
-  const tempDir = join(root, ".turbo-clone-temp");
+  // Validate example name to prevent path traversal and argument injection
+  // Only allow alphanumeric characters, hyphens, and underscores
+  if (!name || !/^[a-zA-Z0-9_-]+$/.test(name)) {
+    throw new Error(`Invalid example name: ${name}`);
+  }
+
+  // Normalize and validate the root directory to prevent unsafe git arguments
+  const normalizedRoot = resolve(root);
+  if (
+    !normalizedRoot ||
+    normalizedRoot.includes("\0") ||
+    normalizedRoot.startsWith("-")
+  ) {
+    throw new Error(`Invalid project root: ${normalizedRoot}`);
+  }
+
+  const tempDir = join(normalizedRoot, ".turbo-clone-temp");
+  if (!tempDir || tempDir.includes("\0") || tempDir.startsWith("-")) {
+    throw new Error(`Invalid temporary directory: ${tempDir}`);
+  }
 
   try {
     // Clone with partial clone (no blobs) and no checkout
@@ -347,7 +419,7 @@ export async function downloadAndExtractExample(root: string, name: string) {
         "1",
         "--sparse",
         "https://github.com/vercel/turborepo.git",
-        tempDir,
+        tempDir
       ],
       { stdio: "pipe" }
     );
@@ -355,18 +427,18 @@ export async function downloadAndExtractExample(root: string, name: string) {
     // Set up sparse checkout for just the example we want
     execFileSync("git", ["sparse-checkout", "set", `examples/${name}`], {
       cwd: tempDir,
-      stdio: "pipe",
+      stdio: "pipe"
     });
 
     // Checkout the files
     execFileSync("git", ["checkout"], {
       cwd: tempDir,
-      stdio: "pipe",
+      stdio: "pipe"
     });
 
     // Copy the example files to the root
     const examplePath = join(tempDir, "examples", name);
-    cpSync(examplePath, root, { recursive: true });
+    cpSync(examplePath, normalizedRoot, { recursive: true });
   } catch (gitError) {
     // Clean up temp directory if git clone failed partway through
     rmSync(tempDir, { recursive: true, force: true });
@@ -379,11 +451,11 @@ export async function downloadAndExtractExample(root: string, name: string) {
 
     await streamingExtract({
       url: "https://codeload.github.com/vercel/turborepo/tar.gz/main",
-      root,
+      root: normalizedRoot,
       strip: 3,
       filter: (p: string, rootPath: string | null) => {
         return p.startsWith(`${rootPath}/examples/${name}/`);
-      },
+      }
     });
 
     return;

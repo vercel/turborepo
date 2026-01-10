@@ -1,0 +1,206 @@
+---
+title: Oxc (oxlint and oxfmt)
+description: Learn how to use oxlint and oxfmt in your Turborepo projects.
+---
+
+import { CreateTurboCallout } from "./create-turbo-callout.tsx";
+
+[Oxc](https://oxc.rs/) is a collection of high-performance JavaScript and TypeScript tools written in Rust, including [oxlint](https://oxc.rs/docs/guide/usage/linter) (a fast linter) and [oxfmt](https://oxc.rs/docs/guide/usage/formatter) (a fast formatter).
+
+<CreateTurboCallout />
+
+## Using Oxc tools with Turborepo
+
+Similar to [Biome](/docs/guides/tools/biome), oxlint and oxfmt are **extraordinarily fast** tools. For this reason, we recommend using [Root Tasks](/docs/crafting-your-repository/configuring-tasks#registering-root-tasks) rather than creating separate scripts in each of your packages.
+
+<Callout type="info" title="Caching behavior">
+  Using oxlint or oxfmt at the root of the project will result in cache misses
+  for all tasks when you upgrade versions or change configuration. If you prefer
+  the tradeoff of higher cache hit ratios in these situations over less
+  configuration, you can still run these tools in separate scripts like the
+  other recommendations in our guides.
+</Callout>
+
+## Setting up oxlint
+
+### Install oxlint
+
+First, install oxlint in your repository:
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+pnpm add --save-dev oxlint
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+yarn add --dev oxlint
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+npm install --save-dev oxlint
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```bash title="Terminal"
+bun add --dev oxlint
+```
+
+</Tab>
+</PackageManagerTabs>
+
+### Create scripts
+
+Add scripts to the root `package.json` of your repository:
+
+```json title="./package.json"
+{
+  "scripts": {
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix ."
+  }
+}
+```
+
+### Create root tasks
+
+Register the scripts to Turborepo as [Root Tasks](/docs/crafting-your-repository/configuring-tasks#registering-root-tasks):
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "//#lint": {},
+    "//#lint:fix": {}
+  }
+}
+```
+
+You can now run `turbo run lint` to lint your entire repository.
+
+## Setting up oxfmt
+
+oxfmt is a fast code formatter for JavaScript and TypeScript, designed to be a drop-in replacement for Prettier.
+
+<Callout type="warn" title="oxfmt is experimental">
+  oxfmt is currently in alpha and may not have full feature parity with
+  Prettier. Check the [oxfmt
+  documentation](https://oxc.rs/docs/guide/usage/formatter) for the latest
+  status and supported options.
+</Callout>
+
+### Install oxfmt
+
+Install oxfmt as a dev dependency:
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+pnpm add --save-dev oxfmt
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+yarn add --dev oxfmt
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+npm install --save-dev oxfmt
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```bash title="Terminal"
+bun add --dev oxfmt
+```
+
+</Tab>
+</PackageManagerTabs>
+
+### Create scripts
+
+Add formatting scripts to the root `package.json`:
+
+```json title="./package.json"
+{
+  "scripts": {
+    "format": "oxfmt --check",
+    "format:fix": "oxfmt ."
+  }
+}
+```
+
+### Create root tasks
+
+Register the scripts to Turborepo:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "//#format": {},
+    "//#format:fix": {}
+  }
+}
+```
+
+You can now run `turbo run format` to check formatting and `turbo run format:fix` to format your code.
+
+## Using oxlint and oxfmt together
+
+For repositories using both tools, you can orchestrate them with a unified quality task:
+
+```json title="./package.json"
+{
+  "scripts": {
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "format": "oxfmt --check",
+    "format:fix": "oxfmt ."
+  }
+}
+```
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "//#quality": {
+      "dependsOn": ["//#lint", "//#format"]
+    },
+    "//#quality:fix": {
+      "dependsOn": ["//#lint:fix", "//#format:fix"]
+    },
+    "//#lint": {},
+    "//#lint:fix": {},
+    "//#format": {},
+    "//#format:fix": {}
+  }
+}
+```
+
+With this configuration:
+
+- Run `turbo run quality` to check both linting and formatting
+- Run `turbo run quality:fix` to fix both linting and formatting issues

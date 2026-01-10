@@ -1,21 +1,23 @@
 ---
 title: Turborepo 1.10
 description: Turborepo 1.10 introduces new features to improve your local development experience.
-date: '2023/06/01'
-tag: 'web development'
+date: "2023/06/01"
+tag: "web development"
 ---
 
-<h1 className="text-center">Turborepo 1.10</h1>
+# Turborepo 1.10
 
-import { Authors } from '#components/authors';
-import { Callout } from '#components/callout';
-import { ThemeAwareImage } from '#components/theme-aware-image';
-import { Date } from '#components/blog/date';
+import { Authors } from "@/components/blog/authors";
+import { Callout } from "@/components/geistdocs/callout";
+import { ThemeAwareImage } from "@/components/geistdocs/theme-aware-image";
+import { Date } from "@/components/blog/date";
+import TurboGenLight from "../../public/images/blog/turbo-1-10-0/turbo-gen-light.gif";
+import TurboGenDark from "../../public/images/blog/turbo-1-10-0/turbo-gen-dark.gif";
 
 <Date>Thursday, June 1st, 2023</Date>
 
 <Authors
-  authors={['nathanhammond', 'tomknickman', 'anthonyshew', 'mehulkar']}
+  authors={["nathanhammond", "tomknickman", "anthonyshew", "mehulkar"]}
 />
 
 Turborepo 1.10 introduces new features to improve your local development experience:
@@ -35,16 +37,16 @@ npx @turbo/codemod migrate
 <ThemeAwareImage
   className="my-4 rounded-xl border-2 border-[#f3f7fd] p-4 dark:border-[#1c2428]"
   light={{
-    alt: 'turbo-gen',
-    src: '/images/blog/turbo-1-10-0/turbo-gen-light.gif',
+    alt: "turbo-gen",
+    src: TurboGenLight,
     props: {
       width: 600,
       height: 205,
     },
   }}
   dark={{
-    alt: 'turbo-gen',
-    src: '/images/blog/turbo-1-10-0/turbo-gen-dark.gif',
+    alt: "turbo-gen",
+    src: TurboGenDark,
     props: {
       width: 600,
       height: 215,

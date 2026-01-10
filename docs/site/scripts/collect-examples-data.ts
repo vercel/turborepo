@@ -8,12 +8,12 @@ const ExampleMetaSchema = z
     name: z.string(),
     description: z.string(),
     template: z.string().optional(),
-    maintainedByCoreTeam: z.boolean(),
+    maintainedByCoreTeam: z.boolean()
   })
   .strict();
 
 // Collect metadata from each example
-const EXAMPLES = [];
+const EXAMPLES: z.infer<typeof ExampleMetaSchema>[] = [];
 
 // Get all directories in the examples folder
 const examplesDir = path.join(process.cwd(), "../../examples");

@@ -3,10 +3,6 @@ title: Upgrading
 description: Learn how to upgrade `turbo` to get the latest improvements to your repository.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Steps, Step } from '#components/steps';
-import { Callout } from '#components/callout';
-
 ## Upgrading to 2.0
 
 <Steps>
@@ -16,7 +12,7 @@ import { Callout } from '#components/callout';
 
 Get started upgrading from 1.x to 2.0 by running:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -50,13 +46,13 @@ bunx @turbo/codemod migrate
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 This will update your `turbo.json`(s) for many of the breaking changes from 1.x to 2.0.
 
 Additionally, a `name` field will be added to any `package.json` in the Workspace that doesn't have one.
 
-<Callout type="good-to-know">
+<Callout type="info">
   You may also manually run each codemod individually. Visit [the codemods
   page](/docs/reference/turbo-codemod#turborepo-2x) for more information.
 </Callout>
@@ -71,7 +67,7 @@ Additionally, a `name` field will be added to any `package.json` in the Workspac
 
 Turborepo 2.0 requires that your Workspace define this field as a way to improve the stability and behavioral predictability of your codebase. If you do not have one already, add this field to your root `package.json`:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -112,7 +108,7 @@ Turborepo 2.0 requires that your Workspace define this field as a way to improve
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 </Step>
 <Step>

@@ -19,7 +19,7 @@ export async function directory({ dir }: { dir: CreateCommandArgument }) {
       }
       return true;
     },
-    filter: (d: string) => d.trim(),
+    filter: (d: string) => d.trim()
   });
 
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it's defined because of the `when` condition above
@@ -31,7 +31,7 @@ export async function directory({ dir }: { dir: CreateCommandArgument }) {
 
 export async function packageManager({
   manager,
-  skipTransforms,
+  skipTransforms
 }: {
   manager: CreateCommandArgument;
   skipTransforms?: boolean;
@@ -56,22 +56,22 @@ export async function packageManager({
       { pm: "npm", label: "npm" },
       { pm: "pnpm", label: "pnpm" },
       { pm: "yarn", label: "yarn" },
-      { pm: "bun", label: "Bun" },
+      { pm: "bun", label: "bun" }
     ].map(({ pm, label }) => ({
       name: label,
       value: pm,
       disabled: availablePackageManagers[pm as PackageManager]
         ? false
-        : `not installed`,
-    })),
+        : `not installed`
+    }))
   });
 
   const {
-    packageManagerInput: selectedPackageManager = manager as PackageManager,
+    packageManagerInput: selectedPackageManager = manager as PackageManager
   } = packageManagerAnswer;
 
   return {
     name: selectedPackageManager,
-    version: availablePackageManagers[selectedPackageManager],
+    version: availablePackageManagers[selectedPackageManager]
   };
 }

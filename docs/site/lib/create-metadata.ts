@@ -1,4 +1,5 @@
 import type { Metadata } from "next/types";
+import { createSignedOgUrl } from "@/lib/og/sign";
 
 const getBaseURL = (): URL => {
   if (process.env.VERCEL_ENV === "production") {
@@ -12,40 +13,34 @@ const getBaseURL = (): URL => {
   return new URL(`http://localhost:${process.env.PORT || 3000}`);
 };
 
+/**
+ * Creates a signed OG image URL for the given title.
+ * For index pages (home, /repo), the title is omitted to show just the logo.
+ */
 const createOgImagePath = ({
   title,
-  product,
-  canonicalPath,
+  canonicalPath
 }: {
   title?: string;
-  product?: string;
   canonicalPath: string;
-}): URL => {
-  const ogURL = new URL(`/api/og`, getBaseURL());
-
-  if (title) {
-    ogURL.searchParams.set("title", title);
-  }
-
-  if (product) {
-    ogURL.searchParams.set("type", product);
-  }
-
-  const isIndex = canonicalPath === "";
+}): string => {
+  const isIndex = canonicalPath === "" || canonicalPath === "/";
   const isRepoIndex = canonicalPath === "/repo";
 
-  if (isIndex || isRepoIndex) {
-    ogURL.searchParams.delete("title");
-  }
+  // For index pages, use empty title (logo only)
+  const ogTitle = isIndex || isRepoIndex ? "" : title || "";
 
-  return ogURL;
+  return createSignedOgUrl(ogTitle);
 };
 
-/** A standardized, utility-ized replacement for generateMetadata. If you need async, see `asyncCreateMetadata`. */
+/**
+ * A standardized, utility-ized replacement for generateMetadata.
+ * Creates metadata with signed OG image URLs.
+ */
 export const createMetadata = ({
   title,
   description,
-  canonicalPath,
+  canonicalPath
 }: {
   title?: string;
   description?: string;
@@ -66,13 +61,13 @@ export const createMetadata = ({
       images: [
         createOgImagePath({
           title: canonicalPath === "/" ? "" : title,
-          canonicalPath,
-        }),
+          canonicalPath
+        })
       ],
-      url: canonicalPath,
+      url: canonicalPath
     },
     alternates: {
-      canonical: canonicalPath,
-    },
+      canonical: canonicalPath
+    }
   };
 };

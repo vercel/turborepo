@@ -3,9 +3,7 @@ title: Caching
 description: Learn about caching in Turborepo.
 ---
 
-import { Step, Steps } from '#components/steps';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Callout } from '#components/callout';
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
 
 Turborepo uses caching to speed up builds, ensuring you **never do the same work twice**. When your task is cacheable, Turborepo will restore the results of your task from cache using a fingerprint from the first time the task ran.
 
@@ -20,7 +18,7 @@ On this page, you'll learn:
 - [What Turborepo uses for the inputs and outputs to a hash](/docs/crafting-your-repository/caching#task-inputs)
 - [How to troubleshoot caching issues](#troubleshooting)
 
-<Callout type="good-to-know">
+<Callout type="info">
   Turborepo assumes that your tasks are **deterministic**. If a task is able to
   produce different outputs given the set of inputs that Turborepo is aware of,
   caching may not work as expected.
@@ -48,7 +46,7 @@ If you have [`turbo` installed globally](/docs/getting-started/installation#glob
 
 Alternatively, you can run the `build` script in `package.json` using your package manager.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```bash title="Terminal"
@@ -79,7 +77,7 @@ bun run build
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 This will result in a cache miss, since you've never ran `turbo` before with this [set of inputs](/docs/crafting-your-repository/caching#task-inputs) in this repository. The inputs are turned into a hash to check for in your local filesystem cache or in [the Remote Cache](/docs/core-concepts/remote-caching).
 
@@ -131,6 +129,48 @@ For information on how to connect your CI machines to Remote Cache, visit [the C
   documentation](/docs/core-concepts/remote-caching#self-hosting)
 </Callout>
 
+## Git Worktree Cache Sharing <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+When working with [Git worktrees](https://git-scm.com/docs/git-worktree), Turborepo automatically shares the local filesystem cache between the main worktree and any linked worktrees. This enables:
+
+- **Cache hits across branches**: Work done on one branch is available when you switch to another branch in a different worktree
+- **Reduced disk usage**: Avoids duplicate cache entries across worktrees
+- **Faster iteration**: Switching between feature branches benefits from existing cache
+
+### How it works
+
+Git worktrees allow you to have multiple working directories attached to the same repository, each checked out to a different branch. When you create a linked worktree with `git worktree add`, Turborepo detects this configuration and automatically redirects the cache to the main worktree's `.turbo/cache` directory.
+
+```bash title="Terminal"
+# Create a linked worktree for a feature branch
+git worktree add ../my-feature feature-branch
+
+# Run turbo in the linked worktree - cache is shared with main worktree
+cd ../my-feature
+turbo build
+```
+
+When worktree cache sharing is active, you'll see a message in the output:
+
+```
+• Remote caching enabled, using shared worktree cache
+```
+
+<Callout type="info">
+  If you set an explicit [`cacheDir`](/docs/reference/configuration#cachedir) in
+  your `turbo.json`, worktree cache sharing is disabled and each worktree will
+  use its own cache directory as specified.
+</Callout>
+
+### With Remote Caching
+
+Git worktree cache sharing works alongside [Remote Caching](/docs/core-concepts/remote-caching). When both are enabled:
+
+- **Local cache** is shared between worktrees on the same machine
+- **Remote cache** is shared across all machines and CI
+
+This means a task built in one worktree can be restored from the shared local cache in another worktree instantly, without a network request. If the local cache doesn't have the artifact, Turborepo will fall back to the Remote Cache as usual.
+
 ## What gets cached?
 
 Turborepo caches two types of outputs: Task outputs and Logs.
@@ -164,7 +204,7 @@ Under the hood, Turborepo creates two hashes: a global hash and a task hash. If 
 
 | Input                                                                                  | Example                                                                                                                                                                                                         |
 | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Resolved task definition from root `turbo.json`<br /> and package `turbo.json`         | Changing [`outputs`](/docs/reference/configuration#outputs) in either root `turbo.json` or [Package Configuration](/docs/reference/package-configurations)                                                      |
+| Resolved task definition from root `turbo.json` and package `turbo.json`               | Changing [`outputs`](/docs/reference/configuration#outputs) in either root `turbo.json` or [Package Configuration](/docs/reference/package-configurations)                                                      |
 | Lockfile changes that affect the Workspace root                                        | Updating dependencies in root `package.json` will cause **all** tasks to miss cache                                                                                                                             |
 | [`globalDependencies`](/docs/reference/configuration#globaldependencies) file contents | Changing `./.env` when it is listed in `globalDependencies` will cause **all** tasks to miss cache                                                                                                              |
 | Values of variables listed in [`globalEnv`](/docs/reference/configuration#globalenv)   | Changing the value of `GITHUB_TOKEN` when it is listed in `globalEnv`                                                                                                                                           |

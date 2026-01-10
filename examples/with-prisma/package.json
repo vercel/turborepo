@@ -1,9 +1,5 @@
 {
   "private": true,
-  "workspaces": [
-    "apps/*",
-    "packages/*"
-  ],
   "prisma": {
     "schema": "packages/database/prisma/schema.prisma",
     "seed": "tsx packages/database/src/seed.ts"
@@ -28,9 +24,10 @@
   "engines": {
     "node": ">=18"
   },
-  "packageManager": "yarn@1.22.19",
+  "packageManager": "pnpm@9.15.1",
   "name": "with-prisma",
   "dependencies": {
+    "@prisma/adapter-pg": "^7.2.0",
     "@prisma/client": "latest"
   }
 }

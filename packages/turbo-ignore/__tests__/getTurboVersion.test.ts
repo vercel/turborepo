@@ -8,7 +8,7 @@ describe("getWorkspace()", () => {
     expect(
       getTurboVersion(
         {
-          turboVersion: "1.2.3",
+          turboVersion: "1.2.3"
         },
         "./__fixtures__/app"
       )

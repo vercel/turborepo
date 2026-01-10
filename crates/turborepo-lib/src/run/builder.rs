@@ -29,7 +29,8 @@ use turborepo_telemetry::events::{
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_ui::{ColorConfig, ColorSelector};
+use turborepo_types::{DryRunMode, UIMode};
+use turborepo_ui::ColorConfig;
 #[cfg(feature = "daemon-package-discovery")]
 use {
     crate::run::package_discovery::DaemonPackageDiscovery,
@@ -40,7 +41,6 @@ use {
 };
 
 use crate::{
-    cli::DryRunMode,
     commands::CommandBase,
     config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder, EngineExt},
@@ -48,7 +48,7 @@ use crate::{
     opts::Opts,
     run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,
-    turbo_json::{TurboJson, TurboJsonLoader, TurboJsonReader, UIMode},
+    turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
     DaemonConnector,
 };
 
@@ -383,6 +383,10 @@ impl RunBuilder {
             };
 
         let scm = scm.await.expect("detecting scm panicked");
+        debug!(
+            "RunBuilder creating AsyncCache with cache_dir={}, repo_root={}",
+            self.opts.cache_opts.cache_dir, self.repo_root
+        );
         let async_cache = AsyncCache::new(
             &self.opts.cache_opts,
             &self.repo_root,
@@ -401,13 +405,13 @@ impl RunBuilder {
         let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
         let turbo_json_loader = if task_access.is_enabled() {
-            TurboJsonLoader::task_access(
+            UnifiedTurboJsonLoader::task_access(
                 reader,
                 root_turbo_json_path.clone(),
                 root_package_json.clone(),
             )
         } else if is_single_package {
-            TurboJsonLoader::single_package(
+            UnifiedTurboJsonLoader::single_package(
                 reader,
                 root_turbo_json_path.clone(),
                 root_package_json.clone(),
@@ -416,20 +420,20 @@ impl RunBuilder {
         // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
         (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
         {
-            TurboJsonLoader::workspace_no_turbo_json(
+            UnifiedTurboJsonLoader::workspace_no_turbo_json(
                 reader,
                 pkg_dep_graph.packages(),
                 micro_frontend_configs.clone(),
             )
         } else if let Some(micro_frontends) = &micro_frontend_configs {
-            TurboJsonLoader::workspace_with_microfrontends(
+            UnifiedTurboJsonLoader::workspace_with_microfrontends(
                 reader,
                 root_turbo_json_path.clone(),
                 pkg_dep_graph.packages(),
                 micro_frontends.clone(),
             )
         } else {
-            TurboJsonLoader::workspace(
+            UnifiedTurboJsonLoader::workspace(
                 reader,
                 root_turbo_json_path.clone(),
                 pkg_dep_graph.packages(),
@@ -466,14 +470,11 @@ impl RunBuilder {
             )?;
         }
 
-        let color_selector = ColorSelector::default();
-
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
             self.opts.runcache_opts,
             &self.opts.cache_opts,
-            color_selector,
             daemon.clone(),
             self.color_config,
             self.opts.run_opts.dry_run.is_some(),
@@ -514,7 +515,7 @@ impl RunBuilder {
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         filtered_pkgs: impl Iterator<Item = &'a PackageName>,
-        turbo_json_loader: &TurboJsonLoader,
+        turbo_json_loader: &impl turborepo_engine::TurboJsonLoader,
     ) -> Result<Engine, Error> {
         let tasks = self.opts.run_opts.tasks.iter().map(|task| {
             // TODO: Pull span info from command

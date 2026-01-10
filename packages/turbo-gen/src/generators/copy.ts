@@ -6,7 +6,7 @@ import {
   createProject,
   logger,
   type DependencyGroups,
-  type PackageJson,
+  type PackageJson
 } from "@turbo/utils";
 import { gatherAddRequirements } from "../utils/gatherAddRequirements";
 import type { TurboGeneratorArguments } from "./types";
@@ -15,7 +15,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
   const { name, type, location, source, dependencies } =
     await gatherAddRequirements({
       project,
-      opts,
+      opts
     });
 
   const newPackageJsonPath = path.join(location.absolute, "package.json");
@@ -30,7 +30,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     await createProject({
       appPath: location.absolute,
       example: opts.copy.source,
-      examplePath: opts.examplePath,
+      examplePath: opts.examplePath
     });
 
     try {
@@ -72,7 +72,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     );
     loader.start();
     await fs.copy(source.paths.root, location.absolute, {
-      filter: filterFunc,
+      filter: filterFunc
     });
     loader.stop();
   }

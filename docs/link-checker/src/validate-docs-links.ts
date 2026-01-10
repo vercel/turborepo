@@ -29,7 +29,7 @@ const validateAllInternalLinks = async (): Promise<void> => {
     .map((linkError) => ({
       link: linkError.href,
       type: linkError.type,
-      path: linkError.doc.path,
+      path: linkError.doc.path
     }))
     .sort((a, b) => a.type.localeCompare(b.type));
 

@@ -3,15 +3,13 @@ title: eslint-plugin-turbo
 description: Learn more about eslint-plugin-turbo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-
 [The `eslint-plugin-turbo` package](https://www.npmjs.com/package/eslint-plugin-turbo) helps you find environment variables that are used in your code that are not a part of Turborepo's hashing. Environment variables used in your source code that are not accounted for in `turbo.json` will be highlighted in your editor and errors will show as ESLint output.
 
 ## Installation
 
 Install `eslint-plugin-turbo` into the location where your ESLint configuration is held:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
 
@@ -44,22 +42,22 @@ Install `eslint-plugin-turbo` into the location where your ESLint configuration 
     ```
 
   </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ## Usage (Flat Config `eslint.config.js`)
 
 ESLint v9 uses the Flat Config format seen below:
 
 ```js title="./packages/eslint-config/base.js"
-import turbo from 'eslint-plugin-turbo';
+import turbo from "eslint-plugin-turbo";
 
-export default [turbo.configs['flat/recommended']];
+export default [turbo.configs["flat/recommended"]];
 ```
 
 Otherwise, you may configure the rules you want to use under the rules section.
 
 ```js title="./packages/eslint-config/base.js"
-import turbo from 'eslint-plugin-turbo';
+import turbo from "eslint-plugin-turbo";
 
 export default [
   {
@@ -67,7 +65,7 @@ export default [
       turbo,
     },
     rules: {
-      'turbo/no-undeclared-env-vars': 'error',
+      "turbo/no-undeclared-env-vars": "error",
     },
   },
 ];
@@ -76,7 +74,7 @@ export default [
 ## Example (Flat Config `eslint.config.js`)
 
 ```js title="./packages/eslint-config/base.js"
-import turbo from 'eslint-plugin-turbo';
+import turbo from "eslint-plugin-turbo";
 
 export default [
   {
@@ -84,10 +82,10 @@ export default [
       turbo,
     },
     rules: {
-      'turbo/no-undeclared-env-vars': [
-        'error',
+      "turbo/no-undeclared-env-vars": [
+        "error",
         {
-          allowList: ['^ENV_[A-Z]+$'],
+          allowList: ["^ENV_[A-Z]+$"],
         },
       ],
     },

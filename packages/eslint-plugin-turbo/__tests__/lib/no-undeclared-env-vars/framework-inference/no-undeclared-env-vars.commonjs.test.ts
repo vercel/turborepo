@@ -4,7 +4,7 @@ import { RULES } from "../../../../lib/constants";
 import rule from "../../../../lib/rules/no-undeclared-env-vars";
 
 const ruleTester = new RuleTester({
-  parserOptions: { ecmaVersion: 2020 },
+  parserOptions: { ecmaVersion: 2020 }
 });
 
 const cwd = path.join(
@@ -18,9 +18,9 @@ const options = (extra: Record<string, unknown> = {}) => ({
   options: [
     {
       cwd,
-      ...extra,
-    },
-  ],
+      ...extra
+    }
+  ]
 });
 
 ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
@@ -28,18 +28,18 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
     {
       code: `const { NEXT_PUBLIC_ZILTOID } = process.env;`,
       ...options(),
-      filename: nextJsFilename,
+      filename: nextJsFilename
     },
     {
       code: `const { VITE_THINGS } = process.env;`,
       ...options(),
-      filename: viteFilename,
+      filename: viteFilename
     },
     {
       code: `const { NEXT_PUBLIC_ZILTOID, GATSBY_THE, NITRO_OMNISCIENT } = process.env;`,
       ...options(),
-      filename: kitchenSinkFilename,
-    },
+      filename: kitchenSinkFilename
+    }
   ],
   invalid: [
     {
@@ -49,9 +49,9 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         {
           message:
-            "NEXT_PUBLIC_ZILTOID is not listed as a dependency in turbo.json",
-        },
-      ],
+            "NEXT_PUBLIC_ZILTOID is not listed as a dependency in turbo.json"
+        }
+      ]
     },
     {
       code: `const { VITE_THINGS } = process.env;`,
@@ -59,9 +59,9 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       filename: nextJsFilename,
       errors: [
         {
-          message: "VITE_THINGS is not listed as a dependency in turbo.json",
-        },
-      ],
+          message: "VITE_THINGS is not listed as a dependency in turbo.json"
+        }
+      ]
     },
     {
       code: `const { VITE_THINGS } = process.env;`,
@@ -69,9 +69,9 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       filename: kitchenSinkFilename,
       errors: [
         {
-          message: "VITE_THINGS is not listed as a dependency in turbo.json",
-        },
-      ],
-    },
-  ],
+          message: "VITE_THINGS is not listed as a dependency in turbo.json"
+        }
+      ]
+    }
+  ]
 });

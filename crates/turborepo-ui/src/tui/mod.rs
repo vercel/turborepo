@@ -5,6 +5,7 @@ pub mod event;
 mod handle;
 mod input;
 mod pane;
+pub mod panic_handler;
 mod popup;
 mod preferences;
 pub mod scroll;

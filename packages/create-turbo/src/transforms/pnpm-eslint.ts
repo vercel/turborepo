@@ -2,11 +2,11 @@ import fs from "fs-extra";
 import type { TransformInput, TransformResult } from "./types";
 
 const meta = {
-  name: "pnpm-eslint",
+  name: "pnpm-eslint"
 };
 
 const VSCODE_ESLINT_CONFIG = {
-  "eslint.workingDirectories": [{ mode: "auto" }],
+  "eslint.workingDirectories": [{ mode: "auto" }]
 };
 
 export async function transform(args: TransformInput): TransformResult {
@@ -21,7 +21,7 @@ export async function transform(args: TransformInput): TransformResult {
       `${project.paths.root}/.vscode/settings.json`,
       VSCODE_ESLINT_CONFIG,
       {
-        spaces: 2,
+        spaces: 2
       }
     );
   } else {

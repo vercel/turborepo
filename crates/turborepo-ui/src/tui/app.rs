@@ -150,6 +150,12 @@ impl<W> App<W> {
     fn update_sidebar_toggle(&mut self) {
         let value = !self.preferences.is_task_list_visible();
         self.preferences.set_is_task_list_visible(Some(value));
+        // Resize terminal outputs to match new pane width
+        let pane_rows = self.size.pane_rows();
+        let pane_cols = self.size.pane_cols_with_sidebar(value);
+        self.tasks.values_mut().for_each(|term| {
+            term.resize(pane_rows, pane_cols);
+        });
     }
 
     fn update_task_selection_pinned_state(&mut self) -> Result<(), Error> {
@@ -502,14 +508,12 @@ impl<W> App<W> {
         debug!("updating task list: {tasks:?}");
         let highlighted_task = self.active_task()?.to_owned();
         // Make sure all tasks have a terminal output
+        let pane_cols = self
+            .size
+            .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         for task in &tasks {
             self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(
-                    self.size.pane_rows(),
-                    self.size.pane_cols(),
-                    None,
-                    self.scrollback_len,
-                )
+                TerminalOutput::new(self.size.pane_rows(), pane_cols, None, self.scrollback_len)
             });
         }
         // Trim the terminal output to only tasks that exist in new list
@@ -547,14 +551,12 @@ impl<W> App<W> {
         debug!("tasks to reset: {tasks:?}");
         let highlighted_task = self.active_task()?.to_owned();
         // Make sure all tasks have a terminal output
+        let pane_cols = self
+            .size
+            .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         for task in &tasks {
             self.tasks.entry(task.clone()).or_insert_with(|| {
-                TerminalOutput::new(
-                    self.size.pane_rows(),
-                    self.size.pane_cols(),
-                    None,
-                    self.scrollback_len,
-                )
+                TerminalOutput::new(self.size.pane_rows(), pane_cols, None, self.scrollback_len)
             });
         }
 
@@ -606,7 +608,12 @@ impl<W> App<W> {
     }
 
     pub fn handle_mouse(&mut self, mut event: crossterm::event::MouseEvent) -> Result<(), Error> {
-        let table_width = self.size.task_list_width();
+        // Only offset by table width if the sidebar is visible
+        let table_width = if self.preferences.is_task_list_visible() {
+            self.size.task_list_width()
+        } else {
+            0
+        };
         debug!("original mouse event: {event:?}, table_width: {table_width}");
         // Only handle mouse event if it happens inside of pane
         // We give a 1 cell buffer to make it easier to select the first column of a row
@@ -663,7 +670,9 @@ impl<W> App<W> {
     pub fn resize(&mut self, rows: u16, cols: u16) {
         self.size.resize(rows, cols);
         let pane_rows = self.size.pane_rows();
-        let pane_cols = self.size.pane_cols();
+        let pane_cols = self
+            .size
+            .pane_cols_with_sidebar(self.preferences.is_task_list_visible());
         self.tasks.values_mut().for_each(|term| {
             term.resize(pane_rows, pane_cols);
         })
@@ -906,6 +915,19 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
     Ok(width >= MIN_WIDTH && height >= MIN_HEIGHT)
 }
 
+/// Detects if the current terminal is VSCode's integrated terminal.
+///
+/// VSCode's terminal is based on xterm.js and has issues with mouse capture -
+/// it can leak mouse events into child process stdout, causing garbage output.
+/// We detect VSCode to disable mouse capture and prevent this issue.
+fn is_vscode_terminal() -> bool {
+    // Primary detection: TERM_PROGRAM is the most reliable indicator
+    // VSCode sets TERM_PROGRAM=vscode in its integrated terminal
+    std::env::var("TERM_PROGRAM")
+        .map(|v| v.eq_ignore_ascii_case("vscode"))
+        .unwrap_or(false)
+}
+
 /// Configures terminal for rendering App
 #[tracing::instrument]
 fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
@@ -916,11 +938,22 @@ fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<St
     let mut stdout = io::stdout();
     // Ensure all pending writes are flushed before we switch to alternative screen
     stdout.flush()?;
-    crossterm::execute!(
-        stdout,
-        crossterm::event::EnableMouseCapture,
-        crossterm::terminal::EnterAlternateScreen
-    )?;
+
+    // VSCode's terminal (xterm.js) has issues with mouse capture - it can leak
+    // mouse events into child process stdout. Disable mouse capture for VSCode.
+    if is_vscode_terminal() {
+        crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
+    } else {
+        crossterm::execute!(
+            stdout,
+            crossterm::event::EnableMouseCapture,
+            crossterm::terminal::EnterAlternateScreen
+        )?;
+    }
+
+    // Mark TUI as active so panic handler knows to restore terminal state
+    super::panic_handler::set_tui_active();
+
     let backend = CrosstermBackend::new(stdout);
 
     let mut terminal = Terminal::with_options(
@@ -942,16 +975,27 @@ fn cleanup<B: Backend + io::Write>(
     callback: Option<oneshot::Sender<()>>,
 ) -> io::Result<()> {
     terminal.clear()?;
+
+    // Always disable mouse capture on cleanup, even if we didn't enable it.
+    // This is idempotent and ensures that if a child process enabled mouse
+    // capture, it gets properly disabled. This is especially important in
+    // VSCode's terminal (xterm.js) where mouse events can leak into child
+    // process stdout if mouse capture isn't properly disabled.
     crossterm::execute!(
         terminal.backend_mut(),
         crossterm::event::DisableMouseCapture,
         crossterm::terminal::LeaveAlternateScreen,
     )?;
+
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
     app.preferences.flush_to_disk().ok();
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
+
+    // Mark TUI as inactive - cleanup is complete
+    super::panic_handler::set_tui_inactive();
+
     // We can close the channel now that terminal is back restored to a normal state
     drop(callback);
     Ok(())
@@ -1094,7 +1138,9 @@ fn update(
             callback
                 .send(PaneSize {
                     rows: app.size.pane_rows(),
-                    cols: app.size.pane_cols(),
+                    cols: app
+                        .size
+                        .pane_cols_with_sidebar(app.preferences.is_task_list_visible()),
                 })
                 .ok();
         }
@@ -1107,7 +1153,8 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     let horizontal = if app.preferences.is_task_list_visible() {
         Layout::horizontal([Constraint::Fill(1), Constraint::Length(cols)])
     } else {
-        Layout::horizontal([Constraint::Max(0), Constraint::Length(cols)])
+        // When sidebar is hidden, let the pane fill the entire width
+        Layout::horizontal([Constraint::Max(0), Constraint::Fill(1)])
     };
     let [table, pane] = horizontal.areas(f.size());
 
@@ -1136,6 +1183,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 
 #[cfg(test)]
 mod test {
+    use serial_test::serial;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
@@ -2222,5 +2270,156 @@ mod test {
         app.persist_tasks(tasks_started)?;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_handle_mouse_with_hidden_sidebar() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<()> = App::new(
+            100,
+            100,
+            vec!["app-a".to_string(), "app-b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Start a task so we have something to interact with
+        app.start_task("app-a", OutputLogs::Full)?;
+
+        // Get the task list width when visible
+        let table_width_visible = app.size.task_list_width();
+        assert!(
+            table_width_visible > 0,
+            "task list should have non-zero width"
+        );
+
+        // Test with sidebar visible - mouse at column 0 should be ignored
+        // because it's within the task list area
+        let mouse_event_col_0 = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 1,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        // This should not error, and should not crash
+        app.handle_mouse(mouse_event_col_0)?;
+
+        // Test with sidebar visible - mouse at column >= table_width should work
+        let mouse_event_in_pane = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: table_width_visible,
+            row: 1,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        app.handle_mouse(mouse_event_in_pane)?;
+
+        // Now hide the sidebar using the toggle function (which also resizes terminals)
+        app.update_sidebar_toggle();
+        assert!(!app.preferences.is_task_list_visible());
+
+        // Verify terminal outputs were resized to full width
+        let full_pane_cols = app.size.pane_cols_with_sidebar(false);
+        assert!(
+            full_pane_cols > table_width_visible as u16,
+            "pane should be wider when sidebar is hidden"
+        );
+        for (name, task) in app.tasks.iter() {
+            let (_, cols) = task.size();
+            assert_eq!(
+                cols, full_pane_cols,
+                "terminal output {name} should be resized to full width"
+            );
+        }
+
+        // With sidebar hidden, mouse at column 0 should now be processed
+        // (it's in the pane area, not the task list)
+        let mouse_event_col_0_hidden = MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 1,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        // This should work without error - previously this would have been
+        // incorrectly ignored because the column check would fail
+        app.handle_mouse(mouse_event_col_0_hidden)?;
+
+        // Test dragging at column 5 with sidebar hidden
+        let mouse_event_drag_hidden = MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 5,
+            row: 2,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        };
+        app.handle_mouse(mouse_event_drag_hidden)?;
+
+        // Toggle sidebar back to visible
+        app.update_sidebar_toggle();
+        assert!(app.preferences.is_task_list_visible());
+
+        // Verify terminal outputs were resized back
+        let sidebar_pane_cols = app.size.pane_cols_with_sidebar(true);
+        for (name, task) in app.tasks.iter() {
+            let (_, cols) = task.size();
+            assert_eq!(
+                cols, sidebar_pane_cols,
+                "terminal output {name} should be resized back when sidebar is shown"
+            );
+        }
+
+        Ok(())
+    }
+
+    // Note: This test modifies the TERM_PROGRAM environment variable, which is
+    // process-global state. It must run serially to avoid interference with other
+    // tests that read TERM_PROGRAM (e.g., startup(), ColorConfig::rainbow()).
+    #[test]
+    #[serial]
+    fn test_is_vscode_terminal_detection() {
+        // Save original value to restore later
+        let original = std::env::var("TERM_PROGRAM").ok();
+
+        // SAFETY: Environment variable modification is safe here because this test
+        // runs serially (via #[serial]) and restores the original value on cleanup.
+        unsafe {
+            // Test: VSCode detection (lowercase)
+            std::env::set_var("TERM_PROGRAM", "vscode");
+            assert!(
+                is_vscode_terminal(),
+                "should detect VSCode when TERM_PROGRAM=vscode"
+            );
+
+            // Test: VSCode detection (mixed case)
+            std::env::set_var("TERM_PROGRAM", "VSCode");
+            assert!(is_vscode_terminal(), "should detect VSCode with mixed case");
+
+            // Test: Non-VSCode terminal
+            std::env::set_var("TERM_PROGRAM", "iTerm.app");
+            assert!(!is_vscode_terminal(), "should not detect iTerm as VSCode");
+
+            // Test: Empty value
+            std::env::set_var("TERM_PROGRAM", "");
+            assert!(
+                !is_vscode_terminal(),
+                "should not detect empty string as VSCode"
+            );
+
+            // Test: Unset variable
+            std::env::remove_var("TERM_PROGRAM");
+            assert!(
+                !is_vscode_terminal(),
+                "should not detect VSCode when TERM_PROGRAM is unset"
+            );
+
+            // Restore original value
+            match original {
+                Some(val) => std::env::set_var("TERM_PROGRAM", val),
+                None => std::env::remove_var("TERM_PROGRAM"),
+            }
+        }
     }
 }

@@ -4,7 +4,7 @@ import { logger } from "@turbo/utils";
 
 export function checkGitStatus({
   directory,
-  force,
+  force
 }: {
   directory?: string;
   force: boolean;

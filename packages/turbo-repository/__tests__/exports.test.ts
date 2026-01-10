@@ -4,7 +4,7 @@ import {
   Package,
   PackageDetails,
   PackageManager,
-  Workspace,
+  Workspace
 } from "../js/dist/index.js";
 
 const nativeLibExports = [Package, PackageDetails, PackageManager, Workspace];

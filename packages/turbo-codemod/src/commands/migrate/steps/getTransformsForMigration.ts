@@ -7,7 +7,7 @@ import type { Transformer } from "../../../types";
  **/
 export function getTransformsForMigration({
   fromVersion,
-  toVersion,
+  toVersion
 }: {
   fromVersion: string;
   toVersion: string;

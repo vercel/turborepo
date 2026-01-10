@@ -3,7 +3,7 @@ import { RULES } from "../../../lib/constants";
 import rule from "../../../lib/rules/no-undeclared-env-vars";
 
 const ruleTester = new RuleTester({
-  parserOptions: { ecmaVersion: 2020 },
+  parserOptions: { ecmaVersion: 2020 }
 });
 
 ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
@@ -12,14 +12,14 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       code: `
         const { TZ } = process.env;
       `,
-      options: [{ cwd: "/some/random/path" }],
+      options: [{ cwd: "/some/random/path" }]
     },
     {
       code: `
           const { ENV_1 } = process.env;
         `,
-      options: [{ cwd: "/some/random/path" }],
-    },
+      options: [{ cwd: "/some/random/path" }]
+    }
   ],
-  invalid: [],
+  invalid: []
 });

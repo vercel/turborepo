@@ -19,7 +19,7 @@ const SUPPORTED_WORKSPACE_GENERATOR_CONFIGS = SUPPORTED_CONFIG_EXTENSIONS.map(
 // config formats that will be automatically loaded from the root (support plopfiles so that users with existing configurations can use them immediately)
 const SUPPORTED_ROOT_GENERATOR_CONFIGS = [
   ...SUPPORTED_WORKSPACE_GENERATOR_CONFIGS,
-  ...SUPPORTED_CONFIG_EXTENSIONS.map((ext) => path.join(`plopfile.${ext}`)),
+  ...SUPPORTED_CONFIG_EXTENSIONS.map((ext) => path.join(`plopfile.${ext}`))
 ];
 
 export type Generator = PlopGenerator & {
@@ -29,7 +29,7 @@ export type Generator = PlopGenerator & {
 
 export function getPlop({
   project,
-  configPath,
+  configPath
 }: {
   project: Project;
   configPath?: string;
@@ -40,8 +40,8 @@ export function getPlop({
     cwd: project.paths.root,
     compilerOptions: {
       module: "nodenext",
-      moduleResolution: "nodenext",
-    },
+      moduleResolution: "nodenext"
+    }
   });
 
   // fetch all the workspace generator configs
@@ -51,14 +51,14 @@ export function getPlop({
   if (configPath) {
     if (!fs.existsSync(configPath)) {
       throw new GeneratorError(`No config at "${configPath}"`, {
-        type: "plop_no_config",
+        type: "plop_no_config"
       });
     }
 
     try {
       plop = nodePlop(configPath, {
         destBasePath: configPath,
-        force: false,
+        force: false
       });
     } catch (e) {
       logger.error(e);
@@ -74,7 +74,7 @@ export function getPlop({
       try {
         plop = nodePlop(plopFile, {
           destBasePath: project.paths.root,
-          force: false,
+          force: false
         });
         break;
       } catch (e) {
@@ -86,7 +86,7 @@ export function getPlop({
       // if no root config, use the first workspace config as the entrypoint
       plop = nodePlop(workspaceConfigs[0].config, {
         destBasePath: workspaceConfigs[0].root,
-        force: false,
+        force: false
       });
       workspaceConfigs.shift();
     }
@@ -98,7 +98,7 @@ export function getPlop({
       try {
         plop.load(c.config, {
           destBasePath: c.root,
-          force: false,
+          force: false
         });
       } catch (e) {
         logger.error(e);
@@ -111,7 +111,7 @@ export function getPlop({
 
 export function getCustomGenerators({
   project,
-  configPath,
+  configPath
 }: {
   project: Project;
   configPath?: string;
@@ -169,7 +169,7 @@ export function getCustomGenerators({
 export function getCustomGenerator({
   project,
   generator,
-  configPath,
+  configPath
 }: {
   project: Project;
   generator: string;
@@ -193,7 +193,7 @@ export function getCustomGenerator({
 
 function injectTurborepoData({
   project,
-  generator,
+  generator
 }: {
   project: Project;
   generator: PlopGenerator & { basePath?: string };
@@ -203,7 +203,7 @@ function injectTurborepoData({
     root: project.paths.root,
     workspace: generator.basePath
       ? searchUp({ cwd: generator.basePath, target: "package.json" })
-      : undefined,
+      : undefined
   };
   let turboConfigs = {};
   try {
@@ -215,8 +215,8 @@ function injectTurborepoData({
   return {
     turbo: {
       paths,
-      configs: turboConfigs,
-    },
+      configs: turboConfigs
+    }
   };
 }
 
@@ -230,7 +230,7 @@ function getWorkspaceGeneratorConfigs({ project }: { project: Project }) {
       if (fs.existsSync(path.join(w.paths.root, configPath))) {
         workspaceGeneratorConfigs.push({
           config: path.join(w.paths.root, configPath),
-          root: w.paths.root,
+          root: w.paths.root
         });
       }
     }
@@ -242,7 +242,7 @@ export async function runCustomGenerator({
   project,
   generator,
   bypassArgs,
-  configPath,
+  configPath
 }: {
   project: Project;
   generator: string;
@@ -252,14 +252,14 @@ export async function runCustomGenerator({
   const plop = getPlop({ project, configPath });
   if (!plop) {
     throw new GeneratorError("Unable to load generators", {
-      type: "plop_unable_to_load_config",
+      type: "plop_unable_to_load_config"
     });
   }
   const gen = plop.getGenerator(generator) as PlopGenerator | undefined;
 
   if (!gen) {
     throw new GeneratorError(`Generator ${generator} not found`, {
-      type: "plop_generator_not_found",
+      type: "plop_generator_not_found"
     });
   }
 
@@ -269,7 +269,7 @@ export async function runCustomGenerator({
     {
       onComment: (comment: string) => {
         logger.dimmed(comment);
-      },
+      }
     }
   );
 
@@ -283,7 +283,7 @@ export async function runCustomGenerator({
       }
     });
     throw new GeneratorError(`Failed to run "${generator}" generator`, {
-      type: "plop_error_running_generator",
+      type: "plop_error_running_generator"
     });
   }
 

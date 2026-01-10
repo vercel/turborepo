@@ -18,7 +18,7 @@ import { shutdownDaemon } from "./steps/shutdownDaemon";
 
 function endMigration({
   message,
-  success,
+  success
 }: {
   message?: string;
   success: boolean;
@@ -73,19 +73,19 @@ export async function migrate(
         }
         return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
       },
-      filter: (d: string) => d.trim(),
-    },
+      filter: (d: string) => d.trim()
+    }
   ]);
 
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it exists because of the prompt
   const { directoryInput: selectedDirectory = directory! } = answers;
   const { exists, absolute: root } = directoryInfo({
-    directory: selectedDirectory,
+    directory: selectedDirectory
   });
   if (!exists) {
     return endMigration({
       success: false,
-      message: `Directory ${picocolors.dim(`(${root})`)} does not exist`,
+      message: `Directory ${picocolors.dim(`(${root})`)} does not exist`
     });
   }
 
@@ -94,7 +94,7 @@ export async function migrate(
       success: false,
       message: `Directory (${picocolors.dim(
         root
-      )}) does not appear to be a repository`,
+      )}) does not appear to be a repository`
     });
   }
 
@@ -106,7 +106,7 @@ export async function migrate(
       success: false,
       message: `Unable to read determine package manager details from ${picocolors.dim(
         root
-      )}`,
+      )}`
     });
   }
 
@@ -115,7 +115,7 @@ export async function migrate(
   if (!fromVersion) {
     return endMigration({
       success: false,
-      message: `Unable to infer the version of turbo being used by ${project.name}`,
+      message: `Unable to infer the version of turbo being used by ${project.name}`
     });
   }
 
@@ -130,14 +130,14 @@ export async function migrate(
     }
     return endMigration({
       success: false,
-      message,
+      message
     });
   }
 
   if (!toVersion) {
     return endMigration({
       success: false,
-      message: "Unable to fetch the latest version of turbo",
+      message: "Unable to fetch the latest version of turbo"
     });
   }
 
@@ -146,7 +146,7 @@ export async function migrate(
       success: true,
       message: `Nothing to do, current version (${picocolors.bold(
         fromVersion
-      )}) is the same as the requested version (${picocolors.bold(toVersion)})`,
+      )}) is the same as the requested version (${picocolors.bold(toVersion)})`
     });
   }
 
@@ -190,7 +190,7 @@ export async function migrate(
     // eslint-disable-next-line no-await-in-loop -- transforms have to run serially to avoid conflicts
     const result = await codemod.transformer({
       root: project.paths.root,
-      options,
+      options
     });
     Runner.logResults(result);
     results.push(result);
@@ -206,7 +206,7 @@ export async function migrate(
     return endMigration({
       success: false,
       message:
-        "Could not complete migration due to codemod errors. Please fix the errors and try again.",
+        "Could not complete migration due to codemod errors. Please fix the errors and try again."
     });
   }
 
@@ -215,13 +215,13 @@ export async function migrate(
   // find the upgrade command, and run it
   const upgradeCommand = await getTurboUpgradeCommand({
     project,
-    to: options.to,
+    to: options.to
   });
 
   if (!upgradeCommand) {
     return endMigration({
       success: false,
-      message: "Unable to determine upgrade command",
+      message: "Unable to determine upgrade command"
     });
   }
 
@@ -244,7 +244,7 @@ export async function migrate(
       } catch (err: unknown) {
         return endMigration({
           success: false,
-          message: `Unable to upgrade turbo: ${String(err)}`,
+          message: `Unable to upgrade turbo: ${String(err)}`
         });
       }
     }

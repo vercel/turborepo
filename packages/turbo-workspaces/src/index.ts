@@ -11,7 +11,7 @@ import type { ConvertErrorType } from "./errors";
 async function convert({
   root,
   to,
-  options,
+  options
 }: {
   root: string;
   to: PackageManager;
@@ -20,16 +20,16 @@ async function convert({
   const logger = new Logger({ ...options, interactive: false });
   const [project, availablePackageManagers] = await Promise.all([
     getWorkspaceDetails({ root }),
-    getAvailablePackageManagers(),
+    getAvailablePackageManagers()
   ]);
   await convertProject({
     project,
     convertTo: {
       name: to,
-      version: availablePackageManagers[to],
+      version: availablePackageManagers[to]
     },
     logger,
-    options,
+    options
   });
 }
 
@@ -40,5 +40,5 @@ export {
   install,
   MANAGERS,
   getPackageManagerMeta,
-  ConvertError,
+  ConvertError
 };

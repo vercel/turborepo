@@ -1,22 +1,24 @@
 ---
 title: Turborepo 2.7
 date: 2025/12/19
-description: 'Devtools, Composable configuration, Biome rule, Yarn 4 catalogs'
-tag: 'web development'
+description: "Devtools, Composable configuration, Biome rule, Yarn 4 catalogs"
+tag: "web development"
 ---
 
-import { Authors } from '#components/authors';
-import { Callout } from '#components/callout';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Date } from '#components/blog/date';
-import { Accordion, Accordions } from '#components/accordion';
-import { ThemeAwareImage } from '#components/theme-aware-image';
+import { Authors } from "@/components/blog/authors";
+import { Callout } from "@/components/geistdocs/callout";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Date } from "@/components/blog/date";
+import { Accordion, Accordions } from "@/components/geistdocs/accordion";
+import { ThemeAwareImage } from "@/components/geistdocs/theme-aware-image";
+import DevtoolsImageDark from "../../public/images/blog/turbo-2-7/devtools-dark.png";
+import DevtoolsImageLight from "../../public/images/blog/turbo-2-7/devtools-light.png";
 
 # Turborepo 2.7
 
 <Date>Friday, December 19th, 2025</Date>
 
-<Authors authors={['anthonyshew', 'tomknickman']} />
+<Authors authors={["anthonyshew", "tomknickman"]} />
 
 Turborepo 2.7 is now available, including new features like:
 
@@ -27,7 +29,7 @@ Turborepo 2.7 is now available, including new features like:
 
 Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -77,7 +79,7 @@ bunx create-turbo@latest
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ## Devtools
 
@@ -86,21 +88,21 @@ We’ve shipped a brand new experience at [turborepo.com/devtools](http://turbor
 <ThemeAwareImage
   className="my-4 flex justify-center"
   light={{
-    alt: '',
-    src: '/images/blog/turbo-2-7/devtools-light.png',
+    alt: "",
+    src: DevtoolsImageLight,
     props: {
       width: 1600,
       height: 750,
-      className: 'dark:hidden block rounded-xl',
+      className: "dark:hidden block rounded-xl",
     },
   }}
   dark={{
-    alt: '',
-    src: '/images/blog/turbo-2-7/devtools-dark.png',
+    alt: "",
+    src: DevtoolsImageDark,
     props: {
       width: 1600,
       height: 750,
-      className: 'hidden dark:block rounded-xl',
+      className: "hidden dark:block rounded-xl",
     },
   }}
 />

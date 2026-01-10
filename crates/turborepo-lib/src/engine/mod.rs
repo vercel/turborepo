@@ -1,38 +1,26 @@
-mod builder;
-pub(crate) mod task_inheritance;
-
-pub use builder::{EngineBuilder, Error as BuilderError};
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;
 // Building state is used for engine construction
 #[cfg(test)]
 pub use turborepo_engine::Building;
+// Re-export builder types from turborepo-engine
+pub use turborepo_engine::{BuilderError, EngineBuilder};
 // Re-export core types from turborepo-engine
 pub use turborepo_engine::{
-    Built, ExecuteError, ExecutionOptions, Message, StopExecution, TaskDefinitionInfo, TaskNode,
+    Built, ExecuteError, ExecutionOptions, Message, TaskDefinitionInfo, TaskNode,
 };
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
-
-use crate::{task_graph::TaskDefinition, turbo_json::UIMode};
+use turborepo_types::{TaskDefinition, UIMode};
+// Keep backward compatibility type alias
+pub type Error = BuilderError;
 
 /// Type alias for Engine specialized with TaskDefinition.
 /// This allows existing code to continue using `Engine` without type
 /// parameters.
 pub type Engine<S = Built> = turborepo_engine::Engine<S, TaskDefinition>;
 
-// Implement TaskDefinitionInfo for TaskDefinition so it can be used with the
-// engine
-impl TaskDefinitionInfo for TaskDefinition {
-    fn persistent(&self) -> bool {
-        self.persistent
-    }
-    fn interruptible(&self) -> bool {
-        self.interruptible
-    }
-    fn interactive(&self) -> bool {
-        self.interactive
-    }
-}
+// Note: TaskDefinitionInfo is now implemented for TaskDefinition
+// directly in turborepo-engine crate.
 
 #[derive(Debug, Error, Diagnostic, PartialEq, PartialOrd, Eq, Ord)]
 pub enum ValidateError {

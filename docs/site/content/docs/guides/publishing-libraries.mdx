@@ -3,9 +3,6 @@ title: Publishing libraries
 description: Learn how to publish libraries to the npm registry from a monorepo.
 ---
 
-import { Callout } from '#components/callout';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-
 Publishing a package to the npm registry from a monorepo can be a smooth experience, with the right tools.
 
 While this guide cannot solve for every possible compiling, bundling, and publishing configuration needed for robust packages, it will explain some of the basics.
@@ -67,7 +64,7 @@ Finally, we should update our package entrypoints. Inside `package.json`, change
 }
 ```
 
-<Callout>
+<Callout type="info">
 
 It is not required to bundle to both `cjs` and `esm`. However, it is recommended, as it allows your package to be used in a wider variety of environments.
 
@@ -188,7 +185,7 @@ If your packages are public, set Changeset's `access` to `public`:
 }
 ```
 
-<Callout>
+<Callout type="info">
   We recommend `publish-packages` so that it doesn't conflict with npm's
   built-in `publish` script.
 </Callout>

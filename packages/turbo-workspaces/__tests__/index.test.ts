@@ -10,7 +10,7 @@ jest.mock("execa", () => jest.fn());
 
 describe("Node entrypoint", () => {
   const { useFixture } = setupTestFixtures({
-    directory: path.join(__dirname, "../"),
+    directory: path.join(__dirname, "../")
   });
 
   beforeEach(() => {
@@ -23,7 +23,7 @@ describe("Node entrypoint", () => {
       failed: false,
       timedOut: false,
       isCanceled: false,
-      killed: false,
+      killed: false
     } as any);
   });
 
@@ -31,11 +31,11 @@ describe("Node entrypoint", () => {
     it("should use shell option on Windows for all package managers", async () => {
       const originalPlatform = process.platform;
       Object.defineProperty(process, "platform", {
-        value: "win32",
+        value: "win32"
       });
 
       const { root } = useFixture({
-        fixture: `./bun/monorepo`,
+        fixture: `./bun/monorepo`
       });
 
       const mockProject = {
@@ -46,39 +46,40 @@ describe("Node entrypoint", () => {
           root,
           packageJson: path.join(root, "package.json"),
           lockfile: path.join(root, "bun.lockb"),
-          nodeModules: path.join(root, "node_modules"),
+          nodeModules: path.join(root, "node_modules")
         },
         workspaceData: {
           globs: ["apps/*", "packages/*"],
-          workspaces: [],
-        },
+          workspaces: []
+        }
       };
 
       await install({
         project: mockProject,
         to: { name: "bun", version: "1.0.1" },
-        options: { dry: false },
+        options: { dry: false }
       });
 
       expect(execa).toHaveBeenCalledWith("bun", ["install"], {
         cwd: root,
         preferLocal: true,
         shell: true,
+        stdin: "ignore"
       });
 
       Object.defineProperty(process, "platform", {
-        value: originalPlatform,
+        value: originalPlatform
       });
     });
 
     it("should not use shell option on non-Windows platforms", async () => {
       const originalPlatform = process.platform;
       Object.defineProperty(process, "platform", {
-        value: "darwin",
+        value: "darwin"
       });
 
       const { root } = useFixture({
-        fixture: `./bun/monorepo`,
+        fixture: `./bun/monorepo`
       });
 
       const mockProject = {
@@ -89,30 +90,95 @@ describe("Node entrypoint", () => {
           root,
           packageJson: path.join(root, "package.json"),
           lockfile: path.join(root, "bun.lockb"),
-          nodeModules: path.join(root, "node_modules"),
+          nodeModules: path.join(root, "node_modules")
         },
         workspaceData: {
           globs: ["apps/*", "packages/*"],
-          workspaces: [],
-        },
+          workspaces: []
+        }
       };
 
       await install({
         project: mockProject,
         to: { name: "bun", version: "1.0.1" },
-        options: { dry: false },
+        options: { dry: false }
       });
 
       expect(execa).toHaveBeenCalledWith("bun", ["install"], {
         cwd: root,
         preferLocal: true,
         shell: false,
+        stdin: "ignore"
       });
 
       Object.defineProperty(process, "platform", {
-        value: originalPlatform,
+        value: originalPlatform
       });
     });
+
+    it.each([
+      {
+        manager: "npm" as const,
+        version: "8.19.2",
+        lockfile: "package-lock.json",
+        installArgs: ["install"]
+      },
+      {
+        manager: "pnpm" as const,
+        version: "7.29.1",
+        lockfile: "pnpm-lock.yaml",
+        installArgs: ["install", "--fix-lockfile"]
+      },
+      {
+        manager: "yarn" as const,
+        version: "1.22.19",
+        lockfile: "yarn.lock",
+        installArgs: ["install"]
+      },
+      {
+        manager: "bun" as const,
+        version: "1.0.1",
+        lockfile: "bun.lockb",
+        installArgs: ["install"]
+      }
+    ])(
+      "should use stdin: ignore for $manager to prevent hanging in non-interactive environments",
+      async ({ manager, version, lockfile, installArgs }) => {
+        const { root } = useFixture({
+          fixture: `./${manager}/monorepo`
+        });
+
+        const mockProject = {
+          name: "test-project",
+          description: undefined,
+          packageManager: manager,
+          paths: {
+            root,
+            packageJson: path.join(root, "package.json"),
+            lockfile: path.join(root, lockfile),
+            nodeModules: path.join(root, "node_modules")
+          },
+          workspaceData: {
+            globs: ["apps/*", "packages/*"],
+            workspaces: []
+          }
+        };
+
+        await install({
+          project: mockProject,
+          to: { name: manager, version },
+          options: { dry: false }
+        });
+
+        expect(execa).toHaveBeenCalledWith(
+          manager,
+          installArgs,
+          expect.objectContaining({
+            stdin: "ignore"
+          })
+        );
+      }
+    );
   });
 
   describe("convert", () => {
@@ -124,7 +190,7 @@ describe("Node entrypoint", () => {
         toManager,
         interactive,
         dry,
-        install,
+        install
       }) => {
         const mockedGetAvailablePackageManagers = jest
           .spyOn(turboUtils, "getAvailablePackageManagers")
@@ -132,11 +198,11 @@ describe("Node entrypoint", () => {
             npm: "8.19.2",
             yarn: "1.22.19",
             pnpm: "7.29.1",
-            bun: "1.0.1",
+            bun: "1.0.1"
           });
 
         const { root } = useFixture({
-          fixture: `./${fixtureManager}/${fixtureType}`,
+          fixture: `./${fixtureManager}/${fixtureType}`
         });
 
         // read
@@ -148,7 +214,7 @@ describe("Node entrypoint", () => {
           convert({
             root,
             to: toManager,
-            options: { interactive, dry, skipInstall: !install },
+            options: { interactive, dry, skipInstall: !install }
           });
 
         if (fixtureManager === toManager) {
@@ -159,7 +225,7 @@ describe("Node entrypoint", () => {
           await expect(convertWrapper()).resolves.toBeUndefined();
           // read again
           const convertedDetails = await getWorkspaceDetails({
-            root,
+            root
           });
           expect(mockedGetAvailablePackageManagers).toHaveBeenCalled();
 

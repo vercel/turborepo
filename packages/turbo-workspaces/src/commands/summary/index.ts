@@ -26,12 +26,12 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
       }
       return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
     },
-    filter: (d: string) => d.trim(),
+    filter: (d: string) => d.trim()
   });
 
   const { directoryInput: selectedDirectory = directory } = answer;
   const { exists, absolute: root } = directoryInfo({
-    directory: selectedDirectory,
+    directory: selectedDirectory
   });
   if (!exists) {
     logger.error(`Directory ${picocolors.dim(`(${root})`)} does not exist`);
@@ -62,7 +62,7 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
   const renderDirectory = ({
     number,
     dir,
-    workspaces,
+    workspaces
   }: {
     number: number;
     dir: string;
@@ -94,7 +94,7 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
       renderDirectory({
         number: idx + 1,
         workspaces: workspacesByDirectory[dir],
-        dir,
+        dir
       });
     });
     logger.blankLine();

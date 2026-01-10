@@ -1,7 +1,8 @@
-use std::{backtrace::Backtrace, fs::OpenOptions};
+use std::backtrace::Backtrace;
 
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{analytics, analytics::AnalyticsEvent};
@@ -43,7 +44,12 @@ impl FSCache {
         repo_root: &AbsoluteSystemPath,
         analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<Self, CacheError> {
+        debug!(
+            "FSCache::new called with cache_dir={}, repo_root={}",
+            cache_dir, repo_root
+        );
         let cache_directory = Self::resolve_cache_dir(repo_root, cache_dir);
+        debug!("FSCache resolved cache_directory={}", cache_directory);
         cache_directory.create_dir_all()?;
 
         Ok(FSCache {
@@ -78,11 +84,20 @@ impl FSCache {
             .cache_directory
             .join_component(&format!("{hash}.tar.zst"));
 
+        debug!(
+            "FSCache::fetch looking for cache artifacts at {} or {}",
+            uncompressed_cache_path, compressed_cache_path
+        );
+
         let cache_path = if uncompressed_cache_path.exists() {
             uncompressed_cache_path
         } else if compressed_cache_path.exists() {
             compressed_cache_path
         } else {
+            debug!(
+                "FSCache::fetch cache miss for hash {} in {}",
+                hash, self.cache_directory
+            );
             self.log_fetch(analytics::CacheEvent::Miss, hash, 0);
             return Ok(None);
         };
@@ -151,6 +166,10 @@ impl FSCache {
             cache_item.add_file(anchor, file)?;
         }
 
+        // Finish the archive (performs atomic rename from temp to final path)
+        cache_item.finish()?;
+
+        // Write metadata file atomically using write-to-temp-then-rename pattern
         let metadata_path = self
             .cache_directory
             .join_component(&format!("{hash}-meta.json"));
@@ -160,13 +179,16 @@ impl FSCache {
             duration,
         };
 
-        let mut metadata_options = OpenOptions::new();
-        metadata_options.create(true).write(true).truncate(true);
-
-        let metadata_file = metadata_path.open_with_options(metadata_options)?;
-
-        serde_json::to_writer(metadata_file, &meta)
+        let meta_json = serde_json::to_string(&meta)
             .map_err(|e| CacheError::InvalidMetadata(e, Backtrace::capture()))?;
+
+        // Write to temporary file then atomically rename
+        let temp_metadata_path = self
+            .cache_directory
+            .join_component(&format!(".{hash}-meta.json.{}.tmp", std::process::id()));
+
+        temp_metadata_path.create_with_contents(&meta_json)?;
+        temp_metadata_path.rename(&metadata_path)?;
 
         Ok(())
     }
@@ -270,6 +292,219 @@ mod test {
         }
 
         analytics_handle.close_with_timeout().await;
+        Ok(())
+    }
+
+    /// Test that multiple concurrent writes to the same hash don't corrupt the
+    /// cache. This tests the atomic write pattern
+    /// (write-to-temp-then-rename).
+    #[tokio::test]
+    async fn test_concurrent_writes_same_hash() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+
+        // Create test files
+        let test_file = repo_root_path.join_component("test.txt");
+        test_file.create_with_contents("test content")?;
+
+        let files = vec![AnchoredSystemPathBuf::from_raw("test.txt")?];
+        let hash = "concurrent_write_test";
+        let duration = 100;
+
+        // Create multiple caches pointing to the same directory
+        let cache1 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache2 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache3 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+
+        // Perform concurrent writes
+        let handle1 = {
+            let files = files.clone();
+            let repo_root = repo_root_path.to_owned();
+            tokio::spawn(async move { cache1.put(&repo_root, hash, &files, duration) })
+        };
+        let handle2 = {
+            let files = files.clone();
+            let repo_root = repo_root_path.to_owned();
+            tokio::spawn(async move { cache2.put(&repo_root, hash, &files, duration) })
+        };
+        let handle3 = {
+            let files = files.clone();
+            let repo_root = repo_root_path.to_owned();
+            tokio::spawn(async move { cache3.put(&repo_root, hash, &files, duration) })
+        };
+
+        // All writes should succeed (or at least not corrupt the cache)
+        let _ = handle1.await?;
+        let _ = handle2.await?;
+        let _ = handle3.await?;
+
+        // The cache should be readable
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let result = cache.fetch(repo_root_path, hash)?;
+        assert!(
+            result.is_some(),
+            "Cache should be readable after concurrent writes"
+        );
+
+        Ok(())
+    }
+
+    /// Test that reads during writes don't fail.
+    /// A read should either return the old content, new content, or a miss -
+    /// never corrupted data.
+    #[tokio::test]
+    async fn test_read_during_write() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+
+        // Create test files
+        let test_file = repo_root_path.join_component("test.txt");
+        test_file.create_with_contents("original content")?;
+
+        let files = vec![AnchoredSystemPathBuf::from_raw("test.txt")?];
+        let hash = "read_during_write_test";
+        let duration = 100;
+
+        // First write to establish the cache
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        cache.put(repo_root_path, hash, &files, duration)?;
+
+        // Update the source file
+        test_file.create_with_contents("updated content")?;
+
+        // Perform concurrent read and write
+        let cache_write = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache_read = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+
+        let write_handle = {
+            let files = files.clone();
+            let repo_root = repo_root_path.to_owned();
+            tokio::spawn(async move { cache_write.put(&repo_root, hash, &files, duration + 1) })
+        };
+
+        // Perform multiple reads while write is happening
+        for _ in 0..10 {
+            let result = cache_read.fetch(repo_root_path, hash);
+            // Should either succeed with valid data or fail cleanly - no corruption
+            if let Ok(Some((metadata, _))) = result {
+                // Duration should be either old or new value
+                assert!(
+                    metadata.time_saved == duration || metadata.time_saved == duration + 1,
+                    "Unexpected duration: {}",
+                    metadata.time_saved
+                );
+            }
+        }
+
+        write_handle.await??;
+
+        Ok(())
+    }
+
+    /// Test that multiple concurrent reads don't interfere with each other.
+    #[tokio::test]
+    async fn test_concurrent_reads() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+
+        // Create test files
+        let test_file = repo_root_path.join_component("test.txt");
+        test_file.create_with_contents("test content")?;
+
+        let files = vec![AnchoredSystemPathBuf::from_raw("test.txt")?];
+        let hash = "concurrent_read_test";
+        let duration = 100;
+
+        // Write to cache first
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        cache.put(repo_root_path, hash, &files, duration)?;
+
+        // Perform concurrent reads
+        let mut handles = Vec::new();
+        for _ in 0..10 {
+            let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+            let repo_root = repo_root_path.to_owned();
+            handles.push(tokio::spawn(async move { cache.fetch(&repo_root, hash) }));
+        }
+
+        // All reads should succeed
+        for handle in handles {
+            let result = handle.await??;
+            assert!(result.is_some(), "Concurrent read should succeed");
+            let (metadata, _) = result.unwrap();
+            assert_eq!(metadata.time_saved, duration);
+        }
+
+        Ok(())
+    }
+
+    /// Test that temp files are cleaned up after concurrent writes.
+    #[tokio::test]
+    async fn test_concurrent_writes_cleanup_temp_files() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+
+        // Create test files
+        let test_file = repo_root_path.join_component("test.txt");
+        test_file.create_with_contents("test content")?;
+
+        let files = vec![AnchoredSystemPathBuf::from_raw("test.txt")?];
+        let hash = "temp_cleanup_test";
+        let duration = 100;
+
+        // Perform concurrent writes
+        let cache1 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache2 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache3 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+
+        let handle1 = {
+            let files = files.clone();
+            let repo_root = repo_root_path.to_owned();
+            tokio::spawn(async move { cache1.put(&repo_root, hash, &files, duration) })
+        };
+        let handle2 = {
+            let files = files.clone();
+            let repo_root = repo_root_path.to_owned();
+            tokio::spawn(async move { cache2.put(&repo_root, hash, &files, duration) })
+        };
+        let handle3 = {
+            let files = files.clone();
+            let repo_root = repo_root_path.to_owned();
+            tokio::spawn(async move { cache3.put(&repo_root, hash, &files, duration) })
+        };
+
+        // Wait for all writes to complete
+        let _ = handle1.await?;
+        let _ = handle2.await?;
+        let _ = handle3.await?;
+
+        // Verify no orphaned temp files remain in cache directory
+        let cache_dir = repo_root_path.join_component("cache");
+        let temp_files: Vec<_> = std::fs::read_dir(cache_dir.as_std_path())?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(
+            temp_files.is_empty(),
+            "Orphaned temp files found after concurrent writes: {:?}",
+            temp_files
+        );
+
+        // Verify exactly one archive file exists for the hash
+        let archive_files: Vec<_> = std::fs::read_dir(cache_dir.as_std_path())?
+            .filter_map(|e| e.ok())
+            .filter(|e| {
+                let name = e.file_name().to_string_lossy().to_string();
+                name.contains(hash) && name.ends_with(".tar.zst")
+            })
+            .collect();
+        assert_eq!(
+            archive_files.len(),
+            1,
+            "Expected exactly one archive file, found: {:?}",
+            archive_files
+        );
+
         Ok(())
     }
 }

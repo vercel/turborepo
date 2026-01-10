@@ -8,7 +8,7 @@ import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
-  ...jest.requireActual("@turbo/workspaces"),
+  ...jest.requireActual("@turbo/workspaces")
 }));
 
 interface TestCase {
@@ -26,28 +26,28 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "normal-workspaces-dev-install",
-    expected: "npm install turbo@latest --save-dev",
+    expected: "npm install turbo@latest --save-dev"
   },
   {
     version: "1.6.3",
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "normal-workspaces-dev-install",
-    expected: "npm install turbo@1.6.3 --save-dev",
+    expected: "npm install turbo@1.6.3 --save-dev"
   },
   {
     version: "canary",
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "normal-workspaces-dev-install",
-    expected: "npm install turbo@canary --save-dev",
+    expected: "npm install turbo@canary --save-dev"
   },
   {
     version: "latest",
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "normal-workspaces",
-    expected: "npm install turbo@latest",
+    expected: "npm install turbo@latest"
   },
   // npm - single package
   {
@@ -55,14 +55,14 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "single-package-dev-install",
-    expected: "npm install turbo@latest --save-dev",
+    expected: "npm install turbo@latest --save-dev"
   },
   {
     version: "latest",
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "single-package",
-    expected: "npm install turbo@latest",
+    expected: "npm install turbo@latest"
   },
   // pnpm - workspaces
   {
@@ -70,28 +70,28 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "pnpm-workspaces-dev-install",
-    expected: "pnpm add turbo@latest --save-dev -w",
+    expected: "pnpm add turbo@latest --save-dev -w"
   },
   {
     version: "1.6.3",
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "pnpm-workspaces-dev-install",
-    expected: "pnpm add turbo@1.6.3 --save-dev -w",
+    expected: "pnpm add turbo@1.6.3 --save-dev -w"
   },
   {
     version: "canary",
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "pnpm-workspaces-dev-install",
-    expected: "pnpm add turbo@canary --save-dev -w",
+    expected: "pnpm add turbo@canary --save-dev -w"
   },
   {
     version: "latest",
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "pnpm-workspaces",
-    expected: "pnpm add turbo@latest -w",
+    expected: "pnpm add turbo@latest -w"
   },
   // pnpm - single package
   {
@@ -99,14 +99,14 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "single-package-dev-install",
-    expected: "pnpm add turbo@latest --save-dev",
+    expected: "pnpm add turbo@latest --save-dev"
   },
   {
     version: "latest",
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "single-package",
-    expected: "pnpm add turbo@latest",
+    expected: "pnpm add turbo@latest"
   },
   // yarn 1.x - workspaces
   {
@@ -114,28 +114,28 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn add turbo@latest --dev -W",
+    expected: "yarn add turbo@latest --dev -W"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "normal-workspaces",
-    expected: "yarn add turbo@latest -W",
+    expected: "yarn add turbo@latest -W"
   },
   {
     version: "1.6.3",
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn add turbo@1.6.3 --dev -W",
+    expected: "yarn add turbo@1.6.3 --dev -W"
   },
   {
     version: "canary",
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn add turbo@canary --dev -W",
+    expected: "yarn add turbo@canary --dev -W"
   },
   // yarn 1.x - single package
   {
@@ -143,14 +143,14 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "single-package-dev-install",
-    expected: "yarn add turbo@latest --dev",
+    expected: "yarn add turbo@latest --dev"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "single-package",
-    expected: "yarn add turbo@latest",
+    expected: "yarn add turbo@latest"
   },
   // yarn 2.x - workspaces
   {
@@ -158,28 +158,28 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn add turbo@latest --dev",
+    expected: "yarn add turbo@latest --dev"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "normal-workspaces",
-    expected: "yarn add turbo@latest",
+    expected: "yarn add turbo@latest"
   },
   {
     version: "1.6.3",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn add turbo@1.6.3 --dev",
+    expected: "yarn add turbo@1.6.3 --dev"
   },
   {
     version: "canary",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn add turbo@canary --dev",
+    expected: "yarn add turbo@canary --dev"
   },
   // yarn 2.x - single package
   {
@@ -187,14 +187,14 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "single-package-dev-install",
-    expected: "yarn add turbo@latest --dev",
+    expected: "yarn add turbo@latest --dev"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "single-package",
-    expected: "yarn add turbo@latest",
+    expected: "yarn add turbo@latest"
   },
   // yarn 3.x - workspaces
   {
@@ -202,28 +202,28 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "yarn",
     packageManagerVersion: "3.3.4",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn add turbo@latest --dev",
+    expected: "yarn add turbo@latest --dev"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "3.3.4",
     fixture: "normal-workspaces",
-    expected: "yarn add turbo@latest",
+    expected: "yarn add turbo@latest"
   },
   {
     version: "1.6.3",
     packageManager: "yarn",
     packageManagerVersion: "3.3.4",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn add turbo@1.6.3 --dev",
+    expected: "yarn add turbo@1.6.3 --dev"
   },
   {
     version: "canary",
     packageManager: "yarn",
     packageManagerVersion: "3.3.4",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn add turbo@canary --dev",
+    expected: "yarn add turbo@canary --dev"
   },
   // yarn 3.x - single package
   {
@@ -231,15 +231,15 @@ const LOCAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "yarn",
     packageManagerVersion: "3.3.4",
     fixture: "single-package-dev-install",
-    expected: "yarn add turbo@latest --dev",
+    expected: "yarn add turbo@latest --dev"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "3.3.4",
     fixture: "single-package",
-    expected: "yarn add turbo@latest",
-  },
+    expected: "yarn add turbo@latest"
+  }
 ];
 
 const GLOBAL_INSTALL_COMMANDS: Array<TestCase> = [
@@ -249,35 +249,35 @@ const GLOBAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "normal-workspaces-dev-install",
-    expected: "npm install turbo@latest --global",
+    expected: "npm install turbo@latest --global"
   },
   {
     version: "1.6.3",
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "normal-workspaces-dev-install",
-    expected: "npm install turbo@1.6.3 --global",
+    expected: "npm install turbo@1.6.3 --global"
   },
   {
     version: "latest",
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "normal-workspaces",
-    expected: "npm install turbo@latest --global",
+    expected: "npm install turbo@latest --global"
   },
   {
     version: "latest",
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "single-package",
-    expected: "npm install turbo@latest --global",
+    expected: "npm install turbo@latest --global"
   },
   {
     version: "latest",
     packageManager: "npm",
     packageManagerVersion: "7.0.0",
     fixture: "single-package-dev-install",
-    expected: "npm install turbo@latest --global",
+    expected: "npm install turbo@latest --global"
   },
   // pnpm
   {
@@ -285,35 +285,35 @@ const GLOBAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "pnpm-workspaces-dev-install",
-    expected: "pnpm add turbo@latest --global",
+    expected: "pnpm add turbo@latest --global"
   },
   {
     version: "1.6.3",
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "pnpm-workspaces-dev-install",
-    expected: "pnpm add turbo@1.6.3 --global",
+    expected: "pnpm add turbo@1.6.3 --global"
   },
   {
     version: "latest",
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "pnpm-workspaces",
-    expected: "pnpm add turbo@latest --global",
+    expected: "pnpm add turbo@latest --global"
   },
   {
     version: "latest",
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "single-package",
-    expected: "pnpm add turbo@latest --global",
+    expected: "pnpm add turbo@latest --global"
   },
   {
     version: "latest",
     packageManager: "pnpm",
     packageManagerVersion: "7.0.0",
     fixture: "single-package-dev-install",
-    expected: "pnpm add turbo@latest --global",
+    expected: "pnpm add turbo@latest --global"
   },
   // yarn 1.x
   {
@@ -321,35 +321,35 @@ const GLOBAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "normal-workspaces",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   {
     version: "1.6.3",
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn global add turbo@1.6.3",
+    expected: "yarn global add turbo@1.6.3"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "single-package",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "1.22.19",
     fixture: "single-package-dev-install",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   // yarn 2.x
   {
@@ -357,35 +357,35 @@ const GLOBAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "normal-workspaces",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   {
     version: "1.6.3",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn global add turbo@1.6.3",
+    expected: "yarn global add turbo@1.6.3"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "single-package",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "2.3.4",
     fixture: "single-package-dev-install",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   // yarn 3.x
   {
@@ -393,42 +393,42 @@ const GLOBAL_INSTALL_COMMANDS: Array<TestCase> = [
     packageManager: "yarn",
     packageManagerVersion: "3.3.3",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "3.3.3",
     fixture: "normal-workspaces",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   {
     version: "1.6.3",
     packageManager: "yarn",
     packageManagerVersion: "3.3.3",
     fixture: "normal-workspaces-dev-install",
-    expected: "yarn global add turbo@1.6.3",
+    expected: "yarn global add turbo@1.6.3"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "3.3.4",
     fixture: "single-package",
-    expected: "yarn global add turbo@latest",
+    expected: "yarn global add turbo@latest"
   },
   {
     version: "latest",
     packageManager: "yarn",
     packageManagerVersion: "3.3.4",
     fixture: "single-package-dev-install",
-    expected: "yarn global add turbo@latest",
-  },
+    expected: "yarn global add turbo@latest"
+  }
 ];
 
 describe("get-turbo-upgrade-command", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "get-turbo-upgrade-command",
+    test: "get-turbo-upgrade-command"
   });
 
   afterEach(() => {
@@ -442,10 +442,10 @@ describe("get-turbo-upgrade-command", () => {
       packageManager,
       packageManagerVersion,
       fixture,
-      expected,
+      expected
     }) => {
       const { root } = useFixture({
-        fixture,
+        fixture
       });
 
       const mockedExec = jest
@@ -462,7 +462,7 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: undefined,
           npm: undefined,
           yarn: undefined,
-          bun: undefined,
+          bun: undefined
         });
       const mockGetAvailablePackageManagers = jest
         .spyOn(turboUtils, "getAvailablePackageManagers")
@@ -470,13 +470,13 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: packageManager === "pnpm" ? packageManagerVersion : undefined,
           npm: packageManager === "npm" ? packageManagerVersion : undefined,
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
-          bun: packageManager === "bun" ? packageManagerVersion : undefined,
+          bun: packageManager === "bun" ? packageManagerVersion : undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
         root,
         packageManager,
-        singlePackage: fixture.includes("single-package"),
+        singlePackage: fixture.includes("single-package")
       });
       const mockGetWorkspaceDetails = jest
         .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -485,7 +485,7 @@ describe("get-turbo-upgrade-command", () => {
       // get the command
       const upgradeCommand = await getTurboUpgradeCommand({
         project,
-        to: version === "latest" ? undefined : version,
+        to: version === "latest" ? undefined : version
       });
 
       expect(upgradeCommand).toEqual(expected);
@@ -504,10 +504,10 @@ describe("get-turbo-upgrade-command", () => {
       packageManager,
       packageManagerVersion,
       fixture,
-      expected,
+      expected
     }) => {
       const { root } = useFixture({
-        fixture,
+        fixture
       });
 
       const mockedExec = jest
@@ -524,7 +524,7 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: `/global/pnpm/bin`,
           npm: `/global/npm/bin`,
           yarn: `/global/yarn/bin`,
-          bun: `/global/bun/bin`,
+          bun: `/global/bun/bin`
         });
 
       const mockGetAvailablePackageManagers = jest
@@ -533,12 +533,12 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: packageManager === "pnpm" ? packageManagerVersion : undefined,
           npm: packageManager === "npm" ? packageManagerVersion : undefined,
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
-          bun: packageManager === "bun" ? packageManagerVersion : undefined,
+          bun: packageManager === "bun" ? packageManagerVersion : undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
         root,
-        packageManager,
+        packageManager
       });
       const mockGetWorkspaceDetails = jest
         .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -547,7 +547,7 @@ describe("get-turbo-upgrade-command", () => {
       // get the command
       const upgradeCommand = await getTurboUpgradeCommand({
         project,
-        to: version === "latest" ? undefined : version,
+        to: version === "latest" ? undefined : version
       });
 
       expect(upgradeCommand).toEqual(expected);
@@ -562,7 +562,7 @@ describe("get-turbo-upgrade-command", () => {
   describe("errors", () => {
     it("fails gracefully if no package.json exists", async () => {
       const { root } = useFixture({
-        fixture: "no-package",
+        fixture: "no-package"
       });
 
       const mockedExec = jest
@@ -580,12 +580,12 @@ describe("get-turbo-upgrade-command", () => {
           pnpm: "8.0.0",
           npm: undefined,
           yarn: undefined,
-          bun: undefined,
+          bun: undefined
         });
 
       const project = getWorkspaceDetailsMockReturnValue({
         root,
-        packageManager: "pnpm",
+        packageManager: "pnpm"
       });
       const mockGetWorkspaceDetails = jest
         .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -593,7 +593,7 @@ describe("get-turbo-upgrade-command", () => {
 
       // get the command
       const upgradeCommand = await getTurboUpgradeCommand({
-        project,
+        project
       });
 
       expect(upgradeCommand).toEqual(undefined);
@@ -606,21 +606,21 @@ describe("get-turbo-upgrade-command", () => {
     it.each([
       {
         fixture: "no-package",
-        name: "fails gracefully if no package.json exists",
+        name: "fails gracefully if no package.json exists"
       },
       {
         fixture: "no-turbo",
-        name: "fails gracefully if turbo cannot be found in package.json",
+        name: "fails gracefully if turbo cannot be found in package.json"
       },
       {
         fixture: "no-deps",
-        name: "fails gracefully if package.json has no deps or devDeps",
-      },
+        name: "fails gracefully if package.json has no deps or devDeps"
+      }
     ])(
       "$name",
       async ({ fixture }) => {
         const { root } = useFixture({
-          fixture,
+          fixture
         });
 
         const mockedExec = jest
@@ -638,12 +638,12 @@ describe("get-turbo-upgrade-command", () => {
             pnpm: "8.0.0",
             npm: undefined,
             yarn: undefined,
-            bun: undefined,
+            bun: undefined
           });
 
         const project = getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager: "pnpm",
+          packageManager: "pnpm"
         });
         const mockGetWorkspaceDetails = jest
           .spyOn(turboWorkspaces, "getWorkspaceDetails")
@@ -651,7 +651,7 @@ describe("get-turbo-upgrade-command", () => {
 
         // get the command
         const upgradeCommand = await getTurboUpgradeCommand({
-          project,
+          project
         });
 
         expect(upgradeCommand).toEqual(undefined);

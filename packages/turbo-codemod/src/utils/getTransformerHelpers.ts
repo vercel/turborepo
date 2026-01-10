@@ -5,7 +5,7 @@ import { Logger } from "./logger";
 export function getTransformerHelpers({
   transformer,
   rootPath,
-  options,
+  options
 }: {
   transformer: string;
   rootPath: string;
@@ -14,7 +14,7 @@ export function getTransformerHelpers({
   const utilArgs = {
     transformer,
     rootPath,
-    ...options,
+    ...options
   };
   const log = new Logger(utilArgs);
   const runner = new Runner(utilArgs);

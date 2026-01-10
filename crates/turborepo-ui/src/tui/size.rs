@@ -37,12 +37,21 @@ impl SizeInfo {
     }
 
     pub fn pane_cols(&self) -> u16 {
-        // Want to maximize pane width
-        let ratio_pane_width = (f32::from(self.cols) * PANE_SIZE_RATIO) as u16;
-        let full_task_width = self.cols.saturating_sub(self.task_width_hint);
-        full_task_width
-            .max(ratio_pane_width)
-            // We need to account for the left border of the pane
-            .saturating_sub(1)
+        self.pane_cols_with_sidebar(true)
+    }
+
+    pub fn pane_cols_with_sidebar(&self, has_sidebar: bool) -> u16 {
+        if has_sidebar {
+            // Want to maximize pane width
+            let ratio_pane_width = (f32::from(self.cols) * PANE_SIZE_RATIO) as u16;
+            let full_task_width = self.cols.saturating_sub(self.task_width_hint);
+            full_task_width
+                .max(ratio_pane_width)
+                // We need to account for the left border of the pane
+                .saturating_sub(1)
+        } else {
+            // When sidebar is hidden, pane takes full width minus border
+            self.cols.saturating_sub(1)
+        }
     }
 }

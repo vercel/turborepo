@@ -26,8 +26,27 @@ pub use crate::{
     logs::{LogWriter, replay_logs, replay_logs_with_crlf},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
-    tui::{TaskTable, TerminalPane},
+    tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_on_panic},
 };
+
+// Re-export documentation for panic handler integration:
+//
+// ## Panic Recovery
+//
+// The [`restore_terminal_on_panic`] function should be called from your panic
+// handler if using the TUI. It will restore terminal state (raw mode, alternate
+// screen, mouse capture) only if the TUI was active, making panic messages
+// visible. This is a best-effort operation that ignores all errors since we're
+// already in a panic context.
+//
+// Example usage in a panic handler:
+// ```ignore
+// pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
+//     // Restore terminal first so panic message is visible
+//     turborepo_ui::restore_terminal_on_panic();
+//     // ... rest of panic handling
+// }
+// ```
 
 #[derive(Debug, Error)]
 pub enum Error {

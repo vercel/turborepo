@@ -5,19 +5,19 @@ import { transformer } from "../src/transforms/rename-pipeline";
 describe("rename-pipeline", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "rename-pipeline",
+    test: "rename-pipeline"
   });
 
   it("migrates turbo.json pipeline - root config only", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "root-only",
+      fixture: "root-only"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -25,9 +25,9 @@ describe("rename-pipeline", () => {
       globalDependencies: ["important.txt"],
       tasks: {
         build: {
-          outputs: ["dist"],
-        },
-      },
+          outputs: ["dist"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -45,13 +45,13 @@ describe("rename-pipeline", () => {
   it("migrates turbo.json pipeline - workspace configs", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "workspace-configs",
+      fixture: "workspace-configs"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
@@ -59,18 +59,18 @@ describe("rename-pipeline", () => {
       tasks: {
         build: {
           dependsOn: ["^build"],
-          outputs: [".next/**", "!.next/cache/**"],
+          outputs: [".next/**", "!.next/cache/**"]
         },
         dev: {
-          cache: false,
+          cache: false
         },
         lint: {
-          outputs: [],
+          outputs: []
         },
         test: {
-          outputs: [],
-        },
-      },
+          outputs: []
+        }
+      }
     });
 
     expect(JSON.parse(read("apps/web/turbo.json") || "{}")).toStrictEqual({
@@ -78,9 +78,9 @@ describe("rename-pipeline", () => {
       extends: ["//"],
       tasks: {
         build: {
-          dependsOn: [],
-        },
-      },
+          dependsOn: []
+        }
+      }
     });
 
     expect(JSON.parse(read("packages/ui/turbo.json") || "{}")).toStrictEqual({
@@ -88,9 +88,9 @@ describe("rename-pipeline", () => {
       extends: ["//"],
       tasks: {
         test: {
-          dependsOn: ["build"],
-        },
-      },
+          dependsOn: ["build"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -123,7 +123,7 @@ describe("rename-pipeline", () => {
   it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "no-turbo-json",
+      fixture: "no-turbo-json"
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -131,7 +131,7 @@ describe("rename-pipeline", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -144,22 +144,22 @@ describe("rename-pipeline", () => {
   it("does not do anything if there is already a top level tasks key", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "with-tasks",
+      fixture: "with-tasks"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turborepo.com/schema.json",
       tasks: {
         build: {
-          outputs: ["dist"],
-        },
-      },
+          outputs: ["dist"]
+        }
+      }
     });
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toStrictEqual({});

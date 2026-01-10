@@ -753,11 +753,6 @@ mod test {
         (None, name)
     }
 
-    fn reverse<T, U>(tuple: (T, U)) -> (U, T) {
-        let (a, b) = tuple;
-        (b, a)
-    }
-
     struct MockDiscovery;
     impl PackageDiscovery for MockDiscovery {
         async fn discover_packages(

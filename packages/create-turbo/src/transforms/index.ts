@@ -11,5 +11,5 @@ export const transforms: Array<(args: TransformInput) => TransformResult> = [
   officialStarter,
   gitIgnoreTransform,
   packageManagerTransform,
-  pnpmEslintTransform,
+  pnpmEslintTransform
 ];

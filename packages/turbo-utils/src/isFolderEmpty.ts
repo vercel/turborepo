@@ -20,7 +20,7 @@ const VALID_FILES = [
   "yarn-debug.log",
   "yarn-error.log",
   "yarnrc.yml",
-  ".yarn",
+  ".yarn"
 ];
 
 export function isFolderEmpty(root: string): {

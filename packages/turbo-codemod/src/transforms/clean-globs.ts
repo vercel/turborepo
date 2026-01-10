@@ -14,12 +14,12 @@ const INTRODUCED_IN = "1.11.0";
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   const turboConfigPath = path.join(root, "turbo.json");
@@ -27,7 +27,7 @@ export function transformer({
   const turboJson: SchemaV1 = loadTurboJson(turboConfigPath);
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: migrateConfig(turboJson),
+    after: migrateConfig(turboJson)
   });
 
   // find and migrate any workspace configs
@@ -37,7 +37,7 @@ export function transformer({
     if ("pipeline" in config) {
       runner.modifyFile({
         filePath,
-        after: migrateConfig(config),
+        after: migrateConfig(config)
       });
     }
   });
@@ -88,7 +88,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

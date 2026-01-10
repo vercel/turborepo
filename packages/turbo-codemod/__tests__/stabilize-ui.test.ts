@@ -5,28 +5,28 @@ import { transformer } from "../src/transforms/stabilize-ui";
 describe("stabilize-ui", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "stabilize-ui",
+    test: "stabilize-ui"
   });
 
   it("adds no config where there was none", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "no-config",
+      fixture: "no-config"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turborepo.com/schema.json",
       tasks: {
         build: {
-          outputs: ["dist"],
-        },
-      },
+          outputs: ["dist"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -44,22 +44,22 @@ describe("stabilize-ui", () => {
   it("removes config if it was already enabled", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "enabled",
+      fixture: "enabled"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turborepo.com/schema.json",
       tasks: {
         build: {
-          outputs: ["dist"],
-        },
-      },
+          outputs: ["dist"]
+        }
+      }
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -77,23 +77,23 @@ describe("stabilize-ui", () => {
   it("renames config if disabled", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "disabled",
+      fixture: "disabled"
     });
 
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
       $schema: "https://turborepo.com/schema.json",
       tasks: {
         build: {
-          outputs: ["dist"],
-        },
+          outputs: ["dist"]
+        }
       },
-      ui: "stream",
+      ui: "stream"
     });
 
     expect(result.fatalError).toBeUndefined();
@@ -111,7 +111,7 @@ describe("stabilize-ui", () => {
   it("errors if no turbo.json can be found", () => {
     // load the fixture for the test
     const { root, read } = useFixture({
-      fixture: "no-turbo-json",
+      fixture: "no-turbo-json"
     });
 
     expect(read("turbo.json")).toBeUndefined();
@@ -119,7 +119,7 @@ describe("stabilize-ui", () => {
     // run the transformer
     const result = transformer({
       root,
-      options: { force: false, dryRun: false, print: false },
+      options: { force: false, dryRun: false, print: false }
     });
 
     expect(read("turbo.json")).toBeUndefined();

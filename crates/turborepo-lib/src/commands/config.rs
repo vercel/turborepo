@@ -2,8 +2,9 @@ use camino::Utf8Path;
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{package_graph::PackageGraph, package_json::PackageJson};
+use turborepo_types::{EnvMode, UIMode};
 
-use crate::{cli, cli::EnvMode, commands::CommandBase, turbo_json::UIMode, Args};
+use crate::{cli, commands::CommandBase, Args};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

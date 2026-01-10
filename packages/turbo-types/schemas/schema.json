@@ -111,9 +111,7 @@
         }
       },
       "additionalProperties": false,
-      "required": [
-        "tasks"
-      ]
+      "required": ["tasks"]
     },
     "Pipeline": {
       "type": "object",
@@ -206,13 +204,7 @@
     },
     "OutputLogs": {
       "type": "string",
-      "enum": [
-        "full",
-        "hash-only",
-        "new-only",
-        "errors-only",
-        "none"
-      ]
+      "enum": ["full", "hash-only", "new-only", "errors-only", "none"]
     },
     "RemoteCache": {
       "type": "object",
@@ -265,10 +257,7 @@
     },
     "UI": {
       "type": "string",
-      "enum": [
-        "tui",
-        "stream"
-      ]
+      "enum": ["tui", "stream"]
     },
     "RelativeUnixPath": {
       "type": "string",
@@ -276,10 +265,7 @@
     },
     "EnvMode": {
       "type": "string",
-      "enum": [
-        "strict",
-        "loose"
-      ]
+      "enum": ["strict", "loose"]
     },
     "RootBoundariesConfig": {
       "type": "object",
@@ -357,9 +343,7 @@
             "type": "string"
           },
           "description": "This key is only available in Workspace Configs and cannot be used in your root turbo.json.\n\nTells turbo to extend your root `turbo.json` and overrides with the keys provided in your Workspace Configs.\n\nCurrently, only the \"//\" value is allowed.",
-          "default": [
-            "//"
-          ]
+          "default": ["//"]
         },
         "tags": {
           "type": "array",
@@ -373,10 +357,7 @@
           "description": "Configuration for `turbo boundaries` that is specific to this package"
         }
       },
-      "required": [
-        "extends",
-        "tasks"
-      ],
+      "required": ["extends", "tasks"],
       "additionalProperties": false,
       "description": "A `turbo.json` file in a package in the monorepo (not the root)"
     },

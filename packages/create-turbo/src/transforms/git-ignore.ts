@@ -5,7 +5,7 @@ import type { TransformInput, TransformResult } from "./types";
 import { TransformError } from "./errors";
 
 const meta = {
-  name: "git-ignore",
+  name: "git-ignore"
 };
 
 // eslint-disable-next-line @typescript-eslint/require-await -- must match transform function signature
@@ -23,7 +23,7 @@ export async function transform(args: TransformInput): TransformResult {
     // assume this came from writeFileSync
     throw new TransformError("Unable to write .gitignore", {
       transform: meta.name,
-      fatal: false,
+      fatal: false
     });
   }
 
