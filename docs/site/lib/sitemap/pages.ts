@@ -1,4 +1,4 @@
-import { docs, blogDocs, openapiDocs } from "@/.source/server";
+import { docs, blogDocs, openapiDocs, extraDocs } from "@/.source/server";
 
 /**
  * Collect all page URLs for the sitemap.
@@ -38,6 +38,12 @@ export function getAllPageUrls(): Array<string> {
     } else {
       urlSet.add(`/docs/openapi/${slug}`);
     }
+  }
+
+  // Extra pages (governance, terms, etc.)
+  for (const doc of extraDocs) {
+    const slug = doc.info.path.replace(/\.mdx?$/, "");
+    urlSet.add(`/${slug}`);
   }
 
   return [...urlSet].sort();
