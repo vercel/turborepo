@@ -1,11 +1,16 @@
 import { source, blog, openapiPages } from "@/lib/geistdocs/source";
-import { discoverStaticRoutes, getAppDirectory } from "./route-discovery";
 
 /**
- * Collect all page URLs from both automatic route discovery and fumadocs loaders.
+ * Static routes that are not part of fumadocs loaders.
+ * These are standalone pages in the app directory.
+ */
+const STATIC_ROUTES = ["/", "/blog", "/showcase", "/governance", "/terms"];
+
+/**
+ * Collect all page URLs from fumadocs loaders and static routes.
  *
  * This ensures the sitemap is always exhaustive by:
- * 1. Scanning the app directory for all static page.tsx files
+ * 1. Including known static routes
  * 2. Getting all dynamic routes from fumadocs loaders (docs, blog, etc.)
  *
  * The results are deduplicated to handle any overlap.
@@ -13,10 +18,8 @@ import { discoverStaticRoutes, getAppDirectory } from "./route-discovery";
 export function getAllPageUrls(): Array<string> {
   const urlSet = new Set<string>();
 
-  // 1. Discover static routes from app directory
-  // This catches standalone pages like /blog, /showcase, etc.
-  const staticRoutes = discoverStaticRoutes(getAppDirectory());
-  for (const route of staticRoutes) {
+  // 1. Add known static routes
+  for (const route of STATIC_ROUTES) {
     urlSet.add(route);
   }
 
