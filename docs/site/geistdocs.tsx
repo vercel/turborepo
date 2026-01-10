@@ -1,12 +1,16 @@
 import {
+  TurborepoLogo,
   TurborepoWordmarkDark,
   TurborepoWordmarkLight
 } from "@/components/logos";
 
 export const Logo = () => (
   <>
-    <TurborepoWordmarkDark className="hidden h-6 w-auto dark:block" />
-    <TurborepoWordmarkLight className="h-6 w-auto dark:hidden" />
+    {/* Logo icon only on screens <= 400px and between 768px-940px */}
+    <TurborepoLogo className="block h-6 w-auto min-[401px]:hidden min-[768px]:block min-[941px]:hidden" />
+    {/* Wordmark on screens 401px-767px and > 940px */}
+    <TurborepoWordmarkDark className="hidden h-6 w-auto dark:min-[401px]:block dark:min-[768px]:hidden dark:min-[941px]:block" />
+    <TurborepoWordmarkLight className="hidden h-6 w-auto min-[401px]:block dark:min-[401px]:hidden min-[768px]:hidden min-[941px]:block dark:min-[941px]:hidden" />
   </>
 );
 
