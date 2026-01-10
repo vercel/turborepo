@@ -90,7 +90,6 @@ async fn run_force_scenario(
     Ok(redact_output(&result.combined_output()))
 }
 
-
 #[tokio::test]
 async fn test_baseline_cache_miss() -> Result<()> {
     let env = TurboTestEnv::new().await?;
@@ -107,7 +106,6 @@ async fn test_baseline_cache_miss() -> Result<()> {
     Ok(())
 }
 
-
 #[test_case(ForceFlag::Missing, "env_true_flag_missing" ; "env_true_flag_missing_bypasses_cache")]
 #[test_case(ForceFlag::True, "env_true_flag_true" ; "env_true_flag_true_bypasses_cache")]
 #[test_case(ForceFlag::False, "env_true_flag_false" ; "env_true_flag_false_uses_cache")]
@@ -120,7 +118,6 @@ async fn test_force_with_env_true(flag: ForceFlag, snapshot_name: &str) -> Resul
     Ok(())
 }
 
-
 #[test_case(ForceFlag::Missing, "env_false_flag_missing" ; "env_false_flag_missing_uses_cache")]
 #[test_case(ForceFlag::True, "env_false_flag_true" ; "env_false_flag_true_bypasses_cache")]
 #[test_case(ForceFlag::False, "env_false_flag_false" ; "env_false_flag_false_uses_cache")]
@@ -132,7 +129,6 @@ async fn test_force_with_env_false(flag: ForceFlag, snapshot_name: &str) -> Resu
     assert_snapshot!(snapshot_name, output);
     Ok(())
 }
-
 
 #[test_case(ForceFlag::Missing, "env_missing_flag_missing" ; "env_missing_flag_missing_uses_cache")]
 #[test_case(ForceFlag::True, "env_missing_flag_true" ; "env_missing_flag_true_bypasses_cache")]
