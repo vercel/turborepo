@@ -24,11 +24,11 @@ describe("validateDirectory", () => {
 
     mockFs.existsSync.mockReturnValue(true);
     mockFs.lstatSync.mockReturnValue({
-      isDirectory: () => true,
+      isDirectory: () => true
     } as fs.Stats);
     mockIsFolderEmpty.mockReturnValue({
       isEmpty: true,
-      conflicts: [],
+      conflicts: []
     });
 
     const result = validateDirectory(directory);
@@ -36,7 +36,7 @@ describe("validateDirectory", () => {
     expect(result).toEqual({
       valid: true,
       root: resolvedPath,
-      projectName: "project",
+      projectName: "project"
     });
   });
 
@@ -45,7 +45,7 @@ describe("validateDirectory", () => {
     const resolvedPath = path.resolve(directory);
 
     mockFs.lstatSync.mockReturnValue({
-      isDirectory: () => false,
+      isDirectory: () => false
     } as fs.Stats);
 
     const result = validateDirectory(directory);
@@ -54,7 +54,7 @@ describe("validateDirectory", () => {
       valid: false,
       root: resolvedPath,
       projectName: "file.txt",
-      error: expect.stringContaining("is not a directory"),
+      error: expect.stringContaining("is not a directory")
     });
   });
 
@@ -65,11 +65,11 @@ describe("validateDirectory", () => {
 
     mockFs.existsSync.mockReturnValue(true);
     mockFs.lstatSync.mockReturnValue({
-      isDirectory: () => true,
+      isDirectory: () => true
     } as fs.Stats);
     mockIsFolderEmpty.mockReturnValue({
       isEmpty: false,
-      conflicts,
+      conflicts
     });
 
     const result = validateDirectory(directory);
@@ -78,7 +78,7 @@ describe("validateDirectory", () => {
       valid: false,
       root: resolvedPath,
       projectName: "existing",
-      error: expect.stringContaining("has 2 conflicting files"),
+      error: expect.stringContaining("has 2 conflicting files")
     });
   });
 
@@ -89,11 +89,11 @@ describe("validateDirectory", () => {
 
     mockFs.existsSync.mockReturnValue(true);
     mockFs.lstatSync.mockReturnValue({
-      isDirectory: () => true,
+      isDirectory: () => true
     } as fs.Stats);
     mockIsFolderEmpty.mockReturnValue({
       isEmpty: false,
-      conflicts,
+      conflicts
     });
 
     const result = validateDirectory(directory);
@@ -102,7 +102,7 @@ describe("validateDirectory", () => {
       valid: false,
       root: resolvedPath,
       projectName: "existing",
-      error: expect.stringContaining("has 1 conflicting file"),
+      error: expect.stringContaining("has 1 conflicting file")
     });
   });
 
@@ -118,7 +118,7 @@ describe("validateDirectory", () => {
     expect(result).toEqual({
       valid: true,
       root: resolvedPath,
-      projectName: "new-project",
+      projectName: "new-project"
     });
   });
 
@@ -140,7 +140,7 @@ describe("validateDirectory", () => {
     expect(result).toEqual({
       valid: true,
       root: resolvedPath,
-      projectName: "project",
+      projectName: "project"
     });
   });
 });

@@ -9,19 +9,19 @@ import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({
   __esModule: true,
-  ...jest.requireActual("@turbo/workspaces"),
+  ...jest.requireActual("@turbo/workspaces")
 }));
 
 describe("transform", () => {
   const mockExit = spyExit();
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
-    test: "transform",
+    test: "transform"
   });
 
   it("runs the selected transform", async () => {
     const { root, readJson } = useFixture({
-      fixture: "basic",
+      fixture: "basic"
     });
 
     const packageManager = "pnpm";
@@ -37,7 +37,7 @@ describe("transform", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
-        bun: undefined,
+        bun: undefined
       });
 
     const mockGetWorkspaceDetails = jest
@@ -45,7 +45,7 @@ describe("transform", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -53,17 +53,17 @@ describe("transform", () => {
       list: false,
       force: false,
       dryRun: false,
-      print: false,
+      print: false
     });
 
     expect(readJson("package.json")).toStrictEqual({
       dependencies: {},
       devDependencies: {
-        turbo: "1.0.0",
+        turbo: "1.0.0"
       },
       name: "transform-basic",
       packageManager: "pnpm@1.2.3",
-      version: "1.0.0",
+      version: "1.0.0"
     });
 
     // verify mocks were called
@@ -79,7 +79,7 @@ describe("transform", () => {
 
   it("runs the selected transform - dry & print", async () => {
     const { root, readJson } = useFixture({
-      fixture: "basic",
+      fixture: "basic"
     });
 
     const packageManager = "pnpm";
@@ -95,7 +95,7 @@ describe("transform", () => {
         pnpm: packageManagerVersion,
         npm: undefined,
         yarn: undefined,
-        bun: undefined,
+        bun: undefined
       });
 
     const mockGetWorkspaceDetails = jest
@@ -103,7 +103,7 @@ describe("transform", () => {
       .mockResolvedValue(
         getWorkspaceDetailsMockReturnValue({
           root,
-          packageManager,
+          packageManager
         })
       );
 
@@ -111,16 +111,16 @@ describe("transform", () => {
       list: false,
       force: false,
       dryRun: true,
-      print: true,
+      print: true
     });
 
     expect(readJson("package.json")).toStrictEqual({
       dependencies: {},
       devDependencies: {
-        turbo: "1.0.0",
+        turbo: "1.0.0"
       },
       name: "transform-basic",
-      version: "1.0.0",
+      version: "1.0.0"
     });
 
     // verify mocks were called
@@ -136,14 +136,14 @@ describe("transform", () => {
 
   it("lists transforms", async () => {
     const { root } = useFixture({
-      fixture: "basic",
+      fixture: "basic"
     });
 
     await transform("add-package-manager", root, {
       list: true,
       force: false,
       dryRun: false,
-      print: false,
+      print: false
     });
 
     expect(mockExit.exit).toHaveBeenCalledWith(0);
@@ -151,14 +151,14 @@ describe("transform", () => {
 
   it("exits on invalid transform", async () => {
     const { root } = useFixture({
-      fixture: "basic",
+      fixture: "basic"
     });
 
     await transform("not-a-real-option", root, {
       list: false,
       force: false,
       dryRun: false,
-      print: false,
+      print: false
     });
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);
@@ -166,14 +166,14 @@ describe("transform", () => {
 
   it("exits on invalid directory", async () => {
     useFixture({
-      fixture: "basic",
+      fixture: "basic"
     });
 
     await transform("add-package-manager", "~/path/that/does/not/exist", {
       list: false,
       force: false,
       dryRun: false,
-      print: false,
+      print: false
     });
 
     expect(mockExit.exit).toHaveBeenCalledWith(1);

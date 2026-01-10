@@ -11,7 +11,7 @@ export type { ProjectKey } from "./utils/calculate-inputs";
 const plugin = {
   meta: { name, version },
   rules: {
-    [RULES.noUndeclaredEnvVars]: noUndeclaredEnvVars,
+    [RULES.noUndeclaredEnvVars]: noUndeclaredEnvVars
   },
   configs: {
     recommended,
@@ -20,10 +20,10 @@ const plugin = {
       plugins: {
         get turbo(): ESLint.Plugin {
           return plugin;
-        },
-      },
-    },
-  },
+        }
+      }
+    }
+  }
 } satisfies ESLint.Plugin;
 
 export const { rules, configs } = plugin;

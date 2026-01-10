@@ -3,7 +3,7 @@ import { getProject } from "../../utils/getProject";
 import { copy as GenFromCopy, empty as GenEmpty } from "../../generators";
 import type {
   TurboGeneratorOptions,
-  WorkspaceType,
+  WorkspaceType
 } from "../../generators/types";
 
 export interface TurboGeneratorCLIOptions {
@@ -33,9 +33,9 @@ function parse(opts: TurboGeneratorCLIOptions): TurboGeneratorOptions {
     method,
     copy: {
       type: sourceType,
-      source,
+      source
     },
-    ...rest,
+    ...rest
   };
 }
 
@@ -49,7 +49,7 @@ export async function workspace(opts: TurboGeneratorCLIOptions) {
   logger.log();
   const args = {
     project,
-    opts: generatorOpts,
+    opts: generatorOpts
   };
 
   if (generatorOpts.method === "copy") {

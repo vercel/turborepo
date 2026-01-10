@@ -7,8 +7,8 @@ import {
   pruneRemovedPages,
   crawlPages,
   getAllPageUrls,
-  SITEMAP_CONFIG,
-} from "#lib/sitemap/index.ts";
+  SITEMAP_CONFIG
+} from "@/lib/sitemap";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // 5 minutes max for crawling
@@ -105,7 +105,7 @@ export async function GET(request: Request): Promise<Response> {
       failedPages,
       removedPages: removed.length,
       errors: errors.slice(0, 10), // Limit errors in response
-      baseUrl: SITEMAP_CONFIG.baseUrl,
+      baseUrl: SITEMAP_CONFIG.baseUrl
     };
 
     // eslint-disable-next-line no-console -- Intentional logging for cron job monitoring
@@ -119,7 +119,7 @@ export async function GET(request: Request): Promise<Response> {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: error instanceof Error ? error.message : String(error)
       },
       { status: 500 }
     );

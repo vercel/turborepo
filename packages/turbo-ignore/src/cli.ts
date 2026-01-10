@@ -4,7 +4,7 @@ import { Command, Option } from "commander";
 import {
   type TurboIgnoreTelemetry,
   initTelemetry,
-  withTelemetryCommand,
+  withTelemetryCommand
 } from "@turbo/telemetry";
 import cliPkg from "../package.json";
 import { turboIgnore } from "./ignore";
@@ -23,8 +23,8 @@ turboIgnoreCli
     const { telemetry } = await initTelemetry<"turbo-ignore">({
       packageInfo: {
         name: "turbo-ignore",
-        version: cliPkg.version,
-      },
+        version: cliPkg.version
+      }
     });
     // inject telemetry into the action as an option
     thisAction.addOption(

@@ -27,6 +27,9 @@ mod ls_tree;
 pub mod manual;
 pub mod package_deps;
 mod status;
+pub mod worktree;
+
+pub use worktree::WorktreeInfo;
 
 #[derive(Debug, Error)]
 pub enum Error {

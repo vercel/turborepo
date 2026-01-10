@@ -3,13 +3,9 @@ title: Start with an example
 description: Start with an example Turborepo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { ExamplesTable } from '#components/examples-table';
-import { Callout } from '#components/callout';
-
 Use `create-turbo` to bootstrap an example with your favorite tooling.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -59,7 +55,7 @@ bunx create-turbo@latest --example [github-url]
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ## Core-maintained examples
 
@@ -71,7 +67,7 @@ The following examples are maintained by the Turborepo core team. Dependencies a
 
 The community curates a set of examples to showcase ways to use common tools and libraries with Turborepo. To bootstrap your monorepo with one of the examples, use the `--example` flag:
 
-<Callout type="good-to-know">
+<Callout type="info">
   GitHub Issues for these examples will be closed. If you find problems, please
   submit a pull request with fixes.
 </Callout>

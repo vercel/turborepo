@@ -37,7 +37,7 @@ async function run() {
       order: "desc",
       per_page: NUM_OF_ISSUES,
       q: `repo:${OWNER}/${REPO} is:issue is:open created:>=${daysAgo}`,
-      sort: "reactions-+1",
+      sort: "reactions-+1"
     });
 
     console.log("Found issues: ", data.items.length);
@@ -58,7 +58,7 @@ async function run() {
 
 function generateWorkflowPayload(issues) {
   const payload = {
-    prelude: `Top ${NUM_OF_ISSUES} issues sorted by :+1: reactions (last ${NUM_OF_DAYS} days).*\nNote: This :github2: workflow will run every Monday at 1PM UTC (9AM EST)._"`,
+    prelude: `Top ${NUM_OF_ISSUES} issues sorted by :+1: reactions (last ${NUM_OF_DAYS} days).*\nNote: This :github2: workflow will run every Monday at 1PM UTC (9AM EST)._"`
   };
 
   issues.forEach((issue, index) => {

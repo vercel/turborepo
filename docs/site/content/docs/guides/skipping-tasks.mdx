@@ -3,8 +3,6 @@ title: Skipping tasks
 description: Never do the same work twice.
 ---
 
-import { Callout } from '#components/callout';
-
 [Caching](/docs/crafting-your-repository/caching) dramatically speeds up your tasks - but you may be able to go even faster by using `npx turbo-ignore`. If a workspace is unaffected by your code changes, you can completely skip executing a task altogether.
 
 Let's say you want to skip the unit tests for your `web` workspace when there aren't any changes to your `web` application (or its package dependencies). If you are already using [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching), you will probably get a cache hit - but you would still spend time provisioning the CI container, installing `npm` dependencies, and other things that can take a while.

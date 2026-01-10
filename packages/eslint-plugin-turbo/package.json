@@ -1,6 +1,6 @@
 {
   "name": "eslint-plugin-turbo",
-  "version": "2.7.3-canary.0",
+  "version": "2.7.4-canary.3",
   "description": "ESLint plugin for Turborepo",
   "keywords": [
     "turbo",
@@ -27,7 +27,6 @@
     "test": "jest",
     "build": "tsup && tsc --declaration",
     "check-types": "tsc --noEmit",
-    "lint": "eslint lib/",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
@@ -35,7 +34,6 @@
   },
   "devDependencies": {
     "@jest/globals": "29.7.0",
-    "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@turbo/types": "workspace:*",
@@ -43,6 +41,7 @@
     "@types/eslint": "8.56.12",
     "@types/estree": "1.0.5",
     "@types/node": "18.17.4",
+    "eslint": "8.57.0",
     "jest": "29.7.0",
     "json5": "2.2.3",
     "ts-jest": "29.2.5",

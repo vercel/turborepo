@@ -8,7 +8,7 @@ import {
   readJsonSync,
   readFileSync,
   writeJsonSync,
-  writeFileSync,
+  writeFileSync
 } from "fs-extra";
 import type { FileTransformArgs, LogFileArgs } from "./types";
 

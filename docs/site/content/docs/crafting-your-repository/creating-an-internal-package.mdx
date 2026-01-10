@@ -3,11 +3,6 @@ title: Creating an Internal Package
 description: Learn how to create an Internal Package for your monorepo.
 ---
 
-import { Callout } from '#components/callout';
-import { Steps, Step } from '#components/steps';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Files, File, Folder } from '#components/files';
-
 [Internal Packages](/docs/core-concepts/internal-packages) are the building blocks of your workspace, giving you a powerful way to share code and functionality across your repo. Turborepo automatically understands the relationships between Internal Packages using the dependencies in `package.json`, creating a [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph) under the hood to optimize your repository's workflows.
 
 ![Visual representation of a Package Graph in a Turborepo.](/images/docs/package-graph.png)
@@ -51,7 +46,7 @@ Next, create the `package.json` for the package. By adding this file, you'll ful
   from '@repo/math/add'`).
 </Callout>
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```json title="./packages/math/package.json"
@@ -162,7 +157,7 @@ Next, create the `package.json` for the package. By adding this file, you'll ful
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Let's break down this `package.json` piece-by-piece:
 
@@ -239,7 +234,7 @@ These files map to the outputs that will be created by `tsc` when you run `turbo
 
 You're ready to use your new package in an application. Let's add it to the `web` application.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```diff title="apps/web/package.json"
@@ -284,7 +279,7 @@ You're ready to use your new package in an application. Let's add it to the `web
   },
 ```
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 <Callout type="warn">
   You just changed the dependencies in your repo. Make sure to run your package
@@ -294,7 +289,7 @@ You're ready to use your new package in an application. Let's add it to the `web
 `@repo/math` is now available in the `web` application, you can use it in your code:
 
 ```tsx title="apps/web/src/app/page.tsx"
-import { add } from '@repo/math/add';
+import { add } from "@repo/math/add";
 
 function Page() {
   return <div>{add(1, 2)}</div>;
@@ -361,7 +356,7 @@ When you're creating [Application Packages](/docs/core-concepts/package-types#ap
 
 Additionally, Application Packages are not meant to be installed into other packages. Instead, they should be thought of as an entrypoint to your [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph).
 
-<Callout type="good-to-know">
+<Callout type="info">
   There are [rare
   exceptions](/docs/core-concepts/package-types#installing-an-applicaiton-package-into-another-package)
   to this rule.

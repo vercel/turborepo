@@ -19,7 +19,7 @@ describe("searchUp", () => {
       dir: path.dirname(pathString),
       base: path.basename(pathString),
       ext: path.extname(pathString),
-      name: path.basename(pathString, path.extname(pathString)),
+      name: path.basename(pathString, path.extname(pathString))
     }));
   });
 

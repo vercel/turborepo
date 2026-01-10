@@ -3,8 +3,6 @@ title: System environment variables
 description: Learn about system variables used by Turborepo.
 ---
 
-import { Heading } from 'fumadocs-ui/components/heading';
-
 By setting certain environment variables, you can change Turborepo's behavior. This can be useful for creating specific configurations for different environments and machines.
 
 System environment variables are always overridden by flag values provided directly to your `turbo` commands.
@@ -28,35 +26,27 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_API</code>
       </td>
       <td>
-        Set the base URL for{' '}
+        Set the base URL for{" "}
         <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
     <tr id="turbo_binary_path">
       <td>
-        <code>
-          <code>TURBO_BINARY_PATH</code>
-        </code>
+        <code>TURBO_BINARY_PATH</code>
       </td>
       <td>
-        Manually set the path to the <code>turbo</code> binary. By default,{' '}
+        Manually set the path to the <code>turbo</code> binary. By default,{" "}
         <code>turbo</code> will automatically discover the binary so you should
         only use this in rare circumstances.
       </td>
     </tr>
     <tr id="turbo_cache">
       <td>
-        <code>
-          <code>TURBO_CACHE</code>
-        </code>
+        <code>TURBO_CACHE</code>
       </td>
       <td>
-        Control reading and writing for cache sources. Uses the same syntax as{' '}
-        <a href="/docs/reference/run#--cache-options">
-          {' '}
-          <code>--cache</code>
-        </a>
-        .
+        Control reading and writing for cache sources. Uses the same syntax as
+        <code>[--cache](/docs/reference/run#--cache-options)</code>.
       </td>
     </tr>
     <tr id="turbo_cache_dir">
@@ -64,12 +54,9 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_CACHE_DIR</code>
       </td>
       <td>
-        Sets the cache directory, similar to using{' '}
-        <a href="/docs/reference/run#--cache-dir-path">
-          {' '}
-          <code>--cache-dir</code>
-        </a>{' '}
-        flag.
+        <span>Sets the cache directory, similar to using</span>{" "}
+        <code>[--cache-dir](/docs/reference/run#--cache-dir-path)</code>
+        <span> flag.</span>
       </td>
     </tr>
     <tr id="turbo_ci_vendor_env_key">
@@ -77,12 +64,12 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_CI_VENDOR_ENV_KEY</code>
       </td>
       <td>
-        Set a prefix for environment variables that you want
-        <strong>excluded</strong> from <a href="/docs/crafting-your-repository/using-environment-variables#framework-inference">
-          Framework Inference
-        </a>.<span></span>
-        <strong>NOTE</strong>: This does not need to be set by the user and should
-        be configured automatically by supported platforms.
+        <span>Set a prefix for environment variables that you want</span>
+        <strong> excluded</strong> <span>from</span> [Framework
+        Inference](/docs/crafting-your-repository/using-environment-variables#framework-inference).{" "}
+        <div></div>
+        <strong>NOTE</strong>: This does not need to be set by the user and
+        should be configured automatically by supported platforms.
       </td>
     </tr>
     <tr id="turbo_dangerously_disable_package_manager_check">
@@ -90,13 +77,13 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_DANGEROUSLY_DISABLE_PACKAGE_MANAGER_CHECK</code>
       </td>
       <td>
-        Disable checking the <code>packageManager</code> field in{' '}
-        <code>package.json</code>. You may run into{' '}
-        <a href="/docs/reference/run#--dangerously-disable-package-manager-check">
-          errors and unexpected caching behavior
-        </a>{' '}
-        when disabling this check. Use <code>true</code> or <code>1</code> to
-        disable.
+        Disable checking the <code>packageManager</code>
+        field in <code>package.json</code>.
+        <div></div>
+        You may run into [errors and unexpected caching
+        behavior](/docs/reference/run#--dangerously-disable-package-manager-check)
+        when disabling this check. Use <code>true</code>
+        or <code>1</code> to disable.
       </td>
     </tr>
     <tr id="turbo_download_local_enabled">
@@ -140,8 +127,11 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_LOG_ORDER</code>
       </td>
       <td>
-        Set the <a href="/docs/reference/run#--log-order-option">log order</a>.
-        Allowed values are <code>grouped</code> and <code>default</code>.
+        <span>Set the</span>{" "}
+        <a href="/docs/reference/run#--log-order-option">log order</a>
+        <span>. Allowed values are</span> <code>grouped</code> <span>and</span>{" "}
+        <code>default</code>
+        <span>.</span>
       </td>
     </tr>
     <tr id="turbo_login">
@@ -149,10 +139,11 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_LOGIN</code>
       </td>
       <td>
-        Set the URL used to log in to{' '}
-        <a href="/docs/core-concepts/remote-caching">Remote Cache</a>. Only
-        needed for self-hosted Remote Caches that implement an endpoint that
-        dynamically creates tokens.
+        Set the URL used to log in to [Remote
+        Cache](/docs/core-concepts/remote-caching).
+        <div></div>
+        Only needed for self-hosted Remote Caches that implement an endpoint
+        that dynamically creates tokens.
       </td>
     </tr>
     <tr id="turbo_no_update_notifier">
@@ -160,8 +151,10 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_NO_UPDATE_NOTIFIER</code>
       </td>
       <td>
-        Remove the update notifier that appears when a new version of{' '}
-        <code>turbo</code> is available. You can also use{' '}
+        Remove the update notifier that appears when a new version of
+        <code>turbo</code>is available.
+        <div></div>
+        You can also use
         <code>NO_UPDATE_NOTIFIER</code> per ecosystem convention.
       </td>
     </tr>
@@ -171,9 +164,11 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         A CSV of environment variable keys that are configured in a supported CI
-        environment (Vercel). <strong>NOTE</strong>: This variable is meant for
+        environment (Vercel).
+        <div></div>
+        <strong>NOTE</strong>: This variable is meant for
         platforms looking to implement zero-configuration environment variables.
-        You are not meant to use this variable as an end user.{' '}
+        You are not meant to use this variable as an end user.
       </td>
     </tr>
     <tr id="turbo_platform_env_disabled">
@@ -181,8 +176,9 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_PLATFORM_ENV_DISABLED</code>
       </td>
       <td>
-        Disable checking environment variables configured in your{' '}
-        <code>turbo.json</code> against those set on your supported platform
+        <span>Disable checking environment variables configured in your</span>{" "}
+        <code>turbo.json</code>{" "}
+        <span>against those set on your supported platform</span>
       </td>
     </tr>
     <tr id="turbo_preflight">
@@ -192,7 +188,7 @@ System environment variables are always overridden by flag values provided direc
       <td>
         Enables sending a preflight request before every cache artifact and
         analytics request. The follow-up upload and download will follow
-        redirects. Only applicable when{' '}
+        redirects. Only applicable when{" "}
         <a href="/docs/core-concepts/remote-caching">Remote Caching</a> is
         configured.
       </td>
@@ -202,7 +198,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_REMOTE_CACHE_READ_ONLY</code>
       </td>
       <td>
-        Prevent writing to the{' '}
+        Prevent writing to the{" "}
         <a href="/docs/core-concepts/remote-caching">Remote Cache</a> - but
         still allow reading.
       </td>
@@ -212,11 +208,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_REMOTE_CACHE_SIGNATURE_KEY</code>
       </td>
       <td>
-        Sign artifacts with a secret key. For more information, visit{' '}
-        <a href="/docs/core-concepts/remote-caching#artifact-integrity-and-authenticity-verification">
-          the Artifact Integrity section
-        </a>
-        .
+        Sign artifacts with a secret key. For more information, visit [the Artifact Integrity section](/docs/core-concepts/remote-caching#artifact-integrity-and-authenticity-verification).
       </td>
     </tr>
     <tr id="turbo_remote_cache_timeout">
@@ -224,7 +216,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_REMOTE_CACHE_TIMEOUT</code>
       </td>
       <td>
-        Set a timeout in seconds for <code>turbo</code> to get artifacts from{' '}
+        Set a timeout in seconds for <code>turbo</code> to get artifacts from{" "}
         <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
@@ -233,7 +225,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT</code>
       </td>
       <td>
-        Set a timeout in seconds for <code>turbo</code> to upload artifacts to{' '}
+        Set a timeout in seconds for <code>turbo</code> to upload artifacts to{" "}
         <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
@@ -248,7 +240,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_RUN_SUMMARY</code>
       </td>
       <td>
-        Generate a <a href="/docs/reference/run#--summarize">Run Summary</a>{' '}
+        Generate a <a href="/docs/reference/run#--summarize">Run Summary</a>{" "}
         when you run tasks.
       </td>
     </tr>
@@ -275,15 +267,8 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_TEAM</code>
       </td>
       <td>
-        The account name associated with your repository. When using{' '}
-        <a
-          href="https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache"
-          rel="noreferrer noopener"
-          target="_blank"
-        >
-          Vercel Remote Cache
-        </a>
-        , this is [your team's slug](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Get+team+slug).
+        The account name associated with your repository. When using{" "}
+          [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache), this is [your team's slug](https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fsettings&title=Get+team+slug).
       </td>
     </tr>
     <tr id="turbo_teamid">
@@ -291,15 +276,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_TEAMID</code>
       </td>
       <td>
-        The account identifier associated with your repository. When using{' '}
-        <a
-          href="https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache"
-          rel="noreferrer noopener"
-          target="_blank"
-        >
-          Vercel Remote Cache
-        </a>
-        , this is your team's ID.
+        The account identifier associated with your repository. When using [Vercel Remote Cache](https://vercel.com/docs/monorepos/remote-caching#vercel-remote-cache), this is your team's ID.
       </td>
     </tr>
     <tr id="turbo_telemetry_message_disabled">
@@ -307,7 +284,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_TELEMETRY_MESSAGE_DISABLED</code>
       </td>
       <td>
-        Disable the message notifying you that{' '}
+        Disable the message notifying you that{" "}
         <a href="/docs/telemetry">Telemetry</a> is enabled.
       </td>
     </tr>
@@ -316,7 +293,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_TOKEN</code>
       </td>
       <td>
-        The Bearer token for authentication to access{' '}
+        The Bearer token for authentication to access{" "}
         <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
@@ -333,11 +310,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_CONCURRENCY</code>
       </td>
       <td>
-        Controls{' '}
-        <a href="/repo/docs/reference/run#--concurrency-number--percentage">
-          concurrency
-        </a>{' '}
-        settings in run or watch mode.
+        Controls [concurrency](/repo/docs/reference/run#--concurrency-number--percentage) settings in run or watch mode.
       </td>
     </tr>
     <tr id="turbo_sso_login_callback_port">
@@ -349,6 +322,7 @@ System environment variables are always overridden by flag values provided direc
         during authentication.
       </td>
     </tr>
+
   </tbody>
 </table>
 

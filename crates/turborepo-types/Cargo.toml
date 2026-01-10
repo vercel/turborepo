@@ -12,4 +12,8 @@ workspace = true
 biome_deserialize = { workspace = true }
 biome_deserialize_macros = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
+globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 serde = { workspace = true, features = ["derive"] }
+turbopath = { workspace = true }
+turborepo-errors = { workspace = true }
+turborepo-task-id = { workspace = true }

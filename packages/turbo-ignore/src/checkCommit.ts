@@ -5,7 +5,7 @@ export const skipAllCommits = [
   `[ci skip]`,
   `[no ci]`,
   `[skip vercel]`,
-  `[vercel skip]`,
+  `[vercel skip]`
 ];
 
 export const forceAllCommits = [`[vercel deploy]`, `[vercel build]`];
@@ -53,13 +53,13 @@ export function checkCommit({ workspace }: { workspace: string }): {
       return {
         result: "deploy",
         scope: "workspace",
-        reason: `Found commit message: ${onlyWorkspaceDeployMatch}`,
+        reason: `Found commit message: ${onlyWorkspaceDeployMatch}`
       };
     }
     return {
       result: "skip",
       scope: "workspace",
-      reason: `Found commit message: ${onlyWorkspaceDeployMatch}`,
+      reason: `Found commit message: ${onlyWorkspaceDeployMatch}`
     };
   }
 
@@ -75,7 +75,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "conflict",
       scope: "workspace",
-      reason: `Conflicting commit messages found: ${forceWorkspaceDeploy} and ${forceWorkspaceSkip}`,
+      reason: `Conflicting commit messages found: ${forceWorkspaceDeploy} and ${forceWorkspaceSkip}`
     };
   }
 
@@ -83,7 +83,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "deploy",
       scope: "workspace",
-      reason: `Found commit message: ${forceWorkspaceDeploy}`,
+      reason: `Found commit message: ${forceWorkspaceDeploy}`
     };
   }
 
@@ -91,7 +91,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "skip",
       scope: "workspace",
-      reason: `Found commit message: ${forceWorkspaceSkip}`,
+      reason: `Found commit message: ${forceWorkspaceSkip}`
     };
   }
 
@@ -103,7 +103,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "conflict",
       scope: "global",
-      reason: `Conflicting commit messages found: ${forceDeploy} and ${forceSkip}`,
+      reason: `Conflicting commit messages found: ${forceDeploy} and ${forceSkip}`
     };
   }
 
@@ -111,7 +111,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "deploy",
       scope: "global",
-      reason: `Found commit message: ${forceDeploy}`,
+      reason: `Found commit message: ${forceDeploy}`
     };
   }
 
@@ -119,13 +119,13 @@ export function checkCommit({ workspace }: { workspace: string }): {
     return {
       result: "skip",
       scope: "global",
-      reason: `Found commit message: ${forceSkip}`,
+      reason: `Found commit message: ${forceSkip}`
     };
   }
 
   return {
     result: "continue",
     scope: "global",
-    reason: `No deploy or skip string found in commit message.`,
+    reason: `No deploy or skip string found in commit message.`
   };
 }

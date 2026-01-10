@@ -24,9 +24,9 @@ Thank you for your interest in contributing to Turborepo!
 
 You will need to have these dependencies installed on your machine to work on this repository:
 
-- [Rust](https://www.rust-lang.org/tools/install) ([Repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
-- [NodeJS](https://nodejs.org/en) v20
-- [pnpm](https://pnpm.io/) v8
+- [Rust](https://www.rust-lang.org/tools/install) (via [rustup](https://rustup.rs/), which will automatically use the [repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
+- [Node.js](https://nodejs.org/en) v22
+- [pnpm](https://pnpm.io/) v10
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
 

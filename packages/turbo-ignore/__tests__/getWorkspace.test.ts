@@ -7,7 +7,7 @@ describe("getWorkspace()", () => {
   it("getWorkspace returns workspace from arg", () => {
     expect(
       getWorkspace({
-        workspace: "test-workspace",
+        workspace: "test-workspace"
       })
     ).toEqual("test-workspace");
     expect(mockConsole.log).toHaveBeenNthCalledWith(
@@ -20,7 +20,7 @@ describe("getWorkspace()", () => {
   it("getWorkspace returns workspace from package.json", () => {
     expect(
       getWorkspace({
-        directory: "./__fixtures__/app",
+        directory: "./__fixtures__/app"
       })
     ).toEqual("test-app");
     expect(mockConsole.log).toHaveBeenCalledWith(
@@ -40,7 +40,7 @@ describe("getWorkspace()", () => {
   it("getWorkspace returns null when no arg is provided and package.json is missing name field", () => {
     expect(
       getWorkspace({
-        directory: "./__fixtures__/invalid-app",
+        directory: "./__fixtures__/invalid-app"
       })
     ).toEqual(null);
     expect(mockConsole.error).toHaveBeenCalledWith(
@@ -52,7 +52,7 @@ describe("getWorkspace()", () => {
   it("getWorkspace returns null when no arg is provided and package.json can be found", () => {
     expect(
       getWorkspace({
-        directory: "./__fixtures__/no-app",
+        directory: "./__fixtures__/no-app"
       })
     ).toEqual(null);
     expect(mockConsole.error).toHaveBeenCalledWith(

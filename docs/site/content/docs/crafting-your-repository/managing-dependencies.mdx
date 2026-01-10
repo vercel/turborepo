@@ -3,14 +3,10 @@ title: Managing dependencies
 description: Learn how to manage dependencies in your monorepo's workspace.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Callout } from '#components/callout';
-import { LinkToDocumentation } from '#components/link-to-documentation';
-
 - **External dependencies** come from [the npm registry](https://www.npmjs.com/), allowing you to leverage valuable code from the ecosystem to build your applications and libraries faster.
 - **Internal dependencies** let you share functionality within your repository, dramatically improving discoverability and usability of shared code. We will discuss how to build an Internal Package in [the next guide](/docs/crafting-your-repository/creating-an-internal-package).
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```json title="./apps/web/package.json"
@@ -55,7 +51,7 @@ import { LinkToDocumentation } from '#components/link-to-documentation';
 }
 ```
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ## Best practices for dependency installation
 
@@ -63,14 +59,14 @@ import { LinkToDocumentation } from '#components/link-to-documentation';
 
 When you install a dependency in your repository, you should install it directly in the package that uses it. The package's `package.json` will have every dependency that the package needs. This is true for both external and internal dependencies.
 
-<Callout type="good-to-know">
+<Callout type="info">
   Note that your package manager may choose to [use a different node_modules
   location than the package](#node_modules-locations).
 </Callout>
 
 To quickly install dependencies in multiple packages, you can use your package manager:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -78,7 +74,7 @@ To quickly install dependencies in multiple packages, you can use your package m
 pnpm add jest --save-dev --recursive --filter=web --filter=@repo/ui --filter=docs
 ```
 
-<LinkToDocumentation href="https://pnpm.io/cli/recursive">pnpm documentation</LinkToDocumentation>
+<LinkToDocumentation href="https://pnpm.io/cli/recursive" text="pnpm documentation" />
 </Tab>
 
 <Tab value="yarn">
@@ -89,9 +85,7 @@ yarn workspace web add jest --dev
 yarn workspace @repo/ui add jest --dev
 ```
 
-<LinkToDocumentation href="https://classic.yarnpkg.com/en/docs/cli/add">
-  Yarn 1 documentation
-</LinkToDocumentation>
+<LinkToDocumentation href="https://classic.yarnpkg.com/en/docs/cli/add" text="Yarn 1 documentation" />
 
 Yarn 2+:
 
@@ -99,9 +93,7 @@ Yarn 2+:
 yarn workspaces foreach -R --from '{web,@repo/ui}' add jest --dev
 ```
 
-<LinkToDocumentation href="https://yarnpkg.com/cli/workspaces/foreach#usage">
-  Yarn 2+ documentation
-</LinkToDocumentation>
+<LinkToDocumentation href="https://yarnpkg.com/cli/workspaces/foreach#usage" text="Yarn 2+ documentation" />
 </Tab>
 
 <Tab value="npm">
@@ -110,7 +102,7 @@ yarn workspaces foreach -R --from '{web,@repo/ui}' add jest --dev
 npm install jest --workspace=web --workspace=@repo/ui --save-dev
 ```
 
-<LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/config#workspace">npm documentation</LinkToDocumentation>
+<LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/config#workspace" text="npm documentation" />
 </Tab>
 
 <Tab value="bun">
@@ -120,9 +112,9 @@ cd apps/web && bun install jest --dev
 cd packages/ui && bun install jest --dev
 ```
 
-<LinkToDocumentation href="https://bun.sh/docs/install/workspaces">bun documentation</LinkToDocumentation>
+<LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="bun documentation" />
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 This practice has several benefits:
 
@@ -178,7 +170,7 @@ Tools like [`syncpack`](https://www.npmjs.com/package/syncpack), [`manypkg`](htt
 
 You can use your package manager to update dependency versions in one command.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -186,7 +178,7 @@ You can use your package manager to update dependency versions in one command.
 pnpm up --recursive typescript@latest
 ```
 
-<small>[→ pnpm documentation](https://pnpm.io/cli/update#--recursive--r)</small>
+<small>[-> pnpm documentation](https://pnpm.io/cli/update#--recursive--r)</small>
 
 </Tab>
 
@@ -195,7 +187,7 @@ Yarn 1:
 ```bash title="Terminal"
 yarn upgrade-interactive --latest
 ```
-<small>[→ Yarn 1 documentation](https://classic.yarnpkg.com/en/docs/cli/upgrade-interactive)</small>
+<small>[-> Yarn 1 documentation](https://classic.yarnpkg.com/en/docs/cli/upgrade-interactive)</small>
 
 Yarn 2+:
 
@@ -203,7 +195,7 @@ Yarn 2+:
 yarn upgrade typescript@latest --upgrade
 ```
 
-<small>[→ Yarn 2+ documentation](https://yarnpkg.com/cli/up)</small>
+<small>[-> Yarn 2+ documentation](https://yarnpkg.com/cli/up)</small>
 
 </Tab>
 
@@ -211,17 +203,17 @@ yarn upgrade typescript@latest --upgrade
 ```bash title="Terminal"
 npm install typescript@latest --workspaces
 ```
-  <small>[→ npm documentation](https://docs.npmjs.com/cli/v7/using-npm/config#workspaces)</small>
+  <small>[-> npm documentation](https://docs.npmjs.com/cli/v7/using-npm/config#workspaces)</small>
 
 </Tab>
 
 <Tab value="bun">
 No equivalent
 
-<small>[→ Bun documentation](https://bun.sh/docs/install/workspaces)</small>
+<small>[-> Bun documentation](https://bun.sh/docs/install/workspaces)</small>
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 #### pnpm catalogs
 

@@ -3,12 +3,6 @@ title: Using environment variables
 description: Learn how to handle environments for your applications.
 ---
 
-import { Fragment } from 'react';
-import { Callout } from '#components/callout';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { Accordion, Accordions } from '#components/accordion';
-import frameworks from '@turbo/types/src/json/frameworks.json';
-
 Environment variable inputs are a vital part of your applications that you'll need to account for in your Turborepo configuration.
 
 There are three important questions when working with environment variables in Turborepo:
@@ -23,7 +17,7 @@ There are three important questions when working with environment variables in T
   serious issues like shipping your preview deployments to production.
 </Callout>
 
-<Callout type="good-to-know">
+<Callout type="info">
   Turborepo also uses [System Environment
   Variables](/docs/reference/system-environment-variables) to configure its own
   behavior. Below, you'll find information about environment variables for your
@@ -48,7 +42,7 @@ Turborepo needs to be aware of your environment variables to account for changes
 - **globalEnv**: Changes to the values of any environment variables in this list will change the hash for all tasks.
 - **env**: Includes changes to the values of environment variables that affect the task, allowing for better granularity. For example, a `lint` task probably doesn't need to miss cache when the value of `API_KEY` changes, but a `build` task likely should.
 
-<Callout type="good-to-know">
+<Callout type="info">
   Turborepo supports wildcards for environment variables so you can easily
   account for all environment variables with a given prefix. Visit [the API
   reference for `env`](/docs/reference/configuration#wildcards) for more.
@@ -58,35 +52,22 @@ Turborepo needs to be aware of your environment variables to account for changes
 
 Turborepo automatically adds prefix wildcards to your [`env`](/docs/reference/configuration#env) key for common frameworks. If you're using one of the frameworks below in a package, you don't need to specify environment variables with these prefixes:
 
-<table>
-  <thead>
-    <tr>
-      <th>Framework</th>
-      <th>
-        <span>
-          <code>env</code> wildcards
-        </span>
-      </th>
-    </tr>
-  </thead>
-  <tbody>
-    {frameworks.map(({ name, envWildcards }) => (
-      <tr key={name}>
-        <td>{name}</td>
-        <td>
-          {envWildcards.map((envWildcard, index) => (
-            <Fragment key={envWildcard}>
-              {index !== 0 ? <span>, </span> : null}
-              <code>{envWildcard}</code>
-            </Fragment>
-          ))}
-        </td>
-      </tr>
-    ))}
-  </tbody>
-</table>
+| Framework        | `env` wildcards        |
+| ---------------- | ---------------------- |
+| Next.js          | `NEXT_PUBLIC_*`        |
+| Vite             | `VITE_*`               |
+| Create React App | `REACT_APP_*`          |
+| Gatsby           | `GATSBY_*`             |
+| Nuxt             | `NUXT_*`, `NUXT_ENV_*` |
+| Expo             | `EXPO_PUBLIC_*`        |
+| Astro            | `PUBLIC_*`             |
+| SvelteKit        | `PUBLIC_*`             |
+| Remix            | `REMIX_*`              |
+| SolidStart       | `VITE_*`               |
+| RedwoodJS        | `REDWOOD_ENV_*`        |
+| Sanity           | `SANITY_STUDIO_*`      |
 
-<Callout type="good-to-know">Framework inference is per-package.</Callout>
+<Callout type="info">Framework inference is per-package.</Callout>
 
 If you'd like to opt out of Framework Inference, you can do so by:
 
@@ -205,7 +186,7 @@ Using a `.env` file at the root of the repository is not recommended. Instead, w
 
 This practice more closely models the runtime behavior of your applications since environment variables exist in each application's runtime individually. Additionally, as your monorepo scales, this practice makes it easier to manage each application's environment, preventing environment variable leakage across applications.
 
-<Callout type="good-to-know">
+<Callout type="info">
   You may find it easier to use a root `.env` file when incrementally migrating
   to a monorepo. Tools like [dotenv](https://www.npmjs.com/package/dotenv) can
   load `.env` files from different locations.

@@ -49,7 +49,7 @@ export function getComparison(args: GetComparisonArgs): {
         );
         return {
           ref: process.env.VERCEL_GIT_PREVIOUS_SHA,
-          type: "previousDeploy",
+          type: "previousDeploy"
         };
       }
 

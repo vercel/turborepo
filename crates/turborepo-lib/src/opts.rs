@@ -3,20 +3,26 @@ use std::backtrace;
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use tracing::debug;
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
+// Re-export RunCacheOpts from turborepo-run-cache
+pub use turborepo_run_cache::RunCacheOpts;
+use turborepo_run_summary::RunOptsInfo;
 // Re-export ScopeOpts from turborepo-scope to avoid duplication
 pub use turborepo_scope::ScopeOpts;
-use turborepo_task_id::{TaskId, TaskName};
+// Re-export opts types from turborepo-types
+pub use turborepo_types::{APIClientOpts, RepoOpts, TuiOpts};
+use turborepo_types::{
+    ContinueMode, DryRunMode, EnvMode, GraphOpts, LogOrder, LogPrefix, ResolvedLogOrder,
+    ResolvedLogPrefix, TaskArgs, UIMode,
+};
 
 use crate::{
-    cli::{
-        Command, ContinueMode, DryRunMode, EnvMode, ExecutionArgs, LogOrder, LogPrefix,
-        OutputLogsMode, RunArgs,
-    },
-    config::{ConfigurationOptions, CONFIG_FILE},
-    turbo_json::{FutureFlags, UIMode},
+    cli::{Command, ExecutionArgs, RunArgs},
+    config::{CacheDirResult, ConfigurationOptions, CONFIG_FILE},
+    turbo_json::FutureFlags,
     Args,
 };
 
@@ -45,26 +51,6 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     Config(#[from] crate::config::Error),
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct APIClientOpts {
-    pub api_url: String,
-    pub timeout: u64,
-    pub upload_timeout: u64,
-    pub token: Option<String>,
-    pub team_id: Option<String>,
-    pub team_slug: Option<String>,
-    pub login_url: String,
-    pub preflight: bool,
-    pub sso_login_callback_port: Option<u16>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct RepoOpts {
-    pub root_turbo_json_path: AbsoluteSystemPathBuf,
-    pub allow_no_package_manager: bool,
-    pub allow_no_turbo_json: bool,
 }
 
 /// The fully resolved options for Turborepo. This is the combination of config,
@@ -169,12 +155,21 @@ impl Opts {
             _ => (&Box::default(), &Box::default()),
         };
 
+        // Resolve cache directory once to avoid duplicate git process spawning.
+        // This is used by both RunOpts and CacheOpts.
+        let cache_dir_result = config.resolve_cache_dir(repo_root);
+        debug!(
+            "Opts::new cache_dir_result: path={}, is_shared_worktree={}",
+            cache_dir_result.path, cache_dir_result.is_shared_worktree
+        );
+
         let inputs = OptsInputs {
             repo_root,
             run_args: run_args.as_ref(),
             execution_args: execution_args.as_ref(),
             config: &config,
             api_auth: &api_auth,
+            cache_dir_result: &cache_dir_result,
         };
         let run_opts = RunOpts::try_from(inputs)?;
         let cache_opts = CacheOpts::try_from(inputs)?;
@@ -205,11 +200,10 @@ struct OptsInputs<'a> {
     execution_args: &'a ExecutionArgs,
     config: &'a ConfigurationOptions,
     api_auth: &'a Option<APIAuth>,
-}
-
-#[derive(Clone, Copy, Debug, Default, Serialize)]
-pub struct RunCacheOpts {
-    pub(crate) task_output_logs_override: Option<OutputLogsMode>,
+    /// Pre-computed cache directory result to avoid duplicate git process
+    /// spawning. This is computed once in `Opts::new()` and shared by
+    /// `RunOpts` and `CacheOpts`.
+    cache_dir_result: &'a CacheDirResult,
 }
 
 impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
@@ -227,6 +221,8 @@ pub struct RunOpts {
     pub(crate) parallel: bool,
     pub(crate) env_mode: EnvMode,
     pub(crate) cache_dir: Utf8PathBuf,
+    /// Whether using shared cache from main worktree (for user messaging).
+    pub(crate) is_shared_worktree_cache: bool,
     // Whether or not to infer the framework for each workspace.
     pub(crate) framework_inference: bool,
     pub profile: Option<String>,
@@ -244,54 +240,10 @@ pub struct RunOpts {
     pub ui_mode: UIMode,
 }
 
-/// Projection of `RunOpts` that only includes information necessary to compute
-/// pass through args.
-#[derive(Debug)]
-pub struct TaskArgs<'a> {
-    pass_through_args: &'a [String],
-    tasks: &'a [String],
-}
-
 impl RunOpts {
     pub fn task_args(&self) -> TaskArgs<'_> {
-        TaskArgs {
-            pass_through_args: &self.pass_through_args,
-            tasks: &self.tasks,
-        }
+        TaskArgs::new(&self.pass_through_args, &self.tasks)
     }
-}
-
-impl<'a> TaskArgs<'a> {
-    pub fn args_for_task(&self, task_id: &TaskId) -> Option<&'a [String]> {
-        if !self.pass_through_args.is_empty()
-            && self
-                .tasks
-                .iter()
-                .any(|task| TaskName::from(task.as_str()).task() == task_id.task())
-        {
-            Some(self.pass_through_args)
-        } else {
-            None
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize)]
-pub enum GraphOpts {
-    Stdout,
-    File(String),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-pub enum ResolvedLogOrder {
-    Stream,
-    Grouped,
-}
-
-#[derive(Debug, Clone, Copy, Serialize)]
-pub enum ResolvedLogPrefix {
-    Task,
-    None,
 }
 
 impl<'a> From<OptsInputs<'a>> for RepoOpts {
@@ -370,7 +322,9 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             graph,
             dry_run: inputs.run_args.dry_run,
             env_mode: inputs.config.env_mode(),
-            cache_dir: inputs.config.cache_dir().into(),
+            // Use pre-computed cache directory to avoid duplicate git process spawning
+            cache_dir: inputs.cache_dir_result.path.clone(),
+            is_shared_worktree_cache: inputs.cache_dir_result.is_shared_worktree,
             is_github_actions,
             ui_mode: inputs.config.ui(),
         })
@@ -395,16 +349,6 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
             backtrace::Backtrace::capture(),
             concurrency_raw.to_string(),
         )),
-    }
-}
-
-impl From<LogPrefix> for ResolvedLogPrefix {
-    fn from(value: LogPrefix) -> Self {
-        match value {
-            // We default to task-prefixed logs
-            LogPrefix::Auto | LogPrefix::Task => ResolvedLogPrefix::Task,
-            LogPrefix::None => ResolvedLogPrefix::None,
-        }
     }
 }
 
@@ -519,12 +463,15 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
             signature,
         ));
 
-        Ok(CacheOpts {
-            cache_dir: inputs.config.cache_dir().into(),
+        let cache_opts = CacheOpts {
+            // Use pre-computed cache directory to avoid duplicate git process spawning
+            cache_dir: inputs.cache_dir_result.path.clone(),
             cache,
             workers: inputs.run_args.cache_workers,
             remote_cache_opts,
-        })
+        };
+        debug!("CacheOpts created with cache_dir={}", cache_opts.cache_dir);
+        Ok(cache_opts)
     }
 }
 
@@ -536,15 +483,55 @@ impl RunOpts {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
-pub struct TuiOpts {
-    pub(crate) scrollback_length: u64,
+// Implement RunOptsInfo for RunOpts to allow use with turborepo-run-summary
+impl RunOptsInfo for RunOpts {
+    fn dry_run(&self) -> Option<DryRunMode> {
+        self.dry_run
+    }
+
+    fn single_package(&self) -> bool {
+        self.single_package
+    }
+
+    fn summarize(&self) -> Option<&str> {
+        self.summarize.then_some("true")
+    }
+
+    fn framework_inference(&self) -> bool {
+        self.framework_inference
+    }
+
+    fn pass_through_args(&self) -> &[String] {
+        &self.pass_through_args
+    }
+
+    fn tasks(&self) -> &[String] {
+        &self.tasks
+    }
 }
 
 impl<'a> From<OptsInputs<'a>> for TuiOpts {
     fn from(inputs: OptsInputs) -> Self {
         TuiOpts {
             scrollback_length: inputs.config.tui_scrollback_length(),
+        }
+    }
+}
+
+// Convert RunOpts to ExecutorConfig for use with the generic task executor
+impl From<&RunOpts> for turborepo_task_executor::ExecutorConfig {
+    fn from(opts: &RunOpts) -> Self {
+        Self {
+            env_mode: opts.env_mode,
+            log_order: opts.log_order,
+            log_prefix: opts.log_prefix,
+            single_package: opts.single_package,
+            is_github_actions: opts.is_github_actions,
+            concurrency: opts.concurrency,
+            ui_mode: opts.ui_mode,
+            continue_on_error: opts.continue_on_error,
+            redirect_stderr_to_stdout: opts.should_redirect_stderr_to_stdout(),
+            framework_inference: opts.framework_inference,
         }
     }
 }
@@ -559,15 +546,17 @@ mod test {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_cache::{CacheActions, CacheConfig, CacheOpts};
     use turborepo_task_id::TaskId;
+    use turborepo_types::{
+        ContinueMode, DryRunMode, EnvMode, ResolvedLogOrder, ResolvedLogPrefix, TaskArgs, UIMode,
+    };
     use turborepo_ui::ColorConfig;
 
-    use super::{APIClientOpts, RepoOpts, RunOpts, TaskArgs};
+    use super::{APIClientOpts, RepoOpts, RunOpts};
     use crate::{
-        cli::{Command, ContinueMode, DryRunMode, RunArgs},
+        cli::{Command, RunArgs},
         commands::CommandBase,
         config::{ConfigurationOptions, CONFIG_FILE},
         opts::{Opts, RunCacheOpts, ScopeOpts, TuiOpts},
-        turbo_json::UIMode,
         Args,
     };
 
@@ -675,8 +664,9 @@ mod test {
             tasks: opts_input.tasks,
             concurrency: 10,
             parallel: opts_input.parallel,
-            env_mode: crate::cli::EnvMode::Loose,
+            env_mode: EnvMode::Loose,
             cache_dir: camino::Utf8PathBuf::new(),
+            is_shared_worktree_cache: false,
             framework_inference: true,
             profile: None,
             continue_on_error: opts_input.continue_on_error,
@@ -686,8 +676,8 @@ mod test {
             graph: None,
             ui_mode: UIMode::Stream,
             single_package: false,
-            log_prefix: crate::opts::ResolvedLogPrefix::Task,
-            log_order: crate::opts::ResolvedLogOrder::Stream,
+            log_prefix: ResolvedLogPrefix::Task,
+            log_order: ResolvedLogOrder::Stream,
             summarize: false,
             is_github_actions: false,
             daemon: None,
@@ -936,10 +926,7 @@ mod test {
         expected_task: TaskId<'static>,
         expected_args: Option<Vec<String>>,
     ) -> Result<(), anyhow::Error> {
-        let task_opts = TaskArgs {
-            tasks: &tasks,
-            pass_through_args: &pass_through_args,
-        };
+        let task_opts = TaskArgs::new(&pass_through_args, &tasks);
 
         assert_eq!(
             task_opts.args_for_task(&expected_task),

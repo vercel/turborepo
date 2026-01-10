@@ -9,7 +9,7 @@ import {
   getRepoInfo,
   existsInRepo,
   hasRepo,
-  type RepoInfo,
+  type RepoInfo
 } from "./examples";
 import { isWriteable } from "./isWriteable";
 import { isFolderEmpty } from "./isFolderEmpty";
@@ -38,7 +38,7 @@ export async function createProject({
   appPath,
   example,
   isDefaultExample,
-  examplePath,
+  examplePath
 }: {
   appPath: string;
   example: string;
@@ -125,7 +125,7 @@ export async function createProject({
           username: "vercel",
           name: "turborepo",
           branch: "main",
-          filePath: `examples/${example}`,
+          filePath: `examples/${example}`
         };
       }
     }
@@ -175,14 +175,14 @@ export async function createProject({
               username: "vercel",
               name: "turborepo",
               branch: "main",
-              filePath: "examples/basic",
+              filePath: "examples/basic"
             }
           ),
         { retries: 3 }
       );
     } else {
       await retry(() => downloadAndExtractExample(root, example), {
-        retries: 3,
+        retries: 3
       });
     }
 

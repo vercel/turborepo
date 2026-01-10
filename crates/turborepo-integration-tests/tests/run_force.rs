@@ -90,9 +90,6 @@ async fn run_force_scenario(
     Ok(redact_output(&result.combined_output()))
 }
 
-// =============================================================================
-// Baseline test - generates the initial cache
-// =============================================================================
 
 #[tokio::test]
 async fn test_baseline_cache_miss() -> Result<()> {
@@ -110,9 +107,6 @@ async fn test_baseline_cache_miss() -> Result<()> {
     Ok(())
 }
 
-// =============================================================================
-// TURBO_FORCE=true scenarios
-// =============================================================================
 
 #[test_case(ForceFlag::Missing, "env_true_flag_missing" ; "env_true_flag_missing_bypasses_cache")]
 #[test_case(ForceFlag::True, "env_true_flag_true" ; "env_true_flag_true_bypasses_cache")]
@@ -126,9 +120,6 @@ async fn test_force_with_env_true(flag: ForceFlag, snapshot_name: &str) -> Resul
     Ok(())
 }
 
-// =============================================================================
-// TURBO_FORCE=false scenarios
-// =============================================================================
 
 #[test_case(ForceFlag::Missing, "env_false_flag_missing" ; "env_false_flag_missing_uses_cache")]
 #[test_case(ForceFlag::True, "env_false_flag_true" ; "env_false_flag_true_bypasses_cache")]
@@ -142,9 +133,6 @@ async fn test_force_with_env_false(flag: ForceFlag, snapshot_name: &str) -> Resu
     Ok(())
 }
 
-// =============================================================================
-// TURBO_FORCE not set (missing) scenarios
-// =============================================================================
 
 #[test_case(ForceFlag::Missing, "env_missing_flag_missing" ; "env_missing_flag_missing_uses_cache")]
 #[test_case(ForceFlag::True, "env_missing_flag_true" ; "env_missing_flag_true_bypasses_cache")]

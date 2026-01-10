@@ -22,12 +22,12 @@ function updateSchemaUrl(content: string): string {
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   log.info('Updating "$schema" property in turbo.json...');
@@ -35,7 +35,7 @@ export function transformer({
 
   if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`,
+      reason: `No turbo.json found at ${root}. Is the path correct?`
     });
   }
 
@@ -52,7 +52,7 @@ export function transformer({
       runner.modifyFile({
         filePath: turboConfigPath,
         before: turboConfigContent,
-        after: updatedContent,
+        after: updatedContent
       });
 
       log.info('Updated "$schema" property in turbo.json');
@@ -61,7 +61,7 @@ export function transformer({
     }
   } catch (err) {
     return runner.abortTransform({
-      reason: `Error updating schema URL in turbo.json: ${String(err)}`,
+      reason: `Error updating schema URL in turbo.json: ${String(err)}`
     });
   }
 
@@ -73,7 +73,7 @@ const transformerMeta: Transformer = {
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
   transformer,
-  idempotent: true,
+  idempotent: true
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

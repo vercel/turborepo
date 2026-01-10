@@ -3,14 +3,11 @@ title: Multi-language support
 description: Learn how to use multiple languages with Turborepo.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { LinkToDocumentation } from '#components/link-to-documentation';
-
 Turborepo is built on the conventions of the JavaScript ecosystem to find scripts and tasks to execute - but it doesn't care what those scripts do. Following [the guidance for specifying a package in a JavaScript workspace](/docs/crafting-your-repository/structuring-a-repository#specifying-packages-in-a-monorepo), you can add any other language or toolchain to Turborepo.
 
 As an example, you may have a Rust project in the `./cli` directory in your repository. To add this directory as a package to your JavaScript package manager's workspace, add the directory to the workspace definition:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
   <Tab value="pnpm">
   ```json title="pnpm-workspace.yaml"
@@ -19,7 +16,7 @@ As an example, you may have a Rust project in the `./cli` directory in your repo
     - "packages/*"
     - "cli" // [!code highlight]
   ```
-  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml">pnpm workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://pnpm.io/pnpm-workspace_yaml" text="pnpm workspace documentation" />
 
   </Tab>
 
@@ -34,7 +31,7 @@ As an example, you may have a Rust project in the `./cli` directory in your repo
   }
   ```
 
-  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared">yarn workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://yarnpkg.com/features/workspaces#how-are-workspaces-declared" text="yarn workspace documentation" />
    </Tab>
 
   <Tab value="npm">
@@ -48,7 +45,7 @@ As an example, you may have a Rust project in the `./cli` directory in your repo
   }
   ```
 
-  <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces">npm workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://docs.npmjs.com/cli/v7/using-npm/workspaces#defining-workspaces" text="npm workspace documentation" />
   </Tab>
 
   <Tab value="bun">
@@ -62,9 +59,9 @@ As an example, you may have a Rust project in the `./cli` directory in your repo
   }
   ```
 
-  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces">Bun workspace documentation</LinkToDocumentation>
+  <LinkToDocumentation href="https://bun.sh/docs/install/workspaces" text="Bun workspace documentation" />
   </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Then, add a `package.json` to the directory:
 
@@ -99,7 +96,7 @@ Because the directory is now a part of the package manager's workspace, you can 
 
 For instance, if you wanted to make sure that the `rust-cli` "package" from above is built before your `web` application, install it into the dependencies for the `web` application:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
   <Tab value="pnpm">
 
 ```diff title="./web/package.json"
@@ -147,7 +144,7 @@ For instance, if you wanted to make sure that the `rust-cli` "package" from abov
 ```
 
   </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Given a `turbo.json` with a `build` task like:
 

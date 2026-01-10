@@ -3,8 +3,6 @@ title: Migrating from Nx
 description: Learn how to migrate to Turborepo from Nx.
 ---
 
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-
 This guide will help you migrate an existing Nx repository to Turborepo.
 
 - Explore key concepts by [migrating from an Nx starter to Turborepo](#migration-steps)
@@ -22,7 +20,7 @@ By contrast, Nx uses layers of plugins, dependencies, and other Nx-specific code
 
 ### Greater control of source code
 
-Nx’s philosophy involves wrapping your code with layers of plugins, dependencies, and Nx-specific code. While these layers of code are optional, they provide a great deal of Nx's value and are recommended by Nx, so most Nx repos have them. When migrating to Turborepo, many developers explain that these layers tend to create a layer of obfuscation that abstracts their repository away from their control, causing issues.
+Nx's philosophy involves wrapping your code with layers of plugins, dependencies, and Nx-specific code. While these layers of code are optional, they provide a great deal of Nx's value and are recommended by Nx, so most Nx repos have them. When migrating to Turborepo, many developers explain that these layers tend to create a layer of obfuscation that abstracts their repository away from their control, causing issues.
 
 Turborepo chooses to let you handle your tooling on your own terms, configuring (or not configuring) any of your tooling as you please.
 
@@ -143,7 +141,7 @@ Migrating to Turborepo will likely require deleting previous configuration that 
 
 ## Migration steps
 
-Our goal for this migration is to get a working Turborepo task as quickly as possible, so that you can adopt Turborepo features incrementally. We’ll start by using the Nx scaffolder to create a repository with a Next.js app.
+Our goal for this migration is to get a working Turborepo task as quickly as possible, so that you can adopt Turborepo features incrementally. We'll start by using the Nx scaffolder to create a repository with a Next.js app.
 
 ```bash title="Terminal"
 npx create-nx-workspace --preset=next --ci=skip --e2eTestRunner=none --style=tailwind --nextAppDir=true --nextSrcDir=false --packageManager=pnpm --appName=starter
@@ -161,7 +159,7 @@ Turborepo uses the .turbo directory to hold local caches and other information a
 
 Turborepo is built on top of package manager workspaces, a JavaScript ecosystem standard. Add the directory paths to the workspace that will contain packages.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -202,7 +200,7 @@ packages:
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ### Step 3: Add a package.json to the application
 
@@ -222,7 +220,7 @@ Add a `package.json` to the `starter` application. Create a `package.json` at `.
 
 ### Step 4: Remove Nx plugin
 
-Remove the Nx plugin from ./apps/starter/next.config.js. The example file below doesn’t have configuration, though your existing Next.js application may need some.
+Remove the Nx plugin from ./apps/starter/next.config.js. The example file below doesn't have configuration, though your existing Next.js application may need some.
 
 ```js title="./apps/starter/next.config.js"
 /** @type {import('next').NextConfig} */
@@ -235,7 +233,7 @@ module.exports = nextConfig;
 
 The root package.json needs to have the `packageManager` field. This ensures developers in the repository use the correct package manager, and that Turborepo can optimize your package graph based on your lockfile.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -277,13 +275,13 @@ The root package.json needs to have the `packageManager` field. This ensures dev
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ### Step 6: Run you package manager's install command
 
 Update your lockfile by running your installation command.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -317,7 +315,7 @@ bun install
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 Once you've done this, you should see a lockfile diff, indicating that the package has been added to the package manager's workspace.
 
@@ -325,7 +323,7 @@ Once you've done this, you should see a lockfile diff, indicating that the packa
 
 Add Turborepo to the root `package.json` of the workspace.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -359,11 +357,11 @@ bun install turbo --dev
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 You can also optionally install `turbo` globally for added convenience when working with Turborepo.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -397,7 +395,7 @@ bun install turbo --global
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ### Step 8: Add a `turbo.json`
 
@@ -422,7 +420,7 @@ Create a `turbo.json` at the root to register your tasks and describe their task
 
 Build the application with Turborepo. Using global `turbo`, this would be `turbo build`. You can also run the command through your package manager:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -456,7 +454,7 @@ bunx turbo run build
 
 </Tab>
 
-</Tabs>
+</PackageManagerTabs>
 
 ### Step 10: Enable Remote Caching (optional)
 
@@ -471,7 +469,7 @@ You may also configure a self-hosted Remote Cache.
 
 ## Advanced migration considerations
 
-While the migration guide above is a good starting point, the breadth of possibilities and capabilities of monorepos means that its difficult to create generalized instructions for all cases. Below, we’ve listed some common next steps that you may be thinking about.
+While the migration guide above is a good starting point, the breadth of possibilities and capabilities of monorepos means that its difficult to create generalized instructions for all cases. Below, we've listed some common next steps that you may be thinking about.
 
 ### Migrate complex monorepos incrementally
 
@@ -489,15 +487,15 @@ Historically, Nx has recommended installing all dependencies in the root of the 
 
 ### Creating shared packages
 
-You’ll follow roughly the same set of steps as above to add a package to your package manager’s workspace.
+You'll follow roughly the same set of steps as above to add a package to your package manager's workspace.
 
-1. Ensure the package’s directory is included in the workspace definition (like `./packages/*` ).
+1. Ensure the package's directory is included in the workspace definition (like `./packages/*` ).
 2. Add a `package.json` to the package with the scripts it needs to run.
 3. Check task dependencies in `turbo.json` to make sure your dependency graph meets your requirements.
 
 ### Multi-language monorepos
 
-Turborepo natively supports JavaScript and TypeScript, with secondary support for any other languages you’d like to use. [Visit the Multi-Language support documentation](/docs/guides/multi-language) to learn more.
+Turborepo natively supports JavaScript and TypeScript, with secondary support for any other languages you'd like to use. [Visit the Multi-Language support documentation](/docs/guides/multi-language) to learn more.
 
 ## Configuration equivalents
 

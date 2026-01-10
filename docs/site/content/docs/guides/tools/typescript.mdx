@@ -3,11 +3,6 @@ title: TypeScript
 description: Learn how to use TypeScript in a monorepo.
 ---
 
-import { Callout } from '#components/callout';
-import { File, Folder, Files } from '#components/files';
-import { Tabs, Tab } from 'fumadocs-ui/components/tabs';
-import { LinkToDocumentation } from '#components/link-to-documentation';
-
 TypeScript is an excellent tool in monorepos, allowing teams to safely add types to their JavaScript code. While there is some complexity to getting set up, this guide will walk you through the important parts of a TypeScript setup for most use cases.
 
 - [Sharing TypeScript configuration](#sharing-tsconfigjson)
@@ -28,7 +23,7 @@ TypeScript's `tsconfig.json` sets the configuration for the TypeScript compiler 
 
 This guide will use [`create-turbo`](/docs/reference/create-turbo) as an example.
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 
@@ -61,7 +56,7 @@ bunx create-turbo@latest
 ```
 
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 ### Use a base `tsconfig` file
 
@@ -84,9 +79,7 @@ Inside `packages/typescript-config`, you have a few `json` files which represent
 }
 ```
 
-<LinkToDocumentation href="https://www.typescriptlang.org/tsconfig">
-  `tsconfig` options reference
-</LinkToDocumentation>
+<LinkToDocumentation href="https://www.typescriptlang.org/tsconfig" text="tsconfig options reference" />
 
 ### Creating the rest of the package
 
@@ -106,14 +99,14 @@ Inside `package.json`, name the package so it can be referenced in the rest of t
 
 First, install the `@repo/typescript-config` package into your package:
 
-<Tabs groupId="package-manager" items={['pnpm', 'yarn', 'npm', 'bun']} persist>
+<PackageManagerTabs>
 
 <Tab value="pnpm">
 ```json title="./apps/web/package.json"
 {
   "devDependencies": {
      "@repo/typescript-config": "workspace:*",
-     "typescript": "latest",
+     "typescript": "latest"
   }
 }
 ```
@@ -124,7 +117,7 @@ First, install the `@repo/typescript-config` package into your package:
 {
   "devDependencies": {
      "@repo/typescript-config": "*",
-     "typescript": "latest",
+     "typescript": "latest"
   }
 }
 ```
@@ -135,7 +128,7 @@ First, install the `@repo/typescript-config` package into your package:
 {
   "devDependencies": {
      "@repo/typescript-config": "*",
-     "typescript": "latest",
+     "typescript": "latest"
   }
 }
 ```
@@ -146,12 +139,12 @@ First, install the `@repo/typescript-config` package into your package:
 {
   "devDependencies": {
      "@repo/typescript-config": "workspace:*",
-     "typescript": "latest",
+     "typescript": "latest"
   }
 }
 ```
 </Tab>
-</Tabs>
+</PackageManagerTabs>
 
 Then, extend the `tsconfig.json` for the package from the `@repo/typescript-config` package. In this example, the `web` package is a Next.js application:
 
@@ -317,7 +310,7 @@ In [Compiled packages](https://turborepo.com/docs/core-concepts/internal-package
   <Tab value="Source code">
 
 ```tsx title="./packages/ui/button.tsx"
-import { MY_STRING } from '#utils.js'; // Uses .js extension // [!code highlight]
+import { MY_STRING } from "#utils.js"; // Uses .js extension // [!code highlight]
 
 export const Button = () => {
   return <button>{MY_STRING}</button>;

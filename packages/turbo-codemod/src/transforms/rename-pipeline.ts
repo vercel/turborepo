@@ -20,19 +20,19 @@ function migrateConfig(config: SchemaV1): SchemaV2 {
 
 export function transformer({
   root,
-  options,
+  options
 }: TransformerArgs): TransformerResults {
   const { log, runner } = getTransformerHelpers({
     transformer: TRANSFORMER,
     rootPath: root,
-    options,
+    options
   });
 
   log.info("Renaming `pipeline` key in turbo.json to `tasks`");
   const turboConfigPath = path.join(root, "turbo.json");
   if (!fs.existsSync(turboConfigPath)) {
     return runner.abortTransform({
-      reason: `No turbo.json found at ${root}. Is the path correct?`,
+      reason: `No turbo.json found at ${root}. Is the path correct?`
     });
   }
 
@@ -46,7 +46,7 @@ export function transformer({
   const turboJson = _turboJson as SchemaV1;
   runner.modifyFile({
     filePath: turboConfigPath,
-    after: migrateConfig(turboJson),
+    after: migrateConfig(turboJson)
   });
 
   // find and migrate any workspace configs
@@ -56,7 +56,7 @@ export function transformer({
     if ("pipeline" in config) {
       runner.modifyFile({
         filePath,
-        after: migrateConfig(config),
+        after: migrateConfig(config)
       });
     }
   });
@@ -68,7 +68,7 @@ const transformerMeta: Transformer = {
   name: TRANSFORMER,
   description: DESCRIPTION,
   introducedIn: INTRODUCED_IN,
-  transformer,
+  transformer
 };
 
 // eslint-disable-next-line import/no-default-export -- transforms require default export

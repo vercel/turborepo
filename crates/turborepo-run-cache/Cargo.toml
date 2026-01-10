@@ -1,0 +1,27 @@
+[package]
+name = "turborepo-run-cache"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Task-aware caching for Turborepo runs"
+
+[lints]
+workspace = true
+
+[dependencies]
+globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
+itertools = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror = "1.0.38"
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+turbopath = { workspace = true }
+turborepo-cache = { workspace = true }
+turborepo-daemon = { workspace = true }
+turborepo-hash = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository" }
+turborepo-scm = { workspace = true }
+turborepo-task-id = { workspace = true }
+turborepo-telemetry = { path = "../turborepo-telemetry" }
+turborepo-types = { workspace = true }
+turborepo-ui = { workspace = true }

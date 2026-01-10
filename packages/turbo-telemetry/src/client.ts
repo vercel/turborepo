@@ -69,8 +69,8 @@ export class TelemetryClient {
           headers: {
             "x-turbo-telemetry-id": this.config.id,
             "x-turbo-session-id": this.sessionId,
-            "User-Agent": utils.buildUserAgent(this.packageInfo),
-          },
+            "User-Agent": utils.buildUserAgent(this.packageInfo)
+          }
         })
       );
     }
@@ -87,7 +87,7 @@ export class TelemetryClient {
     key,
     value,
     parentId,
-    isSensitive,
+    isSensitive
   }: {
     key: string;
     value: string;
@@ -100,7 +100,7 @@ export class TelemetryClient {
       value: isSensitive ? this.config.oneWayHash(value) : value,
       package_name: this.packageInfo.name,
       package_version: this.packageInfo.version,
-      parent_id: parentId,
+      parent_id: parentId
     };
 
     if (TelemetryConfig.isDebug()) {
@@ -138,40 +138,40 @@ export class TelemetryClient {
 
   protected trackCliOption({
     option,
-    value,
+    value
   }: {
     option: string;
     value: string;
   }): Event {
     return this.track({
       key: `option:${option}`,
-      value,
+      value
     });
   }
 
   protected trackCliArgument({
     argument,
-    value,
+    value
   }: {
     argument: string;
     value: string;
   }): Event {
     return this.track({
       key: `argument:${argument}`,
-      value,
+      value
     });
   }
 
   protected trackCliCommand({
     command,
-    value,
+    value
   }: {
     command: string;
     value: string;
   }): Event {
     return this.track({
       key: `command:${command}`,
-      value,
+      value
     });
   }
 
@@ -181,28 +181,28 @@ export class TelemetryClient {
 
   trackCommandStatus({
     command,
-    status,
+    status
   }: {
     command: string;
     status: string;
   }): Event {
     return this.trackCliCommand({
       command,
-      value: status,
+      value: status
     });
   }
 
   trackCommandWarning(warning: string): Event | undefined {
     return this.track({
       key: "warning",
-      value: warning,
+      value: warning
     });
   }
 
   trackCommandError(error: string): Event | undefined {
     return this.track({
       key: "error",
-      value: error,
+      value: error
     });
   }
 }

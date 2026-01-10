@@ -5,6 +5,7 @@ use tracing::warn;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 use turborepo_microfrontends::{Error, TurborepoMfeConfig as MfeConfig, MICROFRONTENDS_PACKAGE};
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_task_executor::MfeConfigProvider;
 use turborepo_task_id::{TaskId, TaskName};
 
 use crate::{config, turbo_json::TurboJson};
@@ -238,9 +239,12 @@ impl MicrofrontendsConfigs {
             }
 
             // We need to modify turbo.json, use default one if there isn't one present
-            let mut turbo_json = turbo_json.or_else(|err| match err {
-                config::Error::NoTurboJSON => Ok(TurboJson::default()),
-                err => Err(err),
+            let mut turbo_json = turbo_json.or_else(|err| {
+                if err.is_no_turbo_json() {
+                    Ok(TurboJson::default())
+                } else {
+                    Err(err)
+                }
             })?;
 
             // If the current package contains the proxy task, then add that definition
@@ -321,6 +325,45 @@ impl MicrofrontendsConfigs {
                 Some(path.as_str().to_string())
             })
             .collect()
+    }
+}
+
+impl MfeConfigProvider for MicrofrontendsConfigs {
+    fn task_has_mfe_proxy(&self, task_id: &TaskId) -> bool {
+        MicrofrontendsConfigs::task_has_mfe_proxy(self, task_id)
+    }
+
+    fn dev_task_port(&self, task_id: &TaskId) -> Option<u16> {
+        MicrofrontendsConfigs::dev_task_port(self, task_id)
+    }
+
+    fn task_uses_turborepo_proxy(&self, task_id: &TaskId) -> bool {
+        MicrofrontendsConfigs::task_uses_turborepo_proxy(self, task_id)
+    }
+
+    fn has_dev_task<'a>(&self, task_ids: impl Iterator<Item = &'a TaskId<'static>>) -> bool {
+        MicrofrontendsConfigs::has_dev_task(self, task_ids)
+    }
+
+    fn should_use_turborepo_proxy(&self) -> bool {
+        MicrofrontendsConfigs::should_use_turborepo_proxy(self)
+    }
+
+    fn dev_tasks(&self, package_name: &str) -> Option<Vec<(TaskId<'static>, String)>> {
+        self.configs.get(package_name).map(|info| {
+            info.tasks
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
+        })
+    }
+
+    fn config_filename(&self, package_name: &str) -> Option<String> {
+        self.configs
+            .get(package_name)?
+            .path
+            .as_ref()
+            .map(|p| p.to_string())
     }
 }
 

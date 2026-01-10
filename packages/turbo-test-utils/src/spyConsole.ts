@@ -11,7 +11,7 @@ export function spyConsole() {
   const spy: SpyConsole = {
     log: undefined,
     error: undefined,
-    warn: undefined,
+    warn: undefined
   };
 
   beforeEach(() => {

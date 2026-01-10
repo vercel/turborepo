@@ -5,9 +5,10 @@ use turborepo_api_client::APIClient;
 use turborepo_auth::{
     login as auth_login, sso_login as auth_sso_login, DefaultLoginServer, LoginOptions, Token,
 };
+use turborepo_json_rewrite::set_path;
 use turborepo_telemetry::events::command::{CommandEventBuilder, LoginMethod};
 
-use crate::{commands::CommandBase, config, rewrite_json::set_path};
+use crate::{commands::CommandBase, config};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -18,7 +19,7 @@ pub enum Error {
     #[error(transparent)]
     Auth(#[from] turborepo_auth::Error),
     #[error("Unable to edit `turbo.json`. {0}")]
-    JsonEdit(#[from] crate::rewrite_json::RewriteError),
+    JsonEdit(#[from] turborepo_json_rewrite::RewriteError),
     #[error("The provided credentials do not have cache access. Please double check them.")]
     NoCacheAccess,
     #[error(transparent)]

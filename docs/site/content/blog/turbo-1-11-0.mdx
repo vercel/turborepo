@@ -1,20 +1,22 @@
 ---
 title: Turborepo 1.11
 description: Turborepo 1.11 sets the Rust-based foundation for the future of Turborepo.
-date: '2023/12/05'
-tag: 'web development'
+date: "2023/12/05"
+tag: "web development"
 ---
 
-<h1 className="text-center">Turborepo 1.11</h1>
+# Turborepo 1.11
 
-import { Authors } from '#components/authors';
-import { ThemeAwareImage } from '#components/theme-aware-image';
-import { Date } from '#components/blog/date';
+import { Authors } from "@/components/blog/authors";
+import { ThemeAwareImage } from "@/components/geistdocs/theme-aware-image";
+import { Date } from "@/components/blog/date";
+import LogOrderGroupsLight from "../../public/images/blog/turbo-1-11-0/log-order-groups-light.png";
+import LogOrderGroupsDark from "../../public/images/blog/turbo-1-11-0/log-order-groups-dark.png";
 
 <Date>Tuesday, December 5th, 2023</Date>
 
 <Authors
-  authors={['gregsoltis', 'chrisolszewski', 'nicholasyang', 'alexanderlyon']}
+  authors={["gregsoltis", "chrisolszewski", "nicholasyang", "alexanderlyon"]}
 />
 
 Turborepo 1.11 completes our migration to Rust and ships several developer experience improvements:
@@ -43,21 +45,21 @@ To make it easier to review your task logs, we've introduced the `--log-order` f
 <ThemeAwareImage
   className="my-4 flex justify-center"
   light={{
-    alt: 'Using `--log-order=grouped` to output task logs to the terminal as separated chunks separated by task.',
-    src: '/images/blog/turbo-1-11-0/log-order-groups-light.png',
+    alt: "Using `--log-order=grouped` to output task logs to the terminal as separated chunks separated by task.",
+    src: LogOrderGroupsLight,
     props: {
       width: 682,
       height: 746.5,
-      className: 'dark:hidden block rounded-xl',
+      className: "dark:hidden block rounded-xl",
     },
   }}
   dark={{
-    alt: 'Using `--log-order=grouped` to output task logs to the terminal as separated chunks separated by task.',
-    src: '/images/blog/turbo-1-11-0/log-order-groups-dark.png',
+    alt: "Using `--log-order=grouped` to output task logs to the terminal as separated chunks separated by task.",
+    src: LogOrderGroupsDark,
     props: {
       width: 682,
       height: 746.5,
-      className: 'hidden dark:block rounded-xl',
+      className: "hidden dark:block rounded-xl",
     },
   }}
 />

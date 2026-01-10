@@ -22,6 +22,7 @@ pub use turborepo_types::EnvMode;
 )]
 pub use turborepo_types::TaskOutputs;
 
+#[allow(dead_code)]
 mod proto_capnp {
     use turborepo_types::EnvMode;
 

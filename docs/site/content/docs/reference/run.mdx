@@ -3,8 +3,6 @@ title: run
 description: API reference for the `turbo run` command
 ---
 
-import { Callout } from '#components/callout';
-
 Run tasks specified in `turbo.json`.
 
 ```bash title="Terminal"
@@ -15,7 +13,7 @@ turbo run [tasks] [options] [-- [args passed to tasks]]
 - **[options]**: Options are used to control the behavior of the `turbo run` command. Available flag options are described below.
 - **[-- [args passed to tasks]]**: You may also pass arguments to the underlying scripts. Note that all arguments will be passed to all tasks that are named in the run command.
 
-<Callout type="good-to-know">
+<Callout type="info">
   `turbo run` is aliased to `turbo`. `turbo run build lint check-types` is the
   same as `turbo build lint check-types`. We recommend [using `turbo run` in CI
   pipelines](/docs/crafting-your-repository/constructing-ci#use-turbo-run-in-ci)
@@ -193,7 +191,7 @@ Task details include useful information like (list is non-exhaustive):
 
 Controls the available environment variables in the task's runtime.
 
-<Callout type="good-to-know">
+<Callout type="info">
   `PATH`, `SHELL`, and `SYSTEMROOT` are always available to the task.
 </Callout>
 
@@ -244,7 +242,7 @@ Filters can be combined to create combinations of packages, directories, and git
 | Directory   | Specify directories to capture a list of packages to run tasks. **When used with other filters, must be wrapped in `{}`**. | `turbo run build --filter=./apps/*` |
 | Git commits | Using Git specifiers, specify packages with source control changes. **Must be wrapped in `[]`**.                           | `turbo run build --filter=[HEAD^1]` |
 
-<Callout type="good-to-know">`-F` is an alias for `--filter`.</Callout>
+<Callout type="info">`-F` is an alias for `--filter`.</Callout>
 
 #### Microsyntaxes for filtering
 
@@ -263,7 +261,7 @@ You can also run a specific task for a specific package in the format of `packag
 turbo run web#lint
 ```
 
-<Callout type="good-to-know">
+<Callout type="info">
   This will also run the task's dependencies. To run a task without its
   dependencies, use [the `--only` flag](#--only).
 </Callout>
@@ -303,7 +301,7 @@ turbo run test --filter=@acme/*{./packages/*}[HEAD^1]
 
 Ignore existing cached artifacts and re-execute all tasks.
 
-<Callout type="good-to-know">
+<Callout type="info">
   `--force` will overwrite existing task caches.
 </Callout>
 
@@ -569,7 +567,7 @@ turbo run build --team=my-team --token=xxxxxxxxxxxxxxxxx
 
 This value can also be set using [the `TURBO_TOKEN` system variable](/docs/reference/system-environment-variables). If both are present, the flag value will override the system variable.
 
-<Callout type="good-to-know">
+<Callout type="info">
   If you are using [Vercel Remote
   Cache](https://vercel.com/docs/monorepos/remote-caching) and building your
   project on Vercel, you do not need to use this flag. This value will be

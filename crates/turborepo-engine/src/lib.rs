@@ -4,21 +4,46 @@
 //! monorepo. It handles task graph construction, dependency resolution, and
 //! parallel execution.
 
+// Allow large error types - boxing would be a significant refactor and these
+// errors are already established patterns in the codebase
+#![allow(clippy::result_large_err)]
+
+mod builder;
+mod builder_error;
+mod builder_errors;
 mod dot;
 mod execute;
+mod graph_visualizer;
+mod loader;
 mod mermaid;
+mod task_definition;
+mod validate;
 
 use std::{
     collections::{HashMap, HashSet},
     fmt,
 };
 
+pub use builder::{EngineBuilder, TaskInheritanceResolver, ValidationMode};
+pub use builder_error::Error as BuilderError;
+pub use builder_errors::{
+    CyclicExtends, InvalidTaskNameError, MissingPackageFromTaskError, MissingPackageTaskError,
+    MissingRootTaskInTurboJsonError, MissingTaskError, MissingTurboJsonExtends,
+};
 pub use execute::{ExecuteError, ExecutionOptions, Message, StopExecution};
+pub use graph_visualizer::{
+    ChildProcess, ChildSpawner, Error as GraphVisualizerError, GraphvizWarningFn, NoOpChild,
+    NoOpSpawner, write_graph,
+};
+pub use loader::TurboJsonLoader;
 use petgraph::Graph;
+pub use task_definition::TaskDefinitionFromProcessed;
 use thiserror::Error;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::PackageName;
 use turborepo_task_id::TaskId;
+use turborepo_types::{EngineInfo, TaskDefinition};
+pub use validate::{TaskDefinitionResult, validate_task_name};
 
 /// Trait for types that provide task definition information needed by the
 /// engine.
@@ -32,6 +57,18 @@ pub trait TaskDefinitionInfo {
     fn interruptible(&self) -> bool;
     /// Returns true if this task requires interactive input
     fn interactive(&self) -> bool;
+}
+
+impl TaskDefinitionInfo for turborepo_types::TaskDefinition {
+    fn persistent(&self) -> bool {
+        self.persistent
+    }
+    fn interruptible(&self) -> bool {
+        self.interruptible
+    }
+    fn interactive(&self) -> bool {
+        self.interactive
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -477,11 +514,234 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     }
 }
 
+// Implement EngineInfo for Engine<Built, TaskDefinition> to allow use with
+// turborepo-run-summary. This implementation provides access to task
+// definitions and dependency information needed for run summaries.
+impl EngineInfo for Engine<Built, TaskDefinition> {
+    type TaskIter<'a> = std::iter::FilterMap<
+        std::collections::hash_set::IntoIter<&'a TaskNode>,
+        fn(&'a TaskNode) -> Option<&'a TaskId<'static>>,
+    >;
+
+    fn task_definition(&self, task_id: &TaskId<'static>) -> Option<&TaskDefinition> {
+        Engine::task_definition(self, task_id)
+    }
+
+    fn dependencies(&self, task_id: &TaskId<'static>) -> Option<Self::TaskIter<'_>> {
+        Engine::dependencies(self, task_id).map(|deps| {
+            deps.into_iter().filter_map(
+                (|node| match node {
+                    TaskNode::Task(id) => Some(id),
+                    TaskNode::Root => None,
+                }) as fn(&TaskNode) -> Option<&TaskId<'static>>,
+            )
+        })
+    }
+
+    fn dependents(&self, task_id: &TaskId<'static>) -> Option<Self::TaskIter<'_>> {
+        Engine::dependents(self, task_id).map(|deps| {
+            deps.into_iter().filter_map(
+                (|node| match node {
+                    TaskNode::Task(id) => Some(id),
+                    TaskNode::Root => None,
+                }) as fn(&TaskNode) -> Option<&TaskId<'static>>,
+            )
+        })
+    }
+}
+
 impl fmt::Display for TaskNode {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TaskNode::Root => f.write_str("___ROOT___"),
             TaskNode::Task(task) => task.fmt(f),
+        }
+    }
+}
+
+// Warning that comes from the execution of the task
+#[derive(Debug, Clone)]
+pub struct TaskWarning {
+    task_id: String,
+    missing_platform_env: Vec<String>,
+}
+
+// Error that comes from the execution of the task
+#[derive(Debug, Error, Clone)]
+#[error("{task_id}: {cause}")]
+pub struct TaskError {
+    task_id: String,
+    cause: TaskErrorCause,
+}
+
+#[derive(Debug, Error, Clone)]
+pub enum TaskErrorCause {
+    #[error("unable to spawn child process: {msg}")]
+    // We eagerly serialize this in order to allow us to implement clone
+    Spawn { msg: String },
+    #[error("command {command} exited ({exit_code})")]
+    Exit { command: String, exit_code: i32 },
+    #[error("turbo has internal error processing task")]
+    Internal,
+}
+
+impl TaskWarning {
+    /// Construct a new warning for a given task with the
+    /// Returns `None` if there are no missing platform environment variables
+    pub fn new(task_id: &str, missing_platform_env: Vec<String>) -> Option<Self> {
+        if missing_platform_env.is_empty() {
+            return None;
+        }
+        Some(Self {
+            task_id: task_id.to_owned(),
+            missing_platform_env,
+        })
+    }
+
+    pub fn task_id(&self) -> &str {
+        &self.task_id
+    }
+
+    /// All missing platform environment variables.
+    /// Guaranteed to have at least length 1 due to constructor validation.
+    pub fn missing_platform_env(&self) -> &[String] {
+        &self.missing_platform_env
+    }
+}
+
+impl TaskError {
+    pub fn new(task_id: String, cause: TaskErrorCause) -> Self {
+        Self { task_id, cause }
+    }
+
+    pub fn exit_code(&self) -> Option<i32> {
+        match self.cause {
+            TaskErrorCause::Exit { exit_code, .. } => Some(exit_code),
+            _ => None,
+        }
+    }
+
+    pub fn from_spawn(task_id: String, err: std::io::Error) -> Self {
+        Self {
+            task_id,
+            cause: TaskErrorCause::Spawn {
+                msg: err.to_string(),
+            },
+        }
+    }
+
+    pub fn from_execution(task_id: String, command: String, exit_code: i32) -> Self {
+        Self {
+            task_id,
+            cause: TaskErrorCause::Exit { command, exit_code },
+        }
+    }
+}
+
+impl TaskErrorCause {
+    pub fn from_spawn(err: std::io::Error) -> Self {
+        TaskErrorCause::Spawn {
+            msg: err.to_string(),
+        }
+    }
+
+    pub fn from_execution(command: String, exit_code: i32) -> Self {
+        TaskErrorCause::Exit { command, exit_code }
+    }
+}
+
+#[cfg(test)]
+mod task_error_tests {
+    use super::*;
+
+    #[test]
+    fn test_warning_no_vars() {
+        let no_warning = TaskWarning::new("a-task", vec![]);
+        assert!(no_warning.is_none());
+    }
+
+    #[test]
+    fn test_warning_some_var() {
+        let warning = TaskWarning::new("a-task", vec!["MY_VAR".into()]);
+        assert!(warning.is_some());
+        let warning = warning.unwrap();
+        assert_eq!(warning.task_id(), "a-task");
+        assert_eq!(warning.missing_platform_env(), &["MY_VAR".to_owned()]);
+    }
+}
+
+use std::sync::{Arc, Mutex};
+
+/// A wrapper around `Arc<Mutex<Vec<TaskError>>>` that implements
+/// `TaskErrorCollector`.
+#[derive(Clone)]
+pub struct TaskErrorCollectorWrapper(pub Arc<Mutex<Vec<TaskError>>>);
+
+impl TaskErrorCollectorWrapper {
+    pub fn new() -> Self {
+        Self(Arc::new(Mutex::new(Vec::new())))
+    }
+
+    pub fn from_arc(arc: Arc<Mutex<Vec<TaskError>>>) -> Self {
+        Self(arc)
+    }
+
+    pub fn into_inner(self) -> Arc<Mutex<Vec<TaskError>>> {
+        self.0
+    }
+}
+
+impl Default for TaskErrorCollectorWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl turborepo_task_executor::TaskErrorCollector for TaskErrorCollectorWrapper {
+    fn push_spawn_error(&self, task_id: String, error: std::io::Error) {
+        self.0
+            .lock()
+            .expect("lock poisoned")
+            .push(TaskError::from_spawn(task_id, error));
+    }
+
+    fn push_execution_error(&self, task_id: String, command: String, exit_code: i32) {
+        self.0
+            .lock()
+            .expect("lock poisoned")
+            .push(TaskError::from_execution(task_id, command, exit_code));
+    }
+}
+
+/// A wrapper around `Arc<Mutex<Vec<TaskWarning>>>` that implements
+/// `TaskWarningCollector`.
+#[derive(Clone)]
+pub struct TaskWarningCollectorWrapper(pub Arc<Mutex<Vec<TaskWarning>>>);
+
+impl TaskWarningCollectorWrapper {
+    pub fn new() -> Self {
+        Self(Arc::new(Mutex::new(Vec::new())))
+    }
+
+    pub fn from_arc(arc: Arc<Mutex<Vec<TaskWarning>>>) -> Self {
+        Self(arc)
+    }
+
+    pub fn into_inner(self) -> Arc<Mutex<Vec<TaskWarning>>> {
+        self.0
+    }
+}
+
+impl Default for TaskWarningCollectorWrapper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl turborepo_task_executor::TaskWarningCollector for TaskWarningCollectorWrapper {
+    fn push_platform_env_warning(&self, task_id: &str, missing_vars: Vec<String>) {
+        if let Some(warning) = TaskWarning::new(task_id, missing_vars) {
+            self.0.lock().expect("lock poisoned").push(warning);
         }
     }
 }

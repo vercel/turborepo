@@ -4,16 +4,15 @@ import {
   expect,
   jest,
   beforeEach,
-  afterEach,
+  afterEach
 } from "@jest/globals";
 import { Readable, PassThrough } from "node:stream";
-import { createGzip } from "node:zlib";
 import {
   mkdirSync,
   rmSync,
   existsSync,
   readFileSync,
-  writeFileSync,
+  writeFileSync
 } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -24,7 +23,7 @@ import {
   hasRepo,
   isPathSafe,
   isLinkEntry,
-  streamingExtract,
+  streamingExtract
 } from "../src/examples";
 
 describe("examples", () => {
@@ -64,6 +63,35 @@ describe("examples", () => {
         expect.objectContaining({ method: "HEAD" })
       );
     });
+
+    it("uses proxy agent when https_proxy is set", async () => {
+      const originalEnv = process.env.https_proxy;
+      process.env.https_proxy = "http://proxy.example.com:8080";
+
+      try {
+        global.fetch = jest.fn(() =>
+          Promise.resolve({ ok: true } as Response)
+        ) as typeof fetch;
+
+        const url = "https://github.com/vercel/turborepo/";
+        await isUrlOk(url);
+
+        // Verify that fetch was called with a dispatcher option
+        expect(global.fetch).toHaveBeenCalledWith(
+          url,
+          expect.objectContaining({
+            method: "HEAD",
+            dispatcher: expect.anything()
+          })
+        );
+      } finally {
+        if (originalEnv === undefined) {
+          delete process.env.https_proxy;
+        } else {
+          process.env.https_proxy = originalEnv;
+        }
+      }
+    });
   });
 
   describe("getRepoInfo", () => {
@@ -77,8 +105,8 @@ describe("examples", () => {
           username: "vercel",
           name: "turborepo",
           branch: "main",
-          filePath: "",
-        },
+          filePath: ""
+        }
       },
       {
         repoUrl:
@@ -90,8 +118,8 @@ describe("examples", () => {
           username: "vercel",
           name: "turborepo",
           branch: "canary",
-          filePath: "examples/kitchen-sink",
-        },
+          filePath: "examples/kitchen-sink"
+        }
       },
       {
         repoUrl: "https://github.com/vercel/turborepo/tree/tek/test-branch/",
@@ -102,9 +130,9 @@ describe("examples", () => {
           username: "vercel",
           name: "turborepo",
           branch: "tek/test-branch",
-          filePath: "examples/basic",
-        },
-      },
+          filePath: "examples/basic"
+        }
+      }
     ])(
       "retrieves repo info for $repoUrl and $examplePath",
       async ({
@@ -112,12 +140,12 @@ describe("examples", () => {
         examplePath,
         defaultBranch,
         expectBranchLookup,
-        expected,
+        expected
       }) => {
         global.fetch = jest.fn(() =>
           Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({ default_branch: defaultBranch }),
+            json: () => Promise.resolve({ default_branch: defaultBranch })
           } as Response)
         ) as typeof fetch;
 
@@ -142,12 +170,12 @@ describe("examples", () => {
           username: "vercel",
           name: "turbo",
           branch: "main",
-          filePath: "",
+          filePath: ""
         },
         expected: true,
         expectedUrl:
-          "https://api.github.com/repos/vercel/turbo/contents/package.json?ref=main",
-      },
+          "https://api.github.com/repos/vercel/turbo/contents/package.json?ref=main"
+      }
     ])(
       "checks repo at $expectedUrl",
       async ({ expected, repoInfo, expectedUrl }) => {
@@ -278,7 +306,7 @@ describe("examples", () => {
         .create(
           {
             gzip: true,
-            cwd: sourceDir,
+            cwd: sourceDir
           },
           ["tarroot"]
         )
@@ -292,13 +320,13 @@ describe("examples", () => {
       const mockBody = await createMockTarballBody([
         { path: "file.txt", content: "Hello World" },
         { path: "subdir", type: "directory" },
-        { path: "subdir/nested.txt", content: "Nested content" },
+        { path: "subdir/nested.txt", content: "Nested content" }
       ]);
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
           ok: true,
-          body: mockBody,
+          body: mockBody
         } as Response)
       ) as typeof fetch;
 
@@ -306,7 +334,7 @@ describe("examples", () => {
         url: "https://example.com/tarball.tar.gz",
         root: testDir,
         strip: 1,
-        filter: () => true,
+        filter: () => true
       });
 
       expect(existsSync(join(testDir, "file.txt"))).toBe(true);
@@ -324,7 +352,7 @@ describe("examples", () => {
         Promise.resolve({
           ok: false,
           status: 404,
-          body: null,
+          body: null
         } as Response)
       ) as typeof fetch;
 
@@ -333,7 +361,7 @@ describe("examples", () => {
           url: "https://example.com/notfound.tar.gz",
           root: testDir,
           strip: 1,
-          filter: () => true,
+          filter: () => true
         })
       ).rejects.toThrow("Failed to download: 404");
     });
@@ -342,7 +370,7 @@ describe("examples", () => {
       global.fetch = jest.fn(() =>
         Promise.resolve({
           ok: true,
-          body: null,
+          body: null
         } as Response)
       ) as typeof fetch;
 
@@ -351,7 +379,7 @@ describe("examples", () => {
           url: "https://example.com/nobody.tar.gz",
           root: testDir,
           strip: 1,
-          filter: () => true,
+          filter: () => true
         })
       ).rejects.toThrow("Failed to download");
     });
@@ -359,13 +387,13 @@ describe("examples", () => {
     it("respects filter function", async () => {
       const mockBody = await createMockTarballBody([
         { path: "include.txt", content: "Included" },
-        { path: "exclude.txt", content: "Excluded" },
+        { path: "exclude.txt", content: "Excluded" }
       ]);
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
           ok: true,
-          body: mockBody,
+          body: mockBody
         } as Response)
       ) as typeof fetch;
 
@@ -373,7 +401,7 @@ describe("examples", () => {
         url: "https://example.com/tarball.tar.gz",
         root: testDir,
         strip: 1,
-        filter: (p: string) => p.includes("include"),
+        filter: (p: string) => p.includes("include")
       });
 
       expect(existsSync(join(testDir, "include.txt"))).toBe(true);
@@ -390,7 +418,7 @@ describe("examples", () => {
           url: "https://example.com/tarball.tar.gz",
           root: testDir,
           strip: 1,
-          filter: () => true,
+          filter: () => true
         })
       ).rejects.toThrow("Network error");
     });
@@ -399,13 +427,13 @@ describe("examples", () => {
       const mockBody = await createMockTarballBody([
         { path: "examples", type: "directory" },
         { path: "examples/basic", type: "directory" },
-        { path: "examples/basic/package.json", content: "{}" },
+        { path: "examples/basic/package.json", content: "{}" }
       ]);
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
           ok: true,
-          body: mockBody,
+          body: mockBody
         } as Response)
       ) as typeof fetch;
 
@@ -413,7 +441,7 @@ describe("examples", () => {
         url: "https://example.com/tarball.tar.gz",
         root: testDir,
         strip: 3, // Strip "tarroot/examples/basic"
-        filter: (p: string) => p.includes("examples/basic/"),
+        filter: (p: string) => p.includes("examples/basic/")
       });
 
       expect(existsSync(join(testDir, "package.json"))).toBe(true);
@@ -424,13 +452,13 @@ describe("examples", () => {
         { path: "a", type: "directory" },
         { path: "a/b", type: "directory" },
         { path: "a/b/c", type: "directory" },
-        { path: "a/b/c/deep.txt", content: "Deep file" },
+        { path: "a/b/c/deep.txt", content: "Deep file" }
       ]);
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
           ok: true,
-          body: mockBody,
+          body: mockBody
         } as Response)
       ) as typeof fetch;
 
@@ -438,13 +466,101 @@ describe("examples", () => {
         url: "https://example.com/tarball.tar.gz",
         root: testDir,
         strip: 1,
-        filter: () => true,
+        filter: () => true
       });
 
       expect(existsSync(join(testDir, "a", "b", "c", "deep.txt"))).toBe(true);
       expect(
         readFileSync(join(testDir, "a", "b", "c", "deep.txt"), "utf-8")
       ).toBe("Deep file");
+    });
+
+    it("uses proxy agent when HTTPS_PROXY is set", async () => {
+      const originalEnv = process.env.HTTPS_PROXY;
+      process.env.HTTPS_PROXY = "http://proxy.example.com:8080";
+
+      try {
+        const mockBody = await createMockTarballBody([
+          { path: "file.txt", content: "Hello" }
+        ]);
+
+        global.fetch = jest.fn(() =>
+          Promise.resolve({
+            ok: true,
+            body: mockBody
+          } as Response)
+        ) as typeof fetch;
+
+        await streamingExtract({
+          url: "https://example.com/tarball.tar.gz",
+          root: testDir,
+          strip: 1,
+          filter: () => true
+        });
+
+        // Verify that fetch was called with a dispatcher option
+        expect(global.fetch).toHaveBeenCalledWith(
+          "https://example.com/tarball.tar.gz",
+          expect.objectContaining({
+            dispatcher: expect.anything()
+          })
+        );
+      } finally {
+        if (originalEnv === undefined) {
+          delete process.env.HTTPS_PROXY;
+        } else {
+          process.env.HTTPS_PROXY = originalEnv;
+        }
+      }
+    });
+
+    it("does not use proxy agent when no proxy env vars are set", async () => {
+      const originalHttpsProxy = process.env.HTTPS_PROXY;
+      const originalHttpProxy = process.env.HTTP_PROXY;
+      const originalHttpsProxyLower = process.env.https_proxy;
+      const originalHttpProxyLower = process.env.http_proxy;
+
+      delete process.env.HTTPS_PROXY;
+      delete process.env.HTTP_PROXY;
+      delete process.env.https_proxy;
+      delete process.env.http_proxy;
+
+      try {
+        const mockBody = await createMockTarballBody([
+          { path: "file.txt", content: "Hello" }
+        ]);
+
+        global.fetch = jest.fn(() =>
+          Promise.resolve({
+            ok: true,
+            body: mockBody
+          } as Response)
+        ) as typeof fetch;
+
+        await streamingExtract({
+          url: "https://example.com/tarball.tar.gz",
+          root: testDir,
+          strip: 1,
+          filter: () => true
+        });
+
+        // Verify that fetch was called with undefined dispatcher
+        expect(global.fetch).toHaveBeenCalledWith(
+          "https://example.com/tarball.tar.gz",
+          expect.objectContaining({
+            dispatcher: undefined
+          })
+        );
+      } finally {
+        if (originalHttpsProxy !== undefined)
+          process.env.HTTPS_PROXY = originalHttpsProxy;
+        if (originalHttpProxy !== undefined)
+          process.env.HTTP_PROXY = originalHttpProxy;
+        if (originalHttpsProxyLower !== undefined)
+          process.env.https_proxy = originalHttpsProxyLower;
+        if (originalHttpProxyLower !== undefined)
+          process.env.http_proxy = originalHttpProxyLower;
+      }
     });
   });
 });

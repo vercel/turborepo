@@ -5,7 +5,7 @@ import { GeneratorError } from "./error";
 
 export async function setupFromTemplate({
   project,
-  template,
+  template
 }: {
   project: Project;
   template: "ts" | "js";
@@ -25,6 +25,6 @@ export async function setupFromTemplate({
 
   // copy templates to project
   await fs.copy(path.join(__dirname, "templates", toCopy), configDirectory, {
-    recursive: true,
+    recursive: true
   });
 }

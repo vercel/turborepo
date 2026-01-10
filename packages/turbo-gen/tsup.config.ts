@@ -19,5 +19,5 @@ export default defineConfig((options: Options) => ({
       pc.green(`${Date.now() - start}ms`)
     );
   },
-  ...options,
+  ...options
 }));

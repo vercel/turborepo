@@ -14,7 +14,7 @@ export const Card = ({ name, alias, avatar, url, children }: CardProps) => {
     <Link
       href={url}
       target="_blank"
-      className="drop-shadow-xs rounded-xl border border-gray-400 bg-background-100 px-6 py-5 hover:bg-background-200 hover:drop-shadow-sm"
+      className="drop-shadow-xs rounded-xl border border-border/50 bg-card px-6 py-5 hover:bg-accent/50 hover:drop-shadow-sm"
     >
       <div className="flex items-center gap-4">
         <Image
@@ -25,11 +25,15 @@ export const Card = ({ name, alias, avatar, url, children }: CardProps) => {
           className="h-12 w-12 rounded-full bg-gray-200"
         />
         <div className="flex flex-col">
-          <div className="font-medium text-gray-1000 text-label-16">{name}</div>
-          <div className="text-gray-800 text-copy-16">{alias}</div>
+          <div className="font-medium text-foreground text-base leading-5">
+            {name}
+          </div>
+          <div className="text-muted-foreground text-base leading-6">
+            {alias}
+          </div>
         </div>
       </div>
-      <div className="mt-4 text-gray-1000 text-copy-16">{children}</div>
+      <div className="mt-4 text-foreground text-base leading-6">{children}</div>
     </Link>
   );
 };
@@ -73,7 +77,7 @@ export const Testimonials = () => {
           url="https://x.com/housecor/status/1580923528596946944"
         >
           <p className="mb-4">
-            I’m really enjoying @turborepo. It’s a game changer.
+            I'm really enjoying @turborepo. It's a game changer.
           </p>
 
           <p className="mb-4">

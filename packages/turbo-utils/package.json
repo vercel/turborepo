@@ -24,7 +24,6 @@
   "types": "src/index.ts",
   "scripts": {
     "test": "jest",
-    "lint": "eslint src/",
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
@@ -32,7 +31,6 @@
     "@arethetypeswrong/cli": "0.18.2",
     "@jest/globals": "29.7.0",
     "@manypkg/find-root": "1.1.0",
-    "@turbo/eslint-config": "workspace:*",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
     "@turbo/types": "workspace:*",
@@ -57,5 +55,8 @@
     "ts-node": "10.9.2",
     "typescript": "5.5.4",
     "update-check": "1.5.4"
+  },
+  "dependencies": {
+    "undici": "^6.21.0"
   }
 }

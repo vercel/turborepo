@@ -1,11 +1,6 @@
 import type { MetadataRoute } from "next";
-import {
-  loadState,
-  getAllPageUrls,
-  SITEMAP_CONFIG,
-} from "#lib/sitemap/index.ts";
+import { loadState, getAllPageUrls, SITEMAP_CONFIG } from "../lib/sitemap";
 
-export const dynamic = "force-dynamic";
 export const revalidate = 3600; // Revalidate every hour
 
 // eslint-disable-next-line import/no-default-export -- Required by Next.js sitemap convention
@@ -24,7 +19,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: `${SITEMAP_CONFIG.baseUrl}${url}`,
       lastModified: pageState?.lastmod
         ? new Date(pageState.lastmod)
-        : new Date(),
+        : new Date()
     };
   });
 

@@ -5,6 +5,8 @@ use tokio::sync::{Semaphore, mpsc, oneshot};
 use tracing::log::debug;
 use turborepo_graph_utils::Walker;
 use turborepo_task_id::TaskId;
+// Re-export StopExecution from turborepo-types for backwards compatibility
+pub use turborepo_types::StopExecution;
 
 use super::{Built, Engine, TaskDefinitionInfo, TaskNode};
 
@@ -47,12 +49,6 @@ impl From<mpsc::error::SendError<Message<VisitorData, VisitorResult>>> for Execu
     ) -> Self {
         ExecuteError::Visitor
     }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum StopExecution {
-    AllTasks,
-    DependentTasks,
 }
 
 impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {

@@ -10,7 +10,7 @@ import type { ConvertCommandArgument, ConvertCommandOptions } from "./types";
 function isPackageManagerDisabled({
   packageManager,
   currentWorkspaceManger,
-  availablePackageManagers,
+  availablePackageManagers
 }: {
   packageManager: PackageManager;
   currentWorkspaceManger: PackageManager;
@@ -53,12 +53,12 @@ export async function convertCommand(
       }
       return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
     },
-    filter: (d: string) => d.trim(),
+    filter: (d: string) => d.trim()
   });
 
   const { directoryInput: selectedDirectory = directory } = directoryAnswer;
   const { exists, absolute: root } = directoryInfo({
-    directory: selectedDirectory,
+    directory: selectedDirectory
   });
   if (!exists) {
     logger.error(`Directory ${picocolors.dim(`(${root})`)} does not exist`);
@@ -67,7 +67,7 @@ export async function convertCommand(
 
   const [project, availablePackageManagers] = await Promise.all([
     getWorkspaceDetails({ root }),
-    getAvailablePackageManagers(),
+    getAvailablePackageManagers()
   ]);
 
   const packageManagerAnswer = await inquirer.prompt<{
@@ -83,20 +83,20 @@ export async function convertCommand(
       { pm: "npm", label: "npm" },
       { pm: "pnpm", label: "pnpm" },
       { pm: "yarn", label: "yarn" },
-      { pm: "bun", label: "Bun (beta)" },
+      { pm: "bun", label: "Bun (beta)" }
     ].map(({ pm, label }) => ({
       name: label,
       value: pm,
       disabled: isPackageManagerDisabled({
         packageManager: pm as PackageManager,
         currentWorkspaceManger: project.packageManager,
-        availablePackageManagers,
-      }),
-    })),
+        availablePackageManagers
+      })
+    }))
   });
   const {
     packageManagerInput:
-      selectedPackageManager = packageManager as PackageManager,
+      selectedPackageManager = packageManager as PackageManager
   } = packageManagerAnswer;
 
   await convertProject({
@@ -104,9 +104,9 @@ export async function convertCommand(
     convertTo: {
       name: selectedPackageManager,
       // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- selectedPackageManager is validated against availablePackageManagers
-      version: availablePackageManagers[selectedPackageManager]!,
+      version: availablePackageManagers[selectedPackageManager]!
     },
     logger,
-    options,
+    options
   });
 }

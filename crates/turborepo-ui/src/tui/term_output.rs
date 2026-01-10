@@ -16,6 +16,9 @@ pub struct TerminalOutput<W> {
     pub task_result: Option<TaskResult>,
     pub cache_result: Option<CacheResult>,
     pub scrollback_len: u64,
+    /// Pending selection start position (row, col) - set on mouse down, used on
+    /// first drag
+    selection_start: Option<(u16, u16)>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -36,6 +39,7 @@ impl<W> TerminalOutput<W> {
             task_result: None,
             cache_result: None,
             scrollback_len,
+            selection_start: None,
         }
     }
 
@@ -141,11 +145,18 @@ impl<W> TerminalOutput<W> {
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                // We need to update the vterm so we don't continue to render the selection
+                // Clear any existing selection and store the click position for potential drag
                 self.parser.screen_mut().clear_selection();
+                self.selection_start = Some((event.row, event.column));
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                // Update selection of underlying parser
+                // On first drag, start selection from the initial click position
+                if let Some((start_row, start_col)) = self.selection_start.take() {
+                    self.parser
+                        .screen_mut()
+                        .update_selection(start_row, start_col);
+                }
+                // Update selection end point to current drag position
                 self.parser
                     .screen_mut()
                     .update_selection(event.row, event.column);

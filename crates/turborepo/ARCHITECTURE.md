@@ -123,6 +123,35 @@ Multi-layered caching system:
 - `TaskCache`: Individual task cache management
 - `AsyncCache`: Handles async cache operations. Supports both local filesystem and remote HTTP caches
 
+#### Worktree Cache Sharing
+
+When running in a Git linked worktree (created via `git worktree add`), Turborepo automatically shares the local file system cache with the main worktree. This enables:
+
+- **Cache hits across worktrees**: Builds on different branches share cache artifacts
+- **Reduced disk usage**: Avoids duplicate cache entries across worktrees
+- **Faster iteration**: Switching between feature branches benefits from existing cache
+
+**How it works:**
+
+1. `WorktreeInfo::detect()` in `turborepo-scm` determines if the current directory is a linked worktree using Git commands (`git rev-parse --show-toplevel` and `git rev-parse --git-common-dir`)
+2. If in a linked worktree, `ConfigurationOptions::resolve_cache_dir()` returns the main worktree's `.turbo/cache` directory instead of the local one
+3. Users are notified via the run prelude message: "Remote caching {status}, using shared worktree cache"
+
+**Configuration:**
+
+- Setting an explicit `cacheDir` in `turbo.json` disables worktree cache sharing
+- Detection failures (non-git repos, git errors) gracefully fall back to local cache
+
+#### Atomic Cache Writes
+
+Cache writes use an atomic write pattern (write-to-temp-then-rename) for concurrent safety:
+
+1. Cache archives are written to temporary files (`.{filename}.{pid}.{counter}.tmp`)
+2. On successful completion, temp files are atomically renamed to final destination
+3. `CacheWriter` implements `Drop` to clean up temp files if `finish()` is not called (e.g., on error or panic)
+
+This ensures concurrent readers never see partially written cache files.
+
 ### 6. Task Hashing (`crates/turborepo-lib/src/task_hash/`)
 
 Creates a "content identifier" for a specific task depending on current state of inputs:
