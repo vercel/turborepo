@@ -14,6 +14,11 @@ const internationalizer = createI18nMiddleware(i18n);
 const proxy = (request: NextRequest, context: NextFetchEvent) => {
   const pathname = request.nextUrl.pathname;
 
+  // OpenAPI pages should not be proxied
+  if (pathname.startsWith("/docs/openapi")) {
+    return NextResponse.next();
+  }
+
   // Handle .md extension in URL path (e.g., /docs/getting-started.md or /docs.md)
   if (pathname === "/docs.md") {
     return NextResponse.rewrite(new URL("/en/llms.md", request.nextUrl));
