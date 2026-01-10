@@ -65,43 +65,45 @@ export const Sidebar = () => {
             </SheetDescription>
             <SearchButton onClick={() => setIsOpen(false)} />
           </SheetHeader>
-          <nav className="flex flex-col gap-1 border-b px-4 py-4">
-            {nav.map((item) =>
-              item.href.startsWith("http") ? (
+          <div className="overflow-y-auto flex-1">
+            <nav className="flex flex-col gap-1 border-b px-4 py-4">
+              {nav.map((item) =>
+                item.href.startsWith("http") ? (
+                  <a
+                    key={item.href}
+                    className="flex items-center gap-2 py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
+                    href={item.href}
+                    rel="noopener"
+                    target="_blank"
+                  >
+                    {item.label}
+                    <ExternalLinkIcon className="size-3.5" />
+                  </a>
+                ) : (
+                  <DynamicLink
+                    key={item.href}
+                    className="py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
+                    href={`/[lang]${item.href}`}
+                    onClick={() => setIsOpen(false)}
+                  >
+                    {item.label}
+                  </DynamicLink>
+                )
+              )}
+              {github.owner && github.repo ? (
                 <a
-                  key={item.href}
                   className="flex items-center gap-2 py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
-                  href={item.href}
+                  href={`https://github.com/${github.owner}/${github.repo}`}
                   rel="noopener"
                   target="_blank"
                 >
-                  {item.label}
-                  <ExternalLinkIcon className="size-3.5" />
+                  <SiGithub className="size-4" />
+                  GitHub
                 </a>
-              ) : (
-                <DynamicLink
-                  key={item.href}
-                  className="py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
-                  href={`/[lang]${item.href}`}
-                  onClick={() => setIsOpen(false)}
-                >
-                  {item.label}
-                </DynamicLink>
-              )
-            )}
-            {github.owner && github.repo ? (
-              <a
-                className="flex items-center gap-2 py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
-                href={`https://github.com/${github.owner}/${github.repo}`}
-                rel="noopener"
-                target="_blank"
-              >
-                <SiGithub className="size-4" />
-                GitHub
-              </a>
-            ) : null}
-          </nav>
-          <div className="px-4">{renderSidebarList(root.children)}</div>
+              ) : null}
+            </nav>
+            <div className="px-4 pb-4">{renderSidebarList(root.children)}</div>
+          </div>
         </SheetContent>
       </Sheet>
     </div>
