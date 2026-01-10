@@ -19,8 +19,9 @@ import {
   type OperationOutput,
   type WebhookOutput
 } from "fumadocs-openapi";
-import { createOpenAPI } from "fumadocs-openapi/server";
 import type { Document } from "fumadocs-openapi";
+// @ts-expect-error - Using .ts extension for node --experimental-strip-types
+import { openapi } from "../lib/openapi.ts";
 
 const out = "./content/openapi";
 
@@ -182,12 +183,6 @@ const thing = await fetch("https://turborepo.com/api/remote-cache-spec")
   .then((json) => updateServerDescription(json));
 
 writeFileSync("./.openapi.json", JSON.stringify(thing, null, 2));
-
-// Create OpenAPI instance for generation
-// This mirrors the configuration in lib/openapi.ts
-const openapi = createOpenAPI({
-  input: ["./.openapi.json"]
-});
 
 // Convert camelCase/PascalCase to kebab-case
 const toKebabCase = (str: string): string => {
