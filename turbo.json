@@ -56,7 +56,12 @@
       "outputs": ["dist/**/*"]
     },
     "build": {
-      "outputs": ["dist/**/*", ".next/**/*"],
+      "outputs": [
+        "dist/**/*",
+        ".next/**/*",
+        "!.next/cache/**/*",
+        "!.next/dev/**/*"
+      ],
       "dependsOn": ["^build"]
     },
     "package-checks": {

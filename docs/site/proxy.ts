@@ -40,8 +40,10 @@ const proxy = (request: NextRequest, context: NextFetchEvent) => {
 };
 
 export const config = {
-  // Matcher ignoring `/_next/`, `/api/`, static assets, favicon, feed.xml, etc.
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico|feed.xml).*)"]
+  // Matcher ignoring `/_next/`, `/api/`, static assets, favicon, feed.xml, sitemap.xml, etc.
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|feed.xml|sitemap.xml).*)"
+  ]
 };
 
 export default proxy;
