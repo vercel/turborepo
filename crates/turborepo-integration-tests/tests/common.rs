@@ -1,13 +1,17 @@
 //! Common test utilities for integration tests.
 //!
-//! Tests run in isolated temp directories with controlled environment variables,
-//! matching the behavior of the existing prysk-based integration tests.
+//! Tests run in isolated temp directories with controlled environment
+//! variables, matching the behavior of the existing prysk-based integration
+//! tests.
+
+use std::{
+    path::{Path, PathBuf},
+    process::Output,
+    sync::{Arc, LazyLock, OnceLock},
+};
 
 use anyhow::{Context, Result};
 use regex::Regex;
-use std::path::{Path, PathBuf};
-use std::process::Output;
-use std::sync::LazyLock;
 
 /// Compiled regex for timing redaction.
 /// Matches patterns like "Time: 1.23s" or "Time: 100ms".
@@ -28,14 +32,15 @@ static HASH_RE: LazyLock<Regex> =
 ///
 /// | Pattern | Example Input | Replacement |
 /// |---------|---------------|-------------|
+/// | CRLF line endings | `\r\n` | `\n` |
 /// | Timing | `Time: 1.23s`, `Time: 100ms` | `Time: [TIME]` |
 /// | Cache hashes | `0555ce94ca234049` | `[HASH]` |
 ///
 /// # Known Limitations
 ///
-/// - The hash regex `[a-f0-9]{16}` matches any 16-character lowercase
-///   hex string, which could over-redact in edge cases (e.g., UUIDs).
-///   This is intentional to catch all cache-related hashes.
+/// - The hash regex `[a-f0-9]{16}` matches any 16-character lowercase hex
+///   string, which could over-redact in edge cases (e.g., UUIDs). This is
+///   intentional to catch all cache-related hashes.
 ///
 /// # Example
 ///
@@ -45,8 +50,10 @@ static HASH_RE: LazyLock<Regex> =
 /// assert_eq!(redacted, "my-app:build: cache miss, executing [HASH]\nTime: [TIME]");
 /// ```
 pub fn redact_output(output: &str) -> String {
-    let output = TIMING_RE.replace_all(output, "Time: [TIME]").to_string();
-    HASH_RE.replace_all(&output, "[HASH]").to_string()
+    // Normalize CRLF to LF for cross-platform snapshot consistency
+    let output = output.replace("\r\n", "\n");
+    let output = TIMING_RE.replace_all(&output, "Time: [TIME]");
+    HASH_RE.replace_all(&output, "[HASH]").into_owned()
 }
 
 /// Path to the turbo binary, discovered via cargo workspace layout.
@@ -200,9 +207,11 @@ impl TurboTestEnv {
 
         // Use spawn_blocking to avoid blocking the async runtime during file I/O
         let workspace_path = self.workspace_path.clone();
-        tokio::task::spawn_blocking(move || copy_dir_recursive(&canonical_fixture, &workspace_path))
-            .await
-            .context("File copy task panicked")??;
+        tokio::task::spawn_blocking(move || {
+            copy_dir_recursive(&canonical_fixture, &workspace_path)
+        })
+        .await
+        .context("File copy task panicked")??;
 
         Ok(())
     }
@@ -232,45 +241,85 @@ impl TurboTestEnv {
     ///
     /// # Environment
     ///
-    /// The following environment variables are automatically set:
+    /// This method clears inherited environment variables and sets only the
+    /// minimum required for deterministic test execution:
+    /// - `PATH` - Required for subprocess execution
+    /// - `HOME` / `USERPROFILE` - Required for turbo to find config
     /// - `TURBO_TELEMETRY_MESSAGE_DISABLED=1`
     /// - `TURBO_GLOBAL_WARNING_DISABLED=1`
     /// - `TURBO_PRINT_VERSION_DISABLED=1`
+    ///
+    /// This isolation prevents test flakiness from inherited `TURBO_*` env
+    /// vars.
     pub async fn run_turbo(&self, args: &[&str]) -> Result<ExecResult> {
-        let output = tokio::process::Command::new(&self.turbo_binary)
-            .args(args)
-            .current_dir(&self.workspace_path)
-            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-            .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-            .env("TURBO_PRINT_VERSION_DISABLED", "1")
-            .output()
-            .await
-            .context("Failed to execute turbo")?;
+        let mut cmd = tokio::process::Command::new(&self.turbo_binary);
+        cmd.args(args).current_dir(&self.workspace_path).env_clear();
 
+        // Restore minimal required environment
+        Self::set_minimal_env(&mut cmd);
+
+        // Set turbo-specific test environment
+        cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+            .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+            .env("TURBO_PRINT_VERSION_DISABLED", "1");
+
+        let output = cmd.output().await.context("Failed to execute turbo")?;
         Ok(ExecResult::from(output))
     }
 
     /// Run turbo with specific environment variables.
     ///
-    /// Additional environment variables are merged with the defaults.
+    /// Additional environment variables are merged with the minimal defaults.
+    /// Inherited environment is cleared for test isolation.
     pub async fn run_turbo_with_env(
         &self,
         args: &[&str],
         env: &[(&str, &str)],
     ) -> Result<ExecResult> {
         let mut cmd = tokio::process::Command::new(&self.turbo_binary);
-        cmd.args(args)
-            .current_dir(&self.workspace_path)
-            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        cmd.args(args).current_dir(&self.workspace_path).env_clear();
+
+        // Restore minimal required environment
+        Self::set_minimal_env(&mut cmd);
+
+        // Set turbo-specific test environment
+        cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1");
 
+        // Add test-specific environment variables
         for (key, value) in env {
             cmd.env(key, value);
         }
 
         let output = cmd.output().await.context("Failed to execute turbo")?;
         Ok(ExecResult::from(output))
+    }
+
+    /// Set minimal environment variables required for process execution.
+    fn set_minimal_env(cmd: &mut tokio::process::Command) {
+        // PATH is required for subprocesses
+        if let Ok(path) = std::env::var("PATH") {
+            cmd.env("PATH", path);
+        }
+        // HOME (Unix) or USERPROFILE (Windows) for config discovery
+        if let Ok(home) = std::env::var("HOME") {
+            cmd.env("HOME", home);
+        }
+        if let Ok(userprofile) = std::env::var("USERPROFILE") {
+            cmd.env("USERPROFILE", userprofile);
+        }
+        // SYSTEMROOT is required on Windows
+        if let Ok(systemroot) = std::env::var("SYSTEMROOT") {
+            cmd.env("SYSTEMROOT", systemroot);
+        }
+        // TMP/TEMP for temporary files on Windows
+        if let Ok(tmp) = std::env::var("TMP") {
+            cmd.env("TMP", tmp);
+        }
+        if let Ok(temp) = std::env::var("TEMP") {
+            cmd.env("TEMP", temp);
+        }
     }
 
     /// Execute a command in the workspace directory.
@@ -366,4 +415,346 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+// =============================================================================
+// Shared Fixture Cache for Test Performance
+// =============================================================================
+
+/// A cached, pre-warmed test environment that can be copied for fast test
+/// setup.
+///
+/// This structure stores a prepared fixture directory with git initialized and
+/// cache primed, allowing tests to copy from this cached state instead of
+/// repeating expensive setup operations.
+struct CachedFixtureEnv {
+    /// Path to the cached fixture directory
+    path: PathBuf,
+    /// Keep the temp dir alive
+    _temp_dir: tempfile::TempDir,
+}
+
+/// Global cache for the basic_monorepo fixture with pre-warmed turbo cache.
+static BASIC_MONOREPO_CACHE: OnceLock<Arc<CachedFixtureEnv>> = OnceLock::new();
+
+impl CachedFixtureEnv {
+    /// Create a new cached fixture environment.
+    async fn new(fixture_name: &str, prime_args: &[&str]) -> Result<Self> {
+        let turbo_binary = turbo_binary_path();
+        if !turbo_binary.exists() {
+            anyhow::bail!(
+                "Turbo binary not found at {:?}. Run `cargo build -p turbo` first.",
+                turbo_binary
+            );
+        }
+
+        let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
+        let workspace_path = temp_dir.path().to_path_buf();
+
+        // Copy fixture
+        let fixtures_base = fixtures_path();
+        let fixture_path = fixtures_base.join(fixture_name);
+        let canonical_fixture = fixture_path.canonicalize()?;
+
+        let workspace_clone = workspace_path.clone();
+        tokio::task::spawn_blocking(move || {
+            copy_dir_recursive(&canonical_fixture, &workspace_clone)
+        })
+        .await
+        .context("File copy task panicked")??;
+
+        // Initialize git
+        let git_commands = [
+            vec!["git", "init"],
+            vec!["git", "config", "user.email", "test@test.com"],
+            vec!["git", "config", "user.name", "Test User"],
+            vec!["git", "add", "."],
+            vec!["git", "commit", "-m", "Initial commit"],
+        ];
+
+        for cmd in &git_commands {
+            let (program, args) = cmd.split_first().unwrap();
+            let output = tokio::process::Command::new(program)
+                .args(args)
+                .current_dir(&workspace_path)
+                .output()
+                .await
+                .context("Failed to execute git command")?;
+            if !output.status.success() {
+                anyhow::bail!(
+                    "Git command {:?} failed: {}",
+                    cmd,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+
+        // Prime the cache with turbo run
+        let mut cmd = tokio::process::Command::new(&turbo_binary);
+        cmd.args(prime_args)
+            .current_dir(&workspace_path)
+            .env_clear();
+
+        // Set minimal environment
+        if let Ok(path) = std::env::var("PATH") {
+            cmd.env("PATH", path);
+        }
+        if let Ok(home) = std::env::var("HOME") {
+            cmd.env("HOME", home);
+        }
+        if let Ok(userprofile) = std::env::var("USERPROFILE") {
+            cmd.env("USERPROFILE", userprofile);
+        }
+        if let Ok(systemroot) = std::env::var("SYSTEMROOT") {
+            cmd.env("SYSTEMROOT", systemroot);
+        }
+
+        cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+            .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+            .env("TURBO_PRINT_VERSION_DISABLED", "1");
+
+        let output = cmd.output().await.context("Failed to prime cache")?;
+        if !output.status.success() {
+            anyhow::bail!(
+                "Failed to prime turbo cache: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        Ok(Self {
+            path: workspace_path,
+            _temp_dir: temp_dir,
+        })
+    }
+}
+
+/// Get or initialize the shared basic_monorepo fixture cache.
+///
+/// This function ensures the fixture is only set up once, even when called
+/// from multiple tests running in parallel. Subsequent calls return a
+/// reference to the cached environment.
+async fn get_basic_monorepo_cache(prime_args: &[&str]) -> Result<Arc<CachedFixtureEnv>> {
+    // Fast path: cache already initialized
+    if let Some(cache) = BASIC_MONOREPO_CACHE.get() {
+        return Ok(Arc::clone(cache));
+    }
+
+    // Slow path: initialize the cache
+    // Note: In parallel test execution, multiple tests might try to initialize.
+    // OnceLock ensures only one succeeds, others will get the cached value.
+    let cache = Arc::new(CachedFixtureEnv::new("basic_monorepo", prime_args).await?);
+
+    // Try to set the cache, if another thread beat us, use their value
+    match BASIC_MONOREPO_CACHE.set(Arc::clone(&cache)) {
+        Ok(()) => Ok(cache),
+        Err(_) => Ok(Arc::clone(BASIC_MONOREPO_CACHE.get().unwrap())),
+    }
+}
+
+/// Create a test environment by copying from the shared cache.
+///
+/// This is significantly faster than `setup_env_with_cache()` because:
+/// 1. Fixture copying happens once per test run, not per test
+/// 2. Git initialization happens once
+/// 3. Cache priming happens once
+///
+/// The returned environment has its own temp directory with a copy of the
+/// cached fixture, so tests can safely modify it without affecting other tests.
+pub async fn create_env_from_cache(prime_args: &[&str]) -> Result<TurboTestEnv> {
+    let cache = get_basic_monorepo_cache(prime_args).await?;
+
+    let turbo_binary = turbo_binary_path();
+    let temp_dir = tempfile::tempdir().context("Failed to create temp directory")?;
+    let workspace_path = temp_dir.path().to_path_buf();
+
+    // Copy from cached fixture (includes .git and .turbo cache)
+    let cache_path = cache.path.clone();
+    let workspace_clone = workspace_path.clone();
+    tokio::task::spawn_blocking(move || copy_dir_recursive(&cache_path, &workspace_clone))
+        .await
+        .context("File copy task panicked")??;
+
+    Ok(TurboTestEnv {
+        workspace_path,
+        turbo_binary,
+        _temp_dir: temp_dir,
+    })
+}
+
+// =============================================================================
+// Unit Tests for Security and Core Functionality
+// =============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =========================================================================
+    // P0: Path Traversal Security Tests
+    // =========================================================================
+
+    #[tokio::test]
+    async fn test_copy_fixture_rejects_path_traversal_dotdot() {
+        let env = TurboTestEnv::new().await.unwrap();
+        let result = env.copy_fixture("../../../etc/passwd").await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("path traversal"),
+            "Expected path traversal error, got: {}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn test_copy_fixture_rejects_nested_path_traversal() {
+        let env = TurboTestEnv::new().await.unwrap();
+        let result = env.copy_fixture("foo/../../../etc/passwd").await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("path traversal"),
+            "Expected path traversal error, got: {}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn test_copy_fixture_rejects_absolute_path_unix() {
+        let env = TurboTestEnv::new().await.unwrap();
+        let result = env.copy_fixture("/etc/passwd").await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("absolute paths"),
+            "Expected absolute path error, got: {}",
+            err
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_copy_fixture_rejects_absolute_path_windows() {
+        let env = TurboTestEnv::new().await.unwrap();
+        let result = env.copy_fixture("C:\\Windows\\System32").await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("absolute paths"),
+            "Expected absolute path error, got: {}",
+            err
+        );
+    }
+
+    #[tokio::test]
+    async fn test_copy_fixture_rejects_nonexistent_fixture() {
+        let env = TurboTestEnv::new().await.unwrap();
+        let result = env.copy_fixture("nonexistent_fixture_12345").await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("Fixture not found"),
+            "Expected fixture not found error, got: {}",
+            err
+        );
+    }
+
+    // =========================================================================
+    // Redaction Tests
+    // =========================================================================
+
+    #[test]
+    fn test_redact_output_normalizes_crlf() {
+        let input = "line1\r\nline2\r\nline3";
+        let output = redact_output(input);
+        assert!(!output.contains('\r'), "CRLF should be normalized to LF");
+        assert_eq!(output, "line1\nline2\nline3");
+    }
+
+    #[test]
+    fn test_redact_output_preserves_lf() {
+        let input = "line1\nline2\nline3";
+        let output = redact_output(input);
+        assert_eq!(output, "line1\nline2\nline3");
+    }
+
+    #[test]
+    fn test_redact_output_handles_mixed_line_endings() {
+        let input = "line1\r\nline2\nline3\r\n";
+        let output = redact_output(input);
+        assert!(!output.contains('\r'));
+        assert_eq!(output, "line1\nline2\nline3\n");
+    }
+
+    #[test]
+    fn test_redact_output_timing() {
+        assert_eq!(redact_output("Time: 1.23s"), "Time: [TIME]");
+        assert_eq!(redact_output("Time: 100ms"), "Time: [TIME]");
+        assert_eq!(redact_output("Time:  42.5s"), "Time: [TIME]");
+    }
+
+    #[test]
+    fn test_redact_output_hash() {
+        let input = "cache miss, executing 0555ce94ca234049";
+        let output = redact_output(input);
+        assert_eq!(output, "cache miss, executing [HASH]");
+    }
+
+    #[test]
+    fn test_redact_output_combined() {
+        let input = "my-app:build: cache miss, executing 0555ce94ca234049\r\nTime: 1.23s";
+        let output = redact_output(input);
+        assert_eq!(
+            output,
+            "my-app:build: cache miss, executing [HASH]\nTime: [TIME]"
+        );
+    }
+
+    #[test]
+    fn test_redact_output_short_hex_not_redacted() {
+        // 15-char hex strings should NOT be redacted
+        let input = "short: deadbeef1234567";
+        let output = redact_output(input);
+        assert_eq!(output, "short: deadbeef1234567");
+    }
+
+    // =========================================================================
+    // ExecResult Tests
+    // =========================================================================
+
+    #[test]
+    fn test_combined_output_stdout_only() {
+        let result = ExecResult {
+            stdout: "output".into(),
+            stderr: "".into(),
+            exit_code: 0,
+        };
+        assert_eq!(result.combined_output(), "output");
+    }
+
+    #[test]
+    fn test_combined_output_stderr_only() {
+        let result = ExecResult {
+            stdout: "".into(),
+            stderr: "error".into(),
+            exit_code: 1,
+        };
+        assert_eq!(result.combined_output(), "error");
+    }
+
+    #[test]
+    fn test_combined_output_both() {
+        let result = ExecResult {
+            stdout: "out".into(),
+            stderr: "err".into(),
+            exit_code: 0,
+        };
+        // Note: concatenated without separator
+        assert_eq!(result.combined_output(), "outerr");
+    }
 }

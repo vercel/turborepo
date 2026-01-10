@@ -1,8 +1,6 @@
 name: Rust Integration Tests
 
 on:
-  push:
-    branches: [main]
   pull_request:
 
 concurrency:
@@ -90,12 +88,14 @@ jobs:
           cargo build -p turbo
         shell: bash
         env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
+          # sccache configuration - only enabled for non-fork PRs
+          SCCACHE_BUCKET: ${{ !github.event.pull_request.head.repo.fork && 'turborepo-sccache' || '' }}
+          SCCACHE_REGION: ${{ !github.event.pull_request.head.repo.fork && 'us-east-2' || '' }}
           RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
           CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # AWS credentials only passed for non-fork PRs to prevent accidental exposure
+          AWS_ACCESS_KEY_ID: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_ACCESS_KEY_ID || '' }}
+          AWS_SECRET_ACCESS_KEY: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_SECRET_ACCESS_KEY || '' }}
           SCCACHE_IDLE_TIMEOUT: 0
           SCCACHE_REQUEST_TIMEOUT: 30
           SCCACHE_ERROR_LOG: error
@@ -109,12 +109,14 @@ jobs:
           cargo nextest run -p turborepo-integration-tests --features integration-tests
         shell: bash
         env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
+          # sccache configuration - only enabled for non-fork PRs
+          SCCACHE_BUCKET: ${{ !github.event.pull_request.head.repo.fork && 'turborepo-sccache' || '' }}
+          SCCACHE_REGION: ${{ !github.event.pull_request.head.repo.fork && 'us-east-2' || '' }}
           RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
           CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # AWS credentials only passed for non-fork PRs to prevent accidental exposure
+          AWS_ACCESS_KEY_ID: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_ACCESS_KEY_ID || '' }}
+          AWS_SECRET_ACCESS_KEY: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_SECRET_ACCESS_KEY || '' }}
           SCCACHE_IDLE_TIMEOUT: 0
           SCCACHE_REQUEST_TIMEOUT: 30
           SCCACHE_ERROR_LOG: error

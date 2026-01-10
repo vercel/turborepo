@@ -14,17 +14,22 @@ To run prysk tests:
 pnpm test --filter=prysk -- integration/tests/run/force.t
 ```
 
-### Testcontainers Tests (New)
+### Rust Integration Tests (New)
 
-A new test system using Docker containers is being developed in `crates/turborepo-integration-tests/`. These tests:
+A new Rust-based test system is being developed in `crates/turborepo-integration-tests/`. These tests:
 
-- Run as part of `cargo test`
-- Use testcontainers for isolated Docker environments
-- Use insta for snapshot testing
+- Run as part of `cargo test` (benefits from nextest parallelization)
+- Use isolated temp directories for each test
+- Use insta for snapshot testing with deterministic output redactions
+- No external dependencies (no Docker, no Python)
 
-To run testcontainers tests:
+To run the Rust integration tests:
 
 ```sh
+# First, build the turbo binary
+cargo build -p turbo
+
+# Run integration tests
 cargo test -p turborepo-integration-tests --features integration-tests
 ```
 

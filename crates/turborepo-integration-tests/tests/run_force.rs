@@ -22,7 +22,7 @@
 mod common;
 
 use anyhow::Result;
-use common::{redact_output, TurboTestEnv};
+use common::{TurboTestEnv, create_env_from_cache, redact_output};
 use insta::assert_snapshot;
 use test_case::test_case;
 
@@ -55,16 +55,16 @@ impl ForceFlag {
 
 /// Helper to set up a test environment with cache already populated.
 ///
-/// This runs an initial build to populate the cache, so subsequent tests
-/// can verify cache hit/bypass behavior.
+/// Uses the shared fixture cache for performance. The fixture is only copied,
+/// git initialized, and cache primed once per test run, regardless of how many
+/// tests call this function.
+///
+/// This is significantly faster than creating a fresh environment per test:
+/// - Fixture copying: once vs 13x
+/// - Git initialization: once vs 13x
+/// - Cache priming: once vs 13x
 async fn setup_env_with_cache() -> Result<TurboTestEnv> {
-    let env = TurboTestEnv::new().await?;
-    env.copy_fixture("basic_monorepo").await?;
-    env.setup_git().await?;
-    // Prime the cache with initial run
-    let result = env.run_turbo(BASE_ARGS).await?;
-    result.assert_success();
-    Ok(env)
+    create_env_from_cache(BASE_ARGS).await
 }
 
 /// Run a force test scenario and return the redacted output.
@@ -79,7 +79,10 @@ async fn run_force_scenario(
     }
 
     let result = match turbo_force_env {
-        Some(value) => env.run_turbo_with_env(&args, &[("TURBO_FORCE", value)]).await?,
+        Some(value) => {
+            env.run_turbo_with_env(&args, &[("TURBO_FORCE", value)])
+                .await?
+        }
         None => env.run_turbo(&args).await?,
     };
 
@@ -99,7 +102,10 @@ async fn test_baseline_cache_miss() -> Result<()> {
 
     let result = env.run_turbo(BASE_ARGS).await?;
     result.assert_success();
-    assert_snapshot!("baseline_cache_miss", redact_output(&result.combined_output()));
+    assert_snapshot!(
+        "baseline_cache_miss",
+        redact_output(&result.combined_output())
+    );
 
     Ok(())
 }
