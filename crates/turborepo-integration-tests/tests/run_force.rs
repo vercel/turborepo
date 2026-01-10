@@ -87,9 +87,6 @@ async fn run_force_scenario(
     Ok(redact_output(&result.combined_output()))
 }
 
-// =============================================================================
-// Baseline test - generates the initial cache
-// =============================================================================
 
 #[tokio::test]
 async fn test_baseline_cache_miss() -> Result<()> {
