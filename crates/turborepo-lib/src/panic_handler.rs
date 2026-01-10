@@ -6,6 +6,11 @@ const OPEN_ISSUE_MESSAGE: &str =
     "Please open an issue at https://github.com/vercel/turborepo/issues/new/choose";
 
 pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
+    // If the TUI was active, restore terminal to a sane state before printing
+    // anything. This function checks a global flag and only runs restoration
+    // if the TUI actually modified terminal state.
+    turborepo_ui::restore_terminal_on_panic();
+
     let cause = panic_info.to_string();
 
     let explanation = match panic_info.location() {

@@ -26,7 +26,7 @@ pub use crate::{
     logs::{LogWriter, replay_logs, replay_logs_with_crlf},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
-    tui::{TaskTable, TerminalPane},
+    tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_on_panic},
 };
 
 #[derive(Debug, Error)]
