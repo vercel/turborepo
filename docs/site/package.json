@@ -9,7 +9,6 @@
     "check-types": "next typegen && fumadocs-mdx && tsc --noEmit",
     "collect-examples-data": "node --experimental-strip-types ./scripts/collect-examples-data.ts",
     "dev": "next dev",
-    "generate-openapi": "node --experimental-strip-types ./scripts/generate-docs.ts",
     "lint": "fumadocs-mdx",
     "postinstall": "fumadocs-mdx",
     "schema": "node --experimental-strip-types scripts/copy-json-schema.ts",
