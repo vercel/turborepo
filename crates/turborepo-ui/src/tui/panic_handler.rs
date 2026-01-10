@@ -79,9 +79,15 @@ pub fn restore_terminal_on_panic() -> bool {
 
 #[cfg(test)]
 mod test {
+    use serial_test::serial;
+
     use super::*;
 
+    // Note: These tests modify global state (TUI_ACTIVE) and must run serially
+    // to avoid interference with each other or other tests that check TUI state.
+
     #[test]
+    #[serial]
     fn test_tui_active_flag() {
         // Reset to known state
         set_tui_inactive();
@@ -97,6 +103,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn test_restore_skipped_when_inactive() {
         // Reset to known state
         set_tui_inactive();
@@ -106,6 +113,7 @@ mod test {
     }
 
     #[test]
+    #[serial]
     fn test_restore_runs_when_active() {
         // Set active
         set_tui_active();

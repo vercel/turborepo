@@ -1183,6 +1183,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 
 #[cfg(test)]
 mod test {
+    use serial_test::serial;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
@@ -2373,14 +2374,17 @@ mod test {
         Ok(())
     }
 
+    // Note: This test modifies the TERM_PROGRAM environment variable, which is
+    // process-global state. It must run serially to avoid interference with other
+    // tests that read TERM_PROGRAM (e.g., startup(), ColorConfig::rainbow()).
     #[test]
+    #[serial]
     fn test_is_vscode_terminal_detection() {
         // Save original value to restore later
         let original = std::env::var("TERM_PROGRAM").ok();
 
-        // SAFETY: This test modifies environment variables. It saves and restores
-        // the original value, and this test should not run in parallel with other
-        // tests that depend on TERM_PROGRAM.
+        // SAFETY: Environment variable modification is safe here because this test
+        // runs serially (via #[serial]) and restores the original value on cleanup.
         unsafe {
             // Test: VSCode detection (lowercase)
             std::env::set_var("TERM_PROGRAM", "vscode");
