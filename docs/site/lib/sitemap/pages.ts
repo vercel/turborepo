@@ -23,8 +23,8 @@ export function getAllPageUrls(): Array<string> {
   // 2. Add dynamic routes from fumadocs loaders
   // These handle content-driven pages with [...slug] patterns
 
-  // Docs pages
-  for (const page of source.getPages()) {
+  // Docs pages - use "en" locale since source has i18n enabled
+  for (const page of source.getPages("en")) {
     urlSet.add(page.url);
   }
 
