@@ -6,7 +6,7 @@ import {
   loader
 } from "fumadocs-core/source";
 import { lucideIconsPlugin } from "fumadocs-core/source/lucide-icons";
-import { createOpenAPI } from "fumadocs-openapi/server";
+import { openapiPlugin } from "fumadocs-openapi/server";
 import {
   docs,
   blogDocs,
@@ -95,10 +95,9 @@ export const externalBlog = loader({
 // OpenAPI loaders
 export const openapiPages = loader({
   baseUrl: "/docs/openapi",
-  source: createSource(openapiDocs, openapiMeta)
+  source: createSource(openapiDocs, openapiMeta),
+  plugins: [openapiPlugin()]
 });
-
-export const openapi = createOpenAPI();
 
 // Extra pages (terms, governance, etc.)
 export const extraPages = loader({

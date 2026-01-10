@@ -6,7 +6,8 @@ import {
   DocsTitle
 } from "@/components/geistdocs/docs-page";
 import { getMDXComponents } from "@/components/geistdocs/mdx-components";
-import { openapi, openapiPages } from "@/lib/geistdocs/source";
+import { APIPage } from "@/components/api-page";
+import { openapiPages } from "@/lib/geistdocs/source";
 import "./openapi.css";
 
 const Page = async ({
@@ -31,7 +32,7 @@ const Page = async ({
         <MDX
           components={getMDXComponents({
             components: {
-              APIPage: openapi.APIPage
+              APIPage
             }
           })}
         />

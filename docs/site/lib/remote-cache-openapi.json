@@ -1,0 +1,647 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Turborepo Remote Cache API",
+    "description": "The Turborepo Remote Cache API specification defines the HTTP interface that any remote cache server must implement to be compatible with Turborepo. This spec enables self-hosted remote caching, allowing teams to run their own cache servers.\n\nThe remote cache stores build artifacts (outputs from tasks like `build`, `lint`, `test`) identified by content-addressable hashes. When Turborepo encounters a task that matches a previously cached result, it can download the artifact instead of re-executing the task.",
+    "version": "1.0.0",
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "contact": {
+      "name": "Turborepo",
+      "url": "https://turbo.build"
+    }
+  },
+  "servers": [
+    {
+      "url": "{protocol}://{host}",
+      "description": "Self-hosted Remote Cache Server",
+      "variables": {
+        "protocol": {
+          "default": "https",
+          "enum": ["http", "https"],
+          "description": "Protocol to use for the remote cache server"
+        },
+        "host": {
+          "default": "localhost:3000",
+          "description": "Hostname and port of the remote cache server"
+        }
+      }
+    },
+    {
+      "url": "https://api.vercel.com",
+      "description": "Vercel Remote Cache (reference implementation) (spec: https://openapi.vercel.com)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "artifacts",
+      "description": "Operations for managing cache artifacts"
+    },
+    {
+      "name": "analytics",
+      "description": "Operations for recording cache usage analytics"
+    }
+  ],
+  "paths": {
+    "/artifacts/status": {
+      "get": {
+        "operationId": "getArtifactStatus",
+        "summary": "Get remote caching status",
+        "description": "Check the status of Remote Caching for the authenticated user or team. Returns a JSON-encoded status indicating if Remote Caching is enabled, disabled, or disabled due to usage limits.\n\nImplementers should return `enabled` if the authenticated principal is allowed to use the cache, or `disabled` if not. The `over_limit` and `paused` statuses are optional and can be used to indicate usage limits or temporary suspension.",
+        "tags": ["artifacts"],
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TeamId"
+          },
+          {
+            "$ref": "#/components/parameters/Slug"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Remote caching status retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CachingStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/artifacts/{hash}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/ArtifactHash"
+        },
+        {
+          "$ref": "#/components/parameters/TeamId"
+        },
+        {
+          "$ref": "#/components/parameters/Slug"
+        }
+      ],
+      "head": {
+        "operationId": "artifactExists",
+        "summary": "Check if artifact exists",
+        "description": "Check that a cache artifact with the given `hash` exists. This request returns response headers only and is equivalent to a `GET` request to this endpoint where the response contains no body.\n\nImplementers should return 200 if the artifact exists, or 404 if it does not.",
+        "tags": ["artifacts"],
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Artifact exists",
+            "headers": {
+              "Content-Length": {
+                "description": "The size of the artifact in bytes",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "x-artifact-duration": {
+                "description": "The time taken to generate the artifact in milliseconds (if stored)",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/ArtifactNotFound"
+          }
+        }
+      },
+      "get": {
+        "operationId": "downloadArtifact",
+        "summary": "Download a cache artifact",
+        "description": "Downloads a cache artifact identified by its `hash` specified on the request path. The artifact is downloaded as an octet-stream (binary data).\n\nThe artifact data is a gzip-compressed tarball containing the cached task outputs. The client will verify the content-length header against the response body size.",
+        "tags": ["artifacts"],
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArtifactClientCI"
+          },
+          {
+            "$ref": "#/components/parameters/ArtifactClientInteractive"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Artifact downloaded successfully",
+            "headers": {
+              "Content-Length": {
+                "description": "The size of the artifact in bytes",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "x-artifact-duration": {
+                "description": "The time taken to generate the artifact in milliseconds",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "x-artifact-tag": {
+                "description": "The signature/tag of the artifact for verification. This value was provided during upload and can be used by the client to verify artifact integrity.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary",
+                  "description": "Gzip-compressed tarball containing the cached task outputs"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/ArtifactNotFound"
+          }
+        }
+      },
+      "put": {
+        "operationId": "uploadArtifact",
+        "summary": "Upload a cache artifact",
+        "description": "Uploads a cache artifact identified by the `hash` specified on the path. The cache artifact can then be downloaded with the provided `hash`.\n\nThe request body should contain a gzip-compressed tarball of the task outputs. The server should store this data and make it available for subsequent downloads.",
+        "tags": ["artifacts"],
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Content-Length",
+            "in": "header",
+            "required": true,
+            "description": "The artifact size in bytes",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "x-artifact-duration",
+            "in": "header",
+            "required": false,
+            "description": "The time taken to generate the artifact in milliseconds. This value is stored and returned when the artifact is downloaded.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "x-artifact-tag",
+            "in": "header",
+            "required": false,
+            "description": "A base64-encoded tag for this artifact, typically used for verification. This value is stored and returned when the artifact is downloaded via the `x-artifact-tag` response header.",
+            "schema": {
+              "type": "string",
+              "maxLength": 600
+            }
+          },
+          {
+            "$ref": "#/components/parameters/ArtifactClientCI"
+          },
+          {
+            "$ref": "#/components/parameters/ArtifactClientInteractive"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "The artifact data as a gzip-compressed tarball",
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Artifact uploaded successfully (alternative success response)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactUploadResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Artifact accepted for storage",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactUploadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/artifacts": {
+      "post": {
+        "operationId": "queryArtifacts",
+        "summary": "Query artifact information",
+        "description": "Query information about multiple artifacts by their hashes. Returns metadata about each artifact including size, task duration, and tag.\n\nThis endpoint is optional for basic cache functionality but enables optimized cache fetching by allowing the client to query multiple artifacts in a single request.",
+        "tags": ["artifacts"],
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TeamId"
+          },
+          {
+            "$ref": "#/components/parameters/Slug"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtifactQueryRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Artifact information retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ArtifactQueryResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/artifacts/events": {
+      "post": {
+        "operationId": "recordCacheEvents",
+        "summary": "Record cache usage events",
+        "description": "Records cache usage analytics events. The body of this request is an array of cache usage events.\n\nThis endpoint is optional but enables cache hit/miss analytics. Implementers can use this data to track cache effectiveness and optimize storage.\n\nEvent types:\n- `HIT`: A cached artifact was found and used\n- `MISS`: No cached artifact was found for the given hash\n\nSource types:\n- `LOCAL`: The cache event was on the user's local filesystem cache\n- `REMOTE`: The cache event is for the remote cache",
+        "tags": ["analytics"],
+        "security": [
+          {
+            "bearerToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/ArtifactClientCI"
+          },
+          {
+            "$ref": "#/components/parameters/ArtifactClientInteractive"
+          },
+          {
+            "$ref": "#/components/parameters/TeamId"
+          },
+          {
+            "$ref": "#/components/parameters/Slug"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CacheEvent"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Events recorded successfully"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerToken": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Bearer token authentication. Pass your authentication token in the `Authorization` header as `Bearer <token>`.\n\nFor self-hosted implementations, the token format and validation logic is up to the implementer. Common approaches include:\n- Static tokens for simple setups\n- JWT tokens for stateless authentication\n- OAuth2 tokens for integration with identity providers"
+      }
+    },
+    "parameters": {
+      "ArtifactHash": {
+        "name": "hash",
+        "in": "path",
+        "required": true,
+        "description": "The artifact hash. This is a content-addressable hash that uniquely identifies the cached artifact based on task inputs.",
+        "schema": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]+$",
+          "minLength": 1
+        }
+      },
+      "TeamId": {
+        "name": "teamId",
+        "in": "query",
+        "required": false,
+        "description": "The team identifier to perform the request on behalf of. Used for multi-tenant cache implementations where artifacts are scoped to teams.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "Slug": {
+        "name": "slug",
+        "in": "query",
+        "required": false,
+        "description": "The team slug to perform the request on behalf of. Alternative to `teamId` for identifying the team.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "ArtifactClientCI": {
+        "name": "x-artifact-client-ci",
+        "in": "header",
+        "required": false,
+        "description": "The continuous integration or delivery environment where this artifact operation is being performed. Examples: `github-actions`, `circleci`, `jenkins`.",
+        "schema": {
+          "type": "string",
+          "maxLength": 50
+        }
+      },
+      "ArtifactClientInteractive": {
+        "name": "x-artifact-client-interactive",
+        "in": "header",
+        "required": false,
+        "description": "Indicates whether the client is running in an interactive shell. `1` for interactive, `0` for non-interactive (CI/scripts).",
+        "schema": {
+          "type": "integer",
+          "enum": [0, 1]
+        }
+      }
+    },
+    "schemas": {
+      "CachingStatus": {
+        "type": "string",
+        "enum": ["disabled", "enabled", "over_limit", "paused"],
+        "description": "The status of remote caching for the authenticated principal.\n\n- `enabled`: Remote caching is enabled and available\n- `disabled`: Remote caching is disabled\n- `over_limit`: Remote caching is disabled due to usage limits (optional)\n- `paused`: Remote caching is temporarily paused (optional)"
+      },
+      "CachingStatusResponse": {
+        "type": "object",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/CachingStatus"
+          }
+        }
+      },
+      "ArtifactUploadResponse": {
+        "type": "object",
+        "required": ["urls"],
+        "properties": {
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uri"
+            },
+            "description": "Array of URLs where the artifact was stored. Implementers can return the storage location(s) for debugging purposes."
+          }
+        }
+      },
+      "ArtifactQueryRequest": {
+        "type": "object",
+        "required": ["hashes"],
+        "properties": {
+          "hashes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Array of artifact hashes to query"
+          }
+        }
+      },
+      "ArtifactQueryResponse": {
+        "type": "object",
+        "additionalProperties": {
+          "nullable": true,
+          "oneOf": [
+            {
+              "$ref": "#/components/schemas/ArtifactInfo"
+            },
+            {
+              "$ref": "#/components/schemas/ArtifactError"
+            }
+          ]
+        },
+        "description": "A map of artifact hashes to their information. The value is `null` if the artifact was not found."
+      },
+      "ArtifactInfo": {
+        "type": "object",
+        "required": ["size", "taskDurationMs"],
+        "properties": {
+          "size": {
+            "type": "integer",
+            "description": "The size of the artifact in bytes"
+          },
+          "taskDurationMs": {
+            "type": "integer",
+            "description": "The time taken to generate the artifact in milliseconds"
+          },
+          "tag": {
+            "type": "string",
+            "description": "The artifact tag/signature for verification"
+          }
+        }
+      },
+      "ArtifactError": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["message"],
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "Error message describing why the artifact information could not be retrieved"
+              }
+            }
+          }
+        }
+      },
+      "CacheEvent": {
+        "type": "object",
+        "required": ["sessionId", "source", "event", "hash"],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "A UUID that identifies the Turborepo session that generated this event"
+          },
+          "source": {
+            "type": "string",
+            "enum": ["LOCAL", "REMOTE"],
+            "description": "The source of the cache event.\n\n- `LOCAL`: The event occurred on the user's local filesystem cache\n- `REMOTE`: The event is for the remote cache"
+          },
+          "event": {
+            "type": "string",
+            "enum": ["HIT", "MISS"],
+            "description": "The type of cache event.\n\n- `HIT`: A cached artifact was found\n- `MISS`: No cached artifact was found"
+          },
+          "hash": {
+            "type": "string",
+            "description": "The artifact hash associated with this event"
+          },
+          "duration": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "The time taken to generate the artifact in milliseconds. Only meaningful for `HIT` events."
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "required": ["code", "message"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "A machine-readable error code"
+          },
+          "message": {
+            "type": "string",
+            "description": "A human-readable error message"
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad request. One or more of the provided values in the request query, headers, or body is invalid.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Unauthorized. The request is missing a valid authentication token or the token is invalid.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden. The authenticated user does not have permission to access this resource.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "ArtifactNotFound": {
+        "description": "Artifact not found. No artifact with the specified hash exists.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  }
+}
