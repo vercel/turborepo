@@ -114,9 +114,6 @@ async fn test_force_with_env_true(flag: ForceFlag, snapshot_name: &str) -> Resul
     Ok(())
 }
 
-// =============================================================================
-// TURBO_FORCE=false scenarios
-// =============================================================================
 
 #[test_case(ForceFlag::Missing, "env_false_flag_missing" ; "env_false_flag_missing_uses_cache")]
 #[test_case(ForceFlag::True, "env_false_flag_true" ; "env_false_flag_true_bypasses_cache")]
