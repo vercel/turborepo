@@ -1,11 +1,10 @@
-import { source } from "@/lib/geistdocs/source";
-import { blogDocs, openapiDocs } from "@/.source/server";
+import { docs, blogDocs, openapiDocs } from "@/.source/server";
 
 /**
  * Collect all page URLs for the sitemap.
  *
- * Uses fumadocs source data directly to avoid initialization issues
- * with the loader() function in serverless environments.
+ * Accesses fumadocs source data directly from .source/server to avoid
+ * initialization issues with the loader() function in serverless environments.
  */
 export function getAllPageUrls(): Array<string> {
   const urlSet = new Set<string>();
@@ -15,19 +14,23 @@ export function getAllPageUrls(): Array<string> {
   urlSet.add("/blog");
   urlSet.add("/showcase");
 
-  // Docs pages - use "en" locale since source has i18n enabled
-  for (const page of source.getPages("en")) {
-    urlSet.add(page.url);
+  // Docs pages - access the docs array directly
+  for (const doc of docs.docs) {
+    const slug = doc.info.path.replace(/\.mdx?$/, "");
+    if (slug === "index") {
+      urlSet.add("/docs");
+    } else {
+      urlSet.add(`/docs/${slug}`);
+    }
   }
 
-  // Blog pages - access docs directly instead of through loader
+  // Blog pages
   for (const doc of blogDocs) {
-    // Build URL from slug: content/blog/foo.mdx -> /blog/foo
     const slug = doc.info.path.replace(/\.mdx?$/, "");
     urlSet.add(`/blog/${slug}`);
   }
 
-  // OpenAPI pages - access docs directly instead of through loader
+  // OpenAPI pages
   for (const doc of openapiDocs) {
     const slug = doc.info.path.replace(/\.mdx?$/, "");
     if (slug === "index") {
