@@ -1,8 +1,44 @@
 ---
-title: OpenAPI specification
+title: Remote Cache API
 description: OpenAPI specification for self-hosted Remote Cache servers.
 ---
 
-This page is a stub so that the sidebar shows this title at the top of the sidebar.
+# Remote Cache API
 
-The route it produces is redirected in next.config.ts.
+The Turborepo Remote Cache API defines the HTTP interface that any remote cache server must implement to be compatible with Turborepo.
+
+## Overview
+
+The remote cache stores build artifacts (outputs from tasks like `build`, `lint`, `test`) identified by content-addressable hashes. When Turborepo encounters a task that matches a previously cached result, it can download the artifact instead of re-executing the task.
+
+## Authentication
+
+All endpoints require Bearer token authentication:
+
+```bash
+Authorization: Bearer <token>
+```
+
+For self-hosted implementations, the token format and validation logic is up to the implementer.
+
+## Endpoints
+
+### Artifacts
+
+| Method | Path                                                                  | Description                                |
+| ------ | --------------------------------------------------------------------- | ------------------------------------------ |
+| `GET`  | [`/artifacts/status`](/repo/docs/openapi/artifacts/status)            | Check remote caching status                |
+| `HEAD` | [`/artifacts/{hash}`](/repo/docs/openapi/artifacts/artifact-exists)   | Check if artifact exists                   |
+| `GET`  | [`/artifacts/{hash}`](/repo/docs/openapi/artifacts/download-artifact) | Download a cache artifact                  |
+| `PUT`  | [`/artifacts/{hash}`](/repo/docs/openapi/artifacts/upload-artifact)   | Upload a cache artifact                    |
+| `POST` | [`/artifacts`](/repo/docs/openapi/artifacts/artifact-query)           | Query information about multiple artifacts |
+
+### Analytics
+
+| Method | Path                                                              | Description               |
+| ------ | ----------------------------------------------------------------- | ------------------------- |
+| `POST` | [`/artifacts/events`](/repo/docs/openapi/artifacts/record-events) | Record cache usage events |
+
+## Download the spec
+
+The full OpenAPI specification is available at [`/api/remote-cache-spec`](/api/remote-cache-spec).

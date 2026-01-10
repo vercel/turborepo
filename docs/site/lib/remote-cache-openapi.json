@@ -15,10 +15,6 @@
   },
   "servers": [
     {
-      "url": "https://api.vercel.com",
-      "description": "Vercel Remote Cache (reference implementation) (spec: https://openapi.vercel.com)"
-    },
-    {
       "url": "{protocol}://{host}",
       "description": "Self-hosted Remote Cache Server",
       "variables": {
@@ -32,6 +28,10 @@
           "description": "Hostname and port of the remote cache server"
         }
       }
+    },
+    {
+      "url": "https://api.vercel.com",
+      "description": "Vercel Remote Cache (reference implementation) (spec: https://openapi.vercel.com)"
     }
   ],
   "tags": [
