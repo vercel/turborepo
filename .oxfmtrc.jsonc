@@ -7,5 +7,7 @@
   // Disable formatting of embedded code blocks (JSON in markdown)
   "embeddedLanguageFormatting": "off",
   // Disable features that differ from Prettier defaults
-  "experimentalSortPackageJson": false
+  "experimentalSortPackageJson": false,
+  // Ignore generated OpenAPI documentation files
+  "ignore": ["docs/site/content/openapi/**/*.mdx"]
 }
