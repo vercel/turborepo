@@ -14,7 +14,13 @@
 // Self-hosted: https://turborepo.com/api/remote-cache-spec
 
 import { writeFileSync } from "node:fs";
-import { generateFiles } from "fumadocs-openapi";
+import {
+  generateFiles,
+  type OperationOutput,
+  type WebhookOutput
+} from "fumadocs-openapi";
+import { createOpenAPI } from "fumadocs-openapi/server";
+import type { Document } from "fumadocs-openapi";
 
 const out = "./content/openapi";
 
@@ -177,9 +183,40 @@ const thing = await fetch("https://turborepo.com/api/remote-cache-spec")
 
 writeFileSync("./.openapi.json", JSON.stringify(thing, null, 2));
 
+// Create OpenAPI instance for generation
+// This mirrors the configuration in lib/openapi.ts
+const openapi = createOpenAPI({
+  input: ["./.openapi.json"]
+});
+
+// Convert camelCase/PascalCase to kebab-case
+const toKebabCase = (str: string): string => {
+  return str
+    .replace(/([a-z])([A-Z])/g, "$1-$2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1-$2")
+    .toLowerCase();
+};
+
 void generateFiles({
-  input: ["./.openapi.json"],
+  input: openapi,
   addGeneratedComment: true,
   output: out,
-  groupBy: "tag"
+  groupBy: "tag",
+  slugify: toKebabCase,
+  name(output: OperationOutput | WebhookOutput, document: Document): string {
+    if (output.type === "operation") {
+      const pathItem = document.paths?.[output.item.path];
+      const operation = pathItem?.[output.item.method];
+      const operationId = operation?.operationId;
+
+      if (operationId) {
+        return toKebabCase(operationId);
+      }
+      // Fallback to path-based name
+      return this.routePathToFilePath(output.item.path);
+    }
+
+    // webhook type
+    return toKebabCase(output.item.name);
+  }
 });

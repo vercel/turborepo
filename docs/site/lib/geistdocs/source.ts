@@ -6,8 +6,7 @@ import {
   loader
 } from "fumadocs-core/source";
 import { lucideIconsPlugin } from "fumadocs-core/source/lucide-icons";
-import { createOpenAPI } from "fumadocs-openapi/server";
-import { shikiTheme } from "@/lib/shiki-theme";
+import { openapiPlugin } from "fumadocs-openapi/server";
 import {
   docs,
   blogDocs,
@@ -96,16 +95,8 @@ export const externalBlog = loader({
 // OpenAPI loaders
 export const openapiPages = loader({
   baseUrl: "/docs/openapi",
-  source: createSource(openapiDocs, openapiMeta)
-});
-
-export const openapi = createOpenAPI({
-  shikiOptions: {
-    themes: {
-      light: shikiTheme,
-      dark: shikiTheme
-    }
-  }
+  source: createSource(openapiDocs, openapiMeta),
+  plugins: [openapiPlugin()]
 });
 
 // Extra pages (terms, governance, etc.)
