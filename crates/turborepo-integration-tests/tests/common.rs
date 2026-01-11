@@ -338,12 +338,20 @@ impl TurboTestEnv {
     /// Initialize git in the workspace (required for turbo).
     ///
     /// Creates a git repository with an initial commit containing all files.
+    /// Also creates `.npmrc` with `script-shell=bash` for cross-platform
+    /// consistency, matching the behavior of the prysk-based integration tests.
     pub async fn setup_git(&self) -> Result<()> {
         self.exec(&["git", "init"]).await?;
         self.exec(&["git", "config", "user.email", "test@test.com"])
             .await?;
         self.exec(&["git", "config", "user.name", "Test User"])
             .await?;
+
+        // Set script-shell=bash for cross-platform consistency.
+        // This ensures npm scripts using bash syntax (;, &&, etc.) work on Windows.
+        // See: https://docs.npmjs.com/cli/v9/using-npm/config#script-shell
+        self.write_file(".npmrc", "script-shell=bash\n").await?;
+
         self.exec(&["git", "add", "."]).await?;
         self.exec(&["git", "commit", "-m", "Initial commit"])
             .await?;
@@ -710,15 +718,43 @@ impl CachedFixtureEnv {
         .context("File copy task panicked")??;
 
         // Initialize git
-        let git_commands = [
+        let git_init_commands = [
             vec!["git", "init"],
             vec!["git", "config", "user.email", "test@test.com"],
             vec!["git", "config", "user.name", "Test User"],
+        ];
+
+        for cmd in &git_init_commands {
+            let (program, args) = cmd.split_first().unwrap();
+            let output = tokio::process::Command::new(program)
+                .args(args)
+                .current_dir(&workspace_path)
+                .output()
+                .await
+                .context("Failed to execute git command")?;
+            if !output.status.success() {
+                anyhow::bail!(
+                    "Git command {:?} failed: {}",
+                    cmd,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+
+        // Set script-shell=bash for cross-platform consistency.
+        // This ensures npm scripts using bash syntax (;, &&, etc.) work on Windows.
+        // See: https://docs.npmjs.com/cli/v9/using-npm/config#script-shell
+        tokio::fs::write(workspace_path.join(".npmrc"), "script-shell=bash\n")
+            .await
+            .context("Failed to write .npmrc")?;
+
+        // Stage and commit all files
+        let git_commit_commands = [
             vec!["git", "add", "."],
             vec!["git", "commit", "-m", "Initial commit"],
         ];
 
-        for cmd in &git_commands {
+        for cmd in &git_commit_commands {
             let (program, args) = cmd.split_first().unwrap();
             let output = tokio::process::Command::new(program)
                 .args(args)
