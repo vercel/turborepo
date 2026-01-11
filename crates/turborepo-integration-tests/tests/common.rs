@@ -346,6 +346,7 @@ impl TurboTestEnv {
     ///
     /// This method inherits the current environment but overrides specific
     /// variables for deterministic test execution:
+    /// - `TURBO_CONFIG_DIR_PATH` - Set to temp dir for telemetry config
     /// - `TURBO_TELEMETRY_MESSAGE_DISABLED=1`
     /// - `TURBO_GLOBAL_WARNING_DISABLED=1`
     /// - `TURBO_PRINT_VERSION_DISABLED=1`
@@ -358,7 +359,8 @@ impl TurboTestEnv {
         cmd.args(args).current_dir(&self.workspace_path);
 
         // Set turbo-specific test environment (overrides any inherited values)
-        cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        cmd.env("TURBO_CONFIG_DIR_PATH", &self.config_dir_path)
+            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
             // Disable colored output for consistent snapshot testing
@@ -383,7 +385,8 @@ impl TurboTestEnv {
         cmd.args(args).current_dir(&dir);
 
         // Set turbo-specific test environment (overrides any inherited values)
-        cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        cmd.env("TURBO_CONFIG_DIR_PATH", &self.config_dir_path)
+            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
             // Disable colored output for consistent snapshot testing
@@ -406,7 +409,8 @@ impl TurboTestEnv {
         cmd.args(args).current_dir(&self.workspace_path);
 
         // Set turbo-specific test environment (overrides any inherited values)
-        cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        cmd.env("TURBO_CONFIG_DIR_PATH", &self.config_dir_path)
+            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
             // Disable colored output for consistent snapshot testing
