@@ -39,21 +39,22 @@ static TEMP_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("Invalid temp path regex")
 });
 
-/// Compiled regex for matching remaining temp dir paths split across lines.
+/// Compiled regex for matching temp paths split across lines.
 /// Error messages may split paths like:
 /// `-> Lockfile not found at /private/var/
 ///     folders/0r/.../T/.tmpXXX/package-lock.json
-static TEMP_PATH_CONTINUATION_RE: LazyLock<Regex> = LazyLock::new(|| {
-    // Match the continuation pattern after a line break
-    Regex::new(r"folders/[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+(/[a-zA-Z0-9._-]+)*")
-        .expect("Invalid temp path continuation regex")
+/// This regex matches the entire multi-line pattern.
+static TEMP_PATH_MULTILINE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    // Match macOS temp path split across two lines:
+    // /private?/var/\n<whitespace>folders/.../T/.tmp.../...
+    Regex::new(r"(?:/private)?/var/\n\s*folders/[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+(?:/[a-zA-Z0-9._-]+)*")
+        .expect("Invalid multiline temp path regex")
 });
 
-/// Compiled regex for matching partial temp paths at line boundaries.
-/// Handles cases like `/private/var/` at the end of a line before continuation.
-static TEMP_PATH_PARTIAL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(/private)?/var/\n\s*\[TEMP_DIR\]").expect("Invalid partial temp path regex")
-});
+/// Compiled regex for partial temp paths at line ends.
+/// Catches paths like `/private/var/` when split across lines.
+static TEMP_PATH_PARTIAL_START_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?:/private)?/var/$").expect("Invalid partial temp path regex"));
 
 /// Apply redactions to make output deterministic for snapshots.
 ///
@@ -87,13 +88,10 @@ pub fn redact_output(output: &str) -> String {
     let output = output.replace("\r\n", "\n");
     let output = TIMING_RE.replace_all(&output, "Time: [TIME]");
     let output = HASH_RE.replace_all(&output, "[HASH]");
-    let output = TEMP_PATH_RE.replace_all(&output, "[TEMP_DIR]");
-    let output = TEMP_PATH_CONTINUATION_RE.replace_all(&output, "[TEMP_DIR]");
-    // Clean up partial paths split across lines (e.g., "/private/var/\n
-    // [TEMP_DIR]")
-    TEMP_PATH_PARTIAL_RE
-        .replace_all(&output, "[TEMP_DIR]")
-        .into_owned()
+    // First handle multiline temp paths (paths split across lines)
+    let output = TEMP_PATH_MULTILINE_RE.replace_all(&output, "[TEMP_DIR]");
+    // Then handle single-line temp paths
+    TEMP_PATH_RE.replace_all(&output, "[TEMP_DIR]").into_owned()
 }
 
 /// Path to the turbo binary, discovered via cargo workspace layout.
@@ -812,6 +810,7 @@ mod tests {
         );
     }
 
+    #[cfg(not(windows))]
     #[tokio::test]
     async fn test_copy_fixture_rejects_absolute_path_unix() {
         let env = TurboTestEnv::new().await.unwrap();
