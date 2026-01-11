@@ -28,6 +28,7 @@ static HASH_RE: LazyLock<Regex> =
 /// - macOS: `/private/var/folders/.../T/.tmpXXX/...` or
 ///   `/var/folders/.../T/.tmpXXX/...`
 /// - Linux: `/tmp/.tmpXXXXXX/...`
+///
 /// These paths appear in:
 /// - npm error messages with locations
 /// - Lockfile warnings
@@ -40,21 +41,17 @@ static TEMP_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
 });
 
 /// Compiled regex for matching temp paths split across lines.
-/// Error messages may split paths like:
-/// `-> Lockfile not found at /private/var/
-///     folders/0r/.../T/.tmpXXX/package-lock.json
+/// Error messages may split paths at various points like:
+/// - `/private/var/folders/03/\n    bcr7.../T/.tmpXXX/...`
+/// - `/private/var/\n    folders/.../T/.tmpXXX/...`
 /// This regex matches the entire multi-line pattern.
 static TEMP_PATH_MULTILINE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    // Match macOS temp path split across two lines:
-    // /private?/var/\n<whitespace>folders/.../T/.tmp.../...
-    Regex::new(r"(?:/private)?/var/\n\s*folders/[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+(?:/[a-zA-Z0-9._-]+)*")
+    // Match macOS temp path split across two lines.
+    // Pattern 1: /private?/var/\n<ws>folders/.../T/.tmpXXX/file
+    // Pattern 2: /private?/var/folders/XX/\n<ws>HASH/T/.tmpXXX/file
+    Regex::new(r"(?:/private)?/var/(?:folders/[a-zA-Z0-9_]+/)?\n\s*(?:folders/)?[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+(?:/[a-zA-Z0-9._-]+)*")
         .expect("Invalid multiline temp path regex")
 });
-
-/// Compiled regex for partial temp paths at line ends.
-/// Catches paths like `/private/var/` when split across lines.
-static TEMP_PATH_PARTIAL_START_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?:/private)?/var/$").expect("Invalid partial temp path regex"));
 
 /// Apply redactions to make output deterministic for snapshots.
 ///
@@ -69,6 +66,7 @@ static TEMP_PATH_PARTIAL_START_RE: LazyLock<Regex> =
 /// | Timing | `Time: 1.23s`, `Time: 100ms` | `Time: [TIME]` |
 /// | Cache hashes | `0555ce94ca234049` | `[HASH]` |
 /// | Temp paths | `/var/folders/.../T/.tmpXXX` | `[TEMP_DIR]` |
+/// | Path separators | `packages\util` | `packages/util` |
 ///
 /// # Known Limitations
 ///
@@ -86,12 +84,43 @@ static TEMP_PATH_PARTIAL_START_RE: LazyLock<Regex> =
 pub fn redact_output(output: &str) -> String {
     // Normalize CRLF to LF for cross-platform snapshot consistency
     let output = output.replace("\r\n", "\n");
+    // Normalize Windows path separators to Unix style for consistent snapshots.
+    // Only replace backslashes that appear in path-like contexts (after
+    // packages, .turbo, etc.)
+    let output = normalize_path_separators(&output);
     let output = TIMING_RE.replace_all(&output, "Time: [TIME]");
     let output = HASH_RE.replace_all(&output, "[HASH]");
+
     // First handle multiline temp paths (paths split across lines)
     let output = TEMP_PATH_MULTILINE_RE.replace_all(&output, "[TEMP_DIR]");
     // Then handle single-line temp paths
     TEMP_PATH_RE.replace_all(&output, "[TEMP_DIR]").into_owned()
+}
+
+/// Normalize Windows path separators to Unix style.
+///
+/// Converts backslashes to forward slashes in common path patterns like:
+/// - `packages\util` -> `packages/util`
+/// - `.turbo\turbo-build.log` -> `.turbo/turbo-build.log`
+fn normalize_path_separators(output: &str) -> String {
+    // Replace backslash path separators with forward slashes.
+    // Be conservative: only replace in contexts that look like paths.
+    static PATH_SEP_RE: LazyLock<Regex> = LazyLock::new(|| {
+        // Match backslash followed by a path component (word char, dot, or hyphen)
+        // but not at the start of a line (to avoid breaking things like \n)
+        Regex::new(r"(\w)\\(\w)").expect("Invalid path separator regex")
+    });
+
+    // Iteratively replace until no more matches (handles `a\b\c` -> `a/b/c`)
+    let mut result = output.to_string();
+    loop {
+        let new_result = PATH_SEP_RE.replace_all(&result, "$1/$2").to_string();
+        if new_result == result {
+            break;
+        }
+        result = new_result;
+    }
+    result
 }
 
 /// Path to the turbo binary, discovered via cargo workspace layout.
@@ -911,6 +940,20 @@ mod tests {
         let input = "short: deadbeef1234567";
         let output = redact_output(input);
         assert_eq!(output, "short: deadbeef1234567");
+    }
+
+    #[test]
+    fn test_redact_output_multiline_temp_path() {
+        // Test multiline temp paths split after /var/
+        let input = "Lockfile not found at /private/var/\n      \
+                     folders/0r/90dc16493lx7gw025k4z8sw40000gn/T/.tmpE7t2eW/package-lock.json";
+        let output = redact_output(input);
+        assert!(
+            !output.contains("/private/var"),
+            "Multiline temp path should be redacted. Got: {}",
+            output
+        );
+        assert!(output.contains("[TEMP_DIR]"), "Should contain [TEMP_DIR]");
     }
 
     // =========================================================================
