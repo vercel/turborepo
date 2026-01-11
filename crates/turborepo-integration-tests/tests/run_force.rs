@@ -16,11 +16,8 @@
 //! | missing | true    | yes     |
 //! | missing | false   | no      |
 //! | missing | novalue | yes     |
-//!
-//! Note: Skipped on Windows due to npm binary path issues in CI.
 
-// Skip entire module on Windows - npm not found in CI PATH
-#![cfg(all(feature = "integration-tests", not(windows)))]
+#![cfg(feature = "integration-tests")]
 
 mod common;
 
