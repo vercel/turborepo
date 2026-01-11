@@ -12,6 +12,7 @@ use turborepo_errors::{Spanned, WithMetadata};
 /// Allows users to restrict a package's dependencies and dependents.
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, PartialEq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
+#[schemars(rename_all = "camelCase")]
 #[ts(export)]
 pub struct BoundariesConfig {
     /// The boundaries rules for tags.

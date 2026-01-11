@@ -32,6 +32,7 @@ use ts_rs::TS;
     Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq, JsonSchema,
 )]
 #[serde(rename_all = "camelCase")]
+#[schemars(rename_all = "camelCase")]
 #[deserializable()]
 pub struct FutureFlags {}
 

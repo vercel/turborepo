@@ -121,7 +121,7 @@ pub trait HasConfigBeyondExtends {
 /// Documentation: https://turborepo.com/docs/core-concepts/remote-caching
 #[derive(Clone, Debug, Default, Iterable, Serialize, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-#[schemars(rename = "RemoteCache")]
+#[schemars(rename = "RemoteCache", rename_all = "camelCase")]
 #[ts(export, rename = "RemoteCache")]
 pub struct RawRemoteCacheOptions {
     /// Set endpoint for API calls to the remote cache.
@@ -254,6 +254,7 @@ pub struct RawPackageTurboJson {
 /// Documentation: https://turborepo.com/docs/reference/configuration
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
+#[schemars(rename_all = "camelCase")]
 #[ts(export)]
 pub struct RawTurboJson {
     // Internal field - excluded from schema
@@ -425,7 +426,7 @@ pub struct RawTurboJson {
 /// during execution.
 #[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
-#[schemars(rename = "Pipeline")]
+#[schemars(rename = "Pipeline", rename_all = "camelCase")]
 #[ts(export, rename = "Pipeline")]
 #[deserializable(unknown_fields = "deny")]
 pub struct RawTaskDefinition {

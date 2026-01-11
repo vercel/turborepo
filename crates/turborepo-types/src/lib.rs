@@ -51,6 +51,7 @@ use turborepo_task_id::{TaskId, TaskName};
     TS,
 )]
 #[serde(rename_all = "lowercase")]
+#[schemars(rename_all = "lowercase")]
 #[ts(export)]
 pub enum EnvMode {
     /// Allow all environment variables for the process to be available.
@@ -166,7 +167,7 @@ impl fmt::Display for DryRunMode {
     TS,
 )]
 #[serde(rename_all = "camelCase")]
-#[schemars(rename = "UI")]
+#[schemars(rename = "UI", rename_all = "camelCase")]
 #[ts(export, rename = "UI")]
 pub enum UIMode {
     /// Use the terminal user interface.
@@ -583,9 +584,11 @@ mod tests {
         let result = task_def.hashable_outputs("build");
 
         // Log file should be included and outputs should be sorted
-        assert!(result
-            .inclusions
-            .contains(&".turbo/turbo-build.log".to_string()));
+        assert!(
+            result
+                .inclusions
+                .contains(&".turbo/turbo-build.log".to_string())
+        );
         assert!(result.inclusions.contains(&"dist/**".to_string()));
         assert_eq!(result.exclusions, vec!["dist/temp".to_string()]);
     }
@@ -622,9 +625,11 @@ mod tests {
         let task_def = TaskDefinition::default();
         let result = task_def.hashable_outputs("build:prod");
 
-        assert!(result
-            .inclusions
-            .contains(&".turbo/turbo-build$colon$prod.log".to_string()));
+        assert!(
+            result
+                .inclusions
+                .contains(&".turbo/turbo-build$colon$prod.log".to_string())
+        );
     }
 
     #[test]
