@@ -42,7 +42,18 @@ fn redact_paths(output: &str) -> String {
             .expect("Invalid shell cmd regex");
     let output = shell_cmd_re.replace_all(&output, "npm error command [SHELL] $1");
 
-    output.into_owned()
+    // Normalize Windows echo output. On Windows, `echo 'working'` outputs
+    // `'working'` (with quotes) while Unix shells output `working` (without
+    // quotes). This normalizes the output to be consistent across platforms.
+    let echo_quotes_re =
+        Regex::new(r"^([a-zA-Z0-9_-]+:build: )'([^']+)'$").expect("Invalid echo quotes regex");
+    let output = output
+        .lines()
+        .map(|line| echo_quotes_re.replace(line, "$1$2").to_string())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    output
 }
 
 /// Filter out the lockfile warning from the output.
