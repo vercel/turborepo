@@ -418,9 +418,13 @@ impl TurboTestEnv {
         if let Ok(userprofile) = std::env::var("USERPROFILE") {
             cmd.env("USERPROFILE", userprofile);
         }
-        // SYSTEMROOT is required on Windows
+        // SYSTEMROOT is required on Windows for system DLLs
         if let Ok(systemroot) = std::env::var("SYSTEMROOT") {
             cmd.env("SYSTEMROOT", systemroot);
+        }
+        // SystemRoot (case variation) - some Windows APIs expect this case
+        if let Ok(systemroot) = std::env::var("SystemRoot") {
+            cmd.env("SystemRoot", systemroot);
         }
         // TMP/TEMP for temporary files on Windows
         if let Ok(tmp) = std::env::var("TMP") {
@@ -428,6 +432,22 @@ impl TurboTestEnv {
         }
         if let Ok(temp) = std::env::var("TEMP") {
             cmd.env("TEMP", temp);
+        }
+        // PATHEXT is required on Windows to find executables (.exe, .cmd, .bat, etc.)
+        if let Ok(pathext) = std::env::var("PATHEXT") {
+            cmd.env("PATHEXT", pathext);
+        }
+        // COMSPEC is the path to cmd.exe, needed for shell commands on Windows
+        if let Ok(comspec) = std::env::var("COMSPEC") {
+            cmd.env("COMSPEC", comspec);
+        }
+        // APPDATA is needed by npm/node on Windows
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            cmd.env("APPDATA", appdata);
+        }
+        // LOCALAPPDATA is also used by npm/node on Windows
+        if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
+            cmd.env("LOCALAPPDATA", localappdata);
         }
     }
 
