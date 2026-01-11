@@ -19,9 +19,13 @@ static TIMING_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"Time:\s*[\d\.]+m?s").expect("Invalid timing regex"));
 
 /// Compiled regex for hash redaction.
-/// Matches 16-character lowercase hex strings (turbo cache hashes).
+/// Matches turbo cache hashes (16-character lowercase hex) in context.
+///
+/// Uses word boundaries (`\b`) to avoid matching hex strings that are part of
+/// larger identifiers (e.g., UUIDs, git SHAs). This prevents over-redaction
+/// while still catching all turbo-generated cache hashes.
 static HASH_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[a-f0-9]{16}").expect("Invalid hash regex"));
+    LazyLock::new(|| Regex::new(r"\b[a-f0-9]{16}\b").expect("Invalid hash regex"));
 
 /// Compiled regex for temp directory path redaction.
 /// Matches various temp paths across platforms:
@@ -101,9 +105,9 @@ static ANSI_ESCAPE_RE: LazyLock<Regex> = LazyLock::new(|| {
 ///
 /// # Known Limitations
 ///
-/// - The hash regex `[a-f0-9]{16}` matches any 16-character lowercase hex
-///   string, which could over-redact in edge cases (e.g., UUIDs). This is
-///   intentional to catch all cache-related hashes.
+/// - The hash regex `\b[a-f0-9]{16}\b` uses word boundaries to match standalone
+///   16-character hex strings. This avoids over-redacting UUIDs or longer hex
+///   identifiers while catching all turbo cache hashes.
 ///
 /// # Example
 ///
@@ -364,26 +368,17 @@ impl TurboTestEnv {
         self.exec(&["npm", "install"]).await
     }
 
-    /// Run turbo with the given arguments.
+    /// Configure turbo-specific test environment on a command.
     ///
-    /// # Environment
-    ///
-    /// This method inherits the current environment but overrides specific
-    /// variables for deterministic test execution:
+    /// This sets environment variables for deterministic test execution:
     /// - `TURBO_CONFIG_DIR_PATH` - Set to temp dir for telemetry config
     /// - `TURBO_TELEMETRY_MESSAGE_DISABLED=1`
     /// - `TURBO_GLOBAL_WARNING_DISABLED=1`
     /// - `TURBO_PRINT_VERSION_DISABLED=1`
     /// - `NO_COLOR=1` - For consistent output formatting
     /// - Removes `GITHUB_ACTIONS` - Prevents CI-specific output formatting
-    ///
-    /// Inheriting the environment (rather than clearing it) ensures that
-    /// npm, node, git, and other tools work correctly across all platforms.
-    pub async fn run_turbo(&self, args: &[&str]) -> Result<ExecResult> {
-        let mut cmd = tokio::process::Command::new(&self.turbo_binary);
-        cmd.args(args).current_dir(&self.workspace_path);
-
-        // Set turbo-specific test environment (overrides any inherited values)
+    /// - Removes `CI` - Prevents CI-specific behavior
+    fn configure_turbo_env(&self, cmd: &mut tokio::process::Command) {
         cmd.env("TURBO_CONFIG_DIR_PATH", &self.config_dir_path)
             .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
@@ -394,6 +389,23 @@ impl TurboTestEnv {
             // format across local development and CI environments
             .env_remove("GITHUB_ACTIONS")
             .env_remove("CI");
+    }
+
+    /// Run turbo with the given arguments.
+    ///
+    /// # Environment
+    ///
+    /// This method inherits the current environment but overrides specific
+    /// variables for deterministic test execution. See
+    /// [`Self::configure_turbo_env`] for the full list of environment
+    /// modifications.
+    ///
+    /// Inheriting the environment (rather than clearing it) ensures that
+    /// npm, node, git, and other tools work correctly across all platforms.
+    pub async fn run_turbo(&self, args: &[&str]) -> Result<ExecResult> {
+        let mut cmd = tokio::process::Command::new(&self.turbo_binary);
+        cmd.args(args).current_dir(&self.workspace_path);
+        self.configure_turbo_env(&mut cmd);
 
         let output = cmd.output().await.context("Failed to execute turbo")?;
         Ok(ExecResult::from(output))
@@ -412,17 +424,7 @@ impl TurboTestEnv {
         let dir = self.workspace_path.join(subdir);
         let mut cmd = tokio::process::Command::new(&self.turbo_binary);
         cmd.args(args).current_dir(&dir);
-
-        // Set turbo-specific test environment (overrides any inherited values)
-        cmd.env("TURBO_CONFIG_DIR_PATH", &self.config_dir_path)
-            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-            .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-            .env("TURBO_PRINT_VERSION_DISABLED", "1")
-            // Disable colored output for consistent snapshot testing
-            .env("NO_COLOR", "1")
-            // Remove CI-specific environment variables to ensure consistent output
-            .env_remove("GITHUB_ACTIONS")
-            .env_remove("CI");
+        self.configure_turbo_env(&mut cmd);
 
         let output = cmd.output().await.context("Failed to execute turbo")?;
         Ok(ExecResult::from(output))
@@ -439,17 +441,7 @@ impl TurboTestEnv {
     ) -> Result<ExecResult> {
         let mut cmd = tokio::process::Command::new(&self.turbo_binary);
         cmd.args(args).current_dir(&self.workspace_path);
-
-        // Set turbo-specific test environment (overrides any inherited values)
-        cmd.env("TURBO_CONFIG_DIR_PATH", &self.config_dir_path)
-            .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-            .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-            .env("TURBO_PRINT_VERSION_DISABLED", "1")
-            // Disable colored output for consistent snapshot testing
-            .env("NO_COLOR", "1")
-            // Remove CI-specific environment variables to ensure consistent output
-            .env_remove("GITHUB_ACTIONS")
-            .env_remove("CI");
+        self.configure_turbo_env(&mut cmd);
 
         // Add test-specific environment variables (these override defaults)
         for (key, value) in env {
