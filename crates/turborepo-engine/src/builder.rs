@@ -667,16 +667,25 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
         }
 
-        if task_definitions.is_empty() && self.should_validate_engine {
-            let (span, text) = task_id.span_and_text("turbo.json");
-            return Err(BuilderError::MissingPackageTask(Box::new(
-                MissingPackageTaskError {
-                    span,
-                    text,
-                    task_id: task_id.to_string(),
-                    task_name: task_name.to_string(),
-                },
-            )));
+        if task_definitions.is_empty() {
+            let has_script_in_package_json = self
+                .package_graph
+                .package_json(&package_name)
+                .is_some_and(|pkg_json| pkg_json.scripts.contains_key(task_name.task()));
+
+            if has_script_in_package_json {
+                task_definitions.push(ProcessedTaskDefinition::default());
+            } else if self.should_validate_engine {
+                let (span, text) = task_id.span_and_text("turbo.json");
+                return Err(BuilderError::MissingPackageTask(Box::new(
+                    MissingPackageTaskError {
+                        span,
+                        text,
+                        task_id: task_id.to_string(),
+                        task_name: task_name.to_string(),
+                    },
+                )));
+            }
         }
 
         Ok(task_definitions)
