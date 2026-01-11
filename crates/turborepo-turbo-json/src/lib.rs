@@ -46,7 +46,8 @@ pub use processed::{
     ProcessedPassThroughEnv, ProcessedTaskDefinition, ProcessedWith,
 };
 pub use raw::{
-    HasConfigBeyondExtends, Pipeline, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson,
+    HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawObservabilityOtel,
+    RawObservabilityOtelMetrics, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson,
     RawTaskDefinition, RawTurboJson, SpacesJson,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};
@@ -593,7 +594,12 @@ mod tests {
         // removed)
         assert!(raw_turbo_json.future_flags.is_some());
         let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
-        assert_eq!(future_flags.as_inner(), &FutureFlags {});
+        assert_eq!(
+            future_flags.as_inner(),
+            &FutureFlags {
+                experimental_observability: false
+            }
+        );
 
         // Verify that the futureFlags field doesn't cause errors during conversion to
         // TurboJson

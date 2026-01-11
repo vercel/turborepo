@@ -60,6 +60,22 @@ Test help flag
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            [possible values: grpc, http-protobuf]
+        --experimental-otel-endpoint <URL>
+            
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            
+        --experimental-otel-header <KEY=VALUE>
+            
+        --experimental-otel-resource <KEY=VALUE>
+            
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -122,11 +138,6 @@ Test help flag
             Only executes the tasks specified, does not execute parent tasks
         --log-prefix <LOG_PREFIX>
             Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
-
-
-
-
-
 
   $ ${TURBO} --help
   The build system that makes ship happen
@@ -206,6 +217,30 @@ Test help flag
   
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+  
+        --experimental-otel-enabled [<ENABLED>]
+            [possible values: true, false]
+  
+        --experimental-otel-protocol <PROTOCOL>
+            [possible values: grpc, http-protobuf]
+  
+        --experimental-otel-endpoint <URL>
+            
+  
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            
+  
+        --experimental-otel-header <KEY=VALUE>
+            
+  
+        --experimental-otel-resource <KEY=VALUE>
+            
+  
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            [possible values: true, false]
+  
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            [possible values: true, false]
   
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`.
@@ -325,7 +360,6 @@ Test help flag
             [default: auto]
             [possible values: auto, none, task]
 
-
 Test help flag for link command
   $ ${TURBO} link -h
   Link your local directory to a Vercel organization and enable remote caching
@@ -373,6 +407,22 @@ Test help flag for link command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            [possible values: grpc, http-protobuf]
+        --experimental-otel-endpoint <URL>
+            
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            
+        --experimental-otel-header <KEY=VALUE>
+            
+        --experimental-otel-resource <KEY=VALUE>
+            
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -421,6 +471,22 @@ Test help flag for unlink command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            [possible values: grpc, http-protobuf]
+        --experimental-otel-endpoint <URL>
+            
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            
+        --experimental-otel-header <KEY=VALUE>
+            
+        --experimental-otel-resource <KEY=VALUE>
+            
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -473,6 +539,22 @@ Test help flag for login command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            [possible values: grpc, http-protobuf]
+        --experimental-otel-endpoint <URL>
+            
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            
+        --experimental-otel-header <KEY=VALUE>
+            
+        --experimental-otel-resource <KEY=VALUE>
+            
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -521,6 +603,22 @@ Test help flag for logout command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            [possible values: grpc, http-protobuf]
+        --experimental-otel-endpoint <URL>
+            
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            
+        --experimental-otel-header <KEY=VALUE>
+            
+        --experimental-otel-resource <KEY=VALUE>
+            
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>

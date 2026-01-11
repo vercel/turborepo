@@ -31,7 +31,14 @@ use struct_iterable::Iterable;
 #[derive(Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 #[deserializable()]
-pub struct FutureFlags {}
+pub struct FutureFlags {
+    /// Enable experimental OpenTelemetry exporter support.
+    ///
+    /// When enabled, Turborepo will honor the `experimentalObservability`
+    /// configuration block (if present) to send run summaries to an
+    /// observability backend.
+    pub experimental_observability: bool,
+}
 
 impl FutureFlags {
     /// Create a new FutureFlags
