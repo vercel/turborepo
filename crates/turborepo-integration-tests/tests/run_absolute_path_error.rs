@@ -19,10 +19,12 @@ use insta::assert_snapshot;
 
 /// Get an absolute path appropriate for the current platform.
 /// Uses paths from the original prysk test fixtures.
+/// Note: Returns JSON-escaped paths on Windows (double backslashes).
 fn absolute_path() -> &'static str {
     #[cfg(windows)]
     {
-        "C:\\another\\absolute\\path"
+        // Double backslashes for JSON escaping
+        "C:\\\\another\\\\absolute\\\\path"
     }
     #[cfg(not(windows))]
     {
@@ -34,7 +36,8 @@ fn absolute_path() -> &'static str {
 fn global_deps_absolute_path() -> &'static str {
     #[cfg(windows)]
     {
-        "C:\\an\\absolute\\path"
+        // Double backslashes for JSON escaping
+        "C:\\\\an\\\\absolute\\\\path"
     }
     #[cfg(not(windows))]
     {
@@ -46,7 +49,8 @@ fn global_deps_absolute_path() -> &'static str {
 fn relative_path() -> &'static str {
     #[cfg(windows)]
     {
-        "a\\relative\\path"
+        // Double backslashes for JSON escaping
+        "a\\\\relative\\\\path"
     }
     #[cfg(not(windows))]
     {

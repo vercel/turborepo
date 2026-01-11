@@ -103,14 +103,14 @@ pub fn redact_output(output: &str) -> String {
 ///
 /// Converts backslashes to forward slashes in common path patterns like:
 /// - `packages\util` -> `packages/util`
-/// - `.turbo\turbo-build.log` -> `.turbo/turbo-build.log`
+/// - `packages\util\.turbo` -> `packages/util/.turbo`
 fn normalize_path_separators(output: &str) -> String {
     // Replace backslash path separators with forward slashes.
-    // Be conservative: only replace in contexts that look like paths.
+    // Match backslash between path-like characters (word chars, dots, hyphens).
     static PATH_SEP_RE: LazyLock<Regex> = LazyLock::new(|| {
-        // Match backslash followed by a path component (word char, dot, or hyphen)
-        // but not at the start of a line (to avoid breaking things like \n)
-        Regex::new(r"(\w)\\(\w)").expect("Invalid path separator regex")
+        // Match backslash preceded by word char and followed by word char or dot
+        // (catches `util\.turbo` patterns)
+        Regex::new(r"(\w)\\([\w.])").expect("Invalid path separator regex")
     });
 
     // Iteratively replace until no more matches (handles `a\b\c` -> `a/b/c`)
