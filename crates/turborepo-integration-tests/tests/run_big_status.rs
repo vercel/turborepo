@@ -6,7 +6,8 @@
 //! 2. Turbo can hash all these files correctly
 //! 3. The input files count is correct (original files + new files)
 
-#![cfg(feature = "integration-tests")]
+// Skip on Windows - npm not found in test harness PATH on Windows CI
+#![cfg(all(feature = "integration-tests", not(windows)))]
 
 mod common;
 

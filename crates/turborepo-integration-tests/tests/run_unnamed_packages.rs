@@ -5,7 +5,8 @@
 //! apps/my-app/.ignore/package.json which should be filtered out during package
 //! discovery.
 
-#![cfg(feature = "integration-tests")]
+// Skip on Windows - npm not found in test harness PATH on Windows CI
+#![cfg(all(feature = "integration-tests", not(windows)))]
 
 mod common;
 

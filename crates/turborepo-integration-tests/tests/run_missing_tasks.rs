@@ -2,7 +2,8 @@
 //!
 //! Tests error messages when running non-existent tasks.
 
-#![cfg(feature = "integration-tests")]
+// Skip on Windows - npm not found in test harness PATH on Windows CI
+#![cfg(all(feature = "integration-tests", not(windows)))]
 
 mod common;
 

@@ -6,7 +6,8 @@
 //! 1. Include the file in the task's inputs hash
 //! 2. Trigger a cache miss when the file content changes
 
-#![cfg(feature = "integration-tests")]
+// Skip on Windows - npm not found in test harness PATH on Windows CI
+#![cfg(all(feature = "integration-tests", not(windows)))]
 
 mod common;
 
