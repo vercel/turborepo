@@ -12,8 +12,6 @@ biome_deserialize = { workspace = true }
 biome_deserialize_macros = { workspace = true }
 biome_diagnostics = { workspace = true }
 camino = "1.1.4"
-schemars = { workspace = true }
-ts-rs = { workspace = true }
 git2 = { workspace = true, default-features = false, optional = true }
 globwalk = { path = "../turborepo-globwalk" }
 indicatif = { workspace = true }
@@ -21,6 +19,7 @@ itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
 oxc_resolver = { workspace = true }
 regex = { workspace = true }
+schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 struct_iterable = "0.1.1"
 swc_common = { workspace = true }
@@ -30,6 +29,7 @@ swc_ecma_visit = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
+ts-rs = { workspace = true }
 turbo-trace = { workspace = true }
 turbopath = { workspace = true }
 turborepo-errors = { workspace = true }

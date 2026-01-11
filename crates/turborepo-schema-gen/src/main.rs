@@ -89,16 +89,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Verify { schema, typescript } => {
             let mut success = true;
 
-            if let Some(schema_path) = schema {
-                if !verify_schema(&schema_path)? {
-                    success = false;
-                }
+            if let Some(schema_path) = schema
+                && !verify_schema(&schema_path)?
+            {
+                success = false;
             }
 
-            if let Some(ts_path) = typescript {
-                if !verify_typescript(&ts_path)? {
-                    success = false;
-                }
+            if let Some(ts_path) = typescript
+                && !verify_typescript(&ts_path)?
+            {
+                success = false;
             }
 
             if !success {
@@ -673,7 +673,7 @@ fn add_type_decl<T: TS>(output: &mut String, description: &str) {
         }
         output.push_str("export ");
         output.push_str(&decl);
-        output.push_str("\n");
+        output.push('\n');
     }
 }
 
