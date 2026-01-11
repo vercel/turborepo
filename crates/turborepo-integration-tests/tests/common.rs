@@ -12,6 +12,7 @@ use std::{
 
 use anyhow::{Context, Result};
 use regex::Regex;
+use which::which;
 
 /// Compiled regex for timing redaction.
 /// Matches patterns like "Time: 1.23s" or "Time: 100ms".
@@ -533,21 +534,32 @@ impl TurboTestEnv {
             .await
             .context("Failed to create corepack install directory")?;
 
+        // Use `which` to find corepack binary - this handles Windows .cmd extensions
+        let corepack_binary =
+            which("corepack").context("corepack not found in PATH. Is Node.js installed?")?;
+
         let install_dir_arg = format!(
             "--install-directory={}",
             self.corepack_install_dir.display()
         );
 
-        let output = tokio::process::Command::new("corepack")
+        let output = tokio::process::Command::new(&corepack_binary)
             .args(["enable", package_manager_name, &install_dir_arg])
             .current_dir(&self.workspace_path)
             .output()
             .await
-            .context("Failed to execute corepack enable")?;
+            .with_context(|| {
+                format!(
+                    "Failed to execute corepack enable (binary: {})",
+                    corepack_binary.display()
+                )
+            })?;
 
         if !output.status.success() {
             anyhow::bail!(
-                "corepack enable failed: {}",
+                "corepack enable failed (exit code {:?}):\nstdout: {}\nstderr: {}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stdout),
                 String::from_utf8_lossy(&output.stderr)
             );
         }
