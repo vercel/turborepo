@@ -22,9 +22,10 @@ static PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?:command \(|at location: )[^\)]+").expect("Invalid path regex")
 });
 
-/// Regex to redact npm command paths (e.g., `/usr/bin/npm` or `npm.cmd`).
+/// Regex to redact npm command paths (e.g., `/usr/bin/npm` or
+/// `C:\...\npm.cmd`). The `:` handles Windows drive letters like `C:`.
 static NPM_CMD_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"[\w/\\\.]+npm(?:\.cmd)?").expect("Invalid npm command regex"));
+    LazyLock::new(|| Regex::new(r"[\w/\\\.\-:]+npm(?:\.cmd)?").expect("Invalid npm command regex"));
 
 /// Regex to redact shell command in npm error messages.
 /// With script-shell=bash in .npmrc, this is consistently "bash -c" on all
