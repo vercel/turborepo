@@ -26,12 +26,11 @@ static PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
 static NPM_CMD_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[\w/\\\.]+npm(?:\.cmd)?").expect("Invalid npm command regex"));
 
-/// Regex to redact shell command differences between Windows and Unix.
-/// Windows: `C:/Windows/system32/cmd.exe /d /s /c`
-/// Unix: `sh -c`
+/// Regex to redact shell command in npm error messages.
+/// With script-shell=bash in .npmrc, this is consistently "bash -c" on all
+/// platforms.
 static SHELL_CMD_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"npm error command (?:C:/Windows/system32/cmd\.exe /d /s /c|sh -c) (.+)")
-        .expect("Invalid shell cmd regex")
+    Regex::new(r"npm error command bash -c (.+)").expect("Invalid shell cmd regex")
 });
 
 /// Apply additional redactions specific to error output.

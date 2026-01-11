@@ -34,26 +34,23 @@ fn redact_paths(output: &str) -> String {
     let cmd_path_re = Regex::new(r"command \([^)]+\)").expect("Invalid cmd path regex");
     let output = cmd_path_re.replace_all(&output, "command ([PATH])");
 
-    // Redact shell command differences between Windows and Unix
-    // Windows: "npm error command C:/Windows/system32/cmd.exe /d /s /c <cmd>"
-    // Unix: "npm error command sh -c <cmd>"
+    // Redact shell command in npm error messages.
+    // With script-shell=bash in .npmrc, this is consistently "bash -c <cmd>" on all
+    // platforms.
     let shell_cmd_re =
-        Regex::new(r"npm error command (?:C:/Windows/system32/cmd\.exe /d /s /c|sh -c) (.+)")
-            .expect("Invalid shell cmd regex");
+        Regex::new(r"npm error command bash -c (.+)").expect("Invalid shell cmd regex");
     let output = shell_cmd_re.replace_all(&output, "npm error command [SHELL] $1");
 
-    // Normalize Windows echo output. On Windows, `echo 'working'` outputs
-    // `'working'` (with quotes) while Unix shells output `working` (without
-    // quotes). This normalizes the output to be consistent across platforms.
+    // Note: With script-shell=bash in .npmrc, echo output should be consistent
+    // across platforms. This redaction is kept as a safety measure but may no
+    // longer be necessary.
     let echo_quotes_re =
         Regex::new(r"^([a-zA-Z0-9_-]+:build: )'([^']+)'$").expect("Invalid echo quotes regex");
-    let output = output
+    output
         .lines()
         .map(|line| echo_quotes_re.replace(line, "$1$2").to_string())
         .collect::<Vec<_>>()
-        .join("\n");
-
-    output
+        .join("\n")
 }
 
 /// Filter out the lockfile warning from the output.
