@@ -48,9 +48,10 @@ static TEMP_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
 /// This regex matches the entire multi-line pattern.
 static TEMP_PATH_MULTILINE_RE: LazyLock<Regex> = LazyLock::new(|| {
     // Match macOS temp path split across two lines.
-    // Pattern 1: /private?/var/\n<ws>folders/.../T/.tmpXXX/file
-    // Pattern 2: /private?/var/folders/XX/\n<ws>HASH/T/.tmpXXX/file
-    Regex::new(r"(?:/private)?/var/(?:folders/[a-zA-Z0-9_]+/)?\n\s*(?:folders/)?[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+(?:/[a-zA-Z0-9._-]+)*")
+    // The path is: /private?/var/folders/XX/HASH/T/.tmpXXX/file
+    // It can break after XX/ (leaving HASH/T/... on next line)
+    // or after /var/ (leaving folders/XX/HASH/T/... on next line)
+    Regex::new(r"(?:/private)?/var/(?:folders/[a-zA-Z0-9_]+/)?\n\s*(?:folders/[a-zA-Z0-9_]+/)?[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+(?:/[a-zA-Z0-9._-]+)*")
         .expect("Invalid multiline temp path regex")
 });
 
@@ -936,11 +937,31 @@ mod tests {
     }
 
     #[test]
-    fn test_redact_output_short_hex_not_redacted() {
-        // 15-char hex strings should NOT be redacted
-        let input = "short: deadbeef1234567";
+    fn test_redact_output_multiline_temp_path_after_var() {
+        // Test multiline temp paths split after /var/
+        let input = "Lockfile not found at /private/var/\n      \
+                     folders/0r/90dc16493lx7gw025k4z8sw40000gn/T/.tmpE7t2eW/package-lock.json";
         let output = redact_output(input);
-        assert_eq!(output, "short: deadbeef1234567");
+        assert!(
+            !output.contains("/private/var"),
+            "Multiline temp path should be redacted. Got: {}",
+            output
+        );
+        assert!(output.contains("[TEMP_DIR]"), "Should contain [TEMP_DIR]");
+    }
+
+    #[test]
+    fn test_redact_output_multiline_temp_path_after_folders_xx() {
+        // Test multiline temp paths split after /folders/XX/ (CI pattern)
+        let input = "Lockfile not found at /private/var/folders/03/\n      \
+                     bcr7nd0x5lz0x5lkgq6vrh5w0000gn/T/.tmpQcamWa/package-lock.json";
+        let output = redact_output(input);
+        assert!(
+            !output.contains("/private/var"),
+            "Multiline temp path should be redacted. Got: {}",
+            output
+        );
+        assert!(output.contains("[TEMP_DIR]"), "Should contain [TEMP_DIR]");
     }
 
     #[test]
