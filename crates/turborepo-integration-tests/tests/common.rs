@@ -324,22 +324,21 @@ impl TurboTestEnv {
     ///
     /// # Environment
     ///
-    /// This method clears inherited environment variables and sets only the
-    /// minimum required for deterministic test execution:
-    /// - `PATH` - Required for subprocess execution
-    /// - `HOME` / `USERPROFILE` - Required for turbo to find config
+    /// This method inherits the parent environment but removes all TURBO_*
+    /// variables to prevent test flakiness, then sets controlled values for:
     /// - `TURBO_TELEMETRY_MESSAGE_DISABLED=1`
     /// - `TURBO_GLOBAL_WARNING_DISABLED=1`
     /// - `TURBO_PRINT_VERSION_DISABLED=1`
     ///
-    /// This isolation prevents test flakiness from inherited `TURBO_*` env
-    /// vars.
+    /// Inheriting the full environment (rather than clearing and restoring)
+    /// ensures compatibility across platforms, especially on Windows where
+    /// many environment variables are required for proper process execution.
     pub async fn run_turbo(&self, args: &[&str]) -> Result<ExecResult> {
         let mut cmd = tokio::process::Command::new(&self.turbo_binary);
-        cmd.args(args).current_dir(&self.workspace_path).env_clear();
+        cmd.args(args).current_dir(&self.workspace_path);
 
-        // Restore minimal required environment
-        Self::set_minimal_env(&mut cmd);
+        // Remove inherited TURBO_* variables for test isolation
+        Self::remove_turbo_env_vars(&mut cmd);
 
         // Set turbo-specific test environment
         cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
@@ -362,10 +361,10 @@ impl TurboTestEnv {
     pub async fn run_turbo_from_dir(&self, subdir: &str, args: &[&str]) -> Result<ExecResult> {
         let dir = self.workspace_path.join(subdir);
         let mut cmd = tokio::process::Command::new(&self.turbo_binary);
-        cmd.args(args).current_dir(&dir).env_clear();
+        cmd.args(args).current_dir(&dir);
 
-        // Restore minimal required environment
-        Self::set_minimal_env(&mut cmd);
+        // Remove inherited TURBO_* variables for test isolation
+        Self::remove_turbo_env_vars(&mut cmd);
 
         // Set turbo-specific test environment
         cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
@@ -378,18 +377,19 @@ impl TurboTestEnv {
 
     /// Run turbo with specific environment variables.
     ///
-    /// Additional environment variables are merged with the minimal defaults.
-    /// Inherited environment is cleared for test isolation.
+    /// Additional environment variables are merged with the inherited defaults.
+    /// TURBO_* variables are removed for test isolation, then replaced with
+    /// controlled values plus any test-specific overrides.
     pub async fn run_turbo_with_env(
         &self,
         args: &[&str],
         env: &[(&str, &str)],
     ) -> Result<ExecResult> {
         let mut cmd = tokio::process::Command::new(&self.turbo_binary);
-        cmd.args(args).current_dir(&self.workspace_path).env_clear();
+        cmd.args(args).current_dir(&self.workspace_path);
 
-        // Restore minimal required environment
-        Self::set_minimal_env(&mut cmd);
+        // Remove inherited TURBO_* variables for test isolation
+        Self::remove_turbo_env_vars(&mut cmd);
 
         // Set turbo-specific test environment
         cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
@@ -405,49 +405,17 @@ impl TurboTestEnv {
         Ok(ExecResult::from(output))
     }
 
-    /// Set minimal environment variables required for process execution.
-    fn set_minimal_env(cmd: &mut tokio::process::Command) {
-        // PATH is required for subprocesses
-        if let Ok(path) = std::env::var("PATH") {
-            cmd.env("PATH", path);
-        }
-        // HOME (Unix) or USERPROFILE (Windows) for config discovery
-        if let Ok(home) = std::env::var("HOME") {
-            cmd.env("HOME", home);
-        }
-        if let Ok(userprofile) = std::env::var("USERPROFILE") {
-            cmd.env("USERPROFILE", userprofile);
-        }
-        // SYSTEMROOT is required on Windows for system DLLs
-        if let Ok(systemroot) = std::env::var("SYSTEMROOT") {
-            cmd.env("SYSTEMROOT", systemroot);
-        }
-        // SystemRoot (case variation) - some Windows APIs expect this case
-        if let Ok(systemroot) = std::env::var("SystemRoot") {
-            cmd.env("SystemRoot", systemroot);
-        }
-        // TMP/TEMP for temporary files on Windows
-        if let Ok(tmp) = std::env::var("TMP") {
-            cmd.env("TMP", tmp);
-        }
-        if let Ok(temp) = std::env::var("TEMP") {
-            cmd.env("TEMP", temp);
-        }
-        // PATHEXT is required on Windows to find executables (.exe, .cmd, .bat, etc.)
-        if let Ok(pathext) = std::env::var("PATHEXT") {
-            cmd.env("PATHEXT", pathext);
-        }
-        // COMSPEC is the path to cmd.exe, needed for shell commands on Windows
-        if let Ok(comspec) = std::env::var("COMSPEC") {
-            cmd.env("COMSPEC", comspec);
-        }
-        // APPDATA is needed by npm/node on Windows
-        if let Ok(appdata) = std::env::var("APPDATA") {
-            cmd.env("APPDATA", appdata);
-        }
-        // LOCALAPPDATA is also used by npm/node on Windows
-        if let Ok(localappdata) = std::env::var("LOCALAPPDATA") {
-            cmd.env("LOCALAPPDATA", localappdata);
+    /// Remove inherited TURBO_* environment variables for test isolation.
+    ///
+    /// This ensures tests are not affected by inherited environment variables
+    /// while still inheriting all other environment variables needed for
+    /// cross-platform compatibility (especially important on Windows).
+    fn remove_turbo_env_vars(cmd: &mut tokio::process::Command) {
+        // Remove all TURBO_* variables that might be inherited
+        for (key, _) in std::env::vars() {
+            if key.starts_with("TURBO_") {
+                cmd.env_remove(&key);
+            }
         }
     }
 
