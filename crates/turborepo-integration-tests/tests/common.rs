@@ -28,6 +28,8 @@ static HASH_RE: LazyLock<Regex> =
 /// - macOS: `/private/var/folders/.../T/.tmpXXX/...` or
 ///   `/var/folders/.../T/.tmpXXX/...`
 /// - Linux: `/tmp/.tmpXXXXXX/...`
+/// - Windows: `C:\Users\...\AppData\Local\Temp\.tmpXXX\...` (after path
+///   normalization)
 ///
 /// These paths appear in:
 /// - npm error messages with locations
@@ -36,7 +38,9 @@ static TEMP_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
     // Match either:
     // 1. macOS style: /private?/var/folders/.../T/.tmp.../...
     // 2. Linux style: /tmp/.tmp.../...
-    Regex::new(r"(?:(?:/private)?/var/folders/[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+|/tmp/\.tmp[a-zA-Z0-9_]+)(?:/[a-zA-Z0-9._-]+)*")
+    // 3. Windows style: C:/Users/.../AppData/Local/Temp/.?tmp.../... (normalized)
+    //    Note: tempfile crate may create "tmpXXX" or ".tmpXXX" directories
+    Regex::new(r"(?:(?:/private)?/var/folders/[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+|/tmp/\.tmp[a-zA-Z0-9_]+|[A-Z]:/Users/[^/]+/AppData/Local/Temp/\.?tmp[a-zA-Z0-9_]+)(?:/[a-zA-Z0-9._-]+)*")
         .expect("Invalid temp path regex")
 });
 
@@ -104,13 +108,14 @@ pub fn redact_output(output: &str) -> String {
 /// Converts backslashes to forward slashes in common path patterns like:
 /// - `packages\util` -> `packages/util`
 /// - `packages\util\.turbo` -> `packages/util/.turbo`
+/// - `C:\Users\...` -> `C:/Users/...`
 fn normalize_path_separators(output: &str) -> String {
     // Replace backslash path separators with forward slashes.
-    // Match backslash between path-like characters (word chars, dots, hyphens).
     static PATH_SEP_RE: LazyLock<Regex> = LazyLock::new(|| {
-        // Match backslash preceded by word char and followed by word char or dot
-        // (catches `util\.turbo` patterns)
-        Regex::new(r"(\w)\\([\w.])").expect("Invalid path separator regex")
+        // Match backslash:
+        // 1. After word char and before word char or dot (catches `util\.turbo`)
+        // 2. After drive letter colon (catches `C:\Users`)
+        Regex::new(r"(\w|:)\\([\w.])").expect("Invalid path separator regex")
     });
 
     // Iteratively replace until no more matches (handles `a\b\c` -> `a/b/c`)
@@ -976,6 +981,61 @@ mod tests {
             output
         );
         assert!(output.contains("[TEMP_DIR]"), "Should contain [TEMP_DIR]");
+    }
+
+    #[test]
+    fn test_redact_output_windows_temp_path() {
+        // Test Windows temp paths (after path normalization from backslash to forward
+        // slash)
+        let input = "Lockfile not found at \
+                     C:/Users/runneradmin/AppData/Local/Temp/.tmpAbC123/package-lock.json";
+        let output = redact_output(input);
+        assert!(
+            !output.contains("runneradmin"),
+            "Windows temp path should be redacted. Got: {}",
+            output
+        );
+        assert!(output.contains("[TEMP_DIR]"), "Should contain [TEMP_DIR]");
+    }
+
+    #[test]
+    fn test_redact_output_windows_temp_path_no_dot() {
+        // Test Windows temp paths without leading dot (tempfile crate variation)
+        let input =
+            "Lockfile not found at C:/Users/runner/AppData/Local/Temp/tmpXYZ789/package-lock.json";
+        let output = redact_output(input);
+        assert!(
+            !output.contains("runner"),
+            "Windows temp path (no dot) should be redacted. Got: {}",
+            output
+        );
+        assert!(output.contains("[TEMP_DIR]"), "Should contain [TEMP_DIR]");
+    }
+
+    #[test]
+    fn test_redact_output_windows_temp_path_with_backslashes() {
+        // Test Windows temp paths with native backslash separators
+        // (simulates raw Windows output before normalization in combined function)
+        let input =
+            r"Lockfile not found at C:\Users\runner\AppData\Local\Temp\tmpXYZ789\package-lock.json";
+        let output = redact_output(input);
+        assert!(
+            !output.contains("runner"),
+            "Windows temp path with backslashes should be redacted. Got: {}",
+            output
+        );
+        assert!(output.contains("[TEMP_DIR]"), "Should contain [TEMP_DIR]");
+    }
+
+    #[test]
+    fn test_normalize_drive_letter_path() {
+        // Verify that drive letter paths are normalized correctly
+        let input = r"C:\Users\test";
+        let output = normalize_path_separators(input);
+        assert_eq!(
+            output, "C:/Users/test",
+            "Drive letter paths should be normalized"
+        );
     }
 
     // =========================================================================
