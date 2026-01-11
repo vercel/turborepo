@@ -18,20 +18,53 @@
 //! an error if specified in workspace packages.
 
 use biome_deserialize_macros::Deserializable;
+use schemars::JsonSchema;
 use serde::Serialize;
 use struct_iterable::Iterable;
+use ts_rs::TS;
 
-/// Future flags configuration for experimental features
-///
-/// Each flag represents an experimental feature that can be enabled
-/// before it becomes the default behavior in a future version.
+/// Opt into breaking changes prior to major releases, experimental features,
+/// and beta features.
 ///
 /// Note: Currently all previous future flags (turboExtendsKeyword,
 /// nonRootExtends) have been graduated and are now enabled by default.
-#[derive(Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq)]
+#[derive(
+    Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq, JsonSchema,
+)]
 #[serde(rename_all = "camelCase")]
 #[deserializable()]
 pub struct FutureFlags {}
+
+/// `FutureFlags` is an empty struct that serializes to `{}` in JSON.
+/// In TypeScript, this is represented as `Record<string, never>` (an empty
+/// object type).
+impl TS for FutureFlags {
+    type WithoutGenerics = Self;
+
+    fn name() -> String {
+        "FutureFlags".to_string()
+    }
+
+    fn inline() -> String {
+        "Record<string, never>".to_string()
+    }
+
+    fn inline_flattened() -> String {
+        "Record<string, never>".to_string()
+    }
+
+    fn decl() -> String {
+        "type FutureFlags = Record<string, never>;".to_string()
+    }
+
+    fn decl_concrete() -> String {
+        "type FutureFlags = Record<string, never>;".to_string()
+    }
+
+    fn dependencies() -> Vec<ts_rs::Dependency> {
+        vec![]
+    }
+}
 
 impl FutureFlags {
     /// Create a new FutureFlags

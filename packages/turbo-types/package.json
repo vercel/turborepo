@@ -19,6 +19,9 @@
     "build": "tsc && pnpm generate-schema",
     "lint:prettier": "prettier -c . --cache",
     "generate-schema": "tsx scripts/generate-schema.ts",
+    "generate-schema:rust": "cargo run -p turborepo-schema-gen -- schema -o schemas/schema.json",
+    "generate-types:rust": "cargo run -p turborepo-schema-gen -- typescript -o src/types/config-v2.ts",
+    "verify-schema": "cargo run -p turborepo-schema-gen -- verify --schema schemas/schema.json",
     "copy-schema": "cp schemas/schema.json ../turbo/schema.json",
     "package:types": "attw --profile node16 --pack"
   },

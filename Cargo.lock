@@ -1858,9 +1858,9 @@ checksum = "56ce8c6da7551ec6c462cbaf3bfbc75131ebbfa1c944aeaa9dab51ca1c5f0c3b"
 
 [[package]]
 name = "dyn-clone"
-version = "1.0.11"
+version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68b0cf012f1230e43cd00ebb729c6bb58707ecfa8ad08b52ef3a4ccd2697fc30"
+checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 
 [[package]]
 name = "either"
@@ -6500,6 +6500,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
+name = "ts-rs"
+version = "10.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e640d9b0964e9d39df633548591090ab92f7a4567bc31d3891af23471a3365c6"
+dependencies = [
+ "lazy_static",
+ "thiserror 2.0.12",
+ "ts-rs-macros",
+]
+
+[[package]]
+name = "ts-rs-macros"
+version = "10.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e9d8656589772eeec2cf7a8264d9cda40fb28b9bc53118ceb9e8c07f8f38730"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
+ "termcolor",
+]
+
+[[package]]
 name = "tui-term"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6707,6 +6730,7 @@ dependencies = [
  "miette",
  "oxc_resolver 4.2.0",
  "regex",
+ "schemars",
  "serde",
  "struct_iterable",
  "swc_common",
@@ -6717,6 +6741,7 @@ dependencies = [
  "thiserror 1.0.63",
  "tokio",
  "tracing",
+ "ts-rs",
  "turbo-trace",
  "turbopath",
  "turborepo-errors",
@@ -6944,10 +6969,12 @@ dependencies = [
  "biome_deserialize 0.6.0",
  "biome_diagnostics",
  "miette",
+ "schemars",
  "serde",
  "serde_json",
  "test-case",
  "thiserror 1.0.63",
+ "ts-rs",
 ]
 
 [[package]]
@@ -7407,6 +7434,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-schema-gen"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "schemars",
+ "serde",
+ "serde_json",
+ "ts-rs",
+ "turborepo-boundaries",
+ "turborepo-turbo-json",
+ "turborepo-types",
+]
+
+[[package]]
 name = "turborepo-scm"
 version = "0.1.0"
 dependencies = [
@@ -7559,9 +7600,11 @@ dependencies = [
 name = "turborepo-task-id"
 version = "0.1.0"
 dependencies = [
+ "schemars",
  "serde",
  "test-case",
  "thiserror 1.0.63",
+ "ts-rs",
  "turborepo-repository",
 ]
 
@@ -7609,6 +7652,7 @@ dependencies = [
  "insta",
  "miette",
  "pretty_assertions",
+ "schemars",
  "serde",
  "serde_json",
  "struct_iterable",
@@ -7616,6 +7660,7 @@ dependencies = [
  "test-case",
  "thiserror 1.0.63",
  "tracing",
+ "ts-rs",
  "turbopath",
  "turborepo-boundaries",
  "turborepo-errors",
@@ -7634,7 +7679,9 @@ dependencies = [
  "biome_deserialize_macros 0.6.0",
  "clap",
  "globwalk",
+ "schemars",
  "serde",
+ "ts-rs",
  "turbopath",
  "turborepo-errors",
  "turborepo-task-id",
@@ -7682,8 +7729,10 @@ name = "turborepo-unescape"
 version = "0.1.0"
 dependencies = [
  "biome_deserialize 0.6.0",
+ "schemars",
  "serde",
  "serde_json",
+ "ts-rs",
 ]
 
 [[package]]
