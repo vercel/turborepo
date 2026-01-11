@@ -24,15 +24,18 @@ static HASH_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-f0-9]{16}").expect("Invalid hash regex"));
 
 /// Compiled regex for temp directory path redaction.
-/// Matches temp directory paths that vary between test runs.
-/// Also handles paths that span multiple lines in error output.
+/// Matches various temp paths across platforms:
+/// - macOS: `/private/var/folders/.../T/.tmpXXX/...` or
+///   `/var/folders/.../T/.tmpXXX/...`
+/// - Linux: `/tmp/.tmpXXXXXX/...`
+/// These paths appear in:
+/// - npm error messages with locations
+/// - Lockfile warnings
 static TEMP_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
-    // Match common temp directory patterns:
-    // - /private/var/folders/.../T/.tmp.../file
-    // - /tmp/.tmp.../file
-    // - /var/folders/.../T/.tmp.../file
-    // The regex handles paths both on single lines and split across lines
-    Regex::new(r"(/private)?/var/folders/[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+(/[a-zA-Z0-9._-]+)*")
+    // Match either:
+    // 1. macOS style: /private?/var/folders/.../T/.tmp.../...
+    // 2. Linux style: /tmp/.tmp.../...
+    Regex::new(r"(?:(?:/private)?/var/folders/[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+|/tmp/\.tmp[a-zA-Z0-9_]+)(?:/[a-zA-Z0-9._-]+)*")
         .expect("Invalid temp path regex")
 });
 
@@ -115,7 +118,16 @@ pub fn turbo_binary_path() -> PathBuf {
         .expect("CARGO_MANIFEST_DIR should have parent (crates/)")
         .parent()
         .expect("crates/ should have parent (workspace root)");
-    workspace_root.join("target").join("debug").join("turbo")
+
+    #[cfg(windows)]
+    let binary_name = "turbo.exe";
+    #[cfg(not(windows))]
+    let binary_name = "turbo";
+
+    workspace_root
+        .join("target")
+        .join("debug")
+        .join(binary_name)
 }
 
 /// Path to the fixtures directory

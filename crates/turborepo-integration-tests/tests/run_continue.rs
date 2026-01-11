@@ -64,7 +64,68 @@ fn filter_lockfile_warning(output: &str) -> String {
 
 /// Apply both standard and path redactions, and filter lockfile warning.
 fn redact_continue_output(output: &str) -> String {
-    filter_lockfile_warning(&redact_paths(&redact_output(output)))
+    let output = filter_lockfile_warning(&redact_paths(&redact_output(output)));
+    normalize_task_order(&output)
+}
+
+/// Normalize task output order for deterministic snapshots.
+///
+/// Turbo runs tasks in parallel, so the order of output blocks can vary between
+/// runs. This function collects all lines belonging to each task and outputs
+/// them in sorted order by task name.
+fn normalize_task_order(output: &str) -> String {
+    use std::collections::BTreeMap;
+
+    let lines: Vec<&str> = output.lines().collect();
+
+    // Find where task output starts (after header) and ends (before summary)
+    let task_start = lines
+        .iter()
+        .position(|line| {
+            // Task output lines start with package:task pattern
+            line.contains(":build:") || line.contains("#build:")
+        })
+        .unwrap_or(0);
+
+    let task_end = lines
+        .iter()
+        .rposition(|line| line.contains(":build:") || line.contains("#build:"))
+        .map(|i| i + 1)
+        .unwrap_or(lines.len());
+
+    // Extract sections
+    let header = &lines[..task_start];
+    let task_section = &lines[task_start..task_end];
+    let footer = &lines[task_end..];
+
+    // Collect all lines for each task
+    let mut task_lines: BTreeMap<String, Vec<&str>> = BTreeMap::new();
+
+    for line in task_section {
+        // Extract task name from line
+        let task_name = extract_task_name(line).unwrap_or_else(|| "zzz_unknown".to_string());
+        task_lines.entry(task_name).or_default().push(line);
+    }
+
+    // Reassemble output with tasks in sorted order
+    let mut result: Vec<&str> = header.to_vec();
+    for (_task, lines) in task_lines {
+        result.extend(lines);
+    }
+    result.extend(footer);
+
+    result.join("\n")
+}
+
+/// Extract task name from a log line.
+/// Returns Some("task-name") for lines like "task-name:build: ..." or
+/// "task-name#build: ..."
+fn extract_task_name(line: &str) -> Option<String> {
+    // Match patterns like "some-lib:build:" or "other-app#build:"
+    let task_re = Regex::new(r"^([a-zA-Z0-9_-]+)[::#]build").ok()?;
+    task_re
+        .captures(line)
+        .map(|c| c.get(1).unwrap().as_str().to_string())
 }
 
 /// Set up the test environment with monorepo_dependency_error fixture.
@@ -162,8 +223,10 @@ async fn test_with_continue_continues_past_errors() -> Result<()> {
 async fn test_with_continue_dependencies_successful() -> Result<()> {
     let env = setup_env().await?;
 
-    // First run to populate cache for base-lib
-    env.run_turbo(&["run", "build"]).await?;
+    // First run to populate cache (with --continue to finish all tasks even if
+    // some fail, and --concurrency=1 for determinism)
+    env.run_turbo(&["run", "build", "--continue", "--concurrency=1"])
+        .await?;
 
     // Run with --continue=dependencies-successful
     // This should:
@@ -172,12 +235,16 @@ async fn test_with_continue_dependencies_successful() -> Result<()> {
     // - Skip my-app (because some-lib failed)
     // - Run yet-another-lib (success, cached)
     // - Run other-app (fails)
+    //
+    // We use --concurrency=1 to ensure deterministic task ordering for snapshot
+    // testing
     let result = env
         .run_turbo(&[
             "run",
             "build",
             "--output-logs=errors-only",
             "--continue=dependencies-successful",
+            "--concurrency=1",
         ])
         .await?;
 

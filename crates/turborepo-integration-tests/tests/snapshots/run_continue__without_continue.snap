@@ -23,6 +23,8 @@ some-lib:build: npm error workspace some-lib
 some-lib:build: npm error location [TEMP_DIR]
 some-lib:build: npm error command failed
 some-lib:build: npm error command sh -c exit 2
+some-lib:build: ERROR: command finished with error: command ([PATH]) [NPM] run build exited (2)
+some-lib#build: command ([PATH]) [NPM] run build exited (2)
 
  Tasks:    1 successful, 2 total
 Cached:    0 cached, 2 total
@@ -33,6 +35,4 @@ Failed:    some-lib#build
    x Could not resolve workspaces.
   `-> Lockfile not found at [TEMP_DIR]
 
-some-lib:build: ERROR: command finished with error: command ([PATH]) [NPM] run build exited (2)
-some-lib#build: command ([PATH]) [NPM] run build exited (2)
  ERROR  run failed: command  exited (2)
