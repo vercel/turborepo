@@ -69,7 +69,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node: "false"
+          node: "true"
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
