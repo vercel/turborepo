@@ -59,6 +59,16 @@ static TEMP_PATH_MULTILINE_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("Invalid multiline temp path regex")
 });
 
+/// Compiled regex for stripping ANSI escape codes from output.
+/// Matches CSI sequences like `\x1b[31m` (color) and `\x1b[0m` (reset).
+static ANSI_ESCAPE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    // Match ANSI escape sequences:
+    // - CSI sequences: \x1b[ followed by parameters and a command letter
+    // - OSC sequences: \x1b] followed by text and \x07 or \x1b\\
+    Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*(?:\x07|\x1b\\)")
+        .expect("Invalid ANSI escape regex")
+});
+
 /// Apply redactions to make output deterministic for snapshots.
 ///
 /// This function normalizes dynamic values in turbo output to enable
@@ -68,6 +78,7 @@ static TEMP_PATH_MULTILINE_RE: LazyLock<Regex> = LazyLock::new(|| {
 ///
 /// | Pattern | Example Input | Replacement |
 /// |---------|---------------|-------------|
+/// | ANSI escape codes | `\x1b[31m` (red) | (removed) |
 /// | CRLF line endings | `\r\n` | `\n` |
 /// | Timing | `Time: 1.23s`, `Time: 100ms` | `Time: [TIME]` |
 /// | Cache hashes | `0555ce94ca234049` | `[HASH]` |
@@ -88,6 +99,8 @@ static TEMP_PATH_MULTILINE_RE: LazyLock<Regex> = LazyLock::new(|| {
 /// assert_eq!(redacted, "my-app:build: cache miss, executing [HASH]\nTime: [TIME]");
 /// ```
 pub fn redact_output(output: &str) -> String {
+    // Strip ANSI escape codes first (colors, cursor movements, etc.)
+    let output = ANSI_ESCAPE_RE.replace_all(output, "");
     // Normalize CRLF to LF for cross-platform snapshot consistency
     let output = output.replace("\r\n", "\n");
     // Normalize Windows path separators to Unix style for consistent snapshots.
