@@ -343,7 +343,9 @@ impl TurboTestEnv {
         // Set turbo-specific test environment
         cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-            .env("TURBO_PRINT_VERSION_DISABLED", "1");
+            .env("TURBO_PRINT_VERSION_DISABLED", "1")
+            // Disable colored output for consistent snapshot testing
+            .env("NO_COLOR", "1");
 
         let output = cmd.output().await.context("Failed to execute turbo")?;
         Ok(ExecResult::from(output))
@@ -369,7 +371,9 @@ impl TurboTestEnv {
         // Set turbo-specific test environment
         cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-            .env("TURBO_PRINT_VERSION_DISABLED", "1");
+            .env("TURBO_PRINT_VERSION_DISABLED", "1")
+            // Disable colored output for consistent snapshot testing
+            .env("NO_COLOR", "1");
 
         let output = cmd.output().await.context("Failed to execute turbo")?;
         Ok(ExecResult::from(output))
@@ -394,7 +398,9 @@ impl TurboTestEnv {
         // Set turbo-specific test environment
         cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-            .env("TURBO_PRINT_VERSION_DISABLED", "1");
+            .env("TURBO_PRINT_VERSION_DISABLED", "1")
+            // Disable colored output for consistent snapshot testing
+            .env("NO_COLOR", "1");
 
         // Add test-specific environment variables
         for (key, value) in env {
