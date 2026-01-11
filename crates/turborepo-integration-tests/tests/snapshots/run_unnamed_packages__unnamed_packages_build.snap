@@ -1,0 +1,21 @@
+---
+source: crates/turborepo-integration-tests/tests/run_unnamed_packages.rs
+expression: redact_output(&result.combined_output())
+---
+• Packages in scope: my-app, util
+• Running build in 2 packages
+• Remote caching disabled
+my-app:build: cache miss, executing [HASH]
+my-app:build: 
+my-app:build: > build
+my-app:build: > echo building
+my-app:build: 
+my-app:build: building
+
+ Tasks:    1 successful, 1 total
+Cached:    0 cached, 1 total
+  Time: [TIME] 
+
+ WARNING  An issue occurred while attempting to parse [TEMP_DIR] Turborepo will still function, but some features may not be available:
+   x Could not resolve workspaces.
+  `-> Lockfile not found at [TEMP_DIR]

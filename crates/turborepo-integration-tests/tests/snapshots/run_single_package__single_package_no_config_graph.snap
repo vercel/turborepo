@@ -1,0 +1,11 @@
+---
+source: crates/turborepo-integration-tests/tests/run_single_package.rs
+expression: redact_output(&result.combined_output())
+---
+digraph {
+	compound = "true"
+	newrank = "true"
+	subgraph "root" {
+		"[root] build" -> "[root] ___ROOT___"
+	}
+}

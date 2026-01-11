@@ -23,6 +23,35 @@ static TIMING_RE: LazyLock<Regex> =
 static HASH_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-f0-9]{16}").expect("Invalid hash regex"));
 
+/// Compiled regex for temp directory path redaction.
+/// Matches temp directory paths that vary between test runs.
+/// Also handles paths that span multiple lines in error output.
+static TEMP_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
+    // Match common temp directory patterns:
+    // - /private/var/folders/.../T/.tmp.../file
+    // - /tmp/.tmp.../file
+    // - /var/folders/.../T/.tmp.../file
+    // The regex handles paths both on single lines and split across lines
+    Regex::new(r"(/private)?/var/folders/[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+(/[a-zA-Z0-9._-]+)*")
+        .expect("Invalid temp path regex")
+});
+
+/// Compiled regex for matching remaining temp dir paths split across lines.
+/// Error messages may split paths like:
+/// `-> Lockfile not found at /private/var/
+///     folders/0r/.../T/.tmpXXX/package-lock.json
+static TEMP_PATH_CONTINUATION_RE: LazyLock<Regex> = LazyLock::new(|| {
+    // Match the continuation pattern after a line break
+    Regex::new(r"folders/[a-zA-Z0-9_]+/[a-zA-Z0-9_]+/T/\.tmp[a-zA-Z0-9_]+(/[a-zA-Z0-9._-]+)*")
+        .expect("Invalid temp path continuation regex")
+});
+
+/// Compiled regex for matching partial temp paths at line boundaries.
+/// Handles cases like `/private/var/` at the end of a line before continuation.
+static TEMP_PATH_PARTIAL_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(/private)?/var/\n\s*\[TEMP_DIR\]").expect("Invalid partial temp path regex")
+});
+
 /// Apply redactions to make output deterministic for snapshots.
 ///
 /// This function normalizes dynamic values in turbo output to enable
@@ -35,6 +64,7 @@ static HASH_RE: LazyLock<Regex> =
 /// | CRLF line endings | `\r\n` | `\n` |
 /// | Timing | `Time: 1.23s`, `Time: 100ms` | `Time: [TIME]` |
 /// | Cache hashes | `0555ce94ca234049` | `[HASH]` |
+/// | Temp paths | `/var/folders/.../T/.tmpXXX` | `[TEMP_DIR]` |
 ///
 /// # Known Limitations
 ///
@@ -53,7 +83,14 @@ pub fn redact_output(output: &str) -> String {
     // Normalize CRLF to LF for cross-platform snapshot consistency
     let output = output.replace("\r\n", "\n");
     let output = TIMING_RE.replace_all(&output, "Time: [TIME]");
-    HASH_RE.replace_all(&output, "[HASH]").into_owned()
+    let output = HASH_RE.replace_all(&output, "[HASH]");
+    let output = TEMP_PATH_RE.replace_all(&output, "[TEMP_DIR]");
+    let output = TEMP_PATH_CONTINUATION_RE.replace_all(&output, "[TEMP_DIR]");
+    // Clean up partial paths split across lines (e.g., "/private/var/\n
+    // [TEMP_DIR]")
+    TEMP_PATH_PARTIAL_RE
+        .replace_all(&output, "[TEMP_DIR]")
+        .into_owned()
 }
 
 /// Path to the turbo binary, discovered via cargo workspace layout.
@@ -267,6 +304,32 @@ impl TurboTestEnv {
         Ok(ExecResult::from(output))
     }
 
+    /// Run turbo from a subdirectory within the workspace.
+    ///
+    /// This is useful for testing package inference behavior, where turbo
+    /// infers the target package from the current working directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `subdir` - Relative path from workspace root to run turbo from
+    /// * `args` - Arguments to pass to turbo
+    pub async fn run_turbo_from_dir(&self, subdir: &str, args: &[&str]) -> Result<ExecResult> {
+        let dir = self.workspace_path.join(subdir);
+        let mut cmd = tokio::process::Command::new(&self.turbo_binary);
+        cmd.args(args).current_dir(&dir).env_clear();
+
+        // Restore minimal required environment
+        Self::set_minimal_env(&mut cmd);
+
+        // Set turbo-specific test environment
+        cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+            .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+            .env("TURBO_PRINT_VERSION_DISABLED", "1");
+
+        let output = cmd.output().await.context("Failed to execute turbo")?;
+        Ok(ExecResult::from(output))
+    }
+
     /// Run turbo with specific environment variables.
     ///
     /// Additional environment variables are merged with the minimal defaults.
@@ -334,6 +397,98 @@ impl TurboTestEnv {
 
         Ok(ExecResult::from(output))
     }
+
+    /// Write content to a file in the workspace.
+    pub async fn write_file(&self, path: &str, content: &str) -> Result<()> {
+        let full_path = self.workspace_path.join(path);
+        if let Some(parent) = full_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        tokio::fs::write(&full_path, content).await?;
+        Ok(())
+    }
+
+    /// Read content from a file in the workspace.
+    pub async fn read_file(&self, path: &str) -> Result<String> {
+        let full_path = self.workspace_path.join(path);
+        let content = tokio::fs::read_to_string(&full_path).await?;
+        Ok(content)
+    }
+
+    /// Set the packageManager field in the root package.json.
+    ///
+    /// This mimics the behavior of setup_package_manager.sh in the prysk tests.
+    /// The default value matches the npm version used in CI (npm@10.5.0).
+    pub async fn set_package_manager(&self, package_manager: &str) -> Result<()> {
+        let package_json_path = self.workspace_path.join("package.json");
+        let content = tokio::fs::read_to_string(&package_json_path).await?;
+        let mut json: serde_json::Value =
+            serde_json::from_str(&content).context("Failed to parse package.json")?;
+
+        json["packageManager"] = serde_json::Value::String(package_manager.to_string());
+
+        let updated = serde_json::to_string_pretty(&json)?;
+        tokio::fs::write(&package_json_path, updated).await?;
+        Ok(())
+    }
+
+    /// Delete a file in the workspace.
+    pub async fn remove_file(&self, path: &str) -> Result<()> {
+        let full_path = self.workspace_path.join(path);
+        tokio::fs::remove_file(&full_path).await?;
+        Ok(())
+    }
+
+    /// Check if a file exists in the workspace.
+    pub async fn file_exists(&self, path: &str) -> bool {
+        let full_path = self.workspace_path.join(path);
+        tokio::fs::metadata(&full_path).await.is_ok()
+    }
+
+    /// Check if a directory exists in the workspace.
+    pub async fn dir_exists(&self, path: &str) -> bool {
+        let full_path = self.workspace_path.join(path);
+        match tokio::fs::metadata(&full_path).await {
+            Ok(metadata) => metadata.is_dir(),
+            Err(_) => false,
+        }
+    }
+
+    /// Rename/move a file in the workspace.
+    pub async fn rename_file(&self, from: &str, to: &str) -> Result<()> {
+        let from_path = self.workspace_path.join(from);
+        let to_path = self.workspace_path.join(to);
+        tokio::fs::rename(&from_path, &to_path).await?;
+        Ok(())
+    }
+
+    /// Touch a file (create empty or update mtime).
+    pub async fn touch_file(&self, path: &str) -> Result<()> {
+        let full_path = self.workspace_path.join(path);
+        if let Some(parent) = full_path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
+        // Create or truncate to update mtime
+        tokio::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(false)
+            .open(&full_path)
+            .await?;
+        Ok(())
+    }
+
+    /// Stage and commit a git change.
+    pub async fn git_commit(&self, message: &str) -> Result<()> {
+        self.exec(&["git", "add", "."]).await?;
+        self.exec(&["git", "commit", "-m", message]).await?;
+        Ok(())
+    }
+
+    /// Get the workspace path.
+    pub fn workspace_path(&self) -> &Path {
+        &self.workspace_path
+    }
 }
 
 /// Result of executing a command.
@@ -380,7 +535,6 @@ impl ExecResult {
     }
 
     /// Assert the command failed (non-zero exit code).
-    #[allow(dead_code)]
     pub fn assert_failure(&self) -> &Self {
         assert_ne!(
             self.exit_code, 0,
@@ -388,6 +542,31 @@ impl ExecResult {
             self.stdout, self.stderr
         );
         self
+    }
+
+    /// Assert a specific exit code.
+    pub fn assert_exit_code(&self, expected: i32) -> &Self {
+        assert_eq!(
+            self.exit_code, expected,
+            "Expected exit code {}, got {}.\nstdout: {}\nstderr: {}",
+            expected, self.exit_code, self.stdout, self.stderr
+        );
+        self
+    }
+
+    /// Check if stdout contains a pattern.
+    pub fn stdout_contains(&self, pattern: &str) -> bool {
+        self.stdout.contains(pattern)
+    }
+
+    /// Check if stderr contains a pattern.
+    pub fn stderr_contains(&self, pattern: &str) -> bool {
+        self.stderr.contains(pattern)
+    }
+
+    /// Check if combined output contains a pattern.
+    pub fn output_contains(&self, pattern: &str) -> bool {
+        self.combined_output().contains(pattern)
     }
 }
 

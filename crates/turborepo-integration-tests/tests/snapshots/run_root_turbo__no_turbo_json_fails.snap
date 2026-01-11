@@ -1,0 +1,6 @@
+---
+source: crates/turborepo-integration-tests/tests/run_root_turbo.rs
+expression: redact_output(&result.combined_output())
+---
+  x Could not find turbo.json or turbo.jsonc.
+  | Follow directions at https://turborepo.com/docs to create one.

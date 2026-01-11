@@ -1,0 +1,12 @@
+---
+source: crates/turborepo-integration-tests/tests/run_absolute_path_error.rs
+expression: redact_output(&result.combined_output())
+---
+  x `outputs` cannot contain an absolute path.
+   ,-[turbo.json:5:19]
+ 4 |     "build": {
+ 5 |       "outputs": ["/another/absolute/path", "a/relative/path"]
+   :                   ^^^^^^^^^^^^|^^^^^^^^^^^
+   :                               `-- absolute path found here
+ 6 |     }
+   `----

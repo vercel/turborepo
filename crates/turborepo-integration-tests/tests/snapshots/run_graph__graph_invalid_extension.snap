@@ -1,0 +1,7 @@
+---
+source: crates/turborepo-integration-tests/tests/run_graph.rs
+expression: redact_output(&result.stderr)
+---
+ ERROR  invalid value 'graph.mdx' for '--graph [<GRAPH>]': Invalid file extension: 'mdx'. Allowed extensions are: ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"]
+
+For more information, try '--help'.

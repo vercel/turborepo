@@ -1,0 +1,44 @@
+---
+source: crates/turborepo-integration-tests/tests/run_one_script_error.rs
+expression: redact_error_output(&result.combined_output())
+---
+• Packages in scope: my-app
+• Running okay2 in 1 packages
+• Remote caching disabled
+my-app:okay: cache hit, replaying logs [HASH]
+my-app:okay: 
+my-app:okay: > okay
+my-app:okay: > echo working
+my-app:okay: 
+my-app:okay: working
+my-app:error: cache miss, executing [HASH]
+my-app:error: 
+my-app:error: > error
+my-app:error: > exit 2
+my-app:error: 
+my-app:error: npm error Lifecycle script `error` failed with error:
+my-app:error: npm error code 2
+my-app:error: npm error path [TEMP_DIR]
+my-app:error: npm error workspace my-app
+my-app:error: npm error location [TEMP_DIR]
+my-app:error: npm error command failed
+my-app:error: npm error command sh -c exit 2
+my-app:okay2: cache miss, executing [HASH]
+my-app:okay2: 
+my-app:okay2: > okay2
+my-app:okay2: > echo working
+my-app:okay2: 
+my-app:okay2: working
+
+ Tasks:    2 successful, 3 total
+Cached:    1 cached, 3 total
+  Time: [TIME] 
+Failed:    my-app#error
+
+ WARNING  An issue occurred while attempting to parse [TEMP_DIR] Turborepo will still function, but some features may not be available:
+   x Could not resolve workspaces.
+  `-> Lockfile not found at [TEMP_DIR]
+
+my-app:error: command finished with error, but continuing...
+my-app#error: [PATH]) [NPM] run error exited (2)
+ ERROR  run failed: command  exited (2)

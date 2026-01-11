@@ -1,0 +1,32 @@
+---
+source: crates/turborepo-integration-tests/tests/run_continue.rs
+expression: redact_continue_output(&result.combined_output())
+---
+• Packages in scope: base-lib, my-app, some-lib
+• Running build in 3 packages
+• Remote caching disabled
+some-lib:build: cache miss, executing [HASH]
+some-lib:build: 
+some-lib:build: > build
+some-lib:build: > exit 2
+some-lib:build: 
+some-lib:build: npm error Lifecycle script `build` failed with error:
+some-lib:build: npm error code 2
+some-lib:build: npm error path [TEMP_DIR]
+some-lib:build: npm error workspace some-lib
+some-lib:build: npm error location [TEMP_DIR]
+some-lib:build: npm error command failed
+some-lib:build: npm error command sh -c exit 2
+
+ Tasks:    2 successful, 3 total
+Cached:    1 cached, 3 total
+  Time: [TIME] 
+Failed:    some-lib#build
+
+ WARNING  An issue occurred while attempting to parse [TEMP_DIR] Turborepo will still function, but some features may not be available:
+   x Could not resolve workspaces.
+  `-> Lockfile not found at [TEMP_DIR]
+
+some-lib:build: command finished with error, but continuing...
+some-lib#build: command ([PATH]) [NPM] run build exited (2)
+ ERROR  run failed: command  exited (2)

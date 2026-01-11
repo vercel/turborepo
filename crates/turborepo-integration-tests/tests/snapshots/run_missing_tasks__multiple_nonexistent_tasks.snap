@@ -1,0 +1,7 @@
+---
+source: crates/turborepo-integration-tests/tests/run_missing_tasks.rs
+expression: redact_output(&result.combined_output())
+---
+  x Missing tasks in project
+  |->   x Could not find task `alsono` in project
+  `->   x Could not find task `doesnotexist` in project
