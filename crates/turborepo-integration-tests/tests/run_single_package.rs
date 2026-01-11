@@ -17,11 +17,16 @@ use common::{TurboTestEnv, redact_output};
 use insta::assert_snapshot;
 
 /// Helper to set up a single_package test environment with packageManager set.
+///
+/// The setup order matches the prysk tests:
+/// 1. Copy fixture files
+/// 2. Initialize git and commit initial files
+/// 3. Set packageManager and commit the change
 async fn setup_single_package_env() -> Result<TurboTestEnv> {
     let mut env = TurboTestEnv::new().await?;
     env.copy_fixture("single_package").await?;
-    env.set_package_manager("npm@10.5.0").await?;
     env.setup_git().await?;
+    env.set_package_manager("npm@10.5.0").await?;
     Ok(env)
 }
 

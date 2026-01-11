@@ -362,6 +362,11 @@ impl TurboTestEnv {
             .await?;
         self.exec(&["git", "config", "user.name", "Test User"])
             .await?;
+        // Disable autocrlf to ensure consistent line endings across platforms.
+        // This prevents Windows from converting LF to CRLF, which would cause
+        // different file hashes and input counts between platforms.
+        self.exec(&["git", "config", "core.autocrlf", "false"])
+            .await?;
 
         // Set script-shell=bash for cross-platform consistency.
         // This ensures npm scripts using bash syntax (;, &&, etc.) work on Windows.
@@ -590,9 +595,12 @@ impl TurboTestEnv {
     ///
     /// This mimics the behavior of setup_package_manager.sh in the prysk tests:
     /// 1. Sets the `packageManager` field in package.json
-    /// 2. Runs `corepack enable` to create shims that respect the version
+    /// 2. Commits the change (if git is initialized)
+    /// 3. Runs `corepack enable` to create shims that respect the version
     ///
-    /// The default value matches the npm version used in CI (npm@10.5.0).
+    /// **Important**: This function should be called AFTER `setup_git()` to
+    /// match the prysk test behavior. The prysk tests commit the initial
+    /// files first, then modify and commit package.json separately.
     ///
     /// # Arguments
     ///
@@ -605,8 +613,22 @@ impl TurboTestEnv {
 
         json["packageManager"] = serde_json::Value::String(package_manager.to_string());
 
-        let updated = serde_json::to_string_pretty(&json)?;
+        // serde_json::to_string_pretty uses \n line endings on all platforms
+        let mut updated = serde_json::to_string_pretty(&json)?;
+        // Ensure file ends with newline (POSIX convention)
+        if !updated.ends_with('\n') {
+            updated.push('\n');
+        }
         tokio::fs::write(&package_json_path, updated).await?;
+
+        // Commit the package.json change if git is initialized.
+        // This matches the behavior of setup_package_manager.sh which commits
+        // after modifying package.json.
+        if self.workspace_path.join(".git").exists() {
+            self.exec(&["git", "add", "package.json"]).await?;
+            let commit_msg = format!("Set packageManager to {}", package_manager);
+            self.exec(&["git", "commit", "-m", &commit_msg]).await?;
+        }
 
         // Extract the package manager name (e.g., "npm" from "npm@10.5.0")
         let package_manager_name = package_manager.split('@').next().unwrap_or(package_manager);
@@ -755,10 +777,15 @@ impl ExecResult {
     }
 }
 
-/// Recursively copy a directory.
+/// Recursively copy a directory, normalizing line endings for text files.
 ///
 /// This function is designed to be called within `spawn_blocking` to avoid
 /// blocking the async runtime.
+///
+/// Text files (determined by extension) have their line endings normalized to
+/// LF. This ensures consistent file hashes across platforms, particularly
+/// important on Windows where git's autocrlf setting might have converted LF to
+/// CRLF when cloning the repo.
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
     for entry in std::fs::read_dir(src).context("Failed to read source directory")? {
         let entry = entry?;
@@ -775,9 +802,58 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<()> {
             std::fs::create_dir_all(&dst_path)?;
             copy_dir_recursive(&src_path, &dst_path)?;
         } else {
-            std::fs::copy(&src_path, &dst_path)?;
+            // For text files, normalize line endings to LF for cross-platform consistency
+            if is_text_file(&src_path) {
+                copy_with_normalized_line_endings(&src_path, &dst_path)?;
+            } else {
+                std::fs::copy(&src_path, &dst_path)?;
+            }
         }
     }
+    Ok(())
+}
+
+/// Check if a file is likely a text file based on its extension.
+fn is_text_file(path: &Path) -> bool {
+    let text_extensions = [
+        "json",
+        "txt",
+        "md",
+        "js",
+        "ts",
+        "jsx",
+        "tsx",
+        "css",
+        "html",
+        "yml",
+        "yaml",
+        "toml",
+        "lock",
+        "gitignore",
+        "npmrc",
+        "sh",
+        "bash",
+        "zsh",
+    ];
+
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| text_extensions.contains(&ext.to_lowercase().as_str()))
+        || path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| {
+                name.starts_with('.') && !name.contains('.') // dotfiles like
+                // .gitignore
+            })
+}
+
+/// Copy a file while normalizing CRLF line endings to LF.
+fn copy_with_normalized_line_endings(src: &Path, dst: &Path) -> Result<()> {
+    let content =
+        std::fs::read_to_string(src).with_context(|| format!("Failed to read file: {:?}", src))?;
+    let normalized = content.replace("\r\n", "\n");
+    std::fs::write(dst, normalized).with_context(|| format!("Failed to write file: {:?}", dst))?;
     Ok(())
 }
 
