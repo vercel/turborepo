@@ -25,7 +25,7 @@ use insta::assert_snapshot;
 /// - Only my-app:build runs (util has no build script)
 #[tokio::test]
 async fn test_unnamed_packages_are_ignored() -> Result<()> {
-    let env = TurboTestEnv::new().await?;
+    let mut env = TurboTestEnv::new().await?;
     env.copy_fixture("nested_packages").await?;
     env.set_package_manager("npm@10.5.0").await?;
     env.setup_git().await?;

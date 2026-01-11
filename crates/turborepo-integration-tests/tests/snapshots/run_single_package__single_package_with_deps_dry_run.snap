@@ -3,7 +3,7 @@ source: crates/turborepo-integration-tests/tests/run_single_package.rs
 expression: redact_output(&result.combined_output())
 ---
 Global Hash Inputs
-  Global Files                          = 2
+  Global Files                          = 3
   External Dependencies Hash            = 
   Global Cache Key                      = I can’t see ya, but I know you’re here
   Global Env Vars                       = 
@@ -25,7 +25,7 @@ build
   Dependencies                   = 
   Dependents                     = test
   With                           = 
-  Inputs Files Considered        = 5
+  Inputs Files Considered        = 8
   Env Vars                       = 
   Env Vars Values                = 
   Inferred Env Vars Values       = 
@@ -44,7 +44,7 @@ test
   Dependencies                   = build
   Dependents                     = 
   With                           = 
-  Inputs Files Considered        = 5
+  Inputs Files Considered        = 8
   Env Vars                       = 
   Env Vars Values                = 
   Inferred Env Vars Values       = 

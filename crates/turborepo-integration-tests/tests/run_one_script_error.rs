@@ -52,7 +52,7 @@ fn redact_error_output(output: &str) -> String {
 
 /// Set up the test environment with the monorepo_one_script_error fixture.
 async fn setup_env() -> Result<TurboTestEnv> {
-    let env = TurboTestEnv::new().await?;
+    let mut env = TurboTestEnv::new().await?;
     env.copy_fixture("monorepo_one_script_error").await?;
     env.set_package_manager("npm@10.5.0").await?;
     env.setup_git().await?;

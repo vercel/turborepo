@@ -18,7 +18,7 @@ use insta::assert_snapshot;
 
 /// Helper to set up a single_package test environment with packageManager set.
 async fn setup_single_package_env() -> Result<TurboTestEnv> {
-    let env = TurboTestEnv::new().await?;
+    let mut env = TurboTestEnv::new().await?;
     env.copy_fixture("single_package").await?;
     env.set_package_manager("npm@10.5.0").await?;
     env.setup_git().await?;

@@ -231,6 +231,13 @@ pub struct TurboTestEnv {
     /// Path to use for turbo config directory (for telemetry config, etc.)
     /// This ensures telemetry can initialize even when HOME is not set.
     config_dir_path: PathBuf,
+    /// Path for corepack shims (npm, yarn, pnpm binaries).
+    /// When corepack is enabled, this directory contains shims that respect
+    /// the `packageManager` field in package.json.
+    corepack_install_dir: PathBuf,
+    /// Whether corepack has been enabled for this environment.
+    /// When true, commands will include the corepack shim directory in PATH.
+    corepack_enabled: bool,
     _temp_dir: tempfile::TempDir, // Keep temp dir alive for duration of test
 }
 
@@ -256,11 +263,15 @@ impl TurboTestEnv {
         // Use temp dir for turbo config to ensure telemetry can initialize
         // even when HOME is not set (common in CI environments)
         let config_dir_path = temp_dir.path().join(".turbo-config");
+        // Create a directory for corepack shims to isolate from system
+        let corepack_install_dir = temp_dir.path().join("corepack");
 
         Ok(Self {
             workspace_path,
             turbo_binary,
             config_dir_path,
+            corepack_install_dir,
+            corepack_enabled: false,
             _temp_dir: temp_dir,
         })
     }
@@ -378,7 +389,14 @@ impl TurboTestEnv {
     /// - `NO_COLOR=1` - For consistent output formatting
     /// - Removes `GITHUB_ACTIONS` - Prevents CI-specific output formatting
     /// - Removes `CI` - Prevents CI-specific behavior
+    /// - If corepack is enabled, prepends the shim directory to PATH
     fn configure_turbo_env(&self, cmd: &mut tokio::process::Command) {
+        // If corepack is enabled, prepend the shim directory to PATH
+        // This ensures turbo spawns the correct npm/yarn/pnpm version
+        if self.corepack_enabled {
+            self.configure_corepack_path(cmd);
+        }
+
         cmd.env("TURBO_CONFIG_DIR_PATH", &self.config_dir_path)
             .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
@@ -453,16 +471,89 @@ impl TurboTestEnv {
     }
 
     /// Execute a command in the workspace directory.
+    ///
+    /// If corepack has been enabled via [`Self::enable_corepack`], the corepack
+    /// shim directory is prepended to PATH so that npm/yarn/pnpm commands use
+    /// the version specified in package.json's `packageManager` field.
     pub async fn exec(&self, cmd: &[&str]) -> Result<ExecResult> {
         let (program, args) = cmd.split_first().context("Empty command")?;
-        let output = tokio::process::Command::new(program)
-            .args(args)
-            .current_dir(&self.workspace_path)
+        let mut command = tokio::process::Command::new(program);
+        command.args(args).current_dir(&self.workspace_path);
+
+        // If corepack is enabled, prepend the shim directory to PATH
+        if self.corepack_enabled {
+            self.configure_corepack_path(&mut command);
+        }
+
+        let output = command
             .output()
             .await
             .context("Failed to execute command")?;
 
         Ok(ExecResult::from(output))
+    }
+
+    /// Configure PATH to include corepack shim directory.
+    fn configure_corepack_path(&self, cmd: &mut tokio::process::Command) {
+        let current_path = std::env::var("PATH").unwrap_or_default();
+        let new_path = format!(
+            "{}{}{}",
+            self.corepack_install_dir.display(),
+            std::path::MAIN_SEPARATOR,
+            current_path
+        );
+        cmd.env("PATH", new_path);
+    }
+
+    /// Enable corepack for the specified package manager.
+    ///
+    /// This runs `corepack enable <manager>` with `--install-directory`
+    /// pointing to the test environment's isolated corepack directory.
+    /// After this, npm/yarn/pnpm commands will use the version specified in
+    /// package.json's `packageManager` field.
+    ///
+    /// This mimics the behavior of `setup_package_manager.sh` in the prysk
+    /// tests.
+    ///
+    /// # Arguments
+    ///
+    /// * `package_manager` - The package manager name (e.g., "npm", "yarn",
+    ///   "pnpm")
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// env.set_package_manager("npm@10.5.0").await?;
+    /// env.enable_corepack("npm").await?;
+    /// // Now npm commands will use npm@10.5.0
+    /// ```
+    pub async fn enable_corepack(&mut self, package_manager_name: &str) -> Result<()> {
+        // Create the corepack install directory
+        tokio::fs::create_dir_all(&self.corepack_install_dir)
+            .await
+            .context("Failed to create corepack install directory")?;
+
+        let install_dir_arg = format!(
+            "--install-directory={}",
+            self.corepack_install_dir.display()
+        );
+
+        let output = tokio::process::Command::new("corepack")
+            .args(["enable", package_manager_name, &install_dir_arg])
+            .current_dir(&self.workspace_path)
+            .output()
+            .await
+            .context("Failed to execute corepack enable")?;
+
+        if !output.status.success() {
+            anyhow::bail!(
+                "corepack enable failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        self.corepack_enabled = true;
+        Ok(())
     }
 
     /// Write content to a file in the workspace.
@@ -482,11 +573,19 @@ impl TurboTestEnv {
         Ok(content)
     }
 
-    /// Set the packageManager field in the root package.json.
+    /// Set the packageManager field in the root package.json and enable
+    /// corepack.
     ///
-    /// This mimics the behavior of setup_package_manager.sh in the prysk tests.
+    /// This mimics the behavior of setup_package_manager.sh in the prysk tests:
+    /// 1. Sets the `packageManager` field in package.json
+    /// 2. Runs `corepack enable` to create shims that respect the version
+    ///
     /// The default value matches the npm version used in CI (npm@10.5.0).
-    pub async fn set_package_manager(&self, package_manager: &str) -> Result<()> {
+    ///
+    /// # Arguments
+    ///
+    /// * `package_manager` - Full package manager spec (e.g., "npm@10.5.0")
+    pub async fn set_package_manager(&mut self, package_manager: &str) -> Result<()> {
         let package_json_path = self.workspace_path.join("package.json");
         let content = tokio::fs::read_to_string(&package_json_path).await?;
         let mut json: serde_json::Value =
@@ -496,6 +595,13 @@ impl TurboTestEnv {
 
         let updated = serde_json::to_string_pretty(&json)?;
         tokio::fs::write(&package_json_path, updated).await?;
+
+        // Extract the package manager name (e.g., "npm" from "npm@10.5.0")
+        let package_manager_name = package_manager.split('@').next().unwrap_or(package_manager);
+
+        // Enable corepack so the packageManager field is respected
+        self.enable_corepack(package_manager_name).await?;
+
         Ok(())
     }
 
@@ -845,11 +951,15 @@ pub async fn create_env_from_cache(prime_args: &[&str]) -> Result<TurboTestEnv> 
 
     // Use temp dir for turbo config to ensure telemetry can initialize
     let config_dir_path = temp_dir.path().join(".turbo-config");
+    // Create a directory for corepack shims
+    let corepack_install_dir = temp_dir.path().join("corepack");
 
     Ok(TurboTestEnv {
         workspace_path,
         turbo_binary,
         config_dir_path,
+        corepack_install_dir,
+        corepack_enabled: false,
         _temp_dir: temp_dir,
     })
 }

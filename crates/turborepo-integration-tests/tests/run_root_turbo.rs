@@ -103,7 +103,7 @@ async fn test_root_turbo_json_env_var() -> Result<()> {
 /// Test that running without turbo.json and without the allow flag fails.
 #[tokio::test]
 async fn test_allow_no_turbo_json_fails_without_flag() -> Result<()> {
-    let env = TurboTestEnv::new().await?;
+    let mut env = TurboTestEnv::new().await?;
     env.copy_fixture("monorepo_no_turbo_json").await?;
     // The fixture has an invalid packageManager field ("bower"), fix it
     env.set_package_manager("npm@10.5.0").await?;
@@ -124,7 +124,7 @@ async fn test_allow_no_turbo_json_fails_without_flag() -> Result<()> {
 /// config.
 #[tokio::test]
 async fn test_allow_no_turbo_json_flag() -> Result<()> {
-    let env = TurboTestEnv::new().await?;
+    let mut env = TurboTestEnv::new().await?;
     env.copy_fixture("monorepo_no_turbo_json").await?;
     // The fixture has an invalid packageManager field ("bower"), fix it
     env.set_package_manager("npm@10.5.0").await?;
@@ -150,7 +150,7 @@ async fn test_allow_no_turbo_json_flag() -> Result<()> {
 /// Running the same command twice should result in "cache bypass" both times.
 #[tokio::test]
 async fn test_allow_no_turbo_json_caching_disabled() -> Result<()> {
-    let env = TurboTestEnv::new().await?;
+    let mut env = TurboTestEnv::new().await?;
     env.copy_fixture("monorepo_no_turbo_json").await?;
     // The fixture has an invalid packageManager field ("bower"), fix it
     env.set_package_manager("npm@10.5.0").await?;
@@ -196,7 +196,7 @@ async fn test_allow_no_turbo_json_caching_disabled() -> Result<()> {
 /// Also tests that turbo can discover tasks from package.json scripts.
 #[tokio::test]
 async fn test_allow_no_turbo_json_env_var() -> Result<()> {
-    let env = TurboTestEnv::new().await?;
+    let mut env = TurboTestEnv::new().await?;
     env.copy_fixture("monorepo_no_turbo_json").await?;
     // The fixture has an invalid packageManager field ("bower"), fix it
     env.set_package_manager("npm@10.5.0").await?;

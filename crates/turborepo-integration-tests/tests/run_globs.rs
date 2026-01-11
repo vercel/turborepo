@@ -35,7 +35,7 @@ const BASE_ARGS: &[&str] = &["run", "build", "--filter=util", "--output-logs=has
 /// specified with glob patterns like "src/".
 #[tokio::test]
 async fn test_input_directory_change_causes_cache_miss() -> Result<()> {
-    let env = TurboTestEnv::new().await?;
+    let mut env = TurboTestEnv::new().await?;
     env.copy_fixture("dir_globs").await?;
     env.set_package_manager("npm@10.5.0").await?;
     env.setup_git().await?;
@@ -74,7 +74,7 @@ async fn test_input_directory_change_causes_cache_miss() -> Result<()> {
 /// the output files are missing but the inputs haven't changed.
 #[tokio::test]
 async fn test_cache_restores_output_files() -> Result<()> {
-    let env = TurboTestEnv::new().await?;
+    let mut env = TurboTestEnv::new().await?;
     env.copy_fixture("dir_globs").await?;
     env.set_package_manager("npm@10.5.0").await?;
     env.setup_git().await?;
