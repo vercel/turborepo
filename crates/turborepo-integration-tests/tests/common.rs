@@ -44,6 +44,7 @@ static TEMP_PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
 /// Error messages may split paths at various points like:
 /// - `/private/var/folders/03/\n    bcr7.../T/.tmpXXX/...`
 /// - `/private/var/\n    folders/.../T/.tmpXXX/...`
+///
 /// This regex matches the entire multi-line pattern.
 static TEMP_PATH_MULTILINE_RE: LazyLock<Regex> = LazyLock::new(|| {
     // Match macOS temp path split across two lines.
