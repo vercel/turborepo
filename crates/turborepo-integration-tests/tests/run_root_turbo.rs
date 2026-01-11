@@ -7,8 +7,7 @@
 //! - `--experimental-allow-no-turbo-json` flag to run without a config
 //! - `TURBO_ALLOW_NO_TURBO_JSON` env var for the same purpose
 
-// Skip on Windows - npm not found in test harness PATH on Windows CI
-#![cfg(all(feature = "integration-tests", not(windows)))]
+#![cfg(feature = "integration-tests")]
 
 mod common;
 

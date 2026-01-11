@@ -719,29 +719,24 @@ impl CachedFixtureEnv {
             }
         }
 
-        // Prime the cache with turbo run
+        // Prime the cache with turbo run.
+        // We inherit the environment (rather than clearing it) to ensure that
+        // npm, node, git, and other tools work correctly across all platforms.
+        // On Windows, this is critical for PATHEXT, COMSPEC, and other system
+        // variables that are required for process spawning to work correctly.
         let mut cmd = tokio::process::Command::new(&turbo_binary);
-        cmd.args(prime_args)
-            .current_dir(&workspace_path)
-            .env_clear();
+        cmd.args(prime_args).current_dir(&workspace_path);
 
-        // Set minimal environment
-        if let Ok(path) = std::env::var("PATH") {
-            cmd.env("PATH", path);
-        }
-        if let Ok(home) = std::env::var("HOME") {
-            cmd.env("HOME", home);
-        }
-        if let Ok(userprofile) = std::env::var("USERPROFILE") {
-            cmd.env("USERPROFILE", userprofile);
-        }
-        if let Ok(systemroot) = std::env::var("SYSTEMROOT") {
-            cmd.env("SYSTEMROOT", systemroot);
-        }
-
+        // Set turbo-specific test environment (overrides any inherited values)
         cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-            .env("TURBO_PRINT_VERSION_DISABLED", "1");
+            .env("TURBO_PRINT_VERSION_DISABLED", "1")
+            // Disable colored output for consistent snapshot testing
+            .env("NO_COLOR", "1")
+            // Remove CI-specific environment variables to ensure consistent output
+            // format across local development and CI environments
+            .env_remove("GITHUB_ACTIONS")
+            .env_remove("CI");
 
         let output = cmd.output().await.context("Failed to prime cache")?;
         if !output.status.success() {

@@ -8,8 +8,7 @@
 //! - Running tasks with dependencies
 //! - Various output log levels
 
-// Skip on Windows - npm not found in test harness PATH on Windows CI
-#![cfg(all(feature = "integration-tests", not(windows)))]
+#![cfg(feature = "integration-tests")]
 
 mod common;
 

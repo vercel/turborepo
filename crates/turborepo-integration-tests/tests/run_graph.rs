@@ -10,8 +10,7 @@
 //! | .mermaid    | file            | Mermaid flowchart format |
 //! | .mdx        | error           | Invalid extension error  |
 
-// Skip on Windows - npm not found in test harness PATH on Windows CI
-#![cfg(all(feature = "integration-tests", not(windows)))]
+#![cfg(feature = "integration-tests")]
 
 mod common;
 

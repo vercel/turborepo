@@ -16,12 +16,7 @@
 //! | missing | true    | yes     |
 //! | missing | false   | no      |
 //! | missing | novalue | yes     |
-//!
-//! Note: These tests are skipped on Windows CI due to npm PATH resolution
-//! issues in the test harness environment.
-
-// Skip on Windows - npm not found in test harness PATH on Windows CI
-#![cfg(all(feature = "integration-tests", not(windows)))]
+#![cfg(feature = "integration-tests")]
 
 mod common;
 

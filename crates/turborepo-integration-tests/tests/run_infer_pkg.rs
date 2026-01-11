@@ -3,8 +3,7 @@
 //! Tests package inference behavior when running turbo from different
 //! directories within the monorepo.
 
-// Skip on Windows - npm not found in test harness PATH on Windows CI
-#![cfg(all(feature = "integration-tests", not(windows)))]
+#![cfg(feature = "integration-tests")]
 
 mod common;
 
