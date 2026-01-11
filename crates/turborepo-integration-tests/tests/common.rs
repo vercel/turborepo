@@ -59,6 +59,20 @@ static TEMP_PATH_MULTILINE_RE: LazyLock<Regex> = LazyLock::new(|| {
         .expect("Invalid multiline temp path regex")
 });
 
+/// Compiled regex for matching Windows temp paths split across lines.
+/// Windows error messages may split paths after the drive letter:
+/// - `C:\n    \Users/runneradmin/AppData/Local/Temp/.tmpXXX/...`
+/// - `C:\n      \Users/runneradmin/AppData/Local/Temp/.tmpXXX/...`
+///
+/// This regex matches the entire multi-line pattern.
+static TEMP_PATH_WINDOWS_MULTILINE_RE: LazyLock<Regex> = LazyLock::new(|| {
+    // Match Windows temp path split across two lines after drive letter.
+    // The path is: C:\Users\...\AppData\Local\Temp\.tmpXXX\file (or with forward
+    // slashes) It can break after C: leaving \Users/... on next line
+    Regex::new(r"[A-Z]:\n\s*[/\\]Users/[^/\n]+/AppData/Local/Temp/\.?tmp[a-zA-Z0-9_]+(?:/[a-zA-Z0-9._-]+)*")
+        .expect("Invalid Windows multiline temp path regex")
+});
+
 /// Compiled regex for stripping ANSI escape codes from output.
 /// Matches CSI sequences like `\x1b[31m` (color) and `\x1b[0m` (reset).
 static ANSI_ESCAPE_RE: LazyLock<Regex> = LazyLock::new(|| {
@@ -112,6 +126,8 @@ pub fn redact_output(output: &str) -> String {
 
     // First handle multiline temp paths (paths split across lines)
     let output = TEMP_PATH_MULTILINE_RE.replace_all(&output, "[TEMP_DIR]");
+    // Handle Windows multiline temp paths (split after drive letter)
+    let output = TEMP_PATH_WINDOWS_MULTILINE_RE.replace_all(&output, "[TEMP_DIR]");
     // Then handle single-line temp paths
     TEMP_PATH_RE.replace_all(&output, "[TEMP_DIR]").into_owned()
 }
@@ -1040,6 +1056,21 @@ mod tests {
             output, "C:/Users/test",
             "Drive letter paths should be normalized"
         );
+    }
+
+    #[test]
+    fn test_redact_output_windows_multiline_temp_path() {
+        // Test Windows temp path split across lines after drive letter (CI pattern)
+        // This happens when npm error messages wrap the path
+        let input = "Lockfile not found at C:\n      \
+                     /Users/runneradmin/AppData/Local/Temp/.tmpLaTNdD/package-lock.json";
+        let output = redact_output(input);
+        assert!(
+            !output.contains("runneradmin"),
+            "Windows multiline temp path should be redacted. Got: {}",
+            output
+        );
+        assert!(output.contains("[TEMP_DIR]"), "Should contain [TEMP_DIR]");
     }
 
     // =========================================================================

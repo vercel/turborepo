@@ -26,16 +26,28 @@ static PATH_RE: LazyLock<Regex> = LazyLock::new(|| {
 static NPM_CMD_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[\w/\\\.]+npm(?:\.cmd)?").expect("Invalid npm command regex"));
 
+/// Regex to redact shell command differences between Windows and Unix.
+/// Windows: `C:/Windows/system32/cmd.exe /d /s /c`
+/// Unix: `sh -c`
+static SHELL_CMD_RE: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"npm error command (?:C:/Windows/system32/cmd\.exe /d /s /c|sh -c) (.+)")
+        .expect("Invalid shell cmd regex")
+});
+
 /// Apply additional redactions specific to error output.
 ///
 /// This handles npm error messages that contain file paths like:
 /// - `at location: /path/to/apps/my-app`
 /// - `command (/path/to/apps/my-app)`
 /// - `/usr/local/bin/npm run error`
+/// - Shell command differences between Windows and Unix
 fn redact_error_output(output: &str) -> String {
     let output = redact_output(output);
     let output = PATH_RE.replace_all(&output, "[PATH]");
-    NPM_CMD_RE.replace_all(&output, "[NPM]").into_owned()
+    let output = NPM_CMD_RE.replace_all(&output, "[NPM]");
+    SHELL_CMD_RE
+        .replace_all(&output, "npm error command [SHELL] $1")
+        .into_owned()
 }
 
 /// Set up the test environment with the monorepo_one_script_error fixture.

@@ -34,6 +34,14 @@ fn redact_paths(output: &str) -> String {
     let cmd_path_re = Regex::new(r"command \([^)]+\)").expect("Invalid cmd path regex");
     let output = cmd_path_re.replace_all(&output, "command ([PATH])");
 
+    // Redact shell command differences between Windows and Unix
+    // Windows: "npm error command C:/Windows/system32/cmd.exe /d /s /c <cmd>"
+    // Unix: "npm error command sh -c <cmd>"
+    let shell_cmd_re =
+        Regex::new(r"npm error command (?:C:/Windows/system32/cmd\.exe /d /s /c|sh -c) (.+)")
+            .expect("Invalid shell cmd regex");
+    let output = shell_cmd_re.replace_all(&output, "npm error command [SHELL] $1");
+
     output.into_owned()
 }
 
