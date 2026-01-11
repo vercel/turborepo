@@ -1,0 +1,21 @@
+---
+source: crates/turborepo-integration-tests/tests/run_root_turbo.rs
+expression: redact_output(&result2.combined_output())
+---
+• Packages in scope: another, my-app, util
+• Running test in 3 packages
+• Remote caching disabled
+my-app:test: cache bypass, force executing [HASH]
+my-app:test: 
+my-app:test: > test
+my-app:test: > echo $MY_VAR
+my-app:test: 
+my-app:test: foo
+
+ Tasks:    1 successful, 1 total
+Cached:    0 cached, 1 total
+  Time: [TIME] 
+
+ WARNING  An issue occurred while attempting to parse [TEMP_DIR] Turborepo will still function, but some features may not be available:
+   x Could not resolve workspaces.
+  `-> Lockfile not found at [TEMP_DIR]

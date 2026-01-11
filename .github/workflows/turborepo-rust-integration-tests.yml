@@ -1,0 +1,131 @@
+name: Rust Integration Tests
+
+on:
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  actions: write
+  contents: read
+  pull-requests: read
+
+jobs:
+  determine_changes:
+    name: Determine changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      rust: ${{ steps.filter.outputs.rust }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for changes
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            rust:
+              - ".github/actions/**"
+              - ".github/workflows/turborepo-rust-integration-tests.yml"
+              - "Cargo.**"
+              - "crates/**"
+              - ".cargo/**"
+              - "rust-toolchain.toml"
+              - "turborepo-tests/integration/fixtures/**"
+
+  rust_integration_tests:
+    name: Rust Integration Tests (${{ matrix.os.name }})
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: ubuntu
+            runner: ubuntu-latest
+          - name: macos
+            runner: macos-latest
+          - name: windows
+            runner: windows-latest
+    runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Set git to use LF line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+        if: matrix.os.name == 'windows'
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node: "true"
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Build turbo binary
+        timeout-minutes: 15
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          cargo build -p turbo
+        shell: bash
+        env:
+          # sccache configuration - only enabled for non-fork PRs
+          SCCACHE_BUCKET: ${{ !github.event.pull_request.head.repo.fork && 'turborepo-sccache' || '' }}
+          SCCACHE_REGION: ${{ !github.event.pull_request.head.repo.fork && 'us-east-2' || '' }}
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          # AWS credentials only passed for non-fork PRs to prevent accidental exposure
+          AWS_ACCESS_KEY_ID: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_ACCESS_KEY_ID || '' }}
+          AWS_SECRET_ACCESS_KEY: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_SECRET_ACCESS_KEY || '' }}
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
+
+      - name: Run Rust integration tests
+        timeout-minutes: 15
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          cargo nextest run -p turborepo-integration-tests --features integration-tests
+        shell: bash
+        env:
+          # sccache configuration - only enabled for non-fork PRs
+          SCCACHE_BUCKET: ${{ !github.event.pull_request.head.repo.fork && 'turborepo-sccache' || '' }}
+          SCCACHE_REGION: ${{ !github.event.pull_request.head.repo.fork && 'us-east-2' || '' }}
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          # AWS credentials only passed for non-fork PRs to prevent accidental exposure
+          AWS_ACCESS_KEY_ID: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_ACCESS_KEY_ID || '' }}
+          AWS_SECRET_ACCESS_KEY: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_SECRET_ACCESS_KEY || '' }}
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
+
+  cleanup:
+    name: Cleanup
+    needs:
+      - determine_changes
+      - rust_integration_tests
+    if: always()
+    uses: ./.github/workflows/pr-clean-caches.yml
+    secrets: inherit

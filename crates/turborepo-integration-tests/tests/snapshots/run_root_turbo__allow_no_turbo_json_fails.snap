@@ -1,0 +1,10 @@
+---
+source: crates/turborepo-integration-tests/tests/run_root_turbo.rs
+expression: redact_output(&result.combined_output())
+---
+ WARNING  An issue occurred while attempting to parse [TEMP_DIR] Turborepo will still function, but some features may not be available:
+   x Could not resolve workspaces.
+  `-> Lockfile not found at [TEMP_DIR]
+
+  x Could not find turbo.json or turbo.jsonc.
+  | Follow directions at https://turborepo.com/docs to create one.

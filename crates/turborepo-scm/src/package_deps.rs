@@ -277,7 +277,7 @@ impl GitRepo {
         // remove the excludes
         hashes.retain(|key, _| !manual_excludes_hashes.contains_key(key));
 
-        return Ok(hashes);
+        Ok(hashes)
     }
 }
 
