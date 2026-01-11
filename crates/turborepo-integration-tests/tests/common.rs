@@ -351,6 +351,7 @@ impl TurboTestEnv {
     /// - `TURBO_GLOBAL_WARNING_DISABLED=1`
     /// - `TURBO_PRINT_VERSION_DISABLED=1`
     /// - `NO_COLOR=1` - For consistent output formatting
+    /// - Removes `GITHUB_ACTIONS` - Prevents CI-specific output formatting
     ///
     /// Inheriting the environment (rather than clearing it) ensures that
     /// npm, node, git, and other tools work correctly across all platforms.
@@ -364,7 +365,11 @@ impl TurboTestEnv {
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
             // Disable colored output for consistent snapshot testing
-            .env("NO_COLOR", "1");
+            .env("NO_COLOR", "1")
+            // Remove CI-specific environment variables to ensure consistent output
+            // format across local development and CI environments
+            .env_remove("GITHUB_ACTIONS")
+            .env_remove("CI");
 
         let output = cmd.output().await.context("Failed to execute turbo")?;
         Ok(ExecResult::from(output))
@@ -390,7 +395,10 @@ impl TurboTestEnv {
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
             // Disable colored output for consistent snapshot testing
-            .env("NO_COLOR", "1");
+            .env("NO_COLOR", "1")
+            // Remove CI-specific environment variables to ensure consistent output
+            .env_remove("GITHUB_ACTIONS")
+            .env_remove("CI");
 
         let output = cmd.output().await.context("Failed to execute turbo")?;
         Ok(ExecResult::from(output))
@@ -414,7 +422,10 @@ impl TurboTestEnv {
             .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
             .env("TURBO_PRINT_VERSION_DISABLED", "1")
             // Disable colored output for consistent snapshot testing
-            .env("NO_COLOR", "1");
+            .env("NO_COLOR", "1")
+            // Remove CI-specific environment variables to ensure consistent output
+            .env_remove("GITHUB_ACTIONS")
+            .env_remove("CI");
 
         // Add test-specific environment variables (these override defaults)
         for (key, value) in env {
