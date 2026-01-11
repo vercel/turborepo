@@ -12,8 +12,12 @@
 //! - my-app: depends on some-lib, builds successfully
 //! - yet-another-lib: depends on base-lib, builds successfully
 //! - other-app: depends on yet-another-lib, fails with exit 3
+//!
+//! Note: These tests are skipped on Windows due to npm path/shell differences
+//! in CI that cause different output formatting.
 
-#![cfg(feature = "integration-tests")]
+// Skip entire module on Windows - npm behavior differs significantly
+#![cfg(all(feature = "integration-tests", not(windows)))]
 
 mod common;
 
