@@ -47,27 +47,61 @@ impl PackageInference {
             pkg_inference_path
         );
         let full_inference_path = turbo_root.resolve(pkg_inference_path);
+
+        // Track the best matching package (the one whose path is the longest prefix
+        // of the inference path, i.e., the most specific package containing our
+        // current directory)
+        let mut best_match: Option<(String, AnchoredSystemPathBuf)> = None;
+        let mut found_package_below = false;
+
         for (workspace_name, workspace_entry) in pkg_graph.packages() {
             let pkg_path = turbo_root.resolve(workspace_entry.package_path());
+
+            // Check if the inference path is inside this package (pkg_path is a prefix of
+            // full_inference_path)
             let inferred_path_is_below = pkg_path.contains(&full_inference_path);
+
             // We skip over the root package as the inferred path will always be below it
             if inferred_path_is_below && (&pkg_path as &AbsoluteSystemPath) != turbo_root {
-                // set both. The user might have set a parent directory filter,
-                // in which case we *should* fail to find any packages, but we should
-                // do so in a consistent manner
-                return Self {
-                    package_name: Some(workspace_name.to_string()),
-                    directory_root: workspace_entry.package_path().to_owned(),
+                // This package contains the inference path. Track it if it's a better
+                // (longer/more specific) match than what we've found so far.
+                let pkg_path_len = workspace_entry.package_path().as_str().len();
+                let is_better_match = match &best_match {
+                    None => true,
+                    Some((_, existing_path)) => pkg_path_len > existing_path.as_str().len(),
                 };
+
+                if is_better_match {
+                    best_match = Some((
+                        workspace_name.to_string(),
+                        workspace_entry.package_path().to_owned(),
+                    ));
+                }
             }
+
+            // Check if this package is below the inference path (full_inference_path is a
+            // prefix of pkg_path)
             let inferred_path_is_between_root_and_pkg = full_inference_path.contains(&pkg_path);
             if inferred_path_is_between_root_and_pkg {
-                // we've found *some* package below our inference directory. We can stop now and
-                // conclude that we're looking for all packages in a
-                // subdirectory
-                break;
+                // We've found *some* package below our inference directory
+                found_package_below = true;
             }
         }
+
+        // If we found a package that contains our inference path, use it
+        if let Some((package_name, directory_root)) = best_match {
+            return Self {
+                package_name: Some(package_name),
+                directory_root,
+            };
+        }
+
+        // If we found packages below the inference path, or no packages matched at all,
+        // use the inference path as the directory root
+        if found_package_below {
+            // We're in a directory that contains packages
+        }
+
         Self {
             package_name: None,
             directory_root: pkg_inference_path.to_owned(),
@@ -718,7 +752,10 @@ pub enum ResolutionError {
 
 #[cfg(test)]
 mod test {
-    use std::collections::{HashMap, HashSet};
+    use std::{
+        collections::{HashMap, HashSet},
+        str::FromStr,
+    };
 
     use pretty_assertions::assert_eq;
     use tempfile::TempDir;
@@ -1389,5 +1426,269 @@ mod test {
                 .map(|h| h.to_owned())
                 .expect("unsupported range"))
         }
+    }
+
+    /// Creates a package graph for testing PackageInference::calculate
+    fn make_package_graph(
+        package_paths: &[&str],
+    ) -> (TempDir, &'static AbsoluteSystemPathBuf, PackageGraph) {
+        let temp_folder = tempfile::tempdir().unwrap();
+        let turbo_root = Box::leak(Box::new(
+            AbsoluteSystemPathBuf::new(temp_folder.path().as_os_str().to_str().unwrap()).unwrap(),
+        ));
+
+        let package_jsons = package_paths
+            .iter()
+            .map(|package_path| {
+                let (_, name) = get_name(package_path);
+                (
+                    turbo_root.join_unix_path(
+                        RelativeUnixPathBuf::new(format!("{package_path}/package.json")).unwrap(),
+                    ),
+                    PackageJson {
+                        name: Some(Spanned::new(name.to_string())),
+                        ..Default::default()
+                    },
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+        for package_dir in package_jsons.keys() {
+            package_dir.ensure_dir().unwrap();
+        }
+
+        let graph = {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            rt.block_on(
+                PackageGraph::builder(turbo_root, Default::default())
+                    .with_package_discovery(MockDiscovery)
+                    .with_package_jsons(Some(package_jsons))
+                    .build(),
+            )
+            .unwrap()
+        };
+
+        (temp_folder, turbo_root, graph)
+    }
+
+    /// Test that PackageInference::calculate is deterministic when invoked from
+    /// a directory that contains nested packages (regression test for
+    /// GitHub issue #11428).
+    ///
+    /// The bug was that HashMap iteration order is non-deterministic, and the
+    /// previous implementation would return early when it found ANY package
+    /// below the inference path, rather than finding the most specific one.
+    #[test]
+    fn test_package_inference_deterministic_with_nested_packages() {
+        // Simulate the structure from the issue:
+        // apps/onprem/          <- invocation directory
+        // apps/onprem/backend/  <- nested package
+        // apps/onprem/web/      <- nested package
+        // packages/shared/      <- unrelated package
+        let (_tempdir, turbo_root, graph) =
+            make_package_graph(&["apps/onprem/backend", "apps/onprem/web", "packages/shared"]);
+
+        // Invoke from apps/onprem (a directory containing packages)
+        let inference_path = AnchoredSystemPathBuf::try_from("apps/onprem").unwrap();
+
+        // Run the calculation multiple times to verify determinism
+        // (with the bug, different runs could give different results)
+        for _ in 0..10 {
+            let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
+
+            // We should NOT infer a specific package - we're in a directory that contains
+            // packages, not inside a specific package
+            assert!(
+                inference.package_name.is_none(),
+                "Expected no package to be inferred when running from a directory containing \
+                 packages, but got {:?}",
+                inference.package_name
+            );
+
+            // The directory root should be the inference path itself
+            assert_eq!(
+                inference.directory_root, inference_path,
+                "Expected directory_root to be the inference path"
+            );
+        }
+    }
+
+    /// Test that PackageInference::calculate correctly identifies when we're
+    /// inside a specific package (at or below the package root).
+    #[test]
+    fn test_package_inference_inside_package() {
+        let (_tempdir, turbo_root, graph) =
+            make_package_graph(&["apps/onprem/backend", "apps/onprem/web", "packages/shared"]);
+
+        // Invoke from inside apps/onprem/backend
+        let inference_path = AnchoredSystemPathBuf::try_from("apps/onprem/backend").unwrap();
+        let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
+
+        assert_eq!(
+            inference.package_name,
+            Some("backend".to_string()),
+            "Expected to infer 'backend' package"
+        );
+        assert_eq!(
+            inference.directory_root,
+            AnchoredSystemPathBuf::try_from("apps/onprem/backend").unwrap()
+        );
+
+        // Invoke from a subdirectory inside apps/onprem/backend/src
+        let inference_path = AnchoredSystemPathBuf::try_from("apps/onprem/backend/src").unwrap();
+        let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
+
+        assert_eq!(
+            inference.package_name,
+            Some("backend".to_string()),
+            "Expected to infer 'backend' package from subdirectory"
+        );
+        assert_eq!(
+            inference.directory_root,
+            AnchoredSystemPathBuf::try_from("apps/onprem/backend").unwrap()
+        );
+    }
+
+    /// Test that PackageInference selects the most specific (deepest) package
+    /// when packages are nested.
+    #[test]
+    fn test_package_inference_selects_deepest_package() {
+        // Create a structure with nested packages
+        let (_tempdir, turbo_root, graph) = make_package_graph(&[
+            "apps",        // shallow package
+            "apps/web",    // deeper package inside apps
+            "apps/web/ui", // even deeper package
+            "packages/shared",
+        ]);
+
+        // When invoked from apps/web/ui/src, should infer apps/web/ui (the deepest)
+        let inference_path = AnchoredSystemPathBuf::try_from("apps/web/ui/src").unwrap();
+        let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
+
+        assert_eq!(
+            inference.package_name,
+            Some("ui".to_string()),
+            "Expected to infer the deepest package 'ui'"
+        );
+        assert_eq!(
+            inference.directory_root,
+            AnchoredSystemPathBuf::try_from("apps/web/ui").unwrap()
+        );
+
+        // When invoked from apps/web/src (outside ui), should infer apps/web
+        let inference_path = AnchoredSystemPathBuf::try_from("apps/web/src").unwrap();
+        let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
+
+        assert_eq!(
+            inference.package_name,
+            Some("web".to_string()),
+            "Expected to infer 'web' package"
+        );
+        assert_eq!(
+            inference.directory_root,
+            AnchoredSystemPathBuf::try_from("apps/web").unwrap()
+        );
+    }
+
+    /// End-to-end test for GitHub issue #11428: running `turbo -F "{./*}^..."
+    /// build` from a directory containing packages should select those
+    /// packages' dependencies.
+    ///
+    /// This test verifies that running from apps/onprem with filter {./*}^...
+    /// correctly selects packages under apps/onprem/* and their dependencies,
+    /// rather than randomly returning 0 packages.
+    #[test]
+    fn test_issue_11428_filter_from_directory_with_nested_packages() {
+        // Create the structure from the issue:
+        // apps/onprem/backend depends on packages/shared
+        // apps/onprem/web depends on packages/shared
+        let (_tempdir, resolver) = make_project(
+            &[
+                ("apps/onprem/backend", "packages/shared"),
+                ("apps/onprem/web", "packages/shared"),
+            ],
+            &[],
+            // Simulate running from apps/onprem
+            Some(PackageInference {
+                package_name: None,
+                directory_root: AnchoredSystemPathBuf::try_from("apps/onprem").unwrap(),
+            }),
+            TestChangeDetector::new(&[]),
+        );
+
+        // The filter {./*}^... means:
+        // - {./*} = packages matching "./*" relative to inference directory
+        //   (apps/onprem/*)
+        // - ^... = exclude self, include dependencies
+        //
+        // So this should select: packages/shared (dependency of backend and web)
+        // but NOT backend or web themselves (^ excludes self)
+        let selector = TargetSelector::from_str("{./*}^...").unwrap();
+        let packages = resolver.get_filtered_packages(vec![selector]).unwrap();
+
+        // We should get the dependencies of apps/onprem/* packages
+        // which is packages/shared
+        assert!(
+            !packages.is_empty(),
+            "Expected to find packages, but got none. This is the bug from issue #11428!"
+        );
+
+        assert!(
+            packages.contains_key(&PackageName::from("shared")),
+            "Expected 'shared' to be selected as a dependency. Got: {:?}",
+            packages.keys().collect::<Vec<_>>()
+        );
+
+        // backend and web should NOT be included (^ excludes self)
+        assert!(
+            !packages.contains_key(&PackageName::from("backend")),
+            "backend should be excluded due to ^ in filter"
+        );
+        assert!(
+            !packages.contains_key(&PackageName::from("web")),
+            "web should be excluded due to ^ in filter"
+        );
+    }
+
+    /// Test that running from a directory containing packages with filter {./*}
+    /// (without dependency traversal) selects those packages directly.
+    #[test]
+    fn test_filter_from_directory_selects_child_packages() {
+        let (_tempdir, resolver) = make_project(
+            &[
+                ("apps/onprem/backend", "packages/shared"),
+                ("apps/onprem/web", "packages/shared"),
+            ],
+            &[],
+            Some(PackageInference {
+                package_name: None,
+                directory_root: AnchoredSystemPathBuf::try_from("apps/onprem").unwrap(),
+            }),
+            TestChangeDetector::new(&[]),
+        );
+
+        // {./*} without ^... should select the packages themselves
+        let selector = TargetSelector::from_str("{./*}").unwrap();
+        let packages = resolver.get_filtered_packages(vec![selector]).unwrap();
+
+        assert!(
+            packages.contains_key(&PackageName::from("backend")),
+            "Expected 'backend' to be selected. Got: {:?}",
+            packages.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            packages.contains_key(&PackageName::from("web")),
+            "Expected 'web' to be selected. Got: {:?}",
+            packages.keys().collect::<Vec<_>>()
+        );
+
+        // shared should NOT be selected (it's not under apps/onprem/*)
+        assert!(
+            !packages.contains_key(&PackageName::from("shared")),
+            "shared should not be selected as it's not under apps/onprem/*"
+        );
     }
 }
