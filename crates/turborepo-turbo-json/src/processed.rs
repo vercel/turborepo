@@ -383,8 +383,7 @@ impl ProcessedTaskDefinition {
     /// Check if a task definition has any configuration beyond just the
     /// `extends` field.
     pub fn has_config_beyond_extends(&self) -> bool {
-        self.description.is_some()
-            || self.cache.is_some()
+        self.cache.is_some()
             || self.depends_on.is_some()
             || self.env.is_some()
             || self.inputs.is_some()
