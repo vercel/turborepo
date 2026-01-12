@@ -13,7 +13,7 @@ use swc_common::{
     input::StringInput,
 };
 use swc_ecma_ast::EsVersion;
-use swc_ecma_parser::{Capturing, EsSyntax, Parser, Syntax, TsSyntax, lexer::Lexer};
+use swc_ecma_parser::{EsSyntax, Lexer, Parser, Syntax, TsSyntax};
 use swc_ecma_visit::VisitWith;
 use thiserror::Error;
 use tokio::task::JoinSet;
@@ -184,7 +184,7 @@ impl Tracer {
             Some(&comments),
         );
 
-        let mut parser = Parser::new_from(Capturing::new(lexer));
+        let mut parser = Parser::new_from(lexer);
 
         // Parse the file as a module
         let module = match parser.parse_module() {

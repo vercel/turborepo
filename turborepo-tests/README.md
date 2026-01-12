@@ -2,7 +2,38 @@
 
 ## Integration tests
 
-TODO
+Integration tests verify turbo's behavior in realistic monorepo scenarios. There are two test systems:
+
+### Prysk Tests (Legacy)
+
+The original integration tests in `integration/tests/` use [prysk](https://www.prysk.net/), a Python-based test runner. These tests are `.t` files that execute shell commands and assert on output.
+
+To run prysk tests:
+
+```sh
+pnpm test --filter=prysk -- integration/tests/run/force.t
+```
+
+### Rust Integration Tests (New)
+
+A new Rust-based test system is being developed in `crates/turborepo-integration-tests/`. These tests:
+
+- Run as part of `cargo test` (benefits from nextest parallelization)
+- Use isolated temp directories for each test
+- Use insta for snapshot testing with deterministic output redactions
+- No external dependencies (no Docker, no Python)
+
+To run the Rust integration tests:
+
+```sh
+# First, build the turbo binary
+cargo build -p turbo
+
+# Run integration tests
+cargo test -p turborepo-integration-tests --features integration-tests
+```
+
+See `crates/turborepo-integration-tests/README.md` for details.
 
 ## Example tests
 
