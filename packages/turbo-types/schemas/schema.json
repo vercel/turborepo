@@ -105,30 +105,21 @@
     },
     "globalDependencies": {
       "description": "A list of globs to include in the set of implicit global hash dependencies.\n\nThe contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.\n\nThis is useful for busting the cache based on: - `.env` files (not in Git) - Any root level file that impacts package tasks that are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.ts`, `.eslintrc`, etc.)\n\nDocumentation: https://turborepo.com/docs/reference/configuration#globaldependencies",
-      "type": [
-        "array",
-        "null"
-      ],
+      "type": ["array", "null"],
       "items": {
         "$ref": "#/definitions/String"
       }
     },
     "globalEnv": {
       "description": "A list of environment variables for implicit global hash dependencies.\n\nThe variables included in this list will affect all task hashes.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#globalenv",
-      "type": [
-        "array",
-        "null"
-      ],
+      "type": ["array", "null"],
       "items": {
         "$ref": "#/definitions/String"
       }
     },
     "globalPassThroughEnv": {
       "description": "An allowlist of environment variables that should be made to all tasks, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#globalpassthroughenv",
-      "type": [
-        "array",
-        "null"
-      ],
+      "type": ["array", "null"],
       "items": {
         "$ref": "#/definitions/String"
       }
@@ -168,10 +159,7 @@
     },
     "tasks": {
       "description": "An object representing the task dependency graph of your project.\n\nturbo interprets these conventions to schedule, execute, and cache the outputs of tasks in your project.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#tasks",
-      "type": [
-        "object",
-        "null"
-      ],
+      "type": ["object", "null"],
       "additionalProperties": {
         "$ref": "#/definitions/Pipeline"
       }
@@ -254,16 +242,12 @@
         {
           "description": "Allow all environment variables for the process to be available.",
           "type": "string",
-          "enum": [
-            "loose"
-          ]
+          "enum": ["loose"]
         },
         {
           "description": "Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.",
           "type": "string",
-          "enum": [
-            "strict"
-          ]
+          "enum": ["strict"]
         }
       ]
     },
@@ -283,37 +267,27 @@
         {
           "description": "Displays all output.",
           "type": "string",
-          "enum": [
-            "full"
-          ]
+          "enum": ["full"]
         },
         {
           "description": "Hides all task output.",
           "type": "string",
-          "enum": [
-            "none"
-          ]
+          "enum": ["none"]
         },
         {
           "description": "Show only the hashes of the tasks.",
           "type": "string",
-          "enum": [
-            "hash-only"
-          ]
+          "enum": ["hash-only"]
         },
         {
           "description": "Only show output from cache misses.",
           "type": "string",
-          "enum": [
-            "new-only"
-          ]
+          "enum": ["new-only"]
         },
         {
           "description": "Only show output from task failures.",
           "type": "string",
-          "enum": [
-            "errors-only"
-          ]
+          "enum": ["errors-only"]
         }
       ]
     },
@@ -373,20 +347,14 @@
         },
         "env": {
           "description": "A list of environment variables that this task depends on.\n\nNote: If you are migrating from a turbo version 1.5 or below, you may be used to prefixing your variables with a `$`. You no longer need to use the `$` prefix.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#env",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"
           }
         },
         "inputs": {
           "description": "The set of glob patterns to consider as inputs to this task.\n\nChanges to files covered by these globs will cause a cache miss and the task will be rerun. If a file has been changed that is **not** included in the set of globs, it will not cause a cache miss. If omitted or empty, all files in the package are considered as inputs.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#inputs",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"
           }
@@ -426,20 +394,14 @@
         },
         "outputs": {
           "description": "The set of glob patterns indicating a task's cacheable filesystem outputs.\n\nTurborepo captures task logs for all tasks. This enables us to cache tasks whose runs produce no artifacts other than logs (such as linters). Logs are always treated as a cacheable artifact and never need to be specified.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#outputs",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"
           }
         },
         "passThroughEnv": {
           "description": "An allowlist of environment variables that should be made available in this task's environment, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#passthroughenv",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"
           }
@@ -457,10 +419,7 @@
         },
         "with": {
           "description": "A list of tasks that will run alongside this task.\n\nTasks in this list will not be run until completion before this task starts execution.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#with",
-          "type": [
-            "array",
-            "null"
-          ],
+          "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"
           }
@@ -609,16 +568,12 @@
         {
           "description": "Use the terminal user interface.",
           "type": "string",
-          "enum": [
-            "tui"
-          ]
+          "enum": ["tui"]
         },
         {
           "description": "Use the standard output stream.",
           "type": "string",
-          "enum": [
-            "stream"
-          ]
+          "enum": ["stream"]
         }
       ]
     },

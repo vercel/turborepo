@@ -18,7 +18,7 @@
   "scripts": {
     "build": "tsc",
     "lint:prettier": "prettier -c . --cache",
-    "generate-schema": "cargo run -p turborepo-schema-gen -- schema -o schemas/schema.json && cargo run -p turborepo-schema-gen -- typescript -o src/types/config-v2.ts",
+    "generate-schema": "cargo run -p turborepo-schema-gen -- schema -o schemas/schema.json && cargo run -p turborepo-schema-gen -- typescript -o src/types/config-v2.ts && pnpm exec oxfmt schemas/schema.json src/types/config-v2.ts",
     "generate-schema:legacy": "tsx scripts/generate-schema.ts",
     "verify-schema": "cargo run -p turborepo-schema-gen -- verify --schema schemas/schema.json --typescript src/types/config-v2.ts",
     "copy-schema": "cp schemas/schema.json ../turbo/schema.json",
