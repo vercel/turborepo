@@ -308,7 +308,7 @@ jobs:
           DEPLOYMENT_URL=$(echo "$RESPONSE" | jq -r '.deployments[0].url // empty')
 
           if [ -z "$DEPLOYMENT_URL" ]; then
-            echo "::error::No READY production deployment found for SHA ${SHA}. Ensure the Vercel production build for this commit has completed."
+            echo "::error::No READY production deployment found for SHA ${SHA}. A production deployment is created when the release commit is merged to main. Ensure the merge to main has completed and the Vercel build has finished before running this workflow."
             echo "API Response: $RESPONSE"
             exit 1
           fi
