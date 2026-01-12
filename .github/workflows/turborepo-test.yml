@@ -240,6 +240,7 @@ jobs:
         run: |
           cargo run -p turborepo-schema-gen -- schema -o packages/turbo-types/schemas/schema.json
           cargo run -p turborepo-schema-gen -- typescript -o packages/turbo-types/src/types/config-v2.ts
+          pnpm exec oxfmt packages/turbo-types/schemas/schema.json packages/turbo-types/src/types/config-v2.ts
 
       - name: Check for uncommitted changes
         run: |
