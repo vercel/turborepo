@@ -14,6 +14,12 @@ use std::{
 /// and raw mode, and set to false when cleanup completes.
 static TUI_ACTIVE: AtomicBool = AtomicBool::new(false);
 
+/// Global flag indicating whether mouse capture was enabled.
+/// On Windows, we must only call DisableMouseCapture if EnableMouseCapture
+/// was called first, because crossterm requires the original console mode
+/// to be saved before it can be restored.
+static MOUSE_CAPTURE_ENABLED: AtomicBool = AtomicBool::new(false);
+
 /// Mark the TUI as active. Call this after entering raw mode and alternate
 /// screen.
 pub fn set_tui_active() {
@@ -28,6 +34,21 @@ pub fn set_tui_inactive() {
 /// Check if the TUI is currently active.
 pub fn is_tui_active() -> bool {
     TUI_ACTIVE.load(Ordering::SeqCst)
+}
+
+/// Mark that mouse capture has been enabled.
+pub fn set_mouse_capture_enabled() {
+    MOUSE_CAPTURE_ENABLED.store(true, Ordering::SeqCst);
+}
+
+/// Mark that mouse capture has been disabled.
+pub fn set_mouse_capture_disabled() {
+    MOUSE_CAPTURE_ENABLED.store(false, Ordering::SeqCst);
+}
+
+/// Check if mouse capture is currently enabled.
+pub fn is_mouse_capture_enabled() -> bool {
+    MOUSE_CAPTURE_ENABLED.load(Ordering::SeqCst)
 }
 
 /// Attempts to restore terminal to a sane state if the TUI was active.
@@ -83,8 +104,9 @@ mod test {
 
     use super::*;
 
-    // Note: These tests modify global state (TUI_ACTIVE) and must run serially
-    // to avoid interference with each other or other tests that check TUI state.
+    // Note: These tests modify global state (TUI_ACTIVE, MOUSE_CAPTURE_ENABLED)
+    // and must run serially to avoid interference with each other or other tests
+    // that check TUI state.
 
     #[test]
     #[serial]
@@ -100,6 +122,22 @@ mod test {
         // Set inactive again
         set_tui_inactive();
         assert!(!is_tui_active());
+    }
+
+    #[test]
+    #[serial]
+    fn test_mouse_capture_flag() {
+        // Reset to known state
+        set_mouse_capture_disabled();
+        assert!(!is_mouse_capture_enabled());
+
+        // Set enabled
+        set_mouse_capture_enabled();
+        assert!(is_mouse_capture_enabled());
+
+        // Set disabled again
+        set_mouse_capture_disabled();
+        assert!(!is_mouse_capture_enabled());
     }
 
     #[test]
