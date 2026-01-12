@@ -436,6 +436,13 @@ pub struct RawTaskDefinition {
     #[ts(skip)]
     pub extends: Option<Spanned<bool>>,
 
+    /// A human-readable description of what this task does.
+    ///
+    /// This field is for documentation purposes only and does not affect
+    /// task execution or caching behavior.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<Spanned<UnescapedString>>,
+
     /// Whether or not to cache the outputs of the task.
     ///
     /// Setting cache to false is useful for long-running "watch" or
@@ -552,7 +559,8 @@ pub struct RawTaskDefinition {
 
 impl HasConfigBeyondExtends for RawTaskDefinition {
     fn has_config_beyond_extends(&self) -> bool {
-        self.cache.is_some()
+        self.description.is_some()
+            || self.cache.is_some()
             || self.depends_on.is_some()
             || self.env.is_some()
             || self.inputs.is_some()

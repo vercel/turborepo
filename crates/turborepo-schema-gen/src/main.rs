@@ -307,6 +307,14 @@ fn generate_remote_cache_interface() -> String {
 fn generate_pipeline_interface() -> String {
     r#"export interface Pipeline {
   /**
+   * A human-readable description of what this task does.
+   *
+   * This field is for documentation purposes only and does not affect
+   * task execution or caching behavior.
+   */
+  description?: string;
+
+  /**
    * The list of tasks that this task depends on.
    *
    * Prefixing an item in dependsOn with a ^ prefix tells turbo that this task depends

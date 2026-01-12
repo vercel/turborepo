@@ -323,6 +323,7 @@ impl ProcessedWith {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ProcessedTaskDefinition {
     pub extends: Option<Spanned<bool>>,
+    pub description: Option<Spanned<UnescapedString>>,
     pub cache: Option<Spanned<bool>>,
     pub depends_on: Option<ProcessedDependsOn>,
     pub env: Option<ProcessedEnv>,
@@ -345,6 +346,7 @@ impl ProcessedTaskDefinition {
     ) -> Result<Self, Error> {
         Ok(ProcessedTaskDefinition {
             extends: raw_task.extends,
+            description: raw_task.description,
             cache: raw_task.cache,
             depends_on: raw_task
                 .depends_on
@@ -381,7 +383,8 @@ impl ProcessedTaskDefinition {
     /// Check if a task definition has any configuration beyond just the
     /// `extends` field.
     pub fn has_config_beyond_extends(&self) -> bool {
-        self.cache.is_some()
+        self.description.is_some()
+            || self.cache.is_some()
             || self.depends_on.is_some()
             || self.env.is_some()
             || self.inputs.is_some()
