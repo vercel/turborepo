@@ -85,7 +85,7 @@ Now, from the root directory, you can run:
 cargo test -p <module>
 ```
 
-- Integration tests (prysk-based)
+- Integration tests
   ```bash
   pnpm test -- --filter=turborepo-tests-integration
   ```
@@ -110,25 +110,6 @@ cargo test -p <module>
   ```bash
   pnpm --filter turborepo-tests-integration test:interactive tests/turbo-help.t
   ```
-
-- Rust integration tests (new)
-
-  These tests run turbo in isolated temp directories using native Rust test infrastructure.
-  See `crates/turborepo-integration-tests/README.md` for details on architecture and writing tests.
-
-  ```bash
-  # Build turbo first
-  cargo build -p turbo
-
-  # Run all Rust integration tests
-  cargo test -p turborepo-integration-tests --features integration-tests
-
-  # Run a specific test
-  cargo test -p turborepo-integration-tests --features integration-tests test_single_package_run_cache_miss
-  ```
-
-  > **Note:** The `--features integration-tests` flag is required because these tests are behind
-  > a feature flag to keep default `cargo test` fast.
 
 ## Manually testing `turbo`
 

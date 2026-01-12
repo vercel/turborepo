@@ -210,9 +210,8 @@ jobs:
           # Only use sccache if we're in the Vercel repo.
           RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
           CARGO_INCREMENTAL: 0
-          # AWS credentials only passed for non-fork PRs to prevent accidental exposure
-          AWS_ACCESS_KEY_ID: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_ACCESS_KEY_ID || '' }}
-          AWS_SECRET_ACCESS_KEY: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_SECRET_ACCESS_KEY || '' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           # sccache timeout configuration to prevent hangs
           SCCACHE_IDLE_TIMEOUT: 0
           SCCACHE_REQUEST_TIMEOUT: 30
@@ -309,9 +308,8 @@ jobs:
           # Only use sccache if we're in the Vercel repo.
           RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
           CARGO_INCREMENTAL: 0
-          # AWS credentials only passed for non-fork PRs to prevent accidental exposure
-          AWS_ACCESS_KEY_ID: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_ACCESS_KEY_ID || '' }}
-          AWS_SECRET_ACCESS_KEY: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_SECRET_ACCESS_KEY || '' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           # sccache timeout configuration to prevent hangs
           SCCACHE_IDLE_TIMEOUT: 0
           SCCACHE_REQUEST_TIMEOUT: 30
@@ -332,9 +330,8 @@ jobs:
           # Only use sccache if we're in the Vercel repo.
           RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
           CARGO_INCREMENTAL: 0
-          # AWS credentials only passed for non-fork PRs to prevent accidental exposure
-          AWS_ACCESS_KEY_ID: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_ACCESS_KEY_ID || '' }}
-          AWS_SECRET_ACCESS_KEY: ${{ !github.event.pull_request.head.repo.fork && secrets.AWS_SECRET_ACCESS_KEY || '' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           # sccache timeout configuration to prevent hangs
           SCCACHE_IDLE_TIMEOUT: 0
           SCCACHE_REQUEST_TIMEOUT: 30
