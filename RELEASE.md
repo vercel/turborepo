@@ -329,25 +329,26 @@ This stage creates a versioned subdomain alias for the documentation site, makin
 
 **Required Secrets**:
 
-| Secret              | Purpose                                |
-| ------------------- | -------------------------------------- |
-| `TURBO_TOKEN`       | Vercel API authentication              |
-| `VERCEL_ORG_ID`     | Vercel team ID                         |
-| `VERCEL_PROJECT_ID` | Vercel project ID for turbo-site       |
+| Secret              | Purpose                          |
+| ------------------- | -------------------------------- |
+| `TURBO_TOKEN`       | Vercel API authentication        |
+| `VERCEL_ORG_ID`     | Vercel team ID                   |
+| `VERCEL_PROJECT_ID` | Vercel project ID for turbo-site |
 
 **Example URLs**:
 
-| Version           | Subdomain URL                          |
-| ----------------- | -------------------------------------- |
-| `2.5.4`           | `https://v2-5-4.turborepo.com`         |
-| `2.7.5-canary.0`  | `https://v2-7-5-canary-0.turborepo.com`|
-| `3.0.0`           | `https://v3-0-0.turborepo.com`         |
+| Version          | Subdomain URL                           |
+| ---------------- | --------------------------------------- |
+| `2.5.4`          | `https://v2-5-4.turborepo.com`          |
+| `2.7.5-canary.0` | `https://v2-7-5-canary-0.turborepo.com` |
+| `3.0.0`          | `https://v3-0-0.turborepo.com`          |
 
 #### Stage 7: Merge Release PR
 
 A release PR is automatically generated. Merge it as soon as possible after publishing has completed.
 
 The PR body will include:
+
 - **On success**: A link to the versioned docs (e.g., `https://v2-5-4.turborepo.com`)
 - **On failure**: A warning banner indicating the docs aliasing failed and needs manual intervention
 
