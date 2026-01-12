@@ -19,25 +19,45 @@ use std::{collections::HashMap, fmt, str::FromStr};
 use biome_deserialize_macros::Deserializable;
 use clap::ValueEnum;
 use globwalk::{GlobError, ValidatedGlob};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
 };
 use turborepo_errors::Spanned;
 use turborepo_task_id::{TaskId, TaskName};
 
-/// Environment mode for task execution.
+/// Turborepo's Environment Modes allow you to control which environment
+/// variables are available to a task at runtime.
 ///
-/// Controls how environment variables are handled during task execution:
-/// - `Loose`: Allows all environment variables to be passed through
-/// - `Strict`: Only explicitly configured environment variables are passed
-///   through
+/// - `strict`: Filter environment variables to only those that are specified in
+///   the `env` and `globalEnv` keys in `turbo.json`.
+/// - `loose`: Allow all environment variables for the process to be available.
+///
+/// Documentation: https://turborepo.com/docs/reference/configuration#envmode
 #[derive(
-    Copy, Clone, Debug, Default, PartialEq, Serialize, ValueEnum, Deserialize, Eq, Deserializable,
+    Copy,
+    Clone,
+    Debug,
+    Default,
+    PartialEq,
+    Serialize,
+    ValueEnum,
+    Deserialize,
+    Eq,
+    Deserializable,
+    JsonSchema,
+    TS,
 )]
 #[serde(rename_all = "lowercase")]
+#[schemars(rename_all = "lowercase")]
+#[ts(export)]
 pub enum EnvMode {
+    /// Allow all environment variables for the process to be available.
     Loose,
+    /// Filter environment variables to only those that are specified in the
+    /// `env` and `globalEnv` keys in `turbo.json`.
     #[default]
     Strict,
 }
@@ -64,25 +84,35 @@ pub enum StopExecution {
     DependentTasks,
 }
 
-/// Output log mode for task execution.
+/// Output mode for the task.
 ///
-/// Controls how task output logs are displayed and persisted:
-/// - `Full`: Entire task output is persisted after run
-/// - `None`: None of a task output is persisted after run
-/// - `HashOnly`: Only the status line of a task is persisted
-/// - `NewOnly`: Output is only persisted if it is a cache miss
-/// - `ErrorsOnly`: Output is only persisted if the task failed
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Deserializable, Serialize)]
+/// - `full`: Displays all output
+/// - `hash-only`: Show only the hashes of the tasks
+/// - `new-only`: Only show output from cache misses
+/// - `errors-only`: Only show output from task failures
+/// - `none`: Hides all task output
+///
+/// Documentation: https://turborepo.com/docs/reference/run#--output-logs-option
+#[derive(
+    Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Deserializable, Serialize, JsonSchema, TS,
+)]
+#[schemars(rename = "OutputLogs")]
+#[ts(export, rename = "OutputLogs")]
 pub enum OutputLogsMode {
+    /// Displays all output.
     #[serde(rename = "full")]
     #[default]
     Full,
+    /// Hides all task output.
     #[serde(rename = "none")]
     None,
+    /// Show only the hashes of the tasks.
     #[serde(rename = "hash-only")]
     HashOnly,
+    /// Only show output from cache misses.
     #[serde(rename = "new-only")]
     NewOnly,
+    /// Only show output from task failures.
     #[serde(rename = "errors-only")]
     ErrorsOnly,
 }
@@ -119,23 +149,37 @@ impl fmt::Display for DryRunMode {
     }
 }
 
-/// UI mode for task execution output.
+/// Enable use of the UI for `turbo`.
 ///
-/// Controls how task output is displayed:
-/// - `Tui`: Use the terminal user interface
-/// - `Stream`: Use the standard output stream
-/// - `Web`: Use the web user interface (experimental)
+/// Documentation: https://turborepo.com/docs/reference/configuration#ui
 #[derive(
-    Serialize, Deserialize, Debug, Default, Copy, Clone, Deserializable, PartialEq, Eq, ValueEnum,
+    Serialize,
+    Deserialize,
+    Debug,
+    Default,
+    Copy,
+    Clone,
+    Deserializable,
+    PartialEq,
+    Eq,
+    ValueEnum,
+    JsonSchema,
+    TS,
 )]
 #[serde(rename_all = "camelCase")]
+#[schemars(rename = "UI", rename_all = "camelCase")]
+#[ts(export, rename = "UI")]
 pub enum UIMode {
-    /// Use the terminal user interface
+    /// Use the terminal user interface.
     #[default]
     Tui,
-    /// Use the standard output stream
+    /// Use the standard output stream.
     Stream,
-    /// Use the web user interface (experimental)
+    /// Use the web user interface.
+    /// Note: This feature is undocumented, experimental, and not meant to be
+    /// used. It may change or be removed at any time.
+    #[schemars(skip)]
+    #[ts(skip)]
     Web,
 }
 

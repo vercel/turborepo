@@ -1,12 +1,11 @@
 export type OutputLogs =
   | "full"
+  | "none"
   | "hash-only"
   | "new-only"
-  | "errors-only"
-  | "none";
-export type EnvMode = "strict" | "loose";
+  | "errors-only";
+export type EnvMode = "loose" | "strict";
 export type UI = "tui" | "stream";
-
 /**
  * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
  */

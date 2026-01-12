@@ -17,7 +17,9 @@ use std::{
     fmt,
 };
 
+use schemars::{JsonSchema, r#gen::SchemaGenerator, schema::Schema};
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
 
 pub const TASK_DELIMITER: &str = "#";
@@ -37,6 +39,47 @@ pub struct TaskId<'a> {
 pub struct TaskName<'a> {
     package: Option<Cow<'a, str>>,
     task: Cow<'a, str>,
+}
+
+/// `TaskName` serializes as a string, so its JSON Schema is a string.
+impl JsonSchema for TaskName<'static> {
+    fn schema_name() -> String {
+        "TaskName".to_string()
+    }
+
+    fn json_schema(generator: &mut SchemaGenerator) -> Schema {
+        // TaskName is serialized as a string via `into = "String"`
+        String::json_schema(generator)
+    }
+}
+
+/// `TaskName` is represented as a `string` in TypeScript.
+impl TS for TaskName<'static> {
+    type WithoutGenerics = Self;
+
+    fn name() -> String {
+        "string".to_string()
+    }
+
+    fn inline() -> String {
+        "string".to_string()
+    }
+
+    fn inline_flattened() -> String {
+        "string".to_string()
+    }
+
+    fn decl() -> String {
+        String::new()
+    }
+
+    fn decl_concrete() -> String {
+        String::new()
+    }
+
+    fn dependencies() -> Vec<ts_rs::Dependency> {
+        vec![]
+    }
 }
 
 impl<'a> From<TaskId<'a>> for TaskName<'a> {
