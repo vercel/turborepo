@@ -278,8 +278,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Get version and compute subdomain
         id: version
