@@ -181,7 +181,7 @@ Test help flag
             Possible values:
             - tui:    Use the terminal user interface
             - stream: Use the standard output stream
-            - web:    Use the web user interface (experimental)
+            - web:    Use the web user interface. Note: This feature is undocumented, experimental, and not meant to be used. It may change or be removed at any time
   
         --login <LOGIN>
             Override the login endpoint
