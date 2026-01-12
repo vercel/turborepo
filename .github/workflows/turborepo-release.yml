@@ -79,6 +79,9 @@ jobs:
         run: |
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
+      - name: Get base SHA
+        id: base-sha
+        run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
       - name: Version
         run: |
           ./scripts/version.js ${{ inputs.increment }} ${{ inputs.tag-override }}
@@ -90,6 +93,7 @@ jobs:
         run: echo "${{ steps.stage.outputs.STAGE_BRANCH }}"
     outputs:
       stage-branch: "${{ steps.stage.outputs.STAGE_BRANCH }}"
+      base-sha: "${{ steps.base-sha.outputs.sha }}"
 
   rust-smoke-test:
     name: Rust Unit Tests
@@ -274,8 +278,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-          fetch-depth: 0
-          fetch-tags: true
 
       - name: Get version and compute subdomain
         id: version
@@ -288,18 +290,6 @@ jobs:
           echo "Version: v${VERSION}"
           echo "Subdomain: ${SUBDOMAIN}.turborepo.com"
 
-      - name: Get SHA for version tag
-        id: get-sha
-        run: |
-          TAG="v${{ steps.version.outputs.version }}"
-          SHA=$(git rev-list -n 1 "${TAG}" 2>/dev/null || echo "")
-          if [ -z "$SHA" ]; then
-            echo "::error::Could not find SHA for tag ${TAG}. Ensure the tag exists and has been fetched."
-            exit 1
-          fi
-          echo "sha=${SHA}" >> $GITHUB_OUTPUT
-          echo "Tag ${TAG} points to SHA: ${SHA}"
-
       - name: Find Vercel deployment for SHA
         id: find-deployment
         env:
@@ -307,23 +297,24 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          echo "Searching for deployment with SHA: ${{ steps.get-sha.outputs.sha }}"
+          SHA="${{ needs.stage.outputs.base-sha }}"
+          echo "Searching for production deployment with SHA: ${SHA}"
 
           RESPONSE=$(curl -s -f -X GET \
-            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&sha=${{ steps.get-sha.outputs.sha }}&state=READY&limit=1&slug=vercel" \
+            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&sha=${SHA}&state=READY&target=production&limit=1&slug=vercel" \
             -H "Authorization: Bearer ${VERCEL_TOKEN}" \
             -H "Content-Type: application/json")
 
           DEPLOYMENT_URL=$(echo "$RESPONSE" | jq -r '.deployments[0].url // empty')
 
           if [ -z "$DEPLOYMENT_URL" ]; then
-            echo "::error::No READY deployment found for SHA ${{ steps.get-sha.outputs.sha }}"
+            echo "::error::No READY production deployment found for SHA ${SHA}. Ensure the Vercel production build for this commit has completed."
             echo "API Response: $RESPONSE"
             exit 1
           fi
 
           echo "deployment_url=${DEPLOYMENT_URL}" >> $GITHUB_OUTPUT
-          echo "Found deployment: ${DEPLOYMENT_URL}"
+          echo "Found production deployment."
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
