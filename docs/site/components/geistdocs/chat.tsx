@@ -7,7 +7,6 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronRightIcon, MessagesSquareIcon, Trash } from "lucide-react";
 import { Portal } from "radix-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { harden } from "rehype-harden";
 import { toast } from "sonner";
 import { defaultRehypePlugins } from "streamdown";
 import type { MyUIMessage } from "@/app/api/chat/types";
@@ -119,6 +118,8 @@ type ChatProps = {
   basePath: string | undefined;
   suggestions: string[];
 };
+
+const { harden, ...plugins } = defaultRehypePlugins;
 
 const ChatInner = ({ basePath, suggestions }: ChatProps) => {
   const [isInitialized, setIsInitialized] = useState(false);
@@ -244,41 +245,53 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
 
       <Conversation>
         <ConversationContent>
-          {messages.map((message) => (
-            <Message
-              className="max-w-[90%]"
-              from={message.role}
-              key={message.id}
-            >
-              <MessageMetadata
-                inProgress={status === "submitted"}
-                parts={message.parts as MyUIMessage["parts"]}
-              />
-              {message.parts
-                .filter((part) => part.type === "text")
-                .map((part, index) => (
-                  <MessageContent key={`${message.id}-${part.type}-${index}`}>
-                    <MessageResponse
-                      className="text-wrap"
-                      rehypePlugins={[
-                        defaultRehypePlugins.raw,
-                        defaultRehypePlugins.katex,
-                        [
-                          harden,
-                          {
-                            defaultOrigin:
-                              process.env
-                                .NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL
-                          }
-                        ]
-                      ]}
+          {messages.map((message, index) => {
+            const isLastMessage = index === messages.length - 1;
+            const isAssistantMessage = message.role === "assistant";
+            const isStreaming =
+              isLastMessage &&
+              isAssistantMessage &&
+              (status === "streaming" || status === "submitted");
+
+            return (
+              <Message
+                className="max-w-[90%]"
+                from={message.role}
+                key={message.id}
+              >
+                <MessageMetadata
+                  inProgress={status === "submitted"}
+                  isStreaming={isStreaming}
+                  parts={message.parts as MyUIMessage["parts"]}
+                />
+                {message.parts
+                  .filter((part) => part.type === "text")
+                  .map((part, partIndex) => (
+                    <MessageContent
+                      key={`${message.id}-${part.type}-${partIndex}`}
                     >
-                      {part.text}
-                    </MessageResponse>
-                  </MessageContent>
-                ))}
-            </Message>
-          ))}
+                      <MessageResponse
+                        className="text-wrap"
+                        rehypePlugins={[
+                          ...Object.values(plugins),
+                          [
+                            harden,
+                            {
+                              defaultOrigin:
+                                process.env
+                                  .NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL,
+                              allowedLinkPrefixes: ["*"]
+                            }
+                          ]
+                        ]}
+                      >
+                        {part.text}
+                      </MessageResponse>
+                    </MessageContent>
+                  ))}
+              </Message>
+            );
+          })}
           {status === "submitted" && (
             <div className="size-12 text-muted-foreground text-sm">
               <Spinner />
