@@ -490,10 +490,23 @@ impl RunBuilder {
             .should_print_prelude_override
             .unwrap_or_else(|| self.will_execute_tasks());
 
+        // Warn if observability config is present but the feature flag is not enabled
+        if let Some(obs_opts) = &self.opts.experimental_observability {
+            if obs_opts.otel.is_some() && !self.opts.future_flags.experimental_observability {
+                tracing::warn!(
+                    "experimentalObservability.otel is configured but \
+                     futureFlags.experimentalObservability is not enabled in turbo.json. The \
+                     observability config will be ignored."
+                );
+            }
+        }
+
         let observability_handle = self
             .opts
+            .future_flags
             .experimental_observability
-            .as_ref()
+            .then(|| self.opts.experimental_observability.as_ref())
+            .flatten()
             .and_then(|opts| {
                 let token = opts
                     .otel

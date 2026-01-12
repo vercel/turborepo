@@ -1,3 +1,70 @@
+//! OpenTelemetry metrics exporter for Turborepo.
+//!
+//! This crate provides OTLP (OpenTelemetry Protocol) metrics export
+//! functionality for Turborepo run summaries. It enables sending run and task
+//! metrics to any OTLP-compatible observability backend (e.g., Grafana,
+//! Datadog, Honeycomb).
+//!
+//! # Architecture
+//!
+//! The crate is organized around these core types:
+//!
+//! - [`Config`]: Resolved configuration for the exporter (endpoint, protocol,
+//!   headers, etc.)
+//! - [`Protocol`]: The transport protocol to use (gRPC or HTTP/Protobuf)
+//! - [`Handle`]: The main entry point for recording metrics; manages the OTLP
+//!   exporter lifecycle
+//! - [`RunMetricsPayload`] / [`TaskMetricsPayload`]: Structured data
+//!   representing run and task metrics
+//! - [`MetricsConfig`]: Toggle which metric categories to emit (run summaries,
+//!   task details)
+//!
+//! # Usage
+//!
+//! ```ignore
+//! use turborepo_otel::{Config, Handle, MetricsConfig, Protocol, RunMetricsPayload};
+//! use std::collections::BTreeMap;
+//! use std::time::Duration;
+//!
+//! let config = Config {
+//!     endpoint: "http://localhost:4317".to_string(),
+//!     protocol: Protocol::Grpc,
+//!     headers: BTreeMap::new(),
+//!     timeout: Duration::from_secs(10),
+//!     resource_attributes: BTreeMap::new(),
+//!     metrics: MetricsConfig {
+//!         run_summary: true,
+//!         task_details: false,
+//!     },
+//! };
+//!
+//! let handle = Handle::try_new(config)?;
+//!
+//! // After a run completes, record metrics:
+//! handle.record_run(&run_payload);
+//!
+//! // On shutdown, flush pending metrics:
+//! handle.shutdown();
+//! ```
+//!
+//! # Feature Flags
+//!
+//! This crate is typically used behind the `otel` feature flag in
+//! `turborepo-run-summary`. When the feature is disabled, a stub implementation
+//! is used that does nothing.
+//!
+//! # Metrics Emitted
+//!
+//! When `run_summary` is enabled:
+//! - `turbo.run.duration_ms` - Histogram of run durations
+//! - `turbo.run.tasks.attempted` - Counter of attempted tasks per run
+//! - `turbo.run.tasks.failed` - Counter of failed tasks per run
+//! - `turbo.run.tasks.cached` - Counter of cache-hit tasks per run
+//!
+//! When `task_details` is enabled:
+//! - `turbo.task.duration_ms` - Histogram of individual task durations
+//! - `turbo.task.cache.events` - Counter of cache events with hit/miss status
+
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
@@ -175,18 +242,12 @@ impl Handle {
     }
 
     pub fn shutdown(self) {
-        tracing::debug!(target = "turborepo_otel", "shutting down otel exporter");
-        match Arc::try_unwrap(self.inner) {
-            Ok(inner) => {
-                if let Err(err) = inner.provider.shutdown() {
-                    warn!("failed to shutdown otel exporter: {err}");
-                }
-            }
-            Err(shared) => {
-                if let Err(err) = shared.provider.shutdown() {
-                    warn!("failed to shutdown otel exporter: {err}");
-                }
-            }
+        tracing::debug!(target: "turborepo_otel", "shutting down otel exporter");
+        // SdkMeterProvider::shutdown flushes pending metrics and shuts down the
+        // exporter. We call it regardless of whether we have exclusive Arc
+        // ownership, since the provider handles concurrent access internally.
+        if let Err(err) = self.inner.provider.shutdown() {
+            warn!("failed to shutdown otel exporter: {err}");
         }
     }
 }
