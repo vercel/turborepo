@@ -5,30 +5,29 @@ edition = { workspace = true }
 license = "MIT"
 publish = false
 
+[[bin]]
+name = "turbo-test-setup"
+path = "src/bin/setup.rs"
+
 [features]
 # Integration tests are behind a feature flag to keep default cargo test fast
 integration-tests = []
 
 [dependencies]
-# Only dev dependencies needed - this crate is test-only
+# Core dependencies for the library and binary
+anyhow = { workspace = true }
+clap = { workspace = true, features = ["derive"] }
+regex = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["full", "process"] }
+which = { workspace = true }
 
 [dev-dependencies]
 # Snapshot testing with redaction support
 insta = { workspace = true, features = ["filters"] }
-# Async runtime
-tokio = { workspace = true, features = ["full", "process"] }
-# Regex for output matching (preserving prysk semantics)
-regex = { workspace = true }
-# Temp directories
-tempfile = { workspace = true }
-# Error handling
-anyhow = { workspace = true }
 # Parameterized tests
 test-case = { workspace = true }
-# JSON parsing for profile tests
-serde_json = { workspace = true }
-# Find executables in PATH (cross-platform)
-which = { workspace = true }
 
 [lints]
 workspace = true

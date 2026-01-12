@@ -1,108 +1,71 @@
 # turborepo-integration-tests
 
-Rust-based integration tests for turborepo, replacing the prysk-based tests.
+Rust-based test setup infrastructure for turborepo integration tests.
 
-## Prerequisites
+## Overview
 
-- **Rust toolchain**: For building the turbo binary and running tests
-- **Git**: Required for test fixtures (turbo requires a git repository)
-- **Pre-built turbo binary**: Run `cargo build -p turbo` before tests
+This crate provides a Rust library and CLI binary (`turbo-test-setup`) for setting up integration test environments. The test setup is used by the prysk-based integration tests to ensure consistent, cross-platform test environments.
 
-## Running the Tests
+## Components
 
-These tests are behind a feature flag:
+### Library (`src/lib.rs`)
 
-```sh
-# First, build the turbo binary
-cargo build -p turbo
+The library exports:
 
-# Run integration tests
-cargo test -p turborepo-integration-tests --features integration-tests
-```
+- `TurboTestEnv` - A test environment struct for running turbo commands in isolated temp directories
+- `redact_output()` - Helper for redacting dynamic values (hashes, timing) from output
+- `copy_dir_recursive()` - Utility for copying fixture directories
+- Path helpers (`turbo_binary_path()`, `fixtures_path()`)
 
-## Architecture
+### CLI Binary (`turbo-test-setup`)
 
-### Isolation Strategy
-
-Tests run in isolated temp directories with controlled environment variables, matching the behavior of the existing prysk-based integration tests:
-
-- Each test gets its own temp directory via `tempfile::tempdir()`
-- Fixtures are copied into the temp directory
-- Git is initialized for turbo to work properly
-- Environment variables are controlled for deterministic output
-- Cleanup happens automatically when the test completes
-
-### Fixtures
-
-Fixtures are copied from `turborepo-tests/integration/fixtures/` into the temp directory at runtime. The test sets up git before running turbo commands.
-
-### Assertions
-
-Tests use [insta](https://insta.rs/) for snapshot testing with redactions for dynamic values:
-
-- **Timing**: `Time: 1.23s` -> `Time: [TIME]`
-- **Hashes**: `0555ce94ca234049` -> `[HASH]`
-
-The `redact_output()` function in `common.rs` handles these redactions using compiled regexes for performance.
-
-When snapshots change, review them with:
+The binary can be called from shell scripts to set up test environments:
 
 ```sh
-cargo insta review
+# Initialize a test environment (outputs shell commands to eval)
+eval "$(turbo-test-setup init basic_monorepo)"
+
+# With custom package manager
+eval "$(turbo-test-setup init basic_monorepo --package-manager npm@10.5.0)"
+
+# Skip dependency installation
+eval "$(turbo-test-setup init basic_monorepo --no-install)"
 ```
 
-## Adding a New Test
+The binary outputs shell variable assignments that set up the environment:
 
-1. Create a new test file in `tests/` (e.g., `tests/run_something.rs`)
-2. Use the `common` module for test setup:
+- `TURBO` - Path to the turbo binary
+- `TURBO_TELEMETRY_MESSAGE_DISABLED=1`
+- `TURBO_GLOBAL_WARNING_DISABLED=1`
+- `TURBO_PRINT_VERSION_DISABLED=1`
+- `PATH` - Updated to include corepack shim directory
 
-```rust
-#![cfg(feature = "integration-tests")]
-
-mod common;
-
-use common::{redact_output, TurboTestEnv};
-use anyhow::Result;
-use insta::assert_snapshot;
-
-#[tokio::test]
-async fn test_something() -> Result<()> {
-    let env = TurboTestEnv::new().await?;
-
-    env.copy_fixture("basic_monorepo").await?;
-    env.setup_git().await?;
-
-    let result = env.run_turbo(&["run", "build"]).await?;
-    result.assert_success();
-
-    // Use insta for snapshots with redaction
-    assert_snapshot!(redact_output(&result.combined_output()));
-
-    Ok(())
-}
-```
-
-3. Run the test to generate initial snapshots:
+## Building
 
 ```sh
-cargo test -p turborepo-integration-tests --features integration-tests -- test_something
-cargo insta review
+# Build the setup binary
+cargo build -p turborepo-integration-tests
+
+# The binary will be at target/debug/turbo-test-setup
 ```
 
-## Migration from Prysk
+## Usage with Prysk Tests
 
-This test system is being developed as a replacement for the prysk-based tests in `turborepo-tests/`. During the migration period, both systems will coexist.
+The prysk integration tests in `turborepo-tests/integration/tests/` will automatically use this binary if it's available:
 
-The goal is feature parity:
+```bash
+# In setup_integration_test.sh
+if [[ -x "$TURBO_TEST_SETUP" ]]; then
+  eval "$($TURBO_TEST_SETUP init $FIXTURE_NAME $SETUP_ARGS)"
+else
+  # Fall back to shell-based setup
+  ...
+fi
+```
 
-- Same test coverage
-- Same assertions (output matching with regex support)
-- Same failure behavior
+## Benefits
 
-Benefits of the new system:
-
-- Runs as part of `cargo test` (benefits from nextest partitioning)
-- No Python dependency
-- Better IDE integration
-- Easier debugging with Rust tooling
-- Platform matrix testing in CI (Linux, macOS, Windows)
+- **Cross-platform consistency**: Handles line ending normalization, path handling
+- **Reproducible environments**: Uses corepack for package manager version pinning
+- **Faster setup**: Rust binary can be faster than shell scripts, especially on Windows
+- **Shared infrastructure**: Same setup code used by both Rust and prysk tests

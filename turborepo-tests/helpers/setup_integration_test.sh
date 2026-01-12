@@ -40,25 +40,42 @@ if [[ "$OSTYPE" == darwin* ]]; then
   export TMPDIR=/tmp
 fi
 
-
-"${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
-"${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
-"${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
-if $INSTALL_DEPS; then
-  "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER"
-fi
-
-# Set TURBO env var, it is used by tests to run the binary
+# Check if the Rust setup binary exists
+TURBO_TEST_SETUP="${MONOREPO_ROOT_DIR}/target/debug/turbo-test-setup"
 if [[ "${OSTYPE}" == "msys" ]]; then
-  EXT=".exe"
-else
-  EXT=""
+  TURBO_TEST_SETUP="${TURBO_TEST_SETUP}.exe"
 fi
 
-export TURBO_TELEMETRY_MESSAGE_DISABLED=1
-export TURBO_GLOBAL_WARNING_DISABLED=1
-export TURBO_PRINT_VERSION_DISABLED=1
-export TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
+if [[ -x "$TURBO_TEST_SETUP" ]]; then
+  # Use the Rust setup binary
+  SETUP_ARGS="--package-manager $PACKAGE_MANAGER --target-dir $TARGET_DIR"
+  if ! $INSTALL_DEPS; then
+    SETUP_ARGS="$SETUP_ARGS --no-install"
+  fi
+  
+  # Run the setup and eval its output to set environment variables
+  eval "$($TURBO_TEST_SETUP init $FIXTURE_NAME $SETUP_ARGS)"
+else
+  # Fall back to shell-based setup if Rust binary not available
+  "${TURBOREPO_TESTS_DIR}/helpers/copy_fixture.sh" "${TARGET_DIR}" "${FIXTURE_NAME}" "${TURBOREPO_TESTS_DIR}/integration/fixtures"
+  "${TURBOREPO_TESTS_DIR}/helpers/setup_git.sh" "${TARGET_DIR}"
+  "${TURBOREPO_TESTS_DIR}/helpers/setup_package_manager.sh" "${TARGET_DIR}" "$PACKAGE_MANAGER"
+  if $INSTALL_DEPS; then
+    "${TURBOREPO_TESTS_DIR}/helpers/install_deps.sh" "$PACKAGE_MANAGER"
+  fi
+
+  # Set TURBO env var, it is used by tests to run the binary
+  if [[ "${OSTYPE}" == "msys" ]]; then
+    EXT=".exe"
+  else
+    EXT=""
+  fi
+
+  export TURBO_TELEMETRY_MESSAGE_DISABLED=1
+  export TURBO_GLOBAL_WARNING_DISABLED=1
+  export TURBO_PRINT_VERSION_DISABLED=1
+  export TURBO=${MONOREPO_ROOT_DIR}/target/debug/turbo${EXT}
+fi
 
 # Undo the set -eo pipefail at the top of this script
 # This script is called with a leading ".", which means that it does not run
