@@ -406,16 +406,22 @@ mod tests {
                 expect_auth: Some("Bearer existing"),
             },
             Case {
-                name: "case-insensitive: preserves lowercase authorization",
+                name: "case-insensitive: skips when lowercase authorization exists",
                 existing_header: Some(("authorization", "Bearer existing")),
                 token: Some("new-token"),
-                expect_auth: None, // won't find "Authorization", existing is lowercase
+                // Case-insensitive check finds "authorization", so no new header is added.
+                // We check for "Authorization" (capitalized) which won't exist since
+                // the original was lowercase and we didn't add a new one.
+                expect_auth: None,
             },
             Case {
-                name: "case-insensitive: preserves AUTHORIZATION",
+                name: "case-insensitive: skips when AUTHORIZATION exists",
                 existing_header: Some(("AUTHORIZATION", "Bearer existing")),
                 token: Some("new-token"),
-                expect_auth: None, // won't find "Authorization", existing is uppercase
+                // Case-insensitive check finds "AUTHORIZATION", so no new header is added.
+                // We check for "Authorization" (mixed case) which won't exist since
+                // the original was uppercase and we didn't add a new one.
+                expect_auth: None,
             },
         ];
 

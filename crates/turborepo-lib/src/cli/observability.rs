@@ -6,71 +6,106 @@ use crate::config::{
     ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
 };
 
+/// CLI arguments for experimental OpenTelemetry metrics export.
+///
+/// These flags allow configuring OTLP metrics export from the command line.
+/// Configuration can also be set via environment variables
+/// (`TURBO_EXPERIMENTAL_OTEL_*`) or in `turbo.json` under
+/// `experimentalObservability.otel`.
 #[derive(Parser, Clone, Debug, Default, PartialEq)]
 pub struct ExperimentalOtelCliArgs {
+    /// Enable or disable OpenTelemetry metrics export.
+    /// Requires `futureFlags.experimentalObservability: true` in turbo.json.
     #[clap(
         long = "experimental-otel-enabled",
         global = true,
         num_args = 0..=1,
-        default_missing_value = "true"
+        default_missing_value = "true",
+        help = "Enable OpenTelemetry metrics export"
     )]
     pub enabled: Option<bool>,
 
+    /// Transport protocol to use for the OTLP exporter.
+    /// Supported values: grpc, http-protobuf
     #[clap(
         long = "experimental-otel-protocol",
         value_enum,
         global = true,
-        value_name = "PROTOCOL"
+        value_name = "PROTOCOL",
+        help = "OTLP transport protocol (grpc or http-protobuf)"
     )]
     pub protocol: Option<ExperimentalOtelProtocol>,
 
-    #[clap(long = "experimental-otel-endpoint", global = true, value_name = "URL")]
+    /// OTLP endpoint URL (e.g., http://localhost:4317 for gRPC).
+    #[clap(
+        long = "experimental-otel-endpoint",
+        global = true,
+        value_name = "URL",
+        help = "OTLP collector endpoint URL"
+    )]
     pub endpoint: Option<String>,
 
+    /// Timeout for OTLP export requests in milliseconds.
     #[clap(
         long = "experimental-otel-timeout-ms",
         global = true,
-        value_name = "MILLISECONDS"
+        value_name = "MILLISECONDS",
+        help = "OTLP export timeout in milliseconds (default: 10000)"
     )]
     pub timeout_ms: Option<u64>,
 
+    /// Additional headers to send with OTLP requests.
+    /// Can be specified multiple times. Useful for authentication.
     #[clap(
         long = "experimental-otel-header",
         global = true,
         value_parser = parse_key_val_pair,
-        value_name = "KEY=VALUE"
+        value_name = "KEY=VALUE",
+        help = "Add header to OTLP requests (can be repeated)"
     )]
     pub headers: Vec<(String, String)>,
 
+    /// OpenTelemetry resource attributes to attach to all metrics.
+    /// Can be specified multiple times (e.g., service.name=my-app).
     #[clap(
         long = "experimental-otel-resource",
         global = true,
         value_parser = parse_key_val_pair,
-        value_name = "KEY=VALUE"
+        value_name = "KEY=VALUE",
+        help = "Add resource attribute to metrics (can be repeated)"
     )]
     pub resource_attributes: Vec<(String, String)>,
 
+    /// Enable run-level summary metrics (duration, task counts).
+    /// Enabled by default when OTEL is configured.
     #[clap(
         long = "experimental-otel-metrics-run-summary",
         global = true,
         num_args = 0..=1,
-        default_missing_value = "true"
+        default_missing_value = "true",
+        help = "Emit run-level summary metrics (default: true)"
     )]
     pub metrics_run_summary: Option<bool>,
 
+    /// Enable per-task detail metrics (individual task durations, cache
+    /// status). Disabled by default due to higher cardinality.
     #[clap(
         long = "experimental-otel-metrics-task-details",
         global = true,
         num_args = 0..=1,
-        default_missing_value = "true"
+        default_missing_value = "true",
+        help = "Emit per-task detail metrics (default: false)"
     )]
     pub metrics_task_details: Option<bool>,
 
+    /// Use the Vercel remote cache authentication token for OTLP requests.
+    /// Automatically adds an Authorization header with the token.
     #[clap(
         long = "experimental-otel-use-remote-cache-token",
         global = true,
         num_args = 0..=1,
-        default_missing_value = "true"
+        default_missing_value = "true",
+        help = "Use remote cache token for OTLP authentication"
     )]
     pub use_remote_cache_token: Option<bool>,
 }
