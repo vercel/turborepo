@@ -292,7 +292,11 @@ jobs:
         id: get-sha
         run: |
           TAG="v${{ steps.version.outputs.version }}"
-          SHA=$(git rev-list -n 1 "${TAG}")
+          SHA=$(git rev-list -n 1 "${TAG}" 2>/dev/null || echo "")
+          if [ -z "$SHA" ]; then
+            echo "::error::Could not find SHA for tag ${TAG}. Ensure the tag exists and has been fetched."
+            exit 1
+          fi
           echo "sha=${SHA}" >> $GITHUB_OUTPUT
           echo "Tag ${TAG} points to SHA: ${SHA}"
 
