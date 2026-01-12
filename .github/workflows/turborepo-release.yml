@@ -307,23 +307,24 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         run: |
-          echo "Searching for deployment with SHA: ${{ steps.get-sha.outputs.sha }}"
+          SHA="${{ steps.get-sha.outputs.sha }}"
+          echo "Searching for production deployment with SHA: ${SHA}"
 
           RESPONSE=$(curl -s -f -X GET \
-            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&sha=${{ steps.get-sha.outputs.sha }}&state=READY&limit=1&slug=vercel" \
+            "https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&sha=${SHA}&state=READY&target=production&limit=1&slug=vercel" \
             -H "Authorization: Bearer ${VERCEL_TOKEN}" \
             -H "Content-Type: application/json")
 
           DEPLOYMENT_URL=$(echo "$RESPONSE" | jq -r '.deployments[0].url // empty')
 
           if [ -z "$DEPLOYMENT_URL" ]; then
-            echo "::error::No READY deployment found for SHA ${{ steps.get-sha.outputs.sha }}"
+            echo "::error::No READY production deployment found for SHA ${SHA}. A production deployment is created when the release commit is merged to main. Ensure the merge to main has completed and the Vercel build has finished before running this workflow."
             echo "API Response: $RESPONSE"
             exit 1
           fi
 
           echo "deployment_url=${DEPLOYMENT_URL}" >> $GITHUB_OUTPUT
-          echo "Found deployment: ${DEPLOYMENT_URL}"
+          echo "Found production deployment."
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
