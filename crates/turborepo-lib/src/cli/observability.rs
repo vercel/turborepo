@@ -12,10 +12,13 @@ use crate::config::{
 /// Configuration can also be set via environment variables
 /// (`TURBO_EXPERIMENTAL_OTEL_*`) or in `turbo.json` under
 /// `experimentalObservability.otel`.
+///
+/// Note: CLI flags and environment variables work independently of the
+/// `futureFlags.experimentalObservability` setting. The future flag only
+/// gates the `experimentalObservability` configuration in `turbo.json`.
 #[derive(Parser, Clone, Debug, Default, PartialEq)]
 pub struct ExperimentalOtelCliArgs {
     /// Enable or disable OpenTelemetry metrics export.
-    /// Requires `futureFlags.experimentalObservability: true` in turbo.json.
     #[clap(
         long = "experimental-otel-enabled",
         global = true,
