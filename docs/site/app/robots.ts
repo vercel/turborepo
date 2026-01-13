@@ -1,22 +1,20 @@
 import type { MetadataRoute } from "next";
 
-/**
- * Check if the host is a subdomain (has more than 2 parts, e.g., v1.example.com)
- */
-function isSubdomain(host: string): boolean {
-  const parts = host.split(".");
-  return parts.length > 2;
-}
+const PRODUCTION_DOMAIN = "turborepo.dev";
 
 /**
  * Dynamic robots.txt generation.
  *
- * All subdomains are blocked from search engine indexing.
+ * Only the production domain (turborepo.dev) is allowed to be indexed.
+ * Subdomains (e.g., v1.turborepo.dev) and preview deployments are blocked.
  */
 export default function robots(): MetadataRoute.Robots {
-  const host = process.env.VERCEL_URL ?? "";
+  // VERCEL_PROJECT_PRODUCTION_URL is the production domain assigned to the project
+  // For the main site, this will be "turborepo.dev"
+  // For subdomains, this will be "v1.turborepo.dev", etc.
+  const productionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? "";
 
-  if (isSubdomain(host)) {
+  if (productionUrl !== PRODUCTION_DOMAIN) {
     return {
       rules: {
         userAgent: "*",
@@ -29,6 +27,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/"
-    }
+    },
+    sitemap: `https://${PRODUCTION_DOMAIN}/sitemap.xml`
   };
 }
