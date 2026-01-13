@@ -89,7 +89,7 @@ Then, create tasks in `turbo.json` to run these scripts in order:
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
   "tasks": {
     "dev": {
       "dependsOn": ["db:seed"],
@@ -131,7 +131,7 @@ You can create a configuration like this one:
 
 ```json title="turbo.json"
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
   "tasks": {
     "lint": {},
     "format": {},
@@ -154,7 +154,7 @@ For instance, a script for checking types using `tsc --noEmit` can be configured
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
   "tasks": {
     "check-types": {
       "inputs": ["**/*.{ts,tsx}"]

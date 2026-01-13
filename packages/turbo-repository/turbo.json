@@ -4,7 +4,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["cli#rust-src"],
-      "env": ["NODE_VERSION"]
+      "env": ["NODE_VERSION"],
+      "outputs": ["js/dist/**/*", "native/**/*"]
     },
     "test": {
       "dependsOn": ["build"]

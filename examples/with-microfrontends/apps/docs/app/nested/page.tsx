@@ -54,7 +54,7 @@ export default function Home() {
           Examples
         </a>
         <a
-          href="https://turborepo.com?utm_source=create-turbo"
+          href="https://turborepo.dev?utm_source=create-turbo"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -65,7 +65,7 @@ export default function Home() {
             width={16}
             height={16}
           />
-          Go to turborepo.com →
+          Go to turborepo.dev →
         </a>
       </footer>
     </div>

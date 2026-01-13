@@ -949,6 +949,8 @@ fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<St
             crossterm::event::EnableMouseCapture,
             crossterm::terminal::EnterAlternateScreen
         )?;
+        // Track that mouse capture was enabled (important for Windows cleanup)
+        super::panic_handler::set_mouse_capture_enabled();
     }
 
     // Mark TUI as active so panic handler knows to restore terminal state
@@ -976,16 +978,41 @@ fn cleanup<B: Backend + io::Write>(
 ) -> io::Result<()> {
     terminal.clear()?;
 
-    // Always disable mouse capture on cleanup, even if we didn't enable it.
-    // This is idempotent and ensures that if a child process enabled mouse
-    // capture, it gets properly disabled. This is especially important in
-    // VSCode's terminal (xterm.js) where mouse events can leak into child
-    // process stdout if mouse capture isn't properly disabled.
-    crossterm::execute!(
-        terminal.backend_mut(),
-        crossterm::event::DisableMouseCapture,
-        crossterm::terminal::LeaveAlternateScreen,
-    )?;
+    // On Windows, we must only call DisableMouseCapture if EnableMouseCapture
+    // was called first, because crossterm requires the original console mode
+    // to be saved before it can be restored. Calling DisableMouseCapture without
+    // first calling EnableMouseCapture causes "Initial console modes not set"
+    // error.
+    //
+    // On Unix, we can safely always disable mouse capture as it uses escape
+    // sequences that are idempotent.
+    #[cfg(windows)]
+    {
+        if super::panic_handler::is_mouse_capture_enabled() {
+            crossterm::execute!(
+                terminal.backend_mut(),
+                crossterm::event::DisableMouseCapture,
+                crossterm::terminal::LeaveAlternateScreen,
+            )?;
+            super::panic_handler::set_mouse_capture_disabled();
+        } else {
+            crossterm::execute!(
+                terminal.backend_mut(),
+                crossterm::terminal::LeaveAlternateScreen,
+            )?;
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        // On Unix, always disable mouse capture - it's safe and handles child
+        // processes that may have enabled mouse capture (especially in VSCode).
+        crossterm::execute!(
+            terminal.backend_mut(),
+            crossterm::event::DisableMouseCapture,
+            crossterm::terminal::LeaveAlternateScreen,
+        )?;
+        super::panic_handler::set_mouse_capture_disabled();
+    }
 
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;

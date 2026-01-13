@@ -1,7 +1,7 @@
 //! Turborepo's telemetry library. Handles sending anonymous telemetry events to
 //! the Vercel API in the background.
 //!
-//! More detail is available at https://turborepo.com/docs/telemetry.
+//! More detail is available at https://turborepo.dev/docs/telemetry.
 
 #![feature(error_generic_member_access)]
 // miette's derive macro causes false positives for this lint

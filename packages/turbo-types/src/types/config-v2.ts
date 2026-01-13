@@ -1,12 +1,11 @@
 export type OutputLogs =
   | "full"
+  | "none"
   | "hash-only"
   | "new-only"
-  | "errors-only"
-  | "none";
-export type EnvMode = "strict" | "loose";
+  | "errors-only";
+export type EnvMode = "loose" | "strict";
 export type UI = "tui" | "stream";
-
 /**
  * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
  */
@@ -14,14 +13,14 @@ export type RelativeUnixPath = string;
 export type EnvWildcard = string;
 
 export interface BaseSchema {
-  /** @defaultValue `https://turborepo.com/schema.v2.json` */
+  /** @defaultValue `https://turborepo.dev/schema.v2.json` */
   $schema?: string;
   /**
    * An object representing the task dependency graph of your project. turbo interprets
    * these conventions to schedule, execute, and cache the outputs of tasks in
    * your project.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#tasks
+   * Documentation: https://turborepo.dev/docs/reference/configuration#tasks
    *
    * @defaultValue `{}`
    */
@@ -78,7 +77,7 @@ export interface RootSchema extends BaseSchema {
    * that are not represented in the traditional dependency graph
    * (e.g. a root tsconfig.json, jest.config.ts, .eslintrc, etc.)
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#globaldependencies
+   * Documentation: https://turborepo.dev/docs/reference/configuration#globaldependencies
    *
    * @defaultValue `[]`
    */
@@ -89,7 +88,7 @@ export interface RootSchema extends BaseSchema {
    *
    * The variables included in this list will affect all task hashes.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#globalenv
+   * Documentation: https://turborepo.dev/docs/reference/configuration#globalenv
    *
    * @defaultValue `[]`
    */
@@ -99,7 +98,7 @@ export interface RootSchema extends BaseSchema {
    * An allowlist of environment variables that should be made to all tasks, but
    * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#globalpassthroughenv
+   * Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
    *
    * @defaultValue `null`
    */
@@ -108,7 +107,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Configuration options that control how turbo interfaces with the remote cache.
    *
-   * Documentation: https://turborepo.com/docs/core-concepts/remote-caching
+   * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
    *
    * @defaultValue `{}`
    */
@@ -117,7 +116,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Enable use of the UI for `turbo`.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#ui
+   * Documentation: https://turborepo.dev/docs/reference/configuration#ui
    *
    * @defaultValue `"stream"`
    */
@@ -129,7 +128,7 @@ export interface RootSchema extends BaseSchema {
    *  - Use `1` to force serial execution (one task at a time).
    *  - Use `100%` to use all available logical processors.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#concurrency
+   * Documentation: https://turborepo.dev/docs/reference/configuration#concurrency
    *
    * @defaultValue `"10"`
    */
@@ -150,7 +149,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Specify the filesystem cache directory.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#cachedir
+   * Documentation: https://turborepo.dev/docs/reference/configuration#cachedir
    *
    * @defaultValue `".turbo/cache"`
    */
@@ -159,7 +158,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#daemon
+   * Documentation: https://turborepo.dev/docs/reference/configuration#daemon
    *
    * @defaultValue `false`
    */
@@ -171,7 +170,7 @@ export interface RootSchema extends BaseSchema {
    * - `"strict"`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`.
    * - `"loose"`: Allow all environment variables for the process to be available.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#envmode
+   * Documentation: https://turborepo.dev/docs/reference/configuration#envmode
    *
    * @defaultValue `"strict"`
    */
@@ -185,7 +184,7 @@ export interface RootSchema extends BaseSchema {
   /**
    * When set to `true`, disables the update notification that appears when a new version of `turbo` is available.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#noupdatenotifier
+   * Documentation: https://turborepo.dev/docs/reference/configuration#noupdatenotifier
    *
    * @defaultValue `false`
    */
@@ -201,6 +200,14 @@ export interface RootSchema extends BaseSchema {
 
 export interface Pipeline {
   /**
+   * A human-readable description of what this task does.
+   *
+   * This field is for documentation purposes only and does not affect
+   * task execution or caching behavior.
+   */
+  description?: string;
+
+  /**
    * The list of tasks that this task depends on.
    *
    * Prefixing an item in dependsOn with a ^ prefix tells turbo that this task depends
@@ -212,7 +219,7 @@ export interface Pipeline {
    * same package (e.g. "A package's test and lint commands depend on its own build being
    * completed first.")
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#dependson
+   * Documentation: https://turborepo.dev/docs/reference/configuration#dependson
    *
    * @defaultValue `[]`
    */
@@ -226,7 +233,7 @@ export interface Pipeline {
    * You no longer need to use the $ prefix.
    * (e.g. $GITHUB_TOKEN → GITHUB_TOKEN)
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#env
+   * Documentation: https://turborepo.dev/docs/reference/configuration#env
    *
    * @defaultValue `[]`
    */
@@ -237,7 +244,7 @@ export interface Pipeline {
    * task's environment, but should not contribute to the task's cache key,
    * e.g. `AWS_SECRET_KEY`.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#passthroughenv
+   * Documentation: https://turborepo.dev/docs/reference/configuration#passthroughenv
    *
    * @defaultValue `null`
    */
@@ -250,7 +257,7 @@ export interface Pipeline {
    * produce no artifacts other than logs (such as linters). Logs are always treated as a
    * cacheable artifact and never need to be specified.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#outputs
+   * Documentation: https://turborepo.dev/docs/reference/configuration#outputs
    *
    * @defaultValue `[]`
    */
@@ -261,7 +268,7 @@ export interface Pipeline {
    *
    * Setting cache to false is useful for long-running "watch" or development mode tasks.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#cache
+   * Documentation: https://turborepo.dev/docs/reference/configuration#cache
    *
    * @defaultValue `true`
    */
@@ -278,7 +285,7 @@ export interface Pipeline {
    *
    * If omitted or empty, all files in the package are considered as inputs.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#inputs
+   * Documentation: https://turborepo.dev/docs/reference/configuration#inputs
    *
    * @defaultValue `[]`
    */
@@ -297,7 +304,7 @@ export interface Pipeline {
    *
    * "none": Hides all task output
    *
-   * Documentation: https://turborepo.com/docs/reference/run#--output-logs-option
+   * Documentation: https://turborepo.dev/docs/reference/run#--output-logs-option
    *
    * @defaultValue `"full"`
    */
@@ -308,7 +315,7 @@ export interface Pipeline {
    * turbo that this is a long-running task and will ensure that other tasks
    * cannot depend on it.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#persistent
+   * Documentation: https://turborepo.dev/docs/reference/configuration#persistent
    *
    * @defaultValue `false`
    */
@@ -319,7 +326,7 @@ export interface Pipeline {
    * Interactive tasks must be marked with "cache": false as the input
    * they receive from stdin can change the outcome of the task.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#interactive
+   * Documentation: https://turborepo.dev/docs/reference/configuration#interactive
    *
    * @defaultValue `false`
    */
@@ -332,7 +339,7 @@ export interface Pipeline {
    * not be restarted by default. To enable restarting persistent tasks, set
    * `interruptible` to true.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#interruptible
+   * Documentation: https://turborepo.dev/docs/reference/configuration#interruptible
    *
    * @defaultValue `false`
    */
@@ -343,7 +350,7 @@ export interface Pipeline {
    *
    * Tasks in this list will not be run until completion before this task starts execution.
    *
-   * Documentation: https://turborepo.com/docs/reference/configuration#with
+   * Documentation: https://turborepo.dev/docs/reference/configuration#with
    *
    * @defaultValue `[]`
    */
@@ -365,7 +372,7 @@ export interface RemoteCache {
    * Indicates if the remote cache is enabled. When `false`, Turborepo will disable
    * all remote cache operations, even if the repo has a valid token. If true, remote caching
    * is enabled, but still requires the user to login and link their repo to a remote cache.
-   * Documentation: https://turborepo.com/docs/core-concepts/remote-caching
+   * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
    *
    * @defaultValue `true`
    */
@@ -382,14 +389,14 @@ export interface RemoteCache {
   preflight?: boolean;
   /**
    * Set endpoint for API calls to the remote cache.
-   * Documentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting
+   * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting
    *
    * @defaultValue `"https://vercel.com/api"`
    */
   apiUrl?: string;
   /**
    * Set endpoint for requesting tokens during `turbo login`.
-   * Documentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting
+   * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting
    *
    * @defaultValue `"https://vercel.com"`
    */

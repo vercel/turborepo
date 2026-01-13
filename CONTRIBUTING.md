@@ -225,7 +225,7 @@ Key characteristics of a great example include:
 - One technology added to the `basic` example
 - An updated README at the root of the example directory. Make sure to include any steps required to run the example
 - All tasks in `turbo.json` in the example run successfully without any code changes needed
-- Works with every package manager listed in our [Support Policy](https://turborepo.com/docs/getting-started/support-policy#package-managers)
+- Works with every package manager listed in our [Support Policy](https://turborepo.dev/docs/getting-started/support-policy#package-managers)
 
 Once you've created your example (with prior approval, as discussed above), you can submit a pull request to the repository.
 

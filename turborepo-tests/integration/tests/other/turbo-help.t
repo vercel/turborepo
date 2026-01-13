@@ -111,7 +111,7 @@ Test help flag
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [possible values: loose, strict]
     -F, --filter <FILTER>
-            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
+            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.dev/docs/reference/command-line-reference/run#--filter
         --affected
             Filter to only packages that are affected by changes between the current branch and `main`
         --output-logs <OUTPUT_LOGS>
@@ -181,7 +181,7 @@ Test help flag
             Possible values:
             - tui:    Use the terminal user interface
             - stream: Use the standard output stream
-            - web:    Use the web user interface (experimental)
+            - web:    Use the web user interface. Note: This feature is undocumented, experimental, and not meant to be used. It may change or be removed at any time
   
         --login <LOGIN>
             Override the login endpoint
@@ -297,19 +297,26 @@ Test help flag
   
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json
-            
-            [possible values: loose, strict]
+  
+            Possible values:
+            - loose:  Allow all environment variables for the process to be available
+            - strict: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`
   
     -F, --filter <FILTER>
-            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
+            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.dev/docs/reference/command-line-reference/run#--filter
   
         --affected
             Filter to only packages that are affected by changes between the current branch and `main`
   
         --output-logs <OUTPUT_LOGS>
             Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full)
-            
-            [possible values: full, none, hash-only, new-only, errors-only]
+  
+            Possible values:
+            - full:        Displays all output
+            - none:        Hides all task output
+            - hash-only:   Show only the hashes of the tasks
+            - new-only:    Only show output from cache misses
+            - errors-only: Only show output from task failures
   
         --log-order <LOG_ORDER>
             Set type of task output order. Use "stream" to show output as soon as it is available. Use "grouped" to show output when a command has finished execution. Use "auto" to let turbo decide based on its own heuristics. (default auto)

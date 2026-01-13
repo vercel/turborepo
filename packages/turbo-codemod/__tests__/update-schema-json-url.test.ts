@@ -21,7 +21,7 @@ describe("update-schema-url", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.v2.json",
+      $schema: "https://turborepo.dev/schema.v2.json",
       tasks: {
         build: {
           outputs: ["dist/**"]
@@ -54,7 +54,7 @@ describe("update-schema-url", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist/**"]

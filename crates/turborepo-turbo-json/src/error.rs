@@ -80,7 +80,7 @@ pub enum Error {
     // File existence and location errors
     // ============================================================
     #[error(
-        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turborepo.com/docs \
+        "Could not find turbo.json or turbo.jsonc.\nFollow directions at https://turborepo.dev/docs \
          to create one."
     )]
     NoTurboJSON,

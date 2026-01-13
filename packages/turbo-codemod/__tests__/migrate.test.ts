@@ -77,7 +77,7 @@ describe("migrate", () => {
       version: "1.0.0"
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
           outputs: [".next/**", "!.next/cache/**"]
@@ -234,7 +234,7 @@ describe("migrate", () => {
       version: "1.0.0"
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
           outputs: [".next/**", "!.next/cache/**"]
@@ -319,7 +319,7 @@ describe("migrate", () => {
       version: "1.0.0"
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
           outputs: [".next/**", "!.next/cache/**"]
@@ -525,7 +525,7 @@ describe("migrate", () => {
       version: "1.0.0"
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
           outputs: [".next/**", "!.next/cache/**"]
@@ -633,7 +633,7 @@ describe("migrate", () => {
       version: "1.0.0"
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {
           outputs: [".next/**", "!.next/cache/**"]
@@ -981,7 +981,7 @@ describe("migrate", () => {
       version: "1.0.0"
     });
     expect(readJson("turbo.json")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: [".next/**", "!.next/cache/**"]

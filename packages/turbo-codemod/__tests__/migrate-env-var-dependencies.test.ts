@@ -423,7 +423,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-        $schema: "https://turborepo.com/schema.json",
+        $schema: "https://turborepo.dev/schema.json",
         globalDependencies: [".env"],
         globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
         pipeline: {
@@ -473,7 +473,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(readJson("turbo.json") || "{}").toStrictEqual({
-        $schema: "https://turborepo.com/schema.json",
+        $schema: "https://turborepo.dev/schema.json",
         globalDependencies: [".env"],
         globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
         pipeline: {
@@ -499,7 +499,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
-        $schema: "https://turborepo.com/schema.json",
+        $schema: "https://turborepo.dev/schema.json",
         extends: ["//"],
         pipeline: {
           build: {
@@ -512,7 +512,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
-        $schema: "https://turborepo.com/schema.json",
+        $schema: "https://turborepo.dev/schema.json",
         extends: ["//"],
         pipeline: {
           build: {
@@ -557,7 +557,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-        $schema: "https://turborepo.com/schema.json",
+        $schema: "https://turborepo.dev/schema.json",
         globalDependencies: [".env"],
         globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
         pipeline: {
@@ -653,7 +653,7 @@ describe("migrate-env-var-dependencies", () => {
       });
 
       expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-        $schema: "https://turborepo.com/schema.json",
+        $schema: "https://turborepo.dev/schema.json",
         globalEnv: ["NEXT_PUBLIC_API_KEY", "STRIPE_API_KEY"],
         globalDependencies: [".env"],
         pipeline: {

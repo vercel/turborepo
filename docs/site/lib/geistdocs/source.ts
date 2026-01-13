@@ -76,9 +76,17 @@ export const getPageImage = (page: InferPageType<typeof source>) => {
 export const getLLMText = async (page: InferPageType<typeof source>) => {
   const processed = await page.data.getText("processed");
 
+  // Clean up the markdown for LLM consumption
+  const cleaned = processed
+    // Remove import statements
+    .replace(/^import\s+.*?from\s+["'].*?["'];?\s*$/gm, "")
+    // Collapse multiple consecutive blank lines into a single blank line
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
   return `# ${page.data.title}
 
-${processed}`;
+${cleaned}`;
 };
 
 // Blog loaders

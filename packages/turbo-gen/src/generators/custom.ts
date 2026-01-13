@@ -50,7 +50,7 @@ export async function generate({
     } else {
       logger.log();
       logger.dimmed(
-        "Learn more about custom Turborepo generators - https://turborepo.com/docs/guides/generating-code#custom-generators"
+        "Learn more about custom Turborepo generators - https://turborepo.dev/docs/guides/generating-code#custom-generators"
       );
       return;
     }
@@ -87,7 +87,7 @@ export async function generate({
       logger.log();
       logger.info(`Congrats! You just ran your first Turborepo generator`);
       logger.dimmed(
-        "Learn more about custom Turborepo generators - https://turborepo.com/docs/guides/generating-code#custom-generators"
+        "Learn more about custom Turborepo generators - https://turborepo.dev/docs/guides/generating-code#custom-generators"
       );
     }
   }

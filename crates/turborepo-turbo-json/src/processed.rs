@@ -323,6 +323,7 @@ impl ProcessedWith {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct ProcessedTaskDefinition {
     pub extends: Option<Spanned<bool>>,
+    pub description: Option<Spanned<UnescapedString>>,
     pub cache: Option<Spanned<bool>>,
     pub depends_on: Option<ProcessedDependsOn>,
     pub env: Option<ProcessedEnv>,
@@ -345,6 +346,7 @@ impl ProcessedTaskDefinition {
     ) -> Result<Self, Error> {
         Ok(ProcessedTaskDefinition {
             extends: raw_task.extends,
+            description: raw_task.description,
             cache: raw_task.cache,
             depends_on: raw_task
                 .depends_on

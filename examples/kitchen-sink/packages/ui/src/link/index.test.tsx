@@ -6,7 +6,7 @@ describe("Link", () => {
   it("renders without crashing", () => {
     const div = document.createElement("div");
     const root = createRoot(div);
-    root.render(<Link href="https://turborepo.com">Turborepo Docs</Link>);
+    root.render(<Link href="https://turborepo.dev">Turborepo Docs</Link>);
     root.unmount();
   });
 });

@@ -223,7 +223,7 @@ impl ErrorPage {
                 <li>Look for errors in the application's console output</li>
             </ul>
             <p class="docs-link">
-                For more troubleshooting information, visit <a href="https://turborepo.com/docs/guides/microfrontends" target="_blank">the microfrontends documentation</a>.
+                For more troubleshooting information, visit <a href="https://turborepo.dev/docs/guides/microfrontends" target="_blank">the microfrontends documentation</a>.
             </p>
         </div>
     </div>

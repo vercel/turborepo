@@ -280,7 +280,7 @@ export async function create(
         `${packageManagerMeta.executable} turbo login`
       )}`
     );
-    logger.log("   - Learn more: https://turborepo.com/remote-cache");
+    logger.log("   - Learn more: https://turborepo.dev/remote-cache");
     logger.log();
     logger.log("- Run commands with Turborepo:");
     availableScripts

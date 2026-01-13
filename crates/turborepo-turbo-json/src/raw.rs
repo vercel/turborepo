@@ -6,8 +6,10 @@
 use std::collections::BTreeMap;
 
 use biome_deserialize_macros::Deserializable;
+use schemars::JsonSchema;
 use serde::Serialize;
 use struct_iterable::Iterable;
+use ts_rs::TS;
 use turbopath::AbsoluteSystemPath;
 use turborepo_boundaries::BoundariesConfig;
 use turborepo_errors::Spanned;
@@ -28,10 +30,52 @@ pub struct SpacesJson {
     pub id: Option<UnescapedString>,
 }
 
-/// Pipeline is a map of task names to their raw definitions
-#[derive(Serialize, Default, Debug, PartialEq, Clone)]
+/// An object representing the task dependency graph of your project.
+///
+/// turbo interprets these conventions to schedule, execute, and cache the
+/// outputs of tasks in your project.
+///
+/// Documentation: https://turborepo.dev/docs/reference/configuration#tasks
+#[derive(Serialize, Default, Debug, PartialEq, Clone, JsonSchema)]
 #[serde(transparent)]
 pub struct Pipeline(pub BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>);
+
+/// Custom TS implementation for Pipeline to generate Record<string, Pipeline>
+/// where "Pipeline" here refers to RawTaskDefinition (the task config).
+/// This is needed because Pipeline is a transparent wrapper around BTreeMap,
+/// and we need to produce a TypeScript indexed object type.
+impl TS for Pipeline {
+    type WithoutGenerics = Self;
+
+    fn name() -> String {
+        // Don't emit a named type - inline it instead
+        String::new()
+    }
+
+    fn inline() -> String {
+        // Inline as an indexed object type: { [script: string]: Pipeline }
+        // Note: "Pipeline" in TS refers to RawTaskDefinition due to the rename
+        "{ [script: string]: Pipeline }".to_string()
+    }
+
+    fn inline_flattened() -> String {
+        Self::inline()
+    }
+
+    fn decl() -> String {
+        // No separate declaration needed - it's inlined
+        String::new()
+    }
+
+    fn decl_concrete() -> String {
+        String::new()
+    }
+
+    fn dependencies() -> Vec<ts_rs::Dependency> {
+        // Depends on RawTaskDefinition (exported as "Pipeline")
+        vec![]
+    }
+}
 
 impl Pipeline {
     pub fn insert(&mut self, key: TaskName<'static>, value: Spanned<RawTaskDefinition>) {
@@ -71,27 +115,83 @@ pub trait HasConfigBeyondExtends {
     fn has_config_beyond_extends(&self) -> bool;
 }
 
-// Iterable is required to enumerate allowed keys
-#[derive(Clone, Debug, Default, Iterable, Serialize, Deserializable)]
+/// Configuration options that control how turbo interfaces with the remote
+/// cache.
+///
+/// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
+#[derive(Clone, Debug, Default, Iterable, Serialize, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
+#[schemars(rename = "RemoteCache", rename_all = "camelCase")]
+#[ts(export, rename = "RemoteCache")]
 pub struct RawRemoteCacheOptions {
+    /// Set endpoint for API calls to the remote cache.
+    ///
+    /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_url: Option<Spanned<String>>,
+
+    /// Set endpoint for requesting tokens during `turbo login`.
+    ///
+    /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting
     #[serde(skip_serializing_if = "Option::is_none")]
     pub login_url: Option<Spanned<String>>,
+
+    /// The slug of the Remote Cache team.
+    ///
+    /// Value will be passed as `slug` in the querystring for all Remote
+    /// Cache HTTP calls.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_slug: Option<Spanned<String>>,
+
+    /// The ID of the Remote Cache team.
+    ///
+    /// Value will be passed as `teamId` in the querystring for all Remote
+    /// Cache HTTP calls. Must start with `team_` or it will not be used.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub team_id: Option<Spanned<String>>,
+
+    /// Indicates if signature verification is enabled for requests to the
+    /// remote cache.
+    ///
+    /// When `true`, Turborepo will sign every uploaded artifact using the
+    /// value of the environment variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`.
+    /// Turborepo will reject any downloaded artifacts that have an invalid
+    /// signature or are missing a signature.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub signature: Option<Spanned<bool>>,
+
+    /// When enabled, any HTTP request will be preceded by an OPTIONS request
+    /// to determine if the request is supported by the endpoint.
+    ///
+    /// Documentation: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#preflighted_requests
     #[serde(skip_serializing_if = "Option::is_none")]
     pub preflight: Option<Spanned<bool>>,
+
+    /// Sets a timeout for remote cache operations.
+    ///
+    /// Value is given in seconds and only whole values are accepted.
+    /// If `0` is passed, then there is no timeout for any cache operations.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number | null")]
     pub timeout: Option<Spanned<u64>>,
+
+    /// Indicates if the remote cache is enabled.
+    ///
+    /// When `false`, Turborepo will disable all remote cache operations,
+    /// even if the repo has a valid token. If `true`, remote caching is
+    /// enabled, but still requires the user to login and link their repo
+    /// to a remote cache.
+    ///
+    /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enabled: Option<Spanned<bool>>,
+
+    /// Sets a timeout for remote cache uploads.
+    ///
+    /// Value is given in seconds and only whole values are accepted.
+    /// If `0` is passed, then there is no timeout for any remote cache uploads.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number | null")]
     pub upload_timeout: Option<Spanned<u64>>,
 }
 
@@ -145,94 +245,315 @@ pub struct RawPackageTurboJson {
     pub _comment: Option<String>,
 }
 
-// Unified structure that represents either root or package turbo.json
-#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+/// Configuration schema for turbo.json.
+///
+/// An object representing the task dependency graph of your project.
+/// turbo interprets these conventions to schedule, execute, and cache
+/// the outputs of tasks in your project.
+///
+/// Documentation: https://turborepo.dev/docs/reference/configuration
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
+#[schemars(rename_all = "camelCase")]
+#[ts(export)]
 pub struct RawTurboJson {
+    // Internal field - excluded from schema
     #[serde(skip)]
+    #[schemars(skip)]
+    #[ts(skip)]
     pub span: Spanned<()>,
+
+    /// JSON Schema URL for validation.
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
+    #[ts(rename = "$schema")]
     pub schema: Option<UnescapedString>,
+
+    // Internal field - excluded from schema
     #[serde(skip_serializing)]
+    #[schemars(skip)]
+    #[ts(skip)]
     pub experimental_spaces: Option<SpacesJson>,
+
+    /// This key is only available in Workspace Configs and cannot be used in
+    /// your root turbo.json.
+    ///
+    /// Tells turbo to extend your root `turbo.json` and overrides with the
+    /// keys provided in your Workspace Configs. Currently, only the `["//"]`
+    /// value is allowed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extends: Option<Spanned<Vec<UnescapedString>>>,
-    // Global root filesystem dependencies
+
+    /// A list of globs to include in the set of implicit global hash
+    /// dependencies.
+    ///
+    /// The contents of these files will be included in the global hashing
+    /// algorithm and affect the hashes of all tasks.
+    ///
+    /// This is useful for busting the cache based on:
+    /// - `.env` files (not in Git)
+    /// - Any root level file that impacts package tasks that are not
+    ///   represented in the traditional dependency graph (e.g. a root
+    ///   `tsconfig.json`, `jest.config.ts`, `.eslintrc`, etc.)
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#globaldependencies
     #[serde(skip_serializing_if = "Option::is_none")]
     pub global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// A list of environment variables for implicit global hash dependencies.
+    ///
+    /// The variables included in this list will affect all task hashes.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#globalenv
     #[serde(skip_serializing_if = "Option::is_none")]
     pub global_env: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// An allowlist of environment variables that should be made to all tasks,
+    /// but should not contribute to the task's cache key, e.g.
+    /// `AWS_SECRET_KEY`.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
     #[serde(skip_serializing_if = "Option::is_none")]
     pub global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
-    // Tasks is a map of task entries which define the task graph
-    // and cache behavior on a per task or per package-task basis.
+
+    /// An object representing the task dependency graph of your project.
+    ///
+    /// turbo interprets these conventions to schedule, execute, and cache the
+    /// outputs of tasks in your project.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#tasks
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tasks: Option<Pipeline>,
+
+    // Deprecated field - excluded from schema
     #[serde(skip_serializing)]
+    #[schemars(skip)]
+    #[ts(skip)]
     pub pipeline: Option<Spanned<Pipeline>>,
-    // Configuration options when interfacing with the remote cache
+
+    /// Configuration options when interfacing with the remote cache.
+    ///
+    /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remote_cache: Option<RawRemoteCacheOptions>,
+
+    /// Enable use of the UI for `turbo`.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#ui
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
     pub ui: Option<Spanned<UIMode>>,
+
+    /// Disable check for `packageManager` in root `package.json`.
+    ///
+    /// This is highly discouraged as it leaves `turbo` dependent on system
+    /// configuration to infer the correct package manager. Some turbo features
+    /// are disabled if this is set to true.
     #[serde(
         skip_serializing_if = "Option::is_none",
         rename = "dangerouslyDisablePackageManagerCheck"
     )]
+    #[ts(rename = "dangerouslyDisablePackageManagerCheck")]
     pub allow_no_package_manager: Option<Spanned<bool>>,
+
+    /// Turborepo runs a background process to pre-calculate some expensive
+    /// operations. This standalone process (daemon) is a performance
+    /// optimization, and not required for proper functioning of `turbo`.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#daemon
     #[serde(skip_serializing_if = "Option::is_none")]
     pub daemon: Option<Spanned<bool>>,
+
+    /// Turborepo's Environment Modes allow you to control which environment
+    /// variables are available to a task at runtime.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#envmode
     #[serde(skip_serializing_if = "Option::is_none")]
     pub env_mode: Option<Spanned<EnvMode>>,
+
+    /// Specify the filesystem cache directory.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#cachedir
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_dir: Option<Spanned<UnescapedString>>,
+
+    /// When set to `true`, disables the update notification that appears when
+    /// a new version of `turbo` is available.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#noupdatenotifier
     #[serde(skip_serializing_if = "Option::is_none")]
     pub no_update_notifier: Option<Spanned<bool>>,
+
+    /// Used to tag a package for boundaries rules.
+    ///
+    /// Boundaries rules can restrict which packages a tag group can import
+    /// or be imported by.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
+
+    /// Configuration for `turbo boundaries`.
+    ///
+    /// Allows users to restrict a package's dependencies and dependents.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub boundaries: Option<Spanned<BoundariesConfig>>,
+
+    /// Set/limit the maximum concurrency for task execution.
+    ///
+    /// Must be an integer greater than or equal to `1` or a percentage value
+    /// like `50%`. Use `1` to force serial execution (one task at a time).
+    /// Use `100%` to use all available logical processors.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#concurrency
     #[serde(skip_serializing_if = "Option::is_none")]
     pub concurrency: Option<Spanned<String>>,
+
+    /// Opt into breaking changes prior to major releases, experimental
+    /// features, and beta features.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub future_flags: Option<Spanned<FutureFlags>>,
+
+    // Internal field - excluded from schema
     #[deserializable(rename = "//")]
     #[serde(skip)]
+    #[schemars(skip)]
+    #[ts(skip)]
     pub _comment: Option<String>,
 }
 
-#[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable, Deserializable)]
+/// Configuration for a pipeline task.
+///
+/// The name of a task that can be executed by turbo. If turbo finds a
+/// workspace package with a `package.json` scripts object with a matching
+/// key, it will apply the pipeline task configuration to that npm script
+/// during execution.
+#[derive(Serialize, Default, Debug, PartialEq, Clone, Iterable, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
+#[schemars(rename = "Pipeline", rename_all = "camelCase")]
+#[ts(export, rename = "Pipeline")]
 #[deserializable(unknown_fields = "deny")]
 pub struct RawTaskDefinition {
+    // Internal field - excluded from schema
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    #[ts(skip)]
     pub extends: Option<Spanned<bool>>,
+
+    /// A human-readable description of what this task does.
+    ///
+    /// This field is for documentation purposes only and does not affect
+    /// task execution or caching behavior.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<Spanned<UnescapedString>>,
+
+    /// Whether or not to cache the outputs of the task.
+    ///
+    /// Setting cache to false is useful for long-running "watch" or
+    /// development mode tasks.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#cache
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache: Option<Spanned<bool>>,
+
+    /// The list of tasks that this task depends on.
+    ///
+    /// Prefixing an item in `dependsOn` with a `^` prefix tells turbo that
+    /// this task depends on the package's topological dependencies completing
+    /// the task first. Items without a `^` prefix express the relationships
+    /// between tasks within the same package.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#dependson
     #[serde(skip_serializing_if = "Option::is_none")]
     pub depends_on: Option<Spanned<Vec<Spanned<UnescapedString>>>>,
+
+    /// A list of environment variables that this task depends on.
+    ///
+    /// Note: If you are migrating from a turbo version 1.5 or below, you may
+    /// be used to prefixing your variables with a `$`. You no longer need to
+    /// use the `$` prefix.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#env
     #[serde(skip_serializing_if = "Option::is_none")]
     pub env: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// The set of glob patterns to consider as inputs to this task.
+    ///
+    /// Changes to files covered by these globs will cause a cache miss and
+    /// the task will be rerun. If a file has been changed that is **not**
+    /// included in the set of globs, it will not cause a cache miss.
+    /// If omitted or empty, all files in the package are considered as inputs.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#inputs
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inputs: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// An allowlist of environment variables that should be made available
+    /// in this task's environment, but should not contribute to the task's
+    /// cache key, e.g. `AWS_SECRET_KEY`.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#passthroughenv
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// Indicates whether the task exits or not.
+    ///
+    /// Setting `persistent` to `true` tells turbo that this is a long-running
+    /// task and will ensure that other tasks cannot depend on it.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#persistent
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persistent: Option<Spanned<bool>>,
+
+    /// Label a persistent task as interruptible to allow it to be restarted
+    /// by `turbo watch`.
+    ///
+    /// `turbo watch` watches for changes to your packages and automatically
+    /// restarts tasks that are affected. However, if a task is persistent,
+    /// it will not be restarted by default. To enable restarting persistent
+    /// tasks, set `interruptible` to `true`.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#interruptible
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interruptible: Option<Spanned<bool>>,
+
+    /// The set of glob patterns indicating a task's cacheable filesystem
+    /// outputs.
+    ///
+    /// Turborepo captures task logs for all tasks. This enables us to cache
+    /// tasks whose runs produce no artifacts other than logs (such as linters).
+    /// Logs are always treated as a cacheable artifact and never need to be
+    /// specified.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#outputs
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outputs: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// Output mode for the task.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/run#--output-logs-option
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_logs: Option<Spanned<OutputLogsMode>>,
+
+    /// Mark a task as interactive allowing it to receive input from stdin.
+    ///
+    /// Interactive tasks must be marked with `"cache": false` as the input
+    /// they receive from stdin can change the outcome of the task.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#interactive
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interactive: Option<Spanned<bool>>,
-    // TODO: Remove this once we have the ability to load task definitions directly
-    // instead of deriving them from a TurboJson
+
+    // Internal field - excluded from schema
     #[serde(skip)]
+    #[schemars(skip)]
+    #[ts(skip)]
     pub env_mode: Option<Spanned<EnvMode>>,
-    // This can currently only be set internally and isn't a part of turbo.json
+
+    /// A list of tasks that will run alongside this task.
+    ///
+    /// Tasks in this list will not be run until completion before this task
+    /// starts execution.
+    ///
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#with
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "with")]
     pub with: Option<Vec<Spanned<UnescapedString>>>,
 }
 
