@@ -301,7 +301,7 @@ jobs:
           SHA="${{ needs.stage.outputs.base-sha }}"
           echo "Searching for production deployment with SHA: ${SHA}"
 
-          DEPLOYMENT_URL=$(vercel list turbo-site --scope=vercel -m githubCommitSha="${SHA}" --status=READY --token="${VERCEL_TOKEN}" 2>&1 | tee /dev/stderr | grep -E '^\S+\.vercel\.app' | head -n 1 | awk '{print $1}')
+          DEPLOYMENT_URL=$(vercel list turbo-site --scope=vercel -m githubCommitSha="${SHA}" --status=READY --token="${VERCEL_TOKEN}" 2>&1 | tee /dev/stderr | grep -E '^\S+\.vercel\.(app|sh)' | head -n 1 | awk '{print $1}')
 
           if [ -z "$DEPLOYMENT_URL" ]; then
             echo "::error::No deployment found for SHA ${SHA}. A production deployment is created when the commit for the release is merged to main. Ensure the merge to main has completed and the Vercel build has finished before running this workflow."
@@ -378,7 +378,7 @@ jobs:
               ]
             }
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.TURBOREPO_REPO_STATS_SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL }}
 
   create-release-pr:
     name: "Open Release Branch PR"
