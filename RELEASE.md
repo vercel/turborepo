@@ -49,7 +49,7 @@ The Turborepo release process is a multi-stage pipeline that:
 2. **Builds Rust binaries** for 6 different platforms (macOS, Linux, Windows on x64 and ARM64)
 3. **Packages native binaries** as separate npm packages (e.g., `turbo-darwin-64`, `turbo-linux-arm64`)
 4. **Publishes JavaScript packages** (main `turbo` package, `create-turbo`, codemods, ESLint plugins, etc.)
-5. **Aliases versioned documentation** to subdomains (e.g., `v2-5-4.turborepo.com`)
+5. **Aliases versioned documentation** to subdomains (e.g., `v2-5-4.turborepo.dev`)
 6. **Creates a release branch** with version bumps and automatically opens a PR to merge back to `main`
 
 The entire process is orchestrated through a GitHub Actions workflow located at `.github/workflows/turborepo-release.yml`.
@@ -307,7 +307,7 @@ See: `cli/Makefile` (publish-turbo target)
 
 **Job**: `alias-versioned-docs` (depends on `stage`, `npm-publish`)
 
-This stage creates a versioned subdomain alias for the documentation site, making docs for each release accessible at a version-specific URL (e.g., `v2-5-4.turborepo.com`).
+This stage creates a versioned subdomain alias for the documentation site, making docs for each release accessible at a version-specific URL (e.g., `v2-5-4.turborepo.dev`).
 
 **Steps**:
 
@@ -339,9 +339,9 @@ This stage creates a versioned subdomain alias for the documentation site, makin
 
 | Version          | Subdomain URL                           |
 | ---------------- | --------------------------------------- |
-| `2.5.4`          | `https://v2-5-4.turborepo.com`          |
-| `2.7.5-canary.0` | `https://v2-7-5-canary-0.turborepo.com` |
-| `3.0.0`          | `https://v3-0-0.turborepo.com`          |
+| `2.5.4`          | `https://v2-5-4.turborepo.dev`          |
+| `2.7.5-canary.0` | `https://v2-7-5-canary-0.turborepo.dev` |
+| `3.0.0`          | `https://v3-0-0.turborepo.dev`          |
 
 #### Stage 7: Merge Release PR
 
@@ -349,7 +349,7 @@ A release PR is automatically generated. Merge it as soon as possible after publ
 
 The PR body will include:
 
-- **On success**: A link to the versioned docs (e.g., `https://v2-5-4.turborepo.com`)
+- **On success**: A link to the versioned docs (e.g., `https://v2-5-4.turborepo.dev`)
 - **On failure**: A warning banner indicating the docs aliasing failed and needs manual intervention
 
 ---

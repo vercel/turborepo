@@ -64,7 +64,7 @@ impl PlatformEnv {
         let docs_message = color!(
             color_config,
             UNDERLINE,
-            "https://turborepo.com/docs/crafting-your-repository/using-environment-variables#platform-environment-variables"
+            "https://turborepo.dev/docs/crafting-your-repository/using-environment-variables#platform-environment-variables"
         );
 
         match ci {

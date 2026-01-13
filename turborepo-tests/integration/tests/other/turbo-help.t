@@ -111,7 +111,7 @@ Test help flag
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [possible values: loose, strict]
     -F, --filter <FILTER>
-            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
+            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.dev/docs/reference/command-line-reference/run#--filter
         --affected
             Filter to only packages that are affected by changes between the current branch and `main`
         --output-logs <OUTPUT_LOGS>
@@ -303,7 +303,7 @@ Test help flag
             - strict: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`
   
     -F, --filter <FILTER>
-            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
+            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.dev/docs/reference/command-line-reference/run#--filter
   
         --affected
             Filter to only packages that are affected by changes between the current branch and `main`

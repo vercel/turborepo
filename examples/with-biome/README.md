@@ -39,22 +39,22 @@ To build all apps and packages, run the following command:
 ```
 cd my-turborepo
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
 turbo build
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
 npx turbo build
 yarn dlx turbo build
 pnpm exec turbo build
 ```
 
-You can build a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+You can build a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
 
 ```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
 turbo build --filter=docs
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
 npx turbo build --filter=docs
 yarn exec turbo build --filter=docs
 pnpm exec turbo build --filter=docs
@@ -67,22 +67,22 @@ To develop all apps and packages, run the following command:
 ```
 cd my-turborepo
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
 turbo dev
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
 npx turbo dev
 yarn exec turbo dev
 pnpm exec turbo dev
 ```
 
-You can develop a specific package by using a [filter](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters):
+You can develop a specific package by using a [filter](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters):
 
 ```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
 turbo dev --filter=web
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
 npx turbo dev --filter=web
 yarn exec turbo dev --filter=web
 pnpm exec turbo dev --filter=web
@@ -93,17 +93,17 @@ pnpm exec turbo dev --filter=web
 > [!TIP]
 > Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
 
 By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
 
 ```
 cd my-turborepo
 
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
 turbo login
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
 npx turbo login
 yarn exec turbo login
 pnpm exec turbo login
@@ -114,10 +114,10 @@ This will authenticate the Turborepo CLI with your [Vercel account](https://verc
 Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
 
 ```
-# With [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation) installed (recommended)
+# With [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation) installed (recommended)
 turbo link
 
-# Without [global `turbo`](https://turborepo.com/docs/getting-started/installation#global-installation), use your package manager
+# Without [global `turbo`](https://turborepo.dev/docs/getting-started/installation#global-installation), use your package manager
 npx turbo link
 yarn exec turbo link
 pnpm exec turbo link
@@ -127,9 +127,9 @@ pnpm exec turbo link
 
 Learn more about the power of Turborepo:
 
-- [Tasks](https://turborepo.com/docs/crafting-your-repository/running-tasks)
-- [Caching](https://turborepo.com/docs/crafting-your-repository/caching)
-- [Remote Caching](https://turborepo.com/docs/core-concepts/remote-caching)
-- [Filtering](https://turborepo.com/docs/crafting-your-repository/running-tasks#using-filters)
-- [Configuration Options](https://turborepo.com/docs/reference/configuration)
-- [CLI Usage](https://turborepo.com/docs/reference/command-line-reference)
+- [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
+- [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
+- [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
+- [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
+- [Configuration Options](https://turborepo.dev/docs/reference/configuration)
+- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)

@@ -28,7 +28,7 @@ use ts_rs::TS;
 /// used.
 pub const TURBO_SITE: &str = match option_env!("TURBO_SITE") {
     Some(url) => url,
-    None => "https://turborepo.com",
+    None => "https://turborepo.dev",
 };
 
 /// A little helper to convert from biome's syntax errors to miette.

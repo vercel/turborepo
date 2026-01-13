@@ -167,7 +167,7 @@ export class TelemetryConfig {
       logger.grey(
         "You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:"
       );
-      logger.underline(picocolors.gray("https://turborepo.com/docs/telemetry"));
+      logger.underline(picocolors.gray("https://turborepo.dev/docs/telemetry"));
     }
 
     this.alertShown();

@@ -48,8 +48,8 @@ npx @turbo/codemod update-schema-json-url
 
 ```diff title="./turbo.json"
 {
-- "$schema": "https://turborepo.com/schema.v1.json",
-+ "$schema": "https://turborepo.com/schema.v2.json",
+- "$schema": "https://turborepo.dev/schema.v1.json",
++ "$schema": "https://turborepo.dev/schema.v2.json",
 }
 ```
 
@@ -220,7 +220,7 @@ npx @turbo/codemod stabilize-env-mode
 
 ```diff title="./turbo.json"
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
 - "experimentalGlobalPassThroughEnv": ["CC"],
 + "globalPassThroughEnv": ["CC"],
   "pipeline": {
@@ -245,7 +245,7 @@ npx @turbo/codemod transform-env-literals-to-wildcards
 
 ```diff title="./turbo.json"
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
 - "globalEnv": ["THIS_*_IS_LITERAL"],
 - "globalPassThroughEnv": ["!LITERAL_LEADING_EXCLAMATION"],
 +  "globalEnv": ["THIS_\\*_IS_LITERAL"],
@@ -274,7 +274,7 @@ npx @turbo/codemod set-default-outputs
 
 ```diff title="turbo.json"
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
   "globalDependencies": [".env"],
   "globalEnv": ["CI_ENV"],
   "pipeline": {
@@ -312,7 +312,7 @@ npx @turbo/codemod migrate-env-var-dependencies
 ```diff title="./turbo.json"
 // After, turbo.json
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
 - "globalDependencies": [".env", "$CI_ENV"],
 + "globalDependencies": [".env"],
 + "globalEnv": ["CI_ENV"],
@@ -386,7 +386,7 @@ npx @turbo/codemod create-turbo-config
 <Tab value="turbo.json">
 ```diff title="./turbo.json"
 + {
-+   "$schema": "https://turborepo.com/schema.json",
++   "$schema": "https://turborepo.dev/schema.json",
 +   "pipeline": {
 +     ...
 +   }

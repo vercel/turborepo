@@ -40,7 +40,7 @@ First, update turbo.json to add env exclusion pattern.
   $ cat turbo.json | jq '.tasks.build.env = ["!NEXT_PUBLIC_*"]' > turbo.json.tmp && mv turbo.json.tmp turbo.json
   $ cat turbo.json
   {
-    "$schema": "https://turborepo.com/schema.json",
+    "$schema": "https://turborepo.dev/schema.json",
     "globalPassThroughEnv": [],
     "tasks": {
       "build": {
@@ -63,7 +63,7 @@ Test globalEnv exclusion also applies to framework-inferred vars.
 Reset turbo.json and use globalEnv instead.
   $ cat > turbo.json << 'EOF'
   > {
-  >   "$schema": "https://turborepo.com/schema.json",
+  >   "$schema": "https://turborepo.dev/schema.json",
   >   "globalEnv": ["!NEXT_PUBLIC_*"],
   >   "globalPassThroughEnv": [],
   >   "tasks": {

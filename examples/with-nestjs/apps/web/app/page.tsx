@@ -76,7 +76,7 @@ export default async function Home() {
             Deploy now
           </a>
           <a
-            href="https://turborepo.com/docs?utm_source"
+            href="https://turborepo.dev/docs?utm_source"
             target="_blank"
             rel="noopener noreferrer"
             className={styles.secondary}
@@ -128,7 +128,7 @@ export default async function Home() {
           Examples
         </a>
         <a
-          href="https://turborepo.com?utm_source=create-turbo"
+          href="https://turborepo.dev?utm_source=create-turbo"
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -139,7 +139,7 @@ export default async function Home() {
             width={16}
             height={16}
           />
-          Go to turborepo.com →
+          Go to turborepo.dev →
         </a>
       </footer>
     </div>

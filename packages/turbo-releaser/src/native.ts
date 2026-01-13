@@ -59,7 +59,7 @@ async function generateNativePackage({
     description: `The ${os}-${arch} binary for turbo, a monorepo build system.`,
     repository: "https://github.com/vercel/turborepo",
     bugs: "https://github.com/vercel/turborepo/issues",
-    homepage: "https://turborepo.com",
+    homepage: "https://turborepo.dev",
     license: "MIT",
     os: [nodeOSLookup[os]],
     cpu: [arch],

@@ -48,7 +48,7 @@ Use our custom turbo config with an invalid env var
 
 Run build with invalid env var
   $ ${TURBO} build
-  invalid_env_prefix (https://turborepo.com/messages/invalid-env-prefix)
+  invalid_env_prefix (https://turborepo.dev/messages/invalid-env-prefix)
   
     x Environment variables should not be prefixed with "$"
      ,-[turbo.json:7:27]

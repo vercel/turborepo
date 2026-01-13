@@ -11,7 +11,7 @@ Make sure that the internal util package is part of the prune output
 Make sure we prune tasks that reference a pruned workspace
   $ cat out/turbo.json | jq
   {
-    "$schema": "https://turborepo.com/schema.json",
+    "$schema": "https://turborepo.dev/schema.json",
     "tasks": {
       "build": {
         "outputs": []

@@ -7,7 +7,7 @@ Any changes made here should also be made to that crate as well.
 ## Overview
 
 This package provides a way to optionally record anonymous usage data that originates from the turborepo node packages.
-This information is used to shape the Turborepo roadmap and prioritize features. You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the [documentation](https://turborepo.com/docs/telemetry):
+This information is used to shape the Turborepo roadmap and prioritize features. You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the [documentation](https://turborepo.dev/docs/telemetry):
 
 ## Events
 

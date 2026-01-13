@@ -9,13 +9,13 @@ Run status (with first run message)
   Turborepo now collects completely anonymous telemetry regarding usage.
   This information is used to shape the Turborepo roadmap and prioritize features.
   You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
-  https://turborepo.com/docs/telemetry
+  https://turborepo.dev/docs/telemetry
   
   
   Status: Enabled
   
   Turborepo telemetry is completely anonymous. Thank you for participating!
-  Learn more: https://turborepo.com/docs/telemetry
+  Learn more: https://turborepo.dev/docs/telemetry
 
 Run without command
   $ ${TURBO} telemetry
@@ -23,7 +23,7 @@ Run without command
   Status: Enabled
   
   Turborepo telemetry is completely anonymous. Thank you for participating!
-  Learn more: https://turborepo.com/docs/telemetry
+  Learn more: https://turborepo.dev/docs/telemetry
 
 Disable
   $ ${TURBO} telemetry disable
@@ -32,7 +32,7 @@ Disable
   Status: Disabled
   
   You have opted-out of Turborepo anonymous telemetry. No data will be collected from your machine.
-  Learn more: https://turborepo.com/docs/telemetry
+  Learn more: https://turborepo.dev/docs/telemetry
 
 Enable
   $ ${TURBO} telemetry enable
@@ -41,6 +41,6 @@ Enable
   Status: Enabled
   
   Turborepo telemetry is completely anonymous. Thank you for participating!
-  Learn more: https://turborepo.com/docs/telemetry
+  Learn more: https://turborepo.dev/docs/telemetry
 
 
