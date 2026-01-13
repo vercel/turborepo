@@ -1,4 +1,4 @@
-const PRODUCT_DOMAIN = "turborepo.com";
+const PRODUCT_DOMAIN = "turborepo.dev";
 
 /**
  * State for a single page tracked in the sitemap

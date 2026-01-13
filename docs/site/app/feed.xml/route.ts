@@ -1,7 +1,7 @@
 import { Feed } from "feed";
 import { blog } from "@/lib/geistdocs/source";
 
-const BASE_URL = "https://turborepo.com";
+const BASE_URL = "https://turborepo.dev";
 
 export const revalidate = false;
 

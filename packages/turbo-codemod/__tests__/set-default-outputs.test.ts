@@ -53,7 +53,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         "build-one": {
           outputs: ["foo"]
@@ -90,7 +90,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(readJson("turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         "build-one": {
           outputs: ["foo"]
@@ -103,7 +103,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(readJson("apps/docs/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       extends: ["//"],
       pipeline: {
         build: {
@@ -113,7 +113,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(readJson("apps/web/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       extends: ["//"],
       pipeline: {
         build: {}
@@ -121,7 +121,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(readJson("packages/ui/turbo.json") || "{}").toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       extends: ["//"],
       pipeline: {
         "build-three": {
@@ -199,7 +199,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         "build-one": {
           outputs: ["foo"]
@@ -265,7 +265,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         "build-one": {
           outputs: ["foo"]
@@ -326,7 +326,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalDependencies: ["$NEXT_PUBLIC_API_KEY", "$STRIPE_API_KEY", ".env"],
       pipeline: {}
     });
@@ -356,7 +356,7 @@ describe("set-default-outputs", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         "build-one": {
           dependsOn: ["build-two"],

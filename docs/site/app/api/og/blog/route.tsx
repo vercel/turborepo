@@ -85,7 +85,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       return new Response(undefined, {
         status: 302,
         headers: {
-          Location: "https://turborepo.com/og-image.png"
+          Location: "https://turborepo.dev/og-image.png"
         }
       });
     }

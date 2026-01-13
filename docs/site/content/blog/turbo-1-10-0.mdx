@@ -88,7 +88,7 @@ To ensure that Turborepo includes these variables in your hash, use the `dotEnv`
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
   "globalDotEnv": [".env"],
   "pipeline": {
     "build": {
@@ -133,7 +133,7 @@ With wildcards, you can now specify patterns of variables to include in your has
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
   "pipeline": {
     "build": {
       "env": ["ACME_*"]

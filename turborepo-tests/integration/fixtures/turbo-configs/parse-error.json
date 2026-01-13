@@ -1,5 +1,5 @@
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
   "globalDependencies": ["foo.txt"],
   "globalEnv": ["SOME_ENV_VAR"],
   "tasks": {
@@ -9,7 +9,7 @@
     },
     // this comment verifies that turbo can read .json files with comments
     "my-app#build": {
-      "outputs": ["banana.txt", "apple.json"]5,
+      "outputs": ["banana.txt", "apple.json"],
       "inputs": ["$TURBO_DEFAULT$", ".env.local"]
     },
 

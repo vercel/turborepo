@@ -35,7 +35,7 @@ pub struct SpacesJson {
 /// turbo interprets these conventions to schedule, execute, and cache the
 /// outputs of tasks in your project.
 ///
-/// Documentation: https://turborepo.com/docs/reference/configuration#tasks
+/// Documentation: https://turborepo.dev/docs/reference/configuration#tasks
 #[derive(Serialize, Default, Debug, PartialEq, Clone, JsonSchema)]
 #[serde(transparent)]
 pub struct Pipeline(pub BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>);
@@ -118,7 +118,7 @@ pub trait HasConfigBeyondExtends {
 /// Configuration options that control how turbo interfaces with the remote
 /// cache.
 ///
-/// Documentation: https://turborepo.com/docs/core-concepts/remote-caching
+/// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
 #[derive(Clone, Debug, Default, Iterable, Serialize, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename = "RemoteCache", rename_all = "camelCase")]
@@ -126,13 +126,13 @@ pub trait HasConfigBeyondExtends {
 pub struct RawRemoteCacheOptions {
     /// Set endpoint for API calls to the remote cache.
     ///
-    /// Documentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting
+    /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting
     #[serde(skip_serializing_if = "Option::is_none")]
     pub api_url: Option<Spanned<String>>,
 
     /// Set endpoint for requesting tokens during `turbo login`.
     ///
-    /// Documentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting
+    /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting
     #[serde(skip_serializing_if = "Option::is_none")]
     pub login_url: Option<Spanned<String>>,
 
@@ -182,7 +182,7 @@ pub struct RawRemoteCacheOptions {
     /// enabled, but still requires the user to login and link their repo
     /// to a remote cache.
     ///
-    /// Documentation: https://turborepo.com/docs/core-concepts/remote-caching
+    /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enabled: Option<Spanned<bool>>,
 
@@ -251,7 +251,7 @@ pub struct RawPackageTurboJson {
 /// turbo interprets these conventions to schedule, execute, and cache
 /// the outputs of tasks in your project.
 ///
-/// Documentation: https://turborepo.com/docs/reference/configuration
+/// Documentation: https://turborepo.dev/docs/reference/configuration
 #[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename_all = "camelCase")]
@@ -295,7 +295,7 @@ pub struct RawTurboJson {
     ///   represented in the traditional dependency graph (e.g. a root
     ///   `tsconfig.json`, `jest.config.ts`, `.eslintrc`, etc.)
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#globaldependencies
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#globaldependencies
     #[serde(skip_serializing_if = "Option::is_none")]
     pub global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
 
@@ -303,7 +303,7 @@ pub struct RawTurboJson {
     ///
     /// The variables included in this list will affect all task hashes.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#globalenv
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#globalenv
     #[serde(skip_serializing_if = "Option::is_none")]
     pub global_env: Option<Vec<Spanned<UnescapedString>>>,
 
@@ -311,7 +311,7 @@ pub struct RawTurboJson {
     /// but should not contribute to the task's cache key, e.g.
     /// `AWS_SECRET_KEY`.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#globalpassthroughenv
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
     #[serde(skip_serializing_if = "Option::is_none")]
     pub global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
 
@@ -320,7 +320,7 @@ pub struct RawTurboJson {
     /// turbo interprets these conventions to schedule, execute, and cache the
     /// outputs of tasks in your project.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#tasks
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#tasks
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tasks: Option<Pipeline>,
 
@@ -332,13 +332,13 @@ pub struct RawTurboJson {
 
     /// Configuration options when interfacing with the remote cache.
     ///
-    /// Documentation: https://turborepo.com/docs/core-concepts/remote-caching
+    /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
     #[serde(skip_serializing_if = "Option::is_none")]
     pub remote_cache: Option<RawRemoteCacheOptions>,
 
     /// Enable use of the UI for `turbo`.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#ui
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#ui
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
     pub ui: Option<Spanned<UIMode>>,
 
@@ -358,27 +358,27 @@ pub struct RawTurboJson {
     /// operations. This standalone process (daemon) is a performance
     /// optimization, and not required for proper functioning of `turbo`.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#daemon
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#daemon
     #[serde(skip_serializing_if = "Option::is_none")]
     pub daemon: Option<Spanned<bool>>,
 
     /// Turborepo's Environment Modes allow you to control which environment
     /// variables are available to a task at runtime.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#envmode
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#envmode
     #[serde(skip_serializing_if = "Option::is_none")]
     pub env_mode: Option<Spanned<EnvMode>>,
 
     /// Specify the filesystem cache directory.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#cachedir
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#cachedir
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_dir: Option<Spanned<UnescapedString>>,
 
     /// When set to `true`, disables the update notification that appears when
     /// a new version of `turbo` is available.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#noupdatenotifier
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#noupdatenotifier
     #[serde(skip_serializing_if = "Option::is_none")]
     pub no_update_notifier: Option<Spanned<bool>>,
 
@@ -401,7 +401,7 @@ pub struct RawTurboJson {
     /// like `50%`. Use `1` to force serial execution (one task at a time).
     /// Use `100%` to use all available logical processors.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#concurrency
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#concurrency
     #[serde(skip_serializing_if = "Option::is_none")]
     pub concurrency: Option<Spanned<String>>,
 
@@ -448,7 +448,7 @@ pub struct RawTaskDefinition {
     /// Setting cache to false is useful for long-running "watch" or
     /// development mode tasks.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#cache
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#cache
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache: Option<Spanned<bool>>,
 
@@ -459,7 +459,7 @@ pub struct RawTaskDefinition {
     /// the task first. Items without a `^` prefix express the relationships
     /// between tasks within the same package.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#dependson
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#dependson
     #[serde(skip_serializing_if = "Option::is_none")]
     pub depends_on: Option<Spanned<Vec<Spanned<UnescapedString>>>>,
 
@@ -469,7 +469,7 @@ pub struct RawTaskDefinition {
     /// be used to prefixing your variables with a `$`. You no longer need to
     /// use the `$` prefix.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#env
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#env
     #[serde(skip_serializing_if = "Option::is_none")]
     pub env: Option<Vec<Spanned<UnescapedString>>>,
 
@@ -480,7 +480,7 @@ pub struct RawTaskDefinition {
     /// included in the set of globs, it will not cause a cache miss.
     /// If omitted or empty, all files in the package are considered as inputs.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#inputs
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#inputs
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inputs: Option<Vec<Spanned<UnescapedString>>>,
 
@@ -488,7 +488,7 @@ pub struct RawTaskDefinition {
     /// in this task's environment, but should not contribute to the task's
     /// cache key, e.g. `AWS_SECRET_KEY`.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#passthroughenv
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#passthroughenv
     #[serde(skip_serializing_if = "Option::is_none")]
     pub pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
 
@@ -497,7 +497,7 @@ pub struct RawTaskDefinition {
     /// Setting `persistent` to `true` tells turbo that this is a long-running
     /// task and will ensure that other tasks cannot depend on it.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#persistent
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#persistent
     #[serde(skip_serializing_if = "Option::is_none")]
     pub persistent: Option<Spanned<bool>>,
 
@@ -509,7 +509,7 @@ pub struct RawTaskDefinition {
     /// it will not be restarted by default. To enable restarting persistent
     /// tasks, set `interruptible` to `true`.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#interruptible
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#interruptible
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interruptible: Option<Spanned<bool>>,
 
@@ -521,13 +521,13 @@ pub struct RawTaskDefinition {
     /// Logs are always treated as a cacheable artifact and never need to be
     /// specified.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#outputs
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#outputs
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outputs: Option<Vec<Spanned<UnescapedString>>>,
 
     /// Output mode for the task.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/run#--output-logs-option
+    /// Documentation: https://turborepo.dev/docs/reference/run#--output-logs-option
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_logs: Option<Spanned<OutputLogsMode>>,
 
@@ -536,7 +536,7 @@ pub struct RawTaskDefinition {
     /// Interactive tasks must be marked with `"cache": false` as the input
     /// they receive from stdin can change the outcome of the task.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#interactive
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#interactive
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interactive: Option<Spanned<bool>>,
 
@@ -551,7 +551,7 @@ pub struct RawTaskDefinition {
     /// Tasks in this list will not be run until completion before this task
     /// starts execution.
     ///
-    /// Documentation: https://turborepo.com/docs/reference/configuration#with
+    /// Documentation: https://turborepo.dev/docs/reference/configuration#with
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "with")]
     pub with: Option<Vec<Spanned<UnescapedString>>>,

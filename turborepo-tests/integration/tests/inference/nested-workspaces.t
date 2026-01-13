@@ -27,26 +27,26 @@ Locate a repository with no turbo.json. We'll get the right root, but there's no
   [1]
   $ grep --quiet -E "Repository Root: .*[\/\\]nested_workspaces[\/\\]outer[\/\\]inner-no-turbo" INNER_NO_TURBO
   $ grep --quiet "x Could not find turbo.json." INNER_NO_TURBO
-  $ grep --quiet "| Follow directions at https://turborepo.com/docs to create one" INNER_NO_TURBO
+  $ grep --quiet "| Follow directions at https://turborepo.dev/docs to create one" INNER_NO_TURBO
 
 Locate a repository with no turbo.json. We'll get the right root and inference directory, but there's nothing to run
   $ cd $TARGET_DIR/outer/inner-no-turbo/apps && ${TURBO} run build --filter=nothing -vv 1> INNER_NO_TURBO_APPS 2>&1
   [1]
   $ grep --quiet -E "Repository Root: .*[\/\\]nested_workspaces[\/\\]outer[\/\\]inner-no-turbo" INNER_NO_TURBO_APPS
   $ grep --quiet "x Could not find turbo.json." INNER_NO_TURBO_APPS
-  $ grep --quiet "| Follow directions at https://turborepo.com/docs to create one" INNER_NO_TURBO_APPS
+  $ grep --quiet "| Follow directions at https://turborepo.dev/docs to create one" INNER_NO_TURBO_APPS
 
   $ cd $TARGET_DIR/outer-no-turbo && ${TURBO} run build --filter=nothing -vv 1> OUTER_NO_TURBO 2>&1
   [1]
   $ grep --quiet -E "Repository Root: .*[\/\\]nested_workspaces[\/\\]outer-no-turbo" OUTER_NO_TURBO
   $ grep --quiet "x Could not find turbo.json." OUTER_NO_TURBO
-  $ grep --quiet "| Follow directions at https://turborepo.com/docs to create one" OUTER_NO_TURBO
+  $ grep --quiet "| Follow directions at https://turborepo.dev/docs to create one" OUTER_NO_TURBO
 
   $ cd $TARGET_DIR/outer-no-turbo/apps && ${TURBO} run build --filter=nothing -vv 1> OUTER_NO_TURBO_APPS 2>&1
   [1]
   $ grep --quiet -E "Repository Root: .*[\/\\]nested_workspaces[\/\\]outer-no-turbo" OUTER_NO_TURBO_APPS
   $ grep --quiet "x Could not find turbo.json." OUTER_NO_TURBO_APPS
-  $ grep --quiet "| Follow directions at https://turborepo.com/docs to create one" OUTER_NO_TURBO_APPS
+  $ grep --quiet "| Follow directions at https://turborepo.dev/docs to create one" OUTER_NO_TURBO_APPS
 
   $ cd $TARGET_DIR/outer-no-turbo/inner && ${TURBO} run build --filter=nothing -vv 1> OUTER_NO_TURBO_INNER 2>&1
   [1]
@@ -62,11 +62,11 @@ Locate a repository with no turbo.json. We'll get the right root and inference d
   [1]
   $ grep --quiet -E "Repository Root: .*[\/\\]nested_workspaces[\/\\]outer-no-turbo[\/\\]inner-no-turbo" INNER_NO_TURBO
   $ grep --quiet "x Could not find turbo.json." INNER_NO_TURBO
-  $ grep --quiet "| Follow directions at https://turborepo.com/docs to create one" INNER_NO_TURBO
+  $ grep --quiet "| Follow directions at https://turborepo.dev/docs to create one" INNER_NO_TURBO
 
   $ cd $TARGET_DIR/outer-no-turbo/inner-no-turbo/apps && ${TURBO} run build --filter=nothing -vv 1> INNER_NO_TURBO_APPS 2>&1
   [1]
   $ grep --quiet -E "Repository Root: .*[\/\\]nested_workspaces[\/\\]outer-no-turbo[\/\\]inner-no-turbo" INNER_NO_TURBO_APPS
   $ grep --quiet "x Could not find turbo.json." INNER_NO_TURBO_APPS
-  $ grep --quiet "| Follow directions at https://turborepo.com/docs to create one" INNER_NO_TURBO_APPS
+  $ grep --quiet "| Follow directions at https://turborepo.dev/docs to create one" INNER_NO_TURBO_APPS
 

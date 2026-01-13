@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "RawTurboJson",
-  "description": "Configuration schema for turbo.json.\n\nAn object representing the task dependency graph of your project. turbo interprets these conventions to schedule, execute, and cache the outputs of tasks in your project.\n\nDocumentation: https://turborepo.com/docs/reference/configuration",
+  "description": "Configuration schema for turbo.json.\n\nAn object representing the task dependency graph of your project. turbo interprets these conventions to schedule, execute, and cache the outputs of tasks in your project.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration",
   "type": "object",
   "properties": {
     "$schema": {
@@ -27,7 +27,7 @@
       ]
     },
     "cacheDir": {
-      "description": "Specify the filesystem cache directory.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#cachedir",
+      "description": "Specify the filesystem cache directory.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#cachedir",
       "anyOf": [
         {
           "$ref": "#/definitions/String"
@@ -38,7 +38,7 @@
       ]
     },
     "concurrency": {
-      "description": "Set/limit the maximum concurrency for task execution.\n\nMust be an integer greater than or equal to `1` or a percentage value like `50%`. Use `1` to force serial execution (one task at a time). Use `100%` to use all available logical processors.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#concurrency",
+      "description": "Set/limit the maximum concurrency for task execution.\n\nMust be an integer greater than or equal to `1` or a percentage value like `50%`. Use `1` to force serial execution (one task at a time). Use `100%` to use all available logical processors.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#concurrency",
       "anyOf": [
         {
           "$ref": "#/definitions/String"
@@ -49,7 +49,7 @@
       ]
     },
     "daemon": {
-      "description": "Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#daemon",
+      "description": "Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#daemon",
       "anyOf": [
         {
           "$ref": "#/definitions/Boolean"
@@ -71,7 +71,7 @@
       ]
     },
     "envMode": {
-      "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#envmode",
+      "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#envmode",
       "anyOf": [
         {
           "$ref": "#/definitions/EnvMode"
@@ -104,28 +104,28 @@
       ]
     },
     "globalDependencies": {
-      "description": "A list of globs to include in the set of implicit global hash dependencies.\n\nThe contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.\n\nThis is useful for busting the cache based on: - `.env` files (not in Git) - Any root level file that impacts package tasks that are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.ts`, `.eslintrc`, etc.)\n\nDocumentation: https://turborepo.com/docs/reference/configuration#globaldependencies",
+      "description": "A list of globs to include in the set of implicit global hash dependencies.\n\nThe contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.\n\nThis is useful for busting the cache based on: - `.env` files (not in Git) - Any root level file that impacts package tasks that are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.ts`, `.eslintrc`, etc.)\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#globaldependencies",
       "type": ["array", "null"],
       "items": {
         "$ref": "#/definitions/String"
       }
     },
     "globalEnv": {
-      "description": "A list of environment variables for implicit global hash dependencies.\n\nThe variables included in this list will affect all task hashes.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#globalenv",
+      "description": "A list of environment variables for implicit global hash dependencies.\n\nThe variables included in this list will affect all task hashes.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#globalenv",
       "type": ["array", "null"],
       "items": {
         "$ref": "#/definitions/String"
       }
     },
     "globalPassThroughEnv": {
-      "description": "An allowlist of environment variables that should be made to all tasks, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#globalpassthroughenv",
+      "description": "An allowlist of environment variables that should be made to all tasks, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv",
       "type": ["array", "null"],
       "items": {
         "$ref": "#/definitions/String"
       }
     },
     "noUpdateNotifier": {
-      "description": "When set to `true`, disables the update notification that appears when a new version of `turbo` is available.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#noupdatenotifier",
+      "description": "When set to `true`, disables the update notification that appears when a new version of `turbo` is available.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#noupdatenotifier",
       "anyOf": [
         {
           "$ref": "#/definitions/Boolean"
@@ -136,7 +136,7 @@
       ]
     },
     "remoteCache": {
-      "description": "Configuration options when interfacing with the remote cache.\n\nDocumentation: https://turborepo.com/docs/core-concepts/remote-caching",
+      "description": "Configuration options when interfacing with the remote cache.\n\nDocumentation: https://turborepo.dev/docs/core-concepts/remote-caching",
       "anyOf": [
         {
           "$ref": "#/definitions/RemoteCache"
@@ -158,14 +158,14 @@
       ]
     },
     "tasks": {
-      "description": "An object representing the task dependency graph of your project.\n\nturbo interprets these conventions to schedule, execute, and cache the outputs of tasks in your project.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#tasks",
+      "description": "An object representing the task dependency graph of your project.\n\nturbo interprets these conventions to schedule, execute, and cache the outputs of tasks in your project.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#tasks",
       "type": ["object", "null"],
       "additionalProperties": {
         "$ref": "#/definitions/Pipeline"
       }
     },
     "ui": {
-      "description": "Enable use of the UI for `turbo`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#ui",
+      "description": "Enable use of the UI for `turbo`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#ui",
       "anyOf": [
         {
           "$ref": "#/definitions/UI"
@@ -237,7 +237,7 @@
       }
     },
     "EnvMode": {
-      "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime.\n\n- `strict`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`. - `loose`: Allow all environment variables for the process to be available.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#envmode",
+      "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime.\n\n- `strict`: Filter environment variables to only those that are specified in the `env` and `globalEnv` keys in `turbo.json`. - `loose`: Allow all environment variables for the process to be available.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#envmode",
       "oneOf": [
         {
           "description": "Allow all environment variables for the process to be available.",
@@ -262,7 +262,7 @@
       }
     },
     "OutputLogs": {
-      "description": "Output mode for the task.\n\n- `full`: Displays all output - `hash-only`: Show only the hashes of the tasks - `new-only`: Only show output from cache misses - `errors-only`: Only show output from task failures - `none`: Hides all task output\n\nDocumentation: https://turborepo.com/docs/reference/run#--output-logs-option",
+      "description": "Output mode for the task.\n\n- `full`: Displays all output - `hash-only`: Show only the hashes of the tasks - `new-only`: Only show output from cache misses - `errors-only`: Only show output from task failures - `none`: Hides all task output\n\nDocumentation: https://turborepo.dev/docs/reference/run#--output-logs-option",
       "oneOf": [
         {
           "description": "Displays all output.",
@@ -324,7 +324,7 @@
       "type": "object",
       "properties": {
         "cache": {
-          "description": "Whether or not to cache the outputs of the task.\n\nSetting cache to false is useful for long-running \"watch\" or development mode tasks.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#cache",
+          "description": "Whether or not to cache the outputs of the task.\n\nSetting cache to false is useful for long-running \"watch\" or development mode tasks.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#cache",
           "anyOf": [
             {
               "$ref": "#/definitions/Boolean"
@@ -335,7 +335,7 @@
           ]
         },
         "dependsOn": {
-          "description": "The list of tasks that this task depends on.\n\nPrefixing an item in `dependsOn` with a `^` prefix tells turbo that this task depends on the package's topological dependencies completing the task first. Items without a `^` prefix express the relationships between tasks within the same package.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#dependson",
+          "description": "The list of tasks that this task depends on.\n\nPrefixing an item in `dependsOn` with a `^` prefix tells turbo that this task depends on the package's topological dependencies completing the task first. Items without a `^` prefix express the relationships between tasks within the same package.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#dependson",
           "anyOf": [
             {
               "$ref": "#/definitions/Array_of_String"
@@ -357,21 +357,21 @@
           ]
         },
         "env": {
-          "description": "A list of environment variables that this task depends on.\n\nNote: If you are migrating from a turbo version 1.5 or below, you may be used to prefixing your variables with a `$`. You no longer need to use the `$` prefix.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#env",
+          "description": "A list of environment variables that this task depends on.\n\nNote: If you are migrating from a turbo version 1.5 or below, you may be used to prefixing your variables with a `$`. You no longer need to use the `$` prefix.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#env",
           "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"
           }
         },
         "inputs": {
-          "description": "The set of glob patterns to consider as inputs to this task.\n\nChanges to files covered by these globs will cause a cache miss and the task will be rerun. If a file has been changed that is **not** included in the set of globs, it will not cause a cache miss. If omitted or empty, all files in the package are considered as inputs.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#inputs",
+          "description": "The set of glob patterns to consider as inputs to this task.\n\nChanges to files covered by these globs will cause a cache miss and the task will be rerun. If a file has been changed that is **not** included in the set of globs, it will not cause a cache miss. If omitted or empty, all files in the package are considered as inputs.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#inputs",
           "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"
           }
         },
         "interactive": {
-          "description": "Mark a task as interactive allowing it to receive input from stdin.\n\nInteractive tasks must be marked with `\"cache\": false` as the input they receive from stdin can change the outcome of the task.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#interactive",
+          "description": "Mark a task as interactive allowing it to receive input from stdin.\n\nInteractive tasks must be marked with `\"cache\": false` as the input they receive from stdin can change the outcome of the task.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#interactive",
           "anyOf": [
             {
               "$ref": "#/definitions/Boolean"
@@ -382,7 +382,7 @@
           ]
         },
         "interruptible": {
-          "description": "Label a persistent task as interruptible to allow it to be restarted by `turbo watch`.\n\n`turbo watch` watches for changes to your packages and automatically restarts tasks that are affected. However, if a task is persistent, it will not be restarted by default. To enable restarting persistent tasks, set `interruptible` to `true`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#interruptible",
+          "description": "Label a persistent task as interruptible to allow it to be restarted by `turbo watch`.\n\n`turbo watch` watches for changes to your packages and automatically restarts tasks that are affected. However, if a task is persistent, it will not be restarted by default. To enable restarting persistent tasks, set `interruptible` to `true`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#interruptible",
           "anyOf": [
             {
               "$ref": "#/definitions/Boolean"
@@ -393,7 +393,7 @@
           ]
         },
         "outputLogs": {
-          "description": "Output mode for the task.\n\nDocumentation: https://turborepo.com/docs/reference/run#--output-logs-option",
+          "description": "Output mode for the task.\n\nDocumentation: https://turborepo.dev/docs/reference/run#--output-logs-option",
           "anyOf": [
             {
               "$ref": "#/definitions/OutputLogs"
@@ -404,21 +404,21 @@
           ]
         },
         "outputs": {
-          "description": "The set of glob patterns indicating a task's cacheable filesystem outputs.\n\nTurborepo captures task logs for all tasks. This enables us to cache tasks whose runs produce no artifacts other than logs (such as linters). Logs are always treated as a cacheable artifact and never need to be specified.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#outputs",
+          "description": "The set of glob patterns indicating a task's cacheable filesystem outputs.\n\nTurborepo captures task logs for all tasks. This enables us to cache tasks whose runs produce no artifacts other than logs (such as linters). Logs are always treated as a cacheable artifact and never need to be specified.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#outputs",
           "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"
           }
         },
         "passThroughEnv": {
-          "description": "An allowlist of environment variables that should be made available in this task's environment, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#passthroughenv",
+          "description": "An allowlist of environment variables that should be made available in this task's environment, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#passthroughenv",
           "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"
           }
         },
         "persistent": {
-          "description": "Indicates whether the task exits or not.\n\nSetting `persistent` to `true` tells turbo that this is a long-running task and will ensure that other tasks cannot depend on it.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#persistent",
+          "description": "Indicates whether the task exits or not.\n\nSetting `persistent` to `true` tells turbo that this is a long-running task and will ensure that other tasks cannot depend on it.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#persistent",
           "anyOf": [
             {
               "$ref": "#/definitions/Boolean"
@@ -429,7 +429,7 @@
           ]
         },
         "with": {
-          "description": "A list of tasks that will run alongside this task.\n\nTasks in this list will not be run until completion before this task starts execution.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#with",
+          "description": "A list of tasks that will run alongside this task.\n\nTasks in this list will not be run until completion before this task starts execution.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#with",
           "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/String"
@@ -438,11 +438,11 @@
       }
     },
     "RemoteCache": {
-      "description": "Configuration options that control how turbo interfaces with the remote cache.\n\nDocumentation: https://turborepo.com/docs/core-concepts/remote-caching",
+      "description": "Configuration options that control how turbo interfaces with the remote cache.\n\nDocumentation: https://turborepo.dev/docs/core-concepts/remote-caching",
       "type": "object",
       "properties": {
         "apiUrl": {
-          "description": "Set endpoint for API calls to the remote cache.\n\nDocumentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting",
+          "description": "Set endpoint for API calls to the remote cache.\n\nDocumentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting",
           "anyOf": [
             {
               "$ref": "#/definitions/String"
@@ -453,7 +453,7 @@
           ]
         },
         "enabled": {
-          "description": "Indicates if the remote cache is enabled.\n\nWhen `false`, Turborepo will disable all remote cache operations, even if the repo has a valid token. If `true`, remote caching is enabled, but still requires the user to login and link their repo to a remote cache.\n\nDocumentation: https://turborepo.com/docs/core-concepts/remote-caching",
+          "description": "Indicates if the remote cache is enabled.\n\nWhen `false`, Turborepo will disable all remote cache operations, even if the repo has a valid token. If `true`, remote caching is enabled, but still requires the user to login and link their repo to a remote cache.\n\nDocumentation: https://turborepo.dev/docs/core-concepts/remote-caching",
           "anyOf": [
             {
               "$ref": "#/definitions/Boolean"
@@ -464,7 +464,7 @@
           ]
         },
         "loginUrl": {
-          "description": "Set endpoint for requesting tokens during `turbo login`.\n\nDocumentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting",
+          "description": "Set endpoint for requesting tokens during `turbo login`.\n\nDocumentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting",
           "anyOf": [
             {
               "$ref": "#/definitions/String"
@@ -574,7 +574,7 @@
       }
     },
     "UI": {
-      "description": "Enable use of the UI for `turbo`.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#ui",
+      "description": "Enable use of the UI for `turbo`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#ui",
       "oneOf": [
         {
           "description": "Use the terminal user interface.",

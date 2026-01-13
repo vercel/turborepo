@@ -71,7 +71,7 @@ Let's assume that the Next.js `docs-site` renders the markdown files from the `.
 
 ```jsonc title="./turbo.json"
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
   "pipeline": {
     // ... omitted for brevity
     "build": {
@@ -125,7 +125,7 @@ A sample pipeline that defines the root script `check-examples` and opts the roo
 
 ```jsonc title="./turbo.json" highlight="20"
 {
-  "$schema": "https://turborepo.com/schema.json",
+  "$schema": "https://turborepo.dev/schema.json",
   "pipeline": {
     "build": {
       "dependsOn": ["^build"],
@@ -189,7 +189,7 @@ Since releasing [Turborepo v1.2 in early April](/blog/turbo-1-2-0), we've seen i
 
 - [8.1k+ GitHub Stars](https://github.com/vercel/turbo)
 - 275k+ weekly NPM downloads (up ~2x)
-- 1,200+ members of the [Turborepo Community Discord](https://turborepo.com/discord)
+- 1,200+ members of the [Turborepo Community Discord](https://turborepo.dev/discord)
 - 5.8 years of compute time saved through Remote Caching on Vercel (up ~5x), saving +7 months per week now
 
 Turborepo is the result of the combined work of over 136 contributors including our core team.

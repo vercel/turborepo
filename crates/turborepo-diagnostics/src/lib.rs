@@ -232,7 +232,7 @@ impl Diagnostic for GitDaemonDiagnostic {
                     if fsmonitor.trim() != "true" || untrackedcache.trim() != "true" {
                         chan.log_line("Git FS Monitor not configured".to_string())
                             .await;
-                        chan.log_line( "For more information, see https://turborepo.com/docs/reference/command-line-reference/scan#fs-monitor".to_string()).await;
+                        chan.log_line( "For more information, see https://turborepo.dev/docs/reference/command-line-reference/scan#fs-monitor".to_string()).await;
                         let Some(resp) = chan
                             .request(
                                 "Configure it for this repo now?".to_string(),
@@ -384,7 +384,7 @@ impl Diagnostic for LSPDiagnostic {
                 Ok(None) => {
                     chan.log_line("Unable to find LSP instance".to_string())
                         .await;
-                    chan.log_line( "For more information, see https://turborepo.com/docs/reference/command-line-reference/scan#lsp".to_string()).await;
+                    chan.log_line( "For more information, see https://turborepo.dev/docs/reference/command-line-reference/scan#lsp".to_string()).await;
                     chan.failed("Turborepo Extension is not running".to_string())
                         .await;
                 }

@@ -262,11 +262,11 @@ With these two files in place, your editor will now navigate to the original sou
 
 ### Use Node.js subpath imports instead of TypeScript compiler `paths`
 
-It's possible to create absolute imports in your packages using [the TypeScript compiler's `paths` option](https://www.typescriptlang.org/tsconfig#paths), but these paths can cause failed compilation when using [Just-in-Time Packages](https://turborepo.com/docs/core-concepts/internal-packages#just-in-time-packages). [As of TypeScript 5.4](https://devblogs.microsoft.com/typescript/announcing-typescript-5-4/#auto-import-support-for-subpath-imports), you can use [Node.js subpath imports](https://nodejs.org/api/packages.html#imports) instead for a more robust solution.
+It's possible to create absolute imports in your packages using [the TypeScript compiler's `paths` option](https://www.typescriptlang.org/tsconfig#paths), but these paths can cause failed compilation when using [Just-in-Time Packages](https://turborepo.dev/docs/core-concepts/internal-packages#just-in-time-packages). [As of TypeScript 5.4](https://devblogs.microsoft.com/typescript/announcing-typescript-5-4/#auto-import-support-for-subpath-imports), you can use [Node.js subpath imports](https://nodejs.org/api/packages.html#imports) instead for a more robust solution.
 
 #### Just-in-Time Packages
 
-In [Just-in-Time packages](https://turborepo.com/docs/core-concepts/internal-packages#just-in-time-packages), `imports` must target the source code in the package, since build outputs like `dist` won't be created.
+In [Just-in-Time packages](https://turborepo.dev/docs/core-concepts/internal-packages#just-in-time-packages), `imports` must target the source code in the package, since build outputs like `dist` won't be created.
 
 <Tabs storageKey="ts-imports-jit" items={["package.json", "Source code"]}>
   <Tab value="package.json">
@@ -294,7 +294,7 @@ export const Button = () => {
 
 #### Compiled Packages
 
-In [Compiled packages](https://turborepo.com/docs/core-concepts/internal-packages#compiled-packages), `imports` target the built outputs for the package.
+In [Compiled packages](https://turborepo.dev/docs/core-concepts/internal-packages#compiled-packages), `imports` target the built outputs for the package.
 
 <Tabs storageKey="ts-imports-compiled" items={["package.json", "Source code"]}>
   <Tab value="package.json">

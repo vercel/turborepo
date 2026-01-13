@@ -82,7 +82,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: [
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
         "GLOBAL_PASSTHROUGH"
@@ -119,7 +119,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: [
         "DUPLICATE_GLOBAL",
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
@@ -161,7 +161,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: [],
       pipeline: {
         build: {
@@ -195,7 +195,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {}
       }
@@ -226,7 +226,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: ["GLOBAL_PASSTHROUGH"],
       pipeline: {
         build: {
@@ -260,7 +260,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: ["GLOBAL_PASSTHROUGH"],
       pipeline: {
         build: {
@@ -294,7 +294,7 @@ describe("stabilize-env-mode", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalPassThroughEnv: [
         "EXPERIMENTAL_GLOBAL_PASSTHROUGH",
         "GLOBAL_PASSTHROUGH"

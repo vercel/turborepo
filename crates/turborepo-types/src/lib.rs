@@ -35,7 +35,7 @@ use turborepo_task_id::{TaskId, TaskName};
 ///   the `env` and `globalEnv` keys in `turbo.json`.
 /// - `loose`: Allow all environment variables for the process to be available.
 ///
-/// Documentation: https://turborepo.com/docs/reference/configuration#envmode
+/// Documentation: https://turborepo.dev/docs/reference/configuration#envmode
 #[derive(
     Copy,
     Clone,
@@ -92,7 +92,7 @@ pub enum StopExecution {
 /// - `errors-only`: Only show output from task failures
 /// - `none`: Hides all task output
 ///
-/// Documentation: https://turborepo.com/docs/reference/run#--output-logs-option
+/// Documentation: https://turborepo.dev/docs/reference/run#--output-logs-option
 #[derive(
     Copy, Clone, Debug, Default, PartialEq, Eq, ValueEnum, Deserializable, Serialize, JsonSchema, TS,
 )]
@@ -151,7 +151,7 @@ impl fmt::Display for DryRunMode {
 
 /// Enable use of the UI for `turbo`.
 ///
-/// Documentation: https://turborepo.com/docs/reference/configuration#ui
+/// Documentation: https://turborepo.dev/docs/reference/configuration#ui
 #[derive(
     Serialize,
     Deserialize,

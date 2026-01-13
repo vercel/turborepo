@@ -69,7 +69,7 @@ impl Registry for NPMRegistry {
         let full_name = pkg.to_string();
         let split_name: Vec<&str> = full_name.split('/').collect();
         let name = split_name[1];
-        let url = format!("https://turborepo.com/api/binaries/version?name={name}&tag={tag}");
+        let url = format!("https://turborepo.dev/api/binaries/version?name={name}&tag={tag}");
 
         let result: NpmVersionData = http.get(&url)?;
         Ok(Some(result.version))

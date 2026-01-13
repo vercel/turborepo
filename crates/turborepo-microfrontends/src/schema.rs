@@ -327,7 +327,7 @@ mod test {
     #[test]
     fn test_schema_field_accepted() {
         let input = r#"{
-        "$schema": "https://turborepo.com/microfrontends/schema.json",
+        "$schema": "https://turborepo.dev/microfrontends/schema.json",
         "version": "1",
         "applications": {
           "web": {

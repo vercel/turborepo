@@ -82,7 +82,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalEnv: [],
       globalPassThroughEnv: [],
       pipeline: {
@@ -118,7 +118,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       pipeline: {
         build: {}
       }
@@ -149,7 +149,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalEnv: ["NO!", "\\!!!", "\\!!!"],
       globalPassThroughEnv: ["DOES", "\\*\\*BOLD\\*\\*", "WORK"],
       pipeline: {
@@ -185,7 +185,7 @@ describe.only("transform-env-literals-to-wildcards", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       globalEnv: ["\\!\\*!\\*"],
       globalPassThroughEnv: ["\\!\\*!\\*"],
       pipeline: {

@@ -21,7 +21,7 @@ describe("stabilize-ui", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist"]
@@ -54,7 +54,7 @@ describe("stabilize-ui", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist"]
@@ -87,7 +87,7 @@ describe("stabilize-ui", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://turborepo.com/schema.json",
+      $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist"]

@@ -111,7 +111,7 @@ Make sure exit code is 2 when no args are passed
         --env-mode [<ENV_MODE>]
             Environment variable mode. Use "loose" to pass the entire existing environment. Use "strict" to use an allowlist specified in turbo.json [possible values: loose, strict]
     -F, --filter <FILTER>
-            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.com/docs/reference/command-line-reference/run#--filter
+            Use the given selector to specify package(s) to act as entry points. The syntax mirrors pnpm's syntax, and additional documentation and examples can be found in turbo's documentation https://turborepo.dev/docs/reference/command-line-reference/run#--filter
         --affected
             Filter to only packages that are affected by changes between the current branch and `main`
         --output-logs <OUTPUT_LOGS>

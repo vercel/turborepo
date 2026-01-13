@@ -34,7 +34,7 @@ export const nav = [
   },
   {
     label: "Enterprise",
-    href: "https://vercel.com/contact/sales?utm_source=turborepo.com&utm_medium=referral&utm_campaign=header-enterpriseLink"
+    href: "https://vercel.com/contact/sales?utm_source=turborepo.dev&utm_medium=referral&utm_campaign=header-enterpriseLink"
   }
 ];
 
@@ -47,7 +47,7 @@ export const footerLinks = {
   community: [
     { href: "https://github.com/vercel/turborepo", label: "GitHub" },
     { href: "https://community.vercel.com/tag/turborepo", label: "Community" },
-    { href: "https://bsky.app/profile/turborepo.com", label: "Bluesky" },
+    { href: "https://bsky.app/profile/turborepo.dev", label: "Bluesky" },
     { href: "https://x.com/turborepo", label: "X" }
   ],
   company: [
