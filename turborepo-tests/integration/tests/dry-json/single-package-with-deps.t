@@ -33,13 +33,13 @@ Setup
       {
         "taskId": "build",
         "task": "build",
-        "hash": "fe0059df5e6291b2",
+        "hash": "99180a8fe2df621b",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
           "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
-          "turbo.json": "3bc68ed1f2a5a308cb0166f9ed073c2fc7980ac7"
+          "turbo.json": "7c63f35ef4a45cec9b74cacb44c5f0211c50d8f5"
         },
         "hashOfExternalDependencies": "",
         "cache": {
@@ -90,13 +90,13 @@ Setup
       {
         "taskId": "test",
         "task": "test",
-        "hash": "7cfbd8e30495d802",
+        "hash": "023dbfb6010ec4b4",
         "inputs": {
           ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
           "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
           "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
           "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
-          "turbo.json": "3bc68ed1f2a5a308cb0166f9ed073c2fc7980ac7"
+          "turbo.json": "7c63f35ef4a45cec9b74cacb44c5f0211c50d8f5"
         },
         "hashOfExternalDependencies": "",
         "cache": {
