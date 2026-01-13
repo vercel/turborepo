@@ -6,7 +6,7 @@
 # 2. Run some smoke tests on that branch
 # 3. Build the Rust binary
 # 4. Publish JS packages npm (including turbo itself)
-# 5. Alias versioned docs (e.g., v2-5-4.turborepo.com)
+# 5. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
 # 6. Create a release branch and open a PR.
 
 # You can opt into a dry run, which will skip publishing to npm and opening the release branch
@@ -288,7 +288,7 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
           echo "Version: v${VERSION}"
-          echo "Subdomain: ${SUBDOMAIN}.turborepo.com"
+          echo "Subdomain: ${SUBDOMAIN}.turborepo.dev"
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
@@ -301,7 +301,7 @@ jobs:
           SHA="${{ needs.stage.outputs.base-sha }}"
           echo "Searching for production deployment with SHA: ${SHA}"
 
-          DEPLOYMENT_URL=$(vercel list turbo-site --scope=vercel -m githubCommitSha="${SHA}" --status=READY --token="${VERCEL_TOKEN}" 2>&1 | tee /dev/stderr | grep -E '^\S+\.vercel\.app' | head -n 1 | awk '{print $1}')
+          DEPLOYMENT_URL=$(vercel list turbo-site --scope=vercel -m githubCommitSha="${SHA}" --status=READY --token="${VERCEL_TOKEN}" 2>&1 | tee /dev/stderr | grep -E '^\S+\.vercel\.(app|sh)' | head -n 1 | awk '{print $1}')
 
           if [ -z "$DEPLOYMENT_URL" ]; then
             echo "::error::No deployment found for SHA ${SHA}. A production deployment is created when the commit for the release is merged to main. Ensure the merge to main has completed and the Vercel build has finished before running this workflow."
@@ -316,7 +316,7 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.TURBO_TOKEN }}
         run: |
-          ALIAS="${{ steps.version.outputs.subdomain }}.turborepo.com"
+          ALIAS="${{ steps.version.outputs.subdomain }}.turborepo.dev"
           DEPLOYMENT_URL="${{ steps.find-deployment.outputs.deployment_url }}"
 
           echo "Assigning alias ${ALIAS} to deployment ${DEPLOYMENT_URL}"
@@ -351,7 +351,7 @@ jobs:
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "*Target Subdomain:*\n${{ steps.version.outputs.subdomain }}.turborepo.com"
+                      "text": "*Target Subdomain:*\n${{ steps.version.outputs.subdomain }}.turborepo.dev"
                     }
                   ]
                 },
@@ -378,7 +378,7 @@ jobs:
               ]
             }
         env:
-          SLACK_WEBHOOK_URL: ${{ secrets.TURBOREPO_REPO_STATS_SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_URL: ${{ secrets.DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL }}
 
   create-release-pr:
     name: "Open Release Branch PR"
@@ -407,7 +407,7 @@ jobs:
           > [!CAUTION]
           > ## VERSIONED DOCS ALIASING FAILED
           >
-          > The documentation alias to `${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.com` **FAILED**.
+          > The documentation alias to `${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.dev` **FAILED**.
           >
           > **Action Required:** Manually investigate and create the alias.
           >
@@ -418,7 +418,7 @@ jobs:
           EOFWARNING
           else
             cat << EOFSUCCESS >> pr-body.md
-          Versioned docs available at: https://${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.com
+          Versioned docs available at: https://${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.dev
 
           ---
 
