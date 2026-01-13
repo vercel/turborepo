@@ -9,7 +9,8 @@ license = "MIT"
 # This is for the convenience of running daily dev workflows, i.e running
 # `cargo xxx` without explicitly specifying features, not that we want to
 # promote this as default backend.
-default = ["rustls-tls", "turborepo-lib/daemon-package-discovery"]
+# otel is enabled by default to support runtime configuration of observability.
+default = ["rustls-tls", "turborepo-lib/daemon-package-discovery", "otel"]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
 pprof = ["turborepo-lib/pprof"]
