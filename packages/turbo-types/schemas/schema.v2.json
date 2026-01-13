@@ -116,6 +116,10 @@
     "Pipeline": {
       "type": "object",
       "properties": {
+        "description": {
+          "type": "string",
+          "description": "A human-readable description of what this task does.\n\nThis field is for documentation purposes only and does not affect task execution or caching behavior."
+        },
         "dependsOn": {
           "type": "array",
           "items": {

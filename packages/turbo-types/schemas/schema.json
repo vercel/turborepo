@@ -345,6 +345,17 @@
             }
           ]
         },
+        "description": {
+          "description": "A human-readable description of what this task does.\n\nThis field is for documentation purposes only and does not affect task execution or caching behavior.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "env": {
           "description": "A list of environment variables that this task depends on.\n\nNote: If you are migrating from a turbo version 1.5 or below, you may be used to prefixing your variables with a `$`. You no longer need to use the `$` prefix.\n\nDocumentation: https://turborepo.com/docs/reference/configuration#env",
           "type": ["array", "null"],

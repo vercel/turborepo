@@ -436,6 +436,13 @@ pub struct RawTaskDefinition {
     #[ts(skip)]
     pub extends: Option<Spanned<bool>>,
 
+    /// A human-readable description of what this task does.
+    ///
+    /// This field is for documentation purposes only and does not affect
+    /// task execution or caching behavior.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<Spanned<UnescapedString>>,
+
     /// Whether or not to cache the outputs of the task.
     ///
     /// Setting cache to false is useful for long-running "watch" or
