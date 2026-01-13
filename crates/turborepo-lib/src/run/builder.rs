@@ -498,10 +498,8 @@ impl RunBuilder {
 
         let observability_handle = self
             .opts
-            .future_flags
             .experimental_observability
-            .then(|| self.opts.experimental_observability.as_ref())
-            .flatten()
+            .as_ref()
             .and_then(|opts| {
                 let token = opts
                     .otel
