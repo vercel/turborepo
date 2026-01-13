@@ -6,7 +6,7 @@
 # 2. Run some smoke tests on that branch
 # 3. Build the Rust binary
 # 4. Publish JS packages npm (including turbo itself)
-# 5. Alias versioned docs (e.g., v2-5-4.turborepo.com)
+# 5. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
 # 6. Create a release branch and open a PR.
 
 # You can opt into a dry run, which will skip publishing to npm and opening the release branch
@@ -288,7 +288,7 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
           echo "Version: v${VERSION}"
-          echo "Subdomain: ${SUBDOMAIN}.turborepo.com"
+          echo "Subdomain: ${SUBDOMAIN}.turborepo.dev"
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
@@ -316,7 +316,7 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.TURBO_TOKEN }}
         run: |
-          ALIAS="${{ steps.version.outputs.subdomain }}.turborepo.com"
+          ALIAS="${{ steps.version.outputs.subdomain }}.turborepo.dev"
           DEPLOYMENT_URL="${{ steps.find-deployment.outputs.deployment_url }}"
 
           echo "Assigning alias ${ALIAS} to deployment ${DEPLOYMENT_URL}"
@@ -351,7 +351,7 @@ jobs:
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "*Target Subdomain:*\n${{ steps.version.outputs.subdomain }}.turborepo.com"
+                      "text": "*Target Subdomain:*\n${{ steps.version.outputs.subdomain }}.turborepo.dev"
                     }
                   ]
                 },
@@ -407,7 +407,7 @@ jobs:
           > [!CAUTION]
           > ## VERSIONED DOCS ALIASING FAILED
           >
-          > The documentation alias to `${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.com` **FAILED**.
+          > The documentation alias to `${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.dev` **FAILED**.
           >
           > **Action Required:** Manually investigate and create the alias.
           >
@@ -418,7 +418,7 @@ jobs:
           EOFWARNING
           else
             cat << EOFSUCCESS >> pr-body.md
-          Versioned docs available at: https://${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.com
+          Versioned docs available at: https://${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.dev
 
           ---
 
