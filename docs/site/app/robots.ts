@@ -1,11 +1,10 @@
 import type { MetadataRoute } from "next";
 
 /**
- * Check if the host is a subdomain (has more than 2 parts, e.g., v1.example.com)
+ * Check if the host is a subdomain of turborepo.com (e.g., v1.turborepo.com)
  */
 function isSubdomain(host: string): boolean {
-  const parts = host.split(".");
-  return parts.length > 2;
+  return host.endsWith(".turborepo.com");
 }
 
 /**
