@@ -12,13 +12,13 @@ process.env.NO_UPDATE_NOTIFIER = 1;
 const isWindows = process.platform === "win32";
 
 // Make virtualenv
-execSync(`python3 -m venv ${VENV_NAME}`);
+execFileSync("python3", ["-m", "venv", VENV_NAME]);
 
 // Upgrade pip
-execSync(`${getVenvBin("python3")} -m pip install --quiet --upgrade pip`);
+execFileSync(getVenvBin("python3"), ["-m", "pip", "install", "--quiet", "--upgrade", "pip"]);
 
 // Install prysk
-execSync(`${getVenvBin("pip")} install "prysk==0.15.2"`);
+execFileSync(getVenvBin("pip"), ["install", "prysk==0.15.2"]);
 
 // Which tests do we want to run?
 const testArg = process.argv[3] ? process.argv[3] : process.argv[2];
