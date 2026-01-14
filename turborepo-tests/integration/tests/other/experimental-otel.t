@@ -28,7 +28,7 @@ Smoke test: OTEL enabled via environment variables does not break turbo run
     Time:\s*[\.0-9]+m?s  (re)
   
    WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
-   
+
 
 Smoke test: OTEL enabled via CLI flags does not break turbo run
   $ unset TURBO_EXPERIMENTAL_OTEL_ENABLED
