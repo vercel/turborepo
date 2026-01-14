@@ -225,41 +225,41 @@ Test help flag
   
         --experimental-otel-enabled [<ENABLED>]
             Enable OpenTelemetry metrics export
-
+            
             [possible values: true, false]
-
+  
         --experimental-otel-protocol <PROTOCOL>
             OTLP transport protocol (grpc or http-protobuf)
-
+            
             [possible values: grpc, http-protobuf]
-
+  
         --experimental-otel-endpoint <URL>
             OTLP collector endpoint URL
-
+  
         --experimental-otel-timeout-ms <MILLISECONDS>
             OTLP export timeout in milliseconds (default: 10000)
-
+  
         --experimental-otel-header <KEY=VALUE>
             Add header to OTLP requests (can be repeated)
-
+  
         --experimental-otel-resource <KEY=VALUE>
             Add resource attribute to metrics (can be repeated)
-
+  
         --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
             Emit run-level summary metrics (default: true)
-
+            
             [possible values: true, false]
-
+  
         --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
             Emit per-task detail metrics (default: false)
-
+            
             [possible values: true, false]
-
+  
         --experimental-otel-use-remote-cache-token [<USE_REMOTE_CACHE_TOKEN>]
             Use remote cache token for OTLP authentication
-
+            
             [possible values: true, false]
-
+  
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`.
 
@@ -384,7 +384,7 @@ Test help flag
             
             [default: auto]
             [possible values: auto, none, task]
-
+  
 Test help flag for link command
   $ ${TURBO} link -h
   Link your local directory to a Vercel organization and enable remote caching
