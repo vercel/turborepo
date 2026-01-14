@@ -11,20 +11,22 @@ Smoke test: OTEL enabled via environment variables does not break turbo run
   $ export TURBO_EXPERIMENTAL_OTEL_ENABLED=1
   $ export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=http://localhost:4318
   $ ${TURBO} run build --filter=my-app
+   WARNING  experimentalObservability.otel is configured but futureFlags.experimentalObservability is not enabled in turbo.json. The observability config will be ignored.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache miss, executing .* (re)
-  my-app:build: 
+  my-app:build:
   my-app:build: > build
   my-app:build: > echo building
-  my-app:build: 
+  my-app:build:
   my-app:build: building
-  
+   WARNING  failed to shutdown otel exporter:.* (re)
+
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
     Time:\s*[\.0-9]+m?s  (re)
-  
+
    WARNING  no output files found for task my-app#build. Please check your `outputs` key in `turbo.json`
  
 
@@ -32,16 +34,18 @@ Smoke test: OTEL enabled via CLI flags does not break turbo run
   $ unset TURBO_EXPERIMENTAL_OTEL_ENABLED
   $ unset TURBO_EXPERIMENTAL_OTEL_ENDPOINT
   $ ${TURBO} run build --filter=my-app --experimental-otel-enabled --experimental-otel-endpoint=http://localhost:4318
+   WARNING  experimentalObservability.otel is configured but futureFlags.experimentalObservability is not enabled in turbo.json. The observability config will be ignored.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache hit, replaying logs .* (re)
-  my-app:build: 
+  my-app:build:
   my-app:build: > build
   my-app:build: > echo building
-  my-app:build: 
+  my-app:build:
   my-app:build: building
-  
+   WARNING  failed to shutdown otel exporter:.* (re)
+
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
@@ -49,16 +53,18 @@ Smoke test: OTEL enabled via CLI flags does not break turbo run
 
 Smoke test: http/protobuf protocol flag is accepted without error
   $ ${TURBO} run build --filter=my-app --experimental-otel-enabled --experimental-otel-endpoint=http://localhost:4318 --experimental-otel-protocol=http-protobuf
+   WARNING  experimentalObservability.otel is configured but futureFlags.experimentalObservability is not enabled in turbo.json. The observability config will be ignored.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache hit, replaying logs .* (re)
-  my-app:build: 
+  my-app:build:
   my-app:build: > build
   my-app:build: > echo building
-  my-app:build: 
+  my-app:build:
   my-app:build: building
-  
+   WARNING  failed to shutdown otel exporter:.* (re)
+
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
@@ -68,16 +74,17 @@ Smoke test: OTEL disabled via environment variable does not break turbo run
   $ export TURBO_EXPERIMENTAL_OTEL_ENABLED=0
   $ export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=http://localhost:4318
   $ ${TURBO} run build --filter=my-app
+   WARNING  experimentalObservability.otel is configured but futureFlags.experimentalObservability is not enabled in turbo.json. The observability config will be ignored.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache hit, replaying logs .* (re)
-  my-app:build: 
+  my-app:build:
   my-app:build: > build
   my-app:build: > echo building
-  my-app:build: 
+  my-app:build:
   my-app:build: building
-  
+
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
@@ -87,16 +94,17 @@ Smoke test: enabled via env without endpoint is a no-op (exporter not configured
   $ export TURBO_EXPERIMENTAL_OTEL_ENABLED=1
   $ unset TURBO_EXPERIMENTAL_OTEL_ENDPOINT
   $ ${TURBO} run build --filter=my-app
+   WARNING  experimentalObservability.otel is configured but futureFlags.experimentalObservability is not enabled in turbo.json. The observability config will be ignored.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
   my-app:build: cache hit, replaying logs .* (re)
-  my-app:build: 
+  my-app:build:
   my-app:build: > build
   my-app:build: > echo building
-  my-app:build: 
+  my-app:build:
   my-app:build: building
-  
+
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
     Time:\s*[\.0-9]+m?s\s*>>> FULL TURBO (re)
