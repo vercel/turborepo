@@ -262,7 +262,7 @@ Test help flag
   
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`.
-
+            
             `turbo` will use hints from codebase to guess which package manager should be used.
   
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -384,7 +384,7 @@ Test help flag
             
             [default: auto]
             [possible values: auto, none, task]
-  
+
 Test help flag for link command
   $ ${TURBO} link -h
   Link your local directory to a Vercel organization and enable remote caching
