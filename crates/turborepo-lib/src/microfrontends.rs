@@ -457,17 +457,6 @@ impl PackageGraphResult {
             referenced_packages.insert(package_name.to_string());
             referenced_packages.extend(info.tasks.keys().map(|task| task.package().to_string()));
 
-            // Validate that the config file is in the correct package
-            if let Some((root_app, root_package)) = config.root_route_app() {
-                if root_package != package_name {
-                    return Err(turborepo_microfrontends::Error::ConfigInWrongPackage {
-                        found_package: package_name.to_string(),
-                        root_app: root_app.to_string(),
-                        root_package: root_package.to_string(),
-                    });
-                }
-            }
-
             configs.insert(package_name.to_string(), info);
         }
         let default_apps_found = configs.keys().cloned().collect();
@@ -915,8 +904,7 @@ mod test {
     }
 
     #[test]
-    fn test_config_in_correct_package() {
-        // Config file is in "web" package, and "web" is the root route app (no routing)
+    fn test_config_in_any_package() {
         let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
@@ -931,51 +919,29 @@ mod test {
         )
         .unwrap();
 
+        // Config in "web" package (root route app)
         let result = PackageGraphResult::new(
             HashSet::from_iter(["web", "docs"].iter().copied()),
-            vec![("web", Ok(Some(config)))].into_iter(),
+            vec![("web", Ok(Some(config.clone())))].into_iter(),
             HashMap::new(),
         );
+        assert!(result.is_ok(), "Config in root app package should succeed");
 
-        assert!(result.is_ok(), "Config in correct package should succeed");
-    }
-
-    #[test]
-    fn test_config_in_wrong_package() {
-        // Config file is in "docs" package, but "web" is the root route app
-        let config = MfeConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "applications": {
-                    "web": {},
-                    "docs": {
-                        "routing": [{"paths": ["/docs", "/docs/:path*"]}]
-                    }
-                }
-            }))
-            .unwrap(),
-            "microfrontends.json",
-        )
-        .unwrap();
-
+        // Config in "docs" package (not the root route app) - now allowed for polyrepo
         let result = PackageGraphResult::new(
             HashSet::from_iter(["web", "docs"].iter().copied()),
             vec![("docs", Ok(Some(config)))].into_iter(),
             HashMap::new(),
         );
-
-        match result {
-            Err(turborepo_microfrontends::Error::ConfigInWrongPackage { .. }) => {
-                // Expected error
-            }
-            Err(other) => panic!("Expected ConfigInWrongPackage error, got: {:?}", other),
-            Ok(_) => panic!("Expected error but got success"),
-        }
+        assert!(
+            result.is_ok(),
+            "Config in non-root package should succeed (polyrepo support)"
+        );
     }
 
     #[test]
     fn test_config_with_package_name_mapping() {
-        // Config file is in "marketing" package, which is where "web" app (root route)
-        // is actually implemented
+        // Config file can be in any package, packageName mapping still works
         let config = MfeConfig::from_str(
             &serde_json::to_string_pretty(&json!({
                 "applications": {
@@ -1000,43 +966,8 @@ mod test {
 
         assert!(
             result.is_ok(),
-            "Config in correct package (with packageName mapping) should succeed"
+            "Config with packageName mapping should succeed"
         );
-    }
-
-    #[test]
-    fn test_config_with_package_name_mapping_in_wrong_package() {
-        // Config file is in "docs" package, but "marketing" maps to "web" app (root
-        // route)
-        let config = MfeConfig::from_str(
-            &serde_json::to_string_pretty(&json!({
-                "applications": {
-                    "web": {
-                        "packageName": "foo"
-                    },
-                    "docs": {
-                        "routing": [{"paths": ["/docs", "/docs/:path*"]}]
-                    }
-                }
-            }))
-            .unwrap(),
-            "microfrontends.json",
-        )
-        .unwrap();
-
-        let result = PackageGraphResult::new(
-            HashSet::from_iter(["foo", "docs"].iter().copied()),
-            vec![("docs", Ok(Some(config)))].into_iter(),
-            HashMap::new(),
-        );
-
-        match result {
-            Err(turborepo_microfrontends::Error::ConfigInWrongPackage { .. }) => {
-                // Expected error
-            }
-            Err(other) => panic!("Expected ConfigInWrongPackage error, got: {:?}", other),
-            Ok(_) => panic!("Expected error but got success with packageName mapping"),
-        }
     }
 
     #[test]
