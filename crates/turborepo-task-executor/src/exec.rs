@@ -28,9 +28,6 @@ use turborepo_ui::{ColorConfig, OutputWriter};
 
 use crate::{TaskAccessProvider, TaskCacheOutput, TaskOutput};
 
-// =============================================================================
-// Windows OOM Detection
-// =============================================================================
 
 /// Windows NT status codes that indicate out-of-memory conditions.
 /// These are the signed i32 representations of the unsigned NT status codes.
