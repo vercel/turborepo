@@ -22,17 +22,6 @@ pub enum Error {
         path: String,
     },
     #[error(
-        "The microfrontends.json file must be located in the package that serves the root route \
-         ('/'). Found configuration in package '{found_package}' but the root route is served by \
-         application '{root_app}' (package: '{root_package}'). Please move the \
-         microfrontends.json file to the '{root_package}' package."
-    )]
-    ConfigInWrongPackage {
-        found_package: String,
-        root_app: String,
-        root_package: String,
-    },
-    #[error(
         "Invalid custom config file name: {0}. Must be a .json or .jsonc file directly in the \
          package root (no subdirectories or path traversal)."
     )]
