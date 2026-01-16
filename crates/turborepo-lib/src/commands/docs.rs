@@ -65,7 +65,11 @@ pub async fn run(query: &str, docs_version: Option<&str>) -> Result<(), Error> {
             validate_version(v)?;
             v.to_string()
         }
-        None => get_version().to_string(),
+        None => {
+            let current_version = get_version().to_string();
+            validate_version(&current_version)?;
+            current_version
+        }
     };
 
     let client = reqwest::Client::new();
@@ -80,10 +84,10 @@ pub async fn run(query: &str, docs_version: Option<&str>) -> Result<(), Error> {
         .json()
         .await?;
 
-    // Filter to only show "page" type results for cleaner output, limit to 10
+    // Filter to only show "page" type results with non-empty content, limit to 10
     let page_results: Vec<_> = results
         .iter()
-        .filter(|r| r.result_type == "page")
+        .filter(|r| r.result_type == "page" && !r.content.is_empty())
         .take(10)
         .collect();
 
