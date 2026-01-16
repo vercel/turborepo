@@ -28,6 +28,59 @@ use turborepo_ui::{ColorConfig, OutputWriter};
 
 use crate::{TaskAccessProvider, TaskCacheOutput, TaskOutput};
 
+/// Windows NT status codes that indicate out-of-memory conditions.
+/// These are the signed i32 representations of the unsigned NT status codes.
+#[cfg(windows)]
+mod windows_oom {
+    /// STATUS_NO_MEMORY (0xC0000017) - insufficient memory to complete
+    /// operation
+    pub const STATUS_NO_MEMORY: i32 = 0xC0000017_u32 as i32;
+    /// STATUS_STACK_OVERFLOW (0xC00000FD) - stack overflow, often
+    /// memory-related
+    pub const STATUS_STACK_OVERFLOW: i32 = 0xC00000FD_u32 as i32;
+    /// STATUS_COMMITMENT_LIMIT (0xC000012D) - system committed memory limit
+    /// reached
+    pub const STATUS_COMMITMENT_LIMIT: i32 = 0xC000012D_u32 as i32;
+
+    /// Check if an exit code indicates an out-of-memory condition on Windows.
+    pub fn is_oom_exit_code(code: i32) -> bool {
+        matches!(
+            code,
+            STATUS_NO_MEMORY | STATUS_STACK_OVERFLOW | STATUS_COMMITMENT_LIMIT
+        )
+    }
+
+    /// Get a human-readable description of the Windows OOM exit code.
+    pub fn oom_description(code: i32) -> &'static str {
+        match code {
+            STATUS_NO_MEMORY => "STATUS_NO_MEMORY: insufficient memory",
+            STATUS_STACK_OVERFLOW => "STATUS_STACK_OVERFLOW: stack overflow",
+            STATUS_COMMITMENT_LIMIT => "STATUS_COMMITMENT_LIMIT: system memory limit reached",
+            _ => "unknown memory error",
+        }
+    }
+}
+
+/// Get a description for an OOM-related exit code, if applicable.
+fn oom_description(code: i32) -> Option<&'static str> {
+    #[cfg(windows)]
+    {
+        if windows_oom::is_oom_exit_code(code) {
+            Some(windows_oom::oom_description(code))
+        } else {
+            None
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        if code == 137 {
+            Some("SIGKILL (signal 9): likely killed by OOM killer")
+        } else {
+            None
+        }
+    }
+}
+
 // =============================================================================
 // Result Types
 // =============================================================================
@@ -67,8 +120,6 @@ pub enum InternalError {
     UnknownChildExit,
     #[error("unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
-    #[error("external process killed a task")]
-    ExternalKill,
     #[error("error with cache: {0}")]
     Cache(#[from] turborepo_run_cache::Error),
 }
@@ -428,7 +479,17 @@ where
                 if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
                     error!("error reading logs: {e}");
                 }
-                let message = format!("command {} exited ({})", process.label(), code);
+                // Check if this looks like an OOM-related exit code
+                let message = if let Some(oom_desc) = oom_description(code) {
+                    format!(
+                        "command {} was killed (exit code {}): {}, likely ran out of memory",
+                        process.label(),
+                        code,
+                        oom_desc
+                    )
+                } else {
+                    format!("command {} exited ({})", process.label(), code)
+                };
                 match self.continue_on_error {
                     ContinueMode::Never => {
                         prefixed_ui.error(&format!("command finished with error: {}", message))
@@ -447,8 +508,67 @@ where
                     message,
                 })
             }
-            ChildExit::Finished(None) | ChildExit::Failed => Err(InternalError::UnknownChildExit),
-            ChildExit::KilledExternal => Err(InternalError::ExternalKill),
+            ChildExit::Finished(None) | ChildExit::Failed => {
+                // Process exited without a code (e.g., killed by signal) or we failed to get
+                // status. Treat as a task failure with exit code 1.
+                if let Err(e) = stdout_writer.flush() {
+                    error!("error flushing logs: {e}");
+                }
+                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
+                    error!("error reading logs: {e}");
+                }
+                let message = format!("command {} exited unexpectedly", process.label());
+                match self.continue_on_error {
+                    ContinueMode::Never => {
+                        prefixed_ui.error(&format!("command finished with error: {}", message))
+                    }
+                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
+                        prefixed_ui.warn("command finished with error, but continuing...")
+                    }
+                }
+                self.errors.push_execution_error(
+                    self.task_id_for_display.clone(),
+                    process.label().to_string(),
+                    1,
+                );
+                Ok(ExecOutcome::Task {
+                    exit_code: Some(1),
+                    message,
+                })
+            }
+            ChildExit::KilledExternal => {
+                // Process was killed by an external signal (e.g., OOM killer sending SIGKILL).
+                // Use exit code 137 (128 + 9) which is the conventional code for SIGKILL.
+                const SIGKILL_EXIT_CODE: i32 = 137;
+                if let Err(e) = stdout_writer.flush() {
+                    error!("error flushing logs: {e}");
+                }
+                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
+                    error!("error reading logs: {e}");
+                }
+                let message = format!(
+                    "command {} was killed (exit code {}), likely due to running out of memory",
+                    process.label(),
+                    SIGKILL_EXIT_CODE
+                );
+                match self.continue_on_error {
+                    ContinueMode::Never => {
+                        prefixed_ui.error(&format!("command finished with error: {}", message))
+                    }
+                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
+                        prefixed_ui.warn("command finished with error, but continuing...")
+                    }
+                }
+                self.errors.push_execution_error(
+                    self.task_id_for_display.clone(),
+                    process.label().to_string(),
+                    SIGKILL_EXIT_CODE,
+                );
+                Ok(ExecOutcome::Task {
+                    exit_code: Some(SIGKILL_EXIT_CODE),
+                    message,
+                })
+            }
             ChildExit::Killed | ChildExit::Interrupted => {
                 if process.is_closing() {
                     Ok(ExecOutcome::Shutdown)

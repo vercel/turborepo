@@ -6,7 +6,7 @@ import { DesktopMenu } from "./desktop-menu";
 import { GitHubButton } from "./github-button";
 import { SlashIcon } from "./icons";
 import { MobileMenu } from "./mobile-menu";
-import { SearchButton } from "./search";
+import { MobileSearchButton, SearchButton } from "./search";
 
 export const Navbar = () => (
   <header className="sticky top-0 z-40 w-full gap-6 border-b bg-sidebar">
@@ -23,6 +23,7 @@ export const Navbar = () => (
       <DesktopMenu className="hidden md:flex" items={nav} />
       <div className="ml-auto flex flex-1 items-center justify-end gap-2">
         <SearchButton className="hidden md:flex" />
+        <MobileSearchButton className="md:hidden" />
         <Chat basePath={basePath} suggestions={suggestions} />
         <GitHubButton className="hidden md:flex" />
         <MobileMenu />
