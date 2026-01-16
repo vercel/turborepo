@@ -253,7 +253,14 @@
     },
     "FutureFlags": {
       "description": "Opt into breaking changes prior to major releases, experimental features, and beta features.\n\nNote: Currently all previous future flags (turboExtendsKeyword, nonRootExtends) have been graduated and are now enabled by default.",
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "errorsOnlyShowHash": {
+          "description": "When using `outputLogs: \"errors-only\"`, show task hashes when tasks complete successfully. This provides visibility into which tasks are running without showing full output logs.",
+          "default": false,
+          "type": "boolean"
+        }
+      }
     },
     "Map_of_TagRules": {
       "type": "object",

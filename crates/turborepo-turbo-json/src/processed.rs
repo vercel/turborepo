@@ -415,7 +415,7 @@ mod tests {
             Spanned::new(UnescapedString::from("item2")),
         ];
 
-        let (processed, extends) = extract_turbo_extends(items, &FutureFlags {});
+        let (processed, extends) = extract_turbo_extends(items, &FutureFlags::default());
 
         assert!(extends);
         assert_eq!(processed.len(), 2);
@@ -430,7 +430,7 @@ mod tests {
             Spanned::new(UnescapedString::from("item2")),
         ];
 
-        let (processed, extends) = extract_turbo_extends(items, &FutureFlags {});
+        let (processed, extends) = extract_turbo_extends(items, &FutureFlags::default());
 
         assert!(!extends);
         assert_eq!(processed.len(), 2);
@@ -570,7 +570,7 @@ mod tests {
             Spanned::new(UnescapedString::from("lib/**")),
         ];
 
-        let inputs = ProcessedInputs::new(raw_globs, &FutureFlags {}).unwrap();
+        let inputs = ProcessedInputs::new(raw_globs, &FutureFlags::default()).unwrap();
 
         assert!(inputs.extends);
         assert_eq!(inputs.globs.len(), 2);
@@ -587,7 +587,7 @@ mod tests {
             Spanned::new(UnescapedString::from("API_KEY")),
         ];
 
-        let result = ProcessedEnv::new(raw_env, &FutureFlags {});
+        let result = ProcessedEnv::new(raw_env, &FutureFlags::default());
         assert!(result.is_ok());
         let env = result.unwrap();
         assert!(env.extends);
@@ -603,7 +603,7 @@ mod tests {
             Spanned::new(UnescapedString::from("test")),
         ];
 
-        let result = ProcessedDependsOn::new(Spanned::new(raw_deps), &FutureFlags {});
+        let result = ProcessedDependsOn::new(Spanned::new(raw_deps), &FutureFlags::default());
         assert!(result.is_ok());
         let depends_on = result.unwrap();
         assert!(depends_on.extends);

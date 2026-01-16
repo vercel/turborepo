@@ -34,11 +34,14 @@ use ts_rs::TS;
 #[serde(rename_all = "camelCase")]
 #[schemars(rename_all = "camelCase")]
 #[deserializable()]
-pub struct FutureFlags {}
+pub struct FutureFlags {
+    /// When using `outputLogs: "errors-only"`, show task hashes when tasks
+    /// complete successfully. This provides visibility into which tasks are
+    /// running without showing full output logs.
+    #[serde(default)]
+    pub errors_only_show_hash: bool,
+}
 
-/// `FutureFlags` is an empty struct that serializes to `{}` in JSON.
-/// In TypeScript, this is represented as `Record<string, never>` (an empty
-/// object type).
 impl TS for FutureFlags {
     type WithoutGenerics = Self;
 
@@ -47,19 +50,19 @@ impl TS for FutureFlags {
     }
 
     fn inline() -> String {
-        "Record<string, never>".to_string()
+        "{ errorsOnlyShowHash?: boolean }".to_string()
     }
 
     fn inline_flattened() -> String {
-        "Record<string, never>".to_string()
+        "{ errorsOnlyShowHash?: boolean }".to_string()
     }
 
     fn decl() -> String {
-        "type FutureFlags = Record<string, never>;".to_string()
+        "type FutureFlags = { errorsOnlyShowHash?: boolean };".to_string()
     }
 
     fn decl_concrete() -> String {
-        "type FutureFlags = Record<string, never>;".to_string()
+        "type FutureFlags = { errorsOnlyShowHash?: boolean };".to_string()
     }
 
     fn dependencies() -> Vec<ts_rs::Dependency> {
