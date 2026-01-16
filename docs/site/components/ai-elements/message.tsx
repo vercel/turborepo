@@ -27,7 +27,7 @@ export type MessageProps = HTMLAttributes<HTMLDivElement> & {
 export const Message = ({ className, from, ...props }: MessageProps) => (
   <div
     className={cn(
-      "group flex flex-col w-full max-w-[80%] gap-2",
+      "group flex flex-col w-full gap-2",
       from === "user" ? "is-user ml-auto justify-end" : "is-assistant",
       className
     )}
@@ -44,8 +44,8 @@ export const MessageContent = ({
 }: MessageContentProps) => (
   <div
     className={cn(
-      "is-user:dark flex w-fit flex-col gap-2 overflow-hidden text-sm",
-      "group-[.is-user]:ml-auto group-[.is-user]:rounded-lg group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
+      "is-user:dark flex w-full flex-col gap-2 overflow-x-auto text-sm",
+      "group-[.is-user]:ml-auto group-[.is-user]:w-fit group-[.is-user]:rounded-lg group-[.is-user]:bg-secondary group-[.is-user]:px-4 group-[.is-user]:py-3 group-[.is-user]:text-foreground",
       "group-[.is-assistant]:text-foreground",
       className
     )}
@@ -171,7 +171,7 @@ export const MessageBranch = ({
   return (
     <MessageBranchContext.Provider value={contextValue}>
       <div
-        className={cn("grid w-full gap-2 [&>div]:pb-0", className)}
+        className={cn("grid w-full min-w-0 gap-2 [&>div]:pb-0", className)}
         {...props}
       />
     </MessageBranchContext.Provider>
@@ -197,7 +197,7 @@ export const MessageBranchContent = ({
   return childrenArray.map((branch, index) => (
     <div
       className={cn(
-        "grid gap-2 overflow-hidden [&>div]:pb-0",
+        "grid gap-2 [&>div]:pb-0",
         index === currentBranch ? "block" : "hidden"
       )}
       key={branch.key}

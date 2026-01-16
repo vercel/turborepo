@@ -22,7 +22,7 @@ const log = (message: string) => {
   console.log(`🤖 [Geistdocs] ${message}`);
 };
 
-const search_docs = (writer: UIMessageStreamWriter) =>
+const search_docs = (writer?: UIMessageStreamWriter) =>
   tool({
     description: "Search through documentation content by query",
     inputSchema: z.object({
@@ -121,14 +121,17 @@ const search_docs = (writer: UIMessageStreamWriter) =>
 
         log(`Trimmed ${trimmedResults.length} results.`);
 
-        for (const [index, doc] of trimmedResults.entries()) {
-          log(`Writing doc: ${doc.title}, ${doc.slug}`);
-          writer.write({
-            type: "source-url",
-            sourceId: `doc-${index}-${doc.slug}`,
-            url: doc.slug,
-            title: doc.title
-          });
+        // Only write source URLs if writer is provided (generation phase)
+        if (writer) {
+          for (const [index, doc] of trimmedResults.entries()) {
+            log(`Writing doc: ${doc.title}, ${doc.slug}`);
+            writer.write({
+              type: "source-url",
+              sourceId: `doc-${index}-${doc.slug}`,
+              url: doc.slug,
+              title: doc.title
+            });
+          }
         }
 
         const formattedResultsString = trimmedResults
@@ -136,8 +139,8 @@ const search_docs = (writer: UIMessageStreamWriter) =>
             (doc) =>
               `**${doc.title}**\nURL: ${doc.slug}\n${
                 doc.description || ""
-              }\n\n${doc.content.slice(0, 1500)}${
-                doc.content.length > 1500 ? "..." : ""
+              }\n\n${doc.content.slice(0, 5000)}${
+                doc.content.length > 5000 ? "..." : ""
               }\n\n---\n`
           )
           .join("\n");
@@ -214,9 +217,12 @@ const list_docs = tool({
   }
 });
 
-export const createTools = (writer: UIMessageStreamWriter) =>
+export const createTools = (writer?: UIMessageStreamWriter) =>
   ({
     get_doc_page,
     list_docs,
     search_docs: search_docs(writer)
   }) satisfies ToolSet;
+
+// RAG-only tools without streaming (for retrieval phase)
+export const createRagTools = () => createTools();
