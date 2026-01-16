@@ -22,6 +22,7 @@ pub(crate) mod clone;
 pub(crate) mod config;
 pub(crate) mod daemon;
 pub(crate) mod devtools;
+pub(crate) mod docs;
 pub(crate) mod generate;
 pub(crate) mod get_mfe_port;
 pub(crate) mod info;
