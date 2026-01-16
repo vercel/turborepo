@@ -34,10 +34,12 @@ PR titles must follow [Conventional Commits](https://www.conventionalcommits.org
 Format: `<type>: <Description>`
 
 Key rules:
+
 - Description must start with an uppercase letter
 - Scopes are not allowed
 
 Examples:
+
 ```
 feat: Add new cache configuration option
 fix: Resolve race condition in task scheduling

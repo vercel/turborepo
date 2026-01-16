@@ -11,7 +11,7 @@ use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
-    commands::{bin, generate, get_mfe_port, link, login, ls, prune, CommandBase},
+    commands::{bin, docs, generate, get_mfe_port, link, login, ls, prune, CommandBase},
     query, run,
     run::{builder::RunBuilder, watch},
 };
@@ -42,6 +42,8 @@ pub enum Error {
     Auth(#[from] turborepo_auth::Error),
     #[error(transparent)]
     Daemon(#[from] DaemonError),
+    #[error(transparent)]
+    Docs(#[from] docs::Error),
     #[error(transparent)]
     Generate(#[from] generate::Error),
     #[error(transparent)]
