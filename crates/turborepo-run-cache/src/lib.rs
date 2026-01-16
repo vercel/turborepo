@@ -77,6 +77,10 @@ pub struct RunCache {
     repo_root: AbsoluteSystemPathBuf,
     daemon_client: Option<DaemonClient<DaemonConnector>>,
     ui: ColorConfig,
+    /// When using `outputLogs: "errors-only"`, show task hashes when tasks
+    /// complete successfully. Controlled by the `errorsOnlyShowHash` future
+    /// flag.
+    errors_only_show_hash: bool,
 }
 
 /// Trait used to output cache information to user
@@ -110,6 +114,7 @@ impl RunCache {
             repo_root: repo_root.to_owned(),
             daemon_client,
             ui,
+            errors_only_show_hash: run_cache_opts.errors_only_show_hash,
         }
     }
 
@@ -147,6 +152,7 @@ impl RunCache {
             daemon_client: self.daemon_client.clone(),
             ui: self.ui,
             warnings: self.warnings.clone(),
+            errors_only_show_hash: self.errors_only_show_hash,
         }
     }
 
@@ -181,6 +187,10 @@ pub struct TaskCache {
     ui: ColorConfig,
     task_id: TaskId<'static>,
     warnings: Arc<Mutex<Vec<String>>>,
+    /// When using `outputLogs: "errors-only"`, show task hashes when tasks
+    /// complete successfully. Controlled by the `errorsOnlyShowHash` future
+    /// flag.
+    errors_only_show_hash: bool,
 }
 
 impl TaskCache {
@@ -203,13 +213,17 @@ impl TaskCache {
 
     pub fn on_error(&self, terminal_output: &mut impl CacheOutput) -> Result<(), Error> {
         if self.task_output_logs == OutputLogsMode::ErrorsOnly {
-            terminal_output.status(
-                &format!(
-                    "cache miss, executing {}",
-                    color!(self.ui, GREY, "{}", self.hash)
-                ),
-                CacheResult::Miss,
-            );
+            // If errors_only_show_hash is enabled, we already printed the hash when
+            // the task started, so we don't need to print it again. We just replay logs.
+            if !self.errors_only_show_hash {
+                terminal_output.status(
+                    &format!(
+                        "cache miss, executing {}",
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                    CacheResult::Miss,
+                );
+            }
             self.replay_log_file(terminal_output)?;
         }
 
@@ -245,7 +259,15 @@ impl TaskCache {
         if self.caching_disabled || self.run_cache.reads_disabled {
             // Always send the cache miss status so TUI knows to start rendering.
             // The message is only shown based on output_logs setting.
-            let message = if matches!(
+            let message = if self.task_output_logs == OutputLogsMode::ErrorsOnly
+                && self.errors_only_show_hash
+            {
+                format!(
+                    "cache bypass, force executing {} {}",
+                    color!(self.ui, GREY, "{}", self.hash),
+                    color!(self.ui, GREY, "(only logging errors)")
+                )
+            } else if matches!(
                 self.task_output_logs,
                 OutputLogsMode::None | OutputLogsMode::ErrorsOnly
             ) {
@@ -298,7 +320,15 @@ impl TaskCache {
             let Some((cache_hit_metadata, restored_files)) = cache_status else {
                 // Always send the cache miss status so TUI knows to start rendering.
                 // The message is only shown based on output_logs setting.
-                let message = if matches!(
+                let message = if self.task_output_logs == OutputLogsMode::ErrorsOnly
+                    && self.errors_only_show_hash
+                {
+                    format!(
+                        "cache miss, executing {} {}",
+                        color!(self.ui, GREY, "{}", self.hash),
+                        color!(self.ui, GREY, "(only logging errors)")
+                    )
+                } else if matches!(
                     self.task_output_logs,
                     OutputLogsMode::None | OutputLogsMode::ErrorsOnly
                 ) {
@@ -373,6 +403,17 @@ impl TaskCache {
                     CacheResult::Hit,
                 );
                 self.replay_log_file(terminal_output)?;
+            }
+            OutputLogsMode::ErrorsOnly if self.errors_only_show_hash => {
+                debug!("log file path: {}", self.log_file_path);
+                terminal_output.status(
+                    &format!(
+                        "cache hit{}, replaying logs (no errors) {}",
+                        more_context,
+                        color!(self.ui, GREY, "{}", self.hash)
+                    ),
+                    CacheResult::Hit,
+                );
             }
             // Note that if we're restoring from cache, the task succeeded
             // so we know we don't need to print anything for errors
