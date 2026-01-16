@@ -210,6 +210,7 @@ impl<'a> From<OptsInputs<'a>> for RunCacheOpts {
     fn from(inputs: OptsInputs<'a>) -> Self {
         RunCacheOpts {
             task_output_logs_override: inputs.execution_args.output_logs,
+            errors_only_show_hash: inputs.config.future_flags().errors_only_show_hash,
         }
     }
 }

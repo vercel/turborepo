@@ -10,6 +10,8 @@ export {
   type BaseSchema as BaseSchemaV2,
   type EnvWildcard,
   type EnvWildcard as EnvWildcardV2,
+  type FutureFlags,
+  type FutureFlags as FutureFlagsV2,
   type OutputLogs as OutputLogsV2,
   type Pipeline,
   type Pipeline as PipelineV2,

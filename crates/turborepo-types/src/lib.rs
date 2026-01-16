@@ -387,6 +387,10 @@ pub struct TuiOpts {
 pub struct RunCacheOpts {
     /// Override for task output logs mode
     pub task_output_logs_override: Option<OutputLogsMode>,
+    /// When using `outputLogs: "errors-only"`, show task hashes when tasks
+    /// complete successfully. Controlled by the `errorsOnlyShowHash` future
+    /// flag.
+    pub errors_only_show_hash: bool,
 }
 
 /// Options for scope resolution.

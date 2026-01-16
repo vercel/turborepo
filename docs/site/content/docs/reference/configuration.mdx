@@ -198,7 +198,9 @@ Read more about [Environment Modes](/docs/crafting-your-repository/using-environ
 
 ```jsonc title="./turbo.json"
 {
-  "futureFlags": {},
+  "futureFlags": {
+    "errorsOnlyShowHash": true,
+  },
 }
 ```
 
@@ -210,7 +212,29 @@ Enable experimental features that will become the default behavior in future ver
   Configuration](/docs/reference/package-configurations).
 </Callout>
 
-There are no future flags at this time.
+#### `errorsOnlyShowHash`
+
+Default: `false`
+
+When using [`outputLogs: "errors-only"`](#outputlogs), show task hashes when tasks start and complete successfully. This provides visibility into which tasks are running without showing full output logs.
+
+With this flag enabled, successful tasks will show messages like:
+
+- `cache miss, executing <hash> (only logging errors)` - when a task starts execution
+- `cache hit, replaying logs (no errors) <hash>` - when a task is restored from cache
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "errorsOnlyShowHash": true,
+  },
+  "tasks": {
+    "build": {
+      "outputLogs": "errors-only",
+    },
+  },
+}
+```
 
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
@@ -603,6 +627,10 @@ Set output logging verbosity. Can be overridden by the [`--output-logs`](/docs/r
   },
 }
 ```
+
+<Callout type="info">
+  When using `errors-only`, you can enable the [`errorsOnlyShowHash`](#errorsonlyshowhash) future flag to show task hashes when tasks complete successfully, providing visibility into running tasks without full output logs.
+</Callout>
 
 ### `persistent`
 

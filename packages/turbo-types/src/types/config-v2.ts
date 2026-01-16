@@ -195,7 +195,18 @@ export interface RootSchema extends BaseSchema {
    *
    * @defaultValue `{}`
    */
-  futureFlags?: Record<string, unknown>;
+  futureFlags?: FutureFlags;
+}
+
+export interface FutureFlags {
+  /**
+   * When using `outputLogs: "errors-only"`, show task hashes when tasks
+   * complete successfully. This provides visibility into which tasks are
+   * running without showing full output logs.
+   *
+   * @defaultValue `false`
+   */
+  errorsOnlyShowHash?: boolean;
 }
 
 export interface Pipeline {
