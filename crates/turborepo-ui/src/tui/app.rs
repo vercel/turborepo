@@ -915,19 +915,6 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
     Ok(width >= MIN_WIDTH && height >= MIN_HEIGHT)
 }
 
-/// Detects if the current terminal is VSCode's integrated terminal.
-///
-/// VSCode's terminal is based on xterm.js and has issues with mouse capture -
-/// it can leak mouse events into child process stdout, causing garbage output.
-/// We detect VSCode to disable mouse capture and prevent this issue.
-fn is_vscode_terminal() -> bool {
-    // Primary detection: TERM_PROGRAM is the most reliable indicator
-    // VSCode sets TERM_PROGRAM=vscode in its integrated terminal
-    std::env::var("TERM_PROGRAM")
-        .map(|v| v.eq_ignore_ascii_case("vscode"))
-        .unwrap_or(false)
-}
-
 /// Configures terminal for rendering App
 #[tracing::instrument]
 fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<Stdout>>> {
@@ -939,19 +926,13 @@ fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<St
     // Ensure all pending writes are flushed before we switch to alternative screen
     stdout.flush()?;
 
-    // VSCode's terminal (xterm.js) has issues with mouse capture - it can leak
-    // mouse events into child process stdout. Disable mouse capture for VSCode.
-    if is_vscode_terminal() {
-        crossterm::execute!(stdout, crossterm::terminal::EnterAlternateScreen)?;
-    } else {
-        crossterm::execute!(
-            stdout,
-            crossterm::event::EnableMouseCapture,
-            crossterm::terminal::EnterAlternateScreen
-        )?;
-        // Track that mouse capture was enabled (important for Windows cleanup)
-        super::panic_handler::set_mouse_capture_enabled();
-    }
+    crossterm::execute!(
+        stdout,
+        crossterm::event::EnableMouseCapture,
+        crossterm::terminal::EnterAlternateScreen
+    )?;
+    // Track that mouse capture was enabled (important for Windows cleanup)
+    super::panic_handler::set_mouse_capture_enabled();
 
     // Mark TUI as active so panic handler knows to restore terminal state
     super::panic_handler::set_tui_active();
@@ -1210,7 +1191,6 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
 
 #[cfg(test)]
 mod test {
-    use serial_test::serial;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
@@ -2399,54 +2379,5 @@ mod test {
         }
 
         Ok(())
-    }
-
-    // Note: This test modifies the TERM_PROGRAM environment variable, which is
-    // process-global state. It must run serially to avoid interference with other
-    // tests that read TERM_PROGRAM (e.g., startup(), ColorConfig::rainbow()).
-    #[test]
-    #[serial]
-    fn test_is_vscode_terminal_detection() {
-        // Save original value to restore later
-        let original = std::env::var("TERM_PROGRAM").ok();
-
-        // SAFETY: Environment variable modification is safe here because this test
-        // runs serially (via #[serial]) and restores the original value on cleanup.
-        unsafe {
-            // Test: VSCode detection (lowercase)
-            std::env::set_var("TERM_PROGRAM", "vscode");
-            assert!(
-                is_vscode_terminal(),
-                "should detect VSCode when TERM_PROGRAM=vscode"
-            );
-
-            // Test: VSCode detection (mixed case)
-            std::env::set_var("TERM_PROGRAM", "VSCode");
-            assert!(is_vscode_terminal(), "should detect VSCode with mixed case");
-
-            // Test: Non-VSCode terminal
-            std::env::set_var("TERM_PROGRAM", "iTerm.app");
-            assert!(!is_vscode_terminal(), "should not detect iTerm as VSCode");
-
-            // Test: Empty value
-            std::env::set_var("TERM_PROGRAM", "");
-            assert!(
-                !is_vscode_terminal(),
-                "should not detect empty string as VSCode"
-            );
-
-            // Test: Unset variable
-            std::env::remove_var("TERM_PROGRAM");
-            assert!(
-                !is_vscode_terminal(),
-                "should not detect VSCode when TERM_PROGRAM is unset"
-            );
-
-            // Restore original value
-            match original {
-                Some(val) => std::env::set_var("TERM_PROGRAM", val),
-                None => std::env::remove_var("TERM_PROGRAM"),
-            }
-        }
     }
 }
