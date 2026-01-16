@@ -13,6 +13,7 @@ Make sure exit code is 2 when no args are passed
     completion    Generate the autocompletion script for the specified shell
     daemon        Runs the Turborepo background daemon
     devtools      Visualize your monorepo's package graph in the browser
+    docs          Search the Turborepo documentation
     generate      Generate a new app / package
     telemetry     Enable or disable anonymous telemetry
     scan          Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
