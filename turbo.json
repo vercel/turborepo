@@ -20,6 +20,9 @@
     "ACTIONS_CACHE_URL",
     "ACTIONS_RUNTIME_TOKEN"
   ],
+  "futureFlags": {
+    "errorsOnlyShowHash": true
+  },
   // This is probably overkill, but we do things per-platform often enough that we should segment
   // everything by OS and RUNNER_OS. This will segment between GH actions and everything else for now.
   "globalEnv": ["OS", "RUNNER_OS"],

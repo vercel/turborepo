@@ -665,7 +665,18 @@ fn generate_root_schema_interface() -> String {
    *
    * @defaultValue `{}`
    */
-  futureFlags?: Record<string, unknown>;
+  futureFlags?: FutureFlags;
+}
+
+export interface FutureFlags {
+  /**
+   * When using `outputLogs: "errors-only"`, show task hashes when tasks
+   * complete successfully. This provides visibility into which tasks are
+   * running without showing full output logs.
+   *
+   * @defaultValue `false`
+   */
+  errorsOnlyShowHash?: boolean;
 }
 
 "#
