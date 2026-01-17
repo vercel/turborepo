@@ -1,5 +1,4 @@
 import { isToolUIPart } from "ai";
-import { BookmarkIcon } from "lucide-react";
 import type { MyUIMessage } from "@/app/api/chat/types";
 import { Shimmer } from "../ai-elements/shimmer";
 import {
@@ -11,6 +10,7 @@ import {
 import { Spinner } from "../ui/spinner";
 
 type MessageMetadataProps = {
+  messageId?: string;
   parts: MyUIMessage["parts"];
   inProgress: boolean;
   isStreaming?: boolean;
@@ -28,17 +28,6 @@ export const MessageMetadata = ({
 
   const reasoning = parts.at(-1)?.type === "reasoning";
 
-  if (!lastPart) {
-    return (
-      <div className="flex items-center gap-2">
-        <Spinner />{" "}
-        {reasoning ? <Shimmer className="text-xs">Thinking...</Shimmer> : ""}
-      </div>
-    );
-  }
-
-  const tool = isToolUIPart(lastPart) ? lastPart : null;
-
   const sources = Array.from(
     new Map(
       parts
@@ -47,47 +36,23 @@ export const MessageMetadata = ({
     ).values()
   );
 
-  // Check if there's any text content in the message
-  const hasTextContent = parts.some(
-    (part) => part.type === "text" && part.text.length > 0
-  );
+  const tool = lastPart && isToolUIPart(lastPart) ? lastPart : null;
 
-  // Show loading state when sources exist but text hasn't started streaming yet
-  if (sources.length > 0 && !hasTextContent && isStreaming) {
+  // Show spinner only when waiting for content (no text/tool yet and not streaming)
+  if (!lastPart && sources.length === 0 && !isStreaming) {
     return (
-      <div className="flex flex-col gap-2">
-        <Sources>
-          <SourcesTrigger count={sources.length}>
-            <BookmarkIcon className="size-4" />
-            <p>Used {sources.length} sources</p>
-          </SourcesTrigger>
-          <SourcesContent>
-            <ul className="flex flex-col gap-2">
-              {sources.map((source) => (
-                <li className="ml-4.5 list-disc pl-1" key={source.url}>
-                  <Source href={source.url} title={source.url}>
-                    {source.title}
-                  </Source>
-                </li>
-              ))}
-            </ul>
-          </SourcesContent>
-        </Sources>
-        <div className="flex items-center gap-2">
-          <Spinner />
-          <Shimmer>Generating response...</Shimmer>
-        </div>
+      <div className="flex items-center gap-2">
+        <Spinner />{" "}
+        {reasoning ? <Shimmer className="text-xs">Thinking...</Shimmer> : ""}
       </div>
     );
   }
 
-  if (sources.length > 0 && !(tool && inProgress)) {
+  // Only show sources if there's also text content (avoids duplicate from sources-only messages)
+  if (sources.length > 0 && lastPart && !(tool && inProgress)) {
     return (
       <Sources>
-        <SourcesTrigger count={sources.length}>
-          <BookmarkIcon className="size-4" />
-          <p>Used {sources.length} sources</p>
-        </SourcesTrigger>
+        <SourcesTrigger count={sources.length} />
         <SourcesContent>
           <ul className="flex flex-col gap-2">
             {sources.map((source) => (
@@ -104,10 +69,16 @@ export const MessageMetadata = ({
   }
 
   if (tool && inProgress) {
+    // Show user-friendly message for search_docs tool
+    const isSearching = tool.type === "tool-search_docs";
     return (
       <div className="flex items-center gap-2">
         <Spinner />
-        <Shimmer>{tool.type}</Shimmer>
+        <Shimmer>
+          {isSearching
+            ? "Searching sources..."
+            : tool.type.replace("tool-", "")}
+        </Shimmer>
       </div>
     );
   }
@@ -116,5 +87,5 @@ export const MessageMetadata = ({
     return null;
   }
 
-  return <div className="h-12" />;
+  return null;
 };

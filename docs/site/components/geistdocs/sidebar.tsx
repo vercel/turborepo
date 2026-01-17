@@ -25,6 +25,7 @@ import {
 import { github, nav } from "@/geistdocs";
 import { useSidebarContext } from "@/hooks/geistdocs/use-sidebar";
 import { SearchButton } from "./search";
+import { VersionWarning } from "@/components/version-warning";
 
 export const Sidebar = () => {
   const { root } = useTreeContext();
@@ -55,6 +56,7 @@ export const Sidebar = () => {
         data-sidebar-placeholder
       >
         <div className="px-4 pt-12 pb-4 h-full overflow-y-auto">
+          <VersionWarning />
           <Fragment key={root.$id}>{renderSidebarList(root.children)}</Fragment>
         </div>
       </div>
@@ -104,7 +106,10 @@ export const Sidebar = () => {
                 </a>
               ) : null}
             </nav>
-            <div className="px-4 pb-4">{renderSidebarList(root.children)}</div>
+            <div className="px-4 pb-4">
+              <VersionWarning />
+              {renderSidebarList(root.children)}
+            </div>
           </div>
         </SheetContent>
       </Sheet>
