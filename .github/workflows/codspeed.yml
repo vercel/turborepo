@@ -18,7 +18,7 @@ permissions:
 jobs:
   benchmarks:
     name: Run benchmarks
-    runs-on: codspeed-macro
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -39,5 +39,5 @@ jobs:
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v4
         with:
-          mode: walltime
+          mode: instrumentation
           run: cargo codspeed run -p globwalk
