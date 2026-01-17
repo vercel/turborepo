@@ -129,7 +129,7 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
   const { initialMessages, isLoading, saveMessages, clearMessages } =
     useChatPersistence();
 
-  const { messages, sendMessage, status, setMessages } = useChat({
+  const { messages, sendMessage, status, setMessages, stop } = useChat({
     transport: new DefaultChatTransport({
       api: basePath ? `${basePath}/api/chat` : "/api/chat"
     }),
@@ -188,6 +188,8 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
 
   const handleClearChat = async () => {
     try {
+      // Cancel any active stream first
+      stop();
       await clearMessages();
       setMessages([]);
       toast.success("Chat history cleared");
@@ -342,7 +344,7 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
               <p className="text-muted-foreground text-xs">
                 {localPrompt.length} / 1000
               </p>
-              <PromptInputSubmit status={status} />
+              <PromptInputSubmit onStop={stop} status={status} />
             </PromptInputFooter>
           </PromptInput>
         </PromptInputProvider>
