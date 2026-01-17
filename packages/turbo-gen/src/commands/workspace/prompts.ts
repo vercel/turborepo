@@ -190,12 +190,14 @@ export async function dependencies({
   workspaceName,
   project,
   workspaceSource,
-  showAllDependencies
+  showAllDependencies,
+  ...opts
 }: {
   workspaceName: string;
   project: Project;
   workspaceSource?: Workspace;
   showAllDependencies?: boolean;
+  addDependencies?: boolean;
 }) {
   const selectedDependencies: DependencyGroups = {
     dependencies: {},
