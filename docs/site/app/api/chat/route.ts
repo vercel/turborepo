@@ -3,9 +3,10 @@ import {
   createUIMessageStream,
   createUIMessageStreamResponse,
   generateText,
+  stepCountIs,
   streamText
 } from "ai";
-import { createRagTools, createTools } from "./tools";
+import { createRagTools } from "./tools";
 import type { MyUIMessage } from "./types";
 import { createSystemPrompt } from "./utils";
 
@@ -99,16 +100,20 @@ User question: ${userQuestion}`
           model: RAG_MODEL,
           messages: [{ role: "user", content: userQuestion }],
           tools: createRagTools(),
-          maxSteps: 2,
+          stopWhen: stepCountIs(2),
           toolChoice: { type: "tool", toolName: "search_docs" }
         });
 
         // Extract retrieved documentation from tool results
         const retrievedDocs = ragResult.steps
           .flatMap((step) => step.toolResults)
-          .map(
-            (result) => (result as { output?: string }).output ?? result.result
-          )
+          .map((result) => {
+            // Handle both static tool results (with output) and dynamic results
+            if ("output" in result) {
+              return result.output;
+            }
+            return null;
+          })
           .filter(Boolean)
           .join("\n\n---\n\n");
 
@@ -116,8 +121,8 @@ User question: ${userQuestion}`
         const sourceUrls: Array<{ url: string; title: string }> = [];
         for (const step of ragResult.steps) {
           for (const toolResult of step.toolResults) {
-            const output =
-              (toolResult as { output?: string }).output ?? toolResult.result;
+            if (!("output" in toolResult)) continue;
+            const output = toolResult.output;
             if (
               toolResult.toolName === "search_docs" &&
               typeof output === "string"

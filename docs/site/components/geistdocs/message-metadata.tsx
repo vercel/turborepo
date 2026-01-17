@@ -1,5 +1,4 @@
 import { isToolUIPart } from "ai";
-import { BookmarkIcon } from "lucide-react";
 import type { MyUIMessage } from "@/app/api/chat/types";
 import { Shimmer } from "../ai-elements/shimmer";
 import {
