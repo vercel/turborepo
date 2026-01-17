@@ -5,6 +5,9 @@ on:
     branches:
       - main
   pull_request:
+  # `workflow_dispatch` allows CodSpeed to trigger backtest
+  # performance analysis in order to generate initial data.
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -12,6 +15,7 @@ concurrency:
 
 permissions:
   contents: read
+  id-token: write # for OIDC authentication with CodSpeed
 
 jobs:
   benchmarks:
@@ -35,7 +39,7 @@ jobs:
         run: cargo codspeed build --workspace
 
       - name: Run benchmarks
-        uses: CodSpeedHQ/action@v3
+        uses: CodSpeedHQ/action@v4
         with:
+          mode: instrumentation
           run: cargo codspeed run --workspace
-          token: ${{ secrets.CODSPEED_TOKEN }}
