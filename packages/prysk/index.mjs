@@ -1,4 +1,4 @@
-import { execSync, execFileSync } from "child_process";
+import { execFileSync } from "child_process";
 import path from "node:path";
 
 // TODO: make this customizable?
