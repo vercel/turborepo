@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,7 +55,14 @@ create("schema.v2.json", "Schema");
 create("schema.json", "Schema");
 
 // Format generated schemas with oxfmt
-execSync(
-  `pnpm exec oxfmt ${join(schemasDir, "schema.json")} ${join(schemasDir, "schema.v1.json")} ${join(schemasDir, "schema.v2.json")}`,
+execFileSync(
+  "pnpm",
+  [
+    "exec",
+    "oxfmt",
+    join(schemasDir, "schema.json"),
+    join(schemasDir, "schema.v1.json"),
+    join(schemasDir, "schema.v2.json")
+  ],
   { stdio: "inherit" }
 );
