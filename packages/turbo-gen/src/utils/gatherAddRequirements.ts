@@ -50,7 +50,8 @@ export async function gatherAddRequirements({
     workspaceName: name,
     project,
     workspaceSource: source,
-    showAllDependencies: opts.showAllDependencies
+    showAllDependencies: opts.showAllDependencies,
+    addDependencies: opts.addDependencies,
   });
 
   return {
