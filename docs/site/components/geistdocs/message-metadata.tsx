@@ -69,10 +69,16 @@ export const MessageMetadata = ({
   }
 
   if (tool && inProgress) {
+    // Show user-friendly message for search_docs tool
+    const isSearching = tool.type === "tool-search_docs";
     return (
       <div className="flex items-center gap-2">
         <Spinner />
-        <Shimmer>{tool.type}</Shimmer>
+        <Shimmer>
+          {isSearching
+            ? "Searching sources..."
+            : tool.type.replace("tool-", "")}
+        </Shimmer>
       </div>
     );
   }
