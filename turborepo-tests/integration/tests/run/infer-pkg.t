@@ -58,6 +58,7 @@ Ensure we don't infer packages if --cwd is supplied
 Run a dry run in packages with a glob filter from directory
   $ ${TURBO} build --dry=json -F "../*" | jq .packages
   [
+    "another",
     "util"
   ]
 
