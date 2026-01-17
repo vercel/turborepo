@@ -29,7 +29,7 @@ use swc_common::{
     input::StringInput,
 };
 use swc_ecma_ast::EsVersion;
-use swc_ecma_parser::{Capturing, EsSyntax, Parser, Syntax, TsSyntax, lexer::Lexer};
+use swc_ecma_parser::{EsSyntax, Parser, Syntax, TsSyntax, lexer::Lexer};
 use swc_ecma_visit::VisitWith;
 pub use tags::{ProcessedPermissions, ProcessedRule, ProcessedRulesMap};
 use thiserror::Error;
@@ -737,10 +737,10 @@ impl BoundariesChecker {
             Some(&comments),
         );
 
-        let mut parser = Parser::new_from(Capturing::new(lexer));
+        let mut parser = Parser::new_from(lexer);
 
         // Parse the file as a module
-        let module = match parser.parse_module() {
+        let module: swc_ecma_ast::Module = match parser.parse_module() {
             Ok(module) => module,
             Err(err) => {
                 result
