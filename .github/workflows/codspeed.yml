@@ -36,10 +36,10 @@ jobs:
           tool: cargo-codspeed
 
       - name: Build benchmarks
-        run: cargo codspeed build --workspace
+        run: cargo codspeed build -p globwalk
 
       - name: Run benchmarks
         uses: CodSpeedHQ/action@v4
         with:
           mode: instrumentation
-          run: cargo codspeed run --workspace
+          run: cargo codspeed run -p globwalk
