@@ -55,10 +55,14 @@ create("schema.v2.json", "Schema");
 create("schema.json", "Schema");
 
 // Format generated schemas with oxfmt
-execFileSync("pnpm", [
-  "exec",
-  "oxfmt",
-  join(schemasDir, "schema.json"),
-  join(schemasDir, "schema.v1.json"),
-  join(schemasDir, "schema.v2.json")
-], { stdio: "inherit" });
+execFileSync(
+  "pnpm",
+  [
+    "exec",
+    "oxfmt",
+    join(schemasDir, "schema.json"),
+    join(schemasDir, "schema.v1.json"),
+    join(schemasDir, "schema.v2.json")
+  ],
+  { stdio: "inherit" }
+);

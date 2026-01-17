@@ -33,13 +33,9 @@ export function validateDirectory(directory: string): {
 
   // Prevent resolved paths that could be misinterpreted as command-line options
   // when passed to tools like git, and ensure the project name is well-formed.
-  const unsafeRoot =
-    !root ||
-    root.startsWith("-") ||
-    root.includes("\0");
+  const unsafeRoot = !root || root.startsWith("-") || root.includes("\0");
   const invalidProjectName =
-    !projectName ||
-    !/^[a-zA-Z0-9._-]+$/.test(projectName);
+    !projectName || !/^[a-zA-Z0-9._-]+$/.test(projectName);
 
   if (unsafeRoot || invalidProjectName) {
     return {

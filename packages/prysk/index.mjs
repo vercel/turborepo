@@ -15,7 +15,14 @@ const isWindows = process.platform === "win32";
 execFileSync("python3", ["-m", "venv", VENV_NAME]);
 
 // Upgrade pip
-execFileSync(getVenvBin("python3"), ["-m", "pip", "install", "--quiet", "--upgrade", "pip"]);
+execFileSync(getVenvBin("python3"), [
+  "-m",
+  "pip",
+  "install",
+  "--quiet",
+  "--upgrade",
+  "pip"
+]);
 
 // Install prysk
 execFileSync(getVenvBin("pip"), ["install", "prysk==0.15.2"]);
