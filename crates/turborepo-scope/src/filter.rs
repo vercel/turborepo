@@ -114,8 +114,13 @@ impl PackageInference {
             return;
         };
 
+        // Only inject package name if user didn't provide a parent_dir filter.
+        // If they provided a directory filter like "./*", they're being explicit
+        // about what they want - don't also inject a name pattern that conflicts.
         if let Some(name) = &self.package_name {
-            selector.name_pattern.clone_from(name);
+            if selector.parent_dir.is_none() {
+                selector.name_pattern.clone_from(name);
+            }
         }
 
         if let Some(parent_dir) = selector.parent_dir.as_deref() {
