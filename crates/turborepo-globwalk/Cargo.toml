@@ -23,5 +23,10 @@ walkdir = "2.3.3"
 wax.workspace = true
 
 [dev-dependencies]
+codspeed-criterion-compat = { workspace = true }
 tempfile = { workspace = true }
 test-case = "3.1.0"
+
+[[bench]]
+name = "globwalk"
+harness = false
