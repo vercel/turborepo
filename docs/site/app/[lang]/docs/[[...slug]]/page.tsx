@@ -15,6 +15,7 @@ import { getMDXComponents } from "@/components/geistdocs/mdx-components";
 import { OpenInChat } from "@/components/geistdocs/open-in-chat";
 import { RemoteCacheCounter } from "@/components/remote-cache-counter";
 import { ScrollTop } from "@/components/geistdocs/scroll-top";
+
 import { Separator } from "@/components/ui/separator";
 import { getLLMText, getPageImage, source } from "@/lib/geistdocs/source";
 
