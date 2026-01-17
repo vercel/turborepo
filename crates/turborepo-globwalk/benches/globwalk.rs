@@ -88,13 +88,15 @@ fn bench_simple_glob(c: &mut Criterion) {
         let exclude: Vec<ValidatedGlob> = vec![];
 
         b.iter(|| {
-            globwalk(
-                black_box(&base_path),
-                black_box(&include),
-                black_box(&exclude),
-                WalkType::Files,
+            black_box(
+                globwalk(
+                    black_box(&base_path),
+                    black_box(&include),
+                    black_box(&exclude),
+                    WalkType::Files,
+                )
+                .unwrap(),
             )
-            .unwrap()
         });
     });
 }
@@ -115,13 +117,15 @@ fn bench_complex_glob_with_excludes(c: &mut Criterion) {
         ];
 
         b.iter(|| {
-            globwalk(
-                black_box(&base_path),
-                black_box(&include),
-                black_box(&exclude),
-                WalkType::Files,
+            black_box(
+                globwalk(
+                    black_box(&base_path),
+                    black_box(&include),
+                    black_box(&exclude),
+                    WalkType::Files,
+                )
+                .unwrap(),
             )
-            .unwrap()
         });
     });
 }
@@ -135,13 +139,15 @@ fn bench_package_json_discovery(c: &mut Criterion) {
         let exclude = vec![ValidatedGlob::from_str("**/node_modules/**").unwrap()];
 
         b.iter(|| {
-            globwalk(
-                black_box(&base_path),
-                black_box(&include),
-                black_box(&exclude),
-                WalkType::Files,
+            black_box(
+                globwalk(
+                    black_box(&base_path),
+                    black_box(&include),
+                    black_box(&exclude),
+                    WalkType::Files,
+                )
+                .unwrap(),
             )
-            .unwrap()
         });
     });
 }
@@ -155,13 +161,15 @@ fn bench_doublestar_pattern(c: &mut Criterion) {
         let exclude: Vec<ValidatedGlob> = vec![];
 
         b.iter(|| {
-            globwalk(
-                black_box(&base_path),
-                black_box(&include),
-                black_box(&exclude),
-                WalkType::All,
+            black_box(
+                globwalk(
+                    black_box(&base_path),
+                    black_box(&include),
+                    black_box(&exclude),
+                    WalkType::All,
+                )
+                .unwrap(),
             )
-            .unwrap()
         });
     });
 }
