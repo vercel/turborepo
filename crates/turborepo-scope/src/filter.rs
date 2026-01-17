@@ -1691,4 +1691,84 @@ mod test {
             "shared should not be selected as it's not under apps/onprem/*"
         );
     }
+
+    /// Test for filter bug where running from a directory that is BOTH a
+    /// workspace itself AND contains child workspaces, using a subdirectory
+    /// filter like `./*` fails to match the child packages.
+    ///
+    /// Reproduction structure:
+    /// - `apps` is a workspace (has package.json with name "apps")
+    /// - `apps/app-a` is a workspace
+    /// - `apps/app-b` is a workspace
+    /// - `apps/app-a/app-a-client` is a nested workspace
+    /// - `packages/*` are workspaces
+    ///
+    /// When running `turbo run build -F ./*` from the `apps` directory:
+    /// - The filter `./*` should match `app-a` and `app-b` (direct children)
+    /// - It should NOT match `apps` itself
+    /// - It should NOT match `app-a-client` (too deeply nested)
+    #[test]
+    fn test_subdirectory_filter_from_workspace_directory() {
+        // Create the structure from the reproduction:
+        // - apps (workspace itself)
+        // - apps/app-a depends on pkg-a
+        // - apps/app-b depends on pkg-c
+        // - apps/app-a/app-a-client depends on app-a
+        // - packages/pkg-a, pkg-b, pkg-c, tooling-config
+        let (_tempdir, resolver) = make_project(
+            &[
+                ("apps/app-a", "packages/pkg-a"),
+                ("apps/app-b", "packages/pkg-c"),
+                ("apps/app-a/app-a-client", "apps/app-a"),
+            ],
+            &[
+                "apps", // apps directory is ALSO a workspace
+                "packages/pkg-b",
+                "packages/tooling-config",
+            ],
+            // Simulate running from apps directory
+            // PackageInference::calculate would set package_name to Some("apps")
+            // because apps is a workspace at that path
+            Some(PackageInference {
+                package_name: Some("apps".to_string()),
+                directory_root: AnchoredSystemPathBuf::try_from("apps").unwrap(),
+            }),
+            TestChangeDetector::new(&[]),
+        );
+
+        // Filter "./*" means: packages matching "./*" relative to current directory
+        // (apps) This should resolve to "apps/*" and match app-a, app-b
+        let selector = TargetSelector::from_str("./*").unwrap();
+        let packages = resolver.get_filtered_packages(vec![selector]).unwrap();
+
+        // We should get app-a and app-b
+        assert!(
+            packages.contains_key(&PackageName::from("app-a")),
+            "Expected 'app-a' to be selected with filter './*' from apps directory. Got: {:?}",
+            packages.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            packages.contains_key(&PackageName::from("app-b")),
+            "Expected 'app-b' to be selected with filter './*' from apps directory. Got: {:?}",
+            packages.keys().collect::<Vec<_>>()
+        );
+
+        // Should NOT include the apps package itself (it's at "apps", not "apps/*")
+        assert!(
+            !packages.contains_key(&PackageName::from("apps")),
+            "The 'apps' package itself should not match './*' filter"
+        );
+
+        // Should NOT include nested packages like app-a-client
+        assert!(
+            !packages.contains_key(&PackageName::from("app-a-client")),
+            "Deeply nested 'app-a-client' should not match './*' filter"
+        );
+
+        // Should NOT include packages outside apps/
+        assert!(
+            !packages.contains_key(&PackageName::from("pkg-a")),
+            "pkg-a should not match './*' filter from apps directory"
+        );
+    }
 }
