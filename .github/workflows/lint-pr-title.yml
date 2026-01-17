@@ -34,12 +34,8 @@ jobs:
             test
             style
             examples
-          # Configure that a scope must always be provided.
-          requireScope: false
-          # Configure which scopes are disallowed in PR titles (newline-delimited).
-          disallowScopes: |
-            examples
-            example
+          # Scopes are not allowed.
+          scopes: ""
           # Configure additional validation for the subject based on a regex.
           # Ensures that the subject starts with an uppercase character.
           subjectPattern: ^[A-Z].*$

@@ -129,7 +129,7 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
   const { initialMessages, isLoading, saveMessages, clearMessages } =
     useChatPersistence();
 
-  const { messages, sendMessage, status, setMessages } = useChat({
+  const { messages, sendMessage, status, setMessages, stop } = useChat({
     transport: new DefaultChatTransport({
       api: basePath ? `${basePath}/api/chat` : "/api/chat"
     }),
@@ -188,6 +188,8 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
 
   const handleClearChat = async () => {
     try {
+      // Cancel any active stream first
+      stop();
       await clearMessages();
       setMessages([]);
       toast.success("Chat history cleared");
@@ -201,14 +203,14 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
   // Show loading state while initial messages are being loaded
   if (isLoading) {
     return (
-      <div className="flex size-full w-full flex-col items-center justify-center overflow-hidden whitespace-nowrap rounded-xl xl:max-w-md xl:border xl:bg-background">
+      <div className="flex size-full w-full flex-col items-center justify-center overflow-hidden rounded-xl xl:max-w-md xl:border xl:bg-background">
         <Spinner />
       </div>
     );
   }
 
   return (
-    <div className="flex size-full w-full flex-col overflow-hidden whitespace-nowrap bg-background">
+    <div className="flex size-full w-full flex-col overflow-hidden bg-background">
       <div className="flex items-center justify-between px-4 py-2.5">
         <h2 className="font-semibold text-sm">Chat</h2>
         <div className="flex items-center gap-3">
@@ -245,58 +247,54 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
 
       <Conversation>
         <ConversationContent>
-          {messages.map((message, index) => {
-            const isLastMessage = index === messages.length - 1;
-            const isAssistantMessage = message.role === "assistant";
-            const isStreaming =
-              isLastMessage &&
-              isAssistantMessage &&
-              (status === "streaming" || status === "submitted");
+          {messages
+            .filter((message) =>
+              message.parts.some((part) => part.type === "text")
+            )
+            .map((message, index, filteredMessages) => {
+              const isLastMessage = index === filteredMessages.length - 1;
+              const isAssistantMessage = message.role === "assistant";
+              const isStreaming =
+                isLastMessage &&
+                isAssistantMessage &&
+                (status === "streaming" || status === "submitted");
 
-            return (
-              <Message
-                className="max-w-[90%]"
-                from={message.role}
-                key={message.id}
-              >
-                <MessageMetadata
-                  inProgress={status === "submitted"}
-                  isStreaming={isStreaming}
-                  parts={message.parts as MyUIMessage["parts"]}
-                />
-                {message.parts
-                  .filter((part) => part.type === "text")
-                  .map((part, partIndex) => (
-                    <MessageContent
-                      key={`${message.id}-${part.type}-${partIndex}`}
-                    >
-                      <MessageResponse
-                        className="text-wrap"
-                        rehypePlugins={[
-                          ...Object.values(plugins),
-                          [
-                            harden,
-                            {
-                              defaultOrigin:
-                                process.env
-                                  .NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL,
-                              allowedLinkPrefixes: ["*"]
-                            }
-                          ]
-                        ]}
+              return (
+                <Message from={message.role} key={message.id}>
+                  <MessageMetadata
+                    messageId={message.id}
+                    inProgress={status === "submitted"}
+                    isStreaming={isStreaming}
+                    parts={message.parts as MyUIMessage["parts"]}
+                  />
+                  {message.parts
+                    .filter((part) => part.type === "text")
+                    .map((part, partIndex) => (
+                      <MessageContent
+                        key={`${message.id}-${part.type}-${partIndex}`}
                       >
-                        {part.text}
-                      </MessageResponse>
-                    </MessageContent>
-                  ))}
-              </Message>
-            );
-          })}
-          {status === "submitted" && (
-            <div className="size-12 text-muted-foreground text-sm">
-              <Spinner />
-            </div>
-          )}
+                        <MessageResponse
+                          className="text-wrap"
+                          rehypePlugins={[
+                            ...Object.values(plugins),
+                            [
+                              harden,
+                              {
+                                defaultOrigin:
+                                  process.env
+                                    .NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL,
+                                allowedLinkPrefixes: ["*"]
+                              }
+                            ]
+                          ]}
+                        >
+                          {part.text}
+                        </MessageResponse>
+                      </MessageContent>
+                    ))}
+                </Message>
+              );
+            })}
         </ConversationContent>
         <ConversationScrollButton className="border-none bg-foreground text-background hover:bg-foreground/80 hover:text-background" />
       </Conversation>
@@ -342,7 +340,7 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
               <p className="text-muted-foreground text-xs">
                 {localPrompt.length} / 1000
               </p>
-              <PromptInputSubmit status={status} />
+              <PromptInputSubmit onStop={stop} status={status} />
             </PromptInputFooter>
           </PromptInput>
         </PromptInputProvider>

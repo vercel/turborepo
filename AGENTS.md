@@ -29,39 +29,19 @@ When making changes to the codebase, check if the following docs need updates:
 
 ### PR Title Format
 
-PR titles must follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
+PR titles must follow [Conventional Commits](https://www.conventionalcommits.org/). See [`.github/workflows/lint-pr-title.yml`](./.github/workflows/lint-pr-title.yml) for the enforced constraints.
+
+Format: `<type>: <Description>`
+
+Key rules:
+
+- Description must start with an uppercase letter
+- Scopes are not allowed
+
+Examples:
 
 ```
-<type>(<scope>): <description>
-```
-
-- **type**: Required. Must be one of:
-  - `fix` - Bug fixes
-  - `feat` - New features
-  - `chore` - Maintenance tasks
-  - `ci` - CI/CD changes
-  - `docs` - Documentation changes
-  - `refactor` - Code refactoring
-  - `perf` - Performance improvements
-  - `test` - Test changes
-  - `style` - Code style changes
-  - `examples` - Example/sample code changes
-- **scope**: Optional, but `examples` and `example` are not allowed as scopes
-- **description**: A short summary of the change, must start with an uppercase letter
-
-### Examples
-
-```
-feat(cli): Add new cache configuration option
-fix(turbo): Resolve race condition in task scheduling
+feat: Add new cache configuration option
+fix: Resolve race condition in task scheduling
 docs: Update installation instructions
-chore(deps): Bump typescript to v5.3
-refactor(core): Simplify task graph construction
 ```
-
-### Rules
-
-1. Use one of the allowed conventional commit types listed above
-2. The subject (description) must start with an uppercase letter
-3. Scope is optional but cannot be `examples` or `example`
-4. Keep the title concise (ideally under 72 characters)

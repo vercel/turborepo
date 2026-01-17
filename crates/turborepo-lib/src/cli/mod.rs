@@ -24,8 +24,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, clone, config, daemon, generate, get_mfe_port, info, link, login, logout,
-        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
+        bin, boundaries, clone, config, daemon, docs, generate, get_mfe_port, info, link, login,
+        logout, ls, prune, query, run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -573,6 +573,14 @@ pub enum Command {
         /// Don't automatically open the browser
         #[clap(long)]
         no_open: bool,
+    },
+    /// Search the Turborepo documentation
+    Docs {
+        /// The search query
+        query: String,
+        /// Override the docs version (minimum: 2.7.5)
+        #[clap(long)]
+        docs_version: Option<String>,
     },
     /// Generate a new app / package
     #[clap(aliases = ["g", "gen"])]
@@ -1397,6 +1405,16 @@ pub async fn run(
             event.track_call();
 
             crate::commands::devtools::run(repo_root, *port, *no_open).await?;
+            Ok(0)
+        }
+        Command::Docs {
+            query,
+            docs_version,
+        } => {
+            let event = CommandEventBuilder::new("docs").with_parent(&root_telemetry);
+            event.track_call();
+
+            docs::run(query, docs_version.as_deref()).await?;
             Ok(0)
         }
         Command::Generate {

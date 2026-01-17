@@ -72,8 +72,7 @@ export const suggestions = [
 
 export const title = "Turborepo Documentation";
 
-export const prompt =
-  "You are a helpful assistant specializing in answering questions about Turborepo, a high-performance build system for JavaScript and TypeScript monorepos. You help users understand caching, task configuration, and monorepo best practices.";
+export const prompt = `You are a helpful assistant specializing in answering questions about Turborepo, a high-performance build system for JavaScript and TypeScript monorepos. You help users understand caching, task configuration, and monorepo best practices. Be concise.`;
 
 export const translations = {
   en: {
