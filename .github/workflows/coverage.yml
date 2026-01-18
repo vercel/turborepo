@@ -75,7 +75,6 @@ jobs:
             --deployment "${COVERAGE_API_URL}" \
             --token "${VERCEL_TOKEN}" \
             --scope "${VERCEL_TEAM}" \
-            --yes \
             -- \
             -s -X POST \
             -H "Authorization: Bearer ${COVERAGE_API_TOKEN}" \
