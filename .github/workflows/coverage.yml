@@ -74,7 +74,8 @@ jobs:
           RESPONSE=$(npx vercel curl "/api/upload?sha=${{ github.sha }}&branch=${BRANCH}" \
             --deployment "${COVERAGE_API_URL}" \
             --token "${VERCEL_TOKEN}" \
-            --team "${VERCEL_TEAM}" \
+            --scope "${VERCEL_TEAM}" \
+            --yes \
             -- \
             -s -X POST \
             -H "Authorization: Bearer ${COVERAGE_API_TOKEN}" \
