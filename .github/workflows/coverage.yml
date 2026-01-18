@@ -172,5 +172,4 @@ jobs:
             --pathname "coverage/raw/branches/${SAFE_BRANCH}/${TIMESTAMP}.json" \
             --rw-token "${{ secrets.BLOB_READ_WRITE_TOKEN }}"
         env:
-          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
-          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
