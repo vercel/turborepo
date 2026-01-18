@@ -63,12 +63,12 @@ jobs:
           SCCACHE_ERROR_LOG: error
 
       - name: Upload coverage to reporter
-        if: vars.COVERAGE_API_URL != ''
+        if: secrets.COVERAGE_API_URL != ''
         run: |
           BRANCH="${{ github.head_ref || github.ref_name }}"
 
           # Upload coverage report
-          RESPONSE=$(curl -s -X POST "${{ vars.COVERAGE_API_URL }}/api/upload?sha=${{ github.sha }}&branch=${BRANCH}" \
+          RESPONSE=$(curl -s -X POST "${{ secrets.COVERAGE_API_URL }}/api/upload?sha=${{ github.sha }}&branch=${BRANCH}" \
             -H "Authorization: Bearer ${{ secrets.COVERAGE_API_TOKEN }}" \
             -H "Content-Type: application/json" \
             -d @coverage.json)
@@ -95,7 +95,7 @@ jobs:
           echo "DIFF_BRANCHES=$DIFF_BRANCHES" >> $GITHUB_ENV
 
       - name: Comment on PR
-        if: github.event_name == 'pull_request' && vars.COVERAGE_API_URL != ''
+        if: github.event_name == 'pull_request' && secrets.COVERAGE_API_URL != ''
         uses: actions/github-script@v7
         with:
           script: |
@@ -124,7 +124,7 @@ jobs:
             | Functions | ${functions.toFixed(2)}%${formatDiff(diffFunctions)} |
             | Branches | ${branches.toFixed(2)}%${formatDiff(diffBranches)} |
 
-            [View full report](${{ vars.COVERAGE_API_URL }}/commits/${{ github.sha }})
+            [View full report](${{ secrets.COVERAGE_API_URL }}/commits/${{ github.sha }})
             `;
 
             // Find existing comment
@@ -153,23 +153,3 @@ jobs:
                 body,
               });
             }
-
-      - name: Upload raw coverage to Vercel Blob
-        if: ${{ !github.event.pull_request.head.repo.fork }}
-        run: |
-          BRANCH="${{ github.head_ref || github.ref_name }}"
-          SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-          # Upload to commit path
-          npx vercel blob put coverage.json \
-            --pathname "coverage/raw/${{ github.sha }}.json" \
-            --rw-token "${{ secrets.BLOB_READ_WRITE_TOKEN }}" \
-            --force
-
-          # Upload to branch path for history
-          npx vercel blob put coverage.json \
-            --pathname "coverage/raw/branches/${SAFE_BRANCH}/${TIMESTAMP}.json" \
-            --rw-token "${{ secrets.BLOB_READ_WRITE_TOKEN }}"
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
