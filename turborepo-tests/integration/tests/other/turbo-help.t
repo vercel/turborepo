@@ -61,6 +61,24 @@ Test help flag
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            Enable OpenTelemetry metrics export [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            OTLP transport protocol (grpc or http-protobuf) [possible values: grpc, http-protobuf]
+        --experimental-otel-endpoint <URL>
+            OTLP collector endpoint URL
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-header <KEY=VALUE>
+            Add header to OTLP requests (can be repeated)
+        --experimental-otel-resource <KEY=VALUE>
+            Add resource attribute to metrics (can be repeated)
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            Emit run-level summary metrics (default: true) [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            Emit per-task detail metrics (default: false) [possible values: true, false]
+        --experimental-otel-use-remote-cache-token [<USE_REMOTE_CACHE_TOKEN>]
+            Use remote cache token for OTLP authentication [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -123,11 +141,6 @@ Test help flag
             Only executes the tasks specified, does not execute parent tasks
         --log-prefix <LOG_PREFIX>
             Use "none" to remove prefixes from task logs. Use "task" to get task id prefixing. Use "auto" to let turbo decide how to prefix the logs based on the execution environment. In most cases this will be the same as "task". Note that tasks running in parallel interleave their logs, so removing prefixes can make it difficult to associate logs with tasks. Use --log-order=grouped to prevent interleaving. (default auto) [default: auto] [possible values: auto, none, task]
-
-
-
-
-
 
   $ ${TURBO} --help
   The build system that makes ship happen
@@ -208,6 +221,43 @@ Test help flag
   
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+  
+        --experimental-otel-enabled [<ENABLED>]
+            Enable OpenTelemetry metrics export
+            
+            [possible values: true, false]
+  
+        --experimental-otel-protocol <PROTOCOL>
+            OTLP transport protocol (grpc or http-protobuf)
+            
+            [possible values: grpc, http-protobuf]
+  
+        --experimental-otel-endpoint <URL>
+            OTLP collector endpoint URL
+  
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            OTLP export timeout in milliseconds (default: 10000)
+  
+        --experimental-otel-header <KEY=VALUE>
+            Add header to OTLP requests (can be repeated)
+  
+        --experimental-otel-resource <KEY=VALUE>
+            Add resource attribute to metrics (can be repeated)
+  
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            Emit run-level summary metrics (default: true)
+            
+            [possible values: true, false]
+  
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            Emit per-task detail metrics (default: false)
+            
+            [possible values: true, false]
+  
+        --experimental-otel-use-remote-cache-token [<USE_REMOTE_CACHE_TOKEN>]
+            Use remote cache token for OTLP authentication
+            
+            [possible values: true, false]
   
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`.
@@ -334,7 +384,6 @@ Test help flag
             [default: auto]
             [possible values: auto, none, task]
 
-
 Test help flag for link command
   $ ${TURBO} link -h
   Link your local directory to a Vercel organization and enable remote caching
@@ -382,6 +431,24 @@ Test help flag for link command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            Enable OpenTelemetry metrics export [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            OTLP transport protocol (grpc or http-protobuf) [possible values: grpc, http-protobuf]
+        --experimental-otel-endpoint <URL>
+            OTLP collector endpoint URL
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-header <KEY=VALUE>
+            Add header to OTLP requests (can be repeated)
+        --experimental-otel-resource <KEY=VALUE>
+            Add resource attribute to metrics (can be repeated)
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            Emit run-level summary metrics (default: true) [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            Emit per-task detail metrics (default: false) [possible values: true, false]
+        --experimental-otel-use-remote-cache-token [<USE_REMOTE_CACHE_TOKEN>]
+            Use remote cache token for OTLP authentication [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -430,6 +497,24 @@ Test help flag for unlink command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            Enable OpenTelemetry metrics export [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            OTLP transport protocol (grpc or http-protobuf) [possible values: grpc, http-protobuf]
+        --experimental-otel-endpoint <URL>
+            OTLP collector endpoint URL
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-header <KEY=VALUE>
+            Add header to OTLP requests (can be repeated)
+        --experimental-otel-resource <KEY=VALUE>
+            Add resource attribute to metrics (can be repeated)
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            Emit run-level summary metrics (default: true) [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            Emit per-task detail metrics (default: false) [possible values: true, false]
+        --experimental-otel-use-remote-cache-token [<USE_REMOTE_CACHE_TOKEN>]
+            Use remote cache token for OTLP authentication [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -482,6 +567,24 @@ Test help flag for login command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            Enable OpenTelemetry metrics export [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            OTLP transport protocol (grpc or http-protobuf) [possible values: grpc, http-protobuf]
+        --experimental-otel-endpoint <URL>
+            OTLP collector endpoint URL
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-header <KEY=VALUE>
+            Add header to OTLP requests (can be repeated)
+        --experimental-otel-resource <KEY=VALUE>
+            Add resource attribute to metrics (can be repeated)
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            Emit run-level summary metrics (default: true) [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            Emit per-task detail metrics (default: false) [possible values: true, false]
+        --experimental-otel-use-remote-cache-token [<USE_REMOTE_CACHE_TOKEN>]
+            Use remote cache token for OTLP authentication [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
@@ -530,6 +633,24 @@ Test help flag for logout command
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            Enable OpenTelemetry metrics export [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            OTLP transport protocol (grpc or http-protobuf) [possible values: grpc, http-protobuf]
+        --experimental-otel-endpoint <URL>
+            OTLP collector endpoint URL
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-header <KEY=VALUE>
+            Add header to OTLP requests (can be repeated)
+        --experimental-otel-resource <KEY=VALUE>
+            Add resource attribute to metrics (can be repeated)
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            Emit run-level summary metrics (default: true) [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            Emit per-task detail metrics (default: false) [possible values: true, false]
+        --experimental-otel-use-remote-cache-token [<USE_REMOTE_CACHE_TOKEN>]
+            Use remote cache token for OTLP authentication [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>
