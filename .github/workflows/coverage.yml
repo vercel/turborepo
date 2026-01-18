@@ -71,7 +71,7 @@ jobs:
           BRANCH="${{ github.head_ref || github.ref_name }}"
 
           # Upload coverage report using vercel curl to bypass deployment protection
-          RESPONSE=$(npx vercel curl --yes "/api/upload?sha=${{ github.sha }}&branch=${BRANCH}" \
+          RESPONSE=$(npx vercel --yes curl "/api/upload?sha=${{ github.sha }}&branch=${BRANCH}" \
             --deployment "${COVERAGE_API_URL}" \
             --token "${VERCEL_TOKEN}" \
             --scope "${VERCEL_TEAM}" \
