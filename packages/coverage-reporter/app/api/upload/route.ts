@@ -16,7 +16,14 @@ export async function POST(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
   const expectedToken = process.env.COVERAGE_API_TOKEN;
 
-  if (expectedToken && authHeader !== `Bearer ${expectedToken}`) {
+  if (!expectedToken) {
+    return NextResponse.json(
+      { error: "Server configuration error: COVERAGE_API_TOKEN not set" },
+      { status: 500 }
+    );
+  }
+
+  if (authHeader !== `Bearer ${expectedToken}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
