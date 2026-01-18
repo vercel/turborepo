@@ -4,12 +4,16 @@
  * Migrates turbo.json $schema URLs from legacy formats to versioned subdomains.
  *
  * ## Migration Path
+ * Legacy URLs:
  * - `https://turborepo.dev/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
  * - `https://turborepo.dev/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
  * - `https://turborepo.com/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
  * - `https://turborepo.com/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
  * - `https://turbo.build/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
  * - `https://turbo.build/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
+ *
+ * Outdated versioned URLs:
+ * - `https://v{A}-{B}-{C}.turborepo.dev/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
  *
  * ## Relationship to update-schema-json-url
  * - `update-schema-json-url` (introduced 2.0.0): Handles schema.v1.json -> schema.v2.json
@@ -27,11 +31,7 @@
  * These are currently identical but could diverge if this transformer is backported.
  *
  * ## Idempotency
- * Marked idempotent because:
- * 1. Running twice with the same toVersion is a no-op
- * 2. Only transforms OLD_SCHEMA_URLS, not existing versioned URLs
- *
- * NOTE: Won't "upgrade" v2-7-5 -> v2-8-0. Users with versioned URLs should update manually.
+ * Marked idempotent because running twice with the same toVersion is a no-op.
  */
 
 import path from "node:path";
@@ -54,7 +54,7 @@ const INTRODUCED_IN = "2.7.5";
 // Currently identical to INTRODUCED_IN but could diverge if this transformer is backported.
 const MIN_VERSIONED_SCHEMA_VERSION = INTRODUCED_IN;
 
-// Old schema URL patterns to migrate.
+// Old schema URL patterns to migrate (static strings).
 // NOTE: Intentionally excludes schema.v1.json - that's handled by update-schema-json-url
 const OLD_SCHEMA_URLS = [
   "https://turborepo.dev/schema.json",
@@ -64,6 +64,10 @@ const OLD_SCHEMA_URLS = [
   "https://turbo.build/schema.json",
   "https://turbo.build/schema.v2.json"
 ];
+
+// Regex to match existing versioned schema URLs (e.g., https://v2-7-4.turborepo.dev/schema.json)
+const VERSIONED_SCHEMA_URL_REGEX =
+  /https:\/\/v\d+-\d+-\d+\.turborepo\.dev\/schema\.json/g;
 
 /**
  * Extracts the base version (major.minor.patch) from a semver string,
@@ -100,17 +104,29 @@ function getVersionedSchemaUrl(version: string): string {
  */
 function updateSchemaUrls(content: string, newUrl: string): string {
   let updated = content;
+  // Replace static old URLs
   for (const oldUrl of OLD_SCHEMA_URLS) {
     updated = updated.replaceAll(oldUrl, newUrl);
   }
+  // Replace outdated versioned URLs (e.g., v2-7-4 -> v2-7-5)
+  updated = updated.replaceAll(VERSIONED_SCHEMA_URL_REGEX, newUrl);
   return updated;
 }
 
 /**
- * Checks if the content contains any of the old schema URLs
+ * Checks if the content contains any schema URLs that need updating
  */
-function hasOldSchemaUrl(content: string): boolean {
-  return OLD_SCHEMA_URLS.some((url) => content.includes(url));
+function hasUpdatableSchemaUrl(content: string, newUrl: string): boolean {
+  // Check for static old URLs
+  if (OLD_SCHEMA_URLS.some((url) => content.includes(url))) {
+    return true;
+  }
+  // Check for outdated versioned URLs (any versioned URL that isn't the target)
+  const matches = content.match(VERSIONED_SCHEMA_URL_REGEX);
+  if (matches) {
+    return matches.some((match) => match !== newUrl);
+  }
+  return false;
 }
 
 export function transformer({
@@ -157,8 +173,8 @@ export function transformer({
       // Read turbo.json as string to preserve formatting
       const turboConfigContent = fs.readFileSync(turboConfigPath, "utf8");
 
-      // Check if it has any old schema URL
-      if (hasOldSchemaUrl(turboConfigContent)) {
+      // Check if it has any schema URL that needs updating
+      if (hasUpdatableSchemaUrl(turboConfigContent, newSchemaUrl)) {
         const updatedContent = updateSchemaUrls(
           turboConfigContent,
           newSchemaUrl

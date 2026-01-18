@@ -169,7 +169,7 @@ describe("update-versioned-schema-json", () => {
     expect(result.changes).toStrictEqual({});
   });
 
-  it("does nothing if schema URL is already versioned", () => {
+  it("does nothing if schema URL is already the target version", () => {
     const { root, read } = useFixture({
       fixture: "already-versioned"
     });
@@ -190,6 +190,29 @@ describe("update-versioned-schema-json", () => {
 
     expect(result.fatalError).toBeUndefined();
     expect(result.changes).toStrictEqual({});
+  });
+
+  it("upgrades outdated versioned schema URL to target version", () => {
+    const { root, read } = useFixture({
+      fixture: "outdated-versioned"
+    });
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false, toVersion: "2.8.0" }
+    });
+
+    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+      $schema: "https://v2-8-0.turborepo.dev/schema.json",
+      tasks: {
+        build: {
+          outputs: ["dist/**"]
+        }
+      }
+    });
+
+    expect(result.fatalError).toBeUndefined();
+    expect(result.changes["turbo.json"].action).toBe("modified");
   });
 
   it("does not modify v1 schema URLs", () => {
