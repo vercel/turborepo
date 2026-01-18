@@ -172,7 +172,7 @@ impl ColorConfig {
         Self { should_strip_ansi }
     }
 
-    /// Infer the color choice from environment variables and checking if stdout
+    /// Infer the color choice from environment variables and checking if stdin
     /// is a tty
     pub fn infer() -> Self {
         let env_setting =
@@ -183,7 +183,7 @@ impl ColorConfig {
                     "true" | "1" | "2" | "3" => Some(false),
                     _ => None,
                 });
-        let should_strip_ansi = env_setting.unwrap_or_else(|| !atty::is(atty::Stream::Stdout));
+        let should_strip_ansi = env_setting.unwrap_or_else(|| !atty::is(atty::Stream::Stdin));
         Self { should_strip_ansi }
     }
 
