@@ -158,7 +158,7 @@ jobs:
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           BRANCH="${{ github.head_ref || github.ref_name }}"
-          SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9-_]/_/g')
+          SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
           # Upload to commit path
