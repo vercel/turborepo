@@ -70,8 +70,10 @@ jobs:
         run: |
           BRANCH="${{ github.head_ref || github.ref_name }}"
 
-          # Upload coverage report
-          RESPONSE=$(curl -s -X POST "${COVERAGE_API_URL}/api/upload?sha=${{ github.sha }}&branch=${BRANCH}" \
+          # Upload coverage report using vercel curl to bypass deployment protection
+          RESPONSE=$(npx vercel curl "/api/upload?sha=${{ github.sha }}&branch=${BRANCH}" \
+            --deployment "${COVERAGE_API_URL}" \
+            -s -X POST \
             -H "Authorization: Bearer ${COVERAGE_API_TOKEN}" \
             -H "Content-Type: application/json" \
             -d @coverage.json)
@@ -96,6 +98,8 @@ jobs:
           echo "DIFF_LINES=$DIFF_LINES" >> $GITHUB_ENV
           echo "DIFF_FUNCTIONS=$DIFF_FUNCTIONS" >> $GITHUB_ENV
           echo "DIFF_BRANCHES=$DIFF_BRANCHES" >> $GITHUB_ENV
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
       - name: Comment on PR
         if: github.event_name == 'pull_request' && env.COVERAGE_API_URL != ''
