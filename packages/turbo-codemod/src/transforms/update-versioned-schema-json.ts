@@ -8,6 +8,8 @@
  * - `https://turborepo.dev/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
  * - `https://turborepo.com/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
  * - `https://turborepo.com/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
+ * - `https://turbo.build/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
+ * - `https://turbo.build/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
  *
  * ## Relationship to update-schema-json-url
  * - `update-schema-json-url` (introduced 2.0.0): Handles schema.v1.json -> schema.v2.json
@@ -58,7 +60,9 @@ const OLD_SCHEMA_URLS = [
   "https://turborepo.dev/schema.json",
   "https://turborepo.dev/schema.v2.json",
   "https://turborepo.com/schema.json",
-  "https://turborepo.com/schema.v2.json"
+  "https://turborepo.com/schema.v2.json",
+  "https://turbo.build/schema.json",
+  "https://turbo.build/schema.v2.json"
 ];
 
 /**

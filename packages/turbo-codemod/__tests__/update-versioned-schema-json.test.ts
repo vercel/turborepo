@@ -261,6 +261,29 @@ describe("update-versioned-schema-json", () => {
     expect(result.changes["turbo.json"].action).toBe("modified");
   });
 
+  it("migrates turbo.build schema URL to versioned format", () => {
+    const { root, read } = useFixture({
+      fixture: "turbo-build-schema"
+    });
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false, toVersion: "2.7.5" }
+    });
+
+    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+      $schema: "https://v2-7-5.turborepo.dev/schema.json",
+      tasks: {
+        build: {
+          outputs: ["dist/**"]
+        }
+      }
+    });
+
+    expect(result.fatalError).toBeUndefined();
+    expect(result.changes["turbo.json"].action).toBe("modified");
+  });
+
   it("does nothing if no schema is present", () => {
     const { root, read } = useFixture({
       fixture: "no-schema"
