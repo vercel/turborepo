@@ -190,7 +190,7 @@ export async function migrate(
     // eslint-disable-next-line no-await-in-loop -- transforms have to run serially to avoid conflicts
     const result = await codemod.transformer({
       root: project.paths.root,
-      options
+      options: { ...options, toVersion }
     });
     Runner.logResults(result);
     results.push(result);
