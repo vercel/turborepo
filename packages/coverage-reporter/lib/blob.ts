@@ -2,7 +2,7 @@
  * Vercel Blob storage layer for coverage data
  */
 
-import { put, list, head, del } from "@vercel/blob";
+import { put } from "@vercel/blob";
 import type {
   CoverageReport,
   CoverageIndex,
