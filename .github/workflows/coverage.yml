@@ -74,6 +74,7 @@ jobs:
           RESPONSE=$(npx vercel curl "/api/upload?sha=${{ github.sha }}&branch=${BRANCH}" \
             --deployment "${COVERAGE_API_URL}" \
             --token "${VERCEL_TOKEN}" \
+            --team "${VERCEL_TEAM}
             -- \
             -s -X POST \
             -H "Authorization: Bearer ${COVERAGE_API_TOKEN}" \
@@ -102,6 +103,7 @@ jobs:
           echo "DIFF_BRANCHES=$DIFF_BRANCHES" >> $GITHUB_ENV
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_TEAM: ${{ secrets.TURBO_TEAM }}
 
       - name: Comment on PR
         if: github.event_name == 'pull_request' && env.COVERAGE_API_URL != ''
