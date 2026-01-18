@@ -54,7 +54,9 @@ const MIN_VERSIONED_SCHEMA_VERSION = INTRODUCED_IN;
 // NOTE: Intentionally excludes schema.v1.json - that's handled by update-schema-json-url
 const OLD_SCHEMA_URLS = [
   "https://turborepo.dev/schema.json",
-  "https://turborepo.dev/schema.v2.json"
+  "https://turborepo.dev/schema.v2.json",
+  "https://turborepo.com/schema.json",
+  "https://turborepo.com/schema.v2.json"
 ];
 
 /**
