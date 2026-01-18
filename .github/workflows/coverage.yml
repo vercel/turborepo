@@ -73,6 +73,7 @@ jobs:
           # Upload coverage report using vercel curl to bypass deployment protection
           RESPONSE=$(npx vercel curl "/api/upload?sha=${{ github.sha }}&branch=${BRANCH}" \
             --deployment "${COVERAGE_API_URL}" \
+            --token "${VERCEL_TOKEN}" \
             -s -X POST \
             -H "Authorization: Bearer ${COVERAGE_API_TOKEN}" \
             -H "Content-Type: application/json" \
