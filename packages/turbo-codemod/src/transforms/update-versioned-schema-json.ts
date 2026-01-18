@@ -4,8 +4,10 @@
  * Migrates turbo.json $schema URLs from legacy formats to versioned subdomains.
  *
  * ## Migration Path
- * - `https://turborepo.dev/schema.json` -> `https://v{X}-{Y}-{Z}.turbo.build/schema.json`
- * - `https://turborepo.dev/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turbo.build/schema.json`
+ * - `https://turborepo.dev/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
+ * - `https://turborepo.dev/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
+ * - `https://turborepo.com/schema.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
+ * - `https://turborepo.com/schema.v2.json` -> `https://v{X}-{Y}-{Z}.turborepo.dev/schema.json`
  *
  * ## Relationship to update-schema-json-url
  * - `update-schema-json-url` (introduced 2.0.0): Handles schema.v1.json -> schema.v2.json
@@ -13,7 +15,7 @@
  *
  * Both run during migrations. For a 1.x -> 2.8.x migration:
  * 1. update-schema-json-url runs first (v1 -> v2)
- * 2. This transformer runs second (schema.v2.json -> v2-8-0.turbo.build)
+ * 2. This transformer runs second (schema.v2.json -> v2-8-0.turborepo.dev)
  *
  * ## Version Gating
  * Two constants control when this transformer runs:
@@ -41,7 +43,7 @@ import type { Transformer, TransformerArgs } from "../types";
 // transformer details
 const TRANSFORMER = "update-versioned-schema-json";
 const DESCRIPTION =
-  'Update the "$schema" property in turbo.json to use the versioned subdomain format (e.g., https://v2-7-5.turbo.build/schema.json)';
+  'Update the "$schema" property in turbo.json to use the versioned subdomain format (e.g., https://v2-7-5.turborepo.dev/schema.json)';
 
 // INTRODUCED_IN: Controls when this codemod is included in migrations (via getTransformsForMigration)
 const INTRODUCED_IN = "2.7.5";
@@ -86,7 +88,7 @@ function getVersionedSchemaUrl(version: string): string {
     throw new Error(`Invalid version: ${version}`);
   }
   const subdomain = versionToSubdomain(baseVersion);
-  return `https://${subdomain}.turbo.build/schema.json`;
+  return `https://${subdomain}.turborepo.dev/schema.json`;
 }
 
 /**

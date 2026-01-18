@@ -19,7 +19,7 @@ describe("update-versioned-schema-json", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://v2-7-5.turbo.build/schema.json",
+      $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist/**"]
@@ -55,7 +55,7 @@ describe("update-versioned-schema-json", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://v2-10-3.turbo.build/schema.json",
+      $schema: "https://v2-10-3.turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist/**"]
@@ -83,7 +83,7 @@ describe("update-versioned-schema-json", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://v2-7-5.turbo.build/schema.json",
+      $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist/**"]
@@ -111,7 +111,7 @@ describe("update-versioned-schema-json", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://v2-8-0.turbo.build/schema.json",
+      $schema: "https://v2-8-0.turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist/**"]
@@ -180,7 +180,7 @@ describe("update-versioned-schema-json", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://v2-7-5.turbo.build/schema.json",
+      $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist/**"]
@@ -226,7 +226,7 @@ describe("update-versioned-schema-json", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://v2-7-5.turbo.build/schema.json",
+      $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist/**"]
@@ -249,7 +249,7 @@ describe("update-versioned-schema-json", () => {
     });
 
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://v2-7-5.turbo.build/schema.json",
+      $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist/**"]
@@ -295,7 +295,7 @@ describe("update-versioned-schema-json", () => {
 
     // Root turbo.json should be updated
     expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://v2-7-5.turbo.build/schema.json",
+      $schema: "https://v2-7-5.turborepo.dev/schema.json",
       tasks: {
         build: {
           outputs: ["dist/**"]
@@ -305,7 +305,7 @@ describe("update-versioned-schema-json", () => {
 
     // Workspace turbo.json files should also be updated
     expect(JSON.parse(read("apps/web/turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://v2-7-5.turbo.build/schema.json",
+      $schema: "https://v2-7-5.turborepo.dev/schema.json",
       extends: ["//"],
       tasks: {
         build: {
@@ -315,7 +315,7 @@ describe("update-versioned-schema-json", () => {
     });
 
     expect(JSON.parse(read("apps/docs/turbo.json") || "{}")).toStrictEqual({
-      $schema: "https://v2-7-5.turbo.build/schema.json",
+      $schema: "https://v2-7-5.turborepo.dev/schema.json",
       extends: ["//"],
       tasks: {
         dev: {
@@ -362,7 +362,7 @@ describe("update-versioned-schema-json", () => {
 
     // Both occurrences should be replaced
     expect(content).not.toContain("https://turborepo.dev/schema.json");
-    expect(content.match(/v2-7-5\.turbo\.build\/schema\.json/g)?.length).toBe(
+    expect(content.match(/v2-7-5\.turborepo\.dev\/schema\.json/g)?.length).toBe(
       2
     );
 
