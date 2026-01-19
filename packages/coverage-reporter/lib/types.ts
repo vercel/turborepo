@@ -100,25 +100,12 @@ export interface FileCoverage {
   uncoveredLines: number[];
 }
 
-// Index file stored in blob
-export interface CoverageIndex {
-  commits: CommitEntry[];
-  branches: Record<string, BranchEntry>;
-  updatedAt: string;
-}
-
+// Commit entry for lists
 export interface CommitEntry {
   sha: string;
   branch: string;
   timestamp: string;
   summary: CoverageSummary;
-}
-
-export interface BranchEntry {
-  name: string;
-  latestSha: string;
-  latestTimestamp: string;
-  history: string[]; // timestamps of coverage runs
 }
 
 // API types

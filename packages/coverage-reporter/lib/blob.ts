@@ -1,19 +1,16 @@
 /**
  * Vercel Blob storage layer for coverage data
+ *
+ * Uses blob list() API instead of an index file to avoid race conditions.
+ * Storage structure:
+ *   coverage/commits/{sha}.json - Full report per commit
+ *   coverage/branches/{branch}/{timestamp}.json - Per-branch history
  */
 
-import { put } from "@vercel/blob";
-import type {
-  CoverageReport,
-  CoverageIndex,
-  CommitEntry,
-  CoverageSummary
-} from "./types";
+import { put, list } from "@vercel/blob";
+import type { CoverageReport, CommitEntry, CoverageSummary } from "./types";
 
 const BLOB_PREFIX = "coverage";
-const INDEX_PATH = `${BLOB_PREFIX}/index.json`;
-const MAX_HISTORY_ENTRIES = 100;
-const MAX_BRANCH_HISTORY = 50;
 
 /**
  * Get the blob path for a commit's coverage data
@@ -23,43 +20,33 @@ function getCommitPath(sha: string): string {
 }
 
 /**
+ * Sanitize branch name for use in paths
+ */
+function sanitizeBranch(branch: string): string {
+  return branch.replace(/[^a-zA-Z0-9-_]/g, "_");
+}
+
+/**
  * Get the blob path for a branch's coverage history entry
  */
 function getBranchPath(branch: string, timestamp: string): string {
-  // Sanitize branch name for path
-  const safeBranch = branch.replace(/[^a-zA-Z0-9-_]/g, "_");
+  const safeBranch = sanitizeBranch(branch);
   return `${BLOB_PREFIX}/branches/${safeBranch}/${timestamp}.json`;
 }
 
 /**
- * Fetch the coverage index, or create an empty one if it doesn't exist
+ * Fetch a blob's JSON content by URL
  */
-export async function getIndex(): Promise<CoverageIndex> {
+async function fetchBlob<T>(url: string): Promise<T | null> {
   try {
-    const response = await fetch(`${process.env.BLOB_URL}/${INDEX_PATH}`);
+    const response = await fetch(url);
     if (response.ok) {
       return await response.json();
     }
   } catch {
-    // Index doesn't exist yet
+    // Blob doesn't exist or fetch failed
   }
-
-  return {
-    commits: [],
-    branches: {},
-    updatedAt: new Date().toISOString()
-  };
-}
-
-/**
- * Save the coverage index
- */
-async function saveIndex(index: CoverageIndex): Promise<void> {
-  index.updatedAt = new Date().toISOString();
-  await put(INDEX_PATH, JSON.stringify(index, null, 2), {
-    access: "public",
-    addRandomSuffix: false
-  });
+  return null;
 }
 
 /**
@@ -67,77 +54,24 @@ async function saveIndex(index: CoverageIndex): Promise<void> {
  */
 export async function storeCoverageReport(
   report: CoverageReport
-): Promise<{ url: string; commitUrl: string; branchUrl: string }> {
-  // Store the full report at commit path
+): Promise<{ url: string }> {
+  const content = JSON.stringify(report, null, 2);
+
+  // Store at commit path
   const commitPath = getCommitPath(report.sha);
-  const { url: commitUrl } = await put(
-    commitPath,
-    JSON.stringify(report, null, 2),
-    {
-      access: "public",
-      addRandomSuffix: false
-    }
-  );
+  const { url } = await put(commitPath, content, {
+    access: "public",
+    addRandomSuffix: false
+  });
 
-  // Store a copy at branch path for history
+  // Also store at branch path for history
   const branchPath = getBranchPath(report.branch, report.timestamp);
-  const { url: branchUrl } = await put(
-    branchPath,
-    JSON.stringify(report, null, 2),
-    {
-      access: "public",
-      addRandomSuffix: false
-    }
-  );
+  await put(branchPath, content, {
+    access: "public",
+    addRandomSuffix: false
+  });
 
-  // Update the index
-  const index = await getIndex();
-
-  // Add/update commit entry
-  const commitEntry: CommitEntry = {
-    sha: report.sha,
-    branch: report.branch,
-    timestamp: report.timestamp,
-    summary: report.summary
-  };
-
-  // Remove existing entry for this SHA if present
-  index.commits = index.commits.filter((c) => c.sha !== report.sha);
-  index.commits.unshift(commitEntry);
-
-  // Trim to max entries
-  if (index.commits.length > MAX_HISTORY_ENTRIES) {
-    index.commits = index.commits.slice(0, MAX_HISTORY_ENTRIES);
-  }
-
-  // Update branch entry
-  const safeBranch = report.branch;
-  if (!index.branches[safeBranch]) {
-    index.branches[safeBranch] = {
-      name: safeBranch,
-      latestSha: report.sha,
-      latestTimestamp: report.timestamp,
-      history: []
-    };
-  }
-
-  const branchEntry = index.branches[safeBranch];
-  branchEntry.latestSha = report.sha;
-  branchEntry.latestTimestamp = report.timestamp;
-  branchEntry.history.unshift(report.timestamp);
-
-  // Trim branch history
-  if (branchEntry.history.length > MAX_BRANCH_HISTORY) {
-    branchEntry.history = branchEntry.history.slice(0, MAX_BRANCH_HISTORY);
-  }
-
-  await saveIndex(index);
-
-  return {
-    url: commitUrl,
-    commitUrl,
-    branchUrl
-  };
+  return { url };
 }
 
 /**
@@ -146,16 +80,41 @@ export async function storeCoverageReport(
 export async function getCoverageReport(
   sha: string
 ): Promise<CoverageReport | null> {
-  try {
-    const path = getCommitPath(sha);
-    const response = await fetch(`${process.env.BLOB_URL}/${path}`);
-    if (response.ok) {
-      return await response.json();
+  const { blobs } = await list({ prefix: `${BLOB_PREFIX}/commits/${sha}` });
+  if (blobs.length === 0) return null;
+  return fetchBlob<CoverageReport>(blobs[0].url);
+}
+
+/**
+ * Get recent commits across all branches
+ */
+export async function getRecentCommits(limit = 20): Promise<CommitEntry[]> {
+  const { blobs } = await list({
+    prefix: `${BLOB_PREFIX}/commits/`,
+    limit: limit * 2 // Fetch extra in case some fail
+  });
+
+  // Sort by uploadedAt descending (most recent first)
+  const sorted = blobs.sort(
+    (a, b) =>
+      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+  );
+
+  const entries: CommitEntry[] = [];
+
+  for (const blob of sorted.slice(0, limit)) {
+    const report = await fetchBlob<CoverageReport>(blob.url);
+    if (report) {
+      entries.push({
+        sha: report.sha,
+        branch: report.branch,
+        timestamp: report.timestamp,
+        summary: report.summary
+      });
     }
-  } catch {
-    // Report doesn't exist
   }
-  return null;
+
+  return entries;
 }
 
 /**
@@ -165,37 +124,28 @@ export async function getBranchHistory(
   branch: string,
   limit = 20
 ): Promise<CoverageReport[]> {
-  const index = await getIndex();
-  const branchEntry = index.branches[branch];
+  const safeBranch = sanitizeBranch(branch);
+  const { blobs } = await list({
+    prefix: `${BLOB_PREFIX}/branches/${safeBranch}/`,
+    limit: limit * 2
+  });
 
-  if (!branchEntry) {
-    return [];
-  }
+  // Sort by uploadedAt descending
+  const sorted = blobs.sort(
+    (a, b) =>
+      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
+  );
 
   const reports: CoverageReport[] = [];
-  const timestamps = branchEntry.history.slice(0, limit);
 
-  for (const timestamp of timestamps) {
-    try {
-      const path = getBranchPath(branch, timestamp);
-      const response = await fetch(`${process.env.BLOB_URL}/${path}`);
-      if (response.ok) {
-        reports.push(await response.json());
-      }
-    } catch {
-      // Skip failed fetches
+  for (const blob of sorted.slice(0, limit)) {
+    const report = await fetchBlob<CoverageReport>(blob.url);
+    if (report) {
+      reports.push(report);
     }
   }
 
   return reports;
-}
-
-/**
- * Get recent commits across all branches
- */
-export async function getRecentCommits(limit = 20): Promise<CommitEntry[]> {
-  const index = await getIndex();
-  return index.commits.slice(0, limit);
 }
 
 /**
@@ -204,21 +154,61 @@ export async function getRecentCommits(limit = 20): Promise<CommitEntry[]> {
 export async function getBranchSummary(
   branch: string
 ): Promise<CoverageSummary | null> {
-  const index = await getIndex();
-  const branchEntry = index.branches[branch];
-
-  if (!branchEntry) {
-    return null;
-  }
-
-  const commit = index.commits.find((c) => c.sha === branchEntry.latestSha);
-  return commit?.summary ?? null;
+  const history = await getBranchHistory(branch, 1);
+  return history[0]?.summary ?? null;
 }
 
 /**
  * List all branches with coverage data
  */
 export async function listBranches(): Promise<string[]> {
-  const index = await getIndex();
-  return Object.keys(index.branches).sort();
+  const { blobs } = await list({
+    prefix: `${BLOB_PREFIX}/branches/`
+  });
+
+  // Extract unique branch names from paths
+  const branches = new Set<string>();
+  for (const blob of blobs) {
+    // Path format: coverage/branches/{branch}/{timestamp}.json
+    const match = blob.pathname.match(/^coverage\/branches\/([^/]+)\//);
+    if (match) {
+      branches.add(match[1]);
+    }
+  }
+
+  return Array.from(branches).sort();
+}
+
+// Legacy exports for compatibility - can remove after migration
+export async function getIndex() {
+  const commits = await getRecentCommits(100);
+  const branchNames = await listBranches();
+
+  const branches: Record<
+    string,
+    {
+      name: string;
+      latestSha: string;
+      latestTimestamp: string;
+      history: string[];
+    }
+  > = {};
+
+  for (const branch of branchNames) {
+    const history = await getBranchHistory(branch, 50);
+    if (history.length > 0) {
+      branches[branch] = {
+        name: branch,
+        latestSha: history[0].sha,
+        latestTimestamp: history[0].timestamp,
+        history: history.map((h) => h.timestamp)
+      };
+    }
+  }
+
+  return {
+    commits,
+    branches,
+    updatedAt: new Date().toISOString()
+  };
 }

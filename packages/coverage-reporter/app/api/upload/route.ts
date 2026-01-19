@@ -4,6 +4,41 @@ import { storeCoverageReport, getBranchSummary } from "@/lib/blob";
 import { calculateCoverageDiff } from "@/lib/coverage";
 import type { LlvmCovReport, UploadResponse } from "@/lib/types";
 
+// Route segment config for large payloads
+export const maxDuration = 60;
+
+/**
+ * Stream and parse JSON from request body in chunks.
+ * Avoids V8 string length limits by not buffering entire body as a string.
+ */
+async function streamParseJson(request: NextRequest): Promise<unknown> {
+  const reader = request.body?.getReader();
+  if (!reader) {
+    throw new Error("No request body");
+  }
+
+  const chunks: Uint8Array[] = [];
+  let totalLength = 0;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    totalLength += value.length;
+  }
+
+  // Combine chunks into a single buffer and parse
+  const combined = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.length;
+  }
+
+  const text = new TextDecoder().decode(combined);
+  return JSON.parse(text);
+}
+
 /**
  * POST /api/upload
  *
@@ -35,20 +70,20 @@ export async function POST(request: NextRequest) {
     let report: LlvmCovReport;
 
     if (contentType.includes("application/json")) {
-      // JSON body with all fields
-      const body = await request.json();
+      // JSON body with all fields - use streaming parser for large payloads
+      const body = (await streamParseJson(request)) as Record<string, unknown>;
 
       // Support both nested and flat formats
       if (body.report) {
         // Nested: { sha, branch, report }
-        sha = body.sha;
-        branch = body.branch;
-        report = body.report;
+        sha = body.sha as string;
+        branch = body.branch as string;
+        report = body.report as LlvmCovReport;
       } else if (body.data && body.type === "llvm.coverage.json.export") {
         // Flat: report is the body, sha/branch from query params
         sha = request.nextUrl.searchParams.get("sha") || "";
         branch = request.nextUrl.searchParams.get("branch") || "";
-        report = body;
+        report = body as unknown as LlvmCovReport;
       } else {
         return NextResponse.json(
           {

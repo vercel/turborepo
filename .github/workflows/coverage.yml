@@ -20,7 +20,6 @@ jobs:
     timeout-minutes: 45
     env:
       COVERAGE_API_URL: ${{ secrets.COVERAGE_API_URL }}
-      COVERAGE_API_TOKEN: ${{ secrets.COVERAGE_API_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -65,44 +64,129 @@ jobs:
           SCCACHE_REQUEST_TIMEOUT: 30
           SCCACHE_ERROR_LOG: error
 
-      - name: Upload coverage to reporter
-        if: env.COVERAGE_API_URL != ''
+      - name: Transform and upload coverage
+        if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           BRANCH="${{ github.head_ref || github.ref_name }}"
+          SHA="${{ github.sha }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9-_]/_/g')
 
-          # Upload coverage report
-          RESPONSE=$(curl -s -X POST \
-            "${COVERAGE_API_URL}/api/upload?sha=${{ github.sha }}&branch=${BRANCH}" \
-            -H "Authorization: Bearer ${COVERAGE_API_TOKEN}" \
-            -H "Content-Type: application/json" \
-            -H "x-vercel-protection-bypass: ${VERCEL_PROTECTION_BYPASS}" \
-            -d @coverage.json)
+          # Transform coverage.json to our format
+          node -e "
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('coverage.json', 'utf8'));
+          const data = report.data[0];
 
-          echo "Upload response: $RESPONSE"
+          function convertSummary(summary) {
+            const toMetric = (s) => ({
+              covered: s.covered,
+              total: s.count,
+              percent: s.percent
+            });
+            return {
+              lines: toMetric(summary.lines),
+              functions: toMetric(summary.functions),
+              branches: toMetric(summary.branches),
+              regions: toMetric(summary.regions)
+            };
+          }
 
-          # Extract summary for PR comment
-          LINES=$(echo "$RESPONSE" | jq -r '.summary.lines.percent // 0')
-          FUNCTIONS=$(echo "$RESPONSE" | jq -r '.summary.functions.percent // 0')
-          BRANCHES=$(echo "$RESPONSE" | jq -r '.summary.branches.percent // 0')
+          function getCrateName(filePath) {
+            const cratesMatch = filePath.match(/crates\/([^/]+)\//);
+            if (cratesMatch) return cratesMatch[1];
+            const packagesMatch = filePath.match(/packages\/([^/]+)\/rust\//);
+            if (packagesMatch) return packagesMatch[1];
+            return 'unknown';
+          }
 
-          # Store for PR comment step
-          echo "COVERAGE_LINES=$LINES" >> $GITHUB_ENV
-          echo "COVERAGE_FUNCTIONS=$FUNCTIONS" >> $GITHUB_ENV
-          echo "COVERAGE_BRANCHES=$BRANCHES" >> $GITHUB_ENV
+          const crateMap = new Map();
+          const files = data.files.map((file) => {
+            const crateName = getCrateName(file.filename);
+            const fileCoverage = {
+              path: file.filename,
+              crate: crateName,
+              summary: convertSummary(file.summary),
+              uncoveredLines: []
+            };
+            if (!crateMap.has(crateName)) {
+              crateMap.set(crateName, { files: [] });
+            }
+            crateMap.get(crateName).files.push(fileCoverage);
+            return fileCoverage;
+          });
 
-          # Check if there's a diff
-          DIFF_LINES=$(echo "$RESPONSE" | jq -r '.diff.lines // "N/A"')
-          DIFF_FUNCTIONS=$(echo "$RESPONSE" | jq -r '.diff.functions // "N/A"')
-          DIFF_BRANCHES=$(echo "$RESPONSE" | jq -r '.diff.branches // "N/A"')
+          const crates = Array.from(crateMap.entries()).map(([name, { files: crateFiles }]) => {
+            const aggregated = {
+              lines: { covered: 0, total: 0 },
+              functions: { covered: 0, total: 0 },
+              branches: { covered: 0, total: 0 },
+              regions: { covered: 0, total: 0 }
+            };
+            for (const file of crateFiles) {
+              aggregated.lines.covered += file.summary.lines.covered;
+              aggregated.lines.total += file.summary.lines.total;
+              aggregated.functions.covered += file.summary.functions.covered;
+              aggregated.functions.total += file.summary.functions.total;
+              aggregated.branches.covered += file.summary.branches.covered;
+              aggregated.branches.total += file.summary.branches.total;
+              aggregated.regions.covered += file.summary.regions.covered;
+              aggregated.regions.total += file.summary.regions.total;
+            }
+            const toMetric = (s) => ({
+              covered: s.covered,
+              total: s.total,
+              percent: s.total > 0 ? (s.covered / s.total) * 100 : 0
+            });
+            return {
+              name,
+              summary: {
+                lines: toMetric(aggregated.lines),
+                functions: toMetric(aggregated.functions),
+                branches: toMetric(aggregated.branches),
+                regions: toMetric(aggregated.regions)
+              },
+              files: crateFiles.map((f) => f.path)
+            };
+          }).sort((a, b) => a.name.localeCompare(b.name));
 
-          echo "DIFF_LINES=$DIFF_LINES" >> $GITHUB_ENV
-          echo "DIFF_FUNCTIONS=$DIFF_FUNCTIONS" >> $GITHUB_ENV
-          echo "DIFF_BRANCHES=$DIFF_BRANCHES" >> $GITHUB_ENV
+          const result = {
+            sha: process.env.SHA,
+            branch: process.env.BRANCH,
+            timestamp: process.env.TIMESTAMP,
+            summary: convertSummary(data.totals),
+            crates,
+            files
+          };
+
+          fs.writeFileSync('coverage-transformed.json', JSON.stringify(result, null, 2));
+
+          // Output summary for PR comment
+          console.log('COVERAGE_LINES=' + result.summary.lines.percent);
+          console.log('COVERAGE_FUNCTIONS=' + result.summary.functions.percent);
+          console.log('COVERAGE_BRANCHES=' + result.summary.branches.percent);
+          " >> "$GITHUB_ENV"
+
+          # Upload to Vercel Blob
+          # Commit path
+          npx vercel blob put "coverage/commits/${SHA}.json" coverage-transformed.json \
+            --token "${BLOB_READ_WRITE_TOKEN}" \
+            --no-add-random-suffix
+
+          # Branch history path
+          npx vercel blob put "coverage/branches/${SAFE_BRANCH}/${TIMESTAMP}.json" coverage-transformed.json \
+            --token "${BLOB_READ_WRITE_TOKEN}" \
+            --no-add-random-suffix
+
+          echo "Uploaded coverage for ${SHA} on branch ${BRANCH}"
         env:
-          VERCEL_PROTECTION_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
+          SHA: ${{ github.sha }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          TIMESTAMP: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
 
       - name: Comment on PR
-        if: github.event_name == 'pull_request' && env.COVERAGE_API_URL != ''
+        if: github.event_name == 'pull_request' && env.COVERAGE_API_URL != '' && !github.event.pull_request.head.repo.fork
         uses: actions/github-script@v7
         with:
           script: |
@@ -110,26 +194,13 @@ jobs:
             const functions = parseFloat(process.env.COVERAGE_FUNCTIONS) || 0;
             const branches = parseFloat(process.env.COVERAGE_BRANCHES) || 0;
 
-            const diffLines = process.env.DIFF_LINES;
-            const diffFunctions = process.env.DIFF_FUNCTIONS;
-            const diffBranches = process.env.DIFF_BRANCHES;
-
-            const formatDiff = (val) => {
-              if (val === 'N/A' || val === 'null') return '';
-              const num = parseFloat(val);
-              if (isNaN(num)) return '';
-              const sign = num >= 0 ? '+' : '';
-              const emoji = num >= 0 ? ':chart_with_upwards_trend:' : ':chart_with_downwards_trend:';
-              return ` (${sign}${num.toFixed(2)}% ${emoji})`;
-            };
-
             const body = `## Coverage Report
 
             | Metric | Coverage |
             |--------|----------|
-            | Lines | ${lines.toFixed(2)}%${formatDiff(diffLines)} |
-            | Functions | ${functions.toFixed(2)}%${formatDiff(diffFunctions)} |
-            | Branches | ${branches.toFixed(2)}%${formatDiff(diffBranches)} |
+            | Lines | ${lines.toFixed(2)}% |
+            | Functions | ${functions.toFixed(2)}% |
+            | Branches | ${branches.toFixed(2)}% |
 
             [View full report](${process.env.COVERAGE_API_URL}/commits/${{ github.sha }})
             `;
