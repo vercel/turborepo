@@ -1,0 +1,231 @@
+name: Coverage
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  coverage:
+    name: Rust Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      COVERAGE_API_URL: ${{ secrets.COVERAGE_API_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node: "false"
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+
+      - name: Generate coverage report
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          cargo llvm-cov nextest \
+            --workspace \
+            --exclude turborepo-napi \
+            --json \
+            --output-path coverage.json
+        env:
+          SCCACHE_BUCKET: turborepo-sccache
+          SCCACHE_REGION: us-east-2
+          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+          CARGO_INCREMENTAL: 0
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          SCCACHE_IDLE_TIMEOUT: 0
+          SCCACHE_REQUEST_TIMEOUT: 30
+          SCCACHE_ERROR_LOG: error
+
+      - name: Transform and upload coverage
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |
+          BRANCH="${{ github.head_ref || github.ref_name }}"
+          SHA="${{ github.sha }}"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
+          SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
+
+          # Transform coverage.json to our format
+          node -e "
+          const fs = require('fs');
+          const report = JSON.parse(fs.readFileSync('coverage.json', 'utf8'));
+          const data = report.data[0];
+
+          function convertSummary(summary) {
+            const toMetric = (s) => ({
+              covered: s.covered,
+              total: s.count,
+              percent: s.percent
+            });
+            return {
+              lines: toMetric(summary.lines),
+              functions: toMetric(summary.functions),
+              branches: toMetric(summary.branches),
+              regions: toMetric(summary.regions)
+            };
+          }
+
+          function getCrateName(filePath) {
+            const cratesMatch = filePath.match(/crates\/([^/]+)\//);
+            if (cratesMatch) return cratesMatch[1];
+            const packagesMatch = filePath.match(/packages\/([^/]+)\/rust\//);
+            if (packagesMatch) return packagesMatch[1];
+            return 'unknown';
+          }
+
+          const crateMap = new Map();
+          const files = data.files.map((file) => {
+            const crateName = getCrateName(file.filename);
+            const fileCoverage = {
+              path: file.filename,
+              crate: crateName,
+              summary: convertSummary(file.summary),
+              uncoveredLines: []
+            };
+            if (!crateMap.has(crateName)) {
+              crateMap.set(crateName, { files: [] });
+            }
+            crateMap.get(crateName).files.push(fileCoverage);
+            return fileCoverage;
+          });
+
+          const crates = Array.from(crateMap.entries()).map(([name, { files: crateFiles }]) => {
+            const aggregated = {
+              lines: { covered: 0, total: 0 },
+              functions: { covered: 0, total: 0 },
+              branches: { covered: 0, total: 0 },
+              regions: { covered: 0, total: 0 }
+            };
+            for (const file of crateFiles) {
+              aggregated.lines.covered += file.summary.lines.covered;
+              aggregated.lines.total += file.summary.lines.total;
+              aggregated.functions.covered += file.summary.functions.covered;
+              aggregated.functions.total += file.summary.functions.total;
+              aggregated.branches.covered += file.summary.branches.covered;
+              aggregated.branches.total += file.summary.branches.total;
+              aggregated.regions.covered += file.summary.regions.covered;
+              aggregated.regions.total += file.summary.regions.total;
+            }
+            const toMetric = (s) => ({
+              covered: s.covered,
+              total: s.total,
+              percent: s.total > 0 ? (s.covered / s.total) * 100 : 0
+            });
+            return {
+              name,
+              summary: {
+                lines: toMetric(aggregated.lines),
+                functions: toMetric(aggregated.functions),
+                branches: toMetric(aggregated.branches),
+                regions: toMetric(aggregated.regions)
+              },
+              files: crateFiles.map((f) => f.path)
+            };
+          }).sort((a, b) => a.name.localeCompare(b.name));
+
+          const result = {
+            sha: process.env.SHA,
+            branch: process.env.BRANCH,
+            timestamp: process.env.TIMESTAMP,
+            summary: convertSummary(data.totals),
+            crates,
+            files
+          };
+
+          fs.writeFileSync('coverage-transformed.json', JSON.stringify(result, null, 2));
+
+          // Output summary for PR comment
+          console.log('COVERAGE_LINES=' + result.summary.lines.percent);
+          console.log('COVERAGE_FUNCTIONS=' + result.summary.functions.percent);
+          console.log('COVERAGE_BRANCHES=' + result.summary.branches.percent);
+          " >> "$GITHUB_ENV"
+
+          # Upload to Vercel Blob
+          # Commit path
+          npx vercel blob put coverage-transformed.json --pathname="coverage/commits/${SHA}.json" \
+            --token "${BLOB_READ_WRITE_TOKEN}" \
+
+          # Branch history path
+          npx vercel blob put coverage-transformed.json --pathname="coverage/branches/${SAFE_BRANCH}/${TIMESTAMP}.json" \
+            --token "${BLOB_READ_WRITE_TOKEN}" \
+
+          echo "Uploaded coverage for ${SHA} on branch ${BRANCH}"
+        env:
+          SHA: ${{ github.sha }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          TIMESTAMP: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && env.COVERAGE_API_URL != '' && !github.event.pull_request.head.repo.fork
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lines = parseFloat(process.env.COVERAGE_LINES) || 0;
+            const functions = parseFloat(process.env.COVERAGE_FUNCTIONS) || 0;
+            const branches = parseFloat(process.env.COVERAGE_BRANCHES) || 0;
+
+            const body = `## Coverage Report
+
+            | Metric | Coverage |
+            |--------|----------|
+            | Lines | ${lines.toFixed(2)}% |
+            | Functions | ${functions.toFixed(2)}% |
+            | Branches | ${branches.toFixed(2)}% |
+
+            [View full report](${process.env.COVERAGE_API_URL}/commits/${{ github.sha }})
+            `;
+
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('## Coverage Report')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
