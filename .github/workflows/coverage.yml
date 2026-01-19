@@ -70,7 +70,7 @@ jobs:
           BRANCH="${{ github.head_ref || github.ref_name }}"
           SHA="${{ github.sha }}"
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
-          SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9-_]/_/g')
+          SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
 
           # Transform coverage.json to our format
           node -e "
