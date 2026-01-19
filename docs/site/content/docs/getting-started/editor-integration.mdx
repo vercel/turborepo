@@ -13,21 +13,20 @@ provide full documentation and linting in case you have invalid shapes or missin
 
 ### Sourcing from the web
 
-A `schema.json` is accessible at the URL shown below. This has the advantage of not needing to run your package manager's install command to see in-editor validation.
+Versioned schemas are available via subdomain, following the format `https://v<version>.turborepo.dev/schema.json`. The version uses a dash separator.
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turborepo.dev/schema.json"
+  "$schema": "https://v2-5-7.turborepo.dev/schema.json"
 }
 ```
 
-There is also a major versioned `schema.json` available, following the format of `https://turborepo.dev/schema.<version>.json`.
+This has the advantage of not needing to run your package manager's install command to see in-editor validation, while also ensuring you're using the schema that matches your installed version of `turbo`.
 
-```json title="./turbo.json"
-{
-  "$schema": "https://turborepo.dev/schema.v1.json"
-}
-```
+<Callout type="info" title="Unversioned schema">
+  If you're using a version of Turborepo older than 2.5.7 or prefer an
+  unversioned schema, you can use `https://turborepo.dev/schema.json` instead.
+</Callout>
 
 ### Sourcing from `node_modules`
 
