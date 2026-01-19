@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { getLLMText, source } from "@/lib/geistdocs/source";
+import { trackMdRequest } from "@/lib/md-tracking";
 
 export const revalidate = false;
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: RouteContext<"/[lang]/llms.md/[[...slug]]">
 ) {
   const { slug, lang } = await params;
@@ -13,6 +14,17 @@ export async function GET(
   if (!page) {
     notFound();
   }
+
+  // Track markdown request (fire-and-forget)
+  const userAgent = req.headers.get("user-agent");
+  const referer = req.headers.get("referer");
+  const acceptHeader = req.headers.get("accept");
+  void trackMdRequest({
+    path: `/llms.md/${slug?.join("/") ?? ""}`,
+    userAgent,
+    referer,
+    acceptHeader,
+  });
 
   return new Response(await getLLMText(page), {
     headers: {
