@@ -1,3 +1,8 @@
+---
+title: Sitemap
+description: A high-level semantic index of the Turborepo documentation for LLM-assisted navigation and quick orientation.
+---
+
 # Turborepo Documentation Sitemap
 
 ## Purpose
