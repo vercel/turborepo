@@ -16,7 +16,7 @@ export async function trackMdRequest({
   path,
   userAgent,
   referer,
-  acceptHeader,
+  acceptHeader
 }: TrackMdRequestParams): Promise<void> {
   if (!MD_TRACKING_URL || !MD_TRACKING_API_KEY) {
     // Tracking not configured, skip silently
@@ -25,29 +25,29 @@ export async function trackMdRequest({
 
   try {
     const response = await fetch(MD_TRACKING_URL, {
-      method: 'POST',
+      method: "POST",
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${MD_TRACKING_API_KEY}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${MD_TRACKING_API_KEY}`
       },
       body: JSON.stringify({
         path,
-        source: 'turborepo',
+        source: "turborepo",
         userAgent,
         referer,
-        acceptHeader,
-      }),
+        acceptHeader
+      })
     });
 
     if (!response.ok) {
       console.error(
-        'MD tracking failed:',
+        "MD tracking failed:",
         response.status,
-        await response.text(),
+        await response.text()
       );
     }
   } catch (error) {
     // Fire-and-forget: don't let tracking errors affect the response
-    console.error('MD tracking error:', error);
+    console.error("MD tracking error:", error);
   }
 }

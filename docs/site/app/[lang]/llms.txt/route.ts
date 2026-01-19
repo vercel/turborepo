@@ -22,7 +22,7 @@ export const GET = async (
     path: "/llms.txt",
     userAgent,
     referer,
-    acceptHeader,
+    acceptHeader
   });
 
   const links = pages

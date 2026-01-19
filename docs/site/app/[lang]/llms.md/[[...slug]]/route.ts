@@ -23,7 +23,7 @@ export async function GET(
     path: `/llms.md/${slug?.join("/") ?? ""}`,
     userAgent,
     referer,
-    acceptHeader,
+    acceptHeader
   });
 
   return new Response(await getLLMText(page), {
