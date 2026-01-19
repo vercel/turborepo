@@ -169,14 +169,12 @@ jobs:
 
           # Upload to Vercel Blob
           # Commit path
-          npx vercel blob put "coverage/commits/${SHA}.json" coverage-transformed.json \
+          npx vercel blob put coverage-transformed.json --pathname="coverage/commits/${SHA}.json" \
             --token "${BLOB_READ_WRITE_TOKEN}" \
-            --no-add-random-suffix
 
           # Branch history path
-          npx vercel blob put "coverage/branches/${SAFE_BRANCH}/${TIMESTAMP}.json" coverage-transformed.json \
+          npx vercel blob put coverage-transformed.json --pathname="coverage/branches/${SAFE_BRANCH}/${TIMESTAMP}.json" \
             --token "${BLOB_READ_WRITE_TOKEN}" \
-            --no-add-random-suffix
 
           echo "Uploaded coverage for ${SHA} on branch ${BRANCH}"
         env:
