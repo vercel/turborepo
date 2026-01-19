@@ -48,7 +48,3 @@ This will permit tasks to depend on `//#build`.
 However, if the root task does call `turbo`, this can cause infinite recursion. In this case, we don't recommend depending
 on the root task. Instead, you can determine the tasks that this root task depends on, and depend on those directly.
 For instance, if `//#build` depends on `app#lint` and `docs#lint`, then you can declare those as dependencies.
-
----
-
-[View full sitemap](/docs/sitemap.md)
