@@ -36,6 +36,25 @@ The codemods below are used for migration paths in the second major version of T
 
 <Accordions>
 
+<Accordion title="update-versioned-schema-json (2.7.5)" id="update-versioned-schema-json">
+
+Updates the `$schema` URL in `turbo.json` files to use the versioned subdomain format. This applies to both root and workspace `turbo.json` files.
+
+```bash title="Terminal"
+npx @turbo/codemod update-versioned-schema-json
+```
+
+**Example**
+
+```diff title="./turbo.json"
+{
+- "$schema": "https://turborepo.dev/schema.json",
++ "$schema": "https://v2-7-5.turborepo.dev/schema.json",
+}
+```
+
+</Accordion>
+
 <Accordion title="update-schema-json-url (2.0.0)" id="update-schema-json-url">
 
 Updates a versioned schema.json URL to v2.
