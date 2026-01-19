@@ -64,7 +64,7 @@ function renderNode(node: PageNode, indent: number): string {
 }
 
 export const GET = async () => {
-  const pages = source.getPages();
+  const pages = source.getPages("en");
 
   const tree = buildTree(pages);
 
