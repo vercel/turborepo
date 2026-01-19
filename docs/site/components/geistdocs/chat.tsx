@@ -387,12 +387,13 @@ export const Chat = ({ basePath, suggestions }: ChatProps) => {
         <span>Ask AI</span>
       </Button>
 
-      <Portal.Root className="hidden md:block">
+      <Portal.Root>
         <div
           className={cn(
             "fixed z-50 flex flex-col gap-4 bg-background transition-all",
             "inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
-            "translate-x-full data-[state=open]:translate-x-0"
+            "translate-x-full data-[state=open]:translate-x-0",
+            "hidden md:flex"
           )}
           data-state={isOpen ? "open" : "closed"}
         >
