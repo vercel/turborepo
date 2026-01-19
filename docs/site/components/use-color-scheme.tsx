@@ -21,6 +21,9 @@ export function useColorScheme(): ColorScheme {
 
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
 
+    // Set initial value on mount (SSR defaults to "light", so we need to sync)
+    setColorScheme(mediaQuery.matches ? "dark" : "light");
+
     const handleChange = (event: MediaQueryListEvent): void => {
       setColorScheme(event.matches ? "dark" : "light");
     };
