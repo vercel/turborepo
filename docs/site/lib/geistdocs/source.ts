@@ -90,7 +90,7 @@ ${cleaned}
 
 ---
 
-[View full sitemap](/docs/sitemap.md)`;
+[View full sitemap](/sitemap.md)`;
 };
 
 // Blog loaders
