@@ -8,12 +8,12 @@ To get the best experience with `turbo`, Turborepo provides a few utilities for 
 ## JSON Schema for `turbo.json`
 
 Turborepo uses [JSON Schema](https://json-schema.org/) to give you auto-complete in your
-`turbo.json` file. By including the `$schema` key in your `turbo.json`, your editor is able to
-provide full documentation and linting in case you have invalid shapes or missing keys.
+`turbo.json` files. By including the `$schema` key in your `turbo.json`, your editor is able to
+provide full documentation and linting for invalid configuration.
 
-### Sourcing from the web
+### Sourcing from web
 
-Versioned schemas are available via subdomain, following the format `https://v<version>.turborepo.dev/schema.json`. The version uses a dash separator.
+Starting with Turborepo 2.5.7, versioned schemas are available via subdomain, following the format `https://v<version>.turborepo.dev/schema.json`. The version uses a dash separator.
 
 ```json title="./turbo.json"
 {
