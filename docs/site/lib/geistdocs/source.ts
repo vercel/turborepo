@@ -86,7 +86,11 @@ export const getLLMText = async (page: InferPageType<typeof source>) => {
 
   return `# ${page.data.title}
 
-${cleaned}`;
+${cleaned}
+
+---
+
+[View full sitemap](/sitemap.md)`;
 };
 
 // Blog loaders

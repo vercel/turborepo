@@ -35,13 +35,19 @@ export function Logo({
     numericHeight = styles.height;
   }
 
+  // Use white logos as base, invert for light mode to get dark grayscale logos
   const logo = (
     <Image
       alt={`${user.caption}'s Logo`}
-      className={cn("mx-8", className)}
+      className={cn(
+        "mx-8",
+        // Light mode: invert white logos to dark
+        theme === "dark" && "invert",
+        className
+      )}
       height={numericHeight}
       priority
-      src={theme === "light" ? user.imageWhite : user.imageColor}
+      src={user.imageWhite}
       style={styles}
       width={numericWidth}
     />
