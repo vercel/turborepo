@@ -168,6 +168,7 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
   }, [messages, saveMessages, isInitialized]);
 
   const handleSuggestionClick = (suggestion: string) => {
+    stop();
     setLocalPrompt("");
     setPrompt("");
     void sendMessage({ text: suggestion });
@@ -182,6 +183,7 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
       return;
     }
 
+    stop();
     setLocalPrompt("");
     setPrompt("");
     void sendMessage({ text });
