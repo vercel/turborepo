@@ -9,7 +9,7 @@ import { MobileMenu } from "./mobile-menu";
 import { MobileSearchButton, SearchButton } from "./search";
 
 export const Navbar = () => (
-  <header className="sticky top-0 z-40 w-full gap-6 border-b bg-sidebar">
+  <header className="sticky top-0 z-40 w-full gap-6 border-b bg-sidebar @container">
     <div className="mx-auto flex h-16 w-full max-w-(--fd-layout-width) items-center gap-4 px-4 py-3.5 md:px-6">
       <div className="flex shrink-0 items-center gap-2.5">
         <a href="https://vercel.com/" rel="noopener" target="_blank">
@@ -20,13 +20,13 @@ export const Navbar = () => (
           <Logo />
         </DynamicLink>
       </div>
-      <DesktopMenu className="hidden md:flex" items={nav} />
+      <DesktopMenu className="hidden @4xl:flex" items={nav} />
       <div className="ml-auto flex flex-1 items-center justify-end gap-2">
-        <SearchButton className="hidden md:flex" />
-        <MobileSearchButton className="md:hidden" />
+        <SearchButton className="hidden @3xl:flex" />
+        <MobileSearchButton className="@3xl:hidden" />
         <Chat basePath={basePath} suggestions={suggestions} />
-        <GitHubButton className="hidden md:flex" />
-        <MobileMenu />
+        <GitHubButton className="hidden @4xl:flex" />
+        <MobileMenu className="@4xl:hidden" />
       </div>
     </div>
   </header>
