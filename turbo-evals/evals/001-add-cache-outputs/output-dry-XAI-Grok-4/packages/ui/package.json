@@ -1,0 +1,20 @@
+{
+  "name": "@repo/ui",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "lint": "echo 'no lint configured'"
+  },
+  "dependencies": {
+    "@repo/utils": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.1.0"
+  }
+}
