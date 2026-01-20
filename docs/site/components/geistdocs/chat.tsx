@@ -249,13 +249,18 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
       <Conversation>
         <ConversationContent>
           {messages
-            .filter((message) =>
-              message.parts.some(
-                (part) =>
-                  (part.type === "text" && part.text) ||
-                  part.type === "source-url"
-              )
-            )
+            .filter((message, index, arr) => {
+              const isLastMessage = index === arr.length - 1;
+              const isStreaming =
+                isLastMessage &&
+                message.role === "assistant" &&
+                (status === "streaming" || status === "submitted");
+              const hasText = message.parts.some(
+                (part) => part.type === "text" && part.text
+              );
+              // Include message if it has text OR if it's actively streaming
+              return hasText || isStreaming;
+            })
             .map((message, index, filteredMessages) => {
               const isLastMessage = index === filteredMessages.length - 1;
               const isAssistantMessage = message.role === "assistant";
