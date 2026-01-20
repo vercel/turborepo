@@ -250,9 +250,6 @@ fn bench_validated_glob_with_colon(c: &mut Criterion) {
     });
 }
 
-// ============================================================================
-// Benchmarks for globwalk_with_settings (ignore_nested_packages)
-// ============================================================================
 
 fn bench_globwalk_ignore_nested_packages(c: &mut Criterion) {
     let tmp = setup_test_dir();
