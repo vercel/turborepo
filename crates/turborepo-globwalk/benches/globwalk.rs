@@ -211,7 +211,6 @@ fn bench_fix_glob_pattern_complex(c: &mut Criterion) {
     });
 }
 
-
 fn bench_validated_glob_simple(c: &mut Criterion) {
     c.bench_function("validated_glob_simple", |b| {
         b.iter(|| black_box(ValidatedGlob::from_str(black_box("**/*.ts")).unwrap()))
