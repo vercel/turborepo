@@ -167,13 +167,13 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
     }
   }, [messages, saveMessages, isInitialized]);
 
-  const handleSuggestionClick = async (suggestion: string) => {
-    await sendMessage({ text: suggestion });
+  const handleSuggestionClick = (suggestion: string) => {
     setLocalPrompt("");
     setPrompt("");
+    void sendMessage({ text: suggestion });
   };
 
-  const handleSubmit: PromptInputProps["onSubmit"] = async (message, event) => {
+  const handleSubmit: PromptInputProps["onSubmit"] = (message, event) => {
     event.preventDefault();
 
     const { text } = message;
@@ -182,9 +182,9 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
       return;
     }
 
-    await sendMessage({ text });
     setLocalPrompt("");
     setPrompt("");
+    void sendMessage({ text });
   };
 
   const handleClearChat = async () => {
@@ -251,7 +251,9 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
           {messages
             .filter((message) =>
               message.parts.some(
-                (part) => part.type === "text" || part.type === "source-url"
+                (part) =>
+                  (part.type === "text" && part.text) ||
+                  part.type === "source-url"
               )
             )
             .map((message, index, filteredMessages) => {
@@ -278,7 +280,11 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
                   {isStreaming && !hasTextContent && (
                     <div className="flex items-center gap-2">
                       <Spinner />
-                      <Shimmer>Generating response...</Shimmer>
+                      <Shimmer>
+                        {message.parts.some((p) => p.type === "source-url")
+                          ? "Generating response..."
+                          : "Looking up sources..."}
+                      </Shimmer>
                     </div>
                   )}
                   {message.parts
@@ -287,36 +293,34 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
                       <MessageContent
                         key={`${message.id}-${part.type}-${partIndex}`}
                       >
-                        <MessageResponse
-                          className="text-wrap"
-                          rehypePlugins={[
-                            ...Object.values(plugins),
-                            [
-                              harden,
-                              {
-                                defaultOrigin:
-                                  process.env
-                                    .NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL,
-                                allowedLinkPrefixes: ["*"]
-                              }
-                            ]
-                          ]}
-                        >
-                          {part.text}
-                        </MessageResponse>
+                        {isAssistantMessage ? (
+                          <MessageResponse
+                            className="text-wrap"
+                            rehypePlugins={[
+                              ...Object.values(plugins),
+                              [
+                                harden,
+                                {
+                                  defaultOrigin:
+                                    process.env
+                                      .NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL,
+                                  allowedLinkPrefixes: ["*"]
+                                }
+                              ]
+                            ]}
+                          >
+                            {part.text}
+                          </MessageResponse>
+                        ) : (
+                          part.text
+                        )}
                       </MessageContent>
                     ))}
                 </Message>
               );
             })}
           {(status === "submitted" || status === "streaming") &&
-            !messages.some(
-              (m) =>
-                m.role === "assistant" &&
-                m.parts.some(
-                  (p) => p.type === "text" || p.type === "source-url"
-                )
-            ) && (
+            !messages.some((m) => m.role === "assistant") && (
               <Message from="assistant">
                 <div className="flex items-center gap-2">
                   <Spinner />
