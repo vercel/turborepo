@@ -31,6 +31,7 @@ import {
   PromptInputSubmit,
   PromptInputTextarea
 } from "@/components/ai-elements/prompt-input";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
@@ -295,6 +296,18 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
                 </Message>
               );
             })}
+          {(status === "submitted" || status === "streaming") &&
+            !messages.some(
+              (m) =>
+                m.role === "assistant" && m.parts.some((p) => p.type === "text")
+            ) && (
+              <Message from="assistant">
+                <div className="flex items-center gap-2">
+                  <Spinner />
+                  <Shimmer>Looking up sources...</Shimmer>
+                </div>
+              </Message>
+            )}
         </ConversationContent>
         <ConversationScrollButton className="border-none bg-foreground text-background hover:bg-foreground/80 hover:text-background" />
       </Conversation>

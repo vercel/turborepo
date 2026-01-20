@@ -142,6 +142,16 @@ User question: ${userQuestion}`
           }
         }
 
+        // Write sources immediately after RAG (before generation starts)
+        sourceUrls.forEach((source, index) => {
+          writer.write({
+            type: "source-url",
+            sourceId: `doc-${index}-${source.url}`,
+            url: source.url,
+            title: source.title
+          });
+        });
+
         // Stage 2: Use better model for generation with retrieved context
         const result = streamText({
           model: GENERATION_MODEL,
@@ -160,18 +170,8 @@ User question: ${userQuestion}`
           system: createSystemPrompt(currentRoute)
         });
 
-        // Merge the generation stream first (this creates the message)
+        // Merge the generation stream
         await writer.merge(result.toUIMessageStream());
-
-        // Then append sources to the same message
-        sourceUrls.forEach((source, index) => {
-          writer.write({
-            type: "source-url",
-            sourceId: `doc-${index}-${source.url}`,
-            url: source.url,
-            title: source.title
-          });
-        });
       }
     });
 
