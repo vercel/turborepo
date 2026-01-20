@@ -176,9 +176,6 @@ fn bench_doublestar_pattern(c: &mut Criterion) {
     });
 }
 
-// ============================================================================
-// Benchmarks for fix_glob_pattern (regex-based pattern normalization)
-// ============================================================================
 
 fn bench_fix_glob_pattern_simple(c: &mut Criterion) {
     c.bench_function("fix_glob_pattern_simple", |b| {
