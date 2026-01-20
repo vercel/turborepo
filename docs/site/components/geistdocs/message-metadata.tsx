@@ -34,8 +34,13 @@ export const MessageMetadata = ({
 
   const tool = lastPart && isToolUIPart(lastPart) ? lastPart : null;
 
-  // Show sources once they exist
-  if (sources.length > 0 && lastPart && !(tool && inProgress)) {
+  // Show sources when:
+  // 1. Currently streaming (sources arrive before text) OR
+  // 2. Historical message that has text content
+  const shouldShowSources =
+    sources.length > 0 && !(tool && inProgress) && (isStreaming || lastPart);
+
+  if (shouldShowSources) {
     return (
       <Sources>
         <SourcesTrigger count={sources.length} />

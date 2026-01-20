@@ -250,7 +250,9 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
         <ConversationContent>
           {messages
             .filter((message) =>
-              message.parts.some((part) => part.type === "text")
+              message.parts.some(
+                (part) => part.type === "text" || part.type === "source-url"
+              )
             )
             .map((message, index, filteredMessages) => {
               const isLastMessage = index === filteredMessages.length - 1;
@@ -259,15 +261,26 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
                 isLastMessage &&
                 isAssistantMessage &&
                 (status === "streaming" || status === "submitted");
+              const hasTextContent = message.parts.some(
+                (part) => part.type === "text"
+              );
 
               return (
                 <Message from={message.role} key={message.id}>
-                  <MessageMetadata
-                    messageId={message.id}
-                    inProgress={status === "submitted"}
-                    isStreaming={isStreaming}
-                    parts={message.parts as MyUIMessage["parts"]}
-                  />
+                  {isAssistantMessage && (
+                    <MessageMetadata
+                      messageId={message.id}
+                      inProgress={status === "submitted"}
+                      isStreaming={isStreaming}
+                      parts={message.parts as MyUIMessage["parts"]}
+                    />
+                  )}
+                  {isStreaming && !hasTextContent && (
+                    <div className="flex items-center gap-2">
+                      <Spinner />
+                      <Shimmer>Generating response...</Shimmer>
+                    </div>
+                  )}
                   {message.parts
                     .filter((part) => part.type === "text")
                     .map((part, partIndex) => (
@@ -299,7 +312,10 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
           {(status === "submitted" || status === "streaming") &&
             !messages.some(
               (m) =>
-                m.role === "assistant" && m.parts.some((p) => p.type === "text")
+                m.role === "assistant" &&
+                m.parts.some(
+                  (p) => p.type === "text" || p.type === "source-url"
+                )
             ) && (
               <Message from="assistant">
                 <div className="flex items-center gap-2">
