@@ -8,26 +8,25 @@ To get the best experience with `turbo`, Turborepo provides a few utilities for 
 ## JSON Schema for `turbo.json`
 
 Turborepo uses [JSON Schema](https://json-schema.org/) to give you auto-complete in your
-`turbo.json` file. By including the `$schema` key in your `turbo.json`, your editor is able to
-provide full documentation and linting in case you have invalid shapes or missing keys.
+`turbo.json` files. By including the `$schema` key in your `turbo.json`, your editor is able to
+provide full documentation and linting for invalid configuration.
 
-### Sourcing from the web
+### Sourcing from web
 
-A `schema.json` is accessible at the URL shown below. This has the advantage of not needing to run your package manager's install command to see in-editor validation.
-
-```json title="./turbo.json"
-{
-  "$schema": "https://turborepo.dev/schema.json"
-}
-```
-
-There is also a major versioned `schema.json` available, following the format of `https://turborepo.dev/schema.<version>.json`.
+Starting with Turborepo 2.5.7, versioned schemas are available via subdomain, following the format `https://v<version>.turborepo.dev/schema.json`. The version uses a dash separator.
 
 ```json title="./turbo.json"
 {
-  "$schema": "https://turborepo.dev/schema.v1.json"
+  "$schema": "https://v2-5-7.turborepo.dev/schema.json"
 }
 ```
+
+This has the advantage of not needing to run your package manager's install command to see in-editor validation, while also ensuring you're using the schema that matches your installed version of `turbo`.
+
+<Callout type="info" title="Unversioned schema">
+  If you're using a version of Turborepo older than 2.5.7 or prefer an
+  unversioned schema, you can use `https://turborepo.dev/schema.json` instead.
+</Callout>
 
 ### Sourcing from `node_modules`
 
