@@ -211,9 +211,6 @@ fn bench_fix_glob_pattern_complex(c: &mut Criterion) {
     });
 }
 
-// ============================================================================
-// Benchmarks for ValidatedGlob::from_str (glob validation/normalization)
-// ============================================================================
 
 fn bench_validated_glob_simple(c: &mut Criterion) {
     c.bench_function("validated_glob_simple", |b| {
