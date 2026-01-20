@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Lab Model Alpha",
+    "modelId": "alpha-v1.0",
+    "baseURL": "https://api.alpha-lab.ai/v1",
+    "apiKey": "sk-alpha-key-here"
+  },
+  {
+    "name": "Lab Model Beta",
+    "modelId": "beta-preview",
+    "baseURL": "https://beta-api.lab.ai/v1",
+    "apiKey": "sk-beta-key-here",
+    "headers": {
+      "X-Custom-Header": "beta-testing",
+      "User-Agent": "NextEvals-Beta/1.0"
+    }
+  },
+  {
+    "name": "Local Dev Model",
+    "modelId": "local-dev",
+    "baseURL": "http://localhost:8080/v1",
+    "headers": {
+      "Authorization": "Bearer dev-token"
+    }
+  }
+]
