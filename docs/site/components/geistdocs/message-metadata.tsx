@@ -1,13 +1,11 @@
 import { isToolUIPart } from "ai";
 import type { MyUIMessage } from "@/app/api/chat/types";
-import { Shimmer } from "../ai-elements/shimmer";
 import {
   Source,
   Sources,
   SourcesContent,
   SourcesTrigger
 } from "../ai-elements/sources";
-import { Spinner } from "../ui/spinner";
 
 type MessageMetadataProps = {
   messageId?: string;
@@ -26,8 +24,6 @@ export const MessageMetadata = ({
     .filter((part) => part.type === "text" || isToolUIPart(part))
     .at(-1);
 
-  const reasoning = parts.at(-1)?.type === "reasoning";
-
   const sources = Array.from(
     new Map(
       parts
@@ -38,18 +34,13 @@ export const MessageMetadata = ({
 
   const tool = lastPart && isToolUIPart(lastPart) ? lastPart : null;
 
-  // Show spinner only when waiting for content (no text/tool yet and not streaming)
-  if (!lastPart && sources.length === 0 && !isStreaming) {
-    return (
-      <div className="flex items-center gap-2">
-        <Spinner />{" "}
-        {reasoning ? <Shimmer className="text-xs">Thinking...</Shimmer> : ""}
-      </div>
-    );
-  }
+  // Show sources when:
+  // 1. Currently streaming (sources arrive before text) OR
+  // 2. Historical message that has text content
+  const shouldShowSources =
+    sources.length > 0 && !(tool && inProgress) && (isStreaming || lastPart);
 
-  // Only show sources if there's also text content (avoids duplicate from sources-only messages)
-  if (sources.length > 0 && lastPart && !(tool && inProgress)) {
+  if (shouldShowSources) {
     return (
       <Sources>
         <SourcesTrigger count={sources.length} />
@@ -66,25 +57,6 @@ export const MessageMetadata = ({
         </SourcesContent>
       </Sources>
     );
-  }
-
-  if (tool && inProgress) {
-    // Show user-friendly message for search_docs tool
-    const isSearching = tool.type === "tool-search_docs";
-    return (
-      <div className="flex items-center gap-2">
-        <Spinner />
-        <Shimmer>
-          {isSearching
-            ? "Searching sources..."
-            : tool.type.replace("tool-", "")}
-        </Shimmer>
-      </div>
-    );
-  }
-
-  if (!tool && sources.length === 0) {
-    return null;
   }
 
   return null;
