@@ -275,11 +275,6 @@ fn bench_globwalk_ignore_nested_packages(c: &mut Criterion) {
     });
 }
 
-// ============================================================================
-// Benchmarks for path preprocessing (collapse_path, escape_glob_literals)
-// These are tested indirectly through globwalk with special patterns
-// ============================================================================
-
 fn bench_globwalk_path_with_special_chars(c: &mut Criterion) {
     let tmp = setup_test_dir();
     let base_path = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
