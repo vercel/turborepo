@@ -25,7 +25,8 @@ export const sendFeedback = async (
       url: new URL(url, baseUrl).toString(),
       emotion: emoji,
       ua: headersList.get("user-agent") ?? undefined,
-      ip: headersList.get("x-real-ip") || headersList.get("x-forwarded-for")
+      ip: headersList.get("x-real-ip") || headersList.get("x-forwarded-for"),
+      label: "turbo-site"
     })
   });
 
