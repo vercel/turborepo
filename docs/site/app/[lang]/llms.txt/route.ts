@@ -12,7 +12,6 @@ export const GET = async (
   const { lang } = await params;
   const pages = source.getPages(lang);
 
-  // Tracking moved to middleware to preserve static optimization
 
   const links = pages
     .sort((a, b) => a.url.localeCompare(b.url))
