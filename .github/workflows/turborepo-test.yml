@@ -602,8 +602,9 @@ jobs:
           TURBO_API= turbo run test --filter "turborepo-repository" --color --env-mode=strict
         env:
           NODE_VERSION: ${{ matrix.node-version }}
-          # macOS ARM runners have limited memory (~7GB). Reduce rustc frontend
-          # threads from 8 to 4 to prevent OOM. RUSTFLAGS overrides .cargo/config.toml.
+          # macOS ARM runners have limited memory (~7GB). Limit parallel crate
+          # compilation and reduce rustc frontend threads to prevent OOM.
+          CARGO_BUILD_JOBS: ${{ matrix.os.name == 'macos' && '2' || '' }}
           RUSTFLAGS: ${{ matrix.os.name == 'macos' && '--cfg tokio_unstable -Zshare-generics=y -Zthreads=4 -Csymbol-mangling-version=v0' || '' }}
 
   summary:
