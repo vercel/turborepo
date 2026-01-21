@@ -14,7 +14,6 @@ export async function GET(
     notFound();
   }
 
-  // Tracking moved to middleware to preserve static optimization
 
   return new Response(await getLLMText(page), {
     headers: {
