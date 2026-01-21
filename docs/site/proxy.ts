@@ -15,7 +15,6 @@ const { rewrite: rewriteLLM } = rewritePath(
 
 const internationalizer = createI18nMiddleware(i18n);
 
-// Helper to track markdown requests (fire-and-forget)
 function trackMd(
   request: NextRequest,
   context: NextFetchEvent,
