@@ -602,6 +602,8 @@ jobs:
           TURBO_API= turbo run test --filter "turborepo-repository" --color --env-mode=strict
         env:
           NODE_VERSION: ${{ matrix.node-version }}
+          # Limit cargo parallelism on macOS to prevent OOM during native library compilation
+          CARGO_BUILD_JOBS: ${{ matrix.os.name == 'macos' && '2' || '' }}
 
   summary:
     name: Test Summary
