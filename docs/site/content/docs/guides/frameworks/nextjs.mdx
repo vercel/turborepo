@@ -3,6 +3,8 @@ title: Next.js
 description: Learn how to use Next.js in a monorepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
 [Next.js](https://nextjs.org) is the React framework for the web. Used by some of the world's largest companies, Next.js enables you to create high-quality web applications with the power of React components.
 
 ## Quickstart
@@ -45,6 +47,13 @@ bunx create-turbo@latest
 </PackageManagerTabs>
 
 ## Adding a Next.js application to an existing repository
+
+<CopyPrompt
+  title="Set up Next.js in an existing monorepo"
+  prompt={
+    "Set up a Next.js application in this Turborepo. 1) Create the initial app structure with create-next-app\n2) Configure internal package imports with the workspace protocol\n3) Set up proper turbo.json tasks for dev, build, and lint\n4) Briefly explain how Next.js caching interacts with Turborepo caching\n\nWalk me through each step with the specific commands and configuration needed for my package manager."
+  }
+/>
 
 Use [`create-next-app`](https://nextjs.org/docs/app/api-reference/create-next-app) to set up a new Next.js application in a package. From the root of your repository, run:
 
