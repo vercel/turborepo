@@ -602,8 +602,9 @@ jobs:
           TURBO_API= turbo run test --filter "turborepo-repository" --color --env-mode=strict
         env:
           NODE_VERSION: ${{ matrix.node-version }}
-          # Limit cargo parallelism on macOS to prevent OOM during native library compilation
-          CARGO_BUILD_JOBS: ${{ matrix.os.name == 'macos' && '2' || '' }}
+          # macOS ARM runners have limited memory (~7GB). Reduce rustc frontend
+          # threads from 8 to 4 to prevent OOM. RUSTFLAGS overrides .cargo/config.toml.
+          RUSTFLAGS: ${{ matrix.os.name == 'macos' && '--cfg tokio_unstable -Zshare-generics=y -Zthreads=4 -Csymbol-mangling-version=v0' || '' }}
 
   summary:
     name: Test Summary
