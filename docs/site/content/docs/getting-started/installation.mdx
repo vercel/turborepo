@@ -86,10 +86,11 @@ A global install of `turbo` brings flexibility and speed to your local workflows
 
 Once installed globally, you can run your scripts through `turbo` from your terminal, quickly running one-off commands to use within your repository. For example:
 
-- `turbo build`: Run `build` scripts following your repository's dependency graph
-- `turbo build --filter=docs --dry`: Quickly print an outline of the `build` task for your `docs` package (without running it)
-- `turbo generate`: Run [Generators](/docs/guides/generating-code) to add new code to your repository
-- `cd apps/docs && turbo build`: Run the `build` script in the `docs` package and its dependencies. For more, visit the [Automatic Package Scoping section](/docs/crafting-your-repository/running-tasks#automatic-package-scoping).
+- `turbo build` — Run all `build` scripts following your repository’s dependency graph.
+- `turbo build --filter=docs --dry` — Print the execution plan for the `build` task in the `docs` package without running it.
+- `turbo generate` — Run generators to scaffold new code in your repository.
+- `cd apps/docs && turbo build` — Run the `build` script in the `docs` package and its dependencies.
+Scoping section](/docs/crafting-your-repository/running-tasks#automatic-package-scoping).
 
 <Callout type="info">
   `turbo` is an alias for [`turbo run`](/docs/reference/run). For example,
