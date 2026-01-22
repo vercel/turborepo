@@ -5,7 +5,7 @@ export type OutputLogs =
   | "new-only"
   | "errors-only";
 export type EnvMode = "loose" | "strict";
-export type UI = "tui" | "stream";
+export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
 /**
  * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
  */
