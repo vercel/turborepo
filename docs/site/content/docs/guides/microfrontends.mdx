@@ -3,6 +3,15 @@ title: Microfrontends
 description: Learn how to use Turborepo's built-in microfrontends proxy for local development.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Set up microfrontends in Turborepo"
+  prompt={
+    "Set up microfrontends in this Turborepo.\n1) Create microfrontends.json configuration\n2) Configure application ports and routing\n3) Set up base paths for my framework\n\nWalk me through each step."
+  }
+/>
+
 Microfrontends are an architectural pattern where a web application is decomposed into smaller, independently developed and deployed applications that work together.
 
 Turborepo provides built-in support for running vertical microfrontends (sometimes called "zones") locally during development through an integrated proxy server. The proxy coordinates multiple applications and routes traffic between them.

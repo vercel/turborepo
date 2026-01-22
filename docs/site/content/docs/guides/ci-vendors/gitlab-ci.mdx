@@ -3,6 +3,15 @@ title: GitLab CI
 description: Learn how to use GitLab CI with Turborepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Set up GitLab CI for Turborepo"
+  prompt={
+    "Set up GitLab CI for this Turborepo.\n1) Create a .gitlab-ci.yml file\n2) Configure caching for my package manager\n3) Set up Remote Caching with environment variables (optional)\n\nWalk me through each step."
+  }
+/>
+
 The following example shows how to use Turborepo with [GitLab CI](https://docs.gitlab.com/ee/ci/).
 
 For a given root `package.json`:

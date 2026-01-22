@@ -3,6 +3,15 @@ title: CircleCI
 description: Learn how to use CircleCI with Turborepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Set up CircleCI for Turborepo"
+  prompt={
+    "Set up CircleCI for this Turborepo.\n1) Create a .circleci/config.yml file\n2) Configure the TURBO_UI=false workaround\n3) Set up Remote Caching (optional)\n\nWalk me through each step."
+  }
+/>
+
 The following example shows how to use Turborepo with [CircleCI](https://circleci.com/).
 
 <Callout type="warn" title="TTY on CircleCI">

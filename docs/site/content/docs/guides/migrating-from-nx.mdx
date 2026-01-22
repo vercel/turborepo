@@ -3,6 +3,15 @@ title: Migrating from Nx
 description: Learn how to migrate to Turborepo from Nx.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Migrate from Nx to Turborepo"
+  prompt={
+    "Help me migrate this repository from Nx to Turborepo.\n1) Update workspace configuration and .gitignore\n2) Convert nx.json to turbo.json\n3) Remove Nx dependencies and plugins\n\nAnalyze my current setup and walk me through each step."
+  }
+/>
+
 This guide will help you migrate an existing Nx repository to Turborepo.
 
 - Explore key concepts by [migrating from an Nx starter to Turborepo](#migration-steps)
