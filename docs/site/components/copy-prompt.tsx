@@ -75,7 +75,7 @@ export function CopyPrompt({ title, prompt, className }: CopyPromptProps) {
         onClick={() => setExpanded(!expanded)}
         aria-label={expanded ? "Collapse prompt" : "Expand prompt"}
         aria-expanded={expanded}
-        className="absolute -bottom-3 left-1/2 flex size-6 -translate-x-1/2 items-center justify-center rounded-full border bg-purple-900/15 transition-colors hover:bg-purple-900/30"
+        className="absolute -bottom-3 left-1/2 flex size-6 -translate-x-1/2 items-center justify-center rounded-full border bg-background"
       >
         <ChevronDownIcon
           className={cn(

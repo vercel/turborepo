@@ -3,6 +3,8 @@ title: Vite
 description: Learn more about using Vite in your monorepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
 [Vite](https://vitejs.dev/) is a build tool that aims to provide a faster and leaner development experience for modern web projects.
 
 ## Quickstart
@@ -45,6 +47,13 @@ bunx create-turbo@latest -e with-vite
 </PackageManagerTabs>
 
 ## Adding a Vite application to an existing repository
+
+<CopyPrompt
+  title="Set up Vite in an existing monorepo"
+  prompt={
+    "Set up a Vite application in this Turborepo.\n1) Create the app\n2) Integrate with the rest of the monorepo\n3) Update turbo.json if needed\n\nWalk me through each step."
+  }
+/>
 
 Use [`npm create vite`](https://vitejs.dev/guide/#scaffolding-your-first-vite-project) to set up a new Vite application in a package. From the root of your repository, run:
 

@@ -3,6 +3,8 @@ title: SvelteKit
 description: Learn more about using SvelteKit in your monorepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
 [SvelteKit](https://kit.svelte.dev/) is a framework for rapidly developing robust, performant web applications using Svelte.
 
 ## Quickstart
@@ -45,6 +47,13 @@ bunx create-turbo@latest -e with-svelte
 </PackageManagerTabs>
 
 ## Adding a SvelteKit application to an existing repository
+
+<CopyPrompt
+  title="Set up SvelteKit in an existing monorepo"
+  prompt={
+    "Set up a SvelteKit application in this Turborepo.\n1) Create the app\n2) Integrate with the rest of the monorepo\n3) Update turbo.json if needed\n\nWalk me through each step."
+  }
+/>
 
 Use [`npm create svelte`](https://kit.svelte.dev/docs/creating-a-project) to set up a new SvelteKit application in a package. From the root of your repository, run:
 
