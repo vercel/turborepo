@@ -4,6 +4,14 @@ description: Learn how to use ESLint in a monorepo.
 ---
 
 import { CreateTurboCallout } from "./create-turbo-callout.tsx";
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Set up ESLint in a Turborepo"
+  prompt={
+    "Set up ESLint in this Turborepo.\n1) Create a shared ESLint config package\n2) Configure packages to use the shared config\n3) Set up linting in turbo.json\n\nWalk me through each step."
+  }
+/>
 
 ESLint is a static analysis tool for quickly finding and fixing problems in your JavaScript code.
 

@@ -3,6 +3,15 @@ title: Vitest
 description: Learn how to use Vitest in a monorepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Set up Vitest in a Turborepo"
+  prompt={
+    "Set up Vitest in this Turborepo.\n1) Install Vitest where needed\n2) Create test scripts\n3) Set up testing in turbo.json\n\nWalk me through each step."
+  }
+/>
+
 [Vitest](https://vitest.dev/) is a test runner from the Vite ecosystem. Integrating it with Turborepo will lead to enormous speed-ups.
 
 [The Vitest documentation](https://vitest.dev/guide/workspace) shows how to create a "Vitest Projects" configuration that runs all tests in the monorepo from one root command, enabling behavior like merged coverage reports out-of-the-box. This feature doesn't follow modern best practices for monorepos, since its designed for compatibility with Jest (whose Workspace feature was built before [package manager Workspaces](/docs/crafting-your-repository/structuring-a-repository)).

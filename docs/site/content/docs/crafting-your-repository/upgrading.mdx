@@ -3,6 +3,15 @@ title: Upgrading
 description: Learn how to upgrade `turbo` to get the latest improvements to your repository.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Upgrade Turborepo to version 2.0"
+  prompt={
+    "Upgrade this repository from Turborepo 1.x to 2.0.\n1) Run the migration codemod\n2) Add packageManager field to package.json\n3) Handle any breaking changes\n\nWalk me through each step."
+  }
+/>
+
 ## Upgrading to 2.0
 
 <Steps>

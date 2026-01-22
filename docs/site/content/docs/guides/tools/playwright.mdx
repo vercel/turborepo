@@ -3,6 +3,15 @@ title: Playwright
 description: Learn how to use Playwright in a Turborepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Set up Playwright in a Turborepo"
+  prompt={
+    "Set up Playwright end-to-end testing in this Turborepo.\n1) Create a Playwright package\n2) Configure dependencies for proper cache invalidation\n3) Set up turbo.json tasks\n\nWalk me through each step."
+  }
+/>
+
 [Playwright](https://playwright.dev/) enables reliable end-to-end testing for modern web apps.
 
 We recommend creating a Playwright package for each test suite that you'd like to run in your monorepo. This may mean suites broken up per-application, per-domain, or some other scheme, according to your needs. If you are unsure, start with creating a Playwright package per-application.

@@ -3,6 +3,15 @@ title: Creating an Internal Package
 description: Learn how to create an Internal Package for your monorepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Create an internal package in Turborepo"
+  prompt={
+    "Create a new internal package in this Turborepo.\n1) Set up the package directory and package.json\n2) Configure TypeScript with tsconfig.json\n3) Set up exports and install it in an app\n\nWalk me through each step."
+  }
+/>
+
 [Internal Packages](/docs/core-concepts/internal-packages) are the building blocks of your workspace, giving you a powerful way to share code and functionality across your repo. Turborepo automatically understands the relationships between Internal Packages using the dependencies in `package.json`, creating a [Package Graph](/docs/core-concepts/package-and-task-graph#package-graph) under the hood to optimize your repository's workflows.
 
 ![Visual representation of a Package Graph in a Turborepo.](/images/docs/package-graph.png)

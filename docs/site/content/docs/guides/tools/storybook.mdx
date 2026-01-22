@@ -3,6 +3,15 @@ title: Storybook
 description: Learn how to use Storybook in a Turborepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Set up Storybook in a Turborepo"
+  prompt={
+    "Set up Storybook in this Turborepo.\n1) Create a Storybook app\n2) Connect it to the UI package\n3) Set up turbo.json tasks\n\nWalk me through each step."
+  }
+/>
+
 [Storybook](https://storybook.js.org/) is a popular way to build UI components in an isolated environment. By putting Storybook into your Turborepo, you can easily develop your design system right alongside your applications.
 
 ## Quickstart
