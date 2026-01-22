@@ -172,13 +172,15 @@ pub fn prefixed_ui<W: Write>(
     stdout: W,
     stderr: W,
     prefix: StyledObject<String>,
+    include_timestamps: bool,
 ) -> turborepo_ui::PrefixedUI<W> {
     let mut prefixed_ui = turborepo_ui::PrefixedUI::new(color_config, stdout, stderr)
         .with_output_prefix(prefix.clone())
         .with_error_prefix(
             Style::new().apply_to(format!("{}ERROR: ", color_config.apply(prefix.clone()))),
         )
-        .with_warn_prefix(prefix);
+        .with_warn_prefix(prefix)
+        .with_timestamps(include_timestamps);
     if is_github_actions {
         prefixed_ui = prefixed_ui
             .with_error_prefix(Style::new().apply_to("[ERROR] ".to_string()))
@@ -339,6 +341,7 @@ where
                 client.stdout(),
                 client.stderr(),
                 self.pretty_prefix.clone(),
+                self.ui_mode.should_include_timestamps(),
             )),
             TaskOutput::UI(task) => TaskCacheOutput::UI(task.clone()),
         }

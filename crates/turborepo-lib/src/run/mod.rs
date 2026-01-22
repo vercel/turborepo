@@ -258,7 +258,7 @@ impl Run {
             UIMode::Tui => self
                 .start_terminal_ui()
                 .map(|res| res.map(|(sender, handle)| (UISender::Tui(sender), handle))),
-            UIMode::Stream => Ok(None),
+            UIMode::Stream | UIMode::StreamWithTimestamps => Ok(None),
             UIMode::Web => self
                 .start_web_ui()
                 .map(|res| res.map(|(sender, handle)| (UISender::Wui(sender), handle))),
