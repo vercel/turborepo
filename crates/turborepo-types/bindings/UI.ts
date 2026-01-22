@@ -5,4 +5,4 @@
  *
  * Documentation: https://turborepo.dev/docs/reference/configuration#ui
  */
-export type UI = "tui" | "stream";
+export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
