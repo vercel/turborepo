@@ -44,7 +44,7 @@ Test help flag
         --heap <HEAP>
             Specify a file to save a pprof heap profile
         --ui <UI>
-            Specify whether to use the streaming UI or TUI [possible values: tui, stream, web]
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream, stream-with-experimental-timestamps, web]
         --login <LOGIN>
             Override the login endpoint
         --no-color
@@ -181,9 +181,10 @@ Test help flag
             Specify whether to use the streaming UI or TUI
   
             Possible values:
-            - tui:    Use the terminal user interface
-            - stream: Use the standard output stream
-            - web:    Use the web user interface. Note: This feature is undocumented, experimental, and not meant to be used. It may change or be removed at any time
+            - tui:                                 Use the terminal user interface
+            - stream:                              Use the standard output stream
+            - stream-with-experimental-timestamps: Use the standard output stream with timestamps. Note: This feature is experimental and may change or be removed at any time
+            - web:                                 Use the web user interface. Note: This feature is undocumented, experimental, and not meant to be used. It may change or be removed at any time
   
         --login <LOGIN>
             Override the login endpoint
@@ -365,7 +366,7 @@ Test help flag for link command
         --heap <HEAP>
             Specify a file to save a pprof heap profile
         --ui <UI>
-            Specify whether to use the streaming UI or TUI [possible values: tui, stream, web]
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream, stream-with-experimental-timestamps, web]
         --login <LOGIN>
             Override the login endpoint
         --no-color
@@ -413,7 +414,7 @@ Test help flag for unlink command
         --heap <HEAP>
             Specify a file to save a pprof heap profile
         --ui <UI>
-            Specify whether to use the streaming UI or TUI [possible values: tui, stream, web]
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream, stream-with-experimental-timestamps, web]
         --login <LOGIN>
             Override the login endpoint
         --no-color
@@ -465,7 +466,7 @@ Test help flag for login command
         --heap <HEAP>
             Specify a file to save a pprof heap profile
         --ui <UI>
-            Specify whether to use the streaming UI or TUI [possible values: tui, stream, web]
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream, stream-with-experimental-timestamps, web]
         --login <LOGIN>
             Override the login endpoint
         --no-color
@@ -513,7 +514,7 @@ Test help flag for logout command
         --heap <HEAP>
             Specify a file to save a pprof heap profile
         --ui <UI>
-            Specify whether to use the streaming UI or TUI [possible values: tui, stream, web]
+            Specify whether to use the streaming UI or TUI [possible values: tui, stream, stream-with-experimental-timestamps, web]
         --login <LOGIN>
             Override the login endpoint
         --no-color
