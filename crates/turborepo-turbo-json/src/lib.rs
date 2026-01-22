@@ -418,6 +418,7 @@ mod tests {
 
     #[test_case(r#"{ "ui": "tui" }"#, Some(UIMode::Tui) ; "tui")]
     #[test_case(r#"{ "ui": "stream" }"#, Some(UIMode::Stream) ; "stream")]
+    #[test_case(r#"{ "ui": "stream-with-experimental-timestamps" }"#, Some(UIMode::StreamWithTimestamps) ; "stream_with_timestamps")]
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_ui(json: &str, expected: Option<UIMode>) {
         let json = RawRootTurboJson::parse(json, "").unwrap();
