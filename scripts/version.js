@@ -23,15 +23,3 @@ const parsed = semver.parse(newVersion);
 const tag = tagOverride || parsed?.prerelease[0] || "latest";
 
 fs.writeFileSync(versionFilePath, `${newVersion}\n${tag}\n`);
-
-// Update the turborepo skill version in YAML frontmatter
-const skillPath = path.join(__dirname, "..", "skills", "turborepo", "SKILL.md");
-if (fs.existsSync(skillPath)) {
-  const skillContent = fs.readFileSync(skillPath, "utf-8");
-  // Match frontmatter between --- delimiters, then replace version within metadata block
-  const updatedSkillContent = skillContent.replace(
-    /^(---\n[\s\S]*?metadata:\n\s*version:\s*).+?(\n[\s\S]*?---)/,
-    `$1${newVersion}$2`
-  );
-  fs.writeFileSync(skillPath, updatedSkillContent);
-}

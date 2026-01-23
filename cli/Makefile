@@ -38,6 +38,9 @@ stage-release:
 	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/turbo-types && pnpm version "$(TURBO_VERSION)" --allow-same-version
 
+	# Update turborepo skill version (in YAML frontmatter metadata block only)
+	node -e "const fs=require('fs'),p='$(CLI_DIR)/../skills/turborepo/SKILL.md',c=fs.readFileSync(p,'utf-8');fs.writeFileSync(p,c.replace(/^(---\n[\s\S]*?metadata:\n\s*version:\s*).+?(\n[\s\S]*?---)/,'\$$1$(TURBO_VERSION)\$$2'))"
+
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
 	git tag "v$(TURBO_VERSION)"
