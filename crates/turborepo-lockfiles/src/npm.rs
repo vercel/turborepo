@@ -152,8 +152,6 @@ impl Lockfile for NpmLockfile {
     fn turbo_version(&self) -> Option<String> {
         let turbo_entry = self.packages.get("node_modules/turbo")?;
         let version = turbo_entry.version.as_ref()?;
-        // Validate version is valid semver to prevent arbitrary package specifiers
-        // (e.g. URLs or file paths) from being passed to npx
         Version::parse(version).ok()?;
         Some(version.clone())
     }
