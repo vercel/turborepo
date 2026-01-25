@@ -94,8 +94,8 @@ Or exclude specific patterns in config:
 
 ## Checking Environment Mode
 
-Use `--dry-run` to see which vars affect each task:
+Use `--dry` to see which vars affect each task:
 
 ```bash
-turbo run build --dry-run=json | jq '.tasks[].environmentVariables'
+turbo run build --dry=json | jq '.tasks[].environmentVariables'
 ```
