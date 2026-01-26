@@ -23,7 +23,9 @@ export async function generateMetadata(props: {
   const version = params.slug?.[0] || "";
 
   const createOgUrl = () => {
-    const groups = /^turbo-(?<major>\d+)-(?<minor>\d+)(?:-\d+)*$/.exec(version);
+    const groups = /^(?:turbo-)?(?<major>\d+)-(?<minor>\d+)(?:-\d+)*$/.exec(
+      version
+    );
     if (groups) {
       const { major, minor } = groups.groups as {
         major: string;
