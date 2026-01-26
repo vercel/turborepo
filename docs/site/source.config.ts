@@ -6,8 +6,18 @@ import {
   metaSchema
 } from "fumadocs-mdx/config";
 import lastModified from "fumadocs-mdx/plugins/last-modified";
+import type { ShikiTransformer } from "shiki";
 import { createCssVariablesTheme } from "shiki";
 import { z } from "zod";
+
+const transformerAddLanguage: ShikiTransformer = {
+  name: "add-language-attribute",
+  pre(node) {
+    if (this.options.lang) {
+      node.properties["data-language"] = this.options.lang;
+    }
+  }
+};
 
 // You can customise Zod schemas for frontmatter and `meta.json` here
 // see https://fumadocs.dev/docs/mdx/collections
@@ -80,7 +90,8 @@ export default defineConfig({
       themes: {
         light: theme,
         dark: theme
-      }
+      },
+      transformers: [transformerAddLanguage]
     }
   },
   plugins: [lastModified()]
