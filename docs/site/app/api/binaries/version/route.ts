@@ -8,6 +8,15 @@ const SUPPORTED_PACKAGES: NonEmptyArray<string> = ["turbo"];
 const SUPPORTED_METHODS = ["GET"];
 const [DEFAULT_NAME] = SUPPORTED_PACKAGES;
 
+/**
+ * Sanitize a value before including it in an error message.
+ * Only allow a limited set of safe characters; otherwise, replace with a placeholder.
+ */
+function sanitizeForErrorMessage(value: string): string {
+  // Allow word characters, dots and dashes; everything else is treated as invalid.
+  return /^[\w.-]+$/.test(value) ? value : "<invalid>";
+}
+
 // There are other properties returned
 // but this is the one we care about.
 interface FetchDistTags {
@@ -78,22 +87,25 @@ Errors (400 | 404 | 500):
 
 export async function GET(req: NextRequest): Promise<Response> {
   if (!SUPPORTED_METHODS.includes(req.method)) {
+    const safeMethod = sanitizeForErrorMessage(req.method);
     return errorResponse({
       status: 404,
-      message: `unsupported method - ${req.method}`
+      message: `unsupported method - ${safeMethod}`
     });
   }
 
   try {
     const { searchParams } = new URL(req.url);
     const name = searchParams.get("name") || DEFAULT_NAME;
+    const safeName = sanitizeForErrorMessage(name);
+    const safeTag = sanitizeForErrorMessage(String(tag));
     const tag = (searchParams.get("tag") ||
       DEFAULT_TAG) as keyof FetchDistTags["dist-tags"];
 
     if (!SUPPORTED_PACKAGES.includes(name)) {
       return errorResponse({
         status: 400,
-        message: `unsupported package - ${name}`
+        message: `unsupported package - ${safeName}`
       });
     }
 
@@ -101,7 +113,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     if (!versions[tag]) {
       return errorResponse({
         status: 404,
-        message: `unsupported tag - ${tag}`
+        message: `unsupported tag - ${safeTag}`
       });
     }
 
@@ -125,6 +137,9 @@ export async function GET(req: NextRequest): Promise<Response> {
 
     // eslint-disable-next-line no-console -- We're alright with this.
     console.error(error);
-    return errorResponse({ status: 500, message: error.message });
+    return errorResponse({
+      status: 500,
+      message: sanitizeForErrorMessage(error.message)
+    });
   }
 }
