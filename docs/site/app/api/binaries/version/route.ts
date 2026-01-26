@@ -98,9 +98,9 @@ export async function GET(req: NextRequest): Promise<Response> {
     const { searchParams } = new URL(req.url);
     const name = searchParams.get("name") || DEFAULT_NAME;
     const safeName = sanitizeForErrorMessage(name);
-    const safeTag = sanitizeForErrorMessage(String(tag));
     const tag = (searchParams.get("tag") ||
       DEFAULT_TAG) as keyof FetchDistTags["dist-tags"];
+    const safeTag = sanitizeForErrorMessage(String(tag));
 
     if (!SUPPORTED_PACKAGES.includes(name)) {
       return errorResponse({
