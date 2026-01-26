@@ -166,12 +166,12 @@
 
 /* Line numbers styles for code blocks (excluding terminal languages) */
 @layer utilities {
-  .line-numbers:not([data-language="bash"]):not([data-language="sh"]):not([data-language="shell"]):not([data-language="zsh"]):not([data-language="terminal"]):not([data-language="console"]) code {
+  .line-numbers code {
     counter-reset: step;
     counter-increment: step 0;
   }
 
-  .line-numbers:not([data-language="bash"]):not([data-language="sh"]):not([data-language="shell"]):not([data-language="zsh"]):not([data-language="terminal"]):not([data-language="console"]) code .line::before {
+  .line-numbers code .line::before {
     @apply w-4 mr-6 inline-block text-right text-muted-foreground;
 
     content: counter(step);
