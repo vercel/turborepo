@@ -4,6 +4,14 @@ description: Learn how to use Docker in a monorepo.
 ---
 
 import { CreateTurboCallout } from "./create-turbo-callout.tsx";
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Set up Docker in a Turborepo"
+  prompt={
+    "Set up Docker deployments for an application in this Turborepo.\n1) Use turbo prune to create a pruned monorepo\n2) Create an optimized Dockerfile\n3) Configure Remote Caching for Docker builds\n\nWalk me through each step."
+  }
+/>
 
 Building a [Docker](https://www.docker.com/) image is a common way to deploy all sorts of applications. However, doing so from a monorepo has several challenges.
 

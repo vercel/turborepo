@@ -4,6 +4,14 @@ description: Learn how to use oxlint and oxfmt in your Turborepo projects.
 ---
 
 import { CreateTurboCallout } from "./create-turbo-callout.tsx";
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Set up Oxc tools in a Turborepo"
+  prompt={
+    "Set up oxlint and oxfmt in this Turborepo.\n1) Install the tools\n2) Create scripts\n3) Set up turbo.json tasks\n\nWalk me through each step."
+  }
+/>
 
 [Oxc](https://oxc.rs/) is a collection of high-performance JavaScript and TypeScript tools written in Rust, including [oxlint](https://oxc.rs/docs/guide/usage/linter) (a fast linter) and [oxfmt](https://oxc.rs/docs/guide/usage/formatter) (a fast formatter).
 

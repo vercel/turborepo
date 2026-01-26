@@ -3,6 +3,15 @@ title: Publishing libraries
 description: Learn how to publish libraries to the npm registry from a monorepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Set up library publishing in Turborepo"
+  prompt={
+    "Set up a publishable library package in this Turborepo.\n1) Configure bundling with tsup\n2) Set up package.json exports for ESM and CJS\n3) Configure Changesets for versioning and publishing\n\nWalk me through each step."
+  }
+/>
+
 Publishing a package to the npm registry from a monorepo can be a smooth experience, with the right tools.
 
 While this guide cannot solve for every possible compiling, bundling, and publishing configuration needed for robust packages, it will explain some of the basics.

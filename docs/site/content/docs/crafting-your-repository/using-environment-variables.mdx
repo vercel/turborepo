@@ -3,6 +3,15 @@ title: Using environment variables
 description: Learn how to handle environments for your applications.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Configure environment variables in Turborepo"
+  prompt={
+    "Configure environment variables for this Turborepo.\n1) Add environment variables to turbo.json for cache hashing\n2) Set up .env file handling\n3) Configure Strict Mode for safety\n\nAnalyze my setup and walk me through each step."
+  }
+/>
+
 Environment variable inputs are a vital part of your applications that you'll need to account for in your Turborepo configuration.
 
 There are three important questions when working with environment variables in Turborepo:

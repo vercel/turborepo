@@ -118,7 +118,12 @@ export const CodeBlock = ({
         </Button>
       </CardHeader>
       <CardContent className="p-0">
-        <CodeBlockComponent className="line-numbers rounded-none border-none" />
+        <CodeBlockComponent
+          className={cn(
+            "rounded-none border-none",
+            title !== "Terminal" && "line-numbers"
+          )}
+        />
       </CardContent>
     </Card>
   );

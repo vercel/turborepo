@@ -3,6 +3,15 @@ title: Generating code
 description: Learn how to generate code using Turborepo.
 ---
 
+import { CopyPrompt } from "@/components/copy-prompt";
+
+<CopyPrompt
+  title="Create a custom code generator in Turborepo"
+  prompt={
+    "Create a custom code generator for this Turborepo.\n1) Set up a generator configuration with Plop\n2) Define prompts to gather input\n3) Create actions to generate files\n\nWalk me through each step."
+  }
+/>
+
 Splitting your monorepo into packages is a great way to organize your code, speed up tasks, and improve the local development
 experience. With Turborepo's code generation, it's easy to generate new source code for packages, modules,
 and even individual UI components in a structured way that integrates with the rest of your repository.
