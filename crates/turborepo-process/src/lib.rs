@@ -17,7 +17,7 @@ mod command;
 
 use std::{
     collections::HashMap,
-    io,
+    io::{self, IsTerminal},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -70,7 +70,7 @@ impl ProcessManager {
     pub fn infer() -> Self {
         // Only use PTY if we're not on windows and we're currently hooked up to a
         // in a TTY
-        let use_pty = !cfg!(windows) && atty::is(atty::Stream::Stdout);
+        let use_pty = !cfg!(windows) && std::io::stdout().is_terminal();
         Self::new(use_pty)
     }
 

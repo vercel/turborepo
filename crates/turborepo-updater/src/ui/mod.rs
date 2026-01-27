@@ -1,4 +1,4 @@
-use console::{Term, measure_text_width};
+use console::{measure_text_width, Term};
 
 use crate::UpdateNotifierError;
 pub mod utils;

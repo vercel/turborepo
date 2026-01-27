@@ -3,7 +3,7 @@
 //! Turborepo's update notifier. Indicates to the user that there is a new
 //! version of `turbo` available.
 
-use std::{fmt, time::Duration};
+use std::{fmt, io::IsTerminal, time::Duration};
 
 use console::style;
 use semver::Version as SemVerVersion;
@@ -11,8 +11,8 @@ use serde::Deserialize;
 use thiserror::Error as ThisError;
 use turborepo_repository::package_manager::PackageManager;
 use update_informer::{
-    Check, Package, Registry, Result as UpdateResult, Version,
     http_client::{GenericHttpClient, HttpClient},
+    Check, Package, Registry, Result as UpdateResult, Version,
 };
 
 mod ui;
@@ -96,7 +96,7 @@ fn should_skip_notification(config_no_update: bool) -> bool {
         return true;
     }
 
-    if !atty::is(atty::Stream::Stdout) {
+    if !std::io::stdout().is_terminal() {
         return true;
     }
 

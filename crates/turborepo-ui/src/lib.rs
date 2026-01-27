@@ -13,11 +13,10 @@ pub mod sender;
 pub mod tui;
 pub mod wui;
 
-use std::{borrow::Cow, env, f64::consts::PI, time::Duration};
+use std::{borrow::Cow, env, f64::consts::PI, io::IsTerminal, sync::LazyLock, time::Duration};
 
 use console::{Style, StyledObject};
 use indicatif::{ProgressBar, ProgressStyle};
-use lazy_static::lazy_static;
 use thiserror::Error;
 
 pub use crate::{
@@ -183,7 +182,7 @@ impl ColorConfig {
                     "true" | "1" | "2" | "3" => Some(false),
                     _ => None,
                 });
-        let should_strip_ansi = env_setting.unwrap_or_else(|| !atty::is(atty::Stream::Stdout));
+        let should_strip_ansi = env_setting.unwrap_or_else(|| !std::io::stdout().is_terminal());
         Self { should_strip_ansi }
     }
 
@@ -230,19 +229,18 @@ impl ColorConfig {
     }
 }
 
-lazy_static! {
-    pub static ref GREY: Style = Style::new().dim();
-    pub static ref CYAN: Style = Style::new().cyan();
-    pub static ref BOLD: Style = Style::new().bold();
-    pub static ref MAGENTA: Style = Style::new().magenta();
-    pub static ref YELLOW: Style = Style::new().yellow();
-    pub static ref BOLD_YELLOW_REVERSE: Style = Style::new().yellow().bold().reverse();
-    pub static ref UNDERLINE: Style = Style::new().underlined();
-    pub static ref BOLD_CYAN: Style = Style::new().cyan().bold();
-    pub static ref BOLD_GREY: Style = Style::new().dim().bold();
-    pub static ref BOLD_GREEN: Style = Style::new().green().bold();
-    pub static ref BOLD_RED: Style = Style::new().red().bold();
-}
+pub static GREY: LazyLock<Style> = LazyLock::new(|| Style::new().dim());
+pub static CYAN: LazyLock<Style> = LazyLock::new(|| Style::new().cyan());
+pub static BOLD: LazyLock<Style> = LazyLock::new(|| Style::new().bold());
+pub static MAGENTA: LazyLock<Style> = LazyLock::new(|| Style::new().magenta());
+pub static YELLOW: LazyLock<Style> = LazyLock::new(|| Style::new().yellow());
+pub static BOLD_YELLOW_REVERSE: LazyLock<Style> =
+    LazyLock::new(|| Style::new().yellow().bold().reverse());
+pub static UNDERLINE: LazyLock<Style> = LazyLock::new(|| Style::new().underlined());
+pub static BOLD_CYAN: LazyLock<Style> = LazyLock::new(|| Style::new().cyan().bold());
+pub static BOLD_GREY: LazyLock<Style> = LazyLock::new(|| Style::new().dim().bold());
+pub static BOLD_GREEN: LazyLock<Style> = LazyLock::new(|| Style::new().green().bold());
+pub static BOLD_RED: LazyLock<Style> = LazyLock::new(|| Style::new().red().bold());
 
 pub const RESET: &str = "\x1b[0m";
 

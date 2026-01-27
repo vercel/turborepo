@@ -19,7 +19,11 @@ mod file;
 mod override_env;
 mod turbo_json;
 
-use std::{collections::HashMap, ffi::OsString, io};
+use std::{
+    collections::HashMap,
+    ffi::OsString,
+    io::{self, IsTerminal},
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use derive_setters::Setters;
@@ -313,7 +317,7 @@ impl ConfigurationOptions {
 
     pub fn ui(&self) -> UIMode {
         // If we aren't hooked up to a TTY, then do not use TUI
-        if !atty::is(atty::Stream::Stdout) {
+        if !std::io::stdout().is_terminal() {
             return UIMode::Stream;
         }
 

@@ -13,10 +13,11 @@ pub mod events;
 
 use std::time::Duration;
 
+use std::sync::OnceLock;
+
 use config::{ConfigError, TelemetryConfig};
 use events::TelemetryEvent;
 use futures::{StreamExt, stream::FuturesUnordered};
-use once_cell::sync::OnceCell;
 use thiserror::Error;
 use tokio::{
     select,
@@ -55,7 +56,7 @@ pub struct TelemetryHandle {
     handle: JoinHandle<()>,
 }
 
-static SENDER_INSTANCE: OnceCell<TelemetrySender> = OnceCell::new();
+static SENDER_INSTANCE: OnceLock<TelemetrySender> = OnceLock::new();
 
 // A global instance of the TelemetrySender.
 pub fn telem(event: events::TelemetryEvent) {
