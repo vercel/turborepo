@@ -408,8 +408,8 @@ jobs:
             --workspace \
             --exclude turborepo-napi \
             --partition hash:${{ matrix.partition }}/2 \
-            --json \
-            --output-path coverage-${{ matrix.partition }}.json
+            --lcov \
+            --output-path coverage-${{ matrix.partition }}.lcov
         shell: bash
         env:
           SCCACHE_BUCKET: turborepo-sccache
@@ -428,7 +428,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-partition-${{ matrix.partition }}
-          path: coverage-${{ matrix.partition }}.json
+          path: coverage-${{ matrix.partition }}.lcov
           retention-days: 1
 
   coverage_report:
@@ -456,6 +456,9 @@ jobs:
           pattern: coverage-partition-*
           merge-multiple: true
 
+      - name: Install lcov
+        run: sudo apt-get install -y lcov
+
       - name: Merge and transform coverage
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
@@ -464,69 +467,57 @@ jobs:
           TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
           SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
 
+          # Merge LCOV files using native lcov tool
+          lcov --add-tracefile coverage-1.lcov --add-tracefile coverage-2.lcov --output-file coverage-merged.lcov
+
+          # Transform LCOV to app JSON format
           node -e "
           const fs = require('fs');
 
-          // Load both partition coverage reports
-          const report1 = JSON.parse(fs.readFileSync('coverage-1.json', 'utf8'));
-          const report2 = JSON.parse(fs.readFileSync('coverage-2.json', 'utf8'));
-          const data1 = report1.data[0];
-          const data2 = report2.data[0];
+          // Parse LCOV format
+          const lcov = fs.readFileSync('coverage-merged.lcov', 'utf8');
+          const files = [];
+          let currentFile = null;
 
-          // Merge file coverage - combine covered counts from both partitions
-          const fileMap = new Map();
-
-          function addFileCoverage(file) {
-            const existing = fileMap.get(file.filename);
-            if (existing) {
-              // Add covered counts (different tests cover different lines)
-              existing.summary.lines.covered += file.summary.lines.covered;
-              existing.summary.functions.covered += file.summary.functions.covered;
-              existing.summary.branches.covered += file.summary.branches.covered;
-              existing.summary.regions.covered += file.summary.regions.covered;
-            } else {
-              fileMap.set(file.filename, JSON.parse(JSON.stringify(file)));
+          for (const line of lcov.split('\n')) {
+            if (line.startsWith('SF:')) {
+              currentFile = {
+                path: line.slice(3),
+                lines: { covered: 0, total: 0 },
+                functions: { covered: 0, total: 0 },
+                branches: { covered: 0, total: 0 }
+              };
+            } else if (line.startsWith('LF:')) {
+              currentFile.lines.total = parseInt(line.slice(3), 10);
+            } else if (line.startsWith('LH:')) {
+              currentFile.lines.covered = parseInt(line.slice(3), 10);
+            } else if (line.startsWith('FNF:')) {
+              currentFile.functions.total = parseInt(line.slice(4), 10);
+            } else if (line.startsWith('FNH:')) {
+              currentFile.functions.covered = parseInt(line.slice(4), 10);
+            } else if (line.startsWith('BRF:')) {
+              currentFile.branches.total = parseInt(line.slice(4), 10);
+            } else if (line.startsWith('BRH:')) {
+              currentFile.branches.covered = parseInt(line.slice(4), 10);
+            } else if (line === 'end_of_record' && currentFile) {
+              files.push(currentFile);
+              currentFile = null;
             }
           }
 
-          for (const file of data1.files) addFileCoverage(file);
-          for (const file of data2.files) addFileCoverage(file);
-
-          // Cap covered counts at total (in case of overlap)
-          for (const file of fileMap.values()) {
-            file.summary.lines.covered = Math.min(file.summary.lines.covered, file.summary.lines.count);
-            file.summary.functions.covered = Math.min(file.summary.functions.covered, file.summary.functions.count);
-            file.summary.branches.covered = Math.min(file.summary.branches.covered, file.summary.branches.count);
-            file.summary.regions.covered = Math.min(file.summary.regions.covered, file.summary.regions.count);
-            // Recalculate percentages
-            file.summary.lines.percent = file.summary.lines.count > 0 ? (file.summary.lines.covered / file.summary.lines.count) * 100 : 0;
-            file.summary.functions.percent = file.summary.functions.count > 0 ? (file.summary.functions.covered / file.summary.functions.count) * 100 : 0;
-            file.summary.branches.percent = file.summary.branches.count > 0 ? (file.summary.branches.covered / file.summary.branches.count) * 100 : 0;
-            file.summary.regions.percent = file.summary.regions.count > 0 ? (file.summary.regions.covered / file.summary.regions.count) * 100 : 0;
+          // Calculate totals
+          const totals = { lines: { covered: 0, total: 0 }, functions: { covered: 0, total: 0 }, branches: { covered: 0, total: 0 } };
+          for (const file of files) {
+            totals.lines.covered += file.lines.covered;
+            totals.lines.total += file.lines.total;
+            totals.functions.covered += file.functions.covered;
+            totals.functions.total += file.functions.total;
+            totals.branches.covered += file.branches.covered;
+            totals.branches.total += file.branches.total;
           }
 
-          const mergedFiles = Array.from(fileMap.values());
-
-          // Calculate merged totals
-          const totals = { lines: { count: 0, covered: 0 }, functions: { count: 0, covered: 0 }, branches: { count: 0, covered: 0 }, regions: { count: 0, covered: 0 } };
-          for (const file of mergedFiles) {
-            totals.lines.count += file.summary.lines.count;
-            totals.lines.covered += file.summary.lines.covered;
-            totals.functions.count += file.summary.functions.count;
-            totals.functions.covered += file.summary.functions.covered;
-            totals.branches.count += file.summary.branches.count;
-            totals.branches.covered += file.summary.branches.covered;
-            totals.regions.count += file.summary.regions.count;
-            totals.regions.covered += file.summary.regions.covered;
-          }
-          totals.lines.percent = totals.lines.count > 0 ? (totals.lines.covered / totals.lines.count) * 100 : 0;
-          totals.functions.percent = totals.functions.count > 0 ? (totals.functions.covered / totals.functions.count) * 100 : 0;
-          totals.branches.percent = totals.branches.count > 0 ? (totals.branches.covered / totals.branches.count) * 100 : 0;
-          totals.regions.percent = totals.regions.count > 0 ? (totals.regions.covered / totals.regions.count) * 100 : 0;
-
-          function convertSummary(summary) {
-            const toMetric = (s) => ({ covered: s.covered, total: s.count, percent: s.percent });
-            return { lines: toMetric(summary.lines), functions: toMetric(summary.functions), branches: toMetric(summary.branches), regions: toMetric(summary.regions) };
+          function toMetric(s) {
+            return { covered: s.covered, total: s.total, percent: s.total > 0 ? (s.covered / s.total) * 100 : 0 };
           }
 
           function getCrateName(filePath) {
@@ -537,17 +528,28 @@ jobs:
             return 'unknown';
           }
 
+          // Group by crate
           const crateMap = new Map();
-          const files = mergedFiles.map((file) => {
-            const crateName = getCrateName(file.filename);
-            const fileCoverage = { path: file.filename, crate: crateName, summary: convertSummary(file.summary), uncoveredLines: [] };
+          const fileResults = files.map((file) => {
+            const crateName = getCrateName(file.path);
+            const fileCoverage = {
+              path: file.path,
+              crate: crateName,
+              summary: {
+                lines: toMetric(file.lines),
+                functions: toMetric(file.functions),
+                branches: toMetric(file.branches),
+                regions: { covered: 0, total: 0, percent: 0 }
+              },
+              uncoveredLines: []
+            };
             if (!crateMap.has(crateName)) crateMap.set(crateName, { files: [] });
             crateMap.get(crateName).files.push(fileCoverage);
             return fileCoverage;
           });
 
           const crates = Array.from(crateMap.entries()).map(([name, { files: crateFiles }]) => {
-            const aggregated = { lines: { covered: 0, total: 0 }, functions: { covered: 0, total: 0 }, branches: { covered: 0, total: 0 }, regions: { covered: 0, total: 0 } };
+            const aggregated = { lines: { covered: 0, total: 0 }, functions: { covered: 0, total: 0 }, branches: { covered: 0, total: 0 } };
             for (const file of crateFiles) {
               aggregated.lines.covered += file.summary.lines.covered;
               aggregated.lines.total += file.summary.lines.total;
@@ -555,14 +557,32 @@ jobs:
               aggregated.functions.total += file.summary.functions.total;
               aggregated.branches.covered += file.summary.branches.covered;
               aggregated.branches.total += file.summary.branches.total;
-              aggregated.regions.covered += file.summary.regions.covered;
-              aggregated.regions.total += file.summary.regions.total;
             }
-            const toMetric = (s) => ({ covered: s.covered, total: s.total, percent: s.total > 0 ? (s.covered / s.total) * 100 : 0 });
-            return { name, summary: { lines: toMetric(aggregated.lines), functions: toMetric(aggregated.functions), branches: toMetric(aggregated.branches), regions: toMetric(aggregated.regions) }, files: crateFiles.map((f) => f.path) };
+            return {
+              name,
+              summary: {
+                lines: toMetric(aggregated.lines),
+                functions: toMetric(aggregated.functions),
+                branches: toMetric(aggregated.branches),
+                regions: { covered: 0, total: 0, percent: 0 }
+              },
+              files: crateFiles.map((f) => f.path)
+            };
           }).sort((a, b) => a.name.localeCompare(b.name));
 
-          const result = { sha: process.env.SHA, branch: process.env.BRANCH, timestamp: process.env.TIMESTAMP, summary: convertSummary(totals), crates, files };
+          const result = {
+            sha: process.env.SHA,
+            branch: process.env.BRANCH,
+            timestamp: process.env.TIMESTAMP,
+            summary: {
+              lines: toMetric(totals.lines),
+              functions: toMetric(totals.functions),
+              branches: toMetric(totals.branches),
+              regions: { covered: 0, total: 0, percent: 0 }
+            },
+            crates,
+            files: fileResults
+          };
           fs.writeFileSync('coverage-transformed.json', JSON.stringify(result, null, 2));
 
           console.log('COVERAGE_LINES=' + result.summary.lines.percent);
