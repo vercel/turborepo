@@ -91,7 +91,9 @@ Register the scripts to Turborepo as [Root Tasks](/docs/crafting-your-repository
 {
   "tasks": {
     "//#lint": {},
-    "//#lint:fix": {}
+    "//#lint:fix": {
+      "cache": false
+    }
   }
 }
 ```
@@ -169,7 +171,9 @@ Register the scripts to Turborepo:
 {
   "tasks": {
     "//#format": {},
-    "//#format:fix": {}
+    "//#format:fix": {
+      "cache": false
+    }
   }
 }
 ```
@@ -201,9 +205,13 @@ For repositories using both tools, you can orchestrate them with a unified quali
       "dependsOn": ["//#lint:fix", "//#format:fix"]
     },
     "//#lint": {},
-    "//#lint:fix": {},
+    "//#lint:fix": {
+      "cache": false
+    },
     "//#format": {},
-    "//#format:fix": {}
+    "//#format:fix": {
+      "cache": false
+    }
   }
 }
 ```
