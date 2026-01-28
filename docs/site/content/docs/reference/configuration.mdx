@@ -152,8 +152,7 @@ Specify the filesystem cache directory.
 ```
 
 <Callout type="info">
-  <ExperimentalBadge>Pre-release</ExperimentalBadge> When no `cacheDir` is
-  specified and you're working in a [Git
+  When no `cacheDir` is specified and you're working in a [Git
   worktree](https://git-scm.com/docs/git-worktree), Turborepo automatically
   shares the cache with the main worktree. This allows cache hits across
   different branches checked out in separate worktrees. Setting an explicit
@@ -304,7 +303,7 @@ Controls whether a task inherits configuration from the extends chain. This opti
 
 See [Excluding tasks from inheritance](/docs/reference/package-configurations#excluding-tasks-from-inheritance) for examples and more details.
 
-### `description` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+### `description`
 
 A human- or agent-readable description of what a task does.
 
@@ -629,7 +628,10 @@ Set output logging verbosity. Can be overridden by the [`--output-logs`](/docs/r
 ```
 
 <Callout type="info">
-  When using `errors-only`, you can enable the [`errorsOnlyShowHash`](#errorsonlyshowhash) future flag to show task hashes when tasks complete successfully, providing visibility into running tasks without full output logs.
+  When using `errors-only`, you can enable the
+  [`errorsOnlyShowHash`](#errorsonlyshowhash) future flag to show task hashes
+  when tasks complete successfully, providing visibility into running tasks
+  without full output logs.
 </Callout>
 
 ### `persistent`

@@ -20,11 +20,7 @@ Files that affect all task hashes.
 
 ```json
 {
-  "globalDependencies": [
-    "tsconfig.json",
-    ".env",
-    "pnpm-lock.yaml"
-  ]
+  "globalDependencies": ["tsconfig.json", ".env", "pnpm-lock.yaml"]
 }
 ```
 
@@ -176,7 +172,7 @@ Bypass the `packageManager` field requirement. Use for incremental migration.
 
 **Warning**: Unstable lockfiles can cause unpredictable behavior.
 
-## Git Worktree Cache Sharing (Pre-release)
+## Git Worktree Cache Sharing
 
 When working in Git worktrees, Turborepo automatically shares local cache between the main worktree and linked worktrees.
 
