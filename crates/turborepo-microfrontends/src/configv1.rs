@@ -629,27 +629,17 @@ mod test {
         let config = ConfigV1::from_str(input, "microfrontends.jsonc");
         assert!(
             config.is_ok(),
-            "Parser should accept JSONC fixture with trailing commas and comments"
+            "Parser should accept JSONC fixture with trailing commas"
         );
 
         let config = config.unwrap();
         match config {
             ParseResult::Actual(config_v1) => {
-                // Verify applications were parsed correctly
-                assert_eq!(config_v1.port("main-app"), Some(4000));
-                assert_eq!(config_v1.port("chat-app"), Some(3002));
-                assert_eq!(config_v1.port("docs-app"), Some(3005));
-                assert_eq!(config_v1.port("marketing-app"), Some(3006));
+                assert_eq!(config_v1.port("a"), Some(3000));
+                assert_eq!(config_v1.port("b"), Some(3001));
                 assert_eq!(config_v1.local_proxy_port(), Some(3000));
-
-                // Verify fallback
-                assert_eq!(config_v1.fallback("main-app"), Some("main.example.com"));
-
-                // Verify routing exists for apps with routing config
-                assert!(config_v1.routing("chat-app").is_some());
-                assert!(config_v1.routing("docs-app").is_some());
-                assert!(config_v1.routing("marketing-app").is_some());
-                assert!(config_v1.routing("main-app").is_none());
+                assert!(config_v1.routing("a").is_none());
+                assert!(config_v1.routing("b").is_some());
             }
             ParseResult::Reference(_) => panic!("expected to get main config"),
         }

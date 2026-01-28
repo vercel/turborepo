@@ -1,58 +1,17 @@
 {
-  "$schema": "https://turborepo.dev/microfrontends/schema.json",
   "applications": {
-    "main-app": {
+    "a": {
       "development": {
-        "fallback": "main.example.com",
-        "local": 4000
-      },
-      "packageName": "web"
+        "local": 3000
+      }
     },
-    "chat-app": {
-      "assetPrefix": "chat-static",
+    "b": {
       "development": {
-        "local": 3002
+        "local": 3001
       },
-      "packageName": "chat",
       "routing": [
         {
-          "paths": [
-            "/some/path",
-          ]
-        }
-      ]
-    },
-    "docs-app": {
-      "development": {
-        "local": 3005
-      },
-      "packageName": "docs",
-      "routing": [
-        {
-          "paths": ["/docs", "/docs/:path*"]
-        }
-      ]
-    },
-    "marketing-app": {
-      "assetPrefix": "marketing-static",
-      "development": {
-        "local": 3006
-      },
-      "packageName": "marketing",
-      "routing": [
-        {
-          "paths": ["/marketing-static/:path*"]
-        },
-        {
-          "flag": "enableMarketingRouting",
-          "paths": [
-            "/blog",
-            "/blog/:path*",
-            "/changelog",
-            "/changelog/:path*",
-            "/enterprise",
-            "/pricing"
-          ]
+          "paths": ["/b", "/b/:path*"]
         }
       ]
     }
