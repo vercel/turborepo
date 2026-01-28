@@ -11,8 +11,8 @@ use serde::Deserialize;
 use thiserror::Error as ThisError;
 use turborepo_repository::package_manager::PackageManager;
 use update_informer::{
-    http_client::{GenericHttpClient, HttpClient},
     Check, Package, Registry, Result as UpdateResult, Version,
+    http_client::{GenericHttpClient, HttpClient},
 };
 
 mod ui;

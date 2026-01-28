@@ -163,9 +163,6 @@ mod tests {
     use crate::{LoginServer, LoginType, current_unix_time};
     const EXPECTED_VERIFICATION_TOKEN: &str = "expected_verification_token";
 
-    static SSO_HITS: std::sync::LazyLock<Arc<AtomicUsize>> =
-        std::sync::LazyLock::new(|| Arc::new(AtomicUsize::new(0)));
-
     #[derive(Debug, thiserror::Error)]
     enum MockApiError {
         #[error("Empty token")]

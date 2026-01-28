@@ -11,9 +11,7 @@ pub mod config;
 pub mod errors;
 pub mod events;
 
-use std::time::Duration;
-
-use std::sync::OnceLock;
+use std::{sync::OnceLock, time::Duration};
 
 use config::{ConfigError, TelemetryConfig};
 use events::TelemetryEvent;
