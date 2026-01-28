@@ -116,9 +116,14 @@ fn parse_port_from_host(host: &str) -> Option<u16> {
 
 impl TurborepoConfig {
     pub fn from_str(input: &str, source: &str) -> Result<Self, Error> {
+        // Use JSONC options: allow comments and trailing commas
+        let jsonc_options = JsonParserOptions::default()
+            .with_allow_comments()
+            .with_allow_trailing_commas();
+
         let (config, errs) = biome_deserialize::json::deserialize_from_json_str::<TurborepoConfig>(
             input,
-            JsonParserOptions::default().with_allow_comments(),
+            jsonc_options,
             source,
         )
         .consume();
@@ -279,12 +284,14 @@ mod test {
     }
 
     #[test]
-    fn test_malformed_json_trailing_comma() {
+    fn test_jsonc_trailing_commas_accepted() {
+        // JSONC files should support trailing commas since they're commonly used
+        // by editors and formatters
         let input = r#"{"applications": {"web": {"development": {"local": 3000,}}}}"#;
-        let config = TurborepoConfig::from_str(input, "somewhere");
+        let config = TurborepoConfig::from_str(input, "somewhere.jsonc");
         assert!(
-            config.is_err(),
-            "Parser should reject JSON with trailing comma"
+            config.is_ok(),
+            "Parser should accept JSONC with trailing commas"
         );
     }
 

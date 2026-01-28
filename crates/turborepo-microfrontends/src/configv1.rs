@@ -140,10 +140,14 @@ fn parse_port_from_host(host: &str) -> Option<u16> {
 
 impl ConfigV1 {
     pub fn from_str(input: &str, source: &str) -> Result<ParseResult, Error> {
+        let jsonc_options = JsonParserOptions::default()
+            .with_allow_comments()
+            .with_allow_trailing_commas();
+
         // attempt to parse a child, ignoring any errors
         let (config, errs) = biome_deserialize::json::deserialize_from_json_str::<ChildConfig>(
             input,
-            JsonParserOptions::default().with_allow_comments(),
+            jsonc_options,
             source,
         )
         .consume();
@@ -154,7 +158,7 @@ impl ConfigV1 {
         // attempt to parse a real one
         let (config, errs) = biome_deserialize::json::deserialize_from_json_str::<ConfigV1>(
             input,
-            JsonParserOptions::default().with_allow_comments(),
+            jsonc_options,
             source,
         )
         .consume();
@@ -610,13 +614,45 @@ mod test {
     }
 
     #[test]
-    fn test_malformed_json_trailing_comma() {
+    fn test_jsonc_trailing_commas_accepted() {
         let input = r#"{"applications": {"web": {"development": {"local": 3000,}}}}"#;
-        let config = ConfigV1::from_str(input, "microfrontends.json");
+        let config = ConfigV1::from_str(input, "microfrontends.jsonc");
         assert!(
-            config.is_err(),
-            "Parser should reject JSON with trailing comma"
+            config.is_ok(),
+            "Parser should accept JSONC with trailing commas"
         );
+    }
+
+    #[test]
+    fn test_jsonc_trailing_commas_fixture() {
+        let input = include_str!("../fixtures/trailing-commas.jsonc");
+        let config = ConfigV1::from_str(input, "microfrontends.jsonc");
+        assert!(
+            config.is_ok(),
+            "Parser should accept JSONC fixture with trailing commas and comments"
+        );
+
+        let config = config.unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                // Verify applications were parsed correctly
+                assert_eq!(config_v1.port("main-app"), Some(4000));
+                assert_eq!(config_v1.port("chat-app"), Some(3002));
+                assert_eq!(config_v1.port("docs-app"), Some(3005));
+                assert_eq!(config_v1.port("marketing-app"), Some(3006));
+                assert_eq!(config_v1.local_proxy_port(), Some(3000));
+
+                // Verify fallback
+                assert_eq!(config_v1.fallback("main-app"), Some("main.example.com"));
+
+                // Verify routing exists for apps with routing config
+                assert!(config_v1.routing("chat-app").is_some());
+                assert!(config_v1.routing("docs-app").is_some());
+                assert!(config_v1.routing("marketing-app").is_some());
+                assert!(config_v1.routing("main-app").is_none());
+            }
+            ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
     }
 
     #[test]
