@@ -385,6 +385,22 @@ export async function downloadAndExtractRepo(
   }
 }
 
+/**
+ * Assert that a path value is safe to be used as a git CLI argument.
+ * Rejects values that could be interpreted as options (e.g. starting with "-")
+ * or that contain NUL bytes.
+ */
+function assertSafePathForGit(pathValue: string, description: string): void {
+  if (
+    !pathValue ||
+    typeof pathValue !== "string" ||
+    pathValue.includes("\0") ||
+    pathValue.startsWith("-")
+  ) {
+    throw new Error(`Invalid ${description}: ${pathValue}`);
+  }
+}
+
 export async function downloadAndExtractExample(root: string, name: string) {
   // Validate example name to prevent path traversal and argument injection
   // Only allow alphanumeric characters, hyphens, and underscores
@@ -394,18 +410,10 @@ export async function downloadAndExtractExample(root: string, name: string) {
 
   // Normalize and validate the root directory to prevent unsafe git arguments
   const normalizedRoot = resolve(root);
-  if (
-    !normalizedRoot ||
-    normalizedRoot.includes("\0") ||
-    normalizedRoot.startsWith("-")
-  ) {
-    throw new Error(`Invalid project root: ${normalizedRoot}`);
-  }
+  assertSafePathForGit(normalizedRoot, "project root");
 
   const tempDir = join(normalizedRoot, ".turbo-clone-temp");
-  if (!tempDir || tempDir.includes("\0") || tempDir.startsWith("-")) {
-    throw new Error(`Invalid temporary directory: ${tempDir}`);
-  }
+  assertSafePathForGit(tempDir, "temporary directory");
 
   try {
     // Clone with partial clone (no blobs) and no checkout

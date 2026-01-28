@@ -17,6 +17,9 @@ const INTRODUCED_IN = "1.10.0";
 function transformEnvVarName(envVarName: string): EnvWildcard {
   let output = envVarName;
 
+  // First escape backslashes so they are treated literally in subsequent processing.
+  output = output.replace(/\\/g, "\\\\");
+
   // Transform leading !
   if (envVarName.startsWith("!")) {
     output = `\\${output}`;
