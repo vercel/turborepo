@@ -85,7 +85,7 @@ bunx create-turbo@latest
 
 Many developers want to run multiple coding agents in parallel, in the same repository. But how do you keep your agents from getting in each others' way?
 
-[Git worktrees](https://git-scm.com/docs/git-worktree) are a common technique for this. They allow you to check out multiple branches simultaneously, in separate directories, all sharing the same Git history. However, in previous versions of Turborepo, this meant that a new local cache instance would get used for each worktree.
+[Git worktrees](https://git-scm.com/docs/git-worktree) are a common technique for this. They allow you to check out multiple branches simultaneously, in separate directories, all sharing the same Git history. However, each worktree would have a new local cache instance, so you would miss cache when creating a new worktree.
 
 Starting with this release, Turborepo now shares the local cache across Git worktrees.
 
@@ -93,12 +93,11 @@ Starting with this release, Turborepo now shares the local cache across Git work
 # Create a cache for your task
 turbo run build
 
-# Create a worktree
-git branch my-branch && git worktree add ../my-worktree my-branch
+# Create a worktree and change to its directory
+git worktree add -B my-branch && cd ../my-branch
 
-## Change to the directory and run the same task
-## Full cache hit from the main worktree's local cache
-cd ../my-worktree && turbo run build
+## Run the task again for a full cache hit
+turbo run build
 ```
 
 Combined with Remote Caching, this can tremendously speed up your agentic coding experience. The feedback loops that you create with your `turbo` commands can achieve higher cache hit rates, locally and in CI.
@@ -127,7 +126,7 @@ We've retooled this site to enable agents and AI-assisted humans to work more ef
 
 We've improved your agents' ability to fetch docs from our site in a number of ways:
 
-- **Markdown responses for agents**: By responding with Markdown responses (instead of HTML), we help to preserve your context window. No configuration or special instructions are required. Run `curl -sL -H "Accept: text-markdown" https://turborepo.dev/repo/docs` in your terminal to see an example response.
+- **Markdown responses for agents**: By responding with Markdown (instead of HTML), we help to preserve your context window. No configuration or special instructions are required. Run `curl -sL -H "Accept: text-markdown" https://turborepo.dev/repo/docs` in your terminal to see an example response.
 - **.md routes**: You can also visit a markdown version of any documentation page by appending `.md` to a route. For example, try https://turborepo.dev/docs.md.
 - **/sitemap.md**: A machine-readable sitemap is available at https://turborepo.dev/sitemap.md, allowing agents to find out what docs exist.
 - **Versioned documentation**: Starting with version 2.7.6 of Turborepo, versioned docs are now available on subdomains of `turborepo.dev`. [Visit the 2.7.6 documentation here](https://v2-7-6.turborepo.dev/docs).
@@ -172,7 +171,7 @@ You can now add a `description` field to your task definitions in `turbo.json`:
 }
 ```
 
-Descriptions are purely informational and don't affect task execution. They're useful for:
+Descriptions are purely informational and don't affect task execution. They're useful for providing context for cases like:
 
 - **Onboarding**: Help new team members understand what each task does
 - **Documentation**: Keep task purposes documented alongside their configuration
