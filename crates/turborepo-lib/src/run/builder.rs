@@ -83,7 +83,7 @@ impl RunBuilder {
         let processes = ProcessManager::new(
             // We currently only use a pty if the following are met:
             // - we're attached to a tty
-            atty::is(atty::Stream::Stdout) &&
+            std::io::stdout().is_terminal() &&
             // - if we're on windows, we're using the UI
             (!cfg!(windows) || matches!(opts.run_opts.ui_mode, UIMode::Tui)),
         );
@@ -201,7 +201,7 @@ impl RunBuilder {
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
             turbo_version = %TurboState::version(),
-            numcpus = num_cpus::get(),
+            numcpus = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(1),
             "performing run on {:?}",
             TurboState::platform_name(),
         );

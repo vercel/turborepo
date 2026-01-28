@@ -19,7 +19,11 @@ impl SCMResource {
         // We want to only take at most NUM_CPUS - 3 for git processes.
         // Accounting for the `turbo` process itself and the daemon this leaves one core
         // available for the rest of the system.
-        let num_permits = num_cpus::get().saturating_sub(3).max(1);
+        let num_permits = std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+            .saturating_sub(3)
+            .max(1);
         Self::new_with_permits(scm, num_permits)
     }
 

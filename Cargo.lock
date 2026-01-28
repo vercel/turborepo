@@ -455,17 +455,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "debc29dde2e69f9e47506b525f639ed42300fc014a3e007832592448fa8e4599"
 
 [[package]]
-name = "atty"
-version = "0.2.14"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9b39be18770d11421cdb1b9947a45dd3f37e93092cbf377614828a319d5fee8"
-dependencies = [
- "hermit-abi 0.1.19",
- "libc",
- "winapi",
-]
-
-[[package]]
 name = "auto_impl"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2507,15 +2496,6 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
 name = "hermit-abi"
-version = "0.1.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
-dependencies = [
- "libc",
-]
-
-[[package]]
-name = "hermit-abi"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d231dfb89cfffdbc30e7fc41579ed6066ad03abda9e567ccafae602b97ec5024"
@@ -3874,16 +3854,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
-]
-
-[[package]]
-name = "num_cpus"
-version = "1.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4161fcb6d602d4d2081af7c3a45852d875a03dd337a6bfdd6e06407b61342a43"
-dependencies = [
- "hermit-abi 0.3.9",
- "libc",
 ]
 
 [[package]]
@@ -6766,7 +6736,6 @@ dependencies = [
 name = "turbo-updater"
 version = "0.1.0"
 dependencies = [
- "atty",
  "console",
  "reqwest",
  "semver 1.0.23",
@@ -6821,7 +6790,6 @@ dependencies = [
  "http 1.1.0",
  "httpmock",
  "insta",
- "lazy_static",
  "port_scanner",
  "regex",
  "reqwest",
@@ -6852,7 +6820,6 @@ dependencies = [
  "http 1.1.0",
  "httpmock",
  "insta",
- "lazy_static",
  "port_scanner",
  "reqwest",
  "serde",
@@ -6958,7 +6925,6 @@ dependencies = [
 name = "turborepo-config"
 version = "0.1.0"
 dependencies = [
- "atty",
  "camino",
  "clap",
  "derive_setters",
@@ -7141,7 +7107,6 @@ dependencies = [
  "git2",
  "libc",
  "notify",
- "num_cpus",
  "radix_trie",
  "tempfile",
  "thiserror 1.0.63",
@@ -7238,7 +7203,6 @@ dependencies = [
  "async-graphql-axum",
  "async-io",
  "async-stream",
- "atty",
  "axum 0.7.5",
  "biome_deserialize 0.6.0",
  "biome_json_parser",
@@ -7263,12 +7227,10 @@ dependencies = [
  "indicatif",
  "insta",
  "itertools 0.10.5",
- "lazy_static",
  "libc",
  "merge",
  "miette",
  "notify",
- "num_cpus",
  "owo-colors 3.5.0",
  "oxc_resolver 4.2.0",
  "petgraph",
@@ -7461,7 +7423,6 @@ dependencies = [
 name = "turborepo-process"
 version = "0.1.0"
 dependencies = [
- "atty",
  "console",
  "futures",
  "itertools 0.10.5",
@@ -7609,7 +7570,6 @@ name = "turborepo-scope"
 version = "0.1.0"
 dependencies = [
  "miette",
- "once_cell",
  "path-clean",
  "pretty_assertions",
  "regex",
@@ -7746,7 +7706,6 @@ dependencies = [
  "config",
  "futures",
  "hex",
- "once_cell",
  "reqwest",
  "serde",
  "serde_json",
@@ -7823,7 +7782,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-graphql",
- "atty",
  "axum 0.7.5",
  "base64 0.22.1",
  "chrono",
@@ -7834,7 +7792,6 @@ dependencies = [
  "futures",
  "indicatif",
  "indoc",
- "lazy_static",
  "nix 0.26.2",
  "ratatui",
  "serde",

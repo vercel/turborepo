@@ -1334,7 +1334,11 @@ pub async fn run(
     // track system info
     root_telemetry.track_platform(TurboState::platform_name());
     root_telemetry.track_version(TurboState::version());
-    root_telemetry.track_cpus(num_cpus::get());
+    root_telemetry.track_cpus(
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1),
+    );
     // track args
     cli_args.track(&root_telemetry);
 

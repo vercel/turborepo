@@ -2,9 +2,8 @@
 //!
 //! This module parses filter strings into structured selectors.
 
-use std::str::FromStr;
+use std::{str::FromStr, sync::LazyLock};
 
-use once_cell::sync::Lazy;
 use regex::Regex;
 use thiserror::Error;
 use turbopath::AnchoredSystemPathBuf;
@@ -25,7 +24,7 @@ use turbopath::AnchoredSystemPathBuf;
 /// - `(\{(?P<directory>[^}]*)\})?` - Optional directory in curly braces
 /// - `(?P<commits>(?:\.{3})?\[[^\]]*\])?` - Optional git range in square
 ///   brackets, optionally prefixed with `...` for match_dependencies
-static SELECTOR_REGEX: Lazy<Regex> = Lazy::new(|| {
+static SELECTOR_REGEX: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
         r"^(?P<name>[^.](?:[^{}\[\]]*[^{}\[\].])?)?(\{(?P<directory>[^}]*)})?(?P<commits>(?:\.{3})?\[[^\]]*\])?$"
     ).expect("selector regex is statically validated")

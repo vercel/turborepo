@@ -8,9 +8,8 @@
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
 
-use std::{backtrace::Backtrace, env, future::Future, time::Duration};
+use std::{backtrace::Backtrace, env, future::Future, sync::LazyLock, time::Duration};
 
-use lazy_static::lazy_static;
 use regex::Regex;
 pub use reqwest::Response;
 use reqwest::{Body, Method, RequestBuilder, StatusCode};
@@ -32,10 +31,8 @@ pub mod telemetry;
 pub use bytes::Bytes;
 pub use tokio_stream::Stream;
 
-lazy_static! {
-    static ref AUTHORIZATION_REGEX: Regex =
-        Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap();
-}
+static AUTHORIZATION_REGEX: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap());
 
 pub trait Client {
     fn get_user(&self, token: &str) -> impl Future<Output = Result<UserResponse>> + Send;
