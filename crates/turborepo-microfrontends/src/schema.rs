@@ -285,8 +285,6 @@ mod test {
 
     #[test]
     fn test_jsonc_trailing_commas_accepted() {
-        // JSONC files should support trailing commas since they're commonly used
-        // by editors and formatters
         let input = r#"{"applications": {"web": {"development": {"local": 3000,}}}}"#;
         let config = TurborepoConfig::from_str(input, "somewhere.jsonc");
         assert!(
