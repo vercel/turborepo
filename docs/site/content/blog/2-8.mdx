@@ -94,7 +94,7 @@ Starting with this release, Turborepo now shares the local cache across Git work
 turbo run build
 
 # Create a worktree and change to its directory
-git worktree add -B my-branch && cd ../my-branch
+git worktree add -B my-branch ../my-branch && cd ../my-branch
 
 ## Run the task again for a full cache hit
 turbo run build
