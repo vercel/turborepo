@@ -127,7 +127,7 @@ mod test {
             .timeout(Duration::from_millis(10));
         let result = make_retryable_request(request_builder, RetryStrategy::Timeout).await;
 
-        req.assert_hits_async(2).await;
+        req.assert_calls_async(2).await;
         assert_matches!(result, Err(Error::TooManyFailures(_)));
     }
 
@@ -166,6 +166,6 @@ mod test {
         // we should make at most one request and give up if it times out after
         // connecting
         assert_matches!(result, Err(_));
-        req.assert_hits_async(1).await;
+        req.assert_calls_async(1).await;
     }
 }
