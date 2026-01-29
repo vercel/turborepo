@@ -143,6 +143,16 @@ jobs:
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 30
     if: ${{ needs.find-changes.outputs.rest == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     strategy:
       fail-fast: false
       matrix:
@@ -206,18 +216,6 @@ jobs:
           fi
           turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} -- "tests/${{ matrix.test-path }}"
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
   turbo_types_check:
     name: "@turbo/types codegen check"
@@ -269,6 +267,16 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/2)
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     steps:
       - name: Set git to use LF line endings
         run: |
@@ -306,18 +314,6 @@ jobs:
               cargo nextest run --workspace --no-run
           fi
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
       - name: Run tests
         timeout-minutes: 30
@@ -328,18 +324,6 @@ jobs:
               cargo nextest run --workspace --partition hash:${{ matrix.partition }}/2
           fi
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
   rust_test_ubuntu:
     strategy:
@@ -352,6 +336,16 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -384,18 +378,6 @@ jobs:
           fi
           cargo nextest run --workspace --no-run
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
       - name: Run tests with coverage
         timeout-minutes: 30
@@ -411,18 +393,6 @@ jobs:
             --lcov \
             --output-path coverage-${{ matrix.partition }}.lcov
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
