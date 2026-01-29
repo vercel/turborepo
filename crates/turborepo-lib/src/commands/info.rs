@@ -54,7 +54,12 @@ pub async fn run(base: CommandBase) {
         "   Available memory (MB): {}",
         system.available_memory() / 1024 / 1024
     );
-    println!("   Available CPU cores: {}", num_cpus::get());
+    println!(
+        "   Available CPU cores: {}",
+        std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1)
+    );
     println!();
 
     println!("Environment:");

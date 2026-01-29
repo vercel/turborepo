@@ -1,8 +1,7 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::sync::OnceLock;
+use std::sync::{LazyLock, OnceLock};
 
-use lazy_static::lazy_static;
 use miette::Diagnostic;
 use tracing::trace;
 use turbopath::{
@@ -54,34 +53,37 @@ pub enum Error {
     Config(#[from] crate::config::Error),
 }
 
-// Files that should be copied from root and if they're required for install
-lazy_static! {
-    static ref ADDITIONAL_FILES: Vec<(&'static RelativeUnixPath, Option<CopyDestination>)> = vec![
-        (RelativeUnixPath::new(".gitignore").unwrap(), None),
-        (
-            RelativeUnixPath::new(".npmrc").unwrap(),
-            Some(CopyDestination::Docker)
-        ),
-        (
-            RelativeUnixPath::new(".yarnrc.yml").unwrap(),
-            Some(CopyDestination::Docker)
-        ),
-        (
-            RelativeUnixPath::new("bunfig.toml").unwrap(),
-            Some(CopyDestination::Docker)
-        ),
-    ];
-    static ref ADDITIONAL_DIRECTORIES: Vec<(&'static RelativeUnixPath, Option<CopyDestination>)> = vec![
-        (
-            RelativeUnixPath::new(".yarn/plugins").unwrap(),
-            Some(CopyDestination::Docker)
-        ),
-        (
-            RelativeUnixPath::new(".yarn/releases").unwrap(),
-            Some(CopyDestination::Docker)
-        ),
-    ];
-}
+static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
+    LazyLock::new(|| {
+        vec![
+            (RelativeUnixPath::new(".gitignore").unwrap(), None),
+            (
+                RelativeUnixPath::new(".npmrc").unwrap(),
+                Some(CopyDestination::Docker),
+            ),
+            (
+                RelativeUnixPath::new(".yarnrc.yml").unwrap(),
+                Some(CopyDestination::Docker),
+            ),
+            (
+                RelativeUnixPath::new("bunfig.toml").unwrap(),
+                Some(CopyDestination::Docker),
+            ),
+        ]
+    });
+static ADDITIONAL_DIRECTORIES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
+    LazyLock::new(|| {
+        vec![
+            (
+                RelativeUnixPath::new(".yarn/plugins").unwrap(),
+                Some(CopyDestination::Docker),
+            ),
+            (
+                RelativeUnixPath::new(".yarn/releases").unwrap(),
+                Some(CopyDestination::Docker),
+            ),
+        ]
+    });
 
 fn package_json() -> &'static AnchoredSystemPath {
     static PATH: OnceLock<&'static AnchoredSystemPath> = OnceLock::new();

@@ -11,9 +11,9 @@ Controls task execution order.
   "tasks": {
     "build": {
       "dependsOn": [
-        "^build",        // Dependencies' build tasks first
-        "codegen",       // Same package's codegen task first
-        "shared#build"   // Specific package's build task
+        "^build", // Dependencies' build tasks first
+        "codegen", // Same package's codegen task first
+        "shared#build" // Specific package's build task
       ]
     }
   }
@@ -124,8 +124,8 @@ Environment variables to include in task hash.
     "build": {
       "env": [
         "API_URL",
-        "NEXT_PUBLIC_*",  // Wildcard matching
-        "!DEBUG"          // Exclude from hash
+        "NEXT_PUBLIC_*", // Wildcard matching
+        "!DEBUG" // Exclude from hash
       ]
     }
   }
@@ -189,7 +189,7 @@ Control when logs are shown. Options: `full`, `hash-only`, `new-only`, `errors-o
 {
   "tasks": {
     "build": {
-      "outputLogs": "new-only"  // Only show logs on cache miss
+      "outputLogs": "new-only" // Only show logs on cache miss
     }
   }
 }
@@ -231,7 +231,7 @@ Allow `turbo watch` to restart the task on changes. Default: `false`.
 
 Use for dev servers that don't automatically detect dependency changes.
 
-## description (Pre-release)
+## description
 
 Human-readable description of the task.
 
@@ -273,7 +273,7 @@ Control task inheritance in Package Configurations.
   "extends": ["//"],
   "tasks": {
     "lint": {
-      "extends": false  // Exclude from this package
+      "extends": false // Exclude from this package
     }
   }
 }

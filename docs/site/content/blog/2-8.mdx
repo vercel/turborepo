@@ -1,0 +1,291 @@
+---
+title: Turborepo 2.8
+date: 2026/01/26
+description: "Git worktrees, Agent Skill, AI-enabled documentation, `turbo docs`, task descriptions"
+tag: "web development"
+---
+
+import { Authors } from "@/components/blog/authors";
+import { Callout } from "@/components/geistdocs/callout";
+import { Tabs, Tab } from "fumadocs-ui/components/tabs";
+import { Date } from "@/components/blog/date";
+import { Accordion, Accordions } from "@/components/geistdocs/accordion";
+
+# Turborepo 2.8
+
+<Date>Thursday, January 23rd, 2026</Date>
+
+<Authors authors={["anthonyshew"]} />
+
+Turborepo 2.8 is the build system for agentic coding, with features like:
+
+- [**Git worktree support**](#shared-cache-for-git-worktrees): Share your local cache across Git worktrees
+- [**Agent Skill**](#agent-skill): Make any agent a Turborepo expert
+- [**AI-enabled documentation**](#improved-ai-accessibility-for-our-docs): AI chat, versioned docs, Markdown responses for agents, and more
+- [**`turbo docs`**](#turbo-docs-command): Search documentation directly from your terminal
+- [**Task descriptions**](#task-descriptions): Add context to your task definitions in `turbo.json`
+
+As usage of coding agents continues to accelerate, Turborepo will keep innovating to make your workflows faster, locally and remotely. Check out [our AI guide](/docs/guides/ai) to learn how to use AI most effectively in a Turborepo.
+
+Upgrade today by running `npx @turbo/codemod migrate` or get started with `npx create-turbo@latest`.
+
+<PackageManagerTabs>
+
+<Tab value="pnpm">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+pnpm dlx @turbo/codemod migrate
+
+# Start a new repository
+pnpm dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="yarn">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+yarn dlx @turbo/codemod migrate
+
+# Start a new repository
+yarn dlx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="npm">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+npx @turbo/codemod migrate
+
+# Start a new repository
+npx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="bun">
+
+```bash title="Terminal"
+# Use the automated upgrade CLI
+bunx @turbo/codemod migrate
+
+# Start a new repository
+bunx create-turbo@latest
+```
+
+</Tab>
+
+</PackageManagerTabs>
+
+## Shared cache for Git worktrees
+
+Many developers want to run multiple coding agents in parallel, in the same repository. But how do you keep your agents from getting in each others' way?
+
+[Git worktrees](https://git-scm.com/docs/git-worktree) are a common technique for this. They allow you to check out multiple branches simultaneously, in separate directories, all sharing the same Git history. However, each worktree would have a new local cache instance, so you would miss cache when creating a new worktree.
+
+Starting with this release, Turborepo now shares the local cache across Git worktrees.
+
+```bash title="Terminal"
+# Create a cache for your task
+turbo run build
+
+# Create a worktree and change to its directory
+git worktree add -B my-branch && cd ../my-branch
+
+## Run the task again for a full cache hit
+turbo run build
+```
+
+Combined with Remote Caching, this can tremendously speed up your agentic coding experience. The feedback loops that you create with your `turbo` commands can achieve higher cache hit rates, locally and in CI.
+
+No configuration is required. Turborepo will automatically detect when it's running in a worktree and share the local cache.
+
+## Agent Skill
+
+[Agent Skills](https://agentskills.io/home) are an open standard that give new capabilities and expertise to agents. They're folders of instructions, scripts, and resources that agents can use to do things more accurately and efficiently.
+
+You can now add the Turborepo Skill to your agent, making it an expert in Turborepo and monorepos.
+
+```bash title="Terminal"
+npx skills add vercel/turborepo
+```
+
+The Skill teaches agents best practices for Turborepo, recommendations for monorepos, anti-patterns to avoid, and other important patterns to get the most out of your repository.
+
+Visit [our AI guide](/docs/guides/ai#agent-skill) to learn more.
+
+## Improved AI accessibility for our docs
+
+We've retooled this site to enable agents and AI-assisted humans to work more efficiently with Turborepo.
+
+### Machine readability for agents
+
+We've improved your agents' ability to fetch docs from our site in a number of ways:
+
+- **Markdown responses for agents**: By responding with Markdown (instead of HTML), we help to preserve your context window. No configuration or special instructions are required. Run `curl -sL -H "Accept: text-markdown" https://turborepo.dev/repo/docs` in your terminal to see an example response.
+- **.md routes**: You can also visit a markdown version of any documentation page by appending `.md` to a route. For example, try https://turborepo.dev/docs.md.
+- **/sitemap.md**: A machine-readable sitemap is available at https://turborepo.dev/sitemap.md, allowing agents to find out what docs exist.
+- **Versioned documentation**: Starting with version 2.7.6 of Turborepo, versioned docs are now available on subdomains of `turborepo.dev`. [Visit the 2.7.6 documentation here](https://v2-7-6.turborepo.dev/docs).
+
+### AI interaction for humans
+
+We've improved the docs for AI-assisted humans, too.
+
+- **Chat with the docs**: We've added an "Ask AI" button to the documentation, so you can chat with a bot that knows every bit of the Turborepo documentation.
+- **Sample prompts**: The docs now include prompts that you can copy for common tasks. You can paste them into your agent directly, and edit them to fit your needs. For an example, see the sample prompt for [adding Turborepo to an existing repository](/docs/getting-started/add-to-existing-repository).
+
+## `turbo docs` command
+
+You can now search the Turborepo documentation directly from your terminal:
+
+```bash title="Terminal"
+# Search the docs for "package configurations"
+turbo docs "package configurations"
+```
+
+A list of docs that fit your search query will be printed to your terminal.
+
+[Visit the docs to learn more.](/docs/reference/docs)
+
+## Task descriptions
+
+You can now add a `description` field to your task definitions in `turbo.json`:
+
+```json title="turbo.json"
+{
+  "tasks": {
+    "build": {
+      "description": "Compiles TypeScript and bundles the application",
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "test": {
+      "description": "Runs the test suite with coverage",
+      "dependsOn": ["build"]
+    }
+  }
+}
+```
+
+Descriptions are purely informational and don't affect task execution. They're useful for providing context for cases like:
+
+- **Onboarding**: Help new team members understand what each task does
+- **Documentation**: Keep task purposes documented alongside their configuration
+- **AI tools**: Provide context that AI assistants can use to understand your repository
+
+[Visit the docs to learn more.](/docs/reference/configuration#description)
+
+## All changes
+
+<Accordions>
+
+  <Accordion title="Features (18)">
+
+    - feat: Agent Skill ([#11541](https://github.com/vercel/turborepo/pull/11541))
+    - feat: Add stream-with-experimental-timestamps UI mode ([#11538](https://github.com/vercel/turborepo/pull/11538))
+    - feat: Add loading spinner while AI chat looks up sources ([#11531](https://github.com/vercel/turborepo/pull/11531))
+    - feat: Add md tracking for AI usage analytics ([#11526](https://github.com/vercel/turborepo/pull/11526))
+    - feat: Add Rust test coverage tracking and reporting ([#11507](https://github.com/vercel/turborepo/pull/11507))
+    - feat(turbo-codemod): Add update-versioned-schema-json transformer ([#11502](https://github.com/vercel/turborepo/pull/11502))
+    - feat(docs): Add version warning for old docs subdomains ([#11495](https://github.com/vercel/turborepo/pull/11495))
+    - feat(docs): Implement two-stage chat ([#11493](https://github.com/vercel/turborepo/pull/11493))
+    - feat: Add docs subcommand for searching documentation ([#11490](https://github.com/vercel/turborepo/pull/11490))
+    - feat: Add `errorsOnlyShowHash` future flag ([#11486](https://github.com/vercel/turborepo/pull/11486))
+    - feat(docs): Add search icon to mobile header ([#11483](https://github.com/vercel/turborepo/pull/11483))
+    - feat(turbo-json): Add optional description field to task definitions ([#11447](https://github.com/vercel/turborepo/pull/11447))
+    - feat(ci): Add versioned docs aliasing to release workflow ([#11446](https://github.com/vercel/turborepo/pull/11446))
+    - feat: Add Rust-based schema and TypeScript generation ([#11429](https://github.com/vercel/turborepo/pull/11429))
+    - feat: Git worktree support ([#11416](https://github.com/vercel/turborepo/pull/11416))
+    - feat: Extract turborepo-task-hash crate from turborepo-lib ([#11334](https://github.com/vercel/turborepo/pull/11334))
+    - feat: Add Rust-based integration tests with CI workflow ([#11333](https://github.com/vercel/turborepo/pull/11333))
+    - feat(query): Provide query for external dependencies ([#9929](https://github.com/vercel/turborepo/pull/9929))
+
+  </Accordion>
+
+  <Accordion title="Fixes (50)">
+
+    - fix: Move md tracking to middleware for static optimization ([#11535](https://github.com/vercel/turborepo/pull/11535))
+    - fix(docs): Update "Edit this page on GitHub" link to new content path ([#11534](https://github.com/vercel/turborepo/pull/11534))
+    - fix: Add turbo-site label to feedback submissions ([#11536](https://github.com/vercel/turborepo/pull/11536))
+    - fix: Use container queries for navbar to handle AI chat panel ([#11532](https://github.com/vercel/turborepo/pull/11532))
+    - fix: Sync favicon to browser theme preference on initial load ([#11518](https://github.com/vercel/turborepo/pull/11518))
+    - fix: Make showcase page logos theme-aware, grayscale ([#11517](https://github.com/vercel/turborepo/pull/11517))
+    - fix: Fix AI chat not opening on home page ([#11514](https://github.com/vercel/turborepo/pull/11514))
+    - fix(scope): Don't inject package name when user provides directory filter ([#11500](https://github.com/vercel/turborepo/pull/11500))
+    - fix: Replace execSync with execFileSync for oxfmt ([#11463](https://github.com/vercel/turborepo/pull/11463))
+    - fix(docs): Cancel active stream when clearing chat ([#11494](https://github.com/vercel/turborepo/pull/11494))
+    - fix(tui): Enable mouse capture for all terminals to restore scroll functionality ([#11487](https://github.com/vercel/turborepo/pull/11487))
+    - fix(docs): Fix mobile hamburger menu not opening ([#11482](https://github.com/vercel/turborepo/pull/11482))
+    - fix: Remove root app package requirement for polyrepo support ([#11478](https://github.com/vercel/turborepo/pull/11478))
+    - fix: Improve behavior for OOM-killed tasks ([#11477](https://github.com/vercel/turborepo/pull/11477))
+    - fix(ci): Fix release workflow Vercel domain matching and docs alias ([#11469](https://github.com/vercel/turborepo/pull/11469))
+    - fix(ci): Update release workflow for Vercel domain change and webhook ([#11467](https://github.com/vercel/turborepo/pull/11467))
+    - fix(ci): Add project flag and show errors in versioned docs aliasing ([#11459](https://github.com/vercel/turborepo/pull/11459))
+    - fix(docs): Allow search engine indexing on production domain ([#11456](https://github.com/vercel/turborepo/pull/11456))
+    - fix(docs): Clean up markdown output for LLM content negotiation ([#11452](https://github.com/vercel/turborepo/pull/11452))
+    - fix(ci): Use base SHA for production deployment lookup in versioned docs aliasing ([#11450](https://github.com/vercel/turborepo/pull/11450))
+    - fix(ci): Filter for production deployment in versioned docs aliasing ([#11449](https://github.com/vercel/turborepo/pull/11449))
+    - fix(tui): Only call `DisableMouseCapture` on Windows if mouse capture was enabled ([#11444](https://github.com/vercel/turborepo/pull/11444))
+    - fix(scope): Make package inference deterministic for subdirectory filters ([#11432](https://github.com/vercel/turborepo/pull/11432))
+    - fix(docs): Fix markdown content negotiation matcher ([#11425](https://github.com/vercel/turborepo/pull/11425))
+    - fix(tui): Properly disable mouse mode on exit and panic ([#11418](https://github.com/vercel/turborepo/pull/11418))
+    - fix(docs): Make mobile menu scrollable on small viewports ([#11422](https://github.com/vercel/turborepo/pull/11422))
+    - fix(docs): OpenAPI docs generation with CI drift detection ([#11424](https://github.com/vercel/turborepo/pull/11424))
+    - fix(docs): Exclude schema.json paths from middleware matcher ([#11420](https://github.com/vercel/turborepo/pull/11420))
+    - fix(example): Remove @expo/webpack-config from with-react-native-web ([#11408](https://github.com/vercel/turborepo/pull/11408))
+    - fix(ui): Fix text selection when TUI sidebar is hidden ([#11405](https://github.com/vercel/turborepo/pull/11405))
+    - fix: Normalize workspace globs with leading `./` ([#11403](https://github.com/vercel/turborepo/pull/11403))
+    - fix: Prevent infinite loop in `pnpm turbo` script and update docs ([#11400](https://github.com/vercel/turborepo/pull/11400))
+    - fix: Update outdated packages to remove node/nest deprecation warning ([#11395](https://github.com/vercel/turborepo/pull/11395))
+    - fix: Validate root and temp directory paths in download function ([#11311](https://github.com/vercel/turborepo/pull/11311))
+    - fix(turbo-utils): Add proxy support to fetch requests ([#11389](https://github.com/vercel/turborepo/pull/11389))
+    - fix(create-turbo): Lowercase bun label for consistency ([#11388](https://github.com/vercel/turborepo/pull/11388))
+    - fix(create-turbo): Prevent hang when using bun package manager ([#11386](https://github.com/vercel/turborepo/pull/11386))
+    - fix: Support file watching for non-root volumes on MacOS ([#11363](https://github.com/vercel/turborepo/pull/11363))
+    - fix: Show TUI when using `--output-logs=errors-only|none` ([#11382](https://github.com/vercel/turborepo/pull/11382))
+    - fix(ci): Prevent Test Summary job from hanging when integration tests are skipped ([#11316](https://github.com/vercel/turborepo/pull/11316))
+    - fix(bun): Add GitHub/git packages ([#11268](https://github.com/vercel/turborepo/pull/11268))
+    - fix: Transit nodes in Devtools ([#11307](https://github.com/vercel/turborepo/pull/11307))
+    - fix: Don't flash TUI on a >>> FULL TURBO ([#11306](https://github.com/vercel/turborepo/pull/11306))
+    - fix: Exclude framework-inferred env vars with wildcards ([#11303](https://github.com/vercel/turborepo/pull/11303))
+    - fix(create-turbo): Loader UI states ([#11300](https://github.com/vercel/turborepo/pull/11300))
+    - fix: Use newline for separator in misuse text ([#10834](https://github.com/vercel/turborepo/pull/10834))
+    - fix: Correct version mismatch causing noUpdateNotifier to fail ([#11133](https://github.com/vercel/turborepo/pull/11133))
+    - fix: Typo in example with-solid README.md description ([#11287](https://github.com/vercel/turborepo/pull/11287))
+    - fix: Overly aggressive path checking in microfrontends loading ([#11286](https://github.com/vercel/turborepo/pull/11286))
+    - fix: Correctly validate workspace root as package ([#11284](https://github.com/vercel/turborepo/pull/11284))
+
+  </Accordion>
+
+  <Accordion title="Documentation (14)">
+
+    - docs: Update $schema recommendation to use versioned subdomain ([#11519](https://github.com/vercel/turborepo/pull/11519))
+    - docs: Add sitemap.md and link from all docs pages ([#11515](https://github.com/vercel/turborepo/pull/11515))
+    - docs: Add update-versioned-schema-json codemod documentation ([#11513](https://github.com/vercel/turborepo/pull/11513))
+    - docs: Add READMEs for all Rust crates ([#11503](https://github.com/vercel/turborepo/pull/11503))
+    - docs: Show 'Searching sources...' loading state in AI chat ([#11496](https://github.com/vercel/turborepo/pull/11496))
+    - docs: Block search engine indexing on subdomains ([#11455](https://github.com/vercel/turborepo/pull/11455))
+    - docs(fix): Add loading state after sources load in AI chat ([#11442](https://github.com/vercel/turborepo/pull/11442))
+    - docs: Fix OpenAPI spec ([#11421](https://github.com/vercel/turborepo/pull/11421))
+    - docs: Exclude sitemap.xml from middleware to prevent i18n rewrite ([#11419](https://github.com/vercel/turborepo/pull/11419))
+    - docs: New site ([#11415](https://github.com/vercel/turborepo/pull/11415))
+    - docs: Add AGENTS.md and remove .cursor rules ([#11401](https://github.com/vercel/turborepo/pull/11401))
+    - docs: Add Oxc (oxlint, oxfmt) guide ([#11398](https://github.com/vercel/turborepo/pull/11398))
+    - docs: Add `dependsOn` to lint task for proper cache invalidation ([#11384](https://github.com/vercel/turborepo/pull/11384))
+    - docs: Release post for 2.7 ([#11272](https://github.com/vercel/turborepo/pull/11272))
+
+  </Accordion>
+
+</Accordions>
+
+## Acknowledgments and community
+
+Turborepo is the result of the combined work of all of its contributors, including our core team: [Anthony](https://github.com/anthonyshew) and [Tom](https://github.com/tknickman).
+
+Thank you for your continued support, feedback, and collaboration to make Turborepo your build tool of choice. To learn how to get involved, [visit the Community page](https://turborepo.dev/docs/community).
+
+We also thank everyone who contributed to this release of Turborepo: @claycurry, @Palid, @leos, @mdlawson, @richhaines, @msebi, @varmac231, and @wantop1.
