@@ -18,14 +18,16 @@ const internationalizer = createI18nMiddleware(i18n);
 function trackMd(
   request: NextRequest,
   context: NextFetchEvent,
-  path: string
+  path: string,
+  requestType?: "md-url" | "header-negotiated"
 ): void {
   context.waitUntil(
     trackMdRequest({
       path,
       userAgent: request.headers.get("user-agent"),
       referer: request.headers.get("referer"),
-      acceptHeader: request.headers.get("accept")
+      acceptHeader: request.headers.get("accept"),
+      requestType
     })
   );
 }
@@ -54,7 +56,7 @@ const proxy = (request: NextRequest, context: NextFetchEvent) => {
     if (result) {
       // Track with path without lang prefix (e.g., /llms.md/getting-started)
       const trackingPath = result.replace(/^\/[a-z]{2}\//, "/");
-      trackMd(request, context, trackingPath);
+      trackMd(request, context, trackingPath, "header-negotiated");
       return NextResponse.rewrite(new URL(result, request.nextUrl));
     }
   }

@@ -6,6 +6,12 @@ interface TrackMdRequestParams {
   userAgent: string | null;
   referer: string | null;
   acceptHeader: string | null;
+  /**
+   * How the markdown was requested:
+   * - 'md-url' for direct .md URLs
+   * - 'header-negotiated' for Accept header
+   */
+  requestType?: "md-url" | "header-negotiated";
 }
 
 /**
@@ -16,7 +22,8 @@ export async function trackMdRequest({
   path,
   userAgent,
   referer,
-  acceptHeader
+  acceptHeader,
+  requestType
 }: TrackMdRequestParams): Promise<void> {
   if (!MD_TRACKING_URL || !MD_TRACKING_API_KEY) {
     // Tracking not configured, skip silently
@@ -35,7 +42,8 @@ export async function trackMdRequest({
         source: "turborepo",
         userAgent,
         referer,
-        acceptHeader
+        acceptHeader,
+        requestType
       })
     });
 
