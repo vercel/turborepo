@@ -3,8 +3,6 @@
   "title": "RawTurboJson",
   "description": "Configuration schema for turbo.json.\n\nAn object representing the task dependency graph of your project. turbo interprets these conventions to schedule, execute, and cache the outputs of tasks in your project.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration",
   "type": "object",
-  "allowComments": true,
-  "allowTrailingCommas": true,
   "properties": {
     "$schema": {
       "description": "JSON Schema URL for validation.",
@@ -178,6 +176,8 @@
       ]
     }
   },
+  "allowComments": true,
+  "allowTrailingCommas": true,
   "definitions": {
     "Array_of_String": {
       "type": "array",

@@ -114,7 +114,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn generate_schema() -> RootSchema {
     // Generate schema for RawTurboJson which is the complete turbo.json structure
     // This includes both root-level and workspace-level configurations
-    schema_for!(RawTurboJson)
+    let mut schema = schema_for!(RawTurboJson);
+
+    // Add allowComments and allowTrailingCommas to the root schema
+    // These tell editors like VSCode that JSONC (JSON with comments) is supported
+    schema
+        .schema
+        .extensions
+        .insert("allowComments".to_string(), serde_json::json!(true));
+    schema
+        .schema
+        .extensions
+        .insert("allowTrailingCommas".to_string(), serde_json::json!(true));
+
+    schema
 }
 
 /// Generate TypeScript type definitions
