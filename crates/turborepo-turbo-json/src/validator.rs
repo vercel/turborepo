@@ -209,12 +209,8 @@ pub fn validate_no_task_extends_in_root(
         .tasks
         .iter()
         .filter_map(|(task_name, definition)| {
-            if definition.extends.is_some() {
-                let (span, text) = definition
-                    .extends
-                    .as_ref()
-                    .unwrap()
-                    .span_and_text("turbo.json");
+            if let Some(spanned) = definition.extends.as_ref() {
+                let (span, text) = spanned.span_and_text("turbo.json");
                 Some(Error::TaskExtendsInRoot {
                     task_name: task_name.to_string(),
                     span,

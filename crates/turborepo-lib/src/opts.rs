@@ -336,7 +336,10 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
     if let Some(percent) = concurrency_raw.strip_suffix('%') {
         let percent = percent.parse::<f64>()?;
         return if percent > 0.0 && percent.is_finite() {
-            Ok((num_cpus::get() as f64 * percent / 100.0).max(1.0) as u32)
+            let num_cpus = std::thread::available_parallelism()
+                .map(|n| n.get())
+                .unwrap_or(1);
+            Ok((num_cpus as f64 * percent / 100.0).max(1.0) as u32)
         } else {
             Err(Error::InvalidConcurrencyPercentage(
                 backtrace::Backtrace::capture(),

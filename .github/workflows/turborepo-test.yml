@@ -1,6 +1,8 @@
 name: Test
 on:
   pull_request:
+  push:
+    branches: [main]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -9,7 +11,7 @@ concurrency:
 permissions:
   actions: write
   contents: read
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   find-changes:
@@ -141,6 +143,16 @@ jobs:
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 30
     if: ${{ needs.find-changes.outputs.rest == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     strategy:
       fail-fast: false
       matrix:
@@ -204,18 +216,6 @@ jobs:
           fi
           turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} -- "tests/${{ matrix.test-path }}"
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
   turbo_types_check:
     name: "@turbo/types codegen check"
@@ -256,8 +256,6 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - name: ubuntu
-            runner: ubuntu-latest
           - name: macos
             runner: macos-latest
           - name: windows
@@ -269,6 +267,16 @@ jobs:
       - find-changes
     if: ${{ needs.find-changes.outputs.rest == 'true' }}
     name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/2)
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     steps:
       - name: Set git to use LF line endings
         run: |
@@ -306,18 +314,6 @@ jobs:
               cargo nextest run --workspace --no-run
           fi
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
       - name: Run tests
         timeout-minutes: 30
@@ -328,18 +324,178 @@ jobs:
               cargo nextest run --workspace --partition hash:${{ matrix.partition }}/2
           fi
         shell: bash
+
+  rust_test_ubuntu:
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node: "false"
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Build tests
+        timeout-minutes: 15
+        # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          cargo nextest run --workspace --no-run
+        shell: bash
+
+      - name: Run tests with coverage
+        timeout-minutes: 30
+        # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          cargo llvm-cov nextest \
+            --workspace \
+            --exclude turborepo-napi \
+            --partition hash:${{ matrix.partition }}/2 \
+            --lcov \
+            --output-path coverage-${{ matrix.partition }}.lcov
+        shell: bash
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-partition-${{ matrix.partition }}
+          path: coverage-${{ matrix.partition }}.lcov
+          retention-days: 1
+
+  coverage_report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - find-changes
+      - rust_test_ubuntu
+    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    env:
+      COVERAGE_API_URL: ${{ secrets.COVERAGE_API_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-partition-*
+          merge-multiple: true
+
+      - name: Install lcov
+        run: sudo apt-get install -y lcov
+
+      - name: Merge and transform coverage
+        if: ${{ !github.event.pull_request.head.repo.fork }}
+        run: |
+          SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
+
+          lcov --add-tracefile coverage-1.lcov --add-tracefile coverage-2.lcov --output-file coverage-merged.lcov
+
+          node scripts/transform-coverage.js coverage-merged.lcov coverage-transformed.json >> "$GITHUB_ENV"
+
+          npx vercel blob put coverage-transformed.json --pathname="coverage/commits/${SHA}.json" \
+            --token "${BLOB_READ_WRITE_TOKEN}"
+
+          npx vercel blob put coverage-transformed.json --pathname="coverage/branches/${SAFE_BRANCH}/${TIMESTAMP}.json" \
+            --token "${BLOB_READ_WRITE_TOKEN}"
+
+          echo "Uploaded coverage for ${SHA} on branch ${BRANCH}"
         env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
+          SHA: ${{ github.sha }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          TIMESTAMP: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && env.COVERAGE_API_URL != '' && !github.event.pull_request.head.repo.fork
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const lines = parseFloat(process.env.COVERAGE_LINES) || 0;
+            const functions = parseFloat(process.env.COVERAGE_FUNCTIONS) || 0;
+            const branches = parseFloat(process.env.COVERAGE_BRANCHES) || 0;
+
+            const body = `## Coverage Report
+
+            | Metric | Coverage |
+            |--------|----------|
+            | Lines | ${lines.toFixed(2)}% |
+            | Functions | ${functions.toFixed(2)}% |
+            | Branches | ${branches.toFixed(2)}% |
+
+            [View full report](${process.env.COVERAGE_API_URL}/commits/${{ github.sha }})
+            `;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('## Coverage Report')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
 
   basic-example:
     name: "`basic` example"
@@ -496,6 +652,8 @@ jobs:
       - integration
       - turbo_types_check
       - rust_test
+      - rust_test_ubuntu
+      - coverage_report
       - basic-example
       - kitchen-sink-example
       - non-monorepo-example
@@ -522,6 +680,8 @@ jobs:
           subjob ${{needs.integration.result}}
           subjob ${{needs.turbo_types_check.result}}
           subjob ${{needs.rust_test.result}}
+          subjob ${{needs.rust_test_ubuntu.result}}
+          subjob ${{needs.coverage_report.result}}
           subjob ${{needs.basic-example.result}}
           subjob ${{needs.kitchen-sink-example.result}}
           subjob ${{needs.non-monorepo-example.result}}

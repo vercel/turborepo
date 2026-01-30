@@ -15,8 +15,23 @@ permissions:
   id-token: write # for OIDC authentication with CodSpeed
 
 jobs:
+  find-changes:
+    name: Find path changes
+    runs-on: ubuntu-latest
+    outputs:
+      rust: ${{ steps.check.outputs.changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for Rust changes
+        id: check
+        uses: ./.github/actions/find-rust-changes
+
   benchmarks:
     name: Run benchmarks
+    needs: find-changes
+    if: ${{ needs.find-changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
