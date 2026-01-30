@@ -721,7 +721,9 @@ impl Lockfile for BunLockfile {
 
     fn turbo_version(&self) -> Option<String> {
         let (_, entry) = self.package_entry("turbo")?;
-        Some(entry.version().to_owned())
+        let version = entry.version();
+        Version::parse(version).ok()?;
+        Some(version.to_owned())
     }
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
@@ -3807,5 +3809,47 @@ mod test {
             packages_pos < patched_deps_pos,
             "packages should come before patchedDependencies"
         );
+    }
+
+    #[test]
+    fn test_turbo_version() {
+        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
+        assert_eq!(lockfile.turbo_version().as_deref(), Some("2.3.3"));
+    }
+
+    #[test]
+    fn test_turbo_version_rejects_non_semver() {
+        // Malicious version strings that could be used for RCE via npx should be
+        // rejected
+        let malicious_versions = [
+            "file:./malicious.tgz",
+            "https://evil.com/malicious.tgz",
+            "git+https://github.com/evil/repo.git",
+            "../../../etc/passwd",
+            "1.0.0 && curl evil.com",
+        ];
+
+        for malicious_version in malicious_versions {
+            let json = format!(
+                r#"{{
+  "lockfileVersion": 0,
+  "workspaces": {{
+    "": {{
+      "name": "test"
+    }}
+  }},
+  "packages": {{
+    "turbo": ["turbo@{malicious_version}", "", {{}}, ""]
+  }}
+}}"#
+            );
+            let lockfile = BunLockfile::from_str(&json).unwrap();
+            assert_eq!(
+                lockfile.turbo_version(),
+                None,
+                "should reject malicious version: {}",
+                malicious_version
+            );
+        }
     }
 }
