@@ -17,7 +17,7 @@ use std::{
     fmt,
 };
 
-use schemars::{JsonSchema, r#gen::SchemaGenerator, schema::Schema};
+use schemars::{r#gen::SchemaGenerator, schema::Schema, JsonSchema};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};
@@ -56,6 +56,7 @@ impl JsonSchema for TaskName<'static> {
 /// `TaskName` is represented as a `string` in TypeScript.
 impl TS for TaskName<'static> {
     type WithoutGenerics = Self;
+    type OptionInnerType = Self;
 
     fn name() -> String {
         "string".to_string()

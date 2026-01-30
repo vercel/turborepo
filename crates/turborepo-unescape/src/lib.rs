@@ -7,7 +7,7 @@ use std::{
 };
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
-use schemars::{JsonSchema, r#gen::SchemaGenerator, schema::Schema};
+use schemars::{r#gen::SchemaGenerator, schema::Schema, JsonSchema};
 use ts_rs::TS;
 
 // We're using a newtype here because biome currently doesn't
@@ -101,6 +101,7 @@ impl JsonSchema for UnescapedString {
 /// type.
 impl TS for UnescapedString {
     type WithoutGenerics = Self;
+    type OptionInnerType = Self;
 
     fn name() -> String {
         "string".to_string()

@@ -16,7 +16,7 @@ use std::{
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use schemars::{JsonSchema, r#gen::SchemaGenerator, schema::Schema};
+use schemars::{r#gen::SchemaGenerator, schema::Schema, JsonSchema};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ts_rs::TS;
@@ -105,6 +105,7 @@ impl<T: JsonSchema> JsonSchema for Spanned<T> {
 /// `T`.
 impl<T: TS + 'static> TS for Spanned<T> {
     type WithoutGenerics = T::WithoutGenerics;
+    type OptionInnerType = Self;
 
     fn name() -> String {
         T::name()
