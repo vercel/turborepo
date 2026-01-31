@@ -1,9 +1,6 @@
 import { describe, it, mock } from "node:test";
 import fs from "node:fs/promises";
 import assert from "node:assert";
-import path from "node:path";
-import { tmpdir } from "node:os";
-import { create as tarCreate } from "tar";
 import native from "./native";
 import type { Platform } from "./types";
 import operations from "./operations";
