@@ -36,6 +36,11 @@
     "*.toml": "taplo format",
     "*.rs": "bash -c 'cargo fmt'"
   },
+  "pnpm": {
+    "overrides": {
+      "form-data": ">=4.0.4"
+    }
+  },
   "packageManager": "pnpm@10.28.0",
   "engines": {
     "node": "22.x"
