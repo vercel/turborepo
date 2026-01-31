@@ -1,6 +1,6 @@
 {
   "name": "@turbo/codemod",
-  "version": "2.8.1",
+  "version": "2.8.2-canary.0",
   "description": "Provides Codemod transformations to help upgrade your Turborepo codebase when a feature is deprecated.",
   "homepage": "https://turborepo.dev",
   "license": "MIT",
@@ -21,7 +21,6 @@
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
-    "axios": "0.27.2",
     "commander": "9.5.0",
     "diff": "5.1.0",
     "find-up": "4.1.0",
@@ -56,7 +55,7 @@
     "plop": "3.1.1",
     "semver": "7.5.0",
     "ts-jest": "29.2.5",
-    "tsup": "6.7.0",
+    "tsup": "8.5.1",
     "typescript": "5.5.4"
   },
   "files": [

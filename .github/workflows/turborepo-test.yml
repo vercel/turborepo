@@ -26,6 +26,7 @@ jobs:
       with-svelte-example: ${{ steps.filter.outputs.with-svelte-example }}
       with-tailwind-example: ${{ steps.filter.outputs.with-tailwind-example }}
       rest: ${{ steps.filter.outputs.rest }}
+      rust: ${{ steps.filter.outputs.rust }}
       native-lib: ${{ steps.filter.outputs.native-lib }}
     steps:
       - name: Checkout
@@ -107,11 +108,25 @@ jobs:
             echo "No changes outside examples/ and docs/ directories"
           fi
 
+          # Detect if Rust/core code changed (requires Rust tests + integration tests)
+          # This excludes JS-only changes like packages/*, lockfile, etc.
+          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|turborepo-tests/)"
+          RUST_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$RUST_PATTERNS" || true)
+
+          if [ -n "$RUST_CHANGES" ]; then
+            echo "rust=true" >> $GITHUB_OUTPUT
+            echo "Rust/core changes detected:"
+            echo "$RUST_CHANGES"
+          else
+            echo "rust=false" >> $GITHUB_OUTPUT
+            echo "No Rust/core changes detected (JS-only change)"
+          fi
+
   generate-integration-test-matrix:
     name: Generate integration test matrix
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -142,7 +157,7 @@ jobs:
       - generate-integration-test-matrix
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 30
-    if: ${{ needs.find-changes.outputs.rest == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
+    if: ${{ needs.find-changes.outputs.rust == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
     env:
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
@@ -221,7 +236,7 @@ jobs:
     name: "@turbo/types codegen check"
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -265,7 +280,7 @@ jobs:
     timeout-minutes: 30
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/2)
     env:
       SCCACHE_BUCKET: turborepo-sccache
@@ -334,7 +349,7 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
     env:
       SCCACHE_BUCKET: turborepo-sccache
@@ -408,7 +423,7 @@ jobs:
     needs:
       - find-changes
       - rust_test_ubuntu
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.rust == 'true' }}
     env:
       COVERAGE_API_URL: ${{ secrets.COVERAGE_API_URL }}
     steps:
