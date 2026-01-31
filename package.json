@@ -2,6 +2,11 @@
   "name": "turbo-monorepo",
   "version": "0.0.0",
   "private": true,
+  "pnpm": {
+    "overrides": {
+      "fast-xml-parser": ">=5.3.4"
+    }
+  },
   "scripts": {
     "build": "turbo run build",
     "build:turbo": "pnpm run --filter=cli build",
@@ -28,7 +33,7 @@
     "lint-staged": "13.1.0",
     "oxfmt": "^0.23.0",
     "oxlint": "^1.35.0",
-    "semver": "7.5.0",
+    "semver": "7.5.2",
     "typescript": "5.5.4"
   },
   "lint-staged": {
