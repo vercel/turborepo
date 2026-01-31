@@ -2,6 +2,11 @@
   "name": "turbo-monorepo",
   "version": "0.0.0",
   "private": true,
+  "pnpm": {
+    "overrides": {
+      "fast-xml-parser": ">=5.3.4"
+    }
+  },
   "scripts": {
     "build": "turbo run build",
     "build:turbo": "pnpm run --filter=cli build",
