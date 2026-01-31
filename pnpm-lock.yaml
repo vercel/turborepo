@@ -27,8 +27,8 @@ importers:
         specifier: ^1.35.0
         version: 1.35.0
       semver:
-        specifier: 7.5.0
-        version: 7.5.0
+        specifier: 7.5.2
+        version: 7.5.2
       typescript:
         specifier: 5.5.4
         version: 5.5.4
@@ -8384,6 +8384,11 @@ packages:
 
   semver@7.5.0:
     resolution: {integrity: sha512-+XC0AD/R7Q2mPSRuy2Id0+CGTZ98+8f+KvwirxOKIEyid+XSx6HbC63p+O4IndTHuX5Z+JxQ0TghCkO5Cg/2HA==}
+    engines: {node: '>=10'}
+    hasBin: true
+
+  semver@7.5.2:
+    resolution: {integrity: sha512-SoftuTROv/cRjCze/scjGyiDtcUyxw1rgYQSZY7XTmtR5hX+dm76iDbTH8TkLPHCQmlbQVSSbNZCPM2hb0knnQ==}
     engines: {node: '>=10'}
     hasBin: true
 
@@ -17471,6 +17476,10 @@ snapshots:
   semver@6.3.1: {}
 
   semver@7.5.0:
+    dependencies:
+      lru-cache: 6.0.0
+
+  semver@7.5.2:
     dependencies:
       lru-cache: 6.0.0
 
