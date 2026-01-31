@@ -17,6 +17,7 @@ export interface TurboGeneratorCLIOptions {
   examplePath?: string;
   // defaults to false
   showAllDependencies: boolean;
+  addDependencies?: boolean;
 }
 
 // convert CLI options to generator options
