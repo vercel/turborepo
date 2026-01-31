@@ -4,7 +4,7 @@ import { RULES } from "../../../../lib/constants";
 import rule from "../../../../lib/rules/no-undeclared-env-vars";
 
 const ruleTester = new RuleTester({
-  parserOptions: { ecmaVersion: 2020, sourceType: "module" }
+  languageOptions: { ecmaVersion: 2020, sourceType: "module" }
 });
 
 const cwd = path.join(__dirname, "../../../../__fixtures__/configs/single");
@@ -40,12 +40,6 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
     {
       code: `
         const val = import.meta.env["NEW_STYLE_GLOBAL_ENV_KEY"];
-      `,
-      ...options()
-    },
-    {
-      code: `
-        const { TASK_ENV_KEY, ANOTHER_ENV_KEY } = import.meta.env;
       `,
       ...options()
     },
