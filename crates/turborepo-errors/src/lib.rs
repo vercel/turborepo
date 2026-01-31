@@ -16,7 +16,7 @@ use std::{
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use schemars::{r#gen::SchemaGenerator, schema::Schema, JsonSchema};
+use schemars::{JsonSchema, r#gen::SchemaGenerator, schema::Schema};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use ts_rs::TS;

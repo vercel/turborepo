@@ -17,7 +17,7 @@ use std::{
     fmt,
 };
 
-use schemars::{r#gen::SchemaGenerator, schema::Schema, JsonSchema};
+use schemars::{JsonSchema, r#gen::SchemaGenerator, schema::Schema};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use turborepo_repository::package_graph::{PackageName, ROOT_PKG_NAME};

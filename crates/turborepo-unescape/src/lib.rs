@@ -7,7 +7,7 @@ use std::{
 };
 
 use biome_deserialize::{Deserializable, DeserializableValue, DeserializationDiagnostic};
-use schemars::{r#gen::SchemaGenerator, schema::Schema, JsonSchema};
+use schemars::{JsonSchema, r#gen::SchemaGenerator, schema::Schema};
 use ts_rs::TS;
 
 // We're using a newtype here because biome currently doesn't
