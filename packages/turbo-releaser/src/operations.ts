@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "node:fs/promises";
 import { execSync } from "node:child_process";
-import tar from "tar";
+import * as tar from "tar";
 import native from "./native";
 import type { Platform } from "./types";
 
