@@ -163,7 +163,7 @@ which = "4.4.0"
 
 # Schema generation
 schemars = "0.8.16"
-ts-rs = "10.0.0"
+ts-rs = { version = "11.1.0", features = ["serde-compat"] }
 
 # Benchmarking
 codspeed-criterion-compat = "2.7"

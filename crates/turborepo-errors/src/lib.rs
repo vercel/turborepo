@@ -105,6 +105,7 @@ impl<T: JsonSchema> JsonSchema for Spanned<T> {
 /// `T`.
 impl<T: TS + 'static> TS for Spanned<T> {
     type WithoutGenerics = T::WithoutGenerics;
+    type OptionInnerType = Self;
 
     fn name() -> String {
         T::name()
