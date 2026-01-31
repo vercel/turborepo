@@ -931,4 +931,48 @@ mod tests {
 
         Ok(())
     }
+
+    #[test]
+    fn test_restore_with_existing_symlink_does_not_overwrite_target() {
+        let input_dir = tempdir().unwrap();
+        let input_files = &[
+            TarFile::Directory {
+                path: AnchoredSystemPathBuf::from_raw("dist").unwrap(),
+            },
+            TarFile::File {
+                path: AnchoredSystemPathBuf::from_raw("dist/index.js").unwrap(),
+                body: b"console.log('hello')".to_vec(),
+            },
+        ];
+        let archive_path = generate_tar(&input_dir, input_files).unwrap();
+        // create a symlink to something in the output
+        let output_dir = tempdir().unwrap();
+        let output_path = AbsoluteSystemPath::from_std_path(output_dir.path()).unwrap();
+
+        // Create dist -> src symlink
+        let output_dist = output_path.join_component("dist");
+        let output_src = output_path.join_component("src");
+        output_src.create_dir_all().unwrap();
+        output_dist.symlink_to_dir("src").unwrap();
+
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path).unwrap();
+
+        assert!(
+            !output_src.join_component("index.js").try_exists().unwrap(),
+            "src is empty before restore"
+        );
+
+        let mut cache_reader = CacheReader::open(&archive_path).unwrap();
+
+        let actual = cache_reader.restore(anchor).unwrap();
+        assert_eq!(
+            actual,
+            into_anchored_system_path_vec(vec!["dist", "dist/index.js",])
+        );
+        assert!(
+            !output_src.join_component("index.js").try_exists().unwrap(),
+            "src should remain empty after restore"
+        );
+    }
 }
