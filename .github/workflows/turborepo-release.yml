@@ -64,36 +64,125 @@ on:
         type: string
         default: ""
 
+  workflow_call:
+    inputs:
+      increment:
+        required: true
+        type: string
+      dry_run:
+        required: false
+        type: boolean
+        default: false
+      tag-override:
+        required: false
+        type: string
+        default: ""
+      ci-tag-override:
+        required: false
+        type: string
+        default: ""
+      sha:
+        required: false
+        type: string
+        default: ""
+      is-canary:
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      NPM_TOKEN:
+        required: true
+      TURBO_TOKEN:
+        required: true
+      DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL:
+        required: true
+    outputs:
+      stage-branch:
+        description: "The staging branch name"
+        value: ${{ jobs.stage.outputs.stage-branch }}
+      version:
+        description: "The released version"
+        value: ${{ jobs.stage.outputs.version }}
+      previous-tag:
+        description: "The previous release tag"
+        value: ${{ jobs.stage.outputs.previous-tag }}
+      docs-url:
+        description: "The versioned docs URL"
+        value: ${{ jobs.alias-versioned-docs.outputs.docs_url }}
+      docs-success:
+        description: "Whether docs aliasing succeeded"
+        value: ${{ jobs.alias-versioned-docs.outputs.success }}
+
 jobs:
   stage:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      stage-branch: ${{ steps.stage.outputs.stage-branch }}
+      base-sha: ${{ steps.base-sha.outputs.sha }}
+      version: ${{ steps.version.outputs.version }}
+      previous-tag: ${{ steps.previous-tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha || github.sha }}
+          fetch-depth: 0
+
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
+
+      - name: Pull latest main (for canary releases)
+        if: ${{ inputs.is-canary }}
+        run: git pull origin main
+
       - name: Configure git
         run: |
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
+
       - name: Get base SHA
         id: base-sha
         run: echo "sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-      - name: Version
+
+      - name: Get previous tag
+        id: previous-tag
         run: |
-          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.tag-override }}
+          PREV_TAG=$(git tag --list 'v*-canary.*' --sort=-version:refname | head -n 1)
+          if [ -z "$PREV_TAG" ]; then
+            PREV_TAG=$(git tag --list 'v*' --sort=-version:refname | grep -v canary | head -n 1)
+          fi
+          echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
+          echo "Previous tag: $PREV_TAG"
+
+      - name: Version
+        id: version
+        env:
+          INCREMENT: ${{ inputs.increment }}
+          TAG_OVERRIDE: ${{ inputs.tag-override }}
+        run: |
+          if [[ -n "$TAG_OVERRIDE" && ! "$TAG_OVERRIDE" =~ ^[a-zA-Z0-9-]+$ ]]; then
+            echo "::error::Invalid tag-override format. Must be alphanumeric with hyphens only."
+            exit 1
+          fi
+
+          ./scripts/version.js "$INCREMENT" "$TAG_OVERRIDE"
+          VERSION=$(head -n 1 version.txt)
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version format produced: $VERSION"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "New version: $VERSION"
           cat version.txt
+
       - name: Stage Commit
         id: stage
-        run: cd cli && make stage-release && echo "STAGE_BRANCH=$(git branch --show-current)" >> $GITHUB_OUTPUT
-      - name: Show Stage Commit
-        run: echo "${{ steps.stage.outputs.STAGE_BRANCH }}"
-    outputs:
-      stage-branch: "${{ steps.stage.outputs.STAGE_BRANCH }}"
-      base-sha: "${{ steps.base-sha.outputs.sha }}"
+        run: |
+          cd cli && make stage-release
+          echo "stage-branch=$(git branch --show-current)" >> $GITHUB_OUTPUT
 
   rust-smoke-test:
     name: Rust Unit Tests
@@ -101,15 +190,14 @@ jobs:
     timeout-minutes: 30
     needs: [stage]
     steps:
-      - name: Show Stage Commit
-        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           node: "false"
 
       - name: Install cargo-nextest
@@ -119,9 +207,7 @@ jobs:
 
       - name: Run tests
         timeout-minutes: 30
-        run: |
-          cargo nextest run --workspace
-        shell: bash
+        run: cargo nextest run --workspace
 
   js-smoke-test:
     name: JS Package Tests
@@ -129,21 +215,22 @@ jobs:
     timeout-minutes: 30
     needs: [stage]
     steps:
-      - name: Show Stage Commit
-        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           rust: "false"
           capnproto: "false"
+
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
-          turbo-version: "${{ github.event.inputs.ci-tag-override }}"
+          turbo-version: ${{ inputs.ci-tag-override || '' }}
+
       - name: Run JS Package Tests
         run: turbo run check-types test --filter="./packages/*" --color
 
@@ -170,12 +257,10 @@ jobs:
     runs-on: ${{ matrix.settings.host }}
     timeout-minutes: 30
     steps:
-      - name: Show Stage Commit
-        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          ref: "${{ needs.stage.outputs.stage-branch }}"
+          ref: ${{ needs.stage.outputs.stage-branch }}
 
       - name: Setup Protoc
         uses: ./.github/actions/setup-protoc
@@ -196,7 +281,6 @@ jobs:
           cache: false
 
       - name: Build Setup
-        shell: bash
         if: ${{ matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
 
@@ -215,12 +299,12 @@ jobs:
     timeout-minutes: 30
     needs: [stage, build-rust, rust-smoke-test, js-smoke-test]
     steps:
-      - name: Show Stage Commit
-        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - uses: actions/checkout@v4
         with:
-          ref: "${{ needs.stage.outputs.stage-branch }}"
+          ref: ${{ needs.stage.outputs.stage-branch }}
+
       - run: git fetch origin --tags
+
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -228,7 +312,7 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
-          turbo-version: "${{ github.event.inputs.ci-tag-override }}"
+          turbo-version: ${{ inputs.ci-tag-override || '' }}
 
       - name: Configure git
         run: |
@@ -253,7 +337,12 @@ jobs:
         run: npm install -g npm@11.5.1
 
       - name: Perform Release
-        run: cd cli && make publish-turbo SKIP_PUBLISH=${{ inputs.dry_run && '--skip-publish' || '' }}
+        run: |
+          SKIP_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            SKIP_FLAG="--skip-publish"
+          fi
+          cd cli && make publish-turbo SKIP_PUBLISH=$SKIP_FLAG
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts
@@ -287,8 +376,6 @@ jobs:
           SUBDOMAIN=$(echo "v${VERSION}" | tr '.' '-')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
-          echo "Version: v${VERSION}"
-          echo "Subdomain: ${SUBDOMAIN}.turborepo.dev"
 
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
@@ -299,17 +386,14 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.TURBO_TOKEN }}
         run: |
           SHA="${{ needs.stage.outputs.base-sha }}"
-          echo "Searching for production deployment with SHA: ${SHA}"
-
           DEPLOYMENT_URL=$(vercel list turbo-site --scope=vercel -m githubCommitSha="${SHA}" --status=READY --token="${VERCEL_TOKEN}" 2>&1 | tee /dev/stderr | grep -E '^\S+\.vercel\.(app|sh)' | head -n 1 | awk '{print $1}')
 
           if [ -z "$DEPLOYMENT_URL" ]; then
-            echo "::error::No deployment found for SHA ${SHA}. A production deployment is created when the commit for the release is merged to main. Ensure the merge to main has completed and the Vercel build has finished before running this workflow."
+            echo "::error::No deployment found for SHA ${SHA}."
             exit 1
           fi
 
           echo "deployment_url=${DEPLOYMENT_URL}" >> $GITHUB_OUTPUT
-          echo "Found production deployment."
 
       - name: Assign subdomain alias
         id: alias
@@ -318,13 +402,8 @@ jobs:
         run: |
           ALIAS="${{ steps.version.outputs.subdomain }}.turborepo.dev"
           DEPLOYMENT_URL="${{ steps.find-deployment.outputs.deployment_url }}"
-
-          echo "Assigning alias ${ALIAS} to deployment ${DEPLOYMENT_URL}"
-
           vercel alias set "${DEPLOYMENT_URL}" "${ALIAS}" --token="${VERCEL_TOKEN}" --scope=vercel
-
           echo "docs_url=https://${ALIAS}" >> $GITHUB_OUTPUT
-          echo "Successfully aliased to https://${ALIAS}"
 
       - name: Notify Slack on failure
         if: failure()
@@ -336,44 +415,18 @@ jobs:
               "blocks": [
                 {
                   "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "Versioned Docs Aliasing Failed",
-                    "emoji": true
-                  }
+                  "text": { "type": "plain_text", "text": "Versioned Docs Aliasing Failed" }
                 },
                 {
                   "type": "section",
                   "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Version:*\nv${{ steps.version.outputs.version }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Target Subdomain:*\n${{ steps.version.outputs.subdomain }}.turborepo.dev"
-                    }
+                    { "type": "mrkdwn", "text": "*Version:*\nv${{ steps.version.outputs.version }}" },
+                    { "type": "mrkdwn", "text": "*Subdomain:*\n${{ steps.version.outputs.subdomain }}.turborepo.dev" }
                   ]
                 },
                 {
                   "type": "section",
-                  "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "*SHA:*\n${{ steps.get-sha.outputs.sha }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Deployment URL:*\n${{ steps.find-deployment.outputs.deployment_url || 'Not found' }}"
-                    }
-                  ]
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Workflow Run:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>"
-                  }
+                  "text": { "type": "mrkdwn", "text": "*Workflow:*\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Logs>" }
                 }
               ]
             }
@@ -383,15 +436,14 @@ jobs:
   create-release-pr:
     name: "Open Release Branch PR"
     needs: [stage, npm-publish, alias-versioned-docs]
-    if: ${{ always() && needs.npm-publish.result == 'success' }}
+    if: ${{ always() && needs.npm-publish.result == 'success' && !inputs.is-canary }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Show Stage Commit
-        run: echo "${{ needs.stage.outputs.stage-branch }}"
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+
       - name: Get version
         id: getVersion
         run: echo "version=$(head -n 1 version.txt)" >> $GITHUB_OUTPUT
@@ -399,39 +451,15 @@ jobs:
       - name: Build PR Body
         id: pr-body
         run: |
-          cat << 'EOFHEADER' > pr-body.md
-          EOFHEADER
-
           if [ "${{ needs.alias-versioned-docs.result }}" != "success" ]; then
-            cat << 'EOFWARNING' >> pr-body.md
-          > [!CAUTION]
-          > ## VERSIONED DOCS ALIASING FAILED
-          >
-          > The documentation alias to `${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.dev` **FAILED**.
-          >
-          > **Action Required:** Manually investigate and create the alias.
-          >
-          > [View the failed workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-          ---
-
-          EOFWARNING
+            echo "> [!CAUTION]" > pr-body.md
+            echo "> Versioned docs aliasing FAILED. [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> pr-body.md
+            echo "" >> pr-body.md
           else
-            cat << EOFSUCCESS >> pr-body.md
-          Versioned docs available at: https://${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.dev
-
-          ---
-
-          EOFSUCCESS
+            echo "Versioned docs: https://${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.dev" > pr-body.md
+            echo "" >> pr-body.md
           fi
-
           echo "Release PR for turborepo v${{ steps.getVersion.outputs.version }}" >> pr-body.md
-
-          {
-            echo "body<<EOFBODY"
-            cat pr-body.md
-            echo "EOFBODY"
-          } >> $GITHUB_OUTPUT
 
       - name: Create pull request
         uses: thomaseizinger/create-pull-request@master
@@ -441,4 +469,4 @@ jobs:
           head: ${{ needs.stage.outputs.stage-branch }}
           base: main
           title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"
-          body: ${{ steps.pr-body.outputs.body }}
+          body-path: pr-body.md

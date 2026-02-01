@@ -1,0 +1,168 @@
+# Canary Release Pipeline
+#
+# Automatically publishes a canary release when PRs merge to main.
+#
+# Key behaviors:
+# - Triggers on push to main (when relevant paths change)
+# - Skips if the push is from a release PR merge (bot actor + release commit message)
+# - Uses GitHub's concurrency to queue/squash multiple rapid merges
+# - Calls the release workflow, then opens an auto-merging PR
+
+name: Canary Release
+
+permissions:
+  id-token: write
+  contents: write
+  pull-requests: write
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "packages/**"
+      - "cli/**"
+      - ".github/workflows/**"
+      - ".github/actions/**"
+
+concurrency:
+  group: canary-release
+  cancel-in-progress: false
+
+jobs:
+  check-skip:
+    name: "Check Skip Conditions"
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.check.outputs.should_skip }}
+    steps:
+      - name: Check if release PR merge
+        id: check
+        env:
+          ACTOR: ${{ github.actor }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          if [[ "$ACTOR" == "github-actions[bot]" && "$COMMIT_MESSAGE" =~ ^release\(turborepo\): ]]; then
+            echo "Skipping: This is a release PR merge"
+            echo "should_skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_skip=false" >> $GITHUB_OUTPUT
+          fi
+
+  release:
+    needs: [check-skip]
+    if: ${{ needs.check-skip.outputs.should_skip != 'true' }}
+    uses: ./.github/workflows/turborepo-release.yml
+    with:
+      increment: prerelease
+      is-canary: true
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL: ${{ secrets.DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL }}
+
+  create-canary-pr:
+    name: "Open Canary Release PR"
+    needs: [check-skip, release]
+    if: ${{ needs.check-skip.outputs.should_skip != 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release.outputs.stage-branch }}
+          fetch-depth: 0
+
+      - name: Fetch main and tags
+        run: git fetch origin main --tags
+
+      - name: Validate version format
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version format: $VERSION"
+            exit 1
+          fi
+
+      - name: Build PR Body
+        env:
+          PREVIOUS_TAG: ${{ needs.release.outputs.previous-tag }}
+          VERSION: ${{ needs.release.outputs.version }}
+          DOCS_URL: ${{ needs.release.outputs.docs-url }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "## Canary Release" > pr-body.md
+          echo "" >> pr-body.md
+
+          if [ -n "$DOCS_URL" ]; then
+            echo "Versioned docs: ${DOCS_URL}" >> pr-body.md
+            echo "" >> pr-body.md
+          fi
+
+          echo "### Included Changes" >> pr-body.md
+          echo "" >> pr-body.md
+
+          if [ -n "$PREVIOUS_TAG" ]; then
+            git log ${PREVIOUS_TAG}..origin/main --pretty=format:"%H %s" | while read -r line; do
+              SHA=$(echo "$line" | cut -d' ' -f1)
+              SHORT_SHA=$(echo "$SHA" | cut -c1-7)
+              MESSAGE=$(echo "$line" | cut -d' ' -f2-)
+              PR_NUM=$(gh api "/repos/${{ github.repository }}/commits/${SHA}/pulls" --jq '.[0].number' 2>/dev/null || echo "")
+
+              if [ -n "$PR_NUM" ]; then
+                echo "- ${SHORT_SHA} - ${MESSAGE} (#${PR_NUM})" >> pr-body.md
+              else
+                echo "- ${SHORT_SHA} - ${MESSAGE}" >> pr-body.md
+              fi
+            done
+          else
+            echo "No previous tag found. This is the first canary release." >> pr-body.md
+          fi
+
+          echo "" >> pr-body.md
+          echo "---" >> pr-body.md
+          echo "Release PR for turborepo v${VERSION}" >> pr-body.md
+
+      - name: Create pull request with auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+          STAGE_BRANCH: ${{ needs.release.outputs.stage-branch }}
+        run: |
+          MAX_RETRIES=3
+          RETRY_DELAY=10
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            if PR_URL=$(gh pr create \
+              --title "release(turborepo): ${VERSION}" \
+              --body-file pr-body.md \
+              --head "${STAGE_BRANCH}" \
+              --base main 2>&1); then
+              break
+            fi
+            echo "PR creation attempt $i failed, retrying in ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+          done
+
+          if [ -z "$PR_URL" ] || [[ ! "$PR_URL" =~ ^https://github.com/.*/pull/[0-9]+$ ]]; then
+            echo "::error::Failed to create PR after $MAX_RETRIES attempts. Output: $PR_URL"
+            exit 1
+          fi
+
+          echo "Created PR: $PR_URL"
+          PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+
+          MERGE_SUCCESS=false
+          for i in $(seq 1 $MAX_RETRIES); do
+            if gh pr merge "$PR_NUM" --auto --squash; then
+              MERGE_SUCCESS=true
+              break
+            fi
+            echo "Auto-merge attempt $i failed, retrying in ${RETRY_DELAY}s..."
+            sleep $RETRY_DELAY
+          done
+
+          if [ "$MERGE_SUCCESS" != "true" ]; then
+            echo "::warning::Failed to enable auto-merge after $MAX_RETRIES attempts. PR created but requires manual merge: $PR_URL"
+          fi
