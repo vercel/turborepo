@@ -140,9 +140,23 @@ jobs:
 
       - name: Version
         id: version
+        env:
+          INCREMENT: ${{ inputs.increment }}
+          TAG_OVERRIDE: ${{ inputs.tag-override }}
         run: |
-          ./scripts/version.js ${{ inputs.increment }} ${{ inputs.tag-override || '' }}
+          if [[ -n "$TAG_OVERRIDE" && ! "$TAG_OVERRIDE" =~ ^[a-zA-Z0-9-]+$ ]]; then
+            echo "::error::Invalid tag-override format. Must be alphanumeric with hyphens only."
+            exit 1
+          fi
+
+          ./scripts/version.js "$INCREMENT" "$TAG_OVERRIDE"
           VERSION=$(head -n 1 version.txt)
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version format produced: $VERSION"
+            exit 1
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "New version: $VERSION"
           cat version.txt

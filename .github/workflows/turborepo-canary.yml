@@ -38,11 +38,11 @@ jobs:
     steps:
       - name: Check if release PR merge
         id: check
+        env:
+          ACTOR: ${{ github.actor }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          ACTOR="${{ github.actor }}"
-          MESSAGE="${{ github.event.head_commit.message }}"
-
-          if [[ "$ACTOR" == "github-actions[bot]" && "$MESSAGE" =~ ^release\(turborepo\): ]]; then
+          if [[ "$ACTOR" == "github-actions[bot]" && "$COMMIT_MESSAGE" =~ ^release\(turborepo\): ]]; then
             echo "Skipping: This is a release PR merge"
             echo "should_skip=true" >> $GITHUB_OUTPUT
           else
@@ -72,6 +72,15 @@ jobs:
 
       - name: Fetch main and tags
         run: git fetch origin main --tags
+
+      - name: Validate version format
+        env:
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid version format: $VERSION"
+            exit 1
+          fi
 
       - name: Build PR Body
         env:
@@ -122,23 +131,35 @@ jobs:
           RETRY_DELAY=10
 
           for i in $(seq 1 $MAX_RETRIES); do
-            PR_URL=$(gh pr create \
+            if PR_URL=$(gh pr create \
               --title "release(turborepo): ${VERSION}" \
               --body-file pr-body.md \
               --head "${STAGE_BRANCH}" \
-              --base main 2>&1) && break
+              --base main 2>&1); then
+              break
+            fi
+            echo "PR creation attempt $i failed, retrying in ${RETRY_DELAY}s..."
             sleep $RETRY_DELAY
           done
 
-          if [ -z "$PR_URL" ]; then
-            echo "::error::Failed to create PR after $MAX_RETRIES attempts"
+          if [ -z "$PR_URL" ] || [[ ! "$PR_URL" =~ ^https://github.com/.*/pull/[0-9]+$ ]]; then
+            echo "::error::Failed to create PR after $MAX_RETRIES attempts. Output: $PR_URL"
             exit 1
           fi
 
           echo "Created PR: $PR_URL"
           PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
 
+          MERGE_SUCCESS=false
           for i in $(seq 1 $MAX_RETRIES); do
-            gh pr merge "$PR_NUM" --auto --squash && break
+            if gh pr merge "$PR_NUM" --auto --squash; then
+              MERGE_SUCCESS=true
+              break
+            fi
+            echo "Auto-merge attempt $i failed, retrying in ${RETRY_DELAY}s..."
             sleep $RETRY_DELAY
           done
+
+          if [ "$MERGE_SUCCESS" != "true" ]; then
+            echo "::warning::Failed to enable auto-merge after $MAX_RETRIES attempts. PR created but requires manual merge: $PR_URL"
+          fi

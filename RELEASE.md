@@ -620,8 +620,153 @@ This is because the Rust binary is never published to crates.io; it's only publi
 
 ---
 
+### Troubleshooting & Recovery
+
+This section covers common failure scenarios and how to recover from them.
+
+#### Canary Release Failed Mid-Publish
+
+If a canary release fails after some packages were published but before others:
+
+1. **Identify what was published**:
+
+   ```bash
+   VERSION="2.6.1-canary.5"  # The failed version
+   for pkg in turbo turbo-darwin-64 turbo-darwin-arm64 turbo-linux-64 turbo-linux-arm64 turbo-windows-64 turbo-windows-arm64 create-turbo @turbo/codemod turbo-ignore @turbo/workspaces @turbo/gen eslint-plugin-turbo eslint-config-turbo @turbo/types; do
+     npm view "$pkg@$VERSION" version 2>/dev/null && echo "✓ $pkg published" || echo "✗ $pkg NOT published"
+   done
+   ```
+
+2. **Option A - Deprecate and re-release**: If few packages were published, deprecate them and trigger a new canary:
+
+   ```bash
+   # Deprecate the partial release
+   npm deprecate turbo@2.6.1-canary.5 "Partial release, use 2.6.1-canary.6"
+   npm deprecate turbo-darwin-64@2.6.1-canary.5 "Partial release, use 2.6.1-canary.6"
+   # ... repeat for each published package
+
+   # Merge any PR to main to trigger a new canary release
+   ```
+
+3. **Option B - Manual completion**: If most packages were published, manually publish the rest:
+
+   ```bash
+   cd cli
+   # Ensure you're on the staging branch
+   git checkout staging-2.6.1-canary.5
+   # Publish missing packages manually
+   npm publish ./path/to/package --tag canary
+   ```
+
+#### Canary PR Won't Auto-Merge
+
+If a canary release PR is created but fails to auto-merge:
+
+1. **Check branch protection**: Ensure required status checks are passing
+2. **Check for conflicts**: The staging branch may have diverged from main
+3. **Manual merge**: If checks pass, manually merge the PR via GitHub UI
+4. **Cleanup if abandoned**: If you need to abandon the release:
+
+   ```bash
+   # Delete the staging branch
+   git push origin --delete staging-2.6.1-canary.5
+   # Close the PR via GitHub UI
+   ```
+
+#### Infinite Release Loop
+
+If you suspect an infinite release loop (canary triggers keep firing):
+
+1. **Disable the workflow temporarily**:
+   - Go to Actions → Canary Release → "..." menu → Disable workflow
+
+2. **Investigate the cause**:
+   - Check if the skip detection pattern matches recent commits
+   - The skip pattern expects: actor=`github-actions[bot]` AND message starts with `release(turborepo):`
+
+3. **Fix and re-enable**:
+   - Ensure the release PR title follows the expected format
+   - Re-enable the workflow once the issue is resolved
+
+#### Broken Package Released
+
+If a canary release contains a critical bug:
+
+1. **Deprecate immediately** (does NOT remove the package, just warns users):
+
+   ```bash
+   npm deprecate turbo@2.6.1-canary.5 "Critical bug in task scheduling, use 2.6.1-canary.6 or later"
+   ```
+
+2. **Cut a fix release**: Merge the fix to main; a new canary will automatically release
+
+3. **Unpublish (last resort, time-limited)**:
+   - npm allows unpublish within 72 hours for packages with few downloads
+   - Generally NOT recommended; deprecation is preferred
+
+   ```bash
+   # Only if absolutely necessary and within 72 hours
+   npm unpublish turbo@2.6.1-canary.5
+   ```
+
+#### Staging Branch Cleanup
+
+Staging branches (`staging-X.Y.Z`) are normally deleted when the PR merges. If orphaned branches accumulate:
+
+```bash
+# List orphaned staging branches
+git fetch --prune
+git branch -r | grep 'origin/staging-' | while read branch; do
+  echo "Orphaned: $branch"
+done
+
+# Delete a specific orphaned branch
+git push origin --delete staging-2.6.1-canary.5
+```
+
+#### Version Conflict
+
+If two releases attempted to use the same version:
+
+1. The second publish will fail with "cannot publish over existing version"
+2. Check which release succeeded: `npm view turbo@X.Y.Z`
+3. If needed, manually bump `version.txt` and re-trigger
+
+#### Vercel Docs Aliasing Failed
+
+If the versioned docs subdomain wasn't created:
+
+1. Check the workflow logs for the specific error
+2. Manually create the alias:
+
+   ```bash
+   # Find the deployment URL for the release commit
+   vercel list turbo-site --scope=vercel -m githubCommitSha="<commit-sha>"
+
+   # Create the alias
+   vercel alias set <deployment-url> v2-6-1-canary-5.turborepo.dev --scope=vercel
+   ```
+
+3. A Slack notification is sent to `#team-turborepo` when this fails
+
+---
+
+### Security Considerations
+
+The release pipeline handles sensitive operations (npm publishing, git tagging). Keep these security practices in mind:
+
+1. **Commit messages are trusted input**: The skip detection reads `github.event.head_commit.message`. This is safe because commits to `main` require PR approval, but never copy this pattern for workflows triggered by fork PRs.
+
+2. **Version format is validated**: The pipeline validates that version strings match expected semver patterns before using them in shell commands.
+
+3. **Secrets scope**: The canary workflow inherits secrets to the release workflow. Only maintainers with write access can trigger releases.
+
+4. **OIDC publishing**: npm packages are published using GitHub's OIDC trusted publishing, which provides cryptographic provenance without storing long-lived tokens.
+
+---
+
 [1]: https://github.com/vercel/turborepo/actions/workflows/turborepo-release.yml
-[2]: https://github.com/vercel/turborepo/blob/main/.github/turborepo-release.yml
+[2]: https://github.com/vercel/turborepo/blob/main/.github/workflows/turborepo-release.yml
 [3]: https://github.com/apps/turbo-orchestrator
 [4]: https://github.com/vercel/turborepo/blob/main/packages/turbo-repository/scripts/bump-version.sh
 [5]: https://github.com/vercel/turborepo/actions/workflows/turborepo-library-release.yml
