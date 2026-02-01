@@ -36,50 +36,38 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
-  cli:
+  apps/coverage-reporter:
     dependencies:
-      '@turbo/releaser':
-        specifier: workspace:*
-        version: link:../packages/turbo-releaser
-
-  docs/link-checker:
-    dependencies:
-      github-slugger:
-        specifier: 2.0.0
-        version: 2.0.0
-      gray-matter:
-        specifier: 4.0.3
-        version: 4.0.3
-      hast-util-select:
-        specifier: 6.0.3
-        version: 6.0.3
-      rehype-parse:
-        specifier: 9.0.1
-        version: 9.0.1
-      rehype-raw:
-        specifier: 7.0.0
-        version: 7.0.0
-      remark-parse:
-        specifier: 11.0.0
-        version: 11.0.0
-      remark-rehype:
-        specifier: 11.1.1
-        version: 11.1.1
-      unified:
-        specifier: 11.0.5
-        version: 11.0.5
-      unist-util-visit:
-        specifier: 5.0.0
-        version: 5.0.0
+      '@vercel/blob':
+        specifier: ^2.0.1
+        version: 2.0.1
+      next:
+        specifier: 16.1.1
+        version: 16.1.1(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      react:
+        specifier: ^19.0.0
+        version: 19.2.3
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.2.3(react@19.2.3)
+      recharts:
+        specifier: ^3.7.0
+        version: 3.7.0(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react-is@18.3.1)(react@19.2.3)(redux@5.0.1)
     devDependencies:
       '@types/node':
-        specifier: 22.7.8
-        version: 22.7.8
+        specifier: ^22.15.3
+        version: 22.15.3
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.7
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.7)
       typescript:
-        specifier: 5.5.4
-        version: 5.5.4
+        specifier: ^5.5.4
+        version: 5.9.3
 
-  docs/site:
+  apps/docs:
     dependencies:
       '@ai-sdk/react':
         specifier: ^2.0.115
@@ -275,42 +263,54 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  cli:
+    dependencies:
+      '@turbo/releaser':
+        specifier: workspace:*
+        version: link:../packages/turbo-releaser
+
+  docs/link-checker:
+    dependencies:
+      github-slugger:
+        specifier: 2.0.0
+        version: 2.0.0
+      gray-matter:
+        specifier: 4.0.3
+        version: 4.0.3
+      hast-util-select:
+        specifier: 6.0.3
+        version: 6.0.3
+      rehype-parse:
+        specifier: 9.0.1
+        version: 9.0.1
+      rehype-raw:
+        specifier: 7.0.0
+        version: 7.0.0
+      remark-parse:
+        specifier: 11.0.0
+        version: 11.0.0
+      remark-rehype:
+        specifier: 11.1.1
+        version: 11.1.1
+      unified:
+        specifier: 11.0.5
+        version: 11.0.5
+      unist-util-visit:
+        specifier: 5.0.0
+        version: 5.0.0
+    devDependencies:
+      '@types/node':
+        specifier: 22.7.8
+        version: 22.7.8
+      typescript:
+        specifier: 5.5.4
+        version: 5.5.4
+
   examples:
     devDependencies:
       tsx:
         specifier: 4.19.1
         version: 4.19.1
-
-  packages/coverage-reporter:
-    dependencies:
-      '@vercel/blob':
-        specifier: ^2.0.1
-        version: 2.0.1
-      next:
-        specifier: 16.1.1
-        version: 16.1.1(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-      react:
-        specifier: ^19.0.0
-        version: 19.2.3
-      react-dom:
-        specifier: ^19.0.0
-        version: 19.2.3(react@19.2.3)
-      recharts:
-        specifier: ^3.7.0
-        version: 3.7.0(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react-is@18.3.1)(react@19.2.3)(redux@5.0.1)
-    devDependencies:
-      '@types/node':
-        specifier: ^22.15.3
-        version: 22.15.3
-      '@types/react':
-        specifier: ^19.0.0
-        version: 19.2.7
-      '@types/react-dom':
-        specifier: ^19.0.0
-        version: 19.2.3(@types/react@19.2.7)
-      typescript:
-        specifier: ^5.5.4
-        version: 5.9.3
 
   packages/create-turbo:
     dependencies:
