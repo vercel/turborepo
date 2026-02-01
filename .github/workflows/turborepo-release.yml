@@ -89,6 +89,13 @@ on:
         required: false
         type: boolean
         default: false
+    secrets:
+      NPM_TOKEN:
+        required: true
+      TURBO_TOKEN:
+        required: true
+      DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL:
+        required: true
     outputs:
       stage-branch:
         description: "The staging branch name"
