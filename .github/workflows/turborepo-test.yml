@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
+      is-release-pr: ${{ steps.check-release.outputs.is-release-pr }}
       docs: ${{ steps.filter.outputs.docs }}
       basic-example: ${{ steps.filter.outputs.basic-example }}
       kitchen-sink-example: ${{ steps.filter.outputs.kitchen-sink-example }}
@@ -29,10 +30,18 @@ jobs:
       rust: ${{ steps.filter.outputs.rust }}
       native-lib: ${{ steps.filter.outputs.native-lib }}
     steps:
+      # Detect automated release PRs which only contain version bumps.
+      # These PRs are created by the release workflow after code has already
+      # been tested on main. Skipping tests on version-only changes saves CI time.
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check if automated release PR
+        id: check-release
+        uses: ./.github/actions/check-release-pr
+
       - name: Check path changes
+        if: steps.check-release.outputs.is-release-pr != 'true'
         id: filter
         run: |
           # Determine the base and head commits to compare
@@ -126,7 +135,7 @@ jobs:
     name: Generate integration test matrix
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -157,7 +166,7 @@ jobs:
       - generate-integration-test-matrix
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 30
-    if: ${{ needs.find-changes.outputs.rust == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
     env:
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
@@ -236,7 +245,7 @@ jobs:
     name: "@turbo/types codegen check"
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -280,7 +289,7 @@ jobs:
     timeout-minutes: 30
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/2)
     env:
       SCCACHE_BUCKET: turborepo-sccache
@@ -349,7 +358,7 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
     env:
       SCCACHE_BUCKET: turborepo-sccache
@@ -423,7 +432,7 @@ jobs:
     needs:
       - find-changes
       - rust_test_ubuntu
-    if: ${{ needs.find-changes.outputs.rust == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     env:
       COVERAGE_API_URL: ${{ secrets.COVERAGE_API_URL }}
     steps:
@@ -517,7 +526,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.basic-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.basic-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -536,7 +545,7 @@ jobs:
     needs:
       - find-changes
     timeout-minutes: 40
-    if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.kitchen-sink-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -555,7 +564,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.non-monorepo-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.non-monorepo-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -574,7 +583,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.with-svelte-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.with-svelte-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -593,7 +602,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.with-tailwind-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.with-tailwind-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -611,7 +620,7 @@ jobs:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.native-lib == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.native-lib == 'true' }}
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
