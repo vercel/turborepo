@@ -27,6 +27,13 @@ stage-release:
 	# Stop if versions are not updated.
 	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
 
+	# Fail if git tag already exists (prevents race condition with queued workflows)
+	@git fetch origin --tags
+	@if git rev-parse "v$(TURBO_VERSION)" >/dev/null 2>&1; then \
+		echo "Error: Tag v$(TURBO_VERSION) already exists. A previous release may still be merging." && \
+		exit 1; \
+	fi
+
 	# Prepare the packages.
 	cd $(CLI_DIR)/../packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
@@ -69,6 +76,12 @@ publish-turbo: build
 	cd $(CLI_DIR)/../packages/turbo-types && pnpm pack --pack-destination=$(CLI_DIR)/../
 
 ifneq ($(SKIP_PUBLISH),--skip-publish)
+	# Fail if turbo package version already exists on npm (prevents race condition)
+	@if npm view "turbo@$(TURBO_VERSION)" version >/dev/null 2>&1; then \
+		echo "Error: turbo@$(TURBO_VERSION) already exists on npm. A previous release may still be merging." && \
+		exit 1; \
+	fi
+
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../
 	npm --version
