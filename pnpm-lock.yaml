@@ -321,8 +321,8 @@ importers:
         specifier: 11.1.1
         version: 11.1.1
       inquirer:
-        specifier: 8.2.4
-        version: 8.2.4
+        specifier: 8.2.7
+        version: 8.2.7(@types/node@18.17.4)
       picocolors:
         specifier: 1.0.1
         version: 1.0.1
@@ -484,8 +484,8 @@ importers:
         specifier: 2.0.1
         version: 2.0.1
       inquirer:
-        specifier: 8.2.4
-        version: 8.2.4
+        specifier: 8.2.7
+        version: 8.2.7(@types/node@18.17.4)
       inquirer-file-tree-selection-prompt:
         specifier: 1.0.19
         version: 1.0.19
@@ -558,7 +558,7 @@ importers:
         version: 29.7.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.10.16(@swc/helpers@0.5.15))(@types/node@18.17.4)(typescript@5.5.4))
       plop:
         specifier: 3.1.1
-        version: 3.1.1
+        version: 3.1.1(@types/node@18.17.4)
       ts-jest:
         specifier: 29.2.5
         version: 29.2.5(@babel/core@7.26.10)(@jest/transform@29.7.0)(@jest/types@29.6.3)(babel-jest@29.7.0(@babel/core@7.26.10))(esbuild@0.14.49)(jest@29.7.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.10.16(@swc/helpers@0.5.15))(@types/node@18.17.4)(typescript@5.5.4)))(typescript@5.5.4)
@@ -583,8 +583,8 @@ importers:
         specifier: 10.1.0
         version: 10.1.0
       inquirer:
-        specifier: 8.2.4
-        version: 8.2.4
+        specifier: 8.2.7
+        version: 8.2.7(@types/node@18.17.4)
       minimatch:
         specifier: 9.0.0
         version: 9.0.0
@@ -962,8 +962,8 @@ importers:
         specifier: 2.0.1
         version: 2.0.1
       inquirer:
-        specifier: 8.2.4
-        version: 8.2.4
+        specifier: 8.2.7
+        version: 8.2.7(@types/node@18.17.4)
       js-yaml:
         specifier: 4.1.0
         version: 4.1.0
@@ -2134,6 +2134,15 @@ packages:
     engines: {node: ^18.17.0 || ^20.3.0 || >=21.0.0}
     cpu: [x64]
     os: [win32]
+
+  '@inquirer/external-editor@1.0.3':
+    resolution: {integrity: sha512-RWbSrDiYmO4LbejWY7ttpxczuwQyZLBUyygsA9Nsv95hpzUWwnNTVQmAq3xuh7vNwCp07UTmE5i11XAEExx4RA==}
+    engines: {node: '>=18'}
+    peerDependencies:
+      '@types/node': '>=18'
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
 
   '@isaacs/cliui@8.0.2':
     resolution: {integrity: sha512-O8jcjabXaleOG9DQ0+ARXWZBTfnP4WNAqzuiJK7ll44AmxGKv/J2M4TPjxjY3znBCfvBXFzucm1twdyFybFqEA==}
@@ -4732,6 +4741,9 @@ packages:
   chardet@0.7.0:
     resolution: {integrity: sha512-mT8iDcrh03qDGRRmoA2hmBJnxpllMR+0/0qlzjqZES6NdiWDcZkCNAk4rPFZ9Q85r27unkiNNg8ZOiwZXBHwcA==}
 
+  chardet@2.1.1:
+    resolution: {integrity: sha512-PsezH1rqdV9VvyNhxxOW32/d75r01NY7TQCmOqomRo15ZSOKbpTFVsfjghxo6JloQUCGnH4k1LGu0R4yCLlWQQ==}
+
   chevrotain-allstar@0.3.1:
     resolution: {integrity: sha512-b7g+y9A0v4mxCW1qUhf3BSVPg+/NvGErk/dOkrDaHA0nQIQGAtrOjlX//9OQtRlSCy+x9rfB5N8yC71lH1nvMw==}
     peerDependencies:
@@ -6536,8 +6548,8 @@ packages:
     resolution: {integrity: sha512-JG3eIAj5V9CwcGvuOmoo6LB9kbAYT8HXffUl6memuszlwDC/qvFAJw49XJ5NROSFNPxp3iQg1GqkFhaY/CR0IA==}
     engines: {node: '>=8.0.0'}
 
-  inquirer@8.2.4:
-    resolution: {integrity: sha512-nn4F01dxU8VeKfq192IjLsxu0/OmMZ4Lg3xKAns148rCaXP6ntAoEkVYZThWjwON8AlzdZZi6oqnhNbxUG9hVg==}
+  inquirer@8.2.7:
+    resolution: {integrity: sha512-UjOaSel/iddGZJ5xP/Eixh6dY1XghiBw4XK13rCCIJcJfyhhoul/7KhLLUGtebEj6GDYM6Vnx/mVsjx2L/mFIA==}
     engines: {node: '>=12.0.0'}
 
   internmap@1.0.1:
@@ -10351,6 +10363,13 @@ snapshots:
   '@img/sharp-win32-x64@0.34.5':
     optional: true
 
+  '@inquirer/external-editor@1.0.3(@types/node@18.17.4)':
+    dependencies:
+      chardet: 2.1.1
+      iconv-lite: 0.7.2
+    optionalDependencies:
+      '@types/node': 18.17.4
+
   '@isaacs/cliui@8.0.2':
     dependencies:
       string-width: 5.1.2
@@ -13045,6 +13064,8 @@ snapshots:
 
   chardet@0.7.0: {}
 
+  chardet@2.1.1: {}
+
   chevrotain-allstar@0.3.1(chevrotain@11.0.3):
     dependencies:
       chevrotain: 11.0.3
@@ -15119,13 +15140,13 @@ snapshots:
       strip-ansi: 6.0.1
       through: 2.3.8
 
-  inquirer@8.2.4:
+  inquirer@8.2.7(@types/node@18.17.4):
     dependencies:
+      '@inquirer/external-editor': 1.0.3(@types/node@18.17.4)
       ansi-escapes: 4.3.2
       chalk: 4.1.2
       cli-cursor: 3.1.0
       cli-width: 3.0.0
-      external-editor: 3.1.0
       figures: 3.2.0
       lodash: 4.17.21
       mute-stream: 0.0.8
@@ -15135,7 +15156,9 @@ snapshots:
       string-width: 4.2.3
       strip-ansi: 6.0.1
       through: 2.3.8
-      wrap-ansi: 7.0.0
+      wrap-ansi: 6.2.0
+    transitivePeerDependencies:
+      - '@types/node'
 
   internmap@1.0.1: {}
 
@@ -16915,14 +16938,14 @@ snapshots:
       mkdirp: 0.5.6
       resolve: 1.22.8
 
-  node-plop@0.31.0:
+  node-plop@0.31.0(@types/node@18.17.4):
     dependencies:
       '@types/inquirer': 8.2.5
       change-case: 4.1.2
       del: 6.1.1
       globby: 13.1.2
       handlebars: 4.7.7
-      inquirer: 8.2.4
+      inquirer: 8.2.7(@types/node@18.17.4)
       isbinaryfile: 4.0.10
       lodash.get: 4.4.2
       lower-case: 2.0.2
@@ -16930,6 +16953,8 @@ snapshots:
       resolve: 1.22.8
       title-case: 3.0.3
       upper-case: 2.0.2
+    transitivePeerDependencies:
+      - '@types/node'
 
   node-releases@2.0.19: {}
 
@@ -17279,16 +17304,18 @@ snapshots:
     transitivePeerDependencies:
       - react
 
-  plop@3.1.1:
+  plop@3.1.1(@types/node@18.17.4):
     dependencies:
       '@types/liftoff': 4.0.0
       chalk: 5.6.0
       interpret: 2.2.0
       liftoff: 4.0.0
       minimist: 1.2.8
-      node-plop: 0.31.0
+      node-plop: 0.31.0(@types/node@18.17.4)
       ora: 6.1.2
       v8flags: 4.0.0
+    transitivePeerDependencies:
+      - '@types/node'
 
   points-on-curve@0.2.0: {}
 
