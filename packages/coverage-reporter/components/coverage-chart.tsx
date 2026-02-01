@@ -36,11 +36,8 @@ export function CoverageChart({ data }: CoverageChartProps) {
     <ResponsiveContainer width="100%" height={300}>
       <LineChart data={formattedData}>
         <CartesianGrid strokeDasharray="3 3" stroke="#333" />
-        {/* @ts-expect-error recharts types incompatible with React 19 */}
         <XAxis dataKey="date" stroke="#888" fontSize={12} />
-        {/* @ts-expect-error recharts types incompatible with React 19 */}
         <YAxis stroke="#888" fontSize={12} domain={[0, 100]} unit="%" />
-        {/* @ts-expect-error recharts types incompatible with React 19 */}
         <Tooltip
           contentStyle={{
             background: "#141414",
@@ -49,9 +46,7 @@ export function CoverageChart({ data }: CoverageChartProps) {
           }}
           labelStyle={{ color: "#888" }}
         />
-        {/* @ts-expect-error recharts types incompatible with React 19 */}
         <Legend />
-        {/* @ts-expect-error recharts types incompatible with React 19 */}
         <Line
           type="monotone"
           dataKey="lines"
@@ -60,7 +55,6 @@ export function CoverageChart({ data }: CoverageChartProps) {
           dot={false}
           name="Lines"
         />
-        {/* @ts-expect-error recharts types incompatible with React 19 */}
         <Line
           type="monotone"
           dataKey="functions"
@@ -69,7 +63,6 @@ export function CoverageChart({ data }: CoverageChartProps) {
           dot={false}
           name="Functions"
         />
-        {/* @ts-expect-error recharts types incompatible with React 19 */}
         <Line
           type="monotone"
           dataKey="branches"
