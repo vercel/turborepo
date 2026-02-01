@@ -17,7 +17,7 @@
     "format:fix": "oxfmt .",
     "check:toml": "taplo format --check",
     "fix:toml": "taplo format",
-    "docs:dev": "turbo run dev --filter=./docs/site",
+    "docs:dev": "turbo run dev --filter=./apps/docs",
     "turbo": "pnpm run build:turbo && ./target/debug/turbo",
     "turbo-prebuilt": "pnpm -- turbo",
     "prepare": "husky install",

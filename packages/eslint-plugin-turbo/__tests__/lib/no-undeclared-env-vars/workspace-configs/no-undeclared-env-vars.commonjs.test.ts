@@ -5,7 +5,7 @@ import { RULES } from "../../../../lib/constants";
 import rule, { clearCache } from "../../../../lib/rules/no-undeclared-env-vars";
 
 const ruleTester = new RuleTester({
-  parserOptions: { ecmaVersion: 2020 }
+  languageOptions: { ecmaVersion: 2020, sourceType: "script" }
 });
 
 const cwd = path.join(__dirname, "../../../../__fixtures__/workspace-configs");

@@ -9,7 +9,7 @@ description: |
   monorepo, shares code between apps, runs changed/affected packages, debugs cache,
   or has apps/packages directories.
 metadata:
-  version: 2.8.2-canary.0
+  version: 2.8.2-canary.2
 ---
 
 # Turborepo Skill
@@ -910,5 +910,5 @@ The `transit` task creates dependency relationships without matching any actual 
 
 This skill is based on the official Turborepo documentation at:
 
-- Source: `docs/site/content/docs/` in the Turborepo repository
+- Source: `apps/docs/content/docs/` in the Turborepo repository
 - Live: https://turborepo.dev/docs
