@@ -45,6 +45,12 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
     },
     {
       code: `
+        const { ANOTHER_ENV_KEY, TASK_ENV_KEY } = import.meta.env;
+      `,
+      ...options()
+    },
+    {
+      code: `
         const x = import.meta.env.GLOBAL_ENV_KEY;
         const { TASK_ENV_KEY, GLOBAL_ENV_KEY: renamedX } = import.meta.env;
       `,

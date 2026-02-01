@@ -45,6 +45,12 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
     },
     {
       code: `
+          const { ANOTHER_ENV_KEY, TASK_ENV_KEY } = process.env;
+        `,
+      ...options()
+    },
+    {
+      code: `
           const x = process.env.GLOBAL_ENV_KEY;
           const { TASK_ENV_KEY, GLOBAL_ENV_KEY: renamedX } = process.env;
         `,
