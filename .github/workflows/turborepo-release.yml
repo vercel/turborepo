@@ -9,16 +9,19 @@
 # 5. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
 # 6. Create a release branch and open a PR.
 
+# You can opt into a dry run, which will skip publishing to npm and opening the release branch
+
 name: Release
 
 env:
   CARGO_PROFILE_RELEASE_LTO: true
-  RELEASE_TURBO_CLI: true
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  RELEASE_TURBO_CLI: true # TODO: do we need this?
 
 permissions:
-  id-token: write
-  contents: write
-  pull-requests: write
+  id-token: write # Required for npm Trusted Publishing using OIDC
+  contents: write # Allow workflow to checkout code from the repository
+  pull-requests: write # Allows the PR for post-release to be created
 
 on:
   workflow_dispatch:
@@ -29,12 +32,19 @@ on:
         default: "prerelease"
         type: choice
         options:
+          # Bump the canary version of the existing semver release
           - prerelease
+          # Bump to the next patch version, creating its first canary release
           - prepatch
+          # Bump to the next minor version, creating its first canary release
           - preminor
+          # Bump to the next major version, creating its first canary release
           - premajor
+          # Bump to the next patch version
           - patch
+          # Bump to the next minor version
           - minor
+          # Bump to the next major version
           - major
       dry_run:
         description: "Do a dry run, skipping the final publish step."
@@ -258,7 +268,9 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: ${{ matrix.settings.target }}
+          # needed to not make it override the defaults
           rustflags: ""
+          # we want more specific settings
           cache: false
 
       - name: Build Setup
@@ -325,6 +337,7 @@ jobs:
           fi
           cd cli && make publish-turbo SKIP_PUBLISH=$SKIP_FLAG
 
+      # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -352,6 +365,7 @@ jobs:
         id: version
         run: |
           VERSION=$(head -n 1 version.txt)
+          # Transform version to valid subdomain (replace dots with dashes, prepend v)
           SUBDOMAIN=$(echo "v${VERSION}" | tr '.' '-')
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
