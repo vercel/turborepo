@@ -284,8 +284,8 @@ importers:
   packages/coverage-reporter:
     dependencies:
       '@vercel/blob':
-        specifier: ^0.27.0
-        version: 0.27.3
+        specifier: ^2.0.1
+        version: 2.0.1
       next:
         specifier: 16.1.1
         version: 16.1.1(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -464,10 +464,10 @@ importers:
   packages/top-issues:
     dependencies:
       '@actions/core':
-        specifier: 1.10.1
-        version: 1.10.1
+        specifier: ^3.0.0
+        version: 3.0.0
       '@actions/github':
-        specifier: 9.0.0
+        specifier: ^9.0.0
         version: 9.0.0
 
   packages/tsconfig: {}
@@ -1192,17 +1192,23 @@ packages:
     resolution: {integrity: sha512-1Yjs2SvM8TflER/OD3cOjhWWOZb58A2t7wpE2S9XfBYTiIl+XFhQG2bjy4Pu1I+EAlCNUzRDYDdFwFYUKvXcIA==}
     engines: {node: '>=0.10.0'}
 
-  '@actions/core@1.10.1':
-    resolution: {integrity: sha512-3lBR9EDAY+iYIpTnTIXmWcNbX3T2kCkAEQGIQx4NVQ0575nk2k3GRZDTPQG+vVtS2izSLmINlxXf0uLtnrTP+g==}
+  '@actions/core@3.0.0':
+    resolution: {integrity: sha512-zYt6cz+ivnTmiT/ksRVriMBOiuoUpDCJJlZ5KPl2/FRdvwU3f7MPh9qftvbkXJThragzUZieit2nyHUyw53Seg==}
+
+  '@actions/exec@3.0.0':
+    resolution: {integrity: sha512-6xH/puSoNBXb72VPlZVm7vQ+svQpFyA96qdDBvhB8eNZOE8LtPf9L4oAsfzK/crCL8YZ+19fKYVnM63Sl+Xzlw==}
 
   '@actions/github@9.0.0':
     resolution: {integrity: sha512-yJ0RoswsAaKcvkmpCE4XxBRiy/whH2SdTBHWzs0gi4wkqTDhXMChjSdqBz/F4AeiDlP28rQqL33iHb+kjAMX6w==}
 
-  '@actions/http-client@2.2.0':
-    resolution: {integrity: sha512-q+epW0trjVUUHboliPb4UF9g2msf+w61b32tAkFEwL/IwP0DQWgbCMM0Hbe3e3WXSKz5VcUXbzJQgy8Hkra/Lg==}
-
   '@actions/http-client@3.0.2':
     resolution: {integrity: sha512-JP38FYYpyqvUsz+Igqlc/JG6YO9PaKuvqjM3iGvaLqFnJ7TFmcLyy2IDrY0bI0qCQug8E9K+elv5ZNfw62ZJzA==}
+
+  '@actions/http-client@4.0.0':
+    resolution: {integrity: sha512-QuwPsgVMsD6qaPD57GLZi9sqzAZCtiJT8kVBCDpLtxhL5MydQ4gS+DrejtZZPdIYyB1e95uCK9Luyds7ybHI3g==}
+
+  '@actions/io@3.0.2':
+    resolution: {integrity: sha512-nRBchcMM+QK1pdjO7/idu86rbJI5YHUKCvKs0KxnSYbVe3F51UfGxuZX4Qy/fWlp6l7gWFwIkrOzN+oUK03kfw==}
 
   '@ai-sdk/gateway@2.0.24':
     resolution: {integrity: sha512-mflk80YF8hj8vrF9e1IHhovGKC1ubX+sY88pesSk3pUiXfH5VPO8dgzNnxjwsqsCZrnkHcztxS5cSl4TzSiEuA==}
@@ -1901,10 +1907,6 @@ packages:
   '@eslint/js@8.57.0':
     resolution: {integrity: sha512-Ys+3g2TaW7gADOJzPt83SJtCDhMjndcDMFVQ/Tj9iA1BfJzFKD9mAUXT3OenpuPHbI6P/myECxRJrofUsDx/5g==}
     engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
-
-  '@fastify/busboy@2.1.0':
-    resolution: {integrity: sha512-+KpH+QxZU7O4675t3mnkQKcZZg56u+K/Ct2K+N2AZYNVK8kyeo/bI18tI8aPm3tvNNRyTWfj6s5tnGNlcbQRsA==}
-    engines: {node: '>=14'}
 
   '@fastify/deepmerge@1.3.0':
     resolution: {integrity: sha512-J8TOSBq3SoZbDhM9+R/u77hP93gz/rajSA+K2kGyijPpORPWUXHUpTaleoj+92As0S9uPRP7Oi8IqMf0u+ro6A==}
@@ -4136,9 +4138,9 @@ packages:
       vue-router:
         optional: true
 
-  '@vercel/blob@0.27.3':
-    resolution: {integrity: sha512-WizeAxzOTmv0JL7wOaxvLIU/KdBcrclM1ZUOdSlIZAxsTTTe1jsyBthStLby0Ueh7FnmKYAjLz26qRJTk5SDkQ==}
-    engines: {node: '>=16.14'}
+  '@vercel/blob@2.0.1':
+    resolution: {integrity: sha512-DeJmC/B5oH1ExazYh/UvjbN6Mg0q0wlDz29GPIPNhi4COjVzqYRkyPYjOcAZd+RgXVzWqGXholZWtGcLCPuL8A==}
+    engines: {node: '>=20.0.0'}
 
   '@vercel/edge-config-fs@0.1.0':
     resolution: {integrity: sha512-NRIBwfcS0bUoUbRWlNGetqjvLSwgYH/BqKqDN7vK1g32p7dN96k0712COgaz6VFizAm9b0g6IG6hR6+hc0KCPg==}
@@ -8803,10 +8805,6 @@ packages:
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
-  undici@5.29.0:
-    resolution: {integrity: sha512-raqeBD6NQK4SkWhQzeYKd1KmIG6dllBOTt55Rmkt4HtI9mwdWtJljnrXjAFUBLTSN67HWrOIZ3EPF4kjUw80Bg==}
-    engines: {node: '>=14.0'}
-
   undici@6.23.0:
     resolution: {integrity: sha512-VfQPToRA5FZs/qJxLIinmU59u0r7LXqoJkCzinq3ckNJp3vKEh7jTWN589YQ5+aoAC/TGRLyJLCPKcLQbM8r9g==}
     engines: {node: '>=18.17'}
@@ -8912,10 +8910,6 @@ packages:
 
   uuid@11.1.0:
     resolution: {integrity: sha512-0/A9rDy9P7cJ+8w1c9WD9V//9Wj15Ce2MPz8Ri6032usz+NfePxx5AcN3bN+r6ZL6jEo066/yNYB3tn4pQEx+A==}
-    hasBin: true
-
-  uuid@8.3.2:
-    resolution: {integrity: sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==}
     hasBin: true
 
   v8-compile-cache-lib@3.0.1:
@@ -9120,10 +9114,14 @@ snapshots:
 
   '@aashutoshrathi/word-wrap@1.2.6': {}
 
-  '@actions/core@1.10.1':
+  '@actions/core@3.0.0':
     dependencies:
-      '@actions/http-client': 2.2.0
-      uuid: 8.3.2
+      '@actions/exec': 3.0.0
+      '@actions/http-client': 4.0.0
+
+  '@actions/exec@3.0.0':
+    dependencies:
+      '@actions/io': 3.0.2
 
   '@actions/github@9.0.0':
     dependencies:
@@ -9135,15 +9133,17 @@ snapshots:
       '@octokit/request-error': 7.1.0
       undici: 6.23.0
 
-  '@actions/http-client@2.2.0':
-    dependencies:
-      tunnel: 0.0.6
-      undici: 5.29.0
-
   '@actions/http-client@3.0.2':
     dependencies:
       tunnel: 0.0.6
       undici: 6.23.0
+
+  '@actions/http-client@4.0.0':
+    dependencies:
+      tunnel: 0.0.6
+      undici: 6.23.0
+
+  '@actions/io@3.0.2': {}
 
   '@ai-sdk/gateway@2.0.24(zod@4.3.5)':
     dependencies:
@@ -9669,8 +9669,6 @@ snapshots:
       - supports-color
 
   '@eslint/js@8.57.0': {}
-
-  '@fastify/busboy@2.1.0': {}
 
   '@fastify/deepmerge@1.3.0': {}
 
@@ -11961,13 +11959,13 @@ snapshots:
       next: 16.1.5(@babel/core@7.26.10)(@opentelemetry/api@1.9.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react: 19.2.3
 
-  '@vercel/blob@0.27.3':
+  '@vercel/blob@2.0.1':
     dependencies:
       async-retry: 1.3.3
       is-buffer: 2.0.5
       is-node-process: 1.2.0
       throttleit: 2.1.0
-      undici: 5.29.0
+      undici: 6.23.0
 
   '@vercel/edge-config-fs@0.1.0': {}
 
@@ -17650,10 +17648,6 @@ snapshots:
 
   undici-types@7.16.0: {}
 
-  undici@5.29.0:
-    dependencies:
-      '@fastify/busboy': 2.1.0
-
   undici@6.23.0: {}
 
   unicode-emoji-modifier-base@1.0.0: {}
@@ -17766,8 +17760,6 @@ snapshots:
   util-deprecate@1.0.2: {}
 
   uuid@11.1.0: {}
-
-  uuid@8.3.2: {}
 
   v8-compile-cache-lib@3.0.1: {}
 
