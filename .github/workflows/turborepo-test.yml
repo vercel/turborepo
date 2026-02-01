@@ -31,22 +31,14 @@ jobs:
       native-lib: ${{ steps.filter.outputs.native-lib }}
     steps:
       # Detect automated release PRs which only contain version bumps.
-      # These don't need full test suites - we skip to the summary.
-      - name: Check if automated release PR
-        id: check-release
-        run: |
-          if [[ "${{ github.event_name }}" == "pull_request" && \
-                "${{ github.event.pull_request.user.login }}" == "github-actions[bot]" && \
-                "${{ github.event.pull_request.title }}" == release\(turborepo\):* ]]; then
-            echo "is-release-pr=true" >> $GITHUB_OUTPUT
-            echo "Detected automated release PR - will skip tests"
-          else
-            echo "is-release-pr=false" >> $GITHUB_OUTPUT
-          fi
-
+      # These PRs are created by the release workflow after code has already
+      # been tested on main. Skipping tests on version-only changes saves CI time.
       - name: Checkout
         uses: actions/checkout@v4
-        if: steps.check-release.outputs.is-release-pr != 'true'
+
+      - name: Check if automated release PR
+        id: check-release
+        uses: ./.github/actions/check-release-pr
 
       - name: Check path changes
         if: steps.check-release.outputs.is-release-pr != 'true'

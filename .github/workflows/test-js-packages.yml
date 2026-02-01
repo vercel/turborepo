@@ -21,23 +21,20 @@ permissions:
 
 jobs:
   # Detect automated release PRs which only contain version bumps.
-  # These don't need full test suites - we skip to the summary.
+  # These PRs are created by the release workflow after code has already
+  # been tested on main. Skipping tests on version-only changes saves CI time.
   check-release-pr:
     name: Check Release PR
     runs-on: ubuntu-latest
     outputs:
       is-release-pr: ${{ steps.check.outputs.is-release-pr }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Check if automated release PR
         id: check
-        run: |
-          if [[ "${{ github.event.pull_request.user.login }}" == "github-actions[bot]" && \
-                "${{ github.event.pull_request.title }}" == release\(turborepo\):* ]]; then
-            echo "is-release-pr=true" >> $GITHUB_OUTPUT
-            echo "Detected automated release PR - will skip tests"
-          else
-            echo "is-release-pr=false" >> $GITHUB_OUTPUT
-          fi
+        uses: ./.github/actions/check-release-pr
 
   js_packages:
     name: "(${{matrix.os.name}}, Node ${{matrix.node-version}})"
