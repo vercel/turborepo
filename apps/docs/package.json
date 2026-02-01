@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "build": "next build",
-    "check-links": "cd content && node --experimental-strip-types ../../link-checker/src/validate-docs-links.ts",
+    "check-links": "cd content && node --experimental-strip-types ../../docs/link-checker/src/validate-docs-links.ts",
     "check-openapi": "node --experimental-strip-types scripts/generate-openapi-docs.ts --check",
     "check-types": "next typegen && fumadocs-mdx && tsc --noEmit",
     "collect-examples-data": "node --experimental-strip-types ./scripts/collect-examples-data.ts",

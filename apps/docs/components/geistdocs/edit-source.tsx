@@ -9,7 +9,7 @@ export const EditSource = ({ path }: EditSourceProps) => {
   let url: string | undefined;
 
   if (github.owner && github.repo && path) {
-    url = `https://github.com/${github.owner}/${github.repo}/edit/main/docs/site/content/docs/${path}`;
+    url = `https://github.com/${github.owner}/${github.repo}/edit/main/apps/docs/content/docs/${path}`;
   }
 
   if (!url) {
