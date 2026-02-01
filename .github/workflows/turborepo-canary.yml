@@ -56,7 +56,10 @@ jobs:
     with:
       increment: prerelease
       is-canary: true
-    secrets: inherit
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL: ${{ secrets.DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL }}
 
   create-canary-pr:
     name: "Open Canary Release PR"
