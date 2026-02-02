@@ -7,7 +7,7 @@ export default defineConfig({
   minify: true,
   outExtensions: () => ({
     js: ".js",
-    dts: ".ts",
+    dts: ".ts"
   }),
-  onSuccess: "cp -r src/templates dist/templates",
+  onSuccess: "cp -r src/templates dist/templates"
 });
