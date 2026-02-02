@@ -21,7 +21,7 @@ const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
 
   return (
     <html
-      className={cn(sans.variable, mono.variable, "scroll-smooth antialiased")}
+      className={cn(sans.variable, mono.variable, "antialiased")}
       lang={lang}
       suppressHydrationWarning
     >
