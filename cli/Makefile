@@ -27,10 +27,22 @@ stage-release:
 	# Stop if versions are not updated.
 	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
 
-	# Fail if git tag already exists (prevents race condition with queued workflows)
+	# Fail if git tag already exists (this version was already successfully released)
 	@git fetch origin --tags
 	@if git rev-parse "v$(TURBO_VERSION)" >/dev/null 2>&1; then \
-		echo "Error: Tag v$(TURBO_VERSION) already exists. A previous release may still be merging." && \
+		echo "Error: Tag v$(TURBO_VERSION) already exists. This version was already released." && \
+		exit 1; \
+	fi
+
+	# Fail if staging branch already exists (a release is in progress or a previous release failed)
+	@if git ls-remote --exit-code --heads origin "staging-$(TURBO_VERSION)" >/dev/null 2>&1; then \
+		echo "Error: Staging branch staging-$(TURBO_VERSION) already exists." && \
+		echo "" && \
+		echo "This means either:" && \
+		echo "  1. A release is currently in progress (check the Actions tab)" && \
+		echo "  2. A previous release failed and left the staging branch behind" && \
+		echo "" && \
+		echo "If a previous release failed, re-run the workflow with 'clear-staging-branch' enabled." && \
 		exit 1; \
 	fi
 
@@ -50,8 +62,14 @@ stage-release:
 
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
+	git push origin staging-$(TURBO_VERSION) --force
+
+.PHONY: create-release-tag
+create-release-tag:
+	@echo "Creating release tag v$(TURBO_VERSION)..."
 	git tag "v$(TURBO_VERSION)"
-	git push origin staging-$(TURBO_VERSION) --tags --force
+	git push origin "v$(TURBO_VERSION)"
+	@echo "Release tag v$(TURBO_VERSION) created and pushed."
 
 .PHONY: publish-turbo
 publish-turbo: build
