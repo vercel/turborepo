@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "start": "node dist/index.js",
+    "start": "node dist/index.cjs",
     "dev": "tsdown --watch --onSuccess \"node dist/index.cjs\"",
     "build": "tsdown",
     "check-types": "tsc --noEmit",
