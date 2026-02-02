@@ -2,15 +2,20 @@
 #
 # This release consists of a few steps
 #
-# 1. Create a staging branch
+# 1. Create a staging branch (acts as a lock to prevent concurrent releases)
 # 2. Run some smoke tests on that branch
 # 3. Build the Rust binary
-# 4. Publish JS packages npm (including turbo itself)
-# 5. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
-# 6. Create a release branch and open a PR.
+# 4. Publish JS packages to npm (including turbo itself)
+# 5. Create the git tag (only after npm publish succeeds)
+# 6. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
+# 7. Create a release branch and open a PR
+# 8. On failure, cleanup the staging branch automatically
 #
 # Canary releases are triggered automatically on push to main.
 # Manual releases are triggered via workflow_dispatch.
+#
+# RECOVERY: If a release fails and cleanup doesn't work, use the
+# 'clear-staging-branch' input to manually clear the stale staging branch.
 
 name: Release
 
@@ -72,6 +77,34 @@ on:
         required: false
         type: string
         default: ""
+      clear-staging-branch:
+        # ┌─────────────────────────────────────────────────────────────────────────────┐
+        # │ ⚠️  DANGER ZONE - READ CAREFULLY BEFORE USING                               │
+        # ├─────────────────────────────────────────────────────────────────────────────┤
+        # │                                                                             │
+        # │ This option deletes the staging branch for the version being released,     │
+        # │ allowing the release to proceed when a previous release attempt failed.    │
+        # │                                                                             │
+        # │ ❌ DO NOT USE IF:                                                           │
+        # │   • A release workflow is currently running (check the Actions tab!)       │
+        # │   • You're unsure why the staging branch exists                            │
+        # │   • The npm package for this version was already published                 │
+        # │                                                                             │
+        # │ ✅ USE ONLY IF:                                                             │
+        # │   • A previous release workflow failed or was cancelled                    │
+        # │   • No release workflow is currently running for this version              │
+        # │   • You've verified the npm package was NOT published (check npm)          │
+        # │                                                                             │
+        # │ HOW TO VERIFY IT'S SAFE:                                                   │
+        # │   1. Check Actions tab - no running release workflows                      │
+        # │   2. Run: npm view turbo@<version> - should return "not found"             │
+        # │   3. Check git tags: git ls-remote --tags origin | grep <version>          │
+        # │      - If tag exists, version was released successfully                    │
+        # │                                                                             │
+        # └─────────────────────────────────────────────────────────────────────────────┘
+        description: "⚠️ DANGER: Delete stale staging branch from a failed release. Only use if previous release failed AND no release is in progress. See workflow file for details."
+        type: boolean
+        default: false
 
 # Canary releases queue up (rapid merges to main get batched).
 # Manual releases each get their own concurrency group.
@@ -138,6 +171,32 @@ jobs:
           fi
           echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
           echo "Previous tag: $PREV_TAG"
+
+      - name: Clear stale staging branch (if requested)
+        if: ${{ inputs.clear-staging-branch }}
+        env:
+          INCREMENT: ${{ github.event_name == 'push' && 'prerelease' || inputs.increment }}
+          TAG_OVERRIDE: ${{ inputs.tag-override }}
+        run: |
+          echo "::warning::clear-staging-branch was enabled. This should only be used to recover from a failed release."
+          echo ""
+
+          # Calculate what version we're about to release so we know which staging branch to delete
+          ./scripts/version.js "$INCREMENT" "$TAG_OVERRIDE"
+          VERSION=$(head -n 1 version.txt)
+
+          echo "Checking for stale staging branch: staging-${VERSION}"
+
+          if git ls-remote --exit-code --heads origin "staging-${VERSION}" >/dev/null 2>&1; then
+            echo "::warning::Deleting staging branch staging-${VERSION}..."
+            git push origin --delete "staging-${VERSION}"
+            echo "Deleted staging branch staging-${VERSION}"
+          else
+            echo "No staging branch found for staging-${VERSION}"
+          fi
+
+          # Reset version.txt so the Version step can run cleanly
+          git checkout version.txt
 
       - name: Version
         id: version
@@ -336,6 +395,26 @@ jobs:
           name: turbo-combined
           path: cli/dist
 
+  create-release-tag:
+    name: "Create Release Tag"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [stage, npm-publish]
+    if: ${{ !inputs.dry_run }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
+
+      - name: Create and push release tag
+        run: cd cli && make create-release-tag
+
   alias-versioned-docs:
     name: "Alias Versioned Docs"
     runs-on: ubuntu-latest
@@ -420,8 +499,8 @@ jobs:
 
   create-release-pr:
     name: "Open Release Branch PR"
-    needs: [stage, npm-publish, alias-versioned-docs]
-    if: ${{ always() && needs.npm-publish.result == 'success' && github.event_name == 'workflow_dispatch' }}
+    needs: [stage, npm-publish, create-release-tag, alias-versioned-docs]
+    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -458,8 +537,8 @@ jobs:
 
   create-canary-pr:
     name: "Open Canary Release PR"
-    needs: [stage, npm-publish, alias-versioned-docs]
-    if: ${{ always() && needs.npm-publish.result == 'success' && github.event_name == 'push' }}
+    needs: [stage, npm-publish, create-release-tag, alias-versioned-docs]
+    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && github.event_name == 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -561,3 +640,19 @@ jobs:
           if [ "$MERGE_SUCCESS" != "true" ]; then
             echo "::warning::Failed to enable auto-merge after $MAX_RETRIES attempts. PR created but requires manual merge: $PR_URL"
           fi
+
+  cleanup-on-failure:
+    name: "Cleanup Failed Release"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [stage, build-rust, rust-smoke-test, js-smoke-test, npm-publish]
+    if: ${{ always() && needs.stage.result == 'success' && (needs.build-rust.result == 'failure' || needs.rust-smoke-test.result == 'failure' || needs.js-smoke-test.result == 'failure' || needs.npm-publish.result == 'failure') }}
+    steps:
+      - name: Delete staging branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          STAGE_BRANCH="${{ needs.stage.outputs.stage-branch }}"
+          echo "::warning::Release failed. Cleaning up staging branch ${STAGE_BRANCH}..."
+          gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/${STAGE_BRANCH}" || echo "Branch may already be deleted or not exist"
+          echo "Cleanup complete. You can retry the release without using clear-staging-branch."
