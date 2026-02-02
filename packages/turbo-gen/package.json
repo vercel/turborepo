@@ -16,7 +16,7 @@
   "bin": "dist/cli.js",
   "types": "dist/types.d.ts",
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown",
     "test": "jest",
     "check-types": "tsc --noEmit",
     "package:types": "attw --profile node16 --pack"
@@ -46,7 +46,7 @@
     "@types/validate-npm-package-name": "4.0.0",
     "jest": "29.7.0",
     "ts-jest": "29.4.6",
-    "tsup": "8.5.1",
+    "tsdown": "0.9.3",
     "typescript": "5.5.4"
   },
   "files": [

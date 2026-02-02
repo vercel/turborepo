@@ -5,8 +5,8 @@
   "private": true,
   "scripts": {
     "start": "node dist/index.js",
-    "dev": "tsup --watch --onSuccess \"node dist/index.cjs\"",
-    "build": "tsup",
+    "dev": "tsdown --watch --onSuccess \"node dist/index.cjs\"",
+    "build": "tsdown",
     "check-types": "tsc --noEmit",
     "lint": "eslint src/ --max-warnings 0",
     "test": "jest --detectOpenHandles"
@@ -35,7 +35,7 @@
     "eslint": "^9.39.0",
     "jest": "^29.7.0",
     "supertest": "^7.1.0",
-    "tsup": "^8.5.0",
+    "tsdown": "0.9.3",
     "typescript": "5.9.3"
   }
 }
