@@ -46,3 +46,9 @@ Follow [@turborepo](https://x.com/turborepo) on X for project updates.
 If you believe you have found a security vulnerability in Turborepo, we encourage you to responsibly disclose this and not open a public issue. We will investigate all legitimate reports. Email `security@vercel.com` to disclose any security vulnerabilities.
 
 https://vercel.com/security
+
+## Compatible Agents
+
+This tool works with:
+- [Claude Code](https://claude.com/product/claude-code)
+- [AdaL](https://sylph.ai/) - Self-evolving AI coding agent ([Docs](https://docs.sylph.ai/) | [GitHub](https://github.com/SylphAI-Inc/adal-cli))
