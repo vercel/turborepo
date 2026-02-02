@@ -102,7 +102,13 @@ jobs:
       - check-release-pr
       - js_packages
     steps:
+      - name: Skip for release PR
+        if: needs.check-release-pr.outputs.is-release-pr == 'true'
+        run: |
+          echo "Release PR detected - skipping tests (code already tested on main)"
+
       - name: Compute info
+        if: needs.check-release-pr.outputs.is-release-pr != 'true'
         run: |
           cancelled=false
           failure=false
