@@ -1,0 +1,77 @@
+name: Check Release PR
+description: |
+  Detects automated release PRs created by github-actions[bot] with title
+  matching "release(turborepo):*". These PRs only contain version bumps and
+  can skip full test suites.
+
+  This action also validates that release PRs only modify expected files
+  (version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG).
+
+outputs:
+  is-release-pr:
+    description: "Whether this is an automated release PR (true/false)"
+    value: ${{ steps.check.outputs.is-release-pr }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check if automated release PR
+      id: check
+      shell: bash
+      env:
+        EVENT_NAME: ${{ github.event_name }}
+        PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      run: |
+        # Only check on pull_request events
+        if [[ "$EVENT_NAME" != "pull_request" ]]; then
+          echo "is-release-pr=false" >> $GITHUB_OUTPUT
+          echo "Not a pull_request event, skipping release PR check"
+          exit 0
+        fi
+
+        # Check if PR is from github-actions[bot] with release title
+        if [[ "$PR_AUTHOR" == "github-actions[bot]" && "$PR_TITLE" =~ ^release\(turborepo\): ]]; then
+          echo "Detected automated release PR from $PR_AUTHOR"
+          echo "Title: $PR_TITLE"
+          echo "is-release-pr=true" >> $GITHUB_OUTPUT
+        else
+          echo "is-release-pr=false" >> $GITHUB_OUTPUT
+          echo "Not a release PR (author: $PR_AUTHOR, title: $PR_TITLE)"
+        fi
+
+    - name: Validate release PR contents
+      if: steps.check.outputs.is-release-pr == 'true'
+      shell: bash
+      env:
+        PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      run: |
+        # Fetch the base branch to compare
+        git fetch origin $PR_BASE_SHA --depth=1 2>/dev/null || true
+
+        # Get list of changed files
+        CHANGED_FILES=$(git diff --name-only $PR_BASE_SHA...HEAD 2>/dev/null || git diff --name-only HEAD~1)
+
+        echo "Changed files in release PR:"
+        echo "$CHANGED_FILES"
+
+        # Validate each file matches expected release patterns
+        ALLOWED_PATTERN="^(version\.txt|.*/package\.json|package\.json|Cargo\.toml|Cargo\.lock|.*/Cargo\.toml|CHANGELOG.*|pnpm-lock\.yaml)$"
+
+        INVALID_FILES=""
+        while IFS= read -r file; do
+          if [[ -n "$file" ]] && ! echo "$file" | grep -qE "$ALLOWED_PATTERN"; then
+            INVALID_FILES="$INVALID_FILES$file"$'\n'
+          fi
+        done <<< "$CHANGED_FILES"
+
+        if [[ -n "$INVALID_FILES" ]]; then
+          echo "::error::Release PR contains unexpected files that are not version-related:"
+          echo "$INVALID_FILES"
+          echo "::error::Release PRs should only modify version.txt, package.json, Cargo.toml, Cargo.lock, CHANGELOG, or pnpm-lock.yaml"
+          exit 1
+        fi
+
+        echo "Release PR content validation passed - only version-related files changed"

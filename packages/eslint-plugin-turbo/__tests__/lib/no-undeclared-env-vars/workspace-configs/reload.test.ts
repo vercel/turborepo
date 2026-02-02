@@ -8,7 +8,7 @@ import rule from "../../../../lib/rules/no-undeclared-env-vars";
 import { Project } from "../../../../lib/utils/calculate-inputs";
 
 const ruleTester = new RuleTester({
-  parserOptions: { ecmaVersion: 2020, sourceType: "module" }
+  languageOptions: { ecmaVersion: 2020, sourceType: "module" }
 });
 
 // Use a dedicated fixture directory for reload tests to avoid conflicts

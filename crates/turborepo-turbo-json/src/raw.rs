@@ -46,6 +46,7 @@ pub struct Pipeline(pub BTreeMap<TaskName<'static>, Spanned<RawTaskDefinition>>)
 /// and we need to produce a TypeScript indexed object type.
 impl TS for Pipeline {
     type WithoutGenerics = Self;
+    type OptionInnerType = Self;
 
     fn name() -> String {
         // Don't emit a named type - inline it instead
@@ -128,12 +129,14 @@ pub struct RawRemoteCacheOptions {
     ///
     /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub api_url: Option<Spanned<String>>,
 
     /// Set endpoint for requesting tokens during `turbo login`.
     ///
     /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching#self-hosting
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub login_url: Option<Spanned<String>>,
 
     /// The slug of the Remote Cache team.
@@ -141,6 +144,7 @@ pub struct RawRemoteCacheOptions {
     /// Value will be passed as `slug` in the querystring for all Remote
     /// Cache HTTP calls.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub team_slug: Option<Spanned<String>>,
 
     /// The ID of the Remote Cache team.
@@ -148,6 +152,7 @@ pub struct RawRemoteCacheOptions {
     /// Value will be passed as `teamId` in the querystring for all Remote
     /// Cache HTTP calls. Must start with `team_` or it will not be used.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub team_id: Option<Spanned<String>>,
 
     /// Indicates if signature verification is enabled for requests to the
@@ -158,6 +163,7 @@ pub struct RawRemoteCacheOptions {
     /// Turborepo will reject any downloaded artifacts that have an invalid
     /// signature or are missing a signature.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub signature: Option<Spanned<bool>>,
 
     /// When enabled, any HTTP request will be preceded by an OPTIONS request
@@ -165,6 +171,7 @@ pub struct RawRemoteCacheOptions {
     ///
     /// Documentation: https://developer.mozilla.org/en-US/docs/Web/HTTP/CORS#preflighted_requests
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub preflight: Option<Spanned<bool>>,
 
     /// Sets a timeout for remote cache operations.
@@ -172,7 +179,7 @@ pub struct RawRemoteCacheOptions {
     /// Value is given in seconds and only whole values are accepted.
     /// If `0` is passed, then there is no timeout for any cache operations.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(type = "number | null")]
+    #[ts(optional, type = "number | null")]
     pub timeout: Option<Spanned<u64>>,
 
     /// Indicates if the remote cache is enabled.
@@ -184,6 +191,7 @@ pub struct RawRemoteCacheOptions {
     ///
     /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub enabled: Option<Spanned<bool>>,
 
     /// Sets a timeout for remote cache uploads.
@@ -191,7 +199,7 @@ pub struct RawRemoteCacheOptions {
     /// Value is given in seconds and only whole values are accepted.
     /// If `0` is passed, then there is no timeout for any remote cache uploads.
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[ts(type = "number | null")]
+    #[ts(optional, type = "number | null")]
     pub upload_timeout: Option<Spanned<u64>>,
 }
 
@@ -265,7 +273,7 @@ pub struct RawTurboJson {
 
     /// JSON Schema URL for validation.
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
-    #[ts(rename = "$schema")]
+    #[ts(optional, rename = "$schema")]
     pub schema: Option<UnescapedString>,
 
     // Internal field - excluded from schema
@@ -281,6 +289,7 @@ pub struct RawTurboJson {
     /// keys provided in your Workspace Configs. Currently, only the `["//"]`
     /// value is allowed.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub extends: Option<Spanned<Vec<UnescapedString>>>,
 
     /// A list of globs to include in the set of implicit global hash
@@ -297,6 +306,7 @@ pub struct RawTurboJson {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#globaldependencies
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
 
     /// A list of environment variables for implicit global hash dependencies.
@@ -305,6 +315,7 @@ pub struct RawTurboJson {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#globalenv
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub global_env: Option<Vec<Spanned<UnescapedString>>>,
 
     /// An allowlist of environment variables that should be made to all tasks,
@@ -313,6 +324,7 @@ pub struct RawTurboJson {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub global_pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
 
     /// An object representing the task dependency graph of your project.
@@ -322,6 +334,7 @@ pub struct RawTurboJson {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#tasks
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub tasks: Option<Pipeline>,
 
     // Deprecated field - excluded from schema
@@ -334,12 +347,14 @@ pub struct RawTurboJson {
     ///
     /// Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub remote_cache: Option<RawRemoteCacheOptions>,
 
     /// Enable use of the UI for `turbo`.
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#ui
     #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
+    #[ts(optional)]
     pub ui: Option<Spanned<UIMode>>,
 
     /// Disable check for `packageManager` in root `package.json`.
@@ -351,7 +366,7 @@ pub struct RawTurboJson {
         skip_serializing_if = "Option::is_none",
         rename = "dangerouslyDisablePackageManagerCheck"
     )]
-    #[ts(rename = "dangerouslyDisablePackageManagerCheck")]
+    #[ts(optional, rename = "dangerouslyDisablePackageManagerCheck")]
     pub allow_no_package_manager: Option<Spanned<bool>>,
 
     /// Turborepo runs a background process to pre-calculate some expensive
@@ -360,6 +375,7 @@ pub struct RawTurboJson {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#daemon
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub daemon: Option<Spanned<bool>>,
 
     /// Turborepo's Environment Modes allow you to control which environment
@@ -367,12 +383,14 @@ pub struct RawTurboJson {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#envmode
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub env_mode: Option<Spanned<EnvMode>>,
 
     /// Specify the filesystem cache directory.
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#cachedir
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub cache_dir: Option<Spanned<UnescapedString>>,
 
     /// When set to `true`, disables the update notification that appears when
@@ -380,6 +398,7 @@ pub struct RawTurboJson {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#noupdatenotifier
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub no_update_notifier: Option<Spanned<bool>>,
 
     /// Used to tag a package for boundaries rules.
@@ -387,12 +406,14 @@ pub struct RawTurboJson {
     /// Boundaries rules can restrict which packages a tag group can import
     /// or be imported by.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
 
     /// Configuration for `turbo boundaries`.
     ///
     /// Allows users to restrict a package's dependencies and dependents.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub boundaries: Option<Spanned<BoundariesConfig>>,
 
     /// Set/limit the maximum concurrency for task execution.
@@ -403,11 +424,13 @@ pub struct RawTurboJson {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#concurrency
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub concurrency: Option<Spanned<String>>,
 
     /// Opt into breaking changes prior to major releases, experimental
     /// features, and beta features.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub future_flags: Option<Spanned<FutureFlags>>,
 
     // Internal field - excluded from schema
@@ -441,6 +464,7 @@ pub struct RawTaskDefinition {
     /// This field is for documentation purposes only and does not affect
     /// task execution or caching behavior.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub description: Option<Spanned<UnescapedString>>,
 
     /// Whether or not to cache the outputs of the task.
@@ -450,6 +474,7 @@ pub struct RawTaskDefinition {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#cache
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub cache: Option<Spanned<bool>>,
 
     /// The list of tasks that this task depends on.
@@ -461,6 +486,7 @@ pub struct RawTaskDefinition {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#dependson
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub depends_on: Option<Spanned<Vec<Spanned<UnescapedString>>>>,
 
     /// A list of environment variables that this task depends on.
@@ -471,6 +497,7 @@ pub struct RawTaskDefinition {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#env
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub env: Option<Vec<Spanned<UnescapedString>>>,
 
     /// The set of glob patterns to consider as inputs to this task.
@@ -482,6 +509,7 @@ pub struct RawTaskDefinition {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#inputs
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub inputs: Option<Vec<Spanned<UnescapedString>>>,
 
     /// An allowlist of environment variables that should be made available
@@ -490,6 +518,7 @@ pub struct RawTaskDefinition {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#passthroughenv
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
 
     /// Indicates whether the task exits or not.
@@ -499,6 +528,7 @@ pub struct RawTaskDefinition {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#persistent
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub persistent: Option<Spanned<bool>>,
 
     /// Label a persistent task as interruptible to allow it to be restarted
@@ -511,6 +541,7 @@ pub struct RawTaskDefinition {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#interruptible
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub interruptible: Option<Spanned<bool>>,
 
     /// The set of glob patterns indicating a task's cacheable filesystem
@@ -523,12 +554,14 @@ pub struct RawTaskDefinition {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#outputs
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub outputs: Option<Vec<Spanned<UnescapedString>>>,
 
     /// Output mode for the task.
     ///
     /// Documentation: https://turborepo.dev/docs/reference/run#--output-logs-option
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub output_logs: Option<Spanned<OutputLogsMode>>,
 
     /// Mark a task as interactive allowing it to receive input from stdin.
@@ -538,6 +571,7 @@ pub struct RawTaskDefinition {
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#interactive
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub interactive: Option<Spanned<bool>>,
 
     // Internal field - excluded from schema
@@ -554,6 +588,7 @@ pub struct RawTaskDefinition {
     /// Documentation: https://turborepo.dev/docs/reference/configuration#with
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(rename = "with")]
+    #[ts(optional)]
     pub with: Option<Vec<Spanned<UnescapedString>>>,
 }
 

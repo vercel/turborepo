@@ -19,6 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
+      is-release-pr: ${{ steps.check-release.outputs.is-release-pr }}
       docs: ${{ steps.filter.outputs.docs }}
       basic-example: ${{ steps.filter.outputs.basic-example }}
       kitchen-sink-example: ${{ steps.filter.outputs.kitchen-sink-example }}
@@ -26,12 +27,21 @@ jobs:
       with-svelte-example: ${{ steps.filter.outputs.with-svelte-example }}
       with-tailwind-example: ${{ steps.filter.outputs.with-tailwind-example }}
       rest: ${{ steps.filter.outputs.rest }}
+      rust: ${{ steps.filter.outputs.rust }}
       native-lib: ${{ steps.filter.outputs.native-lib }}
     steps:
+      # Detect automated release PRs which only contain version bumps.
+      # These PRs are created by the release workflow after code has already
+      # been tested on main. Skipping tests on version-only changes saves CI time.
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check if automated release PR
+        id: check-release
+        uses: ./.github/actions/check-release-pr
+
       - name: Check path changes
+        if: steps.check-release.outputs.is-release-pr != 'true'
         id: filter
         run: |
           # Determine the base and head commits to compare
@@ -107,11 +117,25 @@ jobs:
             echo "No changes outside examples/ and docs/ directories"
           fi
 
+          # Detect if Rust/core code changed (requires Rust tests + integration tests)
+          # This excludes JS-only changes like packages/*, lockfile, etc.
+          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|turborepo-tests/)"
+          RUST_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$RUST_PATTERNS" || true)
+
+          if [ -n "$RUST_CHANGES" ]; then
+            echo "rust=true" >> $GITHUB_OUTPUT
+            echo "Rust/core changes detected:"
+            echo "$RUST_CHANGES"
+          else
+            echo "rust=false" >> $GITHUB_OUTPUT
+            echo "No Rust/core changes detected (JS-only change)"
+          fi
+
   generate-integration-test-matrix:
     name: Generate integration test matrix
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -142,7 +166,17 @@ jobs:
       - generate-integration-test-matrix
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 30
-    if: ${{ needs.find-changes.outputs.rest == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     strategy:
       fail-fast: false
       matrix:
@@ -206,24 +240,12 @@ jobs:
           fi
           turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} -- "tests/${{ matrix.test-path }}"
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
   turbo_types_check:
     name: "@turbo/types codegen check"
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -267,8 +289,18 @@ jobs:
     timeout-minutes: 30
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/2)
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     steps:
       - name: Set git to use LF line endings
         run: |
@@ -306,18 +338,6 @@ jobs:
               cargo nextest run --workspace --no-run
           fi
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
       - name: Run tests
         timeout-minutes: 30
@@ -328,18 +348,6 @@ jobs:
               cargo nextest run --workspace --partition hash:${{ matrix.partition }}/2
           fi
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
   rust_test_ubuntu:
     strategy:
@@ -350,8 +358,18 @@ jobs:
     timeout-minutes: 45
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -384,18 +402,6 @@ jobs:
           fi
           cargo nextest run --workspace --no-run
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
       - name: Run tests with coverage
         timeout-minutes: 30
@@ -411,18 +417,6 @@ jobs:
             --lcov \
             --output-path coverage-${{ matrix.partition }}.lcov
         shell: bash
-        env:
-          SCCACHE_BUCKET: turborepo-sccache
-          SCCACHE_REGION: us-east-2
-          # Only use sccache if we're in the Vercel repo.
-          RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-          CARGO_INCREMENTAL: 0
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          # sccache timeout configuration to prevent hangs
-          SCCACHE_IDLE_TIMEOUT: 0
-          SCCACHE_REQUEST_TIMEOUT: 30
-          SCCACHE_ERROR_LOG: error
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
@@ -438,7 +432,7 @@ jobs:
     needs:
       - find-changes
       - rust_test_ubuntu
-    if: ${{ needs.find-changes.outputs.rest == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     env:
       COVERAGE_API_URL: ${{ secrets.COVERAGE_API_URL }}
     steps:
@@ -462,133 +456,11 @@ jobs:
       - name: Merge and transform coverage
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
-          BRANCH="${{ github.head_ref || github.ref_name }}"
-          SHA="${{ github.sha }}"
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%S.000Z")
           SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
 
-          # Merge LCOV files using native lcov tool
           lcov --add-tracefile coverage-1.lcov --add-tracefile coverage-2.lcov --output-file coverage-merged.lcov
 
-          # Transform LCOV to app JSON format
-          node -e "
-          const fs = require('fs');
-
-          // Parse LCOV format
-          const lcov = fs.readFileSync('coverage-merged.lcov', 'utf8');
-          const files = [];
-          let currentFile = null;
-
-          for (const line of lcov.split('\n')) {
-            if (line.startsWith('SF:')) {
-              currentFile = {
-                path: line.slice(3),
-                lines: { covered: 0, total: 0 },
-                functions: { covered: 0, total: 0 },
-                branches: { covered: 0, total: 0 }
-              };
-            } else if (line.startsWith('LF:')) {
-              currentFile.lines.total = parseInt(line.slice(3), 10);
-            } else if (line.startsWith('LH:')) {
-              currentFile.lines.covered = parseInt(line.slice(3), 10);
-            } else if (line.startsWith('FNF:')) {
-              currentFile.functions.total = parseInt(line.slice(4), 10);
-            } else if (line.startsWith('FNH:')) {
-              currentFile.functions.covered = parseInt(line.slice(4), 10);
-            } else if (line.startsWith('BRF:')) {
-              currentFile.branches.total = parseInt(line.slice(4), 10);
-            } else if (line.startsWith('BRH:')) {
-              currentFile.branches.covered = parseInt(line.slice(4), 10);
-            } else if (line === 'end_of_record' && currentFile) {
-              files.push(currentFile);
-              currentFile = null;
-            }
-          }
-
-          // Calculate totals
-          const totals = { lines: { covered: 0, total: 0 }, functions: { covered: 0, total: 0 }, branches: { covered: 0, total: 0 } };
-          for (const file of files) {
-            totals.lines.covered += file.lines.covered;
-            totals.lines.total += file.lines.total;
-            totals.functions.covered += file.functions.covered;
-            totals.functions.total += file.functions.total;
-            totals.branches.covered += file.branches.covered;
-            totals.branches.total += file.branches.total;
-          }
-
-          function toMetric(s) {
-            return { covered: s.covered, total: s.total, percent: s.total > 0 ? (s.covered / s.total) * 100 : 0 };
-          }
-
-          function getCrateName(filePath) {
-            const cratesMatch = filePath.match(/crates\/([^/]+)\//);
-            if (cratesMatch) return cratesMatch[1];
-            const packagesMatch = filePath.match(/packages\/([^/]+)\/rust\//);
-            if (packagesMatch) return packagesMatch[1];
-            return 'unknown';
-          }
-
-          // Group by crate
-          const crateMap = new Map();
-          const fileResults = files.map((file) => {
-            const crateName = getCrateName(file.path);
-            const fileCoverage = {
-              path: file.path,
-              crate: crateName,
-              summary: {
-                lines: toMetric(file.lines),
-                functions: toMetric(file.functions),
-                branches: toMetric(file.branches),
-                regions: { covered: 0, total: 0, percent: 0 }
-              },
-              uncoveredLines: []
-            };
-            if (!crateMap.has(crateName)) crateMap.set(crateName, { files: [] });
-            crateMap.get(crateName).files.push(fileCoverage);
-            return fileCoverage;
-          });
-
-          const crates = Array.from(crateMap.entries()).map(([name, { files: crateFiles }]) => {
-            const aggregated = { lines: { covered: 0, total: 0 }, functions: { covered: 0, total: 0 }, branches: { covered: 0, total: 0 } };
-            for (const file of crateFiles) {
-              aggregated.lines.covered += file.summary.lines.covered;
-              aggregated.lines.total += file.summary.lines.total;
-              aggregated.functions.covered += file.summary.functions.covered;
-              aggregated.functions.total += file.summary.functions.total;
-              aggregated.branches.covered += file.summary.branches.covered;
-              aggregated.branches.total += file.summary.branches.total;
-            }
-            return {
-              name,
-              summary: {
-                lines: toMetric(aggregated.lines),
-                functions: toMetric(aggregated.functions),
-                branches: toMetric(aggregated.branches),
-                regions: { covered: 0, total: 0, percent: 0 }
-              },
-              files: crateFiles.map((f) => f.path)
-            };
-          }).sort((a, b) => a.name.localeCompare(b.name));
-
-          const result = {
-            sha: process.env.SHA,
-            branch: process.env.BRANCH,
-            timestamp: process.env.TIMESTAMP,
-            summary: {
-              lines: toMetric(totals.lines),
-              functions: toMetric(totals.functions),
-              branches: toMetric(totals.branches),
-              regions: { covered: 0, total: 0, percent: 0 }
-            },
-            crates,
-            files: fileResults
-          };
-          fs.writeFileSync('coverage-transformed.json', JSON.stringify(result, null, 2));
-
-          console.log('COVERAGE_LINES=' + result.summary.lines.percent);
-          console.log('COVERAGE_FUNCTIONS=' + result.summary.functions.percent);
-          console.log('COVERAGE_BRANCHES=' + result.summary.branches.percent);
-          " >> "$GITHUB_ENV"
+          node scripts/transform-coverage.js coverage-merged.lcov coverage-transformed.json >> "$GITHUB_ENV"
 
           npx vercel blob put coverage-transformed.json --pathname="coverage/commits/${SHA}.json" \
             --token "${BLOB_READ_WRITE_TOKEN}"
@@ -654,7 +526,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.basic-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.basic-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -673,7 +545,7 @@ jobs:
     needs:
       - find-changes
     timeout-minutes: 40
-    if: ${{ needs.find-changes.outputs.kitchen-sink-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.kitchen-sink-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -692,7 +564,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.non-monorepo-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.non-monorepo-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -711,7 +583,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.with-svelte-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.with-svelte-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -730,7 +602,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.with-tailwind-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.with-tailwind-example == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -748,7 +620,7 @@ jobs:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.native-lib == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.native-lib == 'true' }}
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -813,9 +685,14 @@ jobs:
       - with-tailwind-example
       - js_native_packages
     steps:
+      - name: Skip for release PR
+        if: needs.find-changes.outputs.is-release-pr == 'true'
+        run: |
+          echo "Release PR detected - skipping tests (code already tested on main)"
+
       - name: Compute info
         id: info
-        if: always()
+        if: needs.find-changes.outputs.is-release-pr != 'true'
         run: |
           cancelled=false
           failure=false
@@ -850,11 +727,11 @@ jobs:
           fi
 
       - name: Failed
-        if: steps.info.outputs.failure == 'true'
+        if: needs.find-changes.outputs.is-release-pr != 'true' && steps.info.outputs.failure == 'true'
         run: exit 1
 
       - name: Succeeded
-        if: steps.info.outputs.success == 'true'
+        if: needs.find-changes.outputs.is-release-pr != 'true' && steps.info.outputs.success == 'true'
         run: echo Ok
 
   cleanup:

@@ -27,6 +27,25 @@ stage-release:
 	# Stop if versions are not updated.
 	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
 
+	# Fail if git tag already exists (this version was already successfully released)
+	@git fetch origin --tags
+	@if git rev-parse "v$(TURBO_VERSION)" >/dev/null 2>&1; then \
+		echo "Error: Tag v$(TURBO_VERSION) already exists. This version was already released." && \
+		exit 1; \
+	fi
+
+	# Fail if staging branch already exists (a release is in progress or a previous release failed)
+	@if git ls-remote --exit-code --heads origin "staging-$(TURBO_VERSION)" >/dev/null 2>&1; then \
+		echo "Error: Staging branch staging-$(TURBO_VERSION) already exists." && \
+		echo "" && \
+		echo "This means either:" && \
+		echo "  1. A release is currently in progress (check the Actions tab)" && \
+		echo "  2. A previous release failed and left the staging branch behind" && \
+		echo "" && \
+		echo "If a previous release failed, re-run the workflow with 'clear-staging-branch' enabled." && \
+		exit 1; \
+	fi
+
 	# Prepare the packages.
 	cd $(CLI_DIR)/../packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
 	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
@@ -43,8 +62,14 @@ stage-release:
 
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
+	git push origin staging-$(TURBO_VERSION) --force
+
+.PHONY: create-release-tag
+create-release-tag:
+	@echo "Creating release tag v$(TURBO_VERSION)..."
 	git tag "v$(TURBO_VERSION)"
-	git push origin staging-$(TURBO_VERSION) --tags --force
+	git push origin "v$(TURBO_VERSION)"
+	@echo "Release tag v$(TURBO_VERSION) created and pushed."
 
 .PHONY: publish-turbo
 publish-turbo: build
@@ -69,6 +94,12 @@ publish-turbo: build
 	cd $(CLI_DIR)/../packages/turbo-types && pnpm pack --pack-destination=$(CLI_DIR)/../
 
 ifneq ($(SKIP_PUBLISH),--skip-publish)
+	# Fail if turbo package version already exists on npm (prevents race condition)
+	@if npm view "turbo@$(TURBO_VERSION)" version >/dev/null 2>&1; then \
+		echo "Error: turbo@$(TURBO_VERSION) already exists on npm. A previous release may still be merging." && \
+		exit 1; \
+	fi
+
 	# Publish the remaining JS packages in order to avoid race conditions.
 	cd $(CLI_DIR)/../
 	npm --version
