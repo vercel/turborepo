@@ -189,16 +189,16 @@ You can capture multiple `.env` files at once using a `*`.
 
 ## Best practices
 
-### Use `.env` files in packages
+### Use `.env` files in Application Packages
 
-Using a `.env` file at the root of the repository is not recommended. Instead, we recommend placing your `.env` files into the packages where they're used.
+Using a `.env` file at the root of the repository is not recommended. Instead, we recommend placing your `.env` files into the [Application Packages](/docs/core-concepts/package-types#application-packages) where they're used.
 
 This practice more closely models the runtime behavior of your applications since environment variables exist in each application's runtime individually. Additionally, as your monorepo scales, this practice makes it easier to manage each application's environment, preventing environment variable leakage across applications.
 
 <Callout type="info">
   You may find it easier to use a root `.env` file when incrementally migrating
   to a monorepo. Tools like [dotenv](https://www.npmjs.com/package/dotenv) can
-  load `.env` files from different locations.
+  load `.env` files from different locations. We encourage making a goal of not using a root `.env` file after completing your migration.
 </Callout>
 
 ### Use `eslint-config-turbo`
