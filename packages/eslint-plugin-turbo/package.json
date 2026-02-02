@@ -25,7 +25,7 @@
   ],
   "scripts": {
     "test": "jest",
-    "build": "tsup && tsc --declaration",
+    "build": "tsdown && tsc -p tsconfig.build.json",
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
@@ -44,7 +44,7 @@
     "jest": "29.7.0",
     "json5": "2.2.3",
     "ts-jest": "29.4.6",
-    "tsup": "8.5.1",
+    "tsdown": "0.9.3",
     "typescript": "5.5.4"
   },
   "peerDependencies": {

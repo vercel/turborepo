@@ -10,7 +10,7 @@
     "template"
   ],
   "scripts": {
-    "build": "tsup",
+    "build": "tsdown",
     "check-types": "tsc --noEmit",
     "test": "node --import tsx --test src/*.test.ts",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
@@ -23,7 +23,7 @@
     "@turbo/tsconfig": "workspace:*",
     "@types/node": "20.11.30",
     "typescript": "5.5.4",
-    "tsup": "8.5.1",
+    "tsdown": "0.9.3",
     "tsx": "4.21.0"
   }
 }
