@@ -685,9 +685,14 @@ jobs:
       - with-tailwind-example
       - js_native_packages
     steps:
+      - name: Skip for release PR
+        if: needs.find-changes.outputs.is-release-pr == 'true'
+        run: |
+          echo "Release PR detected - skipping tests (code already tested on main)"
+
       - name: Compute info
         id: info
-        if: always()
+        if: needs.find-changes.outputs.is-release-pr != 'true'
         run: |
           cancelled=false
           failure=false
@@ -722,11 +727,11 @@ jobs:
           fi
 
       - name: Failed
-        if: steps.info.outputs.failure == 'true'
+        if: needs.find-changes.outputs.is-release-pr != 'true' && steps.info.outputs.failure == 'true'
         run: exit 1
 
       - name: Succeeded
-        if: steps.info.outputs.success == 'true'
+        if: needs.find-changes.outputs.is-release-pr != 'true' && steps.info.outputs.success == 'true'
         run: echo Ok
 
   cleanup:
