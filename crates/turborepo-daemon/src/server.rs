@@ -13,7 +13,7 @@ use std::{
 };
 
 use futures::Future;
-use prost::DecodeError;
+use prost::UnknownEnumValue;
 use semver::Version;
 use thiserror::Error;
 use tokio::{
@@ -528,7 +528,7 @@ impl<W: PackageChangesWatcher + 'static> proto::turbod_server::Turbod for TurboG
             Version::parse(server_version),
         ) {
             // if we fail to parse, or the constraint is invalid, we have a version mismatch
-            (_, Err(_), _) | (_, _, Err(_)) | (Err(DecodeError { .. }), _, _) => false,
+            (_, Err(_), _) | (_, _, Err(_)) | (Err(UnknownEnumValue(_)), _, _) => false,
             (Ok(range), Ok(client), Ok(server)) => compare_versions(client, server, range),
         };
 

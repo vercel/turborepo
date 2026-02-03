@@ -71,7 +71,7 @@ pprof = { version = "0.12.1", features = [
   "prost-codec",
   "frame-pointer",
 ], optional = true }
-prost = "0.12.3"
+prost = "0.13"
 radix_trie = { workspace = true }
 rand = { workspace = true }
 rayon = "1.7.0"
@@ -92,7 +92,7 @@ time = "0.3.20"
 tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = { version = "0.1.12", features = ["net"] }
-tonic = { version = "0.11.0", features = ["transport"] }
+tonic = { version = "0.12.3", features = ["transport"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
 tracing-appender = "0.2.2"
 tracing-chrome = "0.7.1"
