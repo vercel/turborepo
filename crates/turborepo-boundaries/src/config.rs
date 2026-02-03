@@ -20,6 +20,7 @@ pub struct BoundariesConfig {
     /// Restricts which packages can import a tag and which packages a tag can
     /// import.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub tags: Option<Spanned<RulesMap>>,
 
     /// Declares any implicit dependencies, i.e. any dependency not declared in
@@ -28,18 +29,21 @@ pub struct BoundariesConfig {
     /// These can include dependencies automatically injected by a framework or
     /// a testing library.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub implicit_dependencies: Option<Spanned<Vec<Spanned<String>>>>,
 
     /// Rules for a package's dependencies.
     ///
     /// Restricts which packages this package can import.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub dependencies: Option<Spanned<Permissions>>,
 
     /// Rules for a package's dependents.
     ///
     /// Restricts which packages can import this package.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub dependents: Option<Spanned<Permissions>>,
 }
 
@@ -58,12 +62,14 @@ pub struct Rule {
     ///
     /// Restricts which packages a tag can import.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub dependencies: Option<Spanned<Permissions>>,
 
     /// Rules for a tag's dependents.
     ///
     /// Restricts which packages can import this tag.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub dependents: Option<Spanned<Permissions>>,
 }
 
@@ -75,10 +81,12 @@ pub struct Permissions {
     ///
     /// Any tag not included will be banned. If omitted, all tags are permitted.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub allow: Option<Spanned<Vec<Spanned<String>>>>,
 
     /// Lists which tags are banned.
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
     pub deny: Option<Spanned<Vec<Spanned<String>>>>,
 }
 

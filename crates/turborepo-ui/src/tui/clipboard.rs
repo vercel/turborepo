@@ -112,6 +112,4 @@ fn copy_impl(s: &str, provider: &Provider) -> std::io::Result<()> {
     Ok(())
 }
 
-lazy_static::lazy_static! {
-  static ref PROVIDER: Provider = detect_copy_provider();
-}
+static PROVIDER: std::sync::LazyLock<Provider> = std::sync::LazyLock::new(detect_copy_provider);

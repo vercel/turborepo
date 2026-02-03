@@ -14,6 +14,7 @@ use std::{
 use de::Entry;
 use identifiers::{Descriptor, Ident, Locator};
 use protocol_resolver::DescriptorResolver;
+use semver::Version;
 use serde::Deserialize;
 use thiserror::Error;
 use turbopath::RelativeUnixPathBuf;
@@ -563,7 +564,9 @@ impl Lockfile for BerryLockfile {
             .keys()
             .find(|key| turbo_ident == key.ident)?;
         let entry = self.locator_package.get(key)?;
-        Some(entry.version.clone())
+        let version = &entry.version;
+        Version::parse(version).ok()?;
+        Some(version.clone())
     }
 
     fn human_name(&self, package: &crate::Package) -> Option<String> {
@@ -1241,6 +1244,50 @@ mod test {
         let data = LockfileData::from_bytes(include_bytes!("../../fixtures/berry.lock")).unwrap();
         let lockfile = BerryLockfile::new(data, None).unwrap();
         assert_eq!(lockfile.turbo_version().as_deref(), Some("1.4.6"));
+    }
+
+    #[test]
+    fn test_turbo_version_rejects_non_semver() {
+        // Malicious version strings that could be used for RCE via npx should be
+        // rejected
+        let malicious_versions = [
+            "file:./malicious.tgz",
+            "https://evil.com/malicious.tgz",
+            "git+https://github.com/evil/repo.git",
+            "../../../etc/passwd",
+            "1.0.0 && curl evil.com",
+        ];
+
+        for malicious_version in malicious_versions {
+            // Berry lockfile format has turbo in packages section with version field
+            let yaml = format!(
+                r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"turbo@npm:^1.0.0":
+  version: {malicious_version}
+  resolution: "turbo@npm:{malicious_version}"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+"#
+            );
+            let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+            let lockfile = BerryLockfile::new(data, None).unwrap();
+            assert_eq!(
+                lockfile.turbo_version(),
+                None,
+                "should reject malicious version: {}",
+                malicious_version
+            );
+        }
     }
 
     #[test]

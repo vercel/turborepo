@@ -90,8 +90,7 @@ impl TryFrom<RawTurboJson> for TurboJson {
 
         // `futureFlags` key is only allowed in root turbo.json
         let is_workspace_config = raw_turbo.extends.is_some();
-        if is_workspace_config && raw_turbo.future_flags.is_some() {
-            let future_flags = raw_turbo.future_flags.unwrap();
+        if is_workspace_config && let Some(future_flags) = raw_turbo.future_flags {
             let (span, text) = future_flags.span_and_text("turbo.json");
             return Err(Error::FutureFlagsInPackage { span, text });
         }
@@ -419,6 +418,7 @@ mod tests {
 
     #[test_case(r#"{ "ui": "tui" }"#, Some(UIMode::Tui) ; "tui")]
     #[test_case(r#"{ "ui": "stream" }"#, Some(UIMode::Stream) ; "stream")]
+    #[test_case(r#"{ "ui": "stream-with-experimental-timestamps" }"#, Some(UIMode::StreamWithTimestamps) ; "stream_with_timestamps")]
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_ui(json: &str, expected: Option<UIMode>) {
         let json = RawRootTurboJson::parse(json, "").unwrap();

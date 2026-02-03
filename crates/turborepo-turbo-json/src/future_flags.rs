@@ -52,6 +52,7 @@ pub struct FutureFlags {
 
 impl TS for FutureFlags {
     type WithoutGenerics = Self;
+    type OptionInnerType = Self;
 
     fn name() -> String {
         "FutureFlags".to_string()

@@ -56,6 +56,7 @@ impl JsonSchema for TaskName<'static> {
 /// `TaskName` is represented as a `string` in TypeScript.
 impl TS for TaskName<'static> {
     type WithoutGenerics = Self;
+    type OptionInnerType = Self;
 
     fn name() -> String {
         "string".to_string()

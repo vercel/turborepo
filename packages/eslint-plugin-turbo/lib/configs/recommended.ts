@@ -17,6 +17,6 @@ const config = {
   rules: {
     [`turbo/${RULES.noUndeclaredEnvVars}`]: "error"
   }
-} satisfies Linter.Config;
+} satisfies Linter.LegacyConfig;
 
 export default config;

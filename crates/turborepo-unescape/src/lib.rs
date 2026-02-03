@@ -101,6 +101,7 @@ impl JsonSchema for UnescapedString {
 /// type.
 impl TS for UnescapedString {
     type WithoutGenerics = Self;
+    type OptionInnerType = Self;
 
     fn name() -> String {
         "string".to_string()

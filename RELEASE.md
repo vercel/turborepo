@@ -2,14 +2,27 @@
 
 ## Quick Start
 
-### Release Turborepo CLI
+### Automated Canary Releases
+
+Canary releases happen automatically when PRs merge to `main`. The [Canary Release][6] workflow:
+
+1. Triggers on push to `main` (when `crates/**`, `packages/**`, `cli/**`, or `.github/**` change)
+2. Skips if the push is from a release PR merge (to avoid infinite loops)
+3. Queues multiple rapid merges and only releases the latest (via GitHub's concurrency)
+4. Publishes to npm with the `canary` tag
+5. Opens a PR with auto-merge enabled to merge the version bump back to `main`
+
+No manual intervention required for canary releases.
+
+### Manual Releases (Stable/Custom)
 
 1. Create a release by triggering the [Turborepo Release][1] workflow
-   - Specify the semver increment using the SemVer Increment field (start with `prerelease`)
-   - Check the "Dry Run" box to run the full release workflow without publishing any packages. Artifacts will be created that you can test with locally.
+   - For stable releases, use `patch`, `minor`, or `major`
+   - For custom pre-releases, use `prepatch`, `preminor`, or `premajor`
+   - Check the "Dry Run" box to test the workflow without publishing
 
-2. A PR is automatically opened to merge the release branch created in step 1 back into `main`
-   - ⚠️ Merge this in! You don't need to wait for tests to pass (because they won't pass until after this PR is merged in). It's important to merge this branch soon after the publish is successful.
+2. A PR is automatically opened to merge the release branch back into `main`
+   - Merge this promptly to avoid conflicts
 
 ### Release `@turbo/repository`
 
@@ -32,12 +45,13 @@ This section provides comprehensive documentation on how the Turborepo CLI is re
 ### Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
-2. [Version Management](#version-management)
-3. [Release Workflow Stages](#release-workflow-stages)
-4. [Packages Released](#packages-released)
-5. [Platform-Specific Binaries](#platform-specific-binaries)
-6. [Technical Reference](#technical-reference)
-7. [Best Practices](#best-practices)
+2. [Automated Canary Releases](#automated-canary-releases)
+3. [Version Management](#version-management)
+4. [Release Workflow Stages](#release-workflow-stages)
+5. [Packages Released](#packages-released)
+6. [Platform-Specific Binaries](#platform-specific-binaries)
+7. [Technical Reference](#technical-reference)
+8. [Best Practices](#best-practices)
 
 ---
 
@@ -52,7 +66,82 @@ The Turborepo release process is a multi-stage pipeline that:
 5. **Aliases versioned documentation** to subdomains (e.g., `v2-5-4.turborepo.dev`)
 6. **Creates a release branch** with version bumps and automatically opens a PR to merge back to `main`
 
-The entire process is orchestrated through a GitHub Actions workflow located at `.github/workflows/turborepo-release.yml`.
+The process is orchestrated through two GitHub Actions workflows:
+
+- **`.github/workflows/turborepo-release.yml`** - The main release workflow (used for both manual and canary releases)
+- **`.github/workflows/turborepo-canary.yml`** - Triggers automated canary releases on push to `main`
+
+---
+
+### Automated Canary Releases
+
+The canary release system automatically publishes a new canary version every time a PR merges to `main`.
+
+#### How It Works
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ PR merges to main                                           │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│ turborepo-canary.yml triggers                               │
+│ - Checks skip conditions (release PR merge?)                │
+│ - If not skipped, calls turborepo-release.yml               │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│ turborepo-release.yml runs with is-canary: true             │
+│ - Stages version bump                                       │
+│ - Runs smoke tests                                          │
+│ - Builds binaries                                           │
+│ - Publishes to npm                                          │
+│ - Aliases versioned docs                                    │
+│ - Skips manual PR creation (canary handles this)            │
+└──────────────────────┬──────────────────────────────────────┘
+                       │
+                       ▼
+┌─────────────────────────────────────────────────────────────┐
+│ turborepo-canary.yml creates PR with auto-merge             │
+│ - Includes changelog (commits since last canary)            │
+│ - Enables auto-merge (squash)                               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Skip Detection
+
+The canary workflow skips when:
+
+- **Actor** is `github-actions[bot]` AND
+- **Commit message** matches `^release(turborepo):`
+
+This prevents infinite loops when the release PR merges back to `main`.
+
+#### Concurrency & Squashing
+
+GitHub's native concurrency feature handles rapid merges:
+
+```yaml
+concurrency:
+  group: canary-release
+  cancel-in-progress: false
+```
+
+- `cancel-in-progress: false` means running workflows complete
+- Pending workflows are cancelled when a newer one queues
+- Result: only the latest pending merge gets released
+
+#### Path Filters
+
+Canary releases only trigger when these paths change:
+
+- `crates/**` - Rust source code
+- `packages/**` - JavaScript packages
+- `cli/**` - CLI-related files
+- `.github/workflows/**` - Workflow files
+- `.github/actions/**` - Action files
 
 ---
 
@@ -187,10 +276,10 @@ See: `cli/Makefile` (stage-release target)
 
 1. Checkout the staging branch
 2. Setup Turborepo environment (Rust toolchain only, skips Node.js setup)
-3. Install `cargo-groups` tool (v0.1.9) for running grouped tests
-4. Run: `cargo groups test turborepo`
+3. Install `cargo-nextest` for running tests
+4. Run: `cargo nextest run --workspace`
 
-This runs all Rust unit tests for the turborepo crates to ensure the code builds and tests pass before publishing.
+This runs all Rust unit tests to ensure the code builds and tests pass before publishing.
 
 #### Stage 3: JavaScript Package Tests
 
@@ -343,9 +432,14 @@ This stage creates a versioned subdomain alias for the documentation site, makin
 | `2.7.5-canary.0` | `https://v2-7-5-canary-0.turborepo.dev` |
 | `3.0.0`          | `https://v3-0-0.turborepo.dev`          |
 
-#### Stage 7: Merge Release PR
+#### Stage 7: Release PR
 
-A release PR is automatically generated. Merge it as soon as possible after publishing has completed.
+**For manual releases**: A PR is automatically created using the `thomaseizinger/create-pull-request` action. Merge it as soon as possible after publishing.
+
+**For canary releases**: The canary workflow creates a PR with auto-merge enabled. The PR includes:
+
+- A list of commits/PRs included since the last canary
+- A link to versioned docs (if aliasing succeeded)
 
 The PR body will include:
 
@@ -463,11 +557,13 @@ See: `Cargo.toml` (release-turborepo profile)
 
 #### Workflow Inputs Reference
 
-| Input          | Type    | Required | Default      | Description                                                                                        |
-| -------------- | ------- | -------- | ------------ | -------------------------------------------------------------------------------------------------- |
-| `increment`    | choice  | Yes      | `prerelease` | SemVer increment type: `prerelease`, `prepatch`, `preminor`, `premajor`, `patch`, `minor`, `major` |
-| `dry_run`      | boolean | No       | `false`      | Skip npm publish and PR creation (test mode)                                                       |
-| `tag-override` | string  | No       | -            | Override npm dist-tag (e.g., for backports)                                                        |
+| Input             | Type    | Required | Default      | Description                                                                                        |
+| ----------------- | ------- | -------- | ------------ | -------------------------------------------------------------------------------------------------- |
+| `increment`       | choice  | Yes      | `prerelease` | SemVer increment type: `prerelease`, `prepatch`, `preminor`, `premajor`, `patch`, `minor`, `major` |
+| `dry_run`         | boolean | No       | `false`      | Skip npm publish and PR creation (test mode)                                                       |
+| `tag-override`    | string  | No       | -            | Override npm dist-tag (e.g., for backports)                                                        |
+| `ci-tag-override` | string  | No       | -            | Override npm tag for running tests (when recent release was faulty)                                |
+| `sha`             | string  | No       | -            | Override SHA to release from (rarely used, mainly for debugging)                                   |
 
 #### Common npm Dist-tags
 
@@ -501,13 +597,15 @@ This is because the Rust binary is never published to crates.io; it's only publi
 
 ### Best Practices
 
-1. **Always start with canary releases**: When releasing new features, start with `prerelease` to publish a canary version. Test it in production before promoting to stable.
+1. **Let canary releases happen automatically**: Every PR merge to `main` triggers an automatic canary release. No need to manually trigger `prerelease` for normal development.
 
-2. **Use dry run for testing**: When in doubt, use `dry_run: true` to test the entire pipeline without publishing.
+2. **Use manual releases for stable versions**: When ready to promote to stable, manually trigger the release workflow with `patch`, `minor`, or `major`.
 
-3. **Monitor the release PR**: After a successful release, merge the release PR promptly. Don't let it sit for days as it can cause conflicts.
+3. **Use dry run for testing**: When in doubt, use `dry_run: true` to test the entire pipeline without publishing.
 
-4. **Check npm after publishing**: Verify that all packages were published correctly:
+4. **Monitor canary PRs**: Canary release PRs have auto-merge enabled, but check that they're merging successfully. If a canary PR fails to merge, investigate promptly.
+
+5. **Check npm after publishing**: Verify that all packages were published correctly:
 
    ```bash
    npm view turbo@<version>
@@ -516,14 +614,160 @@ This is because the Rust binary is never published to crates.io; it's only publi
    # ... etc
    ```
 
-5. **Handle failed releases carefully**: If a release fails mid-publish (some packages published, others not), document which packages were published and manually publish the rest if needed.
+6. **Handle failed releases carefully**: If a release fails mid-publish (some packages published, others not), document which packages were published and manually publish the rest if needed.
 
-6. **Backporting**: Use `tag-override` when backporting fixes to older major versions. For example, releasing `2.5.3` when `main` is on `3.0.0`.
+7. **Backporting**: Use `tag-override` when backporting fixes to older major versions. For example, releasing `2.5.3` when `main` is on `3.0.0`.
+
+---
+
+### Troubleshooting & Recovery
+
+This section covers common failure scenarios and how to recover from them.
+
+#### Canary Release Failed Mid-Publish
+
+If a canary release fails after some packages were published but before others:
+
+1. **Identify what was published**:
+
+   ```bash
+   VERSION="2.6.1-canary.5"  # The failed version
+   for pkg in turbo turbo-darwin-64 turbo-darwin-arm64 turbo-linux-64 turbo-linux-arm64 turbo-windows-64 turbo-windows-arm64 create-turbo @turbo/codemod turbo-ignore @turbo/workspaces @turbo/gen eslint-plugin-turbo eslint-config-turbo @turbo/types; do
+     npm view "$pkg@$VERSION" version 2>/dev/null && echo "✓ $pkg published" || echo "✗ $pkg NOT published"
+   done
+   ```
+
+2. **Option A - Deprecate and re-release**: If few packages were published, deprecate them and trigger a new canary:
+
+   ```bash
+   # Deprecate the partial release
+   npm deprecate turbo@2.6.1-canary.5 "Partial release, use 2.6.1-canary.6"
+   npm deprecate turbo-darwin-64@2.6.1-canary.5 "Partial release, use 2.6.1-canary.6"
+   # ... repeat for each published package
+
+   # Merge any PR to main to trigger a new canary release
+   ```
+
+3. **Option B - Manual completion**: If most packages were published, manually publish the rest:
+
+   ```bash
+   cd cli
+   # Ensure you're on the staging branch
+   git checkout staging-2.6.1-canary.5
+   # Publish missing packages manually
+   npm publish ./path/to/package --tag canary
+   ```
+
+#### Canary PR Won't Auto-Merge
+
+If a canary release PR is created but fails to auto-merge:
+
+1. **Check branch protection**: Ensure required status checks are passing
+2. **Check for conflicts**: The staging branch may have diverged from main
+3. **Manual merge**: If checks pass, manually merge the PR via GitHub UI
+4. **Cleanup if abandoned**: If you need to abandon the release:
+
+   ```bash
+   # Delete the staging branch
+   git push origin --delete staging-2.6.1-canary.5
+   # Close the PR via GitHub UI
+   ```
+
+#### Infinite Release Loop
+
+If you suspect an infinite release loop (canary triggers keep firing):
+
+1. **Disable the workflow temporarily**:
+   - Go to Actions → Canary Release → "..." menu → Disable workflow
+
+2. **Investigate the cause**:
+   - Check if the skip detection pattern matches recent commits
+   - The skip pattern expects: actor=`github-actions[bot]` AND message starts with `release(turborepo):`
+
+3. **Fix and re-enable**:
+   - Ensure the release PR title follows the expected format
+   - Re-enable the workflow once the issue is resolved
+
+#### Broken Package Released
+
+If a canary release contains a critical bug:
+
+1. **Deprecate immediately** (does NOT remove the package, just warns users):
+
+   ```bash
+   npm deprecate turbo@2.6.1-canary.5 "Critical bug in task scheduling, use 2.6.1-canary.6 or later"
+   ```
+
+2. **Cut a fix release**: Merge the fix to main; a new canary will automatically release
+
+3. **Unpublish (last resort, time-limited)**:
+   - npm allows unpublish within 72 hours for packages with few downloads
+   - Generally NOT recommended; deprecation is preferred
+
+   ```bash
+   # Only if absolutely necessary and within 72 hours
+   npm unpublish turbo@2.6.1-canary.5
+   ```
+
+#### Staging Branch Cleanup
+
+Staging branches (`staging-X.Y.Z`) are normally deleted when the PR merges. If orphaned branches accumulate:
+
+```bash
+# List orphaned staging branches
+git fetch --prune
+git branch -r | grep 'origin/staging-' | while read branch; do
+  echo "Orphaned: $branch"
+done
+
+# Delete a specific orphaned branch
+git push origin --delete staging-2.6.1-canary.5
+```
+
+#### Version Conflict
+
+If two releases attempted to use the same version:
+
+1. The second publish will fail with "cannot publish over existing version"
+2. Check which release succeeded: `npm view turbo@X.Y.Z`
+3. If needed, manually bump `version.txt` and re-trigger
+
+#### Vercel Docs Aliasing Failed
+
+If the versioned docs subdomain wasn't created:
+
+1. Check the workflow logs for the specific error
+2. Manually create the alias:
+
+   ```bash
+   # Find the deployment URL for the release commit
+   vercel list turbo-site --scope=vercel -m githubCommitSha="<commit-sha>"
+
+   # Create the alias
+   vercel alias set <deployment-url> v2-6-1-canary-5.turborepo.dev --scope=vercel
+   ```
+
+3. A Slack notification is sent to `#team-turborepo` when this fails
+
+---
+
+### Security Considerations
+
+The release pipeline handles sensitive operations (npm publishing, git tagging). Keep these security practices in mind:
+
+1. **Commit messages are trusted input**: The skip detection reads `github.event.head_commit.message`. This is safe because commits to `main` require PR approval, but never copy this pattern for workflows triggered by fork PRs.
+
+2. **Version format is validated**: The pipeline validates that version strings match expected semver patterns before using them in shell commands.
+
+3. **Secrets scope**: The canary workflow inherits secrets to the release workflow. Only maintainers with write access can trigger releases.
+
+4. **OIDC publishing**: npm packages are published using GitHub's OIDC trusted publishing, which provides cryptographic provenance without storing long-lived tokens.
 
 ---
 
 [1]: https://github.com/vercel/turborepo/actions/workflows/turborepo-release.yml
-[2]: https://github.com/vercel/turborepo/blob/main/.github/turborepo-release.yml
+[2]: https://github.com/vercel/turborepo/blob/main/.github/workflows/turborepo-release.yml
 [3]: https://github.com/apps/turbo-orchestrator
 [4]: https://github.com/vercel/turborepo/blob/main/packages/turbo-repository/scripts/bump-version.sh
 [5]: https://github.com/vercel/turborepo/actions/workflows/turborepo-library-release.yml
+[6]: https://github.com/vercel/turborepo/actions/workflows/turborepo-canary.yml

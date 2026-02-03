@@ -1,4 +1,3 @@
-import axios from "axios";
 import type { MigrateCommandOptions } from "../types";
 
 const DEFAULT_REGISTRY = "https://registry.npmjs.org";
@@ -16,10 +15,11 @@ async function getPackageDetails({ packageName }: { packageName: string }) {
     process.env.npm_config_registry?.replace(/\/$/, "") || DEFAULT_REGISTRY;
 
   try {
-    const result = await axios.get<PackageDetailsResponse>(
-      `${registry}/${packageName}`
-    );
-    return result.data;
+    const response = await fetch(`${registry}/${packageName}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    return (await response.json()) as PackageDetailsResponse;
   } catch (err) {
     throw new Error(`Unable to fetch the latest version of ${packageName}`);
   }

@@ -1,0 +1,114 @@
+---
+title: Using AI with Turborepo
+description: Get the most out of AI coding assistants in your Turborepo.
+---
+
+import { Callout } from "@/components/geistdocs/callout";
+
+Turborepo is designed to work seamlessly with AI coding assistants. Turborepo provides features that help AI understand your repository and work more efficiently.
+
+## Agent Skill
+
+[Agent Skills](https://agentskills.io) are an open standard that give new capabilities and expertise to agents. They're folders of instructions, scripts, and resources that agents can use to do things more accurately and efficiently.
+
+You can add the Turborepo Skill to your agent, making it an expert in Turborepo and monorepos:
+
+```bash title="Terminal"
+npx skills add vercel/turborepo
+```
+
+The Skill teaches agents:
+
+- Best practices for Turborepo configuration
+- Monorepo patterns and conventions
+- Anti-patterns to avoid
+- Performance optimization techniques
+
+## Git worktrees for parallel agents
+
+When running multiple AI agents in parallel on the same repository, [Git worktrees](https://git-scm.com/docs/git-worktree) prevent conflicts by allowing each agent to work in its own directory while sharing Git history.
+
+Turborepo automatically shares the local cache across worktrees, so agents benefit from each other's cached task results:
+
+```bash title="Terminal"
+# Agent 1 creates a cache
+turbo run build
+
+# Create a worktree for Agent 2
+git branch feature-branch && git worktree add ../agent-2-worktree feature-branch
+
+# Agent 2 gets a cache hit from Agent 1's work
+cd ../agent-2-worktree && turbo run build
+```
+
+Combined with [Remote Caching](/docs/core-concepts/remote-caching), this enables fast feedback loops across multiple agents working simultaneously.
+
+## Task descriptions
+
+Add a `description` field to your task definitions in `turbo.json` to help AI tools understand what each task does:
+
+```json title="turbo.json"
+{
+  "tasks": {
+    "build": {
+      "description": "Compiles TypeScript and bundles the application",
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "test": {
+      "description": "Runs the test suite with coverage",
+      "dependsOn": ["build"]
+    },
+    "lint": {
+      "description": "Checks code style and catches common errors"
+    }
+  }
+}
+```
+
+Descriptions help AI assistants:
+
+- **Understand your repository**: AI can quickly grasp what each task does without reading implementation details
+- **Make better suggestions**: With context about task purposes, AI can provide more relevant recommendations
+- **Onboard faster**: New team members (human or AI) can understand your build system at a glance
+
+## Searching documentation
+
+The `turbo docs` command lets you search the Turborepo documentation directly from your terminal:
+
+```bash title="Terminal"
+turbo docs "package configurations"
+```
+
+Results link to versioned documentation matching your installed version of `turbo`, ensuring you get accurate information for your setup.
+
+This is particularly useful when working with AI assistants that can execute shell commands. Instead of searching the web, you can get precise documentation links directly.
+
+## Machine-readable documentation
+
+Turborepo's documentation site is optimized for AI consumption in several ways:
+
+### Markdown responses
+
+When fetching documentation with appropriate headers, the site returns Markdown instead of HTML, preserving your AI's context window:
+
+```bash title="Terminal"
+curl -sL -H "Accept: text/markdown" https://turborepo.dev/docs
+```
+
+### Direct Markdown routes
+
+Append `.md` to any documentation URL to get a Markdown version:
+
+- `https://turborepo.dev/docs.md`
+- `https://turborepo.dev/docs/crafting-your-repository/caching.md`
+
+### Machine-readable sitemap
+
+A sitemap is available at `https://turborepo.dev/sitemap.md`, allowing agents to discover what documentation exists.
+
+### Versioned documentation
+
+Documentation for specific Turborepo versions is available on subdomains. For example, the 2.7.6 documentation is at `https://v2-7-6.turborepo.dev/docs`.
+
+This is useful when your AI needs to reference documentation matching your exact Turborepo version.

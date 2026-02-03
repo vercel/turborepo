@@ -1,0 +1,34 @@
+name: "Find Rust Changes"
+description: "Detects if Rust-related files have changed between base and head commits"
+outputs:
+  changed:
+    description: "Whether Rust files have changed ('true' or 'false')"
+    value: ${{ steps.check.outputs.changed }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Check for Rust changes
+      id: check
+      shell: bash
+      run: |
+        if [ "${{ github.event_name }}" == "pull_request" ]; then
+          git fetch origin ${{ github.base_ref }}
+          BASE_COMMIT="origin/${{ github.base_ref }}"
+          HEAD_COMMIT="HEAD"
+        else
+          BASE_COMMIT="${{ github.event.before }}"
+          HEAD_COMMIT="${{ github.event.after }}"
+        fi
+
+        echo "Comparing changes between $BASE_COMMIT and $HEAD_COMMIT"
+
+        RUST_PATHS="crates/ Cargo.toml Cargo.lock .cargo/ rust-toolchain.toml"
+
+        if git diff --name-only $BASE_COMMIT $HEAD_COMMIT -- $RUST_PATHS | grep -q .; then
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "Changes detected in Rust paths"
+        else
+          echo "changed=false" >> $GITHUB_OUTPUT
+          echo "No changes in Rust paths"
+        fi

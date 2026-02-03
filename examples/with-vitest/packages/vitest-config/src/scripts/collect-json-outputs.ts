@@ -53,7 +53,15 @@ async function collectCoverageFiles() {
     }
 
     // Create clean patterns for display (without any "../" prefixes)
-    const replaceDotPatterns = (str: string) => str.replace(/\.\.\//g, "");
+    const replaceDotPatterns = (str: string) => {
+      // Normalize and remove any ".." or "." path segments for safe display
+      const normalized = path.normalize(str);
+      const parts = normalized.split(path.sep);
+      const filteredParts = parts.filter(
+        (part) => part !== ".." && part !== "."
+      );
+      return filteredParts.join(path.sep);
+    };
 
     if (directoriesWithCoverage.length > 0) {
       console.log(

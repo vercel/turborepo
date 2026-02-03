@@ -67,7 +67,11 @@ pub async fn daemon_client(
     match command {
         DaemonCommand::Restart => {
             let result: Result<_, DaemonError> = try {
-                let client = connector.clone().connect().await?;
+                let client = connector
+                    .clone()
+                    .connect()
+                    .await
+                    .map_err(DaemonError::DaemonConnect)?;
                 client.restart().await?
             };
 

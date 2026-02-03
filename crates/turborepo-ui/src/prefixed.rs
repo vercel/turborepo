@@ -21,6 +21,7 @@ pub struct PrefixedUI<W> {
     out: W,
     err: W,
     default_prefix: StyledObject<String>,
+    include_timestamps: bool,
 }
 
 impl<W: Write> PrefixedUI<W> {
@@ -33,6 +34,7 @@ impl<W: Write> PrefixedUI<W> {
             warn_prefix: None,
             error_prefix: None,
             default_prefix: Style::new().apply_to(String::new()),
+            include_timestamps: false,
         }
     }
 
@@ -51,6 +53,11 @@ impl<W: Write> PrefixedUI<W> {
         self
     }
 
+    pub fn with_timestamps(mut self, include_timestamps: bool) -> Self {
+        self.include_timestamps = include_timestamps;
+        self
+    }
+
     pub fn output(&mut self, message: impl Display) {
         self.write_line(message, Command::Output)
     }
@@ -63,6 +70,18 @@ impl<W: Write> PrefixedUI<W> {
         self.write_line(message, Command::Error)
     }
 
+    fn format_prefix(&self, prefix: &StyledObject<String>) -> String {
+        if self.include_timestamps {
+            let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
+            let grey_timestamp = self
+                .color_config
+                .apply(crate::GREY.apply_to(format!("[{timestamp}]")));
+            format!("{grey_timestamp} {prefix}")
+        } else {
+            prefix.to_string()
+        }
+    }
+
     fn write_line(&mut self, message: impl Display, command: Command) {
         let prefix = match command {
             Command::Output => &self.output_prefix,
@@ -71,6 +90,7 @@ impl<W: Write> PrefixedUI<W> {
         }
         .as_ref()
         .unwrap_or(&self.default_prefix);
+        let formatted_prefix = self.format_prefix(prefix);
         let writer = match command {
             Command::Output => &mut self.out,
             Command::Warn | Command::Error => &mut self.err,
@@ -79,7 +99,7 @@ impl<W: Write> PrefixedUI<W> {
         // There's no reason to propagate this error
         // because we don't want our entire program to crash
         // due to a log failure.
-        if let Err(err) = writeln!(writer, "{prefix}{message}") {
+        if let Err(err) = writeln!(writer, "{formatted_prefix}{message}") {
             error!("cannot write to logs: {:?}", err);
         }
     }
@@ -87,13 +107,23 @@ impl<W: Write> PrefixedUI<W> {
     /// Construct a PrefixedWriter which will behave the same as `output`, but
     /// without the requirement that messages be valid UTF-8
     pub fn output_prefixed_writer(&mut self) -> PrefixedWriter<&mut W> {
-        PrefixedWriter::new(
-            self.color_config,
-            self.output_prefix
-                .clone()
-                .unwrap_or_else(|| Style::new().apply_to(String::new())),
-            &mut self.out,
-        )
+        if self.include_timestamps {
+            PrefixedWriter::new_with_timestamps(
+                self.color_config,
+                self.output_prefix
+                    .clone()
+                    .unwrap_or_else(|| Style::new().apply_to(String::new())),
+                &mut self.out,
+            )
+        } else {
+            PrefixedWriter::new(
+                self.color_config,
+                self.output_prefix
+                    .clone()
+                    .unwrap_or_else(|| Style::new().apply_to(String::new())),
+                &mut self.out,
+            )
+        }
     }
 }
 
@@ -113,7 +143,22 @@ pub struct PrefixedWriter<W> {
 impl<W: Write> PrefixedWriter<W> {
     pub fn new(color_config: ColorConfig, prefix: StyledObject<impl Display>, writer: W) -> Self {
         Self {
-            inner: LineWriter::new(PrefixedWriterInner::new(color_config, prefix, writer)),
+            inner: LineWriter::new(PrefixedWriterInner::new(
+                color_config,
+                prefix,
+                writer,
+                false,
+            )),
+        }
+    }
+
+    pub fn new_with_timestamps(
+        color_config: ColorConfig,
+        prefix: StyledObject<impl Display>,
+        writer: W,
+    ) -> Self {
+        Self {
+            inner: LineWriter::new(PrefixedWriterInner::new(color_config, prefix, writer, true)),
         }
     }
 }
@@ -133,12 +178,36 @@ impl<W: Write> Write for PrefixedWriter<W> {
 struct PrefixedWriterInner<W> {
     prefix: String,
     writer: W,
+    include_timestamps: bool,
+    color_config: ColorConfig,
 }
 
 impl<W: Write> PrefixedWriterInner<W> {
-    pub fn new(color_config: ColorConfig, prefix: StyledObject<impl Display>, writer: W) -> Self {
+    pub fn new(
+        color_config: ColorConfig,
+        prefix: StyledObject<impl Display>,
+        writer: W,
+        include_timestamps: bool,
+    ) -> Self {
         let prefix = color_config.apply(prefix).to_string();
-        Self { prefix, writer }
+        Self {
+            prefix,
+            writer,
+            include_timestamps,
+            color_config,
+        }
+    }
+
+    fn current_prefix(&self) -> String {
+        if self.include_timestamps {
+            let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
+            let grey_timestamp = self
+                .color_config
+                .apply(crate::GREY.apply_to(format!("[{timestamp}]")));
+            format!("{grey_timestamp} {}", self.prefix)
+        } else {
+            self.prefix.clone()
+        }
     }
 }
 
@@ -153,7 +222,8 @@ impl<W: Write> Write for PrefixedWriterInner<W> {
             //   the line
             // or if the last chunk is just a newline we can skip rewriting the prefix
             if is_first || chunk != b"\n" {
-                self.writer.write_all(self.prefix.as_bytes())?;
+                let prefix = self.current_prefix();
+                self.writer.write_all(prefix.as_bytes())?;
             }
             self.writer.write_all(chunk)?;
             is_first = false;
@@ -217,6 +287,7 @@ mod test {
             ColorConfig::new(strip_ansi),
             crate::BOLD.apply_to("foo#build: "),
             &mut buffer,
+            false,
         );
         writer.write_all(b"cool!").unwrap();
         assert_eq!(String::from_utf8(buffer).unwrap(), expected);
@@ -234,6 +305,7 @@ mod test {
             ColorConfig::new(false),
             Style::new().apply_to("turbo > "),
             &mut buffer,
+            false,
         );
 
         writer.write_all(input.as_bytes()).unwrap();
@@ -274,6 +346,94 @@ mod test {
             String::from_utf8(buffer).unwrap(),
             "turbo > not a line yet, now\nturbo > but \rturbo > another one starts done\nturbo > \
              \n"
+        );
+    }
+
+    #[test]
+    fn test_prefixed_writer_with_timestamps() {
+        let mut buffer = Vec::new();
+        let mut writer = PrefixedWriter::new_with_timestamps(
+            ColorConfig::new(true),
+            Style::new().apply_to("task: "),
+            &mut buffer,
+        );
+
+        writer.write_all(b"hello world\n").unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+        // Verify the timestamp format: [HH:MM:SS.mmm] task: message
+        assert!(
+            output.starts_with('['),
+            "expected output to start with timestamp bracket, got: {output}"
+        );
+        assert!(
+            output.contains("] task: hello world"),
+            "expected output to contain timestamp and prefix, got: {output}"
+        );
+    }
+
+    #[test]
+    fn test_prefixed_writer_with_timestamps_colored() {
+        let mut buffer = Vec::new();
+        let mut writer = PrefixedWriter::new_with_timestamps(
+            ColorConfig::new(false),
+            Style::new().apply_to("task: "),
+            &mut buffer,
+        );
+
+        writer.write_all(b"hello world\n").unwrap();
+        let output = String::from_utf8(buffer).unwrap();
+        // Verify the timestamp has gray ANSI codes (dim = \x1b[2m)
+        assert!(
+            output.contains("\x1b[2m"),
+            "expected output to contain gray/dim ANSI code, got: {output}"
+        );
+        assert!(
+            output.contains("task: hello world"),
+            "expected output to contain prefix and message, got: {output}"
+        );
+    }
+
+    #[test]
+    fn test_prefixed_ui_with_timestamps() {
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let mut ui = PrefixedUI::new(ColorConfig::new(true), &mut out, &mut err)
+            .with_output_prefix(crate::BOLD.apply_to("prefix ".to_string()))
+            .with_timestamps(true);
+
+        ui.output("test message");
+
+        let output = String::from_utf8(out).unwrap();
+        // Verify the timestamp format: [HH:MM:SS.mmm] prefix message
+        assert!(
+            output.starts_with('['),
+            "expected output to start with timestamp bracket, got: {output}"
+        );
+        assert!(
+            output.contains("] prefix test message"),
+            "expected output to contain timestamp and prefix, got: {output}"
+        );
+    }
+
+    #[test]
+    fn test_prefixed_ui_with_timestamps_colored() {
+        let mut out = Vec::new();
+        let mut err = Vec::new();
+        let mut ui = PrefixedUI::new(ColorConfig::new(false), &mut out, &mut err)
+            .with_output_prefix(crate::BOLD.apply_to("prefix ".to_string()))
+            .with_timestamps(true);
+
+        ui.output("test message");
+
+        let output = String::from_utf8(out).unwrap();
+        // Verify the timestamp has gray ANSI codes (dim = \x1b[2m)
+        assert!(
+            output.contains("\x1b[2m"),
+            "expected output to contain gray/dim ANSI code, got: {output}"
+        );
+        assert!(
+            output.contains("prefix ") && output.contains("test message"),
+            "expected output to contain prefix and message, got: {output}"
         );
     }
 }

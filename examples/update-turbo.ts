@@ -4,7 +4,7 @@ import * as path from "path";
 
 /** Script to update the "turbo" package across all example directories */
 
-const examplesDir = path.resolve(__dirname);
+const examplesDir = path.dirname(new URL(import.meta.url).pathname);
 
 /** Get all directories in the examples folder */
 const exampleDirs = readdirSync(examplesDir).filter((dir) =>
@@ -46,7 +46,7 @@ exampleDirs.forEach((dir) => {
     console.log(`Running ${updateCmd} in ${dir}...`);
     execSync(updateCmd, {
       stdio: "inherit",
-      cwd: path.join(examplesDir, dir),
+      cwd: path.join(examplesDir, dir)
     });
   } catch (error) {
     throw new Error(`Failed to process ${packageJsonPath}: ${error}`);

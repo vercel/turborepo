@@ -1,0 +1,9 @@
+# Insta snapshot testing configuration
+# https://insta.rs/docs/advanced/#configuration-file
+
+# Strip ANSI escape codes from snapshots to ensure consistent results
+# across different terminal environments. Some environments output ANSI
+# color codes while others output plain Unicode characters.
+filters:
+  - regex: "\\x1b\\[[0-9;]*m"
+    replacement: ""

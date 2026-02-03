@@ -176,6 +176,8 @@
       ]
     }
   },
+  "allowComments": true,
+  "allowTrailingCommas": true,
   "definitions": {
     "Array_of_String": {
       "type": "array",
@@ -597,6 +599,11 @@
           "description": "Use the standard output stream.",
           "type": "string",
           "enum": ["stream"]
+        },
+        {
+          "description": "Use the standard output stream with timestamps. Note: This feature is experimental and may change or be removed at any time.",
+          "type": "string",
+          "enum": ["stream-with-experimental-timestamps"]
         }
       ]
     },

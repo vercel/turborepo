@@ -3,7 +3,7 @@ import { RULES } from "../../../lib/constants";
 import rule from "../../../lib/rules/no-undeclared-env-vars";
 
 const ruleTester = new RuleTester({
-  parserOptions: { ecmaVersion: 2020 }
+  languageOptions: { ecmaVersion: 2020, sourceType: "script" }
 });
 
 ruleTester.run(RULES.noUndeclaredEnvVars, rule, {

@@ -1,3 +1,5 @@
+use std::io::IsTerminal;
+
 use crossterm::event::{EventStream, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use futures::StreamExt;
 use tokio::{sync::mpsc, task::JoinHandle};
@@ -17,7 +19,7 @@ pub struct InputOptions<'a> {
 
 pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Option<JoinHandle<()>> {
     // quick check if stdin is tty
-    if !atty::is(atty::Stream::Stdin) {
+    if !std::io::stdin().is_terminal() {
         return None;
     }
 

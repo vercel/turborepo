@@ -1,13 +1,6 @@
 name: JS Package Tests
 on:
   pull_request:
-    paths:
-      - package.json
-      - pnpm-workspace.yaml
-      - pnpm-lock.yaml
-      - "packages/**"
-      - ".github/actions/**"
-      - ".github/workflows/test-js-packages.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
@@ -19,8 +12,49 @@ permissions:
   pull-requests: read
 
 jobs:
+  find-changes:
+    name: Find path changes
+    runs-on: ubuntu-latest
+    outputs:
+      is-release-pr: ${{ steps.check.outputs.is-release-pr }}
+      js-packages: ${{ steps.filter.outputs.js-packages }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check if automated release PR
+        id: check
+        uses: ./.github/actions/check-release-pr
+
+      - name: Check path changes
+        if: steps.check.outputs.is-release-pr != 'true'
+        id: filter
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            git fetch origin ${{ github.base_ref }}
+            BASE_COMMIT="origin/${{ github.base_ref }}"
+            HEAD_COMMIT="HEAD"
+          else
+            BASE_COMMIT="${{ github.event.before }}"
+            HEAD_COMMIT="${{ github.event.after }}"
+          fi
+
+          JS_PATTERNS="^(package\.json|pnpm-workspace\.yaml|pnpm-lock\.yaml|version\.txt|packages/|\.github/actions/|\.github/workflows/test-js-packages\.yml)"
+          CHANGED_FILES=$(git diff --name-only $BASE_COMMIT $HEAD_COMMIT)
+          JS_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$JS_PATTERNS" || true)
+
+          if [ -n "$JS_CHANGES" ]; then
+            echo "js-packages=true" >> $GITHUB_OUTPUT
+            echo "JS package changes detected"
+          else
+            echo "js-packages=false" >> $GITHUB_OUTPUT
+            echo "No JS package changes"
+          fi
+
   js_packages:
     name: "(${{matrix.os.name}}, Node ${{matrix.node-version}})"
+    needs: find-changes
+    if: needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.js-packages == 'true'
     timeout-minutes: 30
     runs-on: ${{ matrix.os.runner }}
     strategy:
@@ -70,7 +104,7 @@ jobs:
         # to run when turbo core changes. This job (`js_packages`) does not run on turborpeo core
         # changes, and we don't want to enable that beahvior for _all_ our JS packages.
         run: |
-          TURBO_API= turbo run check-types test build package-checks --filter="!turborepo-repository" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
+          TURBO_API= turbo run check-types test build package-checks --filter="!turborepo-repository" --filter="!@turbo/coverage-reporter" --filter={./packages/*}...[${{ github.event.pull_request.base.sha || 'HEAD^1' }}] --color --env-mode=strict
         env:
           NODE_VERSION: ${{ matrix.node-version }}
 
@@ -80,9 +114,19 @@ jobs:
     timeout-minutes: 30
     if: always()
     needs:
+      - find-changes
       - js_packages
     steps:
+      - name: Skip for release PR
+        if: needs.find-changes.outputs.is-release-pr == 'true'
+        run: echo "Release PR detected - skipping tests (code already tested on main)"
+
+      - name: Skip - no JS changes
+        if: needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.js-packages != 'true'
+        run: echo "No JS package changes detected - skipping tests"
+
       - name: Compute info
+        if: needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.js-packages == 'true'
         run: |
           cancelled=false
           failure=false

@@ -45,12 +45,6 @@ itertools = { workspace = true }
 const_format = "0.2.32"
 tiny-gradient = { workspace = true }
 
-# Signal handling (for spawn_child)
-ctrlc = { version = "3.4.0", features = ["termination"] }
-
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
-
 [target.'cfg(windows)'.dependencies]
 crossterm = "0.27"
 

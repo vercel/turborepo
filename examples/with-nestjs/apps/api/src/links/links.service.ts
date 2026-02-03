@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { Link, CreateLinkDto, UpdateLinkDto } from '@repo/api';
+import * as escapeHtml from 'escape-html';
 
 @Injectable()
 export class LinksService {
@@ -27,7 +28,8 @@ export class LinksService {
   ];
 
   create(createLinkDto: CreateLinkDto) {
-    return `TODO: This action should add a new link '${createLinkDto.title}'`;
+    const safeTitle = escapeHtml(createLinkDto.title ?? '');
+    return `TODO: This action should add a new link '${safeTitle}'`;
   }
 
   findAll() {
@@ -39,7 +41,8 @@ export class LinksService {
   }
 
   update(id: number, updateLinkDto: UpdateLinkDto) {
-    return `TODO: This action should update a #${id} link ${updateLinkDto.title}`;
+    const safeTitle = escapeHtml(updateLinkDto.title ?? '');
+    return `TODO: This action should update a #${id} link ${safeTitle}`;
   }
 
   remove(id: number) {

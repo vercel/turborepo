@@ -971,7 +971,7 @@ fn test_fsevent_reports_correct_absolute_paths() {
     let (tx, rx) = std::sync::mpsc::channel();
     let mut watcher = FsEventWatcher::new(tx, Default::default()).unwrap();
     watcher
-        .watch(&volume.path(), RecursiveMode::Recursive)
+        .watch(volume.path(), RecursiveMode::Recursive)
         .unwrap();
 
     thread::sleep(Duration::from_millis(1000)); // FSEvents init time
