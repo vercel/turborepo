@@ -535,6 +535,7 @@ jobs:
 
       - name: Setup Vercel credentials
         run: |
+          cd examples
           npx vercel link --yes --token=${{ secrets.VERCEL_TOKEN }} --project turborepo-examples-app
           npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }}
 
