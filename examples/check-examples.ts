@@ -102,19 +102,6 @@ function getTasksToRun(examplePath: string): string[] {
   return tasks;
 }
 
-function stripPackageManagerField(content: Buffer): Buffer {
-  try {
-    const pkg = JSON.parse(content.toString("utf-8"));
-    if (pkg.packageManager) {
-      delete pkg.packageManager;
-      return Buffer.from(JSON.stringify(pkg, null, 2) + "\n", "utf-8");
-    }
-  } catch {
-    // Not valid JSON, return as-is
-  }
-  return content;
-}
-
 async function collectFilesRecursively(
   dir: string,
   baseDir: string = dir
@@ -144,10 +131,7 @@ async function collectFilesRecursively(
       const subFiles = await collectFilesRecursively(fullPath, baseDir);
       files.push(...subFiles);
     } else {
-      let content = fs.readFileSync(fullPath);
-      if (entry.name === "package.json") {
-        content = stripPackageManagerField(content);
-      }
+      const content = fs.readFileSync(fullPath);
       files.push({
         path: relativePath,
         content
@@ -169,12 +153,6 @@ function checkCacheHit(output: string): boolean {
 }
 
 const SANDBOX_CWD = "/vercel/sandbox";
-const MAX_ERROR_LENGTH = 500;
-
-function truncateError(error: string): string {
-  if (error.length <= MAX_ERROR_LENGTH) return error;
-  return error.slice(0, MAX_ERROR_LENGTH);
-}
 
 async function installTurbo(sandbox: Sandbox, label: string): Promise<void> {
   console.log(`[${label}] Installing turbo...`);
@@ -182,6 +160,52 @@ async function installTurbo(sandbox: Sandbox, label: string): Promise<void> {
   if (result.exitCode !== 0) {
     const stderr = await result.stderr();
     throw new Error(`Failed to install turbo: ${stderr}`);
+  }
+}
+
+const COREPACK_BIN = `${SANDBOX_CWD}/.corepack-bin`;
+
+async function enableCorepack(sandbox: Sandbox, label: string): Promise<void> {
+  console.log(`[${label}] Enabling corepack...`);
+
+  // Create a bin directory in the sandbox that we can write to
+  await sandbox.runCommand("mkdir", ["-p", COREPACK_BIN]);
+
+  const result = await sandbox.runCommand("corepack", [
+    "enable",
+    "--install-directory",
+    COREPACK_BIN
+  ]);
+  if (result.exitCode !== 0) {
+    const stderr = await result.stderr();
+    const stdout = await result.stdout();
+    throw new Error(
+      `Failed to enable corepack (exit ${result.exitCode}): ${stderr || stdout || "no output"}`
+    );
+  }
+}
+
+async function convertToPackageManager(
+  sandbox: Sandbox,
+  packageManager: PackageManagerType,
+  label: string
+): Promise<void> {
+  console.log(`[${label}] Converting to ${packageManager}...`);
+  // Run with PATH including corepack binaries so yarn/pnpm are available
+  const result = await sandbox.runCommand(
+    "sh",
+    [
+      "-c",
+      `export PATH="${COREPACK_BIN}:$PATH" && npx @turbo/workspaces convert . ${packageManager} --skip-install --ignore-unchanged-package-manager`
+    ],
+    { cwd: SANDBOX_CWD }
+  );
+  if (result.exitCode !== 0) {
+    const stderr = await result.stderr();
+    const stdout = await result.stdout();
+    throw new Error(
+      `Failed to convert to ${packageManager} (exit ${result.exitCode}):\nstderr: ${stderr}\nstdout: ${stdout}`
+    );
   }
 }
 
@@ -201,9 +225,12 @@ async function installDependencies(
   label: string
 ): Promise<void> {
   console.log(`[${label}] Installing dependencies (${packageManager})...`);
-  const result = await sandbox.runCommand(packageManager, ["install"], {
-    cwd: SANDBOX_CWD
-  });
+  // Run with PATH including corepack binaries so yarn/pnpm are available
+  const result = await sandbox.runCommand(
+    "sh",
+    ["-c", `export PATH="${COREPACK_BIN}:$PATH" && ${packageManager} install`],
+    { cwd: SANDBOX_CWD }
+  );
   if (result.exitCode !== 0) {
     const stderr = await result.stderr();
     throw new Error(`Failed to install dependencies: ${stderr}`);
@@ -220,19 +247,22 @@ async function runTasks(
 
   for (const task of tasks) {
     console.log(`[${label}] Running: ${task}...`);
-    const taskResult = await sandbox.runCommand("turbo", ["run", task], {
-      cwd: SANDBOX_CWD
-    });
+    const taskResult = await sandbox.runCommand(
+      "sh",
+      ["-c", `export PATH="${COREPACK_BIN}:$PATH" && turbo run ${task}`],
+      { cwd: SANDBOX_CWD }
+    );
 
     if (taskResult.exitCode !== 0) {
       const stderr = await taskResult.stderr();
       const stdout = await taskResult.stdout();
-      const errorOutput = stderr || stdout;
+      // Combine both streams to get full picture of what happened
+      const fullOutput = [stdout, stderr].filter(Boolean).join("\n");
       console.log(`[${label}] Task ${task} FAILED`);
       success = false;
       results[task] = {
         success: false,
-        error: truncateError(errorOutput)
+        error: fullOutput
       };
     } else {
       console.log(`[${label}] Task ${task} passed`);
@@ -254,9 +284,11 @@ async function verifyCacheHits(
 
   for (const task of tasks) {
     console.log(`[${label}] Cache check: ${task}...`);
-    const taskResult = await sandbox.runCommand("turbo", ["run", task], {
-      cwd: SANDBOX_CWD
-    });
+    const taskResult = await sandbox.runCommand(
+      "sh",
+      ["-c", `export PATH="${COREPACK_BIN}:$PATH" && turbo run ${task}`],
+      { cwd: SANDBOX_CWD }
+    );
 
     const stdout = await taskResult.stdout();
     const stderr = await taskResult.stderr();
@@ -314,7 +346,9 @@ async function runExample(
     console.log(`[${exampleName}] Sandbox created: ${sandbox.sandboxId}`);
 
     await installTurbo(sandbox, exampleName);
+    await enableCorepack(sandbox, exampleName);
     await uploadExampleFiles(sandbox, examplePath, exampleName);
+    await convertToPackageManager(sandbox, packageManager, exampleName);
     await installDependencies(sandbox, packageManager, exampleName);
     result.tasks["install"] = { success: true };
 
