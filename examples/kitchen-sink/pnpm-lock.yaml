@@ -306,6 +306,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@swc/helpers':
+        specifier: ^0.5.18
+        version: 0.5.18
       '@types/react':
         specifier: '>=18'
         version: 18.3.18
@@ -3232,7 +3235,7 @@ packages:
     dev: true
     optional: true
 
-  /@swc/core@1.11.13(@swc/helpers@0.5.15):
+  /@swc/core@1.11.13(@swc/helpers@0.5.18):
     resolution: {integrity: sha512-9BXdYz12Wl0zWmZ80PvtjBWeg2ncwJ9L5WJzjhN6yUTZWEV/AwAdVdJnIEp4pro3WyKmAaMxcVOSbhuuOZco5g==}
     engines: {node: '>=10'}
     requiresBuild: true
@@ -3243,7 +3246,7 @@ packages:
         optional: true
     dependencies:
       '@swc/counter': 0.1.3
-      '@swc/helpers': 0.5.15
+      '@swc/helpers': 0.5.18
       '@swc/types': 0.1.20
     optionalDependencies:
       '@swc/core-darwin-arm64': 1.11.13
@@ -3264,6 +3267,12 @@ packages:
 
   /@swc/helpers@0.5.15:
     resolution: {integrity: sha512-JQ5TuMi45Owi4/BIMAJBoSQoOJu12oOk/gADqlcUL9JEdHB8vyjUSsxqeNXnmXHjYKMi2WcYtezGEEhqUI/E2g==}
+    dependencies:
+      tslib: 2.8.1
+    dev: false
+
+  /@swc/helpers@0.5.18:
+    resolution: {integrity: sha512-TXTnIcNJQEKwThMMqBXsZ4VGAza6bvN4pa41Rkqoio6QBKMvo+5lexeTMScGCIxtzgQJzElcvIltani+adC5PQ==}
     dependencies:
       tslib: 2.8.1
 
@@ -4281,8 +4290,8 @@ packages:
       '@rollup/plugin-replace': 6.0.2(rollup@4.38.0)
       '@rollup/plugin-wasm': 6.2.2(rollup@4.38.0)
       '@rollup/pluginutils': 5.1.4(rollup@4.38.0)
-      '@swc/core': 1.11.13(@swc/helpers@0.5.15)
-      '@swc/helpers': 0.5.15
+      '@swc/core': 1.11.13(@swc/helpers@0.5.18)
+      '@swc/helpers': 0.5.18
       clean-css: 5.3.3
       fast-glob: 3.3.3
       magic-string: 0.30.17
@@ -8682,7 +8691,7 @@ packages:
     dependencies:
       '@fastify/deepmerge': 1.3.0
       '@rollup/pluginutils': 5.1.4(rollup@4.38.0)
-      '@swc/core': 1.11.13(@swc/helpers@0.5.15)
+      '@swc/core': 1.11.13(@swc/helpers@0.5.18)
       get-tsconfig: 4.10.0
       rollup: 4.38.0
       rollup-preserve-directives: 1.1.3(rollup@4.38.0)
