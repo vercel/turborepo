@@ -24,8 +24,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, clone, config, daemon, docs, generate, get_mfe_port, info, link, login,
-        logout, ls, prune, query, run, scan, telemetry, unlink, CommandBase,
+        bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link, login, logout,
+        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -540,17 +540,6 @@ pub enum Command {
         ignore: Option<BoundariesIgnore>,
         #[clap(long, requires = "ignore")]
         reason: Option<String>,
-    },
-    #[clap(hide = true)]
-    Clone {
-        url: String,
-        dir: Option<String>,
-        #[clap(long, conflicts_with = "local")]
-        ci: bool,
-        #[clap(long, conflicts_with = "ci")]
-        local: bool,
-        #[clap(long)]
-        depth: Option<usize>,
     },
     /// Generate the autocompletion script for the specified shell
     Completion { shell: Shell },
@@ -1369,18 +1358,6 @@ pub async fn run(
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
             Ok(boundaries::run(base, event, ignore, reason).await?)
-        }
-        Command::Clone {
-            url,
-            dir,
-            ci,
-            local,
-            depth,
-        } => {
-            let event = CommandEventBuilder::new("clone").with_parent(&root_telemetry);
-            event.track_call();
-
-            Ok(clone::run(cwd, url, dir.as_deref(), *ci, *local, *depth)?)
         }
         #[allow(unused_variables)]
         Command::Daemon {
