@@ -531,14 +531,18 @@ jobs:
         uses: pnpm/action-setup@v4
 
       - name: Install dependencies
-        working-directory: examples
+        working-directory: apps/examples-checker
         run: pnpm install
 
+      - name: Setup Vercel credentials
+        working-directory: apps/examples-checker
+        run: |
+          npx vercel link --yes --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }}
+
       - name: Run examples check
-        working-directory: examples
+        working-directory: apps/examples-checker
         run: pnpm check-examples
-        env:
-          VERCEL_OIDC_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
