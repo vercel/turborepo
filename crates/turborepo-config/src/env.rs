@@ -63,6 +63,10 @@ const TURBO_MAPPING: &[(&str, &str)] = [
         "experimental_otel_timeout_ms",
     ),
     (
+        "turbo_experimental_otel_interval_ms",
+        "experimental_otel_interval_ms",
+    ),
+    (
         "turbo_experimental_otel_headers",
         "experimental_otel_headers",
     ),

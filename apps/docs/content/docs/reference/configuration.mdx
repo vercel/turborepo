@@ -893,9 +893,10 @@ The `experimentalObservability` block is only read when `futureFlags.experimenta
       "protocol": "grpc",
       "endpoint": "https://api.datadoghq.com/api/v2/otlp",
       "headers": {
-        "DD-API-KEY": "your-api-key"
+        "X-Custom-Header": "value"
       },
       "timeoutMs": 10000,
+      "intervalMs": 15000,
       "resource": {
         "service.name": "turborepo"
       },
@@ -943,7 +944,6 @@ Optional HTTP headers to include with export requests. Useful for authentication
   "experimentalObservability": {
     "otel": {
       "headers": {
-        "DD-API-KEY": "your-datadog-api-key",
         "X-Custom-Header": "value"
       }
     }
@@ -956,6 +956,12 @@ Optional HTTP headers to include with export requests. Useful for authentication
 Default: `10000` (10 seconds)
 
 Timeout in milliseconds for export requests to the collector.
+
+#### `experimentalObservability.otel.intervalMs`
+
+Default: `15000` (15 seconds)
+
+Interval in milliseconds between periodic exports to the collector. This controls how frequently metrics are batched and sent to the OTLP collector during a run. A final flush is always performed when the run completes, regardless of this setting.
 
 #### `experimentalObservability.otel.resource`
 
@@ -1017,7 +1023,8 @@ You can also configure observability via environment variables, which take prece
 - `TURBO_EXPERIMENTAL_OTEL_PROTOCOL` - Protocol (`grpc` or `http/protobuf`)
 - `TURBO_EXPERIMENTAL_OTEL_ENDPOINT` - Collector endpoint URL
 - `TURBO_EXPERIMENTAL_OTEL_TIMEOUT_MS` - Timeout in milliseconds
-- `TURBO_EXPERIMENTAL_OTEL_HEADERS` - Comma-separated key=value pairs (e.g., `"DD-API-KEY=key,Header=value"`)
+- `TURBO_EXPERIMENTAL_OTEL_INTERVAL_MS` - Export interval in milliseconds
+- `TURBO_EXPERIMENTAL_OTEL_HEADERS` - Comma-separated key=value pairs (e.g., `"Header=value,Other=value"`)
 - `TURBO_EXPERIMENTAL_OTEL_RESOURCE` - Comma-separated key=value pairs for resource attributes
 - `TURBO_EXPERIMENTAL_OTEL_METRICS_RUN_SUMMARY` - Enable run summary metrics (`1` or `0`)
 - `TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS` - Enable task details metrics (`1` or `0`)
@@ -1030,6 +1037,7 @@ You can override observability settings via CLI flags:
 - `--experimental-otel-protocol` - Protocol (`grpc` or `http/protobuf`)
 - `--experimental-otel-endpoint` - Collector endpoint URL
 - `--experimental-otel-timeout-ms` - Timeout in milliseconds
+- `--experimental-otel-interval-ms` - Export interval in milliseconds
 - `--experimental-otel-header KEY=VALUE` - Add HTTP header (can be repeated)
 - `--experimental-otel-resource KEY=VALUE` - Add resource attribute (can be repeated)
 - `--experimental-otel-metrics-run-summary` - Enable run summary metrics
