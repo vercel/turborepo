@@ -4,13 +4,6 @@
  * Validates all examples marked as `maintainedByCoreTeam` in meta.json
  * by running them in isolated Vercel Sandboxes.
  *
- * This version creates fresh sandboxes for each run (no snapshots).
- * Slower but simpler - no state management needed.
- *
- * Authentication:
- * - For local development: Run `vercel link` and `vercel env pull` first
- * - For CI/CD: Set VERCEL_TOKEN environment variable
- *
  * Usage:
  *   pnpm run check-examples
  */
