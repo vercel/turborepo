@@ -1,11 +1,12 @@
 {
   "name": "turborepo-examples",
   "scripts": {
-    "install-all": "node --experimental-strip-types install-all.ts",
-    "update-turbo": "node --experimental-strip-types update-turbo.ts",
-    "check-examples": "node --experimental-strip-types --env-file=.env.local check-examples.ts"
+    "install-all": "tsx install-all.ts",
+    "update-turbo": "tsx update-turbo.ts",
+    "check-examples": "tsx --env-file=.env.local check-examples.ts"
   },
   "devDependencies": {
-    "@vercel/sandbox": "^1.4.1"
+    "@vercel/sandbox": "^1.4.1",
+    "tsx": "4.21.0"
   }
 }
