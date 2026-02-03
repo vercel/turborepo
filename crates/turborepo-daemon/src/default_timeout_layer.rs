@@ -22,7 +22,8 @@
 
 use std::time::Duration;
 
-use tonic::{codegen::http::Request, server::NamedService, transport::Body};
+use http_body::Body;
+use tonic::{codegen::http::Request, server::NamedService};
 use tower::{Layer, Service};
 
 #[derive(Clone, Debug)]
@@ -30,9 +31,10 @@ pub struct DefaultTimeoutService<S> {
     inner: S,
 }
 
-impl<S> Service<Request<Body>> for DefaultTimeoutService<S>
+impl<S, B> Service<Request<B>> for DefaultTimeoutService<S>
 where
-    S: Service<Request<Body>>,
+    S: Service<Request<B>>,
+    B: Body,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -45,7 +47,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, mut req: Request<Body>) -> Self::Future {
+    fn call(&mut self, mut req: Request<B>) -> Self::Future {
         if !req.uri().path().ends_with("Blocking") {
             req.headers_mut()
                 .entry("grpc-timeout")
@@ -85,10 +87,13 @@ mod test {
         sync::{Arc, Mutex},
     };
 
+    use http_body_util::Empty;
     use test_case::test_case;
     use tonic::codegen::http::HeaderValue;
 
     use super::*;
+
+    type TestBody = Empty<bytes::Bytes>;
 
     #[test_case("/ExampleBlocking", None, None ; "no default for blocking calls")]
     #[test_case("/Example", None, Some("100000u") ; "default for non-blocking calls")]
@@ -102,7 +107,7 @@ mod test {
         #[derive(Clone, Debug)]
         struct MockService(Arc<Mutex<Option<String>>>);
 
-        impl Service<Request<Body>> for MockService {
+        impl Service<Request<TestBody>> for MockService {
             type Response = ();
             type Error = ();
             type Future = impl std::future::Future<Output = Result<(), ()>>;
@@ -114,7 +119,7 @@ mod test {
                 std::task::Poll::Ready(Ok(()))
             }
 
-            fn call(&mut self, req: Request<Body>) -> Self::Future {
+            fn call(&mut self, req: Request<TestBody>) -> Self::Future {
                 // get the content of the header
                 let header = self.0.clone();
                 async move {
@@ -130,7 +135,7 @@ mod test {
 
         let inner = MockService(Arc::new(Mutex::new(None)));
         let mut svc = DefaultTimeoutLayer.layer(inner.clone());
-        let mut req = Request::new(Body::empty());
+        let mut req = Request::new(Empty::new());
         let uri = req.uri_mut();
         *uri = tonic::codegen::http::Uri::from_str(path).unwrap();
         if let Some(timeout) = timeout {
