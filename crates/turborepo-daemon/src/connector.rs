@@ -715,7 +715,6 @@ mod test {
                     // Server expects tokio::io::DuplexStream (implements Connected + AsyncRead +
                     // AsyncWrite)
                     let server: Result<_, anyhow::Error> = Ok(server);
-                    // Client connector needs TokioIo wrapper for hyper 1.x compatibility
                     let client = hyper_util::rt::TokioIo::new(client);
                     tx.send(server).await.unwrap();
                     Ok::<_, anyhow::Error>(client)
