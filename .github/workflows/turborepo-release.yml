@@ -236,6 +236,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [stage]
+    if: ${{ always() && needs.stage.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -261,6 +262,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [stage]
+    if: ${{ always() && needs.stage.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -284,6 +286,7 @@ jobs:
   build-rust:
     name: "Build Rust"
     needs: [stage]
+    if: ${{ always() && needs.stage.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
