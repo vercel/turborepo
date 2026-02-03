@@ -87,10 +87,67 @@ use tonic::metadata::{MetadataKey, MetadataMap, MetadataValue};
 use tracing::warn;
 
 /// Protocol supported by the OTLP exporter.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///
+/// Both gRPC and HTTP transports use standard `http://` or `https://` URL
+/// schemes - see [`validate_endpoint`] for details.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Default,
+    Hash,
+    PartialOrd,
+    Ord,
+    serde::Deserialize,
+    serde::Serialize,
+)]
+#[serde(rename_all = "kebab-case")]
 pub enum Protocol {
+    #[default]
+    #[serde(alias = "grpc")]
     Grpc,
+    #[serde(alias = "http")]
+    #[serde(alias = "http/protobuf")]
     HttpProtobuf,
+}
+
+impl std::fmt::Display for Protocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Protocol::Grpc => write!(f, "grpc"),
+            Protocol::HttpProtobuf => write!(f, "http/protobuf"),
+        }
+    }
+}
+
+/// Error returned when parsing an invalid protocol string.
+#[derive(Debug)]
+pub struct ParseProtocolError(pub String);
+
+impl std::fmt::Display for ParseProtocolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Unsupported protocol `{}`. Use `grpc` or `http/protobuf`.",
+            self.0
+        )
+    }
+}
+
+impl std::error::Error for ParseProtocolError {}
+
+impl std::str::FromStr for Protocol {
+    type Err = ParseProtocolError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_ascii_lowercase().as_str() {
+            "grpc" => Ok(Self::Grpc),
+            "http" | "http/protobuf" | "http_protobuf" => Ok(Self::HttpProtobuf),
+            _ => Err(ParseProtocolError(s.to_string())),
+        }
+    }
 }
 
 /// Metric toggle configuration.
@@ -107,6 +164,7 @@ pub struct Config {
     pub protocol: Protocol,
     pub headers: BTreeMap<String, String>,
     pub timeout: Duration,
+    pub interval: Duration,
     pub resource_attributes: BTreeMap<String, String>,
     pub metrics: MetricsConfig,
 }
@@ -163,6 +221,10 @@ impl TaskCacheStatus {
 pub enum Error {
     #[error("experimentalOtel requires an endpoint")]
     MissingEndpoint,
+    #[error(
+        "unsupported OTLP transport scheme `{0}`: endpoint must start with http:// or https://"
+    )]
+    UnsupportedTransport(String),
     #[error("failed to build OTLP exporter: {0}")]
     Exporter(opentelemetry_otlp::ExporterBuildError),
     #[error("invalid OTLP header `{0}`")]
@@ -198,9 +260,7 @@ impl std::fmt::Debug for Handle {
 
 impl Handle {
     pub fn try_new(config: Config) -> Result<Self, Error> {
-        if config.endpoint.trim().is_empty() {
-            return Err(Error::MissingEndpoint);
-        }
+        validate_endpoint(&config.endpoint)?;
 
         let provider = build_provider(&config)?;
         let meter = provider.meter("turborepo");
@@ -241,11 +301,21 @@ impl Handle {
         }
     }
 
+    /// Shutdown the exporter, flushing any pending metrics.
+    ///
+    /// This triggers a final export of any buffered metrics before shutting
+    /// down. The operation respects the configured `timeout` from
+    /// [`Config`] - if the network is unresponsive, the export will fail
+    /// after that timeout expires (default 10 seconds). This prevents CI
+    /// pipelines from hanging indefinitely on network issues.
+    ///
+    /// If more control over shutdown timing is needed, adjust `timeout_ms` in
+    /// the turbo.json `experimentalOtel` configuration.
     pub fn shutdown(self) {
         tracing::debug!(target: "turborepo_otel", "shutting down otel exporter");
         // SdkMeterProvider::shutdown flushes pending metrics and shuts down the
-        // exporter. We call it regardless of whether we have exclusive Arc
-        // ownership, since the provider handles concurrent access internally.
+        // exporter. The configured timeout applies to the final export operation,
+        // ensuring we don't hang indefinitely on network issues.
         if let Err(err) = self.inner.provider.shutdown() {
             warn!("failed to shutdown otel exporter: {err}");
         }
@@ -311,6 +381,30 @@ impl Instruments {
     }
 }
 
+/// Validates that the endpoint is non-empty and uses a supported OTLP transport
+/// scheme.
+///
+/// The OTEL spec only supports gRPC and HTTP transports, both of which require
+/// `http://` or `https://` URL schemes.
+fn validate_endpoint(endpoint: &str) -> Result<(), Error> {
+    let endpoint = endpoint.trim();
+    if endpoint.is_empty() {
+        return Err(Error::MissingEndpoint);
+    }
+
+    let lower = endpoint.to_lowercase();
+    if !lower.starts_with("http://") && !lower.starts_with("https://") {
+        // Extract the scheme portion for a helpful error message
+        let scheme = endpoint
+            .split_once("://")
+            .map(|(s, _)| s)
+            .unwrap_or(endpoint);
+        return Err(Error::UnsupportedTransport(scheme.to_string()));
+    }
+
+    Ok(())
+}
+
 fn build_provider(config: &Config) -> Result<SdkMeterProvider, Error> {
     let resource = build_resource(config);
 
@@ -350,7 +444,7 @@ fn build_provider(config: &Config) -> Result<SdkMeterProvider, Error> {
     };
 
     let reader = periodic_reader_with_async_runtime::PeriodicReader::builder(exporter, Tokio)
-        .with_interval(Duration::from_secs(15))
+        .with_interval(config.interval)
         .build();
 
     Ok(SdkMeterProvider::builder()
@@ -461,6 +555,7 @@ mod tests {
             protocol: Protocol::Grpc,
             headers: BTreeMap::new(),
             timeout: Duration::from_secs(10),
+            interval: Duration::from_secs(15),
             resource_attributes: BTreeMap::new(),
             metrics: MetricsConfig::default(),
         };
@@ -479,6 +574,7 @@ mod tests {
             protocol: Protocol::Grpc,
             headers: BTreeMap::new(),
             timeout: Duration::from_secs(10),
+            interval: Duration::from_secs(15),
             resource_attributes: BTreeMap::new(),
             metrics: MetricsConfig::default(),
         };
@@ -488,6 +584,64 @@ mod tests {
             Error::MissingEndpoint => {}
             _ => panic!("Expected MissingEndpoint error"),
         }
+    }
+
+    #[test]
+    fn test_validate_endpoint_unsupported_grpc_scheme() {
+        // grpc:// is not a valid URL scheme for OTLP - use http:// or https://
+        let result = validate_endpoint("grpc://localhost:4317");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::UnsupportedTransport(scheme) => {
+                assert_eq!(scheme, "grpc");
+            }
+            _ => panic!("Expected UnsupportedTransport error"),
+        }
+    }
+
+    #[test]
+    fn test_validate_endpoint_unsupported_ftp_scheme() {
+        let result = validate_endpoint("ftp://example.com");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::UnsupportedTransport(scheme) => {
+                assert_eq!(scheme, "ftp");
+            }
+            _ => panic!("Expected UnsupportedTransport error"),
+        }
+    }
+
+    #[test]
+    fn test_validate_endpoint_no_scheme() {
+        // Endpoint without a scheme should be rejected
+        let result = validate_endpoint("localhost:4317");
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::UnsupportedTransport(scheme) => {
+                assert_eq!(scheme, "localhost:4317");
+            }
+            _ => panic!("Expected UnsupportedTransport error"),
+        }
+    }
+
+    #[test]
+    fn test_validate_endpoint_valid_http() {
+        let result = validate_endpoint("http://localhost:4318");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_endpoint_valid_https() {
+        let result = validate_endpoint("https://otel-collector.example.com:4317");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_validate_endpoint_case_insensitive() {
+        // Scheme validation should be case-insensitive
+        assert!(validate_endpoint("HTTP://localhost:4318").is_ok());
+        assert!(validate_endpoint("HTTPS://localhost:4317").is_ok());
+        assert!(validate_endpoint("Http://localhost:4318").is_ok());
     }
 
     #[test]
@@ -539,6 +693,7 @@ mod tests {
             protocol: Protocol::Grpc,
             headers: BTreeMap::new(),
             timeout: Duration::from_secs(10),
+            interval: Duration::from_secs(15),
             resource_attributes: BTreeMap::new(),
             metrics: MetricsConfig::default(),
         };
@@ -563,6 +718,7 @@ mod tests {
             protocol: Protocol::Grpc,
             headers: BTreeMap::new(),
             timeout: Duration::from_secs(10),
+            interval: Duration::from_secs(15),
             resource_attributes: resource_attrs,
             metrics: MetricsConfig::default(),
         };
@@ -588,6 +744,7 @@ mod tests {
             protocol: Protocol::Grpc,
             headers: BTreeMap::new(),
             timeout: Duration::from_secs(10),
+            interval: Duration::from_secs(15),
             resource_attributes: resource_attrs,
             metrics: MetricsConfig::default(),
         };
@@ -616,6 +773,7 @@ mod tests {
             protocol: Protocol::Grpc,
             headers: BTreeMap::new(),
             timeout: Duration::from_secs(10),
+            interval: Duration::from_secs(15),
             resource_attributes: resource_attrs,
             metrics: MetricsConfig::default(),
         };

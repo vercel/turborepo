@@ -352,6 +352,8 @@ impl<'a> RunSummary<'a> {
     ) -> Result<(), Error> {
         // Handle observability shutdown before the dry run check to ensure graceful
         // cleanup even when metrics are not being emitted.
+        // Note: shutdown respects the configured timeout_ms (default 10s) to prevent
+        // hanging indefinitely on network issues.
         if let Some(handle) = self.observability_handle.take() {
             // Only record metrics for actual runs, not dry runs
             if !matches!(self.run_type, RunType::DryJson | RunType::DryText) {

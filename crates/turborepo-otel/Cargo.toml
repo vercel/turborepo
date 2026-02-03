@@ -19,13 +19,8 @@ opentelemetry_sdk = { version = "0.31", features = [
   "experimental_async_runtime",
   "experimental_metrics_periodicreader_with_async_runtime",
 ] }
-serde = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tonic = "0.14"
 tracing = { workspace = true }
-
-[features]
-default = []
-serde = ["dep:serde", "dep:serde_json"]

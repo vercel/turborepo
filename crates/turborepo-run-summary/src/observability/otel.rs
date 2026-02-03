@@ -62,21 +62,22 @@ fn config_from_options(
     }
     let endpoint = endpoint.to_string();
 
-    let protocol = match options.protocol.unwrap_or(ExperimentalOtelProtocol::Grpc) {
-        ExperimentalOtelProtocol::Grpc => turborepo_otel::Protocol::Grpc,
-        ExperimentalOtelProtocol::HttpProtobuf => turborepo_otel::Protocol::HttpProtobuf,
-    };
+    // ExperimentalOtelProtocol is a re-export of turborepo_otel::Protocol,
+    // so no conversion is needed.
+    let protocol = options.protocol.unwrap_or_default();
 
     let headers = options.headers.clone().unwrap_or_default();
     let resource_attributes = options.resource.clone().unwrap_or_default();
     let metrics = metrics_config(options.metrics.as_ref());
     let timeout = Duration::from_millis(options.timeout_ms.unwrap_or(10_000));
+    let interval = Duration::from_millis(options.interval_ms.unwrap_or(15_000));
 
     let mut config = turborepo_otel::Config {
         endpoint,
         protocol,
         headers,
         timeout,
+        interval,
         resource_attributes,
         metrics,
     };
@@ -196,6 +197,7 @@ mod tests {
             protocol: turborepo_otel::Protocol::Grpc,
             headers,
             timeout: Duration::from_millis(10_000),
+            interval: Duration::from_millis(15_000),
             resource_attributes: BTreeMap::new(),
             metrics: turborepo_otel::MetricsConfig {
                 run_summary: true,
@@ -253,6 +255,7 @@ mod tests {
         assert_eq!(config.endpoint, "https://example.com/otel");
         assert_eq!(config.protocol, turborepo_otel::Protocol::Grpc);
         assert_eq!(config.timeout.as_millis(), 10_000);
+        assert_eq!(config.interval.as_millis(), 15_000);
         assert!(config.headers.is_empty());
         assert!(config.resource_attributes.is_empty());
         assert!(config.metrics.run_summary);
@@ -270,6 +273,7 @@ mod tests {
             endpoint: Some("  https://example.com/otel  ".to_string()),
             protocol: Some(ExperimentalOtelProtocol::HttpProtobuf),
             timeout_ms: Some(5000),
+            interval_ms: Some(30000),
             headers: Some(headers),
             resource: Some(resource),
             metrics: Some(ExperimentalOtelMetricsOptions {
@@ -284,6 +288,7 @@ mod tests {
         assert_eq!(config.endpoint, "https://example.com/otel");
         assert_eq!(config.protocol, turborepo_otel::Protocol::HttpProtobuf);
         assert_eq!(config.timeout.as_millis(), 5000);
+        assert_eq!(config.interval.as_millis(), 30000);
         assert_eq!(config.headers.get("X-Custom"), Some(&"value".to_string()));
         assert_eq!(
             config.resource_attributes.get("service.name"),

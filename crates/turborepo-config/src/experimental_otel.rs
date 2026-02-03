@@ -1,68 +1,13 @@
-use std::{collections::BTreeMap, fmt, str::FromStr};
+use std::{collections::BTreeMap, str::FromStr};
 
-use clap::ValueEnum;
 use merge::Merge;
 use serde::{Deserialize, Serialize};
+// Re-export Protocol from turborepo-otel to avoid duplicating the enum.
+// turborepo-config depends on turborepo-otel (the lighter crate), keeping
+// clap CLI parsing here while the core Protocol type lives in turborepo-otel.
+pub use turborepo_otel::{ParseProtocolError, Protocol as ExperimentalOtelProtocol};
 
 use crate::Error;
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    Default,
-    Hash,
-    PartialOrd,
-    Ord,
-    ValueEnum,
-)]
-#[serde(rename_all = "kebab-case")]
-pub enum ExperimentalOtelProtocol {
-    #[default]
-    #[serde(alias = "grpc")]
-    Grpc,
-    #[serde(alias = "http")]
-    #[serde(alias = "http/protobuf")]
-    HttpProtobuf,
-}
-
-impl fmt::Display for ExperimentalOtelProtocol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ExperimentalOtelProtocol::Grpc => write!(f, "grpc"),
-            ExperimentalOtelProtocol::HttpProtobuf => write!(f, "http/protobuf"),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct ParseProtocolError(pub String);
-
-impl fmt::Display for ParseProtocolError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "Unsupported protocol `{}`. Use `grpc` or `http/protobuf`.",
-            self.0
-        )
-    }
-}
-
-impl FromStr for ExperimentalOtelProtocol {
-    type Err = ParseProtocolError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "grpc" => Ok(Self::Grpc),
-            "http" | "http/protobuf" | "http_protobuf" => Ok(Self::HttpProtobuf),
-            _ => Err(ParseProtocolError(s.to_string())),
-        }
-    }
-}
 
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
 #[serde(rename_all = "camelCase")]
@@ -79,6 +24,7 @@ pub struct ExperimentalOtelOptions {
     pub endpoint: Option<String>,
     pub headers: Option<BTreeMap<String, String>>,
     pub timeout_ms: Option<u64>,
+    pub interval_ms: Option<u64>,
     pub resource: Option<BTreeMap<String, String>>,
     pub metrics: Option<ExperimentalOtelMetricsOptions>,
     pub use_remote_cache_token: Option<bool>,
@@ -91,6 +37,7 @@ impl ExperimentalOtelOptions {
             && self.endpoint.is_none()
             && self.headers.as_ref().map(|m| m.is_empty()).unwrap_or(true)
             && self.timeout_ms.is_none()
+            && self.interval_ms.is_none()
             && self.resource.as_ref().map(|m| m.is_empty()).unwrap_or(true)
             && self.use_remote_cache_token.is_none()
             && self
@@ -133,6 +80,16 @@ impl ExperimentalOtelOptions {
                     message: "TURBO_EXPERIMENTAL_OTEL_TIMEOUT_MS must be a number.".to_string(),
                 })?;
             options.timeout_ms = Some(timeout);
+            touched = true;
+        }
+
+        if let Some(raw) = get_non_empty(map, "experimental_otel_interval_ms") {
+            let interval = raw
+                .parse()
+                .map_err(|_| Error::InvalidExperimentalOtelConfig {
+                    message: "TURBO_EXPERIMENTAL_OTEL_INTERVAL_MS must be a number.".to_string(),
+                })?;
+            options.interval_ms = Some(interval);
             touched = true;
         }
 
@@ -362,6 +319,27 @@ mod tests {
     }
 
     #[test]
+    fn test_from_env_map_interval_ms() {
+        let map = build_env_map(&[("experimental_otel_interval_ms", "30000")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().interval_ms, Some(30000));
+    }
+
+    #[test]
+    fn test_from_env_map_interval_ms_invalid() {
+        let map = build_env_map(&[("experimental_otel_interval_ms", "not-a-number")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map);
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InvalidExperimentalOtelConfig { message } => {
+                assert!(message.contains("TURBO_EXPERIMENTAL_OTEL_INTERVAL_MS must be a number"));
+            }
+            _ => panic!("Expected InvalidExperimentalOtelConfig"),
+        }
+    }
+
+    #[test]
     fn test_from_env_map_headers_single() {
         let map = build_env_map(&[("experimental_otel_headers", "key1=value1")]);
         let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
@@ -529,6 +507,7 @@ mod tests {
             ("experimental_otel_protocol", "grpc"),
             ("experimental_otel_endpoint", "https://example.com/otel"),
             ("experimental_otel_timeout_ms", "15000"),
+            ("experimental_otel_interval_ms", "30000"),
             ("experimental_otel_headers", "auth=token123"),
             ("experimental_otel_resource", "service.name=test"),
             ("experimental_otel_metrics_run_summary", "1"),
@@ -540,6 +519,7 @@ mod tests {
         assert_eq!(opts.protocol, Some(ExperimentalOtelProtocol::Grpc));
         assert_eq!(opts.endpoint, Some("https://example.com/otel".to_string()));
         assert_eq!(opts.timeout_ms, Some(15000));
+        assert_eq!(opts.interval_ms, Some(30000));
         assert_eq!(
             opts.headers.unwrap().get("auth"),
             Some(&"token123".to_string())
