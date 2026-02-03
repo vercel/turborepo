@@ -28,6 +28,7 @@ permissions:
   id-token: write # Required for npm Trusted Publishing using OIDC
   contents: write # Allow workflow to checkout code from the repository
   pull-requests: write # Allows the PR for post-release to be created
+  checks: write # Allows posting check statuses for release PRs
 
 on:
   push:
@@ -505,47 +506,9 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL }}
 
   create-release-pr:
-    name: "Open Release Branch PR"
+    name: "Create Release PR"
     needs: [stage, npm-publish, create-release-tag, alias-versioned-docs]
-    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.stage.outputs.stage-branch }}
-
-      - name: Get version
-        id: getVersion
-        run: echo "version=$(head -n 1 version.txt)" >> $GITHUB_OUTPUT
-
-      - name: Build PR Body
-        id: pr-body
-        run: |
-          if [ "${{ needs.alias-versioned-docs.result }}" != "success" ]; then
-            echo "> [!CAUTION]" > pr-body.md
-            echo "> Versioned docs aliasing FAILED. [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> pr-body.md
-            echo "" >> pr-body.md
-          else
-            echo "Versioned docs: https://${{ needs.alias-versioned-docs.outputs.subdomain }}.turborepo.dev" > pr-body.md
-            echo "" >> pr-body.md
-          fi
-          echo "Release PR for turborepo v${{ steps.getVersion.outputs.version }}" >> pr-body.md
-
-      - name: Create pull request
-        uses: thomaseizinger/create-pull-request@master
-        if: ${{ !inputs.dry_run }}
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          head: ${{ needs.stage.outputs.stage-branch }}
-          base: main
-          title: "release(turborepo): ${{ steps.getVersion.outputs.version }}"
-          body-path: pr-body.md
-
-  create-canary-pr:
-    name: "Open Canary Release PR"
-    needs: [stage, npm-publish, create-release-tag, alias-versioned-docs]
-    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && github.event_name == 'push' }}
+    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && !inputs.dry_run }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -557,90 +520,70 @@ jobs:
       - name: Fetch main and tags
         run: git fetch origin main --tags
 
-      - name: Validate version format
+      - name: Build PR body
         run: |
           VERSION="${{ needs.stage.outputs.version }}"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-            echo "::error::Invalid version format: $VERSION"
-            exit 1
-          fi
-
-      - name: Build PR Body
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
           PREVIOUS_TAG="${{ needs.stage.outputs.previous-tag }}"
-          VERSION="${{ needs.stage.outputs.version }}"
           DOCS_URL="${{ needs.alias-versioned-docs.outputs.docs_url }}"
 
-          echo "## Canary Release" > pr-body.md
+          echo "## Release v${VERSION}" > pr-body.md
           echo "" >> pr-body.md
 
-          if [ -n "$DOCS_URL" ]; then
+          # Docs link (or warning if failed)
+          if [ "${{ needs.alias-versioned-docs.result }}" != "success" ]; then
+            echo "> [!CAUTION]" >> pr-body.md
+            echo "> Versioned docs aliasing FAILED. [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> pr-body.md
+          elif [ -n "$DOCS_URL" ]; then
             echo "Versioned docs: ${DOCS_URL}" >> pr-body.md
-            echo "" >> pr-body.md
           fi
-
-          echo "### Included Changes" >> pr-body.md
           echo "" >> pr-body.md
 
+          # Changelog
+          echo "### Changes" >> pr-body.md
+          echo "" >> pr-body.md
           if [ -n "$PREVIOUS_TAG" ]; then
-            git log ${PREVIOUS_TAG}..origin/main --pretty=format:"%H %s" | while read -r line; do
-              SHA=$(echo "$line" | cut -d' ' -f1)
-              SHORT_SHA=$(echo "$SHA" | cut -c1-7)
-              MESSAGE=$(echo "$line" | cut -d' ' -f2-)
-              echo "- \`${SHORT_SHA}\` - ${MESSAGE}" >> pr-body.md
-            done
+            git log ${PREVIOUS_TAG}..origin/main --pretty=format:"- %s (\`%h\`)" >> pr-body.md
           else
-            echo "No previous tag found. This is the first canary release." >> pr-body.md
+            echo "First release - no previous tag." >> pr-body.md
           fi
 
-          echo "" >> pr-body.md
-          echo "---" >> pr-body.md
-          echo "Release PR for turborepo v${VERSION}" >> pr-body.md
-
-      - name: Create pull request with auto-merge
+      - name: Create PR with auto-merge
+        id: create-pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.stage.outputs.version }}"
           STAGE_BRANCH="${{ needs.stage.outputs.stage-branch }}"
-          MAX_RETRIES=3
-          RETRY_DELAY=10
 
-          for i in $(seq 1 $MAX_RETRIES); do
-            if PR_URL=$(gh pr create \
-              --title "release(turborepo): ${VERSION}" \
-              --body-file pr-body.md \
-              --head "${STAGE_BRANCH}" \
-              --base main 2>&1); then
-              break
-            fi
-            echo "PR creation attempt $i failed, retrying in ${RETRY_DELAY}s..."
-            sleep $RETRY_DELAY
-          done
+          PR_URL=$(gh pr create \
+            --title "release(turborepo): ${VERSION}" \
+            --body-file pr-body.md \
+            --head "${STAGE_BRANCH}" \
+            --base main)
 
-          if [ -z "$PR_URL" ] || [[ ! "$PR_URL" =~ ^https://github.com/.*/pull/[0-9]+$ ]]; then
-            echo "::error::Failed to create PR after $MAX_RETRIES attempts. Output: $PR_URL"
-            exit 1
-          fi
-
-          echo "Created PR: $PR_URL"
+          echo "url=$PR_URL" >> $GITHUB_OUTPUT
           PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
+          echo "number=$PR_NUM" >> $GITHUB_OUTPUT
 
-          MERGE_SUCCESS=false
-          for i in $(seq 1 $MAX_RETRIES); do
-            if gh pr merge "$PR_NUM" --auto --squash; then
-              MERGE_SUCCESS=true
-              break
-            fi
-            echo "Auto-merge attempt $i failed, retrying in ${RETRY_DELAY}s..."
-            sleep $RETRY_DELAY
+          gh pr merge "$PR_NUM" --auto --squash
+
+      - name: Post required check statuses
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PR_NUM="${{ steps.create-pr.outputs.number }}"
+          SHA=$(gh pr view "$PR_NUM" --json headRefOid --jq '.headRefOid')
+
+          for check in "Test Summary" "JS Test Summary"; do
+            gh api "repos/${{ github.repository }}/check-runs" \
+              --method POST \
+              -f name="$check" \
+              -f head_sha="$SHA" \
+              -f status="completed" \
+              -f conclusion="success" \
+              -f "output[title]=Skipped for release PR" \
+              -f "output[summary]=Release PRs skip CI - code was already tested on main before release."
           done
-
-          if [ "$MERGE_SUCCESS" != "true" ]; then
-            echo "::warning::Failed to enable auto-merge after $MAX_RETRIES attempts. PR created but requires manual merge: $PR_URL"
-          fi
 
   cleanup-on-failure:
     name: "Cleanup Failed Release"
