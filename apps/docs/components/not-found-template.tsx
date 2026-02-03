@@ -22,31 +22,29 @@ export function NotFoundTemplate({
       {content ? (
         content
       ) : (
-        <div className="prose dark:prose-invert mx-auto">
-          <p>We couldn&apos;t find that link.</p>
-          <ul>
-            <li>
-              <Link className="text-center" href="/">
-                Home
-              </Link>
+        <div className="mx-auto">
+          <p className="text-muted-foreground">
+            We couldn&apos;t find that link.
+          </p>
+          <ul className="mt-8 flex flex-col gap-y-3 text-sm">
+            <li className="transition duration-100 text-muted-foreground hover:text-foreground">
+              <Link href="/">Home</Link>
             </li>
-
-            <li>
-              <Link className="text-center" href="/docs">
-                Documentation
-              </Link>
+            <li className="transition duration-100 text-muted-foreground hover:text-foreground">
+              <Link href="/docs">Documentation</Link>
             </li>
-
-            <li>
-              <Link className="text-center" href={gitHubRepoUrl}>
+            <li className="transition duration-100 text-muted-foreground hover:text-foreground">
+              <a href={gitHubRepoUrl} rel="noopener" target="_blank">
                 GitHub
-              </Link>
+              </a>
             </li>
-
-            <li>
-              <Link className="text-center" href={communityUrl}>
+            <li className="transition duration-100 text-muted-foreground hover:text-foreground">
+              <a href={communityUrl} rel="noopener" target="_blank">
                 Community
-              </Link>
+              </a>
+            </li>
+            <li className="transition duration-100 text-muted-foreground hover:text-foreground">
+              <Link href="/sitemap.md">Sitemap for agents</Link>
             </li>
           </ul>
         </div>

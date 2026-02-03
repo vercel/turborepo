@@ -25,8 +25,6 @@ pub enum Error {
     #[error(transparent)]
     Boundaries(#[from] crate::boundaries::Error),
     #[error(transparent)]
-    Clone(#[from] crate::commands::clone::Error),
-    #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     #[diagnostic(transparent)]

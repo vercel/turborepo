@@ -236,7 +236,7 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
 
         builder.set_global_hash(task_hashable.global_hash);
         if let Some(package_dir) = task_hashable.package_dir {
-            builder.set_package_dir(&package_dir.to_string());
+            builder.set_package_dir(package_dir.to_string());
         }
 
         builder.set_hash_of_files(task_hashable.hash_of_files);
