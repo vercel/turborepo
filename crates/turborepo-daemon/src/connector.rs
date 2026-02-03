@@ -216,7 +216,10 @@ impl DaemonConnector {
         let make_service = move |_| {
             // we clone the reference counter here and move it into the async closure
             let path = path.clone();
-            async move { tokio::net::UnixStream::connect(path.as_path()).await }
+            async move {
+                let stream = tokio::net::UnixStream::connect(path.as_path()).await?;
+                Ok::<_, std::io::Error>(hyper_util::rt::TokioIo::new(stream))
+            }
         };
 
         #[cfg(target_os = "windows")]
@@ -317,11 +320,12 @@ impl DaemonConnector {
 #[cfg(target_os = "windows")]
 fn win(
     path: Arc<turbopath::AbsoluteSystemPathBuf>,
-) -> Result<impl tokio::io::AsyncRead + tokio::io::AsyncWrite, std::io::Error> {
+) -> Result<hyper_util::rt::TokioIo<tokio_util::compat::Compat<async_io::Async<uds_windows::UnixStream>>>, std::io::Error> {
     use tokio_util::compat::FuturesAsyncReadCompatExt;
     uds_windows::UnixStream::connect(&*path)
         .and_then(async_io::Async::new)
         .map(FuturesAsyncReadCompatExt::compat)
+        .map(hyper_util::rt::TokioIo::new)
 }
 
 #[derive(Debug, Error)]
@@ -705,10 +709,13 @@ mod test {
                 let tx = tx.clone();
                 async move {
                     let (client, server) = tokio::io::duplex(1024);
+                    // Server expects tokio::io::DuplexStream (implements Connected + AsyncRead +
+                    // AsyncWrite)
                     let server: Result<_, anyhow::Error> = Ok(server);
-                    let client: Result<_, anyhow::Error> = Ok(client);
+                    // Client connector needs TokioIo wrapper for hyper 1.x compatibility
+                    let client = hyper_util::rt::TokioIo::new(client);
                     tx.send(server).await.unwrap();
-                    client
+                    Ok::<_, anyhow::Error>(client)
                 }
             }))
             .await
