@@ -45,41 +45,19 @@ type Results = Record<string, ExampleResult>;
 
 type PackageManagerType = "pnpm" | "npm" | "yarn";
 
+const PACKAGE_MANAGERS: PackageManagerType[] = ["pnpm", "npm", "yarn"];
+
 function getExamplesDir(): string {
   return path.dirname(new URL(import.meta.url).pathname);
-}
-
-function detectPackageManager(examplePath: string): PackageManagerType {
-  if (fs.existsSync(path.join(examplePath, "pnpm-lock.yaml"))) {
-    return "pnpm";
-  }
-  if (fs.existsSync(path.join(examplePath, "yarn.lock"))) {
-    return "yarn";
-  }
-  if (fs.existsSync(path.join(examplePath, "package-lock.json"))) {
-    return "npm";
-  }
-
-  const packagePath = path.join(examplePath, "package.json");
-  if (fs.existsSync(packagePath)) {
-    const pkg: PackageJson = JSON.parse(fs.readFileSync(packagePath, "utf-8"));
-    if (pkg.packageManager?.startsWith("pnpm")) return "pnpm";
-    if (pkg.packageManager?.startsWith("yarn")) return "yarn";
-    if (pkg.packageManager?.startsWith("npm")) return "npm";
-  }
-
-  return "pnpm";
 }
 
 function findMaintainedExamples(examplesDir: string): {
   name: string;
   path: string;
-  packageManager: PackageManagerType;
 }[] {
   const examples: {
     name: string;
     path: string;
-    packageManager: PackageManagerType;
   }[] = [];
   const entries = fs.readdirSync(examplesDir, { withFileTypes: true });
 
@@ -94,8 +72,7 @@ function findMaintainedExamples(examplesDir: string): {
       const examplePath = path.join(examplesDir, entry.name);
       examples.push({
         name: entry.name,
-        path: examplePath,
-        packageManager: detectPackageManager(examplePath)
+        path: examplePath
       });
     }
   }
@@ -125,6 +102,19 @@ function getTasksToRun(examplePath: string): string[] {
   return tasks;
 }
 
+function stripPackageManagerField(content: Buffer): Buffer {
+  try {
+    const pkg = JSON.parse(content.toString("utf-8"));
+    if (pkg.packageManager) {
+      delete pkg.packageManager;
+      return Buffer.from(JSON.stringify(pkg, null, 2) + "\n", "utf-8");
+    }
+  } catch {
+    // Not valid JSON, return as-is
+  }
+  return content;
+}
+
 async function collectFilesRecursively(
   dir: string,
   baseDir: string = dir
@@ -142,7 +132,10 @@ async function collectFilesRecursively(
       entry.name === ".turbo" ||
       entry.name === ".next" ||
       entry.name === "dist" ||
-      entry.name === "build"
+      entry.name === "build" ||
+      entry.name === "pnpm-lock.yaml" ||
+      entry.name === "package-lock.json" ||
+      entry.name === "yarn.lock"
     ) {
       continue;
     }
@@ -151,9 +144,13 @@ async function collectFilesRecursively(
       const subFiles = await collectFilesRecursively(fullPath, baseDir);
       files.push(...subFiles);
     } else {
+      let content = fs.readFileSync(fullPath);
+      if (entry.name === "package.json") {
+        content = stripPackageManagerField(content);
+      }
       files.push({
         path: relativePath,
-        content: fs.readFileSync(fullPath)
+        content
       });
     }
   }
@@ -362,23 +359,43 @@ async function main(): Promise<void> {
   console.log(
     `Found ${examples.length} maintained examples: ${examples.map((e) => e.name).join(", ")}\n`
   );
+  console.log(
+    `Testing each with ${PACKAGE_MANAGERS.length} package managers: ${PACKAGE_MANAGERS.join(", ")}\n`
+  );
 
-  const exampleConfigs = examples.map((example) => ({
-    ...example,
-    tasks: getTasksToRun(example.path)
-  }));
+  const exampleConfigs: {
+    name: string;
+    path: string;
+    packageManager: PackageManagerType;
+    tasks: string[];
+  }[] = [];
 
-  console.log("Running all examples in parallel (fresh sandboxes)...\n");
+  for (const example of examples) {
+    const tasks = getTasksToRun(example.path);
+    for (const pm of PACKAGE_MANAGERS) {
+      exampleConfigs.push({
+        name: example.name,
+        path: example.path,
+        packageManager: pm,
+        tasks
+      });
+    }
+  }
+
+  console.log(
+    `Running ${exampleConfigs.length} test combinations in parallel...\n`
+  );
 
   const settledResults = await Promise.all(
     exampleConfigs.map(async (example) => {
+      const label = `${example.name} (${example.packageManager})`;
       const result = await runExample(
-        example.name,
+        label,
         example.path,
         example.packageManager,
         example.tasks
       );
-      return { name: example.name, result };
+      return { name: label, result };
     })
   );
 
@@ -393,7 +410,6 @@ async function main(): Promise<void> {
   console.log("Results Summary");
   console.log("=".repeat(50) + "\n");
 
-  // Print timing for each example
   for (const [name, result] of Object.entries(results)) {
     const status = result.success ? "PASS" : "FAIL";
     const cacheStatus = Object.values(result.cacheVerification).every(
