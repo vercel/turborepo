@@ -2,9 +2,11 @@
   "name": "turborepo-examples",
   "scripts": {
     "install-all": "tsx install-all.ts",
-    "update-turbo": "tsx update-turbo.ts"
+    "update-turbo": "tsx update-turbo.ts",
+    "check-examples": "tsx check-examples.ts"
   },
   "devDependencies": {
+    "@vercel/sandbox": "^1.4.1",
     "tsx": "4.21.0"
   }
 }
