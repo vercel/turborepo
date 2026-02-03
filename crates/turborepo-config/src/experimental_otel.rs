@@ -1,8 +1,11 @@
-use std::{collections::BTreeMap, fmt, str::FromStr};
+use std::{collections::BTreeMap, str::FromStr};
 
-use clap::ValueEnum;
 use merge::Merge;
 use serde::{Deserialize, Serialize};
+// Re-export Protocol from turborepo-otel to avoid duplicating the enum.
+// turborepo-config depends on turborepo-otel (the lighter crate), keeping
+// clap CLI parsing here while the core Protocol type lives in turborepo-otel.
+pub use turborepo_otel::{ParseProtocolError, Protocol as ExperimentalOtelProtocol};
 
 use crate::Error;
 
@@ -66,6 +69,7 @@ pub struct ExperimentalOtelOptions {
     pub endpoint: Option<String>,
     pub headers: Option<BTreeMap<String, String>>,
     pub timeout_ms: Option<u64>,
+    pub interval_ms: Option<u64>,
     pub resource: Option<BTreeMap<String, String>>,
     pub metrics: Option<ExperimentalOtelMetricsOptions>,
 }
@@ -77,6 +81,7 @@ impl ExperimentalOtelOptions {
             && self.endpoint.is_none()
             && self.headers.as_ref().map(|m| m.is_empty()).unwrap_or(true)
             && self.timeout_ms.is_none()
+            && self.interval_ms.is_none()
             && self.resource.as_ref().map(|m| m.is_empty()).unwrap_or(true)
             && self
                 .metrics
@@ -121,6 +126,16 @@ impl ExperimentalOtelOptions {
                     message: "TURBO_EXPERIMENTAL_OTEL_TIMEOUT_MS must be a number.".to_string(),
                 })?;
             options.timeout_ms = Some(timeout);
+            touched = true;
+        }
+
+        if let Some(raw) = get_non_empty(map, "experimental_otel_interval_ms") {
+            let interval = raw
+                .parse()
+                .map_err(|_| Error::InvalidExperimentalOtelConfig {
+                    message: "TURBO_EXPERIMENTAL_OTEL_INTERVAL_MS must be a number.".to_string(),
+                })?;
+            options.interval_ms = Some(interval);
             touched = true;
         }
 

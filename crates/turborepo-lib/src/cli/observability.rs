@@ -32,7 +32,6 @@ pub struct ExperimentalOtelCliArgs {
     /// Supported values: grpc, http-protobuf
     #[clap(
         long = "experimental-otel-protocol",
-        value_enum,
         global = true,
         value_name = "PROTOCOL",
         help = "OTLP transport protocol (grpc or http-protobuf)"
@@ -56,6 +55,15 @@ pub struct ExperimentalOtelCliArgs {
         help = "OTLP export timeout in milliseconds (default: 10000)"
     )]
     pub timeout_ms: Option<u64>,
+
+    /// Interval between periodic exports in milliseconds.
+    #[clap(
+        long = "experimental-otel-interval-ms",
+        global = true,
+        value_name = "MILLISECONDS",
+        help = "OTLP export interval in milliseconds (default: 15000)"
+    )]
+    pub interval_ms: Option<u64>,
 
     /// Additional headers to send with OTLP requests.
     /// Can be specified multiple times. Useful for authentication.
@@ -132,6 +140,10 @@ impl ExperimentalOtelCliArgs {
         }
         if let Some(timeout) = self.timeout_ms {
             options.timeout_ms = Some(timeout);
+            touched = true;
+        }
+        if let Some(interval) = self.interval_ms {
+            options.interval_ms = Some(interval);
             touched = true;
         }
         if !self.headers.is_empty() {
@@ -268,6 +280,17 @@ mod tests {
         let result = args.to_config();
         assert!(result.is_some());
         assert_eq!(result.unwrap().timeout_ms, Some(5000));
+    }
+
+    #[test]
+    fn test_experimental_otel_cli_args_interval_ms() {
+        let args = ExperimentalOtelCliArgs {
+            interval_ms: Some(30000),
+            ..Default::default()
+        };
+        let result = args.to_config();
+        assert!(result.is_some());
+        assert_eq!(result.unwrap().interval_ms, Some(30000));
     }
 
     #[test]
@@ -411,6 +434,7 @@ mod tests {
             protocol: Some(ExperimentalOtelProtocol::Grpc),
             endpoint: Some("https://example.com/otel".to_string()),
             timeout_ms: Some(15000),
+            interval_ms: Some(30000),
             headers: vec![("auth".to_string(), "token123".to_string())],
             resource_attributes: vec![("service.name".to_string(), "test".to_string())],
             metrics_run_summary: Some(true),
@@ -424,6 +448,7 @@ mod tests {
         assert_eq!(opts.protocol, Some(ExperimentalOtelProtocol::Grpc));
         assert_eq!(opts.endpoint, Some("https://example.com/otel".to_string()));
         assert_eq!(opts.timeout_ms, Some(15000));
+        assert_eq!(opts.interval_ms, Some(30000));
         assert_eq!(
             opts.headers.unwrap().get("auth"),
             Some(&"token123".to_string())
