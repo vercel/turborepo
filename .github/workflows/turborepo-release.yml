@@ -236,6 +236,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [stage]
+    if: ${{ always() && needs.stage.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -261,6 +262,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [stage]
+    if: ${{ always() && needs.stage.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -284,6 +286,7 @@ jobs:
   build-rust:
     name: "Build Rust"
     needs: [stage]
+    if: ${{ always() && needs.stage.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
@@ -345,6 +348,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [stage, build-rust, rust-smoke-test, js-smoke-test]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.rust-smoke-test.result == 'success' && needs.js-smoke-test.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -403,7 +407,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [stage, npm-publish]
-    if: ${{ !inputs.dry_run }}
+    if: ${{ always() && !inputs.dry_run && needs.npm-publish.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -423,7 +427,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: [stage, npm-publish]
-    if: ${{ !inputs.dry_run }}
+    if: ${{ always() && !inputs.dry_run && needs.npm-publish.result == 'success' }}
     outputs:
       success: ${{ steps.alias.outcome == 'success' }}
       subdomain: ${{ steps.version.outputs.subdomain }}
