@@ -5,7 +5,13 @@
  * by running them in isolated Vercel Sandboxes.
  *
  * Usage:
- *   pnpm run check-examples
+ *   pnpm check-examples [--example <name>] [--pm <pnpm|npm|yarn>]
+ *
+ * Examples:
+ *   pnpm check-examples                           # Run all examples with all package managers
+ *   pnpm check-examples --example basic           # Run only the "basic" example with all PMs
+ *   pnpm check-examples --pm pnpm                 # Run all examples with pnpm only
+ *   pnpm check-examples --example basic --pm npm  # Run "basic" with npm only
  */
 
 import { Sandbox } from "@vercel/sandbox";
@@ -45,7 +51,35 @@ type Results = Record<string, ExampleResult>;
 
 type PackageManagerType = "pnpm" | "npm" | "yarn";
 
-const PACKAGE_MANAGERS: PackageManagerType[] = ["pnpm", "npm", "yarn"];
+const ALL_PACKAGE_MANAGERS: PackageManagerType[] = ["pnpm", "npm", "yarn"];
+
+interface CliArgs {
+  example?: string;
+  pm?: PackageManagerType;
+}
+
+function parseArgs(): CliArgs {
+  const args: CliArgs = {};
+  const argv = process.argv.slice(2);
+
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === "--example" && argv[i + 1]) {
+      args.example = argv[++i];
+    } else if (argv[i] === "--pm" && argv[i + 1]) {
+      const pm = argv[++i];
+      if (pm === "pnpm" || pm === "npm" || pm === "yarn") {
+        args.pm = pm;
+      } else {
+        console.error(
+          `Invalid package manager: ${pm}. Must be pnpm, npm, or yarn.`
+        );
+        process.exit(1);
+      }
+    }
+  }
+
+  return args;
+}
 
 function getExamplesDir(): string {
   return path.dirname(new URL(import.meta.url).pathname);
@@ -384,17 +418,36 @@ async function runExample(
 
 async function main(): Promise<void> {
   const totalStartTime = Date.now();
+  const cliArgs = parseArgs();
 
   console.log("Finding maintained examples...\n");
 
   const examplesDir = getExamplesDir();
-  const examples = findMaintainedExamples(examplesDir);
+  let examples = findMaintainedExamples(examplesDir);
+
+  // Filter to specific example if requested
+  if (cliArgs.example) {
+    const filtered = examples.filter((e) => e.name === cliArgs.example);
+    if (filtered.length === 0) {
+      console.error(`Example not found: ${cliArgs.example}`);
+      console.error(
+        `Available examples: ${examples.map((e) => e.name).join(", ")}`
+      );
+      process.exit(1);
+    }
+    examples = filtered;
+  }
+
+  // Determine which package managers to test
+  const packageManagers: PackageManagerType[] = cliArgs.pm
+    ? [cliArgs.pm]
+    : ALL_PACKAGE_MANAGERS;
 
   console.log(
     `Found ${examples.length} maintained examples: ${examples.map((e) => e.name).join(", ")}\n`
   );
   console.log(
-    `Testing each with ${PACKAGE_MANAGERS.length} package managers: ${PACKAGE_MANAGERS.join(", ")}\n`
+    `Testing each with ${packageManagers.length} package managers: ${packageManagers.join(", ")}\n`
   );
 
   const exampleConfigs: {
@@ -406,7 +459,7 @@ async function main(): Promise<void> {
 
   for (const example of examples) {
     const tasks = getTasksToRun(example.path);
-    for (const pm of PACKAGE_MANAGERS) {
+    for (const pm of packageManagers) {
       exampleConfigs.push({
         name: example.name,
         path: example.path,
