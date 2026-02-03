@@ -21,11 +21,6 @@ jobs:
     outputs:
       is-release-pr: ${{ steps.check-release.outputs.is-release-pr }}
       docs: ${{ steps.filter.outputs.docs }}
-      basic-example: ${{ steps.filter.outputs.basic-example }}
-      kitchen-sink-example: ${{ steps.filter.outputs.kitchen-sink-example }}
-      non-monorepo-example: ${{ steps.filter.outputs.non-monorepo-example }}
-      with-svelte-example: ${{ steps.filter.outputs.with-svelte-example }}
-      with-tailwind-example: ${{ steps.filter.outputs.with-tailwind-example }}
       rest: ${{ steps.filter.outputs.rest }}
       rust: ${{ steps.filter.outputs.rust }}
       native-lib: ${{ steps.filter.outputs.native-lib }}
@@ -96,11 +91,6 @@ jobs:
           echo "Checking path patterns..."
 
           check_paths "docs" "docs/"
-          check_paths "basic-example" "examples/basic/,turborepo-tests/example-basic-*/,turborepo-tests/helpers/"
-          check_paths "kitchen-sink-example" "examples/kitchen-sink/,turborepo-tests/example-kitchen-sink-*/,turborepo-tests/helpers/"
-          check_paths "non-monorepo-example" "examples/non-monorepo/,turborepo-tests/example-non-monorepo-*/,turborepo-tests/helpers/"
-          check_paths "with-svelte-example" "examples/with-svelte/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
-          check_paths "with-tailwind-example" "examples/with-tailwind/,turborepo-tests/example-with-svelte-*/,turborepo-tests/helpers/"
           check_paths "native-lib" "packages/turbo-repository/,crates/"
 
           # Handle the "rest" pattern - files that are NOT in examples/ or docs/
@@ -521,100 +511,36 @@ jobs:
               });
             }
 
-  basic-example:
-    name: "`basic` example"
+  check-examples:
+    name: Check examples
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.basic-example == 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: "Run `basic` example tests"
-        uses: ./.github/actions/examples-tests
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          turbo-token: "${{ secrets.TURBO_TOKEN }}"
-          turbo-team: "${{ vars.TURBO_TEAM }}"
-          test-filter: "@turborepo-examples-tests/basic-*"
+          node-version: "20"
 
-  kitchen-sink-example:
-    name: "`kitchen-sink` example"
-    needs:
-      - find-changes
-    timeout-minutes: 40
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.kitchen-sink-example == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
 
-      - name: "Run `kitchen-sink` example tests"
-        uses: ./.github/actions/examples-tests
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          turbo-token: "${{ secrets.TURBO_TOKEN }}"
-          turbo-team: "${{ vars.TURBO_TEAM }}"
-          test-filter: "@turborepo-examples-tests/kitchen-sink-*"
+      - name: Install dependencies
+        run: pnpm install
 
-  non-monorepo-example:
-    name: "`non-monorepo` example"
-    timeout-minutes: 40
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.non-monorepo-example == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Setup Vercel credentials
+        run: |
+          cd examples
+          npx vercel link --yes --token=${{ secrets.VERCEL_TOKEN }} --project turborepo-examples-app
+          npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }}
 
-      - name: "Run `non-monorepo` example tests"
-        uses: ./.github/actions/examples-tests
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          turbo-token: "${{ secrets.TURBO_TOKEN }}"
-          turbo-team: "${{ vars.TURBO_TEAM }}"
-          test-filter: "@turborepo-examples-tests/non-monorepo-*"
-
-  with-svelte-example:
-    name: "`with-svelte` example"
-    timeout-minutes: 40
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.with-svelte-example == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: "Run `with-svelte` example tests"
-        uses: ./.github/actions/examples-tests
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          turbo-token: "${{ secrets.TURBO_TOKEN }}"
-          turbo-team: "${{ vars.TURBO_TEAM }}"
-          test-filter: "@turborepo-examples-tests/with-svelte-*"
-
-  with-tailwind-example:
-    name: "`with-tailwind` example"
-    timeout-minutes: 40
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.with-tailwind-example == 'true' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: "Run `with-tailwind` example tests"
-        uses: ./.github/actions/examples-tests
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          turbo-token: "${{ secrets.TURBO_TOKEN }}"
-          turbo-team: "${{ vars.TURBO_TEAM }}"
-          test-filter: "@turborepo-examples-tests/with-tailwind-*"
+      - name: Run examples check
+        run: cd examples && pnpm check-examples
 
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
@@ -678,11 +604,7 @@ jobs:
       - rust_test
       - rust_test_ubuntu
       - coverage_report
-      - basic-example
-      - kitchen-sink-example
-      - non-monorepo-example
-      - with-svelte-example
-      - with-tailwind-example
+      - check-examples
       - js_native_packages
     steps:
       - name: Skip for release PR
@@ -711,11 +633,7 @@ jobs:
           subjob ${{needs.rust_test.result}}
           subjob ${{needs.rust_test_ubuntu.result}}
           subjob ${{needs.coverage_report.result}}
-          subjob ${{needs.basic-example.result}}
-          subjob ${{needs.kitchen-sink-example.result}}
-          subjob ${{needs.non-monorepo-example.result}}
-          subjob ${{needs.with-svelte-example.result}}
-          subjob ${{needs.with-tailwind-example.result}}
+          subjob ${{needs.check-examples.result}}
           subjob ${{needs.js_native_packages.result}}
 
           if [ "$cancelled" = "true" ]; then
