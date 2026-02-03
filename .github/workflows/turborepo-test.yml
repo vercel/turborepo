@@ -531,11 +531,9 @@ jobs:
         uses: pnpm/action-setup@v4
 
       - name: Install dependencies
-        working-directory: apps/examples-checker
         run: pnpm install
 
       - name: Setup Vercel credentials
-        working-directory: apps/examples-checker
         run: |
           npx vercel link --yes --token=${{ secrets.VERCEL_TOKEN }} --project turborepo-examples-app
           npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }} --project turborepo-examples-app
