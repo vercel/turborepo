@@ -10,9 +10,10 @@ workspace = true
 [dependencies]
 command-group = { version = "2.1.0", features = ["with-tokio"] }
 futures = { workspace = true }
-http-body = "1"
 futures-core = "0.3.30"
 hex = { workspace = true }
+http-body = "1"
+hyper-util = { version = "0.1", features = ["tokio"] }
 notify = { workspace = true }
 prost = "0.13"
 semver = { workspace = true }
@@ -25,7 +26,6 @@ tokio-stream = { version = "0.1.12", features = ["net"] }
 tokio-util = { version = "0.7.7", features = ["compat"] }
 tonic = { version = "0.12.3", features = ["transport"] }
 tower = "0.4.13"
-hyper-util = { version = "0.1", features = ["tokio"] }
 tracing = { workspace = true }
 
 pidlock = { path = "../turborepo-pidlock" }
