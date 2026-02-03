@@ -534,11 +534,15 @@ jobs:
         working-directory: examples
         run: pnpm install
 
+      - name: Setup Vercel credentials
+        working-directory: examples
+        run: |
+          npx vercel link --yes --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }}
+
       - name: Run examples check
         working-directory: examples
         run: pnpm check-examples
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
 
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
