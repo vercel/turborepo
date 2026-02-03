@@ -539,8 +539,7 @@ jobs:
           npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Run examples check
-        working-directory: apps/examples-checker
-        run: pnpm check-examples
+        run: cd examples && pnpm check-examples
 
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
