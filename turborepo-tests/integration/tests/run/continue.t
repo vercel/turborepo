@@ -17,6 +17,9 @@ Run without --continue
   some-lib:build: > exit 2
   some-lib:build: 
   some-lib:build: npm ERR! Lifecycle script `build` failed with error: 
+  some-lib:build: npm ERR! Error: command failed 
+  some-lib:build: npm ERR!   in workspace: some-lib 
+  some-lib:build: npm ERR!   at location: (.*)(\/|\\)apps(\/|\\)some-lib  (re)
   some-lib:build: ERROR: command finished with error: command \((.*)(\/|\\)apps(\/|\\)some-lib\) .*npm(?:\.cmd)? run build exited \(1\) (re)
   some-lib#build: command \((.*)(\/|\\)apps(\/|\\)some-lib\) .*npm(?:\.cmd)? run build exited \(1\) (re)
   
@@ -40,6 +43,9 @@ Run without --continue, and with only errors.
   some-lib:build: > exit 2
   some-lib:build: 
   some-lib:build: npm ERR! Lifecycle script `build` failed with error: 
+  some-lib:build: npm ERR! Error: command failed 
+  some-lib:build: npm ERR!   in workspace: some-lib 
+  some-lib:build: npm ERR!   at location: (.*)(\/|\\)apps(\/|\\)some-lib  (re)
   some-lib:build: ERROR: command finished with error: command \((.*)(\/|\\)apps(\/|\\)some-lib\) .*npm(?:\.cmd)? run build exited \(1\) (re)
   some-lib#build: command \((.*)(\/|\\)apps(\/|\\)some-lib\) .*npm(?:\.cmd)? run build exited \(1\) (re)
   
@@ -62,6 +68,9 @@ Run with --continue
   some-lib:build: > exit 2
   some-lib:build: 
   some-lib:build: npm ERR! Lifecycle script `build` failed with error: 
+  some-lib:build: npm ERR! Error: command failed 
+  some-lib:build: npm ERR!   in workspace: some-lib 
+  some-lib:build: npm ERR!   at location: (.*)(\/|\\)apps(\/|\\)some-lib  (re)
   some-lib:build: command finished with error, but continuing...
   some-lib#build: command \((.*)(\/|\\)apps(\/|\\)some-lib\) .*npm(?:\.cmd)? run build exited \(1\) (re)
   
@@ -84,6 +93,9 @@ Run with --continue=dependencies-successful
   some-lib:build: > exit 2
   some-lib:build: 
   some-lib:build: npm ERR! Lifecycle script `build` failed with error: 
+  some-lib:build: npm ERR! Error: command failed 
+  some-lib:build: npm ERR!   in workspace: some-lib 
+  some-lib:build: npm ERR!   at location: (.*)(\/|\\)apps(\/|\\)some-lib  (re)
   some-lib:build: command finished with error, but continuing...
   other-app:build: cache miss, executing 2f02bb91c86e81a4
   other-app:build: 
@@ -91,6 +103,9 @@ Run with --continue=dependencies-successful
   other-app:build: > exit 3
   other-app:build: 
   other-app:build: npm ERR! Lifecycle script `build` failed with error: 
+  other-app:build: npm ERR! Error: command failed 
+  other-app:build: npm ERR!   in workspace: other-app 
+  other-app:build: npm ERR!   at location: (.*)(\/|\\)apps(\/|\\)other-app  (re)
   other-app:build: command finished with error, but continuing...
   some-lib#build: command \((.*)(\/|\\)apps(\/|\\)some-lib\) .*npm(?:\.cmd)? run build exited \(1\) (re)
   other-app#build: command \((.*)(\/|\\)apps(\/|\\)other-app\) .*npm(?:\.cmd)? run build exited \(1\) (re)
