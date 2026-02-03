@@ -589,13 +589,7 @@ jobs:
               SHA=$(echo "$line" | cut -d' ' -f1)
               SHORT_SHA=$(echo "$SHA" | cut -c1-7)
               MESSAGE=$(echo "$line" | cut -d' ' -f2-)
-              PR_NUM=$(gh api "/repos/${{ github.repository }}/commits/${SHA}/pulls" --jq '.[0].number' 2>/dev/null || echo "")
-
-              if [ -n "$PR_NUM" ]; then
-                echo "- ${SHORT_SHA} - ${MESSAGE} (#${PR_NUM})" >> pr-body.md
-              else
-                echo "- ${SHORT_SHA} - ${MESSAGE}" >> pr-body.md
-              fi
+              echo "- \`${SHORT_SHA}\` - ${MESSAGE}" >> pr-body.md
             done
           else
             echo "No previous tag found. This is the first canary release." >> pr-body.md
