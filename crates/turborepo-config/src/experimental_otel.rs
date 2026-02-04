@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 // Re-export Protocol from turborepo-otel to avoid duplicating the enum.
 // turborepo-config depends on turborepo-otel (the lighter crate), keeping
 // clap CLI parsing here while the core Protocol type lives in turborepo-otel.
-pub use turborepo_otel::{ParseProtocolError, Protocol as ExperimentalOtelProtocol};
+pub use turborepo_otel::Protocol as ExperimentalOtelProtocol;
 
 use crate::Error;
 
