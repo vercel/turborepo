@@ -69,6 +69,8 @@ Test help flag
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
             OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-interval-ms <MILLISECONDS>
+            OTLP export interval in milliseconds (default: 15000)
         --experimental-otel-header <KEY=VALUE>
             Add header to OTLP requests (can be repeated)
         --experimental-otel-resource <KEY=VALUE>
@@ -238,7 +240,10 @@ Test help flag
   
         --experimental-otel-timeout-ms <MILLISECONDS>
             OTLP export timeout in milliseconds (default: 10000)
-  
+
+        --experimental-otel-interval-ms <MILLISECONDS>
+            OTLP export interval in milliseconds (default: 15000)
+
         --experimental-otel-header <KEY=VALUE>
             Add header to OTLP requests (can be repeated)
   
@@ -440,6 +445,8 @@ Test help flag for link command
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
             OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-interval-ms <MILLISECONDS>
+            OTLP export interval in milliseconds (default: 15000)
         --experimental-otel-header <KEY=VALUE>
             Add header to OTLP requests (can be repeated)
         --experimental-otel-resource <KEY=VALUE>
@@ -506,6 +513,8 @@ Test help flag for unlink command
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
             OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-interval-ms <MILLISECONDS>
+            OTLP export interval in milliseconds (default: 15000)
         --experimental-otel-header <KEY=VALUE>
             Add header to OTLP requests (can be repeated)
         --experimental-otel-resource <KEY=VALUE>
@@ -576,6 +585,8 @@ Test help flag for login command
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
             OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-interval-ms <MILLISECONDS>
+            OTLP export interval in milliseconds (default: 15000)
         --experimental-otel-header <KEY=VALUE>
             Add header to OTLP requests (can be repeated)
         --experimental-otel-resource <KEY=VALUE>
@@ -642,6 +653,8 @@ Test help flag for logout command
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
             OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-interval-ms <MILLISECONDS>
+            OTLP export interval in milliseconds (default: 15000)
         --experimental-otel-header <KEY=VALUE>
             Add header to OTLP requests (can be repeated)
         --experimental-otel-resource <KEY=VALUE>
