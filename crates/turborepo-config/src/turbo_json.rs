@@ -173,6 +173,7 @@ fn convert_raw_observability_otel(
         endpoint: raw.endpoint.map(|endpoint| endpoint.into_inner().into()),
         headers,
         timeout_ms: raw.timeout_ms.map(|timeout| *timeout.as_inner()),
+        interval_ms: raw.interval_ms.map(|interval| *interval.as_inner()),
         resource,
         metrics,
         use_remote_cache_token: raw.use_remote_cache_token.map(|flag| *flag.as_inner()),
