@@ -69,6 +69,8 @@ Make sure exit code is 2 when no args are passed
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
             OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-interval-ms <MILLISECONDS>
+            OTLP export interval in milliseconds (default: 15000)
         --experimental-otel-header <KEY=VALUE>
             Add header to OTLP requests (can be repeated)
         --experimental-otel-resource <KEY=VALUE>

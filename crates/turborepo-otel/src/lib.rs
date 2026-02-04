@@ -144,7 +144,7 @@ impl std::str::FromStr for Protocol {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_ascii_lowercase().as_str() {
             "grpc" => Ok(Self::Grpc),
-            "http" | "http/protobuf" | "http_protobuf" => Ok(Self::HttpProtobuf),
+            "http" | "http/protobuf" | "http_protobuf" | "http-protobuf" => Ok(Self::HttpProtobuf),
             _ => Err(ParseProtocolError(s.to_string())),
         }
     }
