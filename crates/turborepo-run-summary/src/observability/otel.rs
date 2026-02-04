@@ -1,8 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use turborepo_config::{
-    ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
-};
+use turborepo_config::{ExperimentalOtelMetricsOptions, ExperimentalOtelOptions};
 use turborepo_otel::{RunMetricsPayload, TaskCacheStatus, TaskMetricsPayload};
 
 use super::{Handle, RunObserver};
@@ -188,6 +186,8 @@ fn build_task_payload(task: &TaskSummary) -> TaskMetricsPayload {
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+
+    use turborepo_config::ExperimentalOtelProtocol;
 
     use super::*;
 
