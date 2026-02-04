@@ -211,6 +211,7 @@ pub struct RawObservabilityOtel {
     pub endpoint: Option<Spanned<UnescapedString>>,
     pub headers: Option<BTreeMap<UnescapedString, UnescapedString>>,
     pub timeout_ms: Option<Spanned<u64>>,
+    pub interval_ms: Option<Spanned<u64>>,
     pub resource: Option<BTreeMap<UnescapedString, UnescapedString>>,
     pub metrics: Option<RawObservabilityOtelMetrics>,
     pub use_remote_cache_token: Option<Spanned<bool>>,
