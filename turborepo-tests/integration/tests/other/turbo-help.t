@@ -232,7 +232,7 @@ Test help flag
   
         --experimental-otel-protocol <PROTOCOL>
             OTLP transport protocol (grpc or http-protobuf)
-            
+
             [possible values: grpc, http-protobuf]
   
         --experimental-otel-endpoint <URL>
@@ -240,16 +240,16 @@ Test help flag
   
         --experimental-otel-timeout-ms <MILLISECONDS>
             OTLP export timeout in milliseconds (default: 10000)
-
+  
         --experimental-otel-interval-ms <MILLISECONDS>
             OTLP export interval in milliseconds (default: 15000)
-
+  
         --experimental-otel-header <KEY=VALUE>
             Add header to OTLP requests (can be repeated)
-
+  
         --experimental-otel-resource <KEY=VALUE>
             Add resource attribute to metrics (can be repeated)
-
+  
         --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
             Emit run-level summary metrics (default: true)
             
