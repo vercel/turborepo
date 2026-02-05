@@ -7,7 +7,7 @@ import { writeFile, unlink } from "node:fs/promises";
 import { dirname, resolve, relative, join } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
-import { Parse, type ReadEntry, extract } from "tar";
+import { Parser, type ReadEntry, extract } from "tar";
 import { ProxyAgent, type Dispatcher } from "undici";
 import { error, warn } from "./logger";
 
@@ -270,7 +270,7 @@ export async function streamingExtract({
     // Track all file write operations so we can wait for them to complete
     const fileWritePromises: Array<Promise<void>> = [];
 
-    const parser = new Parse({
+    const parser = new Parser({
       filter: (p: string) => {
         // Determine the unpacked root path dynamically instead of hardcoding.
         // This avoids issues when the repository has been renamed.
@@ -280,7 +280,7 @@ export async function streamingExtract({
         }
         return filter(p, rootPath);
       },
-      onentry: (entry: ReadEntry) => {
+      onReadEntry: (entry: ReadEntry) => {
         // Calculate the stripped path
         const pathParts = entry.path.split("/");
         const strippedPath = pathParts.slice(strip).join("/");
