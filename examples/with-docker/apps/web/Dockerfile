@@ -1,4 +1,4 @@
-ARG NODE_VERSION=24.11.1
+ARG NODE_VERSION=24.13.0
 FROM node:${NODE_VERSION}-slim AS base
 
 # This Dockerfile is copy-pasted into our main docs at /docs/handbook/deploying-with-docker.
