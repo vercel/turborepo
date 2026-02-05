@@ -232,8 +232,6 @@ Test help flag
   
         --experimental-otel-protocol <PROTOCOL>
             OTLP transport protocol (grpc or http-protobuf)
-            
-            [possible values: grpc, http-protobuf]
   
         --experimental-otel-endpoint <URL>
             OTLP collector endpoint URL
