@@ -64,7 +64,7 @@ Test help flag
         --experimental-otel-enabled [<ENABLED>]
             Enable OpenTelemetry metrics export [possible values: true, false]
         --experimental-otel-protocol <PROTOCOL>
-            OTLP transport protocol (grpc or http-protobuf)[possible values: grpc, http-protobuf]
+            OTLP transport protocol (grpc or http-protobuf)
         --experimental-otel-endpoint <URL>
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
@@ -232,7 +232,7 @@ Test help flag
   
         --experimental-otel-protocol <PROTOCOL>
             OTLP transport protocol (grpc or http-protobuf)
-
+            
             [possible values: grpc, http-protobuf]
   
         --experimental-otel-endpoint <URL>
@@ -440,7 +440,7 @@ Test help flag for link command
         --experimental-otel-enabled [<ENABLED>]
             Enable OpenTelemetry metrics export [possible values: true, false]
         --experimental-otel-protocol <PROTOCOL>
-            OTLP transport protocol (grpc or http-protobuf)[possible values: grpc, http-protobuf]
+            OTLP transport protocol (grpc or http-protobuf)
         --experimental-otel-endpoint <URL>
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
@@ -508,7 +508,7 @@ Test help flag for unlink command
         --experimental-otel-enabled [<ENABLED>]
             Enable OpenTelemetry metrics export [possible values: true, false]
         --experimental-otel-protocol <PROTOCOL>
-            OTLP transport protocol (grpc or http-protobuf)[possible values: grpc, http-protobuf]
+            OTLP transport protocol (grpc or http-protobuf)
         --experimental-otel-endpoint <URL>
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
@@ -580,7 +580,7 @@ Test help flag for login command
         --experimental-otel-enabled [<ENABLED>]
             Enable OpenTelemetry metrics export [possible values: true, false]
         --experimental-otel-protocol <PROTOCOL>
-            OTLP transport protocol (grpc or http-protobuf)[possible values: grpc, http-protobuf]
+            OTLP transport protocol (grpc or http-protobuf)
         --experimental-otel-endpoint <URL>
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
@@ -648,7 +648,7 @@ Test help flag for logout command
         --experimental-otel-enabled [<ENABLED>]
             Enable OpenTelemetry metrics export [possible values: true, false]
         --experimental-otel-protocol <PROTOCOL>
-            OTLP transport protocol (grpc or http-protobuf)[possible values: grpc, http-protobuf]
+            OTLP transport protocol (grpc or http-protobuf)
         --experimental-otel-endpoint <URL>
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
