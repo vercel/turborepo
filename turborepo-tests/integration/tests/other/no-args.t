@@ -64,7 +64,7 @@ Make sure exit code is 2 when no args are passed
         --experimental-otel-enabled [<ENABLED>]
             Enable OpenTelemetry metrics export [possible values: true, false]
         --experimental-otel-protocol <PROTOCOL>
-            OTLP transport protocol (grpc or http-protobuf) [possible values: grpc, http-protobuf]
+            OTLP transport protocol (grpc or http-protobuf)
         --experimental-otel-endpoint <URL>
             OTLP collector endpoint URL
         --experimental-otel-timeout-ms <MILLISECONDS>
