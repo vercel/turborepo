@@ -1,5 +1,4 @@
-import type { Config } from "jest";
-
+/** @type {import('jest').Config} */
 const config = {
   preset: "ts-jest/presets/js-with-ts",
   testEnvironment: "node",
@@ -10,6 +9,6 @@ const config = {
   collectCoverage: true,
   verbose: process.env.RUNNER_DEBUG === "1",
   silent: process.env.RUNNER_DEBUG !== "1"
-} as const satisfies Config;
+};
 
-export default config;
+module.exports = config;
