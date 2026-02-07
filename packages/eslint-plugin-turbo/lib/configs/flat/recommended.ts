@@ -15,6 +15,6 @@ const config = {
       cacheKey
     }
   }
-} satisfies Linter.FlatConfig;
+} satisfies Linter.Config;
 
 export default config;
