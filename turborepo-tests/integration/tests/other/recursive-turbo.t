@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 sed replaces the square brackets with parentheses so prysk can parse the file path
   $ ${TURBO} something 2>&1 | sed  's/\[\([^]]*\)\]/\(\1)/g'

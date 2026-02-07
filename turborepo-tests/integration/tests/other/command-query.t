@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 Write query to file
   $ echo 'query { packages { items { name } } }' > query.gql

@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config --no-install
 
 # The override-values-task task in the root turbo.json has ALL the config. The workspace config
 # defines the task and overrides all the keys. The tests below use `override-values-task` to assert that:

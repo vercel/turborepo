@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config --no-install
 
 # 1. First run, check the hash
   $ ${TURBO} run config-change-task --filter=config-change --dry=json | jq .tasks[0].hash

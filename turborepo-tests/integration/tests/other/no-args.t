@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 Make sure exit code is 2 when no args are passed
   $ ${TURBO}
@@ -167,7 +167,7 @@ we get the full help output.
   The build system that makes ship happen
 
 Initialize a new monorepo
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config > /dev/null 2>&1
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config --no-install > /dev/null 2>&1
 
   $ ${TURBO} run
   No tasks provided, here are some potential ones

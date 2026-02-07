@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 # Running non-existent tasks errors
   $ ${TURBO} run doesnotexist

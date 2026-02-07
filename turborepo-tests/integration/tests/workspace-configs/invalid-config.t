@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config --no-install
 
 # The test is greping from a logfile because the list of errors can appear in any order
 

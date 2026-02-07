@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh basic_monorepo
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh basic_monorepo --no-install
   $ mv turbo.json turborepo.json
 
 Run without --root-turbo-json should fail

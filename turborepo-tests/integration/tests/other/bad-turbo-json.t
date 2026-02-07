@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 Add turbo.json with unnecessary package task syntax to a package
   $ . ${TESTDIR}/../../../helpers/replace_turbo_json.sh $(pwd)/apps/my-app "package-task.json"
