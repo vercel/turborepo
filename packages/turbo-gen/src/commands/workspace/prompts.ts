@@ -1,6 +1,6 @@
 import path from "node:path";
 import fs from "fs-extra";
-import { prompt, Separator } from "inquirer";
+import inquirer from "inquirer";
 import { minimatch } from "minimatch";
 import validName from "validate-npm-package-name";
 import type { Project, Workspace } from "@turbo/workspaces";
@@ -27,7 +27,7 @@ export async function name({
   if (override && validForNewPackages) {
     return { answer: override };
   }
-  return prompt<{ answer: string }>({
+  return inquirer.prompt<{ answer: string }>({
     type: "input",
     name: "answer",
     default: suggestion,
@@ -50,7 +50,7 @@ export async function type({
     return { answer: override };
   }
 
-  return prompt<{ answer: WorkspaceType }>({
+  return inquirer.prompt<{ answer: WorkspaceType }>({
     type: "list",
     name: "answer",
     message: message ?? "What type of workspace should be added?",
@@ -107,7 +107,7 @@ export async function location({
     newWorkspaceLocation = `${project.paths.root}/packages/${nameAsPath}`;
   }
 
-  const { answer } = await prompt<{
+  const { answer } = await inquirer.prompt<{
     answer: string;
   }>({
     type: "input",
@@ -119,7 +119,7 @@ export async function location({
     validate: (input: string) => {
       const base = path.join(project.paths.root, input);
       const { valid, error } = validateDirectory(base);
-      const isWorkspace = project.workspaceData.globs.some((glob) =>
+      const isWorkspace = project.workspaceData.globs.some((glob: string) =>
         minimatch(input, glob)
       );
 
@@ -131,7 +131,7 @@ export async function location({
         return `${input} is not a valid workspace location`;
       }
 
-      return error;
+      return error || "Invalid directory";
     }
   });
 
@@ -147,12 +147,12 @@ export async function source({
   workspaceName
 }: {
   override?: string;
-  workspaces: Array<Workspace | Separator>;
+  workspaces: Array<Workspace | inquirer.Separator>;
   workspaceName: string;
 }) {
   if (override) {
     const workspaceSource = workspaces.find((workspace) => {
-      if (workspace instanceof Separator) {
+      if (workspace instanceof inquirer.Separator) {
         return false;
       }
       return workspace.name === override;
@@ -164,7 +164,7 @@ export async function source({
     logger.log();
   }
 
-  const sourceAnswer = await prompt<{
+  const sourceAnswer = await inquirer.prompt<{
     answer: Workspace;
   }>({
     type: "list",
@@ -173,7 +173,7 @@ export async function source({
     pageSize: 25,
     message: `Which workspace should "${workspaceName}" start from?`,
     choices: workspaces.map((choice) => {
-      if (choice instanceof Separator) {
+      if (choice instanceof inquirer.Separator) {
         return choice;
       }
       return {
@@ -210,7 +210,7 @@ export async function dependencies({
     return selectedDependencies;
   }
 
-  const { answer: dependencyGroups } = await prompt<{
+  const { answer: dependencyGroups } = await inquirer.prompt<{
     answer: Array<keyof DependencyGroups>;
   }>({
     type: "checkbox",
@@ -238,7 +238,7 @@ export async function dependencies({
 
   for (const group of dependencyGroups) {
     // eslint-disable-next-line no-await-in-loop -- we want to ask this question group by group
-    const { answer: selected } = await prompt<{
+    const { answer: selected } = await inquirer.prompt<{
       answer: Array<string>;
     }>({
       type: "checkbox",
@@ -248,7 +248,7 @@ export async function dependencies({
       message: `Which packages should be added as ${group} to "${workspaceName}?`,
       loop: false,
       choices: depChoices.map((choice) => {
-        if (choice instanceof Separator) {
+        if (choice instanceof inquirer.Separator) {
           return choice;
         }
         return {
@@ -285,7 +285,7 @@ export async function dependencies({
 }
 
 export async function confirm({ message }: { message: string }) {
-  return prompt<{ answer: boolean }>({
+  return inquirer.prompt<{ answer: boolean }>({
     type: "confirm",
     name: "answer",
     message

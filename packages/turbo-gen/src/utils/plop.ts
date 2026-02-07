@@ -4,7 +4,7 @@ import type { Project } from "@turbo/workspaces";
 import type { NodePlopAPI, PlopGenerator } from "node-plop";
 import nodePlop from "node-plop";
 import { register } from "ts-node";
-import { Separator } from "inquirer";
+import inquirer from "inquirer";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
 import { GeneratorError } from "./error";
 
@@ -27,13 +27,13 @@ export type Generator = PlopGenerator & {
   name: string;
 };
 
-export function getPlop({
+export async function getPlop({
   project,
   configPath
 }: {
   project: Project;
   configPath?: string;
-}): NodePlopAPI | undefined {
+}): Promise<NodePlopAPI | undefined> {
   // init ts-node for plop to support ts configs
   register({
     transpileOnly: true,
@@ -56,7 +56,7 @@ export function getPlop({
     }
 
     try {
-      plop = nodePlop(configPath, {
+      plop = await nodePlop(configPath, {
         destBasePath: configPath,
         force: false
       });
@@ -72,7 +72,7 @@ export function getPlop({
       }
 
       try {
-        plop = nodePlop(plopFile, {
+        plop = await nodePlop(plopFile, {
           destBasePath: project.paths.root,
           force: false
         });
@@ -84,7 +84,7 @@ export function getPlop({
 
     if (!plop && workspaceConfigs.length > 0) {
       // if no root config, use the first workspace config as the entrypoint
-      plop = nodePlop(workspaceConfigs[0].config, {
+      plop = await nodePlop(workspaceConfigs[0].config, {
         destBasePath: workspaceConfigs[0].root,
         force: false
       });
@@ -94,29 +94,29 @@ export function getPlop({
 
   if (plop) {
     // add in all the workspace configs
-    workspaceConfigs.forEach((c) => {
+    for (const c of workspaceConfigs) {
       try {
-        plop.load(c.config, {
+        await plop.load(c.config, {
           destBasePath: c.root,
           force: false
         });
       } catch (e) {
         logger.error(e);
       }
-    });
+    }
   }
 
   return plop;
 }
 
-export function getCustomGenerators({
+export async function getCustomGenerators({
   project,
   configPath
 }: {
   project: Project;
   configPath?: string;
-}): Array<Generator | Separator> {
-  const plop = getPlop({ project, configPath });
+}): Promise<Array<Generator | inquirer.Separator>> {
+  const plop = await getPlop({ project, configPath });
 
   if (!plop) {
     return [];
@@ -157,16 +157,16 @@ export function getCustomGenerators({
   });
 
   // add in separators to group by workspace
-  const gensWithSeparators: Array<Generator | Separator> = [];
+  const gensWithSeparators: Array<Generator | inquirer.Separator> = [];
   Object.keys(gensByWorkspace).forEach((group) => {
-    gensWithSeparators.push(new Separator(group));
+    gensWithSeparators.push(new inquirer.Separator(group));
     gensWithSeparators.push(...gensByWorkspace[group]);
   });
 
   return gensWithSeparators;
 }
 
-export function getCustomGenerator({
+export async function getCustomGenerator({
   project,
   generator,
   configPath
@@ -174,8 +174,8 @@ export function getCustomGenerator({
   project: Project;
   generator: string;
   configPath?: string;
-}): string | undefined {
-  const plop = getPlop({ project, configPath });
+}): Promise<string | undefined> {
+  const plop = await getPlop({ project, configPath });
   if (!plop) {
     return undefined;
   }
@@ -249,7 +249,7 @@ export async function runCustomGenerator({
   bypassArgs?: Array<string>;
   configPath?: string;
 }): Promise<void> {
-  const plop = getPlop({ project, configPath });
+  const plop = await getPlop({ project, configPath });
   if (!plop) {
     throw new GeneratorError("Unable to load generators", {
       type: "plop_unable_to_load_config"

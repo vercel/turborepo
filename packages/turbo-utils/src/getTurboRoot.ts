@@ -38,7 +38,8 @@ export function getTurboRoot(cwd?: string, opts?: Options): string | null {
 
   if (!root) {
     try {
-      root = findRootSync(currentDir);
+      const result = findRootSync(currentDir);
+      root = result.rootDir;
       if (!root) {
         return null;
       }
