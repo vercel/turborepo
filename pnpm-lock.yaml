@@ -5,6 +5,8 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@babel/runtime': '>=7.26.10'
+  '@babel/runtime-corejs3': '>=7.26.10'
   fast-xml-parser: '>=5.3.4'
 
 importers:
@@ -1246,12 +1248,12 @@ packages:
     peerDependencies:
       '@babel/core': ^7.0.0-0
 
-  '@babel/runtime-corejs3@7.20.6':
-    resolution: {integrity: sha512-tqeujPiuEfcH067mx+7otTQWROVMKHXEaOQcAeNV5dDdbPWvPcFA8/W9LXw2NfjNmOetqLl03dfnG2WALPlsRQ==}
+  '@babel/runtime-corejs3@7.29.0':
+    resolution: {integrity: sha512-TgUkdp71C9pIbBcHudc+gXZnihEDOjUAmXO1VO4HHGES7QLZcShR0stfKIxLSNIYx2fqhmJChOjm/wkF8wv4gA==}
     engines: {node: '>=6.9.0'}
 
-  '@babel/runtime@7.22.11':
-    resolution: {integrity: sha512-ee7jVNlWN09+KftVOu9n7S8gQzD/Z6hN/I8VBRXW4P1+Xe7kJGXMwu8vds4aGIMHZnNbdpSWCfZZtinytpcAvA==}
+  '@babel/runtime@7.28.6':
+    resolution: {integrity: sha512-05WQkdpL9COIMz4LjTxGpPNCdlpyimKppYNoJ5Di5EUObifl8t4tuLuUBBZEpoLYOmfvIWrsp9fCl0HoPRVTdA==}
     engines: {node: '>=6.9.0'}
 
   '@babel/template@7.27.0':
@@ -4647,8 +4649,8 @@ packages:
     resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
     engines: {node: '>= 0.6'}
 
-  core-js-pure@3.26.1:
-    resolution: {integrity: sha512-VVXcDpp/xJ21KdULRq/lXdLzQAtX7+37LzpyfFM973il0tWSsDEoyzG38G14AjTpK9VTfiNM9jnFauq/CpaWGQ==}
+  core-js-pure@3.48.0:
+    resolution: {integrity: sha512-1slJgk89tWC51HQ1AEqG+s2VuwpTRr8ocu4n20QUcH1v9lAN0RXen0Q0AABa/DK1I7RrNWLucplOHMx8hfTGTw==}
 
   cors@2.8.6:
     resolution: {integrity: sha512-tJtZBBHA6vjIAaF6EnIaq6laBBP9aq/Y3ouVJjEfoHbRBcHBAHYcMh/w8LDrk2PvIMMq8gmopa5D4V8RmbrxGw==}
@@ -7671,12 +7673,6 @@ packages:
   redux@5.0.1:
     resolution: {integrity: sha512-M9/ELqF6fy8FwmkpnF0S3YKOqMyoWJ4+CS5Efg2ct3oY9daQvd/Pc71FpGZsVsbl3Cpb+IIcjBDUnnyBdQbq4w==}
 
-  regenerator-runtime@0.13.11:
-    resolution: {integrity: sha512-kY1AZVr2Ra+t+piVaJ4gxaFaReZVH40AKNo7UCX6W+dEwBo/2oZJzqfuN1qLq1oL45o56cPaTXELwrTh8Fpggg==}
-
-  regenerator-runtime@0.14.0:
-    resolution: {integrity: sha512-srw17NI0TUWHuGa5CFGGmhfNIeja30WMBfbslPNhf6JrqQlLN5gcrvig1oqPxiVaXb0oW0XRKtH6Nngs5lKCIA==}
-
   regex-recursion@6.0.2:
     resolution: {integrity: sha512-0YCaSCq2VRIebiaUviZNs0cBz1kg5kVS2UKUfNIx8YVs1cN3AV7NTctO5FOKBA+UT2BPJIWZauYHPqJODG50cg==}
 
@@ -9079,14 +9075,11 @@ snapshots:
       '@babel/core': 7.26.10
       '@babel/helper-plugin-utils': 7.24.8
 
-  '@babel/runtime-corejs3@7.20.6':
+  '@babel/runtime-corejs3@7.29.0':
     dependencies:
-      core-js-pure: 3.26.1
-      regenerator-runtime: 0.13.11
+      core-js-pure: 3.48.0
 
-  '@babel/runtime@7.22.11':
-    dependencies:
-      regenerator-runtime: 0.14.0
+  '@babel/runtime@7.28.6': {}
 
   '@babel/template@7.27.0':
     dependencies:
@@ -9671,7 +9664,7 @@ snapshots:
 
   '@manypkg/find-root@1.1.0':
     dependencies:
-      '@babel/runtime': 7.22.11
+      '@babel/runtime': 7.28.6
       '@types/node': 12.20.55
       find-up: 4.1.0
       fs-extra: 8.1.0
@@ -12423,7 +12416,7 @@ snapshots:
 
   cookie@0.7.2: {}
 
-  core-js-pure@3.26.1: {}
+  core-js-pure@3.48.0: {}
 
   cors@2.8.6:
     dependencies:
@@ -15624,7 +15617,7 @@ snapshots:
 
   node-plop@0.26.3:
     dependencies:
-      '@babel/runtime-corejs3': 7.20.6
+      '@babel/runtime-corejs3': 7.29.0
       '@types/inquirer': 6.5.0
       change-case: 3.1.0
       del: 5.1.0
@@ -16399,10 +16392,6 @@ snapshots:
       redux: 5.0.1
 
   redux@5.0.1: {}
-
-  regenerator-runtime@0.13.11: {}
-
-  regenerator-runtime@0.14.0: {}
 
   regex-recursion@6.0.2:
     dependencies:
