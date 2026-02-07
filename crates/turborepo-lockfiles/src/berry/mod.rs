@@ -25,7 +25,7 @@ use super::Lockfile;
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Unable to parse yaml: {0}")]
-    Parse(#[from] serde_yaml::Error),
+    Parse(#[from] serde_yml::Error),
     #[error("Unable to parse identifier: {0}")]
     Identifiers(#[from] identifiers::Error),
     #[error("Unable to find original package in patch locator {0}")]
@@ -580,7 +580,7 @@ impl Lockfile for BerryLockfile {
 
 impl LockfileData {
     pub fn from_bytes(s: &[u8]) -> Result<Self, Error> {
-        serde_yaml::from_slice(s).map_err(Error::from)
+        serde_yml::from_slice(s).map_err(Error::from)
     }
 }
 
@@ -706,7 +706,7 @@ mod test {
     #[test]
     fn test_resolve_package() {
         let data: LockfileData =
-            serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
+            serde_yml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
         let lockfile = BerryLockfile::new(data, None).unwrap();
 
         assert_eq!(
@@ -747,7 +747,7 @@ mod test {
     #[test]
     fn test_all_dependencies() {
         let data: LockfileData =
-            serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
+            serde_yml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
         let lockfile = BerryLockfile::new(data, None).unwrap();
 
         let pkg = lockfile
@@ -770,7 +770,7 @@ mod test {
     #[test]
     fn test_package_extension_detection() {
         let data: LockfileData =
-            serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
+            serde_yml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
         let lockfile = BerryLockfile::new(data, None).unwrap();
 
         assert_eq!(
@@ -785,7 +785,7 @@ mod test {
     #[test]
     fn test_patch_list() {
         let data: LockfileData =
-            serde_yaml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
+            serde_yml::from_str(include_str!("../../fixtures/berry.lock")).unwrap();
         let lockfile = BerryLockfile::new(data, None).unwrap();
 
         let locator = Locator::try_from("resolve@npm:2.0.0-next.4").unwrap();
@@ -816,7 +816,7 @@ mod test {
     #[test]
     fn test_basic_descriptor_prune() {
         let data: LockfileData =
-            serde_yaml::from_str(include_str!("../../fixtures/minimal-berry.lock")).unwrap();
+            serde_yml::from_str(include_str!("../../fixtures/minimal-berry.lock")).unwrap();
         let lockfile = BerryLockfile::new(data, None).unwrap();
 
         let pruned_lockfile = lockfile
@@ -870,7 +870,7 @@ mod test {
 
     #[test]
     fn test_basic_resolutions_dependencies() {
-        let data: LockfileData = serde_yaml::from_str(include_str!(
+        let data: LockfileData = serde_yml::from_str(include_str!(
             "../../fixtures/minimal-berry-resolutions.lock"
         ))
         .unwrap();
@@ -901,7 +901,7 @@ mod test {
 
     #[test]
     fn test_targeted_resolutions_dependencies() {
-        let data: LockfileData = serde_yaml::from_str(include_str!(
+        let data: LockfileData = serde_yml::from_str(include_str!(
             "../../fixtures/minimal-berry-resolutions.lock"
         ))
         .unwrap();
@@ -989,7 +989,7 @@ mod test {
     #[test]
     fn test_nonexistent_resolutions_dependencies() {
         let data: LockfileData =
-            serde_yaml::from_str(include_str!("../../fixtures/yarn4-resolution.lock")).unwrap();
+            serde_yml::from_str(include_str!("../../fixtures/yarn4-resolution.lock")).unwrap();
         let manifest = BerryManifest {
             resolutions: Some(
                 [("react@^18.2.0".to_string(), "18.1.0".to_string())]

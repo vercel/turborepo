@@ -134,7 +134,7 @@ pub enum Error {
     #[error(transparent)]
     Workspace(#[from] MissingWorkspaceError),
     #[error("YAML parsing error: {0}")]
-    ParsingYaml(#[from] serde_yaml::Error, #[backtrace] backtrace::Backtrace),
+    ParsingYaml(#[from] serde_yml::Error, #[backtrace] backtrace::Backtrace),
     #[error("JSON parsing error: {0}")]
     ParsingJson(#[from] serde_json::Error, #[backtrace] backtrace::Backtrace),
     #[error("Globbing error: {0}")]

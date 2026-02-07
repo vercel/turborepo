@@ -22,7 +22,7 @@ regex = "1"
 semver = "1.0.17"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = "1.0.86"
-serde_yaml = "0.9.27"
+serde_yml = { workspace = true }
 thiserror = "1.0.38"
 tracing.workspace = true
 turbopath = { path = "../turborepo-paths" }
