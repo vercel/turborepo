@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use serde::Deserialize;
 
-use super::{PackageEntry, PackageInfo, is_git_or_github_package};
+use super::{PackageEntry, PackageInfo, is_file_package, is_git_or_github_package};
 use crate::bun::RootInfo;
 // Comment explaining entry schemas taken from bun.lock.zig
 // first index is resolution for each type of package
@@ -76,8 +76,8 @@ impl<'de> Deserialize<'de> for PackageEntry {
         if let Some(val) = vals.pop_front() {
             match val {
                 Vals::Str(reg) => {
-                    // Only set registry for npm packages, not git/github packages
-                    if !is_git_or_github_package(&key) {
+                    // Only set registry for npm packages, not git/github/file packages
+                    if !is_git_or_github_package(&key) && !is_file_package(&key) {
                         registry = Some(reg);
                     }
                 }
@@ -265,6 +265,42 @@ mod test {
         }
     );
 
+    // file: dependency - should never have a registry field
+    fixture!(
+        file_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "@api/alloy-public@file:api/.api/apis/alloy-public".into(),
+            registry: None,
+            info: Some(PackageInfo {
+                dependencies: Some(("api".into(), "^6.1.2".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: None,
+            root: None,
+        }
+    );
+
+    // file: dependency with corrupted input (empty string at position 1)
+    fixture!(
+        file_pkg_corrupted_input,
+        PackageEntry,
+        PackageEntry {
+            ident: "@api/alloy-public@file:api/.api/apis/alloy-public".into(),
+            registry: None,
+            info: Some(PackageInfo {
+                dependencies: Some(("api".into(), "^6.1.2".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: None,
+            root: None,
+        }
+    );
+
     #[test_case(json!({"name": "bun-test", "devDependencies": {"turbo": "^2.3.3"}}), basic_workspace() ; "basic")]
     #[test_case(json!({"name": "docs", "version": "0.1.0"}), workspace_with_version() ; "with version")]
     #[test_case(json!(["is-odd@3.0.1", "", {"dependencies": {"is-number": "^6.0.0"}, "devDependencies": {"is-bigint": "1.1.0"}, "peerDependencies": {"is-even": "1.0.0"}, "optionalDependencies": {"is-regexp": "1.0.0"}, "optionalPeers": ["is-even"]}, "sha"]), registry_pkg() ; "registry package")]
@@ -273,6 +309,8 @@ mod test {
     #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg() ; "github package")]
     #[test_case(json!(["my-package@git+https://github.com/user/repo#abc123", {"dependencies": {"lodash": "4.17.21"}}, "abc123"]), git_pkg() ; "git package")]
     #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", "", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg_corrupted_input() ; "github package with corrupted 4-element input")]
+    #[test_case(json!(["@api/alloy-public@file:api/.api/apis/alloy-public", {"dependencies": {"api": "^6.1.2"}}]), file_pkg() ; "file dependency")]
+    #[test_case(json!(["@api/alloy-public@file:api/.api/apis/alloy-public", "", {"dependencies": {"api": "^6.1.2"}}]), file_pkg_corrupted_input() ; "file dependency with corrupted 3-element input")]
     fn test_deserialization<T: for<'a> Deserialize<'a> + PartialEq + std::fmt::Debug>(
         input: serde_json::Value,
         expected: &T,
