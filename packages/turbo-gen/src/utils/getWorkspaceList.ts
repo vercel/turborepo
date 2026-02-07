@@ -1,5 +1,5 @@
 import type { Project, Workspace } from "@turbo/workspaces";
-import { Separator } from "inquirer";
+import { Separator } from "@inquirer/prompts";
 import type { WorkspaceType } from "../generators/types";
 import {
   getWorkspaceStructure,
