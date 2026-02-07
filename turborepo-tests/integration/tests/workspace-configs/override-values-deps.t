@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config --no-install
 
 # The override-values-task-with-deps configures dependsOn in the root turbo.json.
 # The workspace does not have a turbo.json config. This test checks that both regular dependencies

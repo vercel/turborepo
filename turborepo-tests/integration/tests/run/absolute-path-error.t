@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 Choose our custom config based on OS, since the input/output configs will be different  
   $ [[ "$OSTYPE" == "msys" ]] && CONFIG="abs-path-inputs-win.json" || CONFIG="abs-path-inputs.json"

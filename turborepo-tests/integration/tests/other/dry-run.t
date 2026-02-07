@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 # Run the build task with --dry flag and cut up the logs into separate files by empty lines
 # https://stackoverflow.com/a/33297878/986415

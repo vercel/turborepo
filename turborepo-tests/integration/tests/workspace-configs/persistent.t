@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config --no-install
 
 This test covers:
 - [x] `persistent:true` in root, omit in workspace with turbo.json

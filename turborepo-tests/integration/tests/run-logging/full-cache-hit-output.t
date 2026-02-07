@@ -5,7 +5,7 @@
 # Related to issue #9470 - TUI flicker fix should not break output on full cache hits
 
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 Run build once to populate the cache
   $ ${TURBO} run build --output-logs=none

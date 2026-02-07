@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config --no-install
 
 # Put some bad JSON into the turbo.json in this app
   $ echo '{"tasks": {"trailing-comma": {},}}' > "$TARGET_DIR/apps/bad-json/turbo.json"

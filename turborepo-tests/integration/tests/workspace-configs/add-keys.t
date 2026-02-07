@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config --no-install
 
 # The add-keys-task in the root turbo.json has no config. This test:
 # [x] Tests dependsOn works by asserting that another task runs first
