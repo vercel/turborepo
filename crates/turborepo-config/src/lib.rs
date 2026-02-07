@@ -15,6 +15,7 @@
 #![allow(clippy::result_large_err)]
 
 mod env;
+mod experimental_otel;
 mod file;
 mod override_env;
 mod turbo_json;
@@ -32,7 +33,7 @@ use file::{AuthFile, ConfigFile};
 use merge::Merge;
 use miette::Diagnostic;
 use override_env::OverrideEnvVars;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use thiserror::Error;
 use tracing::debug;
@@ -156,6 +157,14 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     TurboJsonError(#[from] turborepo_turbo_json::Error),
+
+    /// ============================================================
+    /// Experimental observability errors
+    /// (Note: CLI flags and env vars work independently;
+    /// "futureFlags.experimentalObservability" only gates turbo.json config)
+    /// ============================================================
+    #[error("Invalid experimentalOtel configuration: {message}")]
+    InvalidExperimentalOtelConfig { message: String },
 }
 
 impl Error {
@@ -254,6 +263,18 @@ pub struct ConfigurationOptions {
     pub sso_login_callback_port: Option<u16>,
     #[serde(skip)]
     pub future_flags: Option<FutureFlags>,
+    #[serde(rename = "experimentalObservability")]
+    pub experimental_observability: Option<ExperimentalObservabilityOptions>,
+}
+
+pub use crate::experimental_otel::{
+    ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
+};
+
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
+#[serde(rename_all = "camelCase")]
+pub struct ExperimentalObservabilityOptions {
+    pub otel: Option<ExperimentalOtelOptions>,
 }
 
 #[derive(Default)]
@@ -494,6 +515,10 @@ impl ConfigurationOptions {
 
     pub fn future_flags(&self) -> FutureFlags {
         self.future_flags.unwrap_or_default()
+    }
+
+    pub fn experimental_observability(&self) -> Option<&ExperimentalObservabilityOptions> {
+        self.experimental_observability.as_ref()
     }
 }
 
