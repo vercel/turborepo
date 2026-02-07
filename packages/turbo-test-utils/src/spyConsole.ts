@@ -1,10 +1,10 @@
 import { afterAll, afterEach, jest, beforeEach } from "@jest/globals";
-import type { SpyInstance } from "jest-mock";
+import type { Spied } from "jest-mock";
 
 export interface SpyConsole {
-  log: SpyInstance<Console["log"]> | undefined;
-  error: SpyInstance<Console["error"]> | undefined;
-  warn: SpyInstance<Console["warn"]> | undefined;
+  log: Spied<Console["log"]> | undefined;
+  error: Spied<Console["error"]> | undefined;
+  warn: Spied<Console["warn"]> | undefined;
 }
 
 export function spyConsole() {
