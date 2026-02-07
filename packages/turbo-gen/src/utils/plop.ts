@@ -4,7 +4,7 @@ import type { Project } from "@turbo/workspaces";
 import type { NodePlopAPI, PlopGenerator } from "node-plop";
 import nodePlop from "node-plop";
 import { register } from "ts-node";
-import { Separator } from "inquirer";
+import { Separator } from "@inquirer/prompts";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
 import { GeneratorError } from "./error";
 

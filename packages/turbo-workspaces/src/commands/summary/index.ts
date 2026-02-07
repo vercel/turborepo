@@ -1,5 +1,5 @@
 import path from "node:path";
-import inquirer from "inquirer";
+import { input } from "@inquirer/prompts";
 import picocolors from "picocolors";
 import { Logger } from "../../logger";
 import { directoryInfo } from "../../utils";
@@ -11,25 +11,23 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
   const logger = new Logger();
   logger.hero();
 
-  const answer = await inquirer.prompt<{
-    directoryInput?: string;
-  }>({
-    type: "input",
-    name: "directoryInput",
-    message: "Where is the root of the repo?",
-    when: !directory,
-    default: ".",
-    validate: (d: string) => {
-      const { exists, absolute } = directoryInfo({ directory: d });
-      if (exists) {
-        return true;
-      }
-      return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
-    },
-    filter: (d: string) => d.trim()
-  });
+  let selectedDirectory = directory;
+  if (!selectedDirectory) {
+    selectedDirectory = await input({
+      message: "Where is the root of the repo?",
+      default: ".",
+      validate: (d: string) => {
+        const { exists, absolute } = directoryInfo({ directory: d });
+        if (exists) {
+          return true;
+        }
+        return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
+      },
+      transformer: (d: string) => d.trim()
+    });
+    selectedDirectory = selectedDirectory.trim();
+  }
 
-  const { directoryInput: selectedDirectory = directory } = answer;
   const { exists, absolute: root } = directoryInfo({
     directory: selectedDirectory
   });
