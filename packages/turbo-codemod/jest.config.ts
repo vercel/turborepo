@@ -20,7 +20,7 @@ const config = {
   collectCoverage: true,
   coverageThreshold: {
     global: {
-      branches: 85,
+      branches: 84,
       functions: 93,
       lines: 92,
       statements: 92

@@ -7,6 +7,6 @@ describe("@repo/logger", () => {
   it("prints a message", () => {
     log("hello");
     // eslint-disable-next-line no-console -- testing console
-    expect(console.log).toBeCalledWith("LOGGER: ", "hello");
+    expect(console.log).toHaveBeenCalledWith("LOGGER: ", "hello");
   });
 });
