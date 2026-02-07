@@ -194,6 +194,7 @@ impl From<turborepo_turbo_json::LoaderError> for Error {
 // of the code that want to display the config can tune how they
 // want to display and what fields they want to include.
 #[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable, Merge, Setters)]
+#[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 // Generate setters for the builder type that set these values on its override_config field
 #[setters(
