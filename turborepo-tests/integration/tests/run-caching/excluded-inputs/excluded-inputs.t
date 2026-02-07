@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../../helpers/setup_integration_test.sh --no-install
 
   $ cp ${TESTDIR}/turbo.json $TARGET_DIR/turbo.json # overwrite
   $ git commit --quiet -am "Update turbo.json to include special inputs config"

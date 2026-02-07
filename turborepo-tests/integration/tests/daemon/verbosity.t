@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 TURBO_LOG_VERBOSITY should be respected
   $ TURBO_LOG_VERBOSITY=debug ${TURBO} daemon status > tmp.log 2>&1

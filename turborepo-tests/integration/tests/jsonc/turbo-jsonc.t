@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 # Test 1: Error when both turbo.json and turbo.jsonc exist in the same directory
 Create both turbo.json and turbo.jsonc in the root

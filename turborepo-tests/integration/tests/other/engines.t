@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
   $ jq '.engines = {"node": ">=12"}' package.json > package.json.new
   $ mv package.json.new package.json
 

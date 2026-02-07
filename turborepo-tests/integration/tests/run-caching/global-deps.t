@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh --no-install
 
 Run a build to get a local cache.
   $ SOME_ENV_VAR=hi ${TURBO} run build --output-logs=none --filter=my-app

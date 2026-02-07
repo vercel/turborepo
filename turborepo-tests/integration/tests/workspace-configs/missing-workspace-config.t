@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config --no-install
 
 # The missing-workspace-config-task task in the root turbo.json has config. The workspace config
 # does not have a turbo.json. The tests below use `missing-workspace-config-task` to assert that:

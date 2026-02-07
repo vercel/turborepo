@@ -1,5 +1,5 @@
 Setup
-  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config
+  $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh composable_config --no-install
 
 # The omit-keys-task-with-deps configures dependsOn. The workspace config
 # defines the task, but does not override anything. This test checks
