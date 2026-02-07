@@ -1,4 +1,8 @@
-import { prompt, Separator } from "inquirer";
+import {
+  select,
+  confirm as inquirerConfirm,
+  Separator
+} from "@inquirer/prompts";
 import { logger } from "@turbo/utils";
 import type { Generator } from "../../utils/plop";
 
@@ -22,11 +26,7 @@ export async function customGenerators({
     logger.log();
   }
 
-  const generatorAnswer = await prompt<{
-    selectedGenerator: string;
-  }>({
-    type: "list",
-    name: "selectedGenerator",
+  const selectedGenerator = await select({
     message: `Select generator to run`,
     choices: generators.map((gen) => {
       if (gen instanceof Separator) {
@@ -41,32 +41,32 @@ export async function customGenerators({
     })
   });
 
-  return generatorAnswer;
+  return { selectedGenerator };
 }
 
 export async function chooseGeneratorTemplate() {
-  return prompt<{ answer: "ts" | "js" }>({
-    type: "list",
-    name: "answer",
+  const answer = await select<"ts" | "js">({
     message: "Should the generator config be created with TS or JS?",
     default: "ts",
     choices: [
       {
         name: "JavaScript",
-        value: "js"
+        value: "js" as const
       },
       {
         name: "TypeScript",
-        value: "ts"
+        value: "ts" as const
       }
     ]
   });
+
+  return { answer };
 }
 
 export async function confirm({ message }: { message: string }) {
-  return prompt<{ answer: boolean }>({
-    type: "confirm",
-    name: "answer",
+  const answer = await inquirerConfirm({
     message
   });
+
+  return { answer };
 }

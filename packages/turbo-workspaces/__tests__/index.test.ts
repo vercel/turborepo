@@ -218,7 +218,7 @@ describe("Node entrypoint", () => {
           });
 
         if (fixtureManager === toManager) {
-          await expect(convertWrapper()).rejects.toThrowError(
+          await expect(convertWrapper()).rejects.toThrow(
             "You are already using this package manager"
           );
         } else {

@@ -3,8 +3,7 @@ import fs from "fs-extra";
 import type { Project } from "@turbo/workspaces";
 import type { NodePlopAPI, PlopGenerator } from "node-plop";
 import nodePlop from "node-plop";
-import { register } from "ts-node";
-import { Separator } from "inquirer";
+import { Separator } from "@inquirer/prompts";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
 import { GeneratorError } from "./error";
 
@@ -34,15 +33,11 @@ export function getPlop({
   project: Project;
   configPath?: string;
 }): NodePlopAPI | undefined {
-  // init ts-node for plop to support ts configs
-  register({
-    transpileOnly: true,
-    cwd: project.paths.root,
-    compilerOptions: {
-      module: "nodenext",
-      moduleResolution: "nodenext"
-    }
-  });
+  // Register tsx to support TypeScript plop configs
+  // Lazy require to avoid breaking jest's module system
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const tsx = require("tsx/cjs/api") as { register: () => () => void };
+  tsx.register();
 
   // fetch all the workspace generator configs
   const workspaceConfigs = getWorkspaceGeneratorConfigs({ project });

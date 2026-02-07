@@ -1,5 +1,5 @@
 import picocolors from "picocolors";
-import { prompt } from "inquirer";
+import { input, select } from "@inquirer/prompts";
 import { logger } from "@turbo/utils";
 import { loadTransformers } from "../../utils/loadTransformers";
 import { checkGitStatus } from "../../utils/checkGitStatus";
@@ -28,15 +28,10 @@ export async function transform(
     checkGitStatus({ directory, force: options.force });
   }
 
-  const answers = await prompt<{
-    directoryInput?: string;
-    transformerInput?: string;
-  }>([
-    {
-      type: "input",
-      name: "directoryInput",
+  let selectedDirectory = directory;
+  if (!selectedDirectory) {
+    selectedDirectory = await input({
       message: "Where is the root of the repo where the transform should run?",
-      when: !directory,
       default: ".",
       validate: (d: string) => {
         const { exists, absolute } = directoryInfo({ directory: d });
@@ -45,28 +40,24 @@ export async function transform(
         }
         return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
       },
-      filter: (d: string) => d.trim()
-    },
-    {
-      type: "list",
-      name: "transformerInput",
+      transformer: (d: string) => d.trim()
+    });
+    selectedDirectory = selectedDirectory.trim();
+  }
+
+  let selectedTransformer = transformName;
+  if (!selectedTransformer) {
+    selectedTransformer = await select({
       message: "Which transform would you like to apply?",
-      when: !transformName,
-      pageSize: transforms.length,
       choices: transforms.map((t) => ({
         name: `${picocolors.bold(t.name)} - ${picocolors.gray(
           t.description
         )} ${picocolors.gray(`(${t.introducedIn})`)}`,
         value: t.name
       }))
-    }
-  ]);
+    });
+  }
 
-  const {
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it exists because of the prompt
-    directoryInput: selectedDirectory = directory!,
-    transformerInput: selectedTransformer = transformName
-  } = answers;
   const { exists, absolute: root } = directoryInfo({
     directory: selectedDirectory
   });

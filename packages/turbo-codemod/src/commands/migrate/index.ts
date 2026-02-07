@@ -1,7 +1,7 @@
 import os from "node:os";
 import { execSync } from "node:child_process";
 import picocolors from "picocolors";
-import { prompt } from "inquirer";
+import { input } from "@inquirer/prompts";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { logger } from "@turbo/utils";
 import { checkGitStatus } from "../../utils/checkGitStatus";
@@ -57,14 +57,10 @@ export async function migrate(
     checkGitStatus({ directory, force: options.force });
   }
 
-  const answers = await prompt<{
-    directoryInput?: string;
-  }>([
-    {
-      type: "input",
-      name: "directoryInput",
+  let selectedDirectory = directory;
+  if (!selectedDirectory) {
+    selectedDirectory = await input({
       message: "Where is the root of the repo to migrate?",
-      when: !directory,
       default: ".",
       validate: (d: string) => {
         const { exists, absolute } = directoryInfo({ directory: d });
@@ -73,12 +69,10 @@ export async function migrate(
         }
         return `Directory ${picocolors.dim(`(${absolute})`)} does not exist`;
       },
-      filter: (d: string) => d.trim()
-    }
-  ]);
-
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it exists because of the prompt
-  const { directoryInput: selectedDirectory = directory! } = answers;
+      transformer: (d: string) => d.trim()
+    });
+    selectedDirectory = selectedDirectory.trim();
+  }
   const { exists, absolute: root } = directoryInfo({
     directory: selectedDirectory
   });

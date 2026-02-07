@@ -1,16 +1,15 @@
 import type { PackageManager } from "@turbo/utils";
 import { getAvailablePackageManagers, validateDirectory } from "@turbo/utils";
-import inquirer from "inquirer";
+import { input, select } from "@inquirer/prompts";
 import type { CreateCommandArgument } from "./types";
 
 export async function directory({ dir }: { dir: CreateCommandArgument }) {
-  const projectDirectoryAnswer = await inquirer.prompt<{
-    projectDirectory: string;
-  }>({
-    type: "input",
-    name: "projectDirectory",
+  if (dir) {
+    return validateDirectory(dir);
+  }
+
+  const projectDirectory = await input({
     message: "Where would you like to create your Turborepo?",
-    when: !dir,
     default: "./my-turborepo",
     validate: (d: string) => {
       const { valid, error } = validateDirectory(d);
@@ -19,14 +18,10 @@ export async function directory({ dir }: { dir: CreateCommandArgument }) {
       }
       return true;
     },
-    filter: (d: string) => d.trim()
+    transformer: (d: string) => d.trim()
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- we know it's defined because of the `when` condition above
-  const { projectDirectory: selectedProjectDirectory = dir! } =
-    projectDirectoryAnswer;
-
-  return validateDirectory(selectedProjectDirectory);
+  return validateDirectory(projectDirectory.trim());
 }
 
 export async function packageManager({
@@ -42,16 +37,16 @@ export async function packageManager({
   }
 
   const availablePackageManagers = await getAvailablePackageManagers();
-  const packageManagerAnswer = await inquirer.prompt<{
-    packageManagerInput?: PackageManager;
-  }>({
-    name: "packageManagerInput",
-    type: "list",
+
+  if (manager && availablePackageManagers[manager as PackageManager]) {
+    return {
+      name: manager as PackageManager,
+      version: availablePackageManagers[manager as PackageManager]
+    };
+  }
+
+  const selectedPackageManager = await select<PackageManager>({
     message: "Which package manager do you want to use?",
-    when:
-      // prompt for package manager if it wasn't provided as an argument, or if it was
-      // provided, but isn't available (always allow npm)
-      !manager || !availablePackageManagers[manager as PackageManager],
     choices: [
       { pm: "npm", label: "npm" },
       { pm: "pnpm", label: "pnpm" },
@@ -59,16 +54,12 @@ export async function packageManager({
       { pm: "bun", label: "bun" }
     ].map(({ pm, label }) => ({
       name: label,
-      value: pm,
+      value: pm as PackageManager,
       disabled: availablePackageManagers[pm as PackageManager]
         ? false
         : `not installed`
     }))
   });
-
-  const {
-    packageManagerInput: selectedPackageManager = manager as PackageManager
-  } = packageManagerAnswer;
 
   return {
     name: selectedPackageManager,

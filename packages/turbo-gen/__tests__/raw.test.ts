@@ -138,7 +138,12 @@ describe("raw", () => {
   ];
   it.each(testMatrix)(
     "$command and $options calls $target with $calledWith",
-    async ({ command, options, target, calledWith }) => {
+    async ({
+      command,
+      options,
+      target,
+      calledWith
+    }: (typeof testMatrix)[number]) => {
       // mock generation functions, we only care if they are called,
       // and what they are called with
       const mockWorkspace = jest
@@ -156,7 +161,9 @@ describe("raw", () => {
         );
         expect(mockWorkspace).not.toHaveBeenCalled();
       } else {
-        expect(mockWorkspace).toHaveBeenCalledWith(calledWith);
+        expect(mockWorkspace).toHaveBeenCalledWith(
+          calledWith as Parameters<typeof workspace.workspace>[0]
+        );
         expect(mockRun).not.toHaveBeenCalled();
       }
 
