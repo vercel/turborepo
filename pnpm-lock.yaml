@@ -6,6 +6,7 @@ settings:
 
 overrides:
   fast-xml-parser: '>=5.3.4'
+  '@eslint/plugin-kit': '>=0.3.4'
 
 importers:
 
@@ -1495,6 +1496,10 @@ packages:
     resolution: {integrity: sha512-yfkgDw1KR66rkT5A8ci4irzDysN7FRpq3ttJolR88OqQikAWqwA8j5VZyas+vjyBNFIJ7MfybJ9plMILI2UrCw==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
+  '@eslint/core@1.1.0':
+    resolution: {integrity: sha512-/nr9K9wkr3P1EzFTdFdMoLuo1PmIxjmwvPozwoSodjNBdefGujXQUF93u1DDZpEaTuDvMsIQddsd35BwtrW9Xw==}
+    engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+
   '@eslint/eslintrc@3.3.3':
     resolution: {integrity: sha512-Kr+LPIUVKz2qkx1HAMH8q1q6azbqBAsXJUxBl/ODDuVPX45Z9DfwB8tPjTi6nNZ8BuM3nbJxC5zCAg5elnBUTQ==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
@@ -1507,9 +1512,9 @@ packages:
     resolution: {integrity: sha512-VtAOaymWVfZcmZbp6E2mympDIHvyjXs/12LqWYjVw6qjrfF+VK+fyG33kChz3nnK+SU5/NeHOqrTEHS8sXO3OA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
-  '@eslint/plugin-kit@0.2.8':
-    resolution: {integrity: sha512-ZAoA40rNMPwSm+AeHpCq8STiNAwzWLJuP8Xv4CHIc9wv/PSuExjMrmjfYNj682vW0OOiZ1HKxzvjQr9XZIisQA==}
-    engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+  '@eslint/plugin-kit@0.6.0':
+    resolution: {integrity: sha512-bIZEUzOI1jkhviX2cp5vNyXQc6olzb2ohewQubuYlMXZ2Q/XjBO0x0XhGPvc9fjSIiUN0vw+0hq53BJ4eQSJKQ==}
+    engines: {node: ^20.19.0 || ^22.13.0 || >=24}
 
   '@fastify/deepmerge@1.3.0':
     resolution: {integrity: sha512-J8TOSBq3SoZbDhM9+R/u77hP93gz/rajSA+K2kGyijPpORPWUXHUpTaleoj+92As0S9uPRP7Oi8IqMf0u+ro6A==}
@@ -9262,6 +9267,10 @@ snapshots:
     dependencies:
       '@types/json-schema': 7.0.15
 
+  '@eslint/core@1.1.0':
+    dependencies:
+      '@types/json-schema': 7.0.15
+
   '@eslint/eslintrc@3.3.3':
     dependencies:
       ajv: 6.12.6
@@ -9280,9 +9289,9 @@ snapshots:
 
   '@eslint/object-schema@2.1.7': {}
 
-  '@eslint/plugin-kit@0.2.8':
+  '@eslint/plugin-kit@0.6.0':
     dependencies:
-      '@eslint/core': 0.13.0
+      '@eslint/core': 1.1.0
       levn: 0.4.1
 
   '@fastify/deepmerge@1.3.0': {}
@@ -13015,7 +13024,7 @@ snapshots:
       '@eslint/core': 0.13.0
       '@eslint/eslintrc': 3.3.3
       '@eslint/js': 9.26.0
-      '@eslint/plugin-kit': 0.2.8
+      '@eslint/plugin-kit': 0.6.0
       '@humanfs/node': 0.16.7
       '@humanwhocodes/module-importer': 1.0.1
       '@humanwhocodes/retry': 0.4.3
