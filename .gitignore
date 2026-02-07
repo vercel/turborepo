@@ -68,6 +68,10 @@ file_descriptor_set.bin
 # include test fixtures for vt100
 !crates/turborepo-vt100/tests/data
 
+# Shared corepack state for integration tests
+.corepack-integration
+.corepack-cache
+
 # DevContainer cache directories
 .devcontainer/cache/
 .devcontainer/cargo/

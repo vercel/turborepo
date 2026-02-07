@@ -29,7 +29,7 @@ if [[ "${ARGS[1]}" != "" ]]; then
 fi
 
 THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
-MONOREPO_ROOT_DIR="$THIS_DIR/../.."
+export MONOREPO_ROOT_DIR="$THIS_DIR/../.."
 TURBOREPO_TESTS_DIR="${MONOREPO_ROOT_DIR}/turborepo-tests"
 
 TARGET_DIR="$(pwd)"

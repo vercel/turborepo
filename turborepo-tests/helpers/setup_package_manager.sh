@@ -27,20 +27,23 @@ fi
 # `corepack enable` with no specified packageManager does not work for npm.
 pkgManagerName="${pkgManager%%@*}"
 
-# Set the corepack install directory to a temp directory (either prysk temp or provided dir).
-# This will help isolate from the rest of the system, especially when running tests on a dev machine.
-if [ "$PRYSK_TEMP" == "" ]; then
-  COREPACK_INSTALL_DIR="$dir/corepack"
-  mkdir -p "${COREPACK_INSTALL_DIR}"
-  export PATH=${COREPACK_INSTALL_DIR}:$PATH
+# Share corepack install directory and cache across test runs to avoid
+# redundant package manager downloads. Use MONOREPO_ROOT_DIR if available
+# (set by setup_integration_test.sh), otherwise fall back to per-test isolation.
+if [ -n "$MONOREPO_ROOT_DIR" ]; then
+  COREPACK_INSTALL_DIR="${MONOREPO_ROOT_DIR}/.corepack-integration"
+  export COREPACK_HOME="${MONOREPO_ROOT_DIR}/.corepack-cache"
 else
-  COREPACK_INSTALL_DIR="${PRYSK_TEMP}/corepack"
-  mkdir -p "${COREPACK_INSTALL_DIR}"
-  export PATH=${COREPACK_INSTALL_DIR}:$PATH
+  if [ "$PRYSK_TEMP" == "" ]; then
+    COREPACK_INSTALL_DIR="$dir/corepack"
+  else
+    COREPACK_INSTALL_DIR="${PRYSK_TEMP}/corepack"
+  fi
 fi
+
+mkdir -p "${COREPACK_INSTALL_DIR}"
+mkdir -p "${COREPACK_HOME:-}"
+export PATH=${COREPACK_INSTALL_DIR}:$PATH
 
 # Enable corepack so that the packageManager setting in package.json is respected.
 corepack enable $pkgManagerName "--install-directory=${COREPACK_INSTALL_DIR}"
-
-
-
