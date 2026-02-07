@@ -952,7 +952,7 @@ fn startup(color_config: ColorConfig) -> io::Result<Terminal<CrosstermBackend<St
 
 /// Restores terminal to expected state
 #[tracing::instrument(skip_all)]
-fn cleanup<B: Backend + io::Write>(
+fn cleanup<B: Backend<Error = io::Error> + io::Write>(
     mut terminal: Terminal<B>,
     mut app: App<Box<dyn io::Write + Send>>,
     callback: Option<oneshot::Sender<()>>,
@@ -1164,7 +1164,7 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
         // When sidebar is hidden, let the pane fill the entire width
         Layout::horizontal([Constraint::Max(0), Constraint::Fill(1)])
     };
-    let [table, pane] = horizontal.areas(f.size());
+    let [table, pane] = horizontal.areas(f.area());
 
     let active_task = app.active_task().unwrap().to_string();
 
