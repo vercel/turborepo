@@ -211,8 +211,8 @@ jobs:
         id: cache-prysk
         uses: actions/cache@v4
         with:
-          path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.runner }}
+          path: turborepo-tests/integration/.cram_env
+          key: prysk-venv-${{ matrix.os.runner }}-v2
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
