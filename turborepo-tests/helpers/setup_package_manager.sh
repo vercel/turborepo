@@ -27,12 +27,11 @@ fi
 # `corepack enable` with no specified packageManager does not work for npm.
 pkgManagerName="${pkgManager%%@*}"
 
-# Share corepack install directory and cache across test runs to avoid
-# redundant package manager downloads. Use MONOREPO_ROOT_DIR if available
-# (set by setup_integration_test.sh), otherwise fall back to per-test isolation.
+# Share corepack install directory across test runs to avoid redundant package
+# manager downloads. Use MONOREPO_ROOT_DIR if available (set by
+# setup_integration_test.sh), otherwise fall back to per-test isolation.
 if [ -n "$MONOREPO_ROOT_DIR" ]; then
   COREPACK_INSTALL_DIR="${MONOREPO_ROOT_DIR}/.corepack-integration"
-  export COREPACK_HOME="${MONOREPO_ROOT_DIR}/.corepack-cache"
 else
   if [ "$PRYSK_TEMP" == "" ]; then
     COREPACK_INSTALL_DIR="$dir/corepack"
@@ -42,7 +41,6 @@ else
 fi
 
 mkdir -p "${COREPACK_INSTALL_DIR}"
-mkdir -p "${COREPACK_HOME:-}"
 export PATH=${COREPACK_INSTALL_DIR}:$PATH
 
 # Enable corepack so that the packageManager setting in package.json is respected.

@@ -32,6 +32,11 @@ THIS_DIR=$(dirname "${BASH_SOURCE[0]}")
 export MONOREPO_ROOT_DIR="$THIS_DIR/../.."
 TURBOREPO_TESTS_DIR="${MONOREPO_ROOT_DIR}/turborepo-tests"
 
+# Share corepack's download cache across test runs so the package manager
+# archive is only downloaded once, even when tests run in parallel.
+export COREPACK_HOME="${MONOREPO_ROOT_DIR}/.corepack-cache"
+mkdir -p "${COREPACK_HOME}"
+
 TARGET_DIR="$(pwd)"
 
 # on macos, using the tmp dir set by prysk can fail, so set it
