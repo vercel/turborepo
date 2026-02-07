@@ -1,4 +1,10 @@
 import { describe, it, expect, jest } from "@jest/globals";
+
+jest.mock("node-plop", () => ({
+  __esModule: true,
+  default: jest.fn()
+}));
+
 import { raw } from "../src/commands/raw";
 import * as run from "../src/commands/run";
 import * as workspace from "../src/commands/workspace";
