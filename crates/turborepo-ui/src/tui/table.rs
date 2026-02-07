@@ -1,6 +1,6 @@
 use ratatui::{
     layout::{Constraint, Rect},
-    style::{Modifier, Style, Stylize},
+    style::{Modifier, Style},
     text::{Line, Span, Text},
     widgets::{Block, Borders, Cell, Row, StatefulWidget, Table, TableState},
 };
@@ -151,7 +151,7 @@ impl<'a> StatefulWidget for &'a TaskTable<'a> {
                 .chain(self.finished_rows()),
             [Constraint::Min(18)],
         )
-        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+        .row_highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .column_spacing(0)
         .block(Block::new().borders(Borders::RIGHT))
         .header(
