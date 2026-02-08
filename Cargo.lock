@@ -7391,7 +7391,7 @@ dependencies = [
  "turbopath",
  "turborepo-lockfiles",
  "turborepo-types",
- "twox-hash",
+ "xxhash-rust",
 ]
 
 [[package]]
@@ -8076,17 +8076,6 @@ dependencies = [
  "tui-term",
  "unicode-width 0.1.13",
  "vte",
-]
-
-[[package]]
-name = "twox-hash"
-version = "1.6.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
-dependencies = [
- "cfg-if",
- "rand 0.8.5",
- "static_assertions",
 ]
 
 [[package]]
@@ -9008,6 +8997,12 @@ dependencies = [
  "linux-raw-sys 0.4.13",
  "rustix 0.38.31",
 ]
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fdd20c5420375476fbd4394763288da7eb0cc0b8c11deed431a91562af7335d3"
 
 [[package]]
 name = "yansi"

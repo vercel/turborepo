@@ -15,7 +15,11 @@ use crate::{Error, GitHashes};
 fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     let mut hasher = Sha1::new();
     let mut f = path.open()?;
-    let mut buffer = Vec::new();
+    // Pre-allocate the buffer based on file metadata to avoid repeated
+    // reallocations during read_to_end. The +1 accounts for read_to_end's
+    // probe read that confirms EOF.
+    let estimated_size = f.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
+    let mut buffer = Vec::with_capacity(estimated_size);
     // Note that read_to_end reads the target if f is a symlink. Currently, this can
     // happen when we are hashing a specific set of files, which in turn only
     // happens for handling dotEnv files. It is likely that in the future we

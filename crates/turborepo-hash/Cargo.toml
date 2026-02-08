@@ -14,7 +14,7 @@ hex = "0.4.3"
 turbopath = { workspace = true }
 turborepo-lockfiles = { workspace = true }
 turborepo-types = { workspace = true }
-twox-hash = "1.6.3"
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
 
 [dev-dependencies]
 test-case = { workspace = true }
