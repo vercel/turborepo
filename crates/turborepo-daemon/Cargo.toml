@@ -41,8 +41,8 @@ miette = { workspace = true, features = ["fancy"] }
 serde_json = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies]
-uds_windows = "1.0.2"
-async-io = "1.12.0"
+uds_windows = "1.1.0"
+async-io = "2"
 
 [build-dependencies]
 tonic-build = "0.12.3"

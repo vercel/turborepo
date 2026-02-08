@@ -22,6 +22,43 @@ pub enum SocketOpenError {
 #[cfg(windows)]
 const WINDOWS_POLL_DURATION: Duration = Duration::from_millis(1);
 
+/// Newtype wrapper around `uds_windows::UnixStream` that implements
+/// `async_io::IoSafe`. This is needed because async-io 2.x requires `IoSafe`
+/// for `Async<T>` to implement `AsyncRead`/`AsyncWrite`, and orphan rules
+/// prevent implementing a foreign trait on a foreign type directly.
+#[cfg(windows)]
+pub(crate) struct SafeUnixStream(pub uds_windows::UnixStream);
+
+#[cfg(windows)]
+impl std::os::windows::io::AsSocket for SafeUnixStream {
+    fn as_socket(&self) -> std::os::windows::io::BorrowedSocket<'_> {
+        self.0.as_socket()
+    }
+}
+
+#[cfg(windows)]
+impl std::io::Read for SafeUnixStream {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.0.read(buf)
+    }
+}
+
+#[cfg(windows)]
+impl std::io::Write for SafeUnixStream {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.write(buf)
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.flush()
+    }
+}
+
+// SAFETY: uds_windows::UnixStream is a standard socket type backed by a Windows
+// HANDLE. Its Read/Write implementations perform normal blocking I/O on the
+// underlying socket, which is safe for use with async-io's Async wrapper.
+#[cfg(windows)]
+unsafe impl async_io::IoSafe for SafeUnixStream {}
+
 /// Gets a stream of incoming connections from a Unix socket.
 /// On windows, this will use the `uds_windows` crate, and
 /// poll the result in another thread.
@@ -91,6 +128,7 @@ pub async fn listen_socket(
                     .await
                     .expect("no panic")?
                     .map(|(stream, _)| stream)
+                    .map(SafeUnixStream)
                     .and_then(async_io::Async::new)
                     .map(FuturesAsyncReadCompatExt::compat)
                     .map(UdsWindowsStream);
