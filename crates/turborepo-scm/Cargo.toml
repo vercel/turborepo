@@ -28,9 +28,15 @@ wax = { workspace = true }
 which = { workspace = true }
 
 [dev-dependencies]
+codspeed-criterion-compat = { workspace = true }
 git2 = { workspace = true, default-features = false }
 tempfile = { workspace = true }
 test-case = "3.1.0"
 
 [features]
 git2 = ["dep:git2"]
+
+[[bench]]
+name = "file_hash"
+harness = false
+required-features = ["git2"]
