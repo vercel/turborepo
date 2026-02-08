@@ -6073,7 +6073,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c879d448e9d986b661742763247d3693ed13609438cf3d006f51f5368a5ba6b"
 dependencies = [
- "bitflags 2.5.0",
+ "bitflags 2.10.0",
  "core-foundation",
  "system-configuration-sys",
 ]
@@ -6682,7 +6682,7 @@ version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
 dependencies = [
- "bitflags 2.5.0",
+ "bitflags 2.10.0",
  "bytes",
  "futures-util",
  "http",
@@ -7418,6 +7418,7 @@ version = "0.1.0"
 dependencies = [
  "capnp",
  "capnpc",
+ "codspeed-criterion-compat",
  "hex",
  "test-case",
  "turbopath",
