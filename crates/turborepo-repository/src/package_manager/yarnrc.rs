@@ -1,7 +1,7 @@
 use std::io;
 
 use serde::Deserialize;
-use serde_yaml;
+use serde_yml;
 use turbopath::AbsoluteSystemPath;
 
 pub const YARNRC_FILENAME: &str = ".yarnrc.yml";
@@ -11,7 +11,7 @@ pub enum Error {
     #[error("Encountered error opening yarnrc.yml: {0}")]
     Io(#[from] std::io::Error),
     #[error("Encountered error parsing yarnrc.yml: {0}")]
-    SerdeYaml(#[from] serde_yaml::Error),
+    SerdeYaml(#[from] serde_yml::Error),
 }
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
@@ -50,7 +50,7 @@ impl Default for YarnRc {
 
 impl YarnRc {
     pub fn from_reader(mut reader: impl io::Read) -> Result<Self, Error> {
-        let config: YarnRc = serde_yaml::from_reader(&mut reader)?;
+        let config: YarnRc = serde_yml::from_reader(&mut reader)?;
         Ok(config)
     }
 
