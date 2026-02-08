@@ -1,3 +1,9 @@
+import {
+  transformerNotationDiff,
+  transformerNotationFocus,
+  transformerNotationHighlight,
+  transformerNotationWordHighlight
+} from "@shikijs/transformers";
 import { remarkMdxMermaid } from "fumadocs-core/mdx-plugins";
 import {
   defineConfig,
@@ -91,7 +97,13 @@ export default defineConfig({
         light: theme,
         dark: theme
       },
-      transformers: [transformerAddLanguage]
+      transformers: [
+        transformerNotationHighlight({ matchAlgorithm: "v3" }),
+        transformerNotationWordHighlight({ matchAlgorithm: "v3" }),
+        transformerNotationDiff({ matchAlgorithm: "v3" }),
+        transformerNotationFocus({ matchAlgorithm: "v3" }),
+        transformerAddLanguage
+      ]
     }
   },
   plugins: [lastModified()]
