@@ -76,6 +76,9 @@ impl<'a> TurboJsonReader<'a> {
             .map(|allow| *allow.as_inner());
         opts.daemon = turbo_json.daemon.map(|daemon| *daemon.as_inner());
         opts.env_mode = turbo_json.env_mode.map(|mode| *mode.as_inner());
+        opts.no_update_notifier = turbo_json
+            .no_update_notifier
+            .map(|no_update_notifier| *no_update_notifier.as_inner());
         opts.cache_dir = cache_dir;
         opts.concurrency = turbo_json.concurrency.map(|c| c.as_inner().clone());
         opts.future_flags = turbo_json.future_flags.map(|f| *f.as_inner());
@@ -226,5 +229,21 @@ mod test {
         .into();
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
         assert_eq!(config.allow_no_package_manager(), expected);
+    }
+
+    #[test]
+    fn test_no_update_notifier() {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "noUpdateNotifier": true
+            }))
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .into();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+
+        assert!(config.no_update_notifier());
     }
 }

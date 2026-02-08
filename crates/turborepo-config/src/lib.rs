@@ -540,6 +540,12 @@ impl TurborepoConfigBuilder {
         self
     }
 
+    /// Applies a fully-formed override layer as the highest-precedence source.
+    pub fn with_override_config(mut self, override_config: ConfigurationOptions) -> Self {
+        self.override_config.merge(override_config);
+        self
+    }
+
     fn get_environment(&self) -> HashMap<OsString, OsString> {
         self.environment
             .clone()
