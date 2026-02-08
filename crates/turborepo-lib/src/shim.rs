@@ -66,11 +66,8 @@ impl ConfigProvider for TurboConfigProvider {
         root: &AbsoluteSystemPath,
         root_turbo_json: Option<&AbsoluteSystemPathBuf>,
     ) -> ShimConfigurationOptions {
-        let mut builder = crate::config::TurborepoConfigBuilder::new(root);
-        if let Some(root_turbo_json) = root_turbo_json {
-            builder = builder.with_root_turbo_json_path(Some(root_turbo_json.clone()));
-        }
-        let config = builder.build().unwrap_or_default();
+        let config = crate::config::resolve_configuration_for_shim(root, root_turbo_json)
+            .unwrap_or_default();
         ShimConfigurationOptions::new(Some(config.no_update_notifier()))
     }
 }
