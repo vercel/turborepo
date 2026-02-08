@@ -205,10 +205,10 @@
 }
 
 /* Code syntax highlighting */
-/* copied from @vercel/geist/src/components/code-block/code-block.module.css */
+/* Maps Shiki CSS variables theme (--shiki-*) to Geist design system tokens */
 pre {
-  --shiki-color-text: var(--ds-gray-1000);
-  --shiki-color-background: transparent;
+  --shiki-foreground: var(--ds-gray-1000);
+  --shiki-background: transparent;
   --shiki-token-constant: var(--ds-blue-900);
   --shiki-token-string: var(--ds-green-900);
   --shiki-token-comment: var(--ds-gray-900);

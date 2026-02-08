@@ -87,7 +87,7 @@ turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-vt100 = { path = "crates/turborepo-vt100" }
 
-reqwest = { version = "0.12.9", default-features = false }
+reqwest = { version = "0.12.28", default-features = false }
 
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
@@ -107,7 +107,7 @@ biome_formatter = { version = "0.5.7" }
 biome_json_parser = { version = "0.5.7" }
 biome_json_formatter = { version = "0.5.7" }
 biome_json_syntax = { version = "0.5.7" }
-bytes = "1.1.0"
+bytes = "1.11.1"
 camino = { version = "1.1.4", features = ["serde1"] }
 chrono = "0.4.23"
 clap = "4.5.16"
@@ -137,12 +137,12 @@ port_scanner = "0.1.5"
 pretty_assertions = "1.3.0"
 radix_trie = "0.2.1"
 rand = "0.8.5"
-ratatui = "0.26.1"
+ratatui = "0.30.0"
 regex = "1.7.0"
 semver = "1.0.16"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.93"
-serde_yaml = "0.9.17"
+serde_yml = "0.0.12"
 sha2 = "0.10.6"
 swc_common = "18.0.1"
 swc_ecma_ast = "20.0.0"
@@ -157,7 +157,7 @@ tokio-util = { version = "0.7.7", features = ["io"] }
 tracing = "0.1.37"
 tracing-appender = "0.2.2"
 tracing-subscriber = "0.3.20"
-tui-term = { version = "=0.1.9", default-features = false }
+tui-term = { version = "0.3.1", default-features = false }
 url = "2.2.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
