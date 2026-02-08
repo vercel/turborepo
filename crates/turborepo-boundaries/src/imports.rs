@@ -6,8 +6,8 @@ use std::{
 use camino::Utf8Path;
 use itertools::Itertools;
 use miette::{NamedSource, SourceSpan};
-use oxc_resolver::{ResolveError, Resolver, TsConfig};
-use swc_common::{SourceFile, Span, comments::SingleThreadedComments};
+use oxc_resolver::{ResolveError, Resolver};
+use swc_common::{comments::SingleThreadedComments, SourceFile, Span};
 use turbo_trace::ImportType;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_errors::Spanned;
@@ -16,9 +16,7 @@ use turborepo_repository::{
     package_json::PackageJson,
 };
 
-use crate::{
-    BoundariesChecker, BoundariesDiagnostic, BoundariesResult, Error, tsconfig::TsConfigLoader,
-};
+use crate::{BoundariesChecker, BoundariesDiagnostic, BoundariesResult, Error};
 
 /// All the places a dependency can be declared
 #[derive(Clone, Copy)]
@@ -83,13 +81,15 @@ impl<'a> DependencyLocations<'a> {
     }
 }
 
-/// Checks if the given import can be resolved as a tsconfig path alias,
-/// e.g. `@/types/foo` -> `./src/foo`, and if so, checks the resolved paths.
+/// Checks if the given import can be resolved via the resolver (which handles
+/// tsconfig path aliases), e.g. `@/types/foo` -> `./src/foo`, and if so,
+/// checks the resolved path against package boundaries.
 ///
-/// Returns true if the import was resolved as a tsconfig path alias.
+/// Returns true if the import was resolved (i.e. should not be checked
+/// further).
 #[allow(clippy::too_many_arguments)]
-fn check_import_as_tsconfig_path_alias(
-    tsconfig_loader: &mut TsConfigLoader,
+fn check_import_via_resolver(
+    resolver: &Resolver,
     package_name: &PackageName,
     package_root: &AbsoluteSystemPath,
     span: SourceSpan,
@@ -99,37 +99,35 @@ fn check_import_as_tsconfig_path_alias(
     result: &mut BoundariesResult,
 ) -> Result<bool, Error> {
     let dir = file_path.parent().expect("file_path must have a parent");
-    let Some(tsconfig) = tsconfig_loader.load(dir, result) else {
-        return Ok(false);
-    };
 
-    let resolved_paths = tsconfig.resolve(dir.as_std_path(), import);
-    for path in &resolved_paths {
-        let Some(utf8_path) = Utf8Path::from_path(path) else {
-            result.diagnostics.push(BoundariesDiagnostic::InvalidPath {
-                path: path.to_string_lossy().to_string(),
-            });
-            continue;
-        };
-        let resolved_import_path = AbsoluteSystemPath::new(utf8_path)?;
-        result.diagnostics.extend(check_file_import(
-            file_path,
-            package_root,
-            package_name,
-            import,
-            resolved_import_path,
-            span,
-            file_content,
-        )?);
+    match resolver.resolve(dir, import) {
+        Ok(resolution) => {
+            let path = resolution.path();
+            let Some(utf8_path) = Utf8Path::from_path(path) else {
+                result.diagnostics.push(BoundariesDiagnostic::InvalidPath {
+                    path: path.to_string_lossy().to_string(),
+                });
+                return Ok(true);
+            };
+            let resolved_import_path = AbsoluteSystemPath::new(utf8_path)?;
+            result.diagnostics.extend(check_file_import(
+                file_path,
+                package_root,
+                package_name,
+                import,
+                resolved_import_path,
+                span,
+                file_content,
+            )?);
+            Ok(true)
+        }
+        Err(_) => Ok(false),
     }
-
-    Ok(!resolved_paths.is_empty())
 }
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn check_import(
     comments: &SingleThreadedComments,
-    tsconfig_loader: &mut TsConfigLoader,
     result: &mut BoundariesResult,
     source_file: &Arc<SourceFile>,
     package_name: &PackageName,
@@ -176,8 +174,8 @@ pub(crate) fn check_import(
 
     let span = SourceSpan::new(start.into(), end - start);
 
-    if check_import_as_tsconfig_path_alias(
-        tsconfig_loader,
+    if check_import_via_resolver(
+        resolver,
         package_name,
         package_root,
         span,

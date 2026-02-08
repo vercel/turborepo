@@ -4,7 +4,8 @@ use camino::{Utf8Path, Utf8PathBuf};
 use globwalk::WalkType;
 use miette::{Diagnostic, Report, SourceSpan};
 use oxc_resolver::{
-    EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
+    EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigDiscovery, TsconfigOptions,
+    TsconfigReferences,
 };
 use swc_common::{
     FileName, SourceMap,
@@ -334,13 +335,13 @@ impl Tracer {
         if tsconfig_dir.is_some() || node_modules_dir.is_some() {
             let mut options = existing_resolver.options().clone();
             if let Some(tsconfig_dir) = tsconfig_dir {
-                options.tsconfig = Some(TsconfigOptions {
+                options.tsconfig = Some(TsconfigDiscovery::Manual(TsconfigOptions {
                     config_file: tsconfig_dir
                         .join_component("tsconfig.json")
                         .as_std_path()
                         .into(),
                     references: TsconfigReferences::Auto,
-                });
+                }));
             }
 
             if let Some(node_modules_dir) = node_modules_dir {
@@ -373,10 +374,10 @@ impl Tracer {
             .with_condition_names(&["import", "require", "node", "types", "default"]);
 
         if let Some(ts_config) = ts_config {
-            options.tsconfig = Some(TsconfigOptions {
+            options.tsconfig = Some(TsconfigDiscovery::Manual(TsconfigOptions {
                 config_file: ts_config.as_std_path().into(),
                 references: TsconfigReferences::Auto,
-            });
+            }));
         }
 
         Resolver::new(options)

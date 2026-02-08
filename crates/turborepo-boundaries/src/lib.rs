@@ -5,7 +5,6 @@
 mod config;
 mod imports;
 mod tags;
-mod tsconfig;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -40,7 +39,7 @@ use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName, PackageNode};
 use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, color};
 
-use crate::{imports::DependencyLocations, tsconfig::TsConfigLoader};
+use crate::imports::DependencyLocations;
 
 pub trait PackageGraphProvider {
     fn packages(&self) -> Box<dyn Iterator<Item = (&PackageName, &PackageInfo)> + '_>;
@@ -566,7 +565,6 @@ impl BoundariesChecker {
             Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
         let mut not_supported_extensions = HashSet::new();
-        let mut tsconfig_loader = TsConfigLoader::new(&resolver);
 
         for file_path in &files {
             if let Some(ext @ ("svelte" | "vue")) = file_path.extension() {
@@ -582,7 +580,6 @@ impl BoundariesChecker {
             };
             Self::process_file(
                 ctx,
-                &mut tsconfig_loader,
                 result,
                 package_name,
                 &package_root,
@@ -652,7 +649,6 @@ impl BoundariesChecker {
             Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
         let mut not_supported_extensions = HashSet::new();
-        let mut tsconfig_loader = TsConfigLoader::new(&resolver);
 
         for file_path in &files {
             if let Some(ext @ ("svelte" | "vue")) = file_path.extension() {
@@ -662,7 +658,6 @@ impl BoundariesChecker {
 
             Self::process_file(
                 ctx,
-                &mut tsconfig_loader,
                 result,
                 package_name,
                 &package_root,
@@ -690,7 +685,6 @@ impl BoundariesChecker {
     #[allow(clippy::too_many_arguments)]
     async fn process_file<G, T>(
         _ctx: &BoundariesContext<'_, G, T>,
-        tsconfig_loader: &mut TsConfigLoader<'_>,
         result: &mut BoundariesResult,
         package_name: &PackageName,
         package_root: &AbsoluteSystemPath,
@@ -767,7 +761,6 @@ impl BoundariesChecker {
         for (import, span, import_type) in finder.imports() {
             imports::check_import(
                 &comments,
-                tsconfig_loader,
                 result,
                 &source_file,
                 package_name,
