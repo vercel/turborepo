@@ -4,13 +4,12 @@
 
 ### Automated Canary Releases
 
-Canary releases happen automatically when PRs merge to `main`. The [Canary Release][6] workflow:
+Canary releases run on an hourly schedule via the [Release workflow][1]:
 
-1. Triggers on push to `main` (when `crates/**`, `packages/**`, `cli/**`, or `.github/**` change)
-2. Skips if the push is from a release PR merge (to avoid infinite loops)
-3. Queues multiple rapid merges and only releases the latest (via GitHub's concurrency)
-4. Publishes to npm with the `canary` tag
-5. Opens a PR with auto-merge enabled to merge the version bump back to `main`
+1. Runs every hour via cron, skipping if no relevant files (`crates/`, `packages/`, `cli/`) changed since the last canary tag
+2. Skips if the latest commit is a release PR merge (to avoid releasing the version bump itself)
+3. Publishes to npm with the `canary` tag
+4. Opens a PR with auto-merge enabled to merge the version bump back to `main`
 
 No manual intervention required for canary releases.
 
@@ -66,82 +65,56 @@ The Turborepo release process is a multi-stage pipeline that:
 5. **Aliases versioned documentation** to subdomains (e.g., `v2-5-4.turborepo.dev`)
 6. **Creates a release branch** with version bumps and automatically opens a PR to merge back to `main`
 
-The process is orchestrated through two GitHub Actions workflows:
+The process is orchestrated through one GitHub Actions workflow:
 
-- **`.github/workflows/turborepo-release.yml`** - The main release workflow (used for both manual and canary releases)
-- **`.github/workflows/turborepo-canary.yml`** - Triggers automated canary releases on push to `main`
+- **`.github/workflows/turborepo-release.yml`** - Handles both scheduled canary releases and manual releases
 
 ---
 
 ### Automated Canary Releases
 
-The canary release system automatically publishes a new canary version every time a PR merges to `main`.
+The canary release system runs on an hourly cron schedule, publishing a new canary version if relevant files have changed since the last release.
 
 #### How It Works
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ PR merges to main                                           │
+│ Hourly cron fires                                            │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ turborepo-canary.yml triggers                               │
-│ - Checks skip conditions (release PR merge?)                │
-│ - If not skipped, calls turborepo-release.yml               │
+│ check-skip job                                               │
+│ - Skips if no relevant files changed since last release      │
 └──────────────────────┬──────────────────────────────────────┘
                        │
                        ▼
 ┌─────────────────────────────────────────────────────────────┐
-│ turborepo-release.yml runs with is-canary: true             │
-│ - Stages version bump                                       │
-│ - Runs smoke tests                                          │
-│ - Builds binaries                                           │
-│ - Publishes to npm                                          │
-│ - Aliases versioned docs                                    │
-│ - Skips manual PR creation (canary handles this)            │
-└──────────────────────┬──────────────────────────────────────┘
-                       │
-                       ▼
-┌─────────────────────────────────────────────────────────────┐
-│ turborepo-canary.yml creates PR with auto-merge             │
-│ - Includes changelog (commits since last canary)            │
-│ - Enables auto-merge (squash)                               │
+│ turborepo-release.yml continues                              │
+│ - Stages version bump                                        │
+│ - Runs smoke tests                                           │
+│ - Builds binaries                                            │
+│ - Publishes to npm                                           │
+│ - Aliases versioned docs                                     │
+│ - Creates PR with auto-merge                                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 #### Skip Detection
 
-The canary workflow skips when:
+The `check-skip` job finds the commit that last modified `version.txt` (which is always the release PR merge) and diffs from there to HEAD. If no files in `crates/`, `packages/`, or `cli/` changed since that commit, there's nothing new to release and the run is skipped.
 
-- **Actor** is `github-actions[bot]` AND
-- **Commit message** matches `^release(turborepo):`
+#### Concurrency
 
-This prevents infinite loops when the release PR merges back to `main`.
-
-#### Concurrency & Squashing
-
-GitHub's native concurrency feature handles rapid merges:
+All releases (scheduled and manual) share a single concurrency group:
 
 ```yaml
 concurrency:
-  group: canary-release
+  group: turborepo-release
   cancel-in-progress: false
 ```
 
-- `cancel-in-progress: false` means running workflows complete
-- Pending workflows are cancelled when a newer one queues
-- Result: only the latest pending merge gets released
-
-#### Path Filters
-
-Canary releases only trigger when these paths change:
-
-- `crates/**` - Rust source code
-- `packages/**` - JavaScript packages
-- `cli/**` - CLI-related files
-- `.github/workflows/**` - Workflow files
-- `.github/actions/**` - Action files
+This ensures only one release runs at a time. If a manual release is triggered while a scheduled run is in progress, it waits for the current run to finish.
 
 ---
 
@@ -597,7 +570,7 @@ This is because the Rust binary is never published to crates.io; it's only publi
 
 ### Best Practices
 
-1. **Let canary releases happen automatically**: Every PR merge to `main` triggers an automatic canary release. No need to manually trigger `prerelease` for normal development.
+1. **Let canary releases happen automatically**: The hourly cron handles canary releases. No need to manually trigger `prerelease` for normal development.
 
 2. **Use manual releases for stable versions**: When ready to promote to stable, manually trigger the release workflow with `patch`, `minor`, or `major`.
 
@@ -673,16 +646,16 @@ If a canary release PR is created but fails to auto-merge:
    # Close the PR via GitHub UI
    ```
 
-#### Infinite Release Loop
+#### Unexpected Repeated Releases
 
-If you suspect an infinite release loop (canary triggers keep firing):
+If canary releases keep firing when they shouldn't:
 
 1. **Disable the workflow temporarily**:
-   - Go to Actions → Canary Release → "..." menu → Disable workflow
+   - Go to Actions → Release → "..." menu → Disable workflow
 
 2. **Investigate the cause**:
-   - Check if the skip detection pattern matches recent commits
-   - The skip pattern expects: actor=`github-actions[bot]` AND message starts with `release(turborepo):`
+   - Check if the skip detection is working: the `check-skip` job should skip when the latest commit is a release PR merge or when no relevant files changed since the last canary tag
+   - Verify that release PR commit messages match the expected format: `release(turborepo): <version>`
 
 3. **Fix and re-enable**:
    - Ensure the release PR title follows the expected format
@@ -698,7 +671,7 @@ If a canary release contains a critical bug:
    npm deprecate turbo@2.6.1-canary.5 "Critical bug in task scheduling, use 2.6.1-canary.6 or later"
    ```
 
-2. **Cut a fix release**: Merge the fix to main; a new canary will automatically release
+2. **Cut a fix release**: Merge the fix to main; the next hourly canary run will pick it up automatically
 
 3. **Unpublish (last resort, time-limited)**:
    - npm allows unpublish within 72 hours for packages with few downloads
@@ -755,7 +728,7 @@ If the versioned docs subdomain wasn't created:
 
 The release pipeline handles sensitive operations (npm publishing, git tagging). Keep these security practices in mind:
 
-1. **Commit messages are trusted input**: The skip detection reads `github.event.head_commit.message`. This is safe because commits to `main` require PR approval, but never copy this pattern for workflows triggered by fork PRs.
+1. **Commit messages are trusted input**: The skip detection reads the latest commit message via `git log`. This is safe because commits to `main` require PR approval, but never copy this pattern for workflows triggered by fork PRs.
 
 2. **Version format is validated**: The pipeline validates that version strings match expected semver patterns before using them in shell commands.
 
@@ -770,4 +743,3 @@ The release pipeline handles sensitive operations (npm publishing, git tagging).
 [3]: https://github.com/apps/turbo-orchestrator
 [4]: https://github.com/vercel/turborepo/blob/main/packages/turbo-repository/scripts/bump-version.sh
 [5]: https://github.com/vercel/turborepo/actions/workflows/turborepo-library-release.yml
-[6]: https://github.com/vercel/turborepo/actions/workflows/turborepo-canary.yml
