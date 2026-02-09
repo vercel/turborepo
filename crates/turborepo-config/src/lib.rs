@@ -17,6 +17,7 @@
 mod env;
 mod file;
 mod override_env;
+mod precedence;
 pub mod registry;
 mod turbo_json;
 
@@ -33,6 +34,7 @@ use file::{AuthFile, ConfigFile};
 use merge::Merge;
 use miette::Diagnostic;
 use override_env::OverrideEnvVars;
+pub use precedence::{ConfigurationSource, CONFIGURATION_PRECEDENCE};
 use serde::Deserialize;
 use struct_iterable::Iterable;
 use thiserror::Error;
@@ -554,14 +556,6 @@ impl TurborepoConfigBuilder {
     }
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
-        // Priority, from least significant to most significant:
-        // - shared configuration (turbo.json)
-        // - global configuration (~/.turbo/config.json)
-        // - local configuration (<REPO_ROOT>/.turbo/config.json)
-        // - environment variables
-        // - CLI arguments
-        // - builder pattern overrides.
-
         let turbo_json = TurboJsonReader::new(&self.repo_root);
         let global_config = ConfigFile::global_config(self.global_config_path.clone())?;
         let global_auth = AuthFile::global_auth(self.global_config_path.clone())?;
@@ -570,30 +564,32 @@ impl TurborepoConfigBuilder {
         let env_var_config = EnvVars::new(&env_vars)?;
         let override_env_var_config = OverrideEnvVars::new(&env_vars)?;
 
-        // These are ordered from highest to lowest priority
-        let sources: [Box<dyn ResolvedConfigurationOptions>; 7] = [
-            Box::new(&self.override_config),
-            Box::new(env_var_config),
-            Box::new(override_env_var_config),
-            Box::new(local_config),
-            Box::new(global_auth),
-            Box::new(global_config),
-            Box::new(turbo_json),
-        ];
-
-        let config = sources.into_iter().try_fold(
-            ConfigurationOptions::default(),
-            |mut acc, current_source| {
-                let current_source_config = current_source.get_configuration_options(&acc)?;
-                acc.merge(current_source_config);
-                Ok(acc)
-            },
-        );
-
-        // We explicitly do a let and return to help the Rust compiler see that there
-        // are no references still held by the folding.
-        #[allow(clippy::let_and_return)]
-        config
+        let mut config = ConfigurationOptions::default();
+        for source in CONFIGURATION_PRECEDENCE.iter().rev().copied() {
+            let source_config = match source {
+                ConfigurationSource::TurboJson => turbo_json.get_configuration_options(&config)?,
+                ConfigurationSource::GlobalConfig => {
+                    global_config.get_configuration_options(&config)?
+                }
+                ConfigurationSource::GlobalAuth => {
+                    global_auth.get_configuration_options(&config)?
+                }
+                ConfigurationSource::LocalConfig => {
+                    local_config.get_configuration_options(&config)?
+                }
+                ConfigurationSource::OverrideEnvironment => {
+                    override_env_var_config.get_configuration_options(&config)?
+                }
+                ConfigurationSource::Environment => {
+                    env_var_config.get_configuration_options(&config)?
+                }
+                ConfigurationSource::Override => {
+                    (&self.override_config).get_configuration_options(&config)?
+                }
+            };
+            config.merge(source_config);
+        }
+        Ok(config)
     }
 }
 

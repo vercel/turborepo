@@ -3,28 +3,6 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use super::{ConfigurationOptions, Error, TurborepoConfigBuilder};
 use crate::Args;
 
-/// Ordered from lowest to highest precedence.
-pub const CONFIGURATION_PRECEDENCE: &[ConfigurationSource] = &[
-    ConfigurationSource::TurboJson,
-    ConfigurationSource::GlobalConfig,
-    ConfigurationSource::GlobalAuth,
-    ConfigurationSource::LocalConfig,
-    ConfigurationSource::OverrideEnvironment,
-    ConfigurationSource::Environment,
-    ConfigurationSource::Cli,
-];
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ConfigurationSource {
-    TurboJson,
-    GlobalConfig,
-    GlobalAuth,
-    LocalConfig,
-    Environment,
-    OverrideEnvironment,
-    Cli,
-}
-
 /// Converts CLI args into the top-precedence configuration override layer.
 pub fn cli_overrides_from_args(args: &Args) -> Result<ConfigurationOptions, Error> {
     Ok(ConfigurationOptions {
