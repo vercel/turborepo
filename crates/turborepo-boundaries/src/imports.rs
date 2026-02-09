@@ -7,7 +7,7 @@ use camino::Utf8Path;
 use itertools::Itertools;
 use miette::{NamedSource, SourceSpan};
 use oxc_resolver::{ResolveError, Resolver};
-use swc_common::{comments::SingleThreadedComments, SourceFile, Span};
+use swc_common::{SourceFile, Span, comments::SingleThreadedComments};
 use turbo_trace::ImportType;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_errors::Spanned;
@@ -81,14 +81,17 @@ impl<'a> DependencyLocations<'a> {
     }
 }
 
-/// Checks if the given import can be resolved via the resolver (which handles
-/// tsconfig path aliases), e.g. `@/types/foo` -> `./src/foo`, and if so,
-/// checks the resolved path against package boundaries.
+/// Checks if the given import can be resolved as a tsconfig path alias via the
+/// resolver, e.g. `@/types/foo` -> `./src/foo`, and if so, checks the resolved
+/// path against package boundaries.
 ///
-/// Returns true if the import was resolved (i.e. should not be checked
-/// further).
+/// Only attempts resolution for imports that are not relative paths and not
+/// bare package names, so that bare specifiers like `react` still go through
+/// `check_package_import` for dependency declaration validation.
+///
+/// Returns true if the import was resolved as a tsconfig path alias.
 #[allow(clippy::too_many_arguments)]
-fn check_import_via_resolver(
+fn check_import_as_tsconfig_path_alias(
     resolver: &Resolver,
     package_name: &PackageName,
     package_root: &AbsoluteSystemPath,
@@ -98,6 +101,12 @@ fn check_import_via_resolver(
     import: &str,
     result: &mut BoundariesResult,
 ) -> Result<bool, Error> {
+    // Skip relative imports and bare package names — those are handled elsewhere.
+    // We only want to resolve tsconfig path aliases here.
+    if import.starts_with('.') || BoundariesChecker::is_potential_package_name(import) {
+        return Ok(false);
+    }
+
     let dir = file_path.parent().expect("file_path must have a parent");
 
     match resolver.resolve(dir, import) {
@@ -174,7 +183,7 @@ pub(crate) fn check_import(
 
     let span = SourceSpan::new(start.into(), end - start);
 
-    if check_import_via_resolver(
+    if check_import_as_tsconfig_path_alias(
         resolver,
         package_name,
         package_root,
