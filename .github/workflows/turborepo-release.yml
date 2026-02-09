@@ -11,7 +11,7 @@
 # 7. Create a release branch and open a PR
 # 8. On failure, cleanup the staging branch automatically
 #
-# Canary releases are triggered automatically on push to main.
+# Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
 #
 # RECOVERY: If a release fails and cleanup doesn't work, use the
@@ -31,14 +31,8 @@ permissions:
   checks: write # Allows posting check statuses for release PRs
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "crates/**"
-      - "packages/**"
-      - "cli/**"
-      - ".github/workflows/**"
-      - ".github/actions/**"
+  schedule:
+    - cron: "0 * * * *"
   workflow_dispatch:
     inputs:
       increment:
@@ -107,31 +101,31 @@ on:
         type: boolean
         default: false
 
-# Canary releases queue up (rapid merges to main get batched).
-# Manual releases each get their own concurrency group.
 concurrency:
-  group: ${{ github.event_name == 'push' && 'canary-release' || format('release-{0}', github.run_id) }}
+  group: turborepo-release
   cancel-in-progress: false
 
 jobs:
   check-skip:
     name: "Check Skip Conditions"
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' }}
+    if: ${{ github.event_name == 'schedule' }}
     outputs:
       should_skip: ${{ steps.check.outputs.should_skip }}
     steps:
-      - name: Check if release PR merge
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if should skip
         id: check
-        env:
-          # Use commit author, not github.actor - github.actor is the person who
-          # triggered the workflow (e.g., who enabled auto-merge), while the commit
-          # author is the bot that created the release commit
-          COMMIT_AUTHOR: ${{ github.event.head_commit.author.name }}
-          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          if [[ "$COMMIT_AUTHOR" == "github-actions[bot]" && "$COMMIT_MESSAGE" =~ ^release\(turborepo\): ]]; then
-            echo "Skipping: This is a release PR merge (author: $COMMIT_AUTHOR)"
+          # Find the commit that last updated version.txt (the release PR merge).
+          # If no relevant files changed since then, there's nothing new to release.
+          LAST_VERSION_COMMIT=$(git log -1 --format='%H' -- version.txt)
+          CHANGES=$(git diff --name-only "$LAST_VERSION_COMMIT"..HEAD -- crates/ packages/ cli/)
+          if [ -z "$CHANGES" ]; then
+            echo "Skipping: No relevant changes since last release (${LAST_VERSION_COMMIT:0:12})"
             echo "should_skip=true" >> $GITHUB_OUTPUT
           else
             echo "should_skip=false" >> $GITHUB_OUTPUT
@@ -179,7 +173,7 @@ jobs:
       - name: Clear stale staging branch (if requested)
         if: ${{ inputs.clear-staging-branch }}
         env:
-          INCREMENT: ${{ github.event_name == 'push' && 'prerelease' || inputs.increment }}
+          INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
           TAG_OVERRIDE: ${{ inputs.tag-override }}
         run: |
           echo "::warning::clear-staging-branch was enabled. This should only be used to recover from a failed release."
@@ -205,8 +199,8 @@ jobs:
       - name: Version
         id: version
         env:
-          # For push events (canary), always use prerelease. For workflow_dispatch, use the input.
-          INCREMENT: ${{ github.event_name == 'push' && 'prerelease' || inputs.increment }}
+          # For scheduled runs (canary), always use prerelease. For workflow_dispatch, use the input.
+          INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
           TAG_OVERRIDE: ${{ inputs.tag-override }}
         run: |
           if [[ -n "$TAG_OVERRIDE" && ! "$TAG_OVERRIDE" =~ ^[a-zA-Z0-9-]+$ ]]; then
