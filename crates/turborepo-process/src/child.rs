@@ -544,6 +544,10 @@ impl Child {
                 .await
             }
             Some(ChildOutput::Pty(output)) => {
+                // Drop stdin before reading so the UnixMasterWriter sends EOT
+                // and releases its fd, allowing the reader to reach EOF once
+                // the controller is dropped after the child exits.
+                drop(self.stdin_inner());
                 self.wait_with_piped_sync_output(stdout_pipe, std::io::BufReader::new(output))
                     .await
             }
@@ -1089,7 +1093,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     async fn test_wait_with_single_output(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world_hello_moon.js");
