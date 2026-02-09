@@ -88,6 +88,8 @@ turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-vt100 = { path = "crates/turborepo-vt100" }
 
 reqwest = { version = "0.12.28", default-features = false }
+rustls-native-certs = "0.8.3"
+hyper-rustls = { version = "0.27.7", default-features = false }
 
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
