@@ -46,4 +46,3 @@ Follow [@turborepo](https://x.com/turborepo) on X for project updates.
 If you believe you have found a security vulnerability in Turborepo, we encourage you to responsibly disclose this and not open a public issue. We will investigate all legitimate reports. Email `security@vercel.com` to disclose any security vulnerabilities.
 
 https://vercel.com/security
-
