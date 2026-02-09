@@ -17,6 +17,7 @@
 mod env;
 mod file;
 mod override_env;
+pub mod registry;
 mod turbo_json;
 
 use std::{
