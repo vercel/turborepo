@@ -520,7 +520,7 @@ fn symbols_to_combinations<'a, T: Iterator<Item = GlobSymbol<'a>>>(
 fn glob_to_symbols(glob: &str) -> impl Iterator<Item = GlobSymbol<'_>> {
     let glob_bytes = glob.as_bytes();
     let mut escaped = false;
-    let mut cursor = unic_segment::GraphemeCursor::new(0, glob.len());
+    let mut cursor = unicode_segmentation::GraphemeCursor::new(0, glob.len(), true);
 
     std::iter::from_fn(move || {
         loop {
