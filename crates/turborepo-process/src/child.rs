@@ -1093,7 +1093,7 @@ mod test {
     }
 
     #[test_case(false)]
-    #[test_case(true)]
+    #[test_case(TEST_PTY)]
     #[tokio::test]
     async fn test_wait_with_single_output(use_pty: bool) {
         let script = find_script_dir().join_component("hello_world_hello_moon.js");
