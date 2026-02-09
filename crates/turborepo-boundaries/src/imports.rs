@@ -345,6 +345,7 @@ pub(crate) fn check_package_import(
 #[cfg(test)]
 mod test {
     use test_case::test_case;
+    use turbo_trace::Tracer;
 
     use super::*;
 
@@ -358,5 +359,125 @@ mod test {
     #[test_case("foo/bar/baz", "foo"; "multiple slashes")]
     fn test_get_package_name(import: &str, expected: &str) {
         assert_eq!(get_package_name(import), expected);
+    }
+
+    fn make_tsconfig_alias_test_args(
+        import: &str,
+    ) -> (Resolver, PackageName, SourceSpan, String, BoundariesResult) {
+        let resolver = Tracer::create_resolver(None);
+        let package_name = PackageName::from("test-pkg");
+        let span = SourceSpan::new(0.into(), 0);
+        let file_content = format!("import {{ x }} from \"{import}\";");
+        let result = BoundariesResult::default();
+        (resolver, package_name, span, file_content, result)
+    }
+
+    #[test_case("react" ; "bare package name")]
+    #[test_case("lodash" ; "bare package name lodash")]
+    #[test_case("@scope/package" ; "scoped package name")]
+    #[test_case("@types/node" ; "types package name")]
+    fn tsconfig_alias_check_skips_bare_package_names(import: &str) {
+        let (resolver, package_name, span, file_content, mut result) =
+            make_tsconfig_alias_test_args(import);
+        let tmp = tempfile::tempdir().unwrap();
+        let package_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let file_path = package_root.join_component("index.ts");
+        std::fs::write(file_path.as_std_path(), &file_content).unwrap();
+
+        let resolved = check_import_as_tsconfig_path_alias(
+            &resolver,
+            &package_name,
+            package_root,
+            span,
+            &file_path,
+            &file_content,
+            import,
+            &mut result,
+        )
+        .unwrap();
+
+        assert!(
+            !resolved,
+            "bare package name {import:?} should not be resolved as tsconfig alias"
+        );
+        assert!(result.diagnostics.is_empty());
+    }
+
+    #[test_case("./foo" ; "relative current dir")]
+    #[test_case("../bar" ; "relative parent dir")]
+    #[test_case("./deeply/nested/module" ; "relative deeply nested")]
+    fn tsconfig_alias_check_skips_relative_imports(import: &str) {
+        let (resolver, package_name, span, file_content, mut result) =
+            make_tsconfig_alias_test_args(import);
+        let tmp = tempfile::tempdir().unwrap();
+        let package_root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let file_path = package_root.join_component("index.ts");
+        std::fs::write(file_path.as_std_path(), &file_content).unwrap();
+
+        let resolved = check_import_as_tsconfig_path_alias(
+            &resolver,
+            &package_name,
+            package_root,
+            span,
+            &file_path,
+            &file_content,
+            import,
+            &mut result,
+        )
+        .unwrap();
+
+        assert!(
+            !resolved,
+            "relative import {import:?} should not be resolved as tsconfig alias"
+        );
+        assert!(result.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn tsconfig_alias_resolves_path_alias() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Create a tsconfig with a path alias
+        let tsconfig = root.join("tsconfig.json");
+        std::fs::write(
+            &tsconfig,
+            r#"{ "compilerOptions": { "paths": { "@/*": ["./*"] } } }"#,
+        )
+        .unwrap();
+
+        // Create the target file the alias should resolve to
+        std::fs::create_dir_all(root.join("utils")).unwrap();
+        std::fs::write(root.join("utils").join("helper.ts"), "export const x = 1;").unwrap();
+
+        // Create the source file
+        let file_content = "import { x } from \"@/utils/helper\";";
+        std::fs::write(root.join("index.ts"), file_content).unwrap();
+
+        let package_root = AbsoluteSystemPath::new(root.to_str().unwrap()).unwrap();
+        let tsconfig_path = AbsoluteSystemPath::new(tsconfig.to_str().unwrap()).unwrap();
+        let file_path = package_root.join_component("index.ts");
+        let package_name = PackageName::from("test-pkg");
+        let span = SourceSpan::new(0.into(), 0);
+        let mut result = BoundariesResult::default();
+
+        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+
+        let resolved = check_import_as_tsconfig_path_alias(
+            &resolver,
+            &package_name,
+            package_root,
+            span,
+            &file_path,
+            file_content,
+            "@/utils/helper",
+            &mut result,
+        )
+        .unwrap();
+
+        assert!(
+            resolved,
+            "@/utils/helper should be resolved as a tsconfig path alias"
+        );
     }
 }
