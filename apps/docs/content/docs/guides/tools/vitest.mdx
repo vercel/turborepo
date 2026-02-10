@@ -73,7 +73,12 @@ Inside the root `turbo.json`, create a `test` task:
 ```json title="./turbo.json"
 {
   "tasks": {
-    "test": {}
+    "test": {
+      "dependsOn": ["transit"]
+    },
+    "transit": {
+      "dependsOn": ["^transit"]
+    }
   }
 }
 ```
