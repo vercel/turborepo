@@ -16,7 +16,7 @@ type WorkspaceRawArgs = Omit<
 };
 
 // 🐪
-export function parseToCamel<T>(str: string): T {
+function parseToCamel<T>(str: string): T {
   try {
     const parsed = JSON.parse(str) as Record<string, unknown>;
     const camelCased: Record<string, unknown> = {};
@@ -31,36 +31,6 @@ export function parseToCamel<T>(str: string): T {
   }
 }
 
-export function parseWorkspaceArgs(json: string): TurboGeneratorCLIOptions {
-  const parsedArgs = parseToCamel<WorkspaceRawArgs>(json);
-  parsedArgs.showAllDependencies = parsedArgs.showAllDependencies ?? false;
-
-  let copy: string | boolean = false;
-  let empty: boolean = parsedArgs.empty || true;
-
-  if (parsedArgs.copy === "" || parsedArgs.copy === true) {
-    copy = true;
-    empty = false;
-  } else if (parsedArgs.copy && parsedArgs.copy.length > 0) {
-    copy = parsedArgs.copy;
-    empty = false;
-  }
-
-  parsedArgs.copy = copy;
-  parsedArgs.empty = empty;
-
-  return parsedArgs as TurboGeneratorCLIOptions;
-}
-
-export function parseRunArgs(json: string): {
-  generatorName: string | undefined;
-  rest: CustomGeneratorCLIOptions;
-} {
-  const parsedArgs = parseToCamel<CustomRawArgs>(json);
-  const { generatorName, ...rest } = parsedArgs;
-  return { generatorName, rest };
-}
-
 /**
  * Given a command and a JSON string of options, attempt to deserialize the JSON and run the command
  *
@@ -68,9 +38,31 @@ export function parseRunArgs(json: string): {
  */
 export async function raw(command: string, options: { json: string }) {
   if (command === "workspace") {
-    await workspace(parseWorkspaceArgs(options.json));
+    const parsedArgs = parseToCamel<WorkspaceRawArgs>(options.json);
+    parsedArgs.showAllDependencies = parsedArgs.showAllDependencies ?? false;
+
+    // massage copy and empty
+    let copy: string | boolean = false;
+    let empty: boolean = parsedArgs.empty || true;
+
+    // arg was passed with no value or as bool (explicitly)
+    if (parsedArgs.copy === "" || parsedArgs.copy === true) {
+      copy = true;
+      empty = false;
+      // arg was passed with a value
+    } else if (parsedArgs.copy && parsedArgs.copy.length > 0) {
+      copy = parsedArgs.copy;
+      empty = false;
+    }
+
+    // update options values
+    parsedArgs.copy = copy;
+    parsedArgs.empty = empty;
+
+    await workspace(parsedArgs as TurboGeneratorCLIOptions);
   } else if (command === "run") {
-    const { generatorName, rest } = parseRunArgs(options.json);
+    const parsedArgs = parseToCamel<CustomRawArgs>(options.json);
+    const { generatorName, ...rest } = parsedArgs;
     await run(generatorName, rest);
   } else {
     logger.error(
