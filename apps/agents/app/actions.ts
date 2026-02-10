@@ -1,21 +1,10 @@
 "use server";
 
-import { cronSecret } from "@/lib/env";
+import { runAuditAndFix } from "@/lib/audit";
 
 export async function triggerAudit() {
-  const baseUrl = process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : "http://localhost:3000";
-
-  const res = await fetch(`${baseUrl}/api/cron/audit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ secret: cronSecret() })
+  // Fire and forget — results go to Slack
+  runAuditAndFix().catch((error) => {
+    console.error("Audit failed:", error);
   });
-
-  if (!res.ok) {
-    throw new Error(`Failed to trigger audit: ${res.status}`);
-  }
-
-  return res.json();
 }
