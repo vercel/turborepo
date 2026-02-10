@@ -9,8 +9,8 @@ import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { z } from "zod";
 
-const REPO_DIR = "/vercel/sandbox/turborepo";
-const RESULTS_PATH = "/vercel/sandbox/results.json";
+const REPO_DIR = process.env.REPO_DIR ?? "/vercel/sandbox/turborepo";
+const RESULTS_PATH = process.env.RESULTS_PATH ?? "/vercel/sandbox/results.json";
 const MAX_STEPS = 30;
 
 function shell(cmd, { cwd = REPO_DIR, allowFailure = false } = {}) {
@@ -19,10 +19,7 @@ function shell(cmd, { cwd = REPO_DIR, allowFailure = false } = {}) {
       cwd,
       encoding: "utf-8",
       timeout: 120_000,
-      env: {
-        ...process.env,
-        PATH: `${process.env.HOME}/.cargo/bin:${process.env.PATH}`
-      }
+      env: process.env
     }).trim();
   } catch (e) {
     if (allowFailure) {
@@ -38,7 +35,8 @@ const agent = new ToolLoopAgent({
   toolChoice: "required",
   instructions: `You are a senior engineer fixing security vulnerabilities in the Turborepo monorepo.
 
-The repo is already cloned at ${REPO_DIR}. Rust, cargo-audit, pnpm, and node are installed.
+The repo is already cloned at ${REPO_DIR}. cargo-audit, pnpm, and node are installed.
+cargo-audit is a pre-built binary at /usr/local/bin/cargo-audit. Rust is NOT installed — do not try to install it or use cargo for anything other than cargo-audit.
 
 CRITICAL RULES:
 - You MUST use tools for EVERY step. Never generate plain text — it terminates the loop.
@@ -50,8 +48,8 @@ Your job:
 2. Fix them by updating dependency version constraints in manifest files (Cargo.toml, package.json).
    Do NOT just update lockfiles — that is not a fix.
 3. After making changes, run the relevant test suites to make sure nothing is broken.
-   - For Rust: cargo check (full build takes too long, check is sufficient)
    - For JS/TS: pnpm run check-types (if it exists), pnpm test --filter=<affected>
+   - Rust is not installed, so you cannot run cargo check/build/test. Focus on manifest changes only for Cargo.toml.
 4. If tests fail, read the errors, diagnose the issue, and fix the source code as needed.
 5. Re-run audits to verify the vulnerabilities are resolved.
 6. Repeat until clean or you've exhausted your options.

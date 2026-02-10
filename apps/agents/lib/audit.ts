@@ -8,6 +8,12 @@ const REPO_URL = "https://github.com/vercel/turborepo.git";
 const AGENT_SCRIPT_PATH = resolve(process.cwd(), "sandbox/audit-fix-agent.mjs");
 const RESULTS_PATH = "/vercel/sandbox/results.json";
 
+const CARGO_AUDIT_VERSION = "0.22.1";
+const INSTALL_CARGO_AUDIT = [
+  `curl -sL "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/cargo-audit-x86_64-unknown-linux-gnu-v${CARGO_AUDIT_VERSION}.tgz"`,
+  "| tar xz -C /usr/local/bin"
+].join(" ");
+
 interface AuditVulnerability {
   name: string;
   severity: string;
@@ -49,14 +55,7 @@ export async function runSecurityAudit(): Promise<AuditResults> {
   const sandbox = await Sandbox.create({ runtime: "node22" });
 
   try {
-    await sandbox.runCommand("bash", [
-      "-c",
-      "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-    ]);
-    await sandbox.runCommand("bash", [
-      "-c",
-      "source $HOME/.cargo/env && cargo install cargo-audit"
-    ]);
+    await sandbox.runCommand("bash", ["-c", INSTALL_CARGO_AUDIT]);
     await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
     await sandbox.runCommand("git", [
       "clone",
@@ -68,7 +67,7 @@ export async function runSecurityAudit(): Promise<AuditResults> {
 
     const cargoResult = await sandbox.runCommand("bash", [
       "-c",
-      "source $HOME/.cargo/env && cd turborepo && cargo audit --json 2>&1 || true"
+      "cd turborepo && cargo-audit audit --json 2>&1 || true"
     ]);
     const cargoRaw = await cargoResult.stdout();
 
@@ -108,15 +107,8 @@ export async function runAuditFix(
   });
 
   try {
-    await onProgress?.("Installing Rust toolchain...");
-    await sandbox.runCommand("bash", [
-      "-c",
-      "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-    ]);
-    await sandbox.runCommand("bash", [
-      "-c",
-      "source $HOME/.cargo/env && cargo install cargo-audit"
-    ]);
+    await onProgress?.("Installing tooling...");
+    await sandbox.runCommand("bash", ["-c", INSTALL_CARGO_AUDIT]);
     await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
 
     await onProgress?.("Cloning repository...");
