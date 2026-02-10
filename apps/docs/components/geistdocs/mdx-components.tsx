@@ -26,7 +26,7 @@ import { PrereleaseBadge } from "./prerelease-badge";
 import { File, Files, Folder } from "./files";
 import { InVersion } from "./in-version";
 import { LinkToDocumentation } from "./link-to-documentation";
-import { Mermaid } from "./mermaid";
+import { Mermaid } from "@/components/diagram/diagram";
 import { Step, Steps } from "./steps";
 import { ThemeAwareImage } from "./theme-aware-image";
 import { Video } from "./video";
