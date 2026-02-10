@@ -186,7 +186,7 @@ export function FlowDiagram({ graph }: FlowDiagramProps) {
     setMounted(true);
   }, []);
 
-  const { nodes, edges, width, height } = useMemo(() => {
+  const { nodes, edges, height } = useMemo(() => {
     const { nodes: rawNodes, edges: rawEdges } = graphToReactFlow(graph);
     return layoutFlowchart(
       rawNodes,
