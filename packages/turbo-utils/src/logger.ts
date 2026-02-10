@@ -1,10 +1,6 @@
-import {
-  reset,
-  bold as pcBold,
-  underline as pcUnderline,
-  gray,
-  dim
-} from "picocolors";
+import pico from "picocolors";
+
+const { reset, bold: pcBold, underline: pcUnderline, gray, dim } = pico;
 import ora from "ora";
 import gradient from "gradient-string";
 
