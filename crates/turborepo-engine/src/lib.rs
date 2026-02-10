@@ -36,7 +36,10 @@ pub use graph_visualizer::{
     NoOpSpawner, write_graph,
 };
 pub use loader::TurboJsonLoader;
-use petgraph::Graph;
+use petgraph::{
+    Graph,
+    visit::{DfsEvent, Reversed, depth_first_search},
+};
 pub use task_definition::TaskDefinitionFromProcessed;
 use thiserror::Error;
 use turborepo_errors::Spanned;
@@ -237,21 +240,32 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     pub fn create_engine_for_subgraph(&self, changed_packages: &HashSet<PackageName>) -> Self {
         let entrypoint_indices: Vec<_> = changed_packages
             .iter()
-            .flat_map(|pkg| self.package_tasks.get(pkg))
+            .filter_map(|pkg| self.package_tasks.get(pkg))
             .flatten()
+            .copied()
             .collect();
 
-        // We reverse the graph because we want the *dependents* of entrypoint tasks
-        let mut reversed_graph = self.task_graph.clone();
-        reversed_graph.reverse();
-
-        // This is `O(V^3)`, so in theory a bottleneck. Running dijkstra's
-        // algorithm for each entrypoint task could potentially be faster.
-        let node_distances = petgraph::algo::floyd_warshall::floyd_warshall(&reversed_graph, |_| 1)
-            .expect("no negative cycles");
+        // Compute all nodes reachable from the entrypoint tasks by traversing
+        // dependents (incoming direction on the original graph = outgoing on
+        // reversed). Uses a multi-source DFS which is O(V+E), replacing the
+        // previous O(V^3) Floyd-Warshall approach.
+        let mut reachable = HashSet::new();
+        depth_first_search(
+            Reversed(&self.task_graph),
+            entrypoint_indices,
+            |event| {
+                if let DfsEvent::Discover(n, _) = event {
+                    reachable.insert(n);
+                }
+            },
+        );
 
         let new_graph = self.task_graph.filter_map(
             |node_idx, node| {
+                if !reachable.contains(&node_idx) {
+                    return None;
+                }
+
                 if let TaskNode::Task(task) = &self.task_graph[node_idx] {
                     // We only want to include tasks that are not persistent
                     let def = self
@@ -263,15 +277,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
                         return None;
                     }
                 }
-                // If the node is reachable from any of the entrypoint tasks, we include it
-                entrypoint_indices
-                    .iter()
-                    .any(|idx| {
-                        node_distances
-                            .get(&(**idx, node_idx))
-                            .is_some_and(|dist| *dist != i32::MAX)
-                    })
-                    .then_some(node.clone())
+                Some(node.clone())
             },
             |_, _| Some(()),
         );
