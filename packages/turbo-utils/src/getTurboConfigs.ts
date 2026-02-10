@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import yaml from "js-yaml";
-import fg from "fast-glob";
+import { sync } from "fast-glob";
 import JSON5 from "json5";
 import type {
   BaseSchemaV1,
@@ -118,15 +118,13 @@ export function getTurboConfigs(cwd?: string, opts?: Options): TurboConfigs {
       (glob) => `${glob}/${ROOT_GLOB}`
     );
 
-    const configPaths = fg
-      .sync([ROOT_GLOB, ...workspaceConfigGlobs], {
-        cwd: turboRoot,
-        onlyFiles: true,
-        followSymbolicLinks: false,
-        // avoid throwing when encountering permission errors or unreadable paths
-        suppressErrors: true
-      })
-      .map((configPath) => path.join(turboRoot, configPath));
+    const configPaths = sync([ROOT_GLOB, ...workspaceConfigGlobs], {
+      cwd: turboRoot,
+      onlyFiles: true,
+      followSymbolicLinks: false,
+      // avoid throwing when encountering permission errors or unreadable paths
+      suppressErrors: true
+    }).map((configPath) => path.join(turboRoot, configPath));
 
     // Check for both turbo.json and turbo.jsonc in the same directory
     const configPathsByDir: Record<string, Array<string>> = {};
@@ -205,15 +203,13 @@ export function getWorkspaceConfigs(
       (glob) => `${glob}/package.json`
     );
 
-    const configPaths = fg
-      .sync([ROOT_WORKSPACE_GLOB, ...workspaceConfigGlobs], {
-        cwd: turboRoot,
-        onlyFiles: true,
-        followSymbolicLinks: false,
-        // avoid throwing when encountering permission errors or unreadable paths
-        suppressErrors: true
-      })
-      .map((configPath) => path.join(turboRoot, configPath));
+    const configPaths = sync([ROOT_WORKSPACE_GLOB, ...workspaceConfigGlobs], {
+      cwd: turboRoot,
+      onlyFiles: true,
+      followSymbolicLinks: false,
+      // avoid throwing when encountering permission errors or unreadable paths
+      suppressErrors: true
+    }).map((configPath) => path.join(turboRoot, configPath));
 
     for (const configPath of configPaths) {
       try {
