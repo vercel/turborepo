@@ -35,6 +35,6 @@ where
         hasher.write(buf);
         let out = hasher.finish();
 
-        hex::encode(out.to_be_bytes())
+        format!("{:016x}", out)
     }
 }
