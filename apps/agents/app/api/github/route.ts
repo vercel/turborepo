@@ -69,13 +69,6 @@ async function triageNewIssue(payload: GitHubIssuePayload) {
       }
     },
     {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: bodyPreview
-      }
-    },
-    {
       type: "context",
       elements: [
         {
@@ -97,7 +90,8 @@ async function triageNewIssue(payload: GitHubIssuePayload) {
         {
           type: "button",
           text: { type: "plain_text", text: "Dismiss" },
-          action_id: "repro_dismiss"
+          action_id: "repro_dismiss",
+          value: String(issue.number)
         }
       ]
     }
