@@ -47,7 +47,7 @@ function DiagramNode({ data }: { data: DiagramNodeData }) {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: isDiamond ? "8px 16px" : "8px 16px",
+        padding: "8px 16px",
         height: "100%",
         width: "100%",
         backgroundColor: "var(--diagram-node-bg)",
@@ -59,23 +59,87 @@ function DiagramNode({ data }: { data: DiagramNodeData }) {
         textAlign: "center"
       }}
     >
-      <Handle type="target" position={Position.Top} style={{ opacity: 0 }} />
-      <Handle type="target" position={Position.Left} style={{ opacity: 0 }} />
+      <Handle
+        type="target"
+        id="top"
+        position={Position.Top}
+        style={{ opacity: 0 }}
+      />
+      <Handle
+        type="target"
+        id="left"
+        position={Position.Left}
+        style={{ opacity: 0 }}
+      />
+      <Handle
+        type="target"
+        id="bottom"
+        position={Position.Bottom}
+        style={{ opacity: 0 }}
+      />
+      <Handle
+        type="target"
+        id="right"
+        position={Position.Right}
+        style={{ opacity: 0 }}
+      />
       <span style={isDiamond ? { transform: "rotate(-45deg)" } : undefined}>
         {data.label}
       </span>
-      <Handle type="source" position={Position.Bottom} style={{ opacity: 0 }} />
-      <Handle type="source" position={Position.Right} style={{ opacity: 0 }} />
+      <Handle
+        type="source"
+        id="top"
+        position={Position.Top}
+        style={{ opacity: 0 }}
+      />
+      <Handle
+        type="source"
+        id="left"
+        position={Position.Left}
+        style={{ opacity: 0 }}
+      />
+      <Handle
+        type="source"
+        id="bottom"
+        position={Position.Bottom}
+        style={{ opacity: 0 }}
+      />
+      <Handle
+        type="source"
+        id="right"
+        position={Position.Right}
+        style={{ opacity: 0 }}
+      />
     </div>
   );
 }
 
 const nodeTypes = { diagram: DiagramNode };
 
+function getHandleIds(direction: FlowchartGraph["direction"]): {
+  sourceHandle: string;
+  targetHandle: string;
+} {
+  switch (direction) {
+    case "LR":
+      return { sourceHandle: "right", targetHandle: "left" };
+    case "RL":
+      return { sourceHandle: "left", targetHandle: "right" };
+    case "BT":
+      return { sourceHandle: "top", targetHandle: "bottom" };
+    case "TD":
+    case "TB":
+    default:
+      return { sourceHandle: "bottom", targetHandle: "top" };
+  }
+}
+
 function graphToReactFlow(graph: FlowchartGraph): {
   nodes: Node[];
   edges: Edge[];
 } {
+  const { sourceHandle, targetHandle } = getHandleIds(graph.direction);
+
   const nodes: Node[] = graph.nodes.map((n) => ({
     id: n.id,
     type: "diagram",
@@ -87,6 +151,8 @@ function graphToReactFlow(graph: FlowchartGraph): {
     id: `e-${e.source}-${e.target}-${i}`,
     source: e.source,
     target: e.target,
+    sourceHandle,
+    targetHandle,
     label: e.label,
     type: "default",
     animated: e.style === "dotted",
