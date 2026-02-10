@@ -3,6 +3,8 @@
   "exclude": ["src/templates", "dist", "node_modules"],
   "compilerOptions": {
     "rootDir": ".",
-    "lib": ["ES2022", "DOM"]
+    "lib": ["ES2022", "DOM"],
+    "module": "ES2022",
+    "moduleResolution": "bundler"
   }
 }
