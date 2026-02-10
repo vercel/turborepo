@@ -11,10 +11,7 @@ export async function generate({
   opts
 }: CustomGeneratorArguments) {
   let isOnboarding = false;
-  let generators = await getCustomGenerators({
-    project,
-    configPath: opts.config
-  });
+  let generators = getCustomGenerators({ project, configPath: opts.config });
   if (!generators.length) {
     logger.error(`No generators found.`);
     logger.log();
@@ -43,10 +40,7 @@ export async function generate({
       logger.log();
 
       // fetch generators again, and continue to selection prompt
-      generators = await getCustomGenerators({
-        project,
-        configPath: opts.config
-      });
+      generators = getCustomGenerators({ project, configPath: opts.config });
 
       // something went wrong and we weren't able to find our new custom generator
       if (!generators.length) {
