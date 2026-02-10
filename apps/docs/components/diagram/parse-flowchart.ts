@@ -114,10 +114,6 @@ function parseEdgeStatement(
   line: string,
   nodeMap: Map<string, FlowNode>
 ): FlowEdge[] {
-  // Match edge operators with optional labels
-  // Patterns: --> , --- , -.- , ==> , -->|label| , -- label --> , etc.
-  const edgeRegex = /\s*(={2,}>|--+>|--+[^->]|(?:-\.+-?>?))\s*/;
-
   const edges: FlowEdge[] = [];
   let remaining = line.trim();
 

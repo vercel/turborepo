@@ -5,11 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type {
   ArrowStyle,
   SequenceDiagram as ParsedSequence,
-  SequenceBlock,
-  SequenceEvent,
-  SequenceMessage,
-  SequenceNote,
-  SequenceParticipant
+  SequenceEvent
 } from "./parse-sequence";
 
 const PARTICIPANT_WIDTH = 120;
