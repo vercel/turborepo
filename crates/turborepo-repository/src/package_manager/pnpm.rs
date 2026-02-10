@@ -155,7 +155,7 @@ impl PnpmWorkspace {
     pub fn from_file(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
         let workspace_yaml_path = repo_root.join_component(WORKSPACE_CONFIGURATION_PATH);
         let workspace_yaml = workspace_yaml_path.read_to_string()?;
-        Ok(serde_yml::from_str(&workspace_yaml)?)
+        Ok(serde_yaml_ng::from_str(&workspace_yaml)?)
     }
 
     fn link_workspace_packages(&self) -> Option<bool> {
@@ -303,7 +303,7 @@ mod test {
     #[test]
     fn test_workspace_parsing() {
         let config: PnpmWorkspace =
-            serde_yml::from_str("linkWorkspacePackages: true\npackages:\n  - \"apps/*\"\n")
+            serde_yaml_ng::from_str("linkWorkspacePackages: true\npackages:\n  - \"apps/*\"\n")
                 .unwrap();
         assert_eq!(config.link_workspace_packages(), Some(true));
         assert_eq!(config.packages, vec!["apps/*".to_string()]);
