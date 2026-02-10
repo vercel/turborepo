@@ -94,14 +94,14 @@ cargo test -p <module>
 
   ```bash
   # Build `turbo` first because the next command doesn't run through `turbo`
-  pnpm -- turbo run build --filter=cli
+  pnpm -- turbo run build --filter=@turbo/cli
   pnpm test -F turborepo-tests-integration -- "run-summary"
   ```
 
 - Updating integration tests
 
   ```bash
-  turbo run build --filter=cli
+  turbo run build --filter=@turbo/cli
   pnpm --filter turborepo-tests-integration test:interactive
   ```
 

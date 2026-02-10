@@ -10,7 +10,7 @@
   },
   "scripts": {
     "build": "turbo run build",
-    "build:turbo": "pnpm run --filter=cli build",
+    "build:turbo": "pnpm run --filter=@turbo/cli build",
     "build:ts": "tsc -b tsconfig.project.json",
     "lint": "pnpm exec oxlint --deny-warnings .",
     "lint:fix": "pnpm exec oxlint --fix .",
