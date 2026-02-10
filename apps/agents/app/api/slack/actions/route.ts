@@ -40,7 +40,8 @@ export async function POST(request: Request) {
 
   const channel = payload.channel.id;
   const messageTs = payload.message.ts;
-  const user = payload.user.username;
+  const userId = payload.user.id;
+  const mention = `<@${userId}>`;
 
   switch (action.action_id) {
     // Issue triage: user approves posting a reproduction request comment
@@ -52,16 +53,20 @@ export async function POST(request: Request) {
       await updateMessage(
         channel,
         messageTs,
-        `:white_check_mark: @${user} posted reproduction request on #${issueNumber}`
+        `:white_check_mark: ${mention} posted reproduction request on <https://github.com/vercel/turborepo/issues/${issueNumber}|#${issueNumber}>`
       );
       break;
     }
 
     case "repro_dismiss": {
+      const issueNumber = parseInt(action.value ?? "0", 10);
+      const issueRef = issueNumber
+        ? ` for <https://github.com/vercel/turborepo/issues/${issueNumber}|#${issueNumber}>`
+        : "";
       await updateMessage(
         channel,
         messageTs,
-        `:heavy_minus_sign: @${user} dismissed — no reproduction request needed`
+        `:heavy_minus_sign: ${mention} dismissed${issueRef} — no reproduction request needed`
       );
       break;
     }
@@ -71,14 +76,14 @@ export async function POST(request: Request) {
       await updateMessage(
         channel,
         messageTs,
-        `:hourglass_flowing_sand: @${user} triggered the audit fix agent...`
+        `:hourglass_flowing_sand: ${mention} triggered the audit fix agent...`
       );
 
       const onProgress = async (message: string) => {
         await updateMessage(
           channel,
           messageTs,
-          `:hourglass_flowing_sand: @${user} — ${message}`
+          `:hourglass_flowing_sand: ${mention} — ${message}`
         );
       };
 
@@ -148,7 +153,7 @@ export async function POST(request: Request) {
             await updateMessage(
               channel,
               messageTs,
-              `:white_check_mark: @${user} — agent finished. Review posted above.`
+              `:white_check_mark: ${mention} — agent finished. Review posted above.`
             );
           })
           .catch(async (error: Error) => {
@@ -156,7 +161,7 @@ export async function POST(request: Request) {
             await updateMessage(
               channel,
               messageTs,
-              `:x: @${user} audit fix agent failed: ${error.message}`
+              `:x: ${mention} audit fix agent failed: ${error.message}`
             );
           })
       );
@@ -182,14 +187,14 @@ export async function POST(request: Request) {
         await updateMessage(
           channel,
           messageTs,
-          `:white_check_mark: @${user} opened <${pr.prUrl}|PR #${pr.prNumber}>`
+          `:white_check_mark: ${mention} opened <${pr.prUrl}|PR #${pr.prNumber}>`
         );
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         await updateMessage(
           channel,
           messageTs,
-          `:x: @${user} failed to open PR: ${msg}`
+          `:x: ${mention} failed to open PR: ${msg}`
         );
       }
       break;
@@ -199,7 +204,7 @@ export async function POST(request: Request) {
       await updateMessage(
         channel,
         messageTs,
-        `:heavy_minus_sign: @${user} dismissed the audit results`
+        `:heavy_minus_sign: ${mention} dismissed the audit results`
       );
       break;
     }
