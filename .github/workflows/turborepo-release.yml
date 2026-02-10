@@ -511,6 +511,30 @@ jobs:
           ref: ${{ needs.stage.outputs.stage-branch }}
           fetch-depth: 0
 
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
+
+      - name: Bump to next canary for stable releases
+        run: |
+          TAG=$(sed -n '2p' version.txt)
+
+          if [ "$TAG" = "latest" ]; then
+            VERSION="${{ needs.stage.outputs.version }}"
+            echo "Stable release detected (${VERSION}). Bumping to next prepatch canary..."
+            ./scripts/version.js prepatch
+            cat version.txt
+            git commit -anm "bump to next canary after ${VERSION}"
+            git push origin "${{ needs.stage.outputs.stage-branch }}"
+          else
+            echo "Pre-release ($TAG), skipping canary bump."
+          fi
+
       - name: Fetch main and tags
         run: git fetch origin main --tags
 
