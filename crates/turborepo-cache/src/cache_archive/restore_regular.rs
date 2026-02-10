@@ -1,9 +1,19 @@
-use std::{fs::OpenOptions, io, io::Read, path::Path};
+use std::{
+    fs::OpenOptions,
+    io::{self, BufWriter, Read},
+    path::Path,
+};
 
 use tar::Entry;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf};
 
 use crate::{CacheError, cache_archive::restore_directory::CachedDirTree};
+
+/// Size of the write buffer for restoring files from cache archives.
+/// 64KB provides a good balance between memory usage and reducing write
+/// syscalls. Without this buffer, each `io::copy` chunk (~8KB) triggers a
+/// direct syscall, which is the bottleneck for restoring many files.
+const RESTORE_WRITE_BUFFER_SIZE: usize = 64 * 1024;
 
 pub fn restore_regular(
     dir_cache: &mut CachedDirTree,
@@ -35,8 +45,9 @@ pub fn restore_regular(
         open_options.mode(header.mode()?);
     }
 
-    let mut file = open_options.open(resolved_path.as_path())?;
-    io::copy(entry, &mut file)?;
+    let file = open_options.open(resolved_path.as_path())?;
+    let mut writer = BufWriter::with_capacity(RESTORE_WRITE_BUFFER_SIZE, file);
+    io::copy(entry, &mut writer)?;
 
     Ok(processed_name)
 }

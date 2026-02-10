@@ -165,7 +165,7 @@ impl<'a> CacheWriter<'a> {
     }
 
     // Adds a user-cached item to the tar
-    pub(crate) fn add_file(
+    pub fn add_file(
         &mut self,
         anchor: &AbsoluteSystemPath,
         file_path: &AnchoredSystemPath,

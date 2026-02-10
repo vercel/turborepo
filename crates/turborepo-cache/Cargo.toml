@@ -12,6 +12,7 @@ rustls-tls = ["turborepo-api-client/rustls-tls"]
 
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
+codspeed-criterion-compat = { workspace = true }
 futures = { workspace = true }
 insta = { workspace = true }
 libc = "0.2.146"
@@ -20,6 +21,10 @@ tempfile = { workspace = true }
 test-case = { workspace = true }
 turborepo-vercel-api = { workspace = true }
 turborepo-vercel-api-mock = { workspace = true }
+
+[[bench]]
+name = "cache_archive"
+harness = false
 
 [lints]
 workspace = true

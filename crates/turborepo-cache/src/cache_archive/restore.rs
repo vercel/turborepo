@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, collections::HashMap, io::Read};
+use std::{backtrace::Backtrace, collections::HashMap, io, io::Read};
 
 use petgraph::graph::DiGraph;
 use sha2::{Digest, Sha512};
@@ -36,9 +36,13 @@ impl<'a> CacheReader<'a> {
         let is_compressed = path.extension() == Some("zst");
 
         let reader: Box<dyn Read> = if is_compressed {
+            // zstd::Decoder already uses internal buffering
             Box::new(zstd::Decoder::new(file)?)
         } else {
-            Box::new(file)
+            // For uncompressed archives, wrap in BufReader to avoid a syscall
+            // per tar header read. The tar crate reads small headers frequently,
+            // so buffering the underlying file reduces syscall overhead.
+            Box::new(io::BufReader::with_capacity(64 * 1024, file))
         };
 
         Ok(CacheReader { reader })
