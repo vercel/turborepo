@@ -1,10 +1,7 @@
-import { waitUntil } from "@vercel/functions";
-import { verifySlackRequest, updateMessage, postMessage } from "@/lib/slack";
-import { slackChannel } from "@/lib/env";
+import { verifySlackRequest, updateMessage } from "@/lib/slack";
 import { addComment } from "@/lib/github";
-import { runAuditFix, openFixPR, type AgentResults } from "@/lib/audit";
+import { openFixPR, type AgentResults } from "@/lib/audit";
 import { REPRODUCTION_REQUEST } from "@/lib/templates";
-import type { KnownBlock } from "@slack/web-api";
 
 interface SlackAction {
   type: string;
@@ -19,8 +16,6 @@ interface SlackActionPayload {
   channel: { id: string };
   message: { ts: string; text: string };
 }
-
-export const maxDuration = 300;
 
 export async function POST(request: Request) {
   const rawBody = await request.text();
@@ -40,11 +35,9 @@ export async function POST(request: Request) {
 
   const channel = payload.channel.id;
   const messageTs = payload.message.ts;
-  const userId = payload.user.id;
-  const mention = `<@${userId}>`;
+  const mention = `<@${payload.user.id}>`;
 
   switch (action.action_id) {
-    // Issue triage: user approves posting a reproduction request comment
     case "approve_repro_request": {
       const issueNumber = parseInt(action.value ?? "0", 10);
       if (!issueNumber) break;
@@ -71,104 +64,6 @@ export async function POST(request: Request) {
       break;
     }
 
-    // Audit flow step 1: user triggers the fix agent
-    case "audit_fix": {
-      await updateMessage(
-        channel,
-        messageTs,
-        `:hourglass_flowing_sand: ${mention} triggered the audit fix agent...`
-      );
-
-      const onProgress = async (message: string) => {
-        await updateMessage(
-          channel,
-          messageTs,
-          `:hourglass_flowing_sand: ${mention} — ${message}`
-        );
-      };
-
-      waitUntil(
-        runAuditFix(onProgress)
-          .then(async (result) => {
-            const { agentResults: r, branch, diff } = result;
-            const statusLine = [
-              `${r.vulnerabilitiesFixed} fixed, ${r.vulnerabilitiesRemaining} remaining`,
-              `tests: ${r.testsPass ? "passing" : "failing"}`,
-              `audits: ${r.auditsClean ? "clean" : "not clean"}`
-            ].join(" · ");
-
-            // Truncate diff for Slack (max ~3000 chars in a code block)
-            const diffPreview =
-              diff.length > 2500
-                ? diff.slice(0, 2500) + "\n... (truncated)"
-                : diff;
-
-            const blocks: KnownBlock[] = [
-              {
-                type: "section",
-                text: {
-                  type: "mrkdwn",
-                  text: `:white_check_mark: *Audit fix agent finished*\n${statusLine}`
-                }
-              },
-              {
-                type: "section",
-                text: {
-                  type: "mrkdwn",
-                  text: `*Summary:* ${r.summary}`
-                }
-              },
-              {
-                type: "section",
-                text: {
-                  type: "mrkdwn",
-                  text: `\`\`\`\n${diffPreview}\n\`\`\``
-                }
-              },
-              {
-                type: "actions",
-                elements: [
-                  {
-                    type: "button",
-                    text: { type: "plain_text", text: "Open PR" },
-                    style: "primary",
-                    action_id: "audit_open_pr",
-                    value: JSON.stringify({ branch, agentResults: r })
-                  },
-                  {
-                    type: "button",
-                    text: { type: "plain_text", text: "Dismiss" },
-                    action_id: "audit_dismiss"
-                  }
-                ]
-              }
-            ];
-
-            await postMessage(
-              slackChannel(),
-              `Audit fix ready for review (branch: ${branch})`,
-              blocks
-            );
-
-            await updateMessage(
-              channel,
-              messageTs,
-              `:white_check_mark: ${mention} — agent finished. Review posted above.`
-            );
-          })
-          .catch(async (error: Error) => {
-            console.error("Audit fix agent failed:", error);
-            await updateMessage(
-              channel,
-              messageTs,
-              `:x: ${mention} audit fix agent failed: ${error.message}`
-            );
-          })
-      );
-      break;
-    }
-
-    // Audit flow step 2: user approves opening the PR
     case "audit_open_pr": {
       let parsed: { branch: string; agentResults: AgentResults };
       try {
