@@ -23,7 +23,7 @@ export async function POST(request: Request) {
 
   const params = new URLSearchParams(rawBody);
   const payload = JSON.parse(
-    params.get("payload") ?? "{}"
+    params.get("payload") ?? "{}",
   ) as SlackActionPayload;
 
   if (payload.type !== "block_actions") {
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       await updateMessage(
         channel,
         messageTs,
-        `:white_check_mark: ${mention} posted reproduction request on <https://github.com/vercel/turborepo/issues/${issueNumber}|#${issueNumber}>`
+        `:white_check_mark: ${mention} posted reproduction request on <https://github.com/vercel/turborepo/issues/${issueNumber}|#${issueNumber}>`,
       );
       break;
     }
@@ -59,7 +59,7 @@ export async function POST(request: Request) {
       await updateMessage(
         channel,
         messageTs,
-        `:heavy_minus_sign: ${mention} dismissed${issueRef} — no reproduction request needed`
+        `:heavy_minus_sign: ${mention} dismissed${issueRef} — no reproduction request needed`,
       );
       break;
     }
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
         await updateMessage(
           channel,
           messageTs,
-          `:x: Failed to parse action data`
+          `:x: Failed to parse action data`,
         );
         break;
       }
@@ -82,14 +82,14 @@ export async function POST(request: Request) {
         await updateMessage(
           channel,
           messageTs,
-          `:white_check_mark: ${mention} opened <${pr.prUrl}|PR #${pr.prNumber}>`
+          `:white_check_mark: ${mention} opened <${pr.prUrl}|PR #${pr.prNumber}>`,
         );
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         await updateMessage(
           channel,
           messageTs,
-          `:x: ${mention} failed to open PR: ${msg}`
+          `:x: ${mention} failed to open PR: ${msg}`,
         );
       }
       break;
@@ -99,7 +99,7 @@ export async function POST(request: Request) {
       await updateMessage(
         channel,
         messageTs,
-        `:heavy_minus_sign: ${mention} dismissed the audit results`
+        `:heavy_minus_sign: ${mention} dismissed the audit results`,
       );
       break;
     }

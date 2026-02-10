@@ -254,6 +254,111 @@ export async function openFixPR(
   return { prUrl: pr.html_url, prNumber: pr.number };
 }
 
+// The full audit-and-fix pipeline: scan, run agent, post results to Slack.
+// Used by both the cron route and the UI server action.
+export async function runAuditAndFix(): Promise<void> {
+  const { slackChannel } = await import("./env");
+  const { postMessage, updateMessage } = await import("./slack");
+
+  let results: AuditResults;
+  try {
+    results = await runSecurityAudit();
+  } catch (error) {
+    console.error("Audit failed:", error);
+    await postMessage(
+      slackChannel(),
+      ":x: Security audit failed to run. Check the logs."
+    );
+    return;
+  }
+
+  const totalVulns = results.cargo.length + results.pnpm.length;
+
+  if (totalVulns === 0) {
+    await postMessage(
+      slackChannel(),
+      ":white_check_mark: Security audit passed. 0 vulnerabilities found in cargo and pnpm."
+    );
+    return;
+  }
+
+  const statusMsg = await postMessage(
+    slackChannel(),
+    `:hourglass_flowing_sand: Security audit found ${totalVulns} vulnerabilities. Fix agent is running...`
+  );
+
+  const channel = slackChannel();
+  const ts = statusMsg.ts as string;
+
+  const onProgress = async (message: string) => {
+    await updateMessage(channel, ts, `:hourglass_flowing_sand: ${message}`);
+  };
+
+  try {
+    const fixResult = await runAuditFix(onProgress);
+    const { agentResults: r, branch, diff } = fixResult;
+
+    const statusLine = [
+      `${r.vulnerabilitiesFixed} fixed, ${r.vulnerabilitiesRemaining} remaining`,
+      `tests: ${r.testsPass ? "passing" : "failing"}`,
+      `audits: ${r.auditsClean ? "clean" : "not clean"}`
+    ].join(" · ");
+
+    const diffPreview =
+      diff.length > 2500 ? diff.slice(0, 2500) + "\n... (truncated)" : diff;
+
+    await updateMessage(
+      channel,
+      ts,
+      `Audit fix ready for review (branch: ${branch})`,
+      [
+        {
+          type: "section" as const,
+          text: {
+            type: "mrkdwn" as const,
+            text: `:white_check_mark: *Audit fix agent finished*\n${statusLine}`
+          }
+        },
+        {
+          type: "section" as const,
+          text: {
+            type: "mrkdwn" as const,
+            text: `*Summary:* ${r.summary}`
+          }
+        },
+        {
+          type: "section" as const,
+          text: {
+            type: "mrkdwn" as const,
+            text: `\`\`\`\n${diffPreview}\n\`\`\``
+          }
+        },
+        {
+          type: "actions" as const,
+          elements: [
+            {
+              type: "button" as const,
+              text: { type: "plain_text" as const, text: "Open PR" },
+              style: "primary" as const,
+              action_id: "audit_open_pr",
+              value: JSON.stringify({ branch, agentResults: r })
+            },
+            {
+              type: "button" as const,
+              text: { type: "plain_text" as const, text: "Dismiss" },
+              action_id: "audit_dismiss"
+            }
+          ]
+        }
+      ]
+    );
+  } catch (error) {
+    console.error("Audit fix agent failed:", error);
+    const msg = error instanceof Error ? error.message : String(error);
+    await updateMessage(channel, ts, `:x: Audit fix agent failed: ${msg}`);
+  }
+}
+
 function parseCargoAudit(raw: string): AuditVulnerability[] {
   try {
     const data = JSON.parse(raw);
