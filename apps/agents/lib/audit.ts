@@ -282,16 +282,22 @@ export async function runAuditAndFix(): Promise<void> {
     return;
   }
 
+  const header = `:wrench: *Security audit: fixing ${totalVulns} vulnerabilities*`;
+
   const statusMsg = await postMessage(
     slackChannel(),
-    `:hourglass_flowing_sand: Security audit found ${totalVulns} vulnerabilities. Fix agent is running...`
+    `${header}\n:hourglass_flowing_sand: Starting fix agent...`
   );
 
   const channel = slackChannel();
   const ts = statusMsg.ts as string;
 
   const onProgress = async (message: string) => {
-    await updateMessage(channel, ts, `:hourglass_flowing_sand: ${message}`);
+    await updateMessage(
+      channel,
+      ts,
+      `${header}\n:hourglass_flowing_sand: ${message}`
+    );
   };
 
   try {
