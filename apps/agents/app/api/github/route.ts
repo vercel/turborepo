@@ -56,10 +56,6 @@ async function triageNewIssue(payload: GitHubIssuePayload) {
 
   if (!classification.needsReproduction) return;
 
-  const bodyPreview = issue.body
-    ? issue.body.slice(0, 300) + (issue.body.length > 300 ? "..." : "")
-    : "_No description provided_";
-
   const blocks: KnownBlock[] = [
     {
       type: "section",
