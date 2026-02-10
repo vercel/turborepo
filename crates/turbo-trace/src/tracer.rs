@@ -3,10 +3,6 @@ use std::{collections::HashMap, fmt, sync::Arc};
 use camino::{Utf8Path, Utf8PathBuf};
 use globwalk::WalkType;
 use miette::{Diagnostic, Report, SourceSpan};
-use oxc_resolver::{
-    EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigDiscovery, TsconfigOptions,
-    TsconfigReferences,
-};
 use swc_common::{
     FileName, SourceMap,
     comments::SingleThreadedComments,
@@ -20,6 +16,9 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
+use unrs_resolver::{
+    EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
+};
 
 use crate::import_finder::ImportFinder;
 
@@ -335,13 +334,13 @@ impl Tracer {
         if tsconfig_dir.is_some() || node_modules_dir.is_some() {
             let mut options = existing_resolver.options().clone();
             if let Some(tsconfig_dir) = tsconfig_dir {
-                options.tsconfig = Some(TsconfigDiscovery::Manual(TsconfigOptions {
+                options.tsconfig = Some(TsconfigOptions {
                     config_file: tsconfig_dir
                         .join_component("tsconfig.json")
                         .as_std_path()
                         .into(),
                     references: TsconfigReferences::Auto,
-                }));
+                });
             }
 
             if let Some(node_modules_dir) = node_modules_dir {
@@ -370,14 +369,14 @@ impl Tracer {
             .with_main_field("module")
             .with_main_field("types")
             // Condition names are used to determine which export to use when importing a module.
-            // We add a bunch so oxc_resolver can resolve all kinds of imports.
+            // We add a bunch so unrs_resolver can resolve all kinds of imports.
             .with_condition_names(&["import", "require", "node", "types", "default"]);
 
         if let Some(ts_config) = ts_config {
-            options.tsconfig = Some(TsconfigDiscovery::Manual(TsconfigOptions {
+            options.tsconfig = Some(TsconfigOptions {
                 config_file: ts_config.as_std_path().into(),
                 references: TsconfigReferences::Auto,
-            }));
+            });
         }
 
         Resolver::new(options)

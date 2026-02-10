@@ -6,7 +6,6 @@ use std::{
 use camino::Utf8Path;
 use itertools::Itertools;
 use miette::{NamedSource, SourceSpan};
-use oxc_resolver::{ResolveError, Resolver};
 use swc_common::{SourceFile, Span, comments::SingleThreadedComments};
 use turbo_trace::ImportType;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
@@ -15,6 +14,7 @@ use turborepo_repository::{
     package_graph::{PackageName, PackageNode},
     package_json::PackageJson,
 };
+use unrs_resolver::{ResolveError, Resolver};
 
 use crate::{BoundariesChecker, BoundariesDiagnostic, BoundariesResult, Error};
 
@@ -32,7 +32,7 @@ pub struct DependencyLocations<'a> {
 
 impl<'a> DependencyLocations<'a> {
     /// Go through all the possible places a package could be declared to see if
-    /// it's a valid import. We don't use `oxc_resolver` because there are some
+    /// it's a valid import. We don't use `unrs_resolver` because there are some
     /// cases where you can resolve a package that isn't declared properly.
     fn is_dependency(&self, package_name: &PackageNode) -> bool {
         // The containing package's name. We allow a package to import itself per

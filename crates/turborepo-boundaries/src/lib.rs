@@ -19,7 +19,6 @@ use git2::Repository;
 use globwalk::Settings;
 use indicatif::{ProgressBar, ProgressIterator};
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
-use oxc_resolver::Resolver;
 use regex::Regex;
 use swc_common::{
     FileName, SourceMap, Span,
@@ -38,6 +37,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName, PackageNode};
 use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, color};
+use unrs_resolver::Resolver;
 
 use crate::imports::DependencyLocations;
 
