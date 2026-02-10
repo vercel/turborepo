@@ -35,9 +35,15 @@ function shell(cmd, { cwd = REPO_DIR, allowFailure = false } = {}) {
 const agent = new ToolLoopAgent({
   model: "anthropic/claude-opus-4-6",
   stopWhen: stepCountIs(MAX_STEPS),
+  toolChoice: "required",
   instructions: `You are a senior engineer fixing security vulnerabilities in the Turborepo monorepo.
 
 The repo is already cloned at ${REPO_DIR}. Rust, cargo-audit, pnpm, and node are installed.
+
+CRITICAL RULES:
+- You MUST use tools for EVERY step. Never generate plain text — it terminates the loop.
+- If you need to think or reason, use the "think" tool.
+- When you are completely done, you MUST call "reportResults" as your final action.
 
 Your job:
 1. Run security audits (cargo audit, pnpm audit) to identify vulnerabilities.
@@ -50,17 +56,29 @@ Your job:
 5. Re-run audits to verify the vulnerabilities are resolved.
 6. Repeat until clean or you've exhausted your options.
 
-When you are done, use the reportResults tool to write the final summary. This is mandatory.
-
 Important:
 - The repo is a monorepo with Rust crates in crates/ and JS/TS packages in packages/ and apps/.
 - Cargo.toml workspace is at the root. Individual crates have their own Cargo.toml.
 - pnpm-workspace.yaml defines the JS workspace.
 - Be conservative. Don't bump major versions unless the audit specifically requires it.
 - If a vulnerability cannot be auto-fixed, note it in your report rather than making risky changes.
-- Always explain what you changed and why.`,
+- Always explain what you changed and why in the reportResults summary.`,
 
   tools: {
+    think: tool({
+      description:
+        "Use this tool to reason, plan, or think through a problem. This keeps the agent loop running. Use it instead of generating plain text.",
+      inputSchema: zodSchema(
+        z.object({
+          thought: z.string().describe("Your reasoning or plan")
+        })
+      ),
+      execute: async ({ thought }) => {
+        console.log(`[think] ${thought}`);
+        return "Continue.";
+      }
+    }),
+
     runCommand: tool({
       description:
         "Run a shell command in the repo directory. Use for audits, builds, tests, git operations, etc.",
