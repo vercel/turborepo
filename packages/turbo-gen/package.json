@@ -2,7 +2,7 @@
   "name": "@turbo/gen",
   "version": "2.8.3-canary.15",
   "description": "Extend a Turborepo",
-  "type": "commonjs",
+  "type": "module",
   "homepage": "https://turborepo.dev",
   "license": "MIT",
   "repository": {
@@ -17,9 +17,9 @@
   "types": "dist/types.d.ts",
   "scripts": {
     "build": "tsdown",
-    "test": "jest",
+    "test": "node --import tsx/esm --test __tests__/raw.test.ts",
     "check-types": "tsc --noEmit",
-    "package:types": "attw --profile node16 --pack"
+    "package:types": "attw --profile esm-only --pack"
   },
   "dependencies": {
     "@turbo/workspaces": "workspace:*",
@@ -27,25 +27,22 @@
     "fs-extra": "10.1.0",
     "@inquirer/prompts": "^7.10.1",
     "minimatch": "9.0.0",
-    "node-plop": "0.26.3",
+    "esbuild": "0.27.2",
+    "node-plop": "0.32.3",
     "picocolors": "1.0.1",
     "proxy-agent": "6.5.0",
-    "tsx": "4.21.0",
     "update-check": "1.5.4",
     "validate-npm-package-name": "5.0.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
-    "@jest/globals": "30.2.0",
     "@turbo/test-utils": "workspace:*",
+    "tsx": "4.21.0",
     "@turbo/tsconfig": "workspace:*",
     "@turbo/utils": "workspace:*",
     "@types/fs-extra": "9.0.13",
     "@types/node": "18.17.4",
     "@types/validate-npm-package-name": "4.0.0",
-    "jest": "30.2.0",
-    "ts-jest": "29.4.6",
-    "ts-node": "10.9.2",
     "tsdown": "0.9.3",
     "typescript": "5.5.4"
   },
