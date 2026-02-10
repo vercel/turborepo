@@ -144,18 +144,19 @@ export async function runAuditFix(
     ]);
 
     await onProgress?.("Running audit fix agent...");
-    const agentResult = await sandbox.runCommand({
-      cmd: "node",
-      args: ["audit-fix-agent.mjs"],
-      env: { AI_GATEWAY_API_KEY: aiGatewayKey },
-      stdout: process.stdout,
-      stderr: process.stderr
-    });
+    const agentResult = await sandbox.runCommand("bash", [
+      "-c",
+      `AI_GATEWAY_API_KEY=${aiGatewayKey} node audit-fix-agent.mjs`
+    ]);
+
+    const agentStdout = await agentResult.stdout();
+    const agentStderr = await agentResult.stderr();
 
     if (agentResult.exitCode !== 0) {
-      const stderr = await agentResult.stderr();
+      console.error("Agent stdout:", agentStdout.slice(-2000));
+      console.error("Agent stderr:", agentStderr.slice(-2000));
       throw new Error(
-        `Agent exited with code ${agentResult.exitCode}: ${stderr.slice(0, 500)}`
+        `Agent exited with code ${agentResult.exitCode}: ${agentStderr.slice(0, 500)}`
       );
     }
 
@@ -282,16 +283,22 @@ export async function runAuditAndFix(): Promise<void> {
     return;
   }
 
+  const header = `:wrench: *Security audit: fixing ${totalVulns} vulnerabilities*`;
+
   const statusMsg = await postMessage(
     slackChannel(),
-    `:hourglass_flowing_sand: Security audit found ${totalVulns} vulnerabilities. Fix agent is running...`
+    `${header}\n:hourglass_flowing_sand: Starting fix agent...`
   );
 
   const channel = slackChannel();
   const ts = statusMsg.ts as string;
 
   const onProgress = async (message: string) => {
-    await updateMessage(channel, ts, `:hourglass_flowing_sand: ${message}`);
+    await updateMessage(
+      channel,
+      ts,
+      `${header}\n:hourglass_flowing_sand: ${message}`
+    );
   };
 
   try {
