@@ -1,8 +1,11 @@
 import path from "node:path";
+import nodeFs from "node:fs";
+import os from "node:os";
+import { transformSync } from "esbuild";
 import fs from "fs-extra";
 import type { Project } from "@turbo/workspaces";
-import type { NodePlopAPI, PlopGenerator } from "node-plop";
 import nodePlop from "node-plop";
+import type { NodePlopAPI, PlopGenerator } from "node-plop";
 import { Separator } from "@inquirer/prompts";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
 import { GeneratorError } from "./error";
@@ -26,19 +29,62 @@ export type Generator = PlopGenerator & {
   name: string;
 };
 
-export function getPlop({
+// Tracks compiled temp files so we can clean them up
+const compiledConfigs: Array<string> = [];
+
+// node-plop 0.32+ loads configs via dynamic import(). In projects with
+// "type": "commonjs" (or no type field), Node.js treats .ts files as CJS,
+// which breaks ESM syntax like `export default`. To handle all project
+// configurations, we precompile .ts configs to .mjs temp files that Node.js
+// always loads as ESM regardless of the nearest package.json "type" field.
+function resolveConfig(configPath: string): string {
+  if (!configPath.endsWith(".ts")) {
+    return configPath;
+  }
+
+  try {
+    const source = nodeFs.readFileSync(configPath, "utf-8");
+    const { code } = transformSync(source, {
+      loader: "ts",
+      format: "esm",
+      target: "node18",
+      sourcefile: configPath
+    });
+
+    const tmpDir = path.join(os.tmpdir(), "turbo-gen");
+    nodeFs.mkdirSync(tmpDir, { recursive: true });
+
+    const hash = configPath.replace(/[^a-zA-Z0-9]/g, "_");
+    const compiledPath = path.join(tmpDir, `${hash}.mjs`);
+    nodeFs.writeFileSync(compiledPath, code);
+    compiledConfigs.push(compiledPath);
+
+    return compiledPath;
+  } catch {
+    // If compilation fails, return the original path and let node-plop
+    // attempt to load it directly (may work in ESM projects)
+    return configPath;
+  }
+}
+
+function cleanupCompiledConfigs(): void {
+  for (const f of compiledConfigs) {
+    try {
+      nodeFs.unlinkSync(f);
+    } catch {
+      // ignore cleanup errors
+    }
+  }
+  compiledConfigs.length = 0;
+}
+
+export async function getPlop({
   project,
   configPath
 }: {
   project: Project;
   configPath?: string;
-}): NodePlopAPI | undefined {
-  // Register tsx to support TypeScript plop configs
-  // Lazy require to avoid breaking jest's module system
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const tsx = require("tsx/cjs/api") as { register: () => () => void };
-  tsx.register();
-
+}): Promise<NodePlopAPI | undefined> {
   // fetch all the workspace generator configs
   const workspaceConfigs = getWorkspaceGeneratorConfigs({ project });
   let plop: NodePlopAPI | undefined;
@@ -51,7 +97,7 @@ export function getPlop({
     }
 
     try {
-      plop = nodePlop(configPath, {
+      plop = await nodePlop(resolveConfig(configPath), {
         destBasePath: configPath,
         force: false
       });
@@ -67,7 +113,7 @@ export function getPlop({
       }
 
       try {
-        plop = nodePlop(plopFile, {
+        plop = await nodePlop(resolveConfig(plopFile), {
           destBasePath: project.paths.root,
           force: false
         });
@@ -79,7 +125,7 @@ export function getPlop({
 
     if (!plop && workspaceConfigs.length > 0) {
       // if no root config, use the first workspace config as the entrypoint
-      plop = nodePlop(workspaceConfigs[0].config, {
+      plop = await nodePlop(resolveConfig(workspaceConfigs[0].config), {
         destBasePath: workspaceConfigs[0].root,
         force: false
       });
@@ -89,29 +135,30 @@ export function getPlop({
 
   if (plop) {
     // add in all the workspace configs
-    workspaceConfigs.forEach((c) => {
+    for (const c of workspaceConfigs) {
       try {
-        plop.load(c.config, {
+        await plop.load(resolveConfig(c.config), {
           destBasePath: c.root,
           force: false
         });
       } catch (e) {
         logger.error(e);
       }
-    });
+    }
   }
 
+  cleanupCompiledConfigs();
   return plop;
 }
 
-export function getCustomGenerators({
+export async function getCustomGenerators({
   project,
   configPath
 }: {
   project: Project;
   configPath?: string;
-}): Array<Generator | Separator> {
-  const plop = getPlop({ project, configPath });
+}): Promise<Array<Generator | Separator>> {
+  const plop = await getPlop({ project, configPath });
 
   if (!plop) {
     return [];
@@ -161,7 +208,7 @@ export function getCustomGenerators({
   return gensWithSeparators;
 }
 
-export function getCustomGenerator({
+export async function getCustomGenerator({
   project,
   generator,
   configPath
@@ -169,8 +216,8 @@ export function getCustomGenerator({
   project: Project;
   generator: string;
   configPath?: string;
-}): string | undefined {
-  const plop = getPlop({ project, configPath });
+}): Promise<string | undefined> {
+  const plop = await getPlop({ project, configPath });
   if (!plop) {
     return undefined;
   }
@@ -244,7 +291,7 @@ export async function runCustomGenerator({
   bypassArgs?: Array<string>;
   configPath?: string;
 }): Promise<void> {
-  const plop = getPlop({ project, configPath });
+  const plop = await getPlop({ project, configPath });
   if (!plop) {
     throw new GeneratorError("Unable to load generators", {
       type: "plop_unable_to_load_config"

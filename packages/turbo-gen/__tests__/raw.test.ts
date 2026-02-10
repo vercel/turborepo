@@ -1,173 +1,137 @@
-import { describe, it, mock } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { parseWorkspaceArgs, parseRunArgs } from "../src/commands/raw/index.js";
 
-interface TestCase {
-  command: string;
-  options: Record<string, unknown>;
-  target: "run" | "workspace";
-  calledWith: Record<string, unknown>;
-}
+describe("parseRunArgs", () => {
+  it("parses basic run options", () => {
+    const result = parseRunArgs(
+      JSON.stringify({ config: "../config.ts", root: "../" })
+    );
+    assert.equal(result.generatorName, undefined);
+    assert.deepEqual(result.rest, { config: "../config.ts", root: "../" });
+  });
 
-const testMatrix: Array<TestCase> = [
-  {
-    command: "run",
-    options: { config: "../config.ts", root: "../" },
-    target: "run",
-    calledWith: { config: "../config.ts", root: "../" }
-  },
-  {
-    command: "run",
-    options: {
-      generator_name: "thisOne",
-      config: "../config.ts",
-      root: "../"
-    },
-    target: "run",
-    calledWith: { config: "../config.ts", root: "../" }
-  },
-  {
-    command: "run",
-    options: {
-      generator_name: "thisOne",
+  it("extracts generator_name and camelCases it", () => {
+    const result = parseRunArgs(
+      JSON.stringify({
+        generator_name: "thisOne",
+        config: "../config.ts",
+        root: "../"
+      })
+    );
+    assert.equal(result.generatorName, "thisOne");
+    assert.deepEqual(result.rest, { config: "../config.ts", root: "../" });
+  });
+
+  it("passes through args array", () => {
+    const result = parseRunArgs(
+      JSON.stringify({
+        generator_name: "thisOne",
+        config: "../config.ts",
+        root: "../",
+        args: ["cool name", "packages/cool-name"]
+      })
+    );
+    assert.equal(result.generatorName, "thisOne");
+    assert.deepEqual(result.rest, {
       config: "../config.ts",
       root: "../",
       args: ["cool name", "packages/cool-name"]
-    },
-    target: "run",
-    calledWith: {
-      config: "../config.ts",
-      root: "../",
-      args: ["cool name", "packages/cool-name"]
-    }
-  },
-  {
-    command: "workspace",
-    options: {},
-    target: "workspace",
-    calledWith: {
+    });
+  });
+});
+
+describe("parseWorkspaceArgs", () => {
+  it("defaults to empty workspace", () => {
+    const result = parseWorkspaceArgs(JSON.stringify({}));
+    assert.deepEqual(result, {
       empty: true,
       copy: false,
       showAllDependencies: false
-    }
-  },
-  {
-    command: "workspace",
-    options: { copy: "" },
-    target: "workspace",
-    calledWith: {
+    });
+  });
+
+  it("empty string copy sets copy=true, empty=false", () => {
+    const result = parseWorkspaceArgs(JSON.stringify({ copy: "" }));
+    assert.deepEqual(result, {
       empty: false,
       copy: true,
       showAllDependencies: false
-    }
-  },
-  {
-    command: "workspace",
-    options: {
-      copy: "some-workspace",
-      show_all_dependencies: false
-    },
-    target: "workspace",
-    calledWith: {
+    });
+  });
+
+  it("string copy value passes through", () => {
+    const result = parseWorkspaceArgs(
+      JSON.stringify({ copy: "some-workspace", show_all_dependencies: false })
+    );
+    assert.deepEqual(result, {
       copy: "some-workspace",
       empty: false,
       showAllDependencies: false
-    }
-  },
-  {
-    command: "workspace",
-    options: {
-      type: "package",
-      name: "cool-name",
-      copy: true,
-      show_all_dependencies: true
-    },
-    target: "workspace",
-    calledWith: {
+    });
+  });
+
+  it("boolean copy=true with other options", () => {
+    const result = parseWorkspaceArgs(
+      JSON.stringify({
+        type: "package",
+        name: "cool-name",
+        copy: true,
+        show_all_dependencies: true
+      })
+    );
+    assert.deepEqual(result, {
       type: "package",
       name: "cool-name",
       copy: true,
       empty: false,
       showAllDependencies: true
-    }
-  },
-  {
-    command: "workspace",
-    options: {
-      type: "package",
-      name: "cool-name",
-      empty: true,
-      copy: "tailwind-css",
-      destination: "../../",
-      show_all_dependencies: true,
-      example_path: "packages/cool-name"
-    },
-    target: "workspace",
-    calledWith: {
-      type: "package",
-      name: "cool-name",
-      empty: false,
-      copy: "tailwind-css",
-      destination: "../../",
-      showAllDependencies: true,
-      examplePath: "packages/cool-name"
-    }
-  },
-  {
-    command: "workspace",
-    options: {
-      type: "package",
-      name: "cool-name",
-      empty: true,
-      copy: "tailwind-css",
-      destination: "../../",
-      "show-all-dependencies": true,
-      "example-path": "packages/cool-name"
-    },
-    target: "workspace",
-    calledWith: {
-      type: "package",
-      name: "cool-name",
-      empty: false,
-      copy: "tailwind-css",
-      destination: "../../",
-      showAllDependencies: true,
-      examplePath: "packages/cool-name"
-    }
-  }
-];
-
-const mockRun = mock.fn(async () => {});
-const mockWorkspace = mock.fn(async () => {});
-
-// @ts-expect-error -- mock.module exists in Node 22+ but @types/node@18 doesn't include it
-mock.module("../src/commands/run/index.js", { namedExports: { run: mockRun } });
-// @ts-expect-error -- mock.module exists in Node 22+ but @types/node@18 doesn't include it
-mock.module("../src/commands/workspace/index.js", {
-  namedExports: { workspace: mockWorkspace }
-});
-
-const { raw } = await import("../src/commands/raw/index.js");
-
-describe("raw", () => {
-  for (const { command, options, target, calledWith } of testMatrix) {
-    it(`${command} with ${JSON.stringify(options)} calls ${target}`, async () => {
-      mockRun.mock.resetCalls();
-      mockWorkspace.mock.resetCalls();
-
-      await raw(command, { json: JSON.stringify(options) });
-
-      if (target === "run") {
-        assert.equal(mockRun.mock.callCount(), 1);
-        const runArgs = mockRun.mock.calls[0].arguments as unknown[];
-        assert.deepEqual(runArgs[0], options.generator_name);
-        assert.deepEqual(runArgs[1], calledWith);
-        assert.equal(mockWorkspace.mock.callCount(), 0);
-      } else {
-        assert.equal(mockWorkspace.mock.callCount(), 1);
-        const wsArgs = mockWorkspace.mock.calls[0].arguments as unknown[];
-        assert.deepEqual(wsArgs[0], calledWith);
-        assert.equal(mockRun.mock.callCount(), 0);
-      }
     });
-  }
+  });
+
+  it("copy overrides empty when both provided", () => {
+    const result = parseWorkspaceArgs(
+      JSON.stringify({
+        type: "package",
+        name: "cool-name",
+        empty: true,
+        copy: "tailwind-css",
+        destination: "../../",
+        show_all_dependencies: true,
+        example_path: "packages/cool-name"
+      })
+    );
+    assert.deepEqual(result, {
+      type: "package",
+      name: "cool-name",
+      empty: false,
+      copy: "tailwind-css",
+      destination: "../../",
+      showAllDependencies: true,
+      examplePath: "packages/cool-name"
+    });
+  });
+
+  it("handles kebab-case keys", () => {
+    const result = parseWorkspaceArgs(
+      JSON.stringify({
+        type: "package",
+        name: "cool-name",
+        empty: true,
+        copy: "tailwind-css",
+        destination: "../../",
+        "show-all-dependencies": true,
+        "example-path": "packages/cool-name"
+      })
+    );
+    assert.deepEqual(result, {
+      type: "package",
+      name: "cool-name",
+      empty: false,
+      copy: "tailwind-css",
+      destination: "../../",
+      showAllDependencies: true,
+      examplePath: "packages/cool-name"
+    });
+  });
 });
