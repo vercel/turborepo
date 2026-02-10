@@ -17,7 +17,7 @@ export async function GET(
   return new Response(await getLLMText(page), {
     headers: {
       "Content-Type": "text/markdown",
-      "Vary": "Accept"
+      Vary: "Accept"
     }
   });
 }
