@@ -7,7 +7,7 @@
       "dependsOn": ["^topo"]
     },
     "test": {
-      "dependsOn": ["cli#build", "topo", "^build"],
+      "dependsOn": ["@turbo/cli#build", "topo", "^build"],
       "passThroughEnv": ["CI", "!GITHUB_*", "!RUNNER_*"]
     }
   }
