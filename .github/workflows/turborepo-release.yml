@@ -113,18 +113,19 @@ jobs:
     outputs:
       should_skip: ${{ steps.check.outputs.should_skip }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Check if should skip
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Find the commit that last updated version.txt (the release PR merge).
           # If no relevant files changed since then, there's nothing new to release.
-          LAST_VERSION_COMMIT=$(git log -1 --format='%H' -- version.txt)
-          CHANGES=$(git diff --name-only "$LAST_VERSION_COMMIT"..HEAD -- crates/ packages/ cli/)
-          if [ -z "$CHANGES" ]; then
+          # Uses the GitHub API instead of a full clone to avoid fetching entire repo history.
+          LAST_VERSION_COMMIT=$(gh api "repos/${{ github.repository }}/commits?path=version.txt&per_page=1" --jq '.[0].sha')
+          CHANGES=$(gh api "repos/${{ github.repository }}/compare/${LAST_VERSION_COMMIT}...${{ github.sha }}" \
+            --jq '[.files[].filename | select(startswith("crates/") or startswith("packages/") or startswith("cli/"))] | length')
+
+          if [ "$CHANGES" = "0" ]; then
             echo "Skipping: No relevant changes since last release (${LAST_VERSION_COMMIT:0:12})"
             echo "should_skip=true" >> $GITHUB_OUTPUT
           else
@@ -145,7 +146,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha || github.sha }}
-          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch origin --tags
 
       - uses: ./.github/actions/setup-node
         with:
@@ -407,7 +410,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-          fetch-depth: 0
 
       - name: Configure git
         run: |
@@ -509,7 +511,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-          fetch-depth: 0
 
       - uses: ./.github/actions/setup-node
         with:
@@ -535,10 +536,9 @@ jobs:
             echo "Pre-release ($TAG), skipping canary bump."
           fi
 
-      - name: Fetch main and tags
-        run: git fetch origin main --tags
-
       - name: Build PR body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.stage.outputs.version }}"
           PREVIOUS_TAG="${{ needs.stage.outputs.previous-tag }}"
@@ -556,11 +556,12 @@ jobs:
           fi
           echo "" >> pr-body.md
 
-          # Changelog
+          # Changelog (via GitHub API to avoid needing full git history)
           echo "### Changes" >> pr-body.md
           echo "" >> pr-body.md
           if [ -n "$PREVIOUS_TAG" ]; then
-            git log ${PREVIOUS_TAG}..origin/main --pretty=format:"- %s (\`%h\`)" >> pr-body.md
+            gh api "repos/${{ github.repository }}/compare/${PREVIOUS_TAG}...main" \
+              --jq '.commits[] | "- \(.commit.message | split("\n") | .[0]) (`\(.sha[:7])`)"' >> pr-body.md
           else
             echo "First release - no previous tag." >> pr-body.md
           fi
