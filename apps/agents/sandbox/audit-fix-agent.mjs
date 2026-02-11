@@ -55,8 +55,8 @@ const agent = new ToolLoopAgent({
     "",
     "The repo is cloned at " +
       REPO_DIR +
-      ". Tools available: cargo-audit (at /usr/local/bin/cargo-audit), pnpm, node.",
-    "Rust toolchain is NOT installed — do not try to install it or run cargo build/check/test.",
+      ". Tools available: cargo-audit, cargo, rustc, pnpm, node.",
+    "Rust is installed via dnf. cargo-audit is at ~/.cargo/bin/cargo-audit. You can use cargo check/build if needed.",
     "",
     "RULES:",
     '- ALWAYS use tools. Plain text terminates the loop. Use "think" to reason.',

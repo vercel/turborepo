@@ -25,13 +25,13 @@ async function main() {
   console.log(`Sandbox created: ${sandbox.sandboxId}`);
 
   try {
-    const CARGO_AUDIT_VERSION = "0.22.1";
-    const CARGO_AUDIT_DIR = `cargo-audit-x86_64-unknown-linux-gnu-v${CARGO_AUDIT_VERSION}`;
-    console.log("Installing cargo-audit (pre-built binary)...");
-    await sandbox.runCommand("bash", [
-      "-c",
-      `curl -sL "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/${CARGO_AUDIT_DIR}.tgz" | tar xz -C /tmp && mv /tmp/${CARGO_AUDIT_DIR}/cargo-audit /usr/local/bin/cargo-audit && chmod +x /usr/local/bin/cargo-audit`,
-    ]);
+    console.log("Installing Rust and cargo-audit...");
+    await sandbox.runCommand({
+      cmd: "dnf",
+      args: ["install", "-y", "rust", "cargo", "gcc", "openssl-devel"],
+      sudo: true,
+    });
+    await sandbox.runCommand("cargo", ["install", "cargo-audit"]);
 
     console.log("Installing pnpm...");
     await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);

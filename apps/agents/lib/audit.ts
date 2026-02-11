@@ -8,14 +8,14 @@ const REPO_URL = "https://github.com/vercel/turborepo.git";
 const AGENT_SCRIPT_PATH = resolve(process.cwd(), "sandbox/audit-fix-agent.mjs");
 const RESULTS_PATH = "/vercel/sandbox/results.json";
 
-const CARGO_AUDIT_VERSION = "0.22.1";
-const CARGO_AUDIT_DIR = `cargo-audit-x86_64-unknown-linux-gnu-v${CARGO_AUDIT_VERSION}`;
-const INSTALL_CARGO_AUDIT = [
-  `curl -sL "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/${CARGO_AUDIT_DIR}.tgz"`,
-  `| tar xz -C /tmp`,
-  `&& mv /tmp/${CARGO_AUDIT_DIR}/cargo-audit /usr/local/bin/cargo-audit`,
-  `&& chmod +x /usr/local/bin/cargo-audit`,
-].join(" ");
+async function installCargoAudit(sandbox: InstanceType<typeof Sandbox>) {
+  await sandbox.runCommand({
+    cmd: "dnf",
+    args: ["install", "-y", "rust", "cargo", "gcc", "openssl-devel"],
+    sudo: true,
+  });
+  await sandbox.runCommand("cargo", ["install", "cargo-audit"]);
+}
 
 interface AuditVulnerability {
   name: string;
@@ -58,14 +58,14 @@ export async function runSecurityAudit(): Promise<AuditResults> {
   const sandbox = await Sandbox.create({ runtime: "node22" });
 
   try {
-    await sandbox.runCommand("bash", ["-c", INSTALL_CARGO_AUDIT]);
+    await installCargoAudit(sandbox);
     await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
     await sandbox.runCommand("git", [
       "clone",
       "--depth",
       "1",
       REPO_URL,
-      "turborepo"
+      "turborepo",
     ]);
 
     const cargoResult = await sandbox.runCommand("bash", [
@@ -111,7 +111,7 @@ export async function runAuditFix(
 
   try {
     await onProgress?.("Installing tooling...");
-    await sandbox.runCommand("bash", ["-c", INSTALL_CARGO_AUDIT]);
+    await installCargoAudit(sandbox);
     await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
 
     await onProgress?.("Cloning repository...");
