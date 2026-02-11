@@ -23,7 +23,7 @@ function parseDiffLines(diff: string) {
 }
 
 export default async function ViewDiffPage({
-  searchParams,
+  searchParams
 }: {
   searchParams: Promise<{ url?: string }>;
 }) {
@@ -55,8 +55,8 @@ export default async function ViewDiffPage({
         <div>
           <h1 className="text-xl font-bold">{filename}</h1>
           <p className="text-xs text-neutral-500">
-            {(diff.length / 1024).toFixed(1)} KB ·{" "}
-            {diff.split("\n").length} lines
+            {(diff.length / 1024).toFixed(1)} KB · {diff.split("\n").length}{" "}
+            lines
           </p>
         </div>
         <div className="flex gap-3">

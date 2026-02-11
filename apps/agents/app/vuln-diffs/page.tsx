@@ -23,7 +23,7 @@ export default async function DiffsPage() {
             .sort(
               (a, b) =>
                 new Date(b.uploadedAt).getTime() -
-                new Date(a.uploadedAt).getTime(),
+                new Date(a.uploadedAt).getTime()
             )
             .map((blob) => {
               const name = blob.pathname.replace("diffs/", "");

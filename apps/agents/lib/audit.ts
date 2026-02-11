@@ -12,7 +12,7 @@ async function installCargoAudit(sandbox: InstanceType<typeof Sandbox>) {
   await sandbox.runCommand({
     cmd: "dnf",
     args: ["install", "-y", "rust", "cargo", "gcc", "openssl-devel"],
-    sudo: true,
+    sudo: true
   });
   await sandbox.runCommand("cargo", ["install", "cargo-audit"]);
 }
@@ -65,7 +65,7 @@ export async function runSecurityAudit(): Promise<AuditResults> {
       "--depth",
       "1",
       REPO_URL,
-      "turborepo",
+      "turborepo"
     ]);
 
     const cargoResult = await sandbox.runCommand("bash", [
@@ -314,7 +314,7 @@ export async function runAuditAndFix(): Promise<void> {
     const statusLine = [
       `${r.vulnerabilitiesFixed} fixed, ${r.vulnerabilitiesRemaining} remaining`,
       `tests: ${r.testsPass ? "passing" : "failing"}`,
-      `audits: ${r.auditsClean ? "clean" : "not clean"}`,
+      `audits: ${r.auditsClean ? "clean" : "not clean"}`
     ].join(" · ");
 
     await updateMessage(
@@ -326,22 +326,22 @@ export async function runAuditAndFix(): Promise<void> {
           type: "section" as const,
           text: {
             type: "mrkdwn" as const,
-            text: `:white_check_mark: *Audit fix agent finished*\n${statusLine}`,
-          },
+            text: `:white_check_mark: *Audit fix agent finished*\n${statusLine}`
+          }
         },
         {
           type: "section" as const,
           text: {
             type: "mrkdwn" as const,
-            text: `*Summary:* ${r.summary}`,
-          },
+            text: `*Summary:* ${r.summary}`
+          }
         },
         {
           type: "section" as const,
           text: {
             type: "mrkdwn" as const,
-            text: `<${viewUrl}|View diff> · <${diffUrl}|Download .patch>`,
-          },
+            text: `<${viewUrl}|View diff> · <${diffUrl}|Download .patch>`
+          }
         },
         {
           type: "actions" as const,
@@ -351,16 +351,16 @@ export async function runAuditAndFix(): Promise<void> {
               text: { type: "plain_text" as const, text: "Open PR" },
               style: "primary" as const,
               action_id: "audit_open_pr",
-              value: JSON.stringify({ branch, agentResults: r }),
+              value: JSON.stringify({ branch, agentResults: r })
             },
             {
               type: "button" as const,
               text: { type: "plain_text" as const, text: "Dismiss" },
-              action_id: "audit_dismiss",
-            },
-          ],
-        },
-      ],
+              action_id: "audit_dismiss"
+            }
+          ]
+        }
+      ]
     );
   } catch (error) {
     console.error("Audit fix agent failed:", error);

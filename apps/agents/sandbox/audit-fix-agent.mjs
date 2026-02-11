@@ -21,7 +21,7 @@ function shell(cmd, opts = {}) {
       cwd,
       encoding: "utf-8",
       timeout: 120_000,
-      env: process.env,
+      env: process.env
     }).trim();
   } catch (e) {
     if (allowFailure) {
@@ -30,7 +30,7 @@ function shell(cmd, opts = {}) {
         "STDOUT:",
         (e.stdout ?? "").trim(),
         "STDERR:",
-        (e.stderr ?? "").trim(),
+        (e.stderr ?? "").trim()
       ].join("\n");
     }
     throw e;
@@ -80,7 +80,7 @@ const agent = new ToolLoopAgent({
     "IMPORTANT:",
     '- pnpm overrides go in the ROOT package.json under "pnpm": { "overrides": { "package": ">=version" } }.',
     '- False positives: if a workspace package name matches an npm package name (e.g. a workspace called "cli" matching the npm "cli" package), skip it — that is a pnpm audit bug.',
-    "- Don't waste steps investigating whether an override will break something. Make the change, run tests, fix if broken.",
+    "- Don't waste steps investigating whether an override will break something. Make the change, run tests, fix if broken."
   ].join("\n"),
 
   tools: {
@@ -88,13 +88,13 @@ const agent = new ToolLoopAgent({
       description: "Reason or plan. Use instead of generating text.",
       inputSchema: zodSchema(
         z.object({
-          thought: z.string().describe("Your reasoning"),
-        }),
+          thought: z.string().describe("Your reasoning")
+        })
       ),
       execute: async function ({ thought }) {
         console.log("[think] " + thought);
         return "Continue.";
-      },
+      }
     }),
 
     runCommand: tool({
@@ -110,25 +110,25 @@ const agent = new ToolLoopAgent({
           allowFailure: z
             .boolean()
             .optional()
-            .describe("Return output even on non-zero exit (default false)"),
-        }),
+            .describe("Return output even on non-zero exit (default false)")
+        })
       ),
       execute: async function ({ command, cwd, allowFailure }) {
         console.log("$ " + command);
         var output = shell(command, {
           cwd: cwd ?? REPO_DIR,
-          allowFailure: allowFailure ?? false,
+          allowFailure: allowFailure ?? false
         });
         return truncate(output);
-      },
+      }
     }),
 
     readFile: tool({
       description: "Read a file in the repo.",
       inputSchema: zodSchema(
         z.object({
-          path: z.string().describe("File path relative to repo root"),
-        }),
+          path: z.string().describe("File path relative to repo root")
+        })
       ),
       execute: async function ({ path }) {
         var fullPath = REPO_DIR + "/" + path;
@@ -136,7 +136,7 @@ const agent = new ToolLoopAgent({
           return "File not found: " + path;
         }
         return truncate(readFileSync(fullPath, "utf-8"));
-      },
+      }
     }),
 
     writeFile: tool({
@@ -144,14 +144,14 @@ const agent = new ToolLoopAgent({
       inputSchema: zodSchema(
         z.object({
           path: z.string().describe("File path relative to repo root"),
-          content: z.string().describe("The full file content to write"),
-        }),
+          content: z.string().describe("The full file content to write")
+        })
       ),
       execute: async function ({ path, content }) {
         var fullPath = REPO_DIR + "/" + path;
         writeFileSync(fullPath, content, "utf-8");
         return "Wrote " + content.length + " bytes to " + path;
-      },
+      }
     }),
 
     listFiles: tool({
@@ -160,15 +160,15 @@ const agent = new ToolLoopAgent({
         z.object({
           pattern: z
             .string()
-            .describe('Glob pattern, e.g. "packages/*/package.json"'),
-        }),
+            .describe('Glob pattern, e.g. "packages/*/package.json"')
+        })
       ),
       execute: async function ({ pattern }) {
         var output = shell("find . -path './" + pattern + "' | head -50", {
-          allowFailure: true,
+          allowFailure: true
         });
         return output || "(no matches)";
-      },
+      }
     }),
 
     reportResults: tool({
@@ -189,12 +189,12 @@ const agent = new ToolLoopAgent({
             .array(z.string())
             .describe("Source files modified for compatibility"),
           testsPass: z.boolean(),
-          auditsClean: z.boolean(),
-        }),
-      ),
+          auditsClean: z.boolean()
+        })
+      )
       // No execute — calling this tool stops the agent loop.
-    }),
-  },
+    })
+  }
 });
 
 async function main() {
@@ -203,7 +203,7 @@ async function main() {
   try {
     var result = await agent.generate({
       prompt:
-        "Run security audits on this repo and fix the vulnerabilities. Follow the strategy in your instructions exactly — audit, fix manifests, reinstall, verify, report. Do not over-analyze. Act quickly.",
+        "Run security audits on this repo and fix the vulnerabilities. Follow the strategy in your instructions exactly — audit, fix manifests, reinstall, verify, report. Do not over-analyze. Act quickly."
     });
 
     console.log("\nAgent finished.");
@@ -221,7 +221,7 @@ async function main() {
       writeFileSync(
         RESULTS_PATH,
         JSON.stringify(reportCall.args, null, 2),
-        "utf-8",
+        "utf-8"
       );
     } else if (!existsSync(RESULTS_PATH)) {
       console.log("Agent did not call reportResults.");
@@ -238,12 +238,12 @@ async function main() {
             manifestsUpdated: [],
             sourceFilesUpdated: [],
             testsPass: false,
-            auditsClean: false,
+            auditsClean: false
           },
           null,
-          2,
+          2
         ),
-        "utf-8",
+        "utf-8"
       );
     }
   } catch (err) {
@@ -259,12 +259,12 @@ async function main() {
           manifestsUpdated: [],
           sourceFilesUpdated: [],
           testsPass: false,
-          auditsClean: false,
+          auditsClean: false
         },
         null,
-        2,
+        2
       ),
-      "utf-8",
+      "utf-8"
     );
   }
 }

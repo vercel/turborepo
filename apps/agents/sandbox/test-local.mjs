@@ -20,7 +20,7 @@ async function main() {
   const sandbox = await Sandbox.create({
     runtime: "node22",
     resources: { vcpus: 4 },
-    timeout: 18_000_000,
+    timeout: 18_000_000
   });
   console.log(`Sandbox created: ${sandbox.sandboxId}`);
 
@@ -29,7 +29,7 @@ async function main() {
     await sandbox.runCommand({
       cmd: "dnf",
       args: ["install", "-y", "rust", "cargo", "gcc", "openssl-devel"],
-      sudo: true,
+      sudo: true
     });
     await sandbox.runCommand("cargo", ["install", "cargo-audit"]);
 
@@ -42,7 +42,7 @@ async function main() {
       "--depth",
       "1",
       REPO_URL,
-      "turborepo",
+      "turborepo"
     ]);
 
     console.log("Installing agent dependencies...");
@@ -51,7 +51,7 @@ async function main() {
     console.log("Uploading agent script...");
     const agentScript = readFileSync("sandbox/audit-fix-agent.mjs");
     await sandbox.writeFiles([
-      { path: "/vercel/sandbox/audit-fix-agent.mjs", content: agentScript },
+      { path: "/vercel/sandbox/audit-fix-agent.mjs", content: agentScript }
     ]);
 
     console.log("Running agent...\n---");
@@ -59,9 +59,9 @@ async function main() {
       cmd: "bash",
       args: [
         "-c",
-        `AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY} node audit-fix-agent.mjs`,
+        `AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY} node audit-fix-agent.mjs`
       ],
-      detached: true,
+      detached: true
     });
 
     for await (const log of cmd.logs()) {
@@ -78,7 +78,7 @@ async function main() {
     // Read results
     try {
       const resultsBuffer = await sandbox.readFileToBuffer({
-        path: "/vercel/sandbox/results.json",
+        path: "/vercel/sandbox/results.json"
       });
       if (resultsBuffer) {
         const results = JSON.parse(resultsBuffer.toString("utf-8"));
@@ -92,7 +92,7 @@ async function main() {
     // Show the diff
     const diffResult = await sandbox.runCommand("bash", [
       "-c",
-      "cd turborepo && git diff",
+      "cd turborepo && git diff"
     ]);
     const diff = await diffResult.stdout();
     if (diff) {
