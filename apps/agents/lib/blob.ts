@@ -7,10 +7,10 @@ export async function uploadDiff(
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `diffs/${branch}-${timestamp}.patch`;
 
-  const { url } = await put(filename, diff, {
+  const { pathname } = await put(filename, diff, {
     access: "private",
     contentType: "text/plain"
   });
 
-  return url;
+  return pathname;
 }

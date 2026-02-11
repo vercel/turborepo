@@ -1,17 +1,10 @@
-import { list, getDownloadUrl } from "@vercel/blob";
+import { list } from "@vercel/blob";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
 export default async function DiffsPage() {
   const { blobs } = await list({ prefix: "diffs/" });
-
-  const blobsWithDownloadUrls = await Promise.all(
-    blobs.map(async (blob) => ({
-      ...blob,
-      downloadUrl: await getDownloadUrl(blob.url)
-    }))
-  );
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-16 font-mono">
@@ -22,11 +15,11 @@ export default async function DiffsPage() {
         </Link>
       </div>
 
-      {blobsWithDownloadUrls.length === 0 ? (
+      {blobs.length === 0 ? (
         <p className="text-neutral-500">No diffs yet.</p>
       ) : (
         <ul className="space-y-3">
-          {blobsWithDownloadUrls
+          {blobs
             .sort(
               (a, b) =>
                 new Date(b.uploadedAt).getTime() -
@@ -48,18 +41,11 @@ export default async function DiffsPage() {
                   </div>
                   <div className="flex gap-3">
                     <Link
-                      href={`/vuln-diffs/view?url=${encodeURIComponent(blob.url)}`}
+                      href={`/vuln-diffs/view?pathname=${encodeURIComponent(blob.pathname)}`}
                       className="rounded bg-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-700"
                     >
                       View
                     </Link>
-                    <a
-                      href={blob.downloadUrl}
-                      download={name}
-                      className="rounded bg-white px-3 py-1.5 text-xs text-black hover:bg-neutral-200"
-                    >
-                      Download
-                    </a>
                   </div>
                 </li>
               );

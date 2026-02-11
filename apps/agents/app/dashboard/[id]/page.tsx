@@ -260,21 +260,12 @@ export default function RunDetailPage({
       {/* Links */}
       <div className="mb-6 flex gap-3">
         {run.diffUrl && (
-          <>
-            <Link
-              href={`/vuln-diffs/view?url=${encodeURIComponent(run.diffUrl)}`}
-              className="rounded border border-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-800"
-            >
-              View diff
-            </Link>
-            <a
-              href={run.diffUrl}
-              download
-              className="rounded border border-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-800"
-            >
-              Download .patch
-            </a>
-          </>
+          <Link
+            href={`/vuln-diffs/view?pathname=${encodeURIComponent(run.diffUrl)}`}
+            className="rounded border border-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-800"
+          >
+            View diff
+          </Link>
         )}
       </div>
 

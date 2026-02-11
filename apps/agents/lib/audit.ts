@@ -414,7 +414,7 @@ export async function runAuditAndFix(
       : process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
         : "http://localhost:3000";
-    const viewUrl = `${appUrl}/vuln-diffs/view?url=${encodeURIComponent(diffUrl)}`;
+    const viewUrl = `${appUrl}/vuln-diffs/view?pathname=${encodeURIComponent(diffUrl)}`;
 
     const statusLine = [
       `${r.vulnerabilitiesFixed} fixed, ${r.vulnerabilitiesRemaining} remaining`,
@@ -445,7 +445,7 @@ export async function runAuditAndFix(
           type: "section" as const,
           text: {
             type: "mrkdwn" as const,
-            text: `<${viewUrl}|View diff> · <${diffUrl}|Download .patch>`
+            text: `<${viewUrl}|View diff>`
           }
         },
         {

@@ -1,4 +1,4 @@
-import { put, list, getDownloadUrl, head } from "@vercel/blob";
+import { put, list, head, get } from "@vercel/blob";
 
 export type RunStatus =
   | "queued"
@@ -38,12 +38,26 @@ function logsPath(id: string): string {
   return `${LOGS_PREFIX}${id}.log`;
 }
 
-function downloadBlob(url: string): Promise<Response> {
-  return fetch(getDownloadUrl(url));
+async function readBlobText(pathname: string): Promise<string | null> {
+  const result = await get(pathname, { access: "private" });
+  if (!result) return null;
+  const reader = result.stream.getReader();
+  const chunks: Uint8Array[] = [];
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+  }
+  const combined = new Uint8Array(chunks.reduce((acc, c) => acc + c.length, 0));
+  let offset = 0;
+  for (const chunk of chunks) {
+    combined.set(chunk, offset);
+    offset += chunk.length;
+  }
+  return new TextDecoder().decode(combined);
 }
 
 // In-memory cache so updateRun doesn't depend on list() consistency.
-// This only lives for the duration of a single pipeline execution.
 const runCache = new Map<string, RunMeta>();
 
 export async function createRun(trigger: "cron" | "manual"): Promise<RunMeta> {
@@ -71,8 +85,6 @@ export async function updateRun(
   id: string,
   updates: Partial<Omit<RunMeta, "id" | "createdAt">>
 ): Promise<RunMeta> {
-  // Prefer in-memory cache to avoid list() eventual consistency issues.
-  // Fall back to reading from blob storage for dashboard/API callers.
   let current = runCache.get(id);
   if (!current) {
     current = (await getRun(id)) ?? undefined;
@@ -99,17 +111,13 @@ export async function updateRun(
 }
 
 export async function getRun(id: string): Promise<RunMeta | null> {
-  // Try head() first -- it works even when list() hasn't caught up
   try {
-    const blob = await head(metaPath(id));
-    const res = await downloadBlob(blob.url);
-    if (res.ok) {
-      return res.json() as Promise<RunMeta>;
-    }
+    const text = await readBlobText(metaPath(id));
+    if (!text) return null;
+    return JSON.parse(text) as RunMeta;
   } catch {
-    // head() throws BlobNotFoundError if not found
+    return null;
   }
-  return null;
 }
 
 export async function listRuns(limit = 20): Promise<RunMeta[]> {
@@ -125,9 +133,9 @@ export async function listRuns(limit = 20): Promise<RunMeta[]> {
   const runs: RunMeta[] = [];
   for (const blob of metaBlobs.slice(0, limit)) {
     try {
-      const res = await downloadBlob(blob.url);
-      if (res.ok) {
-        runs.push((await res.json()) as RunMeta);
+      const text = await readBlobText(blob.pathname);
+      if (text) {
+        runs.push(JSON.parse(text) as RunMeta);
       }
     } catch {
       // Skip corrupt entries
@@ -138,15 +146,11 @@ export async function listRuns(limit = 20): Promise<RunMeta[]> {
 }
 
 export async function appendLogs(id: string, lines: string): Promise<void> {
-  const { blobs } = await list({ prefix: `${LOGS_PREFIX}${id}` });
-  const blob = blobs[0];
-
   let existing = "";
-  if (blob) {
-    const res = await downloadBlob(blob.url);
-    if (res.ok) {
-      existing = await res.text();
-    }
+  try {
+    existing = (await readBlobText(logsPath(id))) ?? "";
+  } catch {
+    // No existing log file yet
   }
 
   await put(logsPath(id), existing + lines, {
@@ -158,11 +162,9 @@ export async function appendLogs(id: string, lines: string): Promise<void> {
 }
 
 export async function getLogs(id: string): Promise<string> {
-  const { blobs } = await list({ prefix: `${LOGS_PREFIX}${id}` });
-  const blob = blobs[0];
-  if (!blob) return "";
-
-  const res = await downloadBlob(blob.url);
-  if (!res.ok) return "";
-  return res.text();
+  try {
+    return (await readBlobText(logsPath(id))) ?? "";
+  } catch {
+    return "";
+  }
 }
