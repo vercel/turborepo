@@ -8,6 +8,15 @@ const REPO_URL = "https://github.com/vercel/turborepo.git";
 const AGENT_SCRIPT_PATH = resolve(process.cwd(), "sandbox/audit-fix-agent.mjs");
 const RESULTS_PATH = "/vercel/sandbox/results.json";
 
+async function installCargoAudit(sandbox: InstanceType<typeof Sandbox>) {
+  await sandbox.runCommand({
+    cmd: "dnf",
+    args: ["install", "-y", "rust", "cargo", "gcc", "openssl-devel"],
+    sudo: true,
+  });
+  await sandbox.runCommand("cargo", ["install", "cargo-audit"]);
+}
+
 interface AuditVulnerability {
   name: string;
   severity: string;
@@ -49,26 +58,19 @@ export async function runSecurityAudit(): Promise<AuditResults> {
   const sandbox = await Sandbox.create({ runtime: "node22" });
 
   try {
-    await sandbox.runCommand("bash", [
-      "-c",
-      "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-    ]);
-    await sandbox.runCommand("bash", [
-      "-c",
-      "source $HOME/.cargo/env && cargo install cargo-audit"
-    ]);
+    await installCargoAudit(sandbox);
     await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
     await sandbox.runCommand("git", [
       "clone",
       "--depth",
       "1",
       REPO_URL,
-      "turborepo"
+      "turborepo",
     ]);
 
     const cargoResult = await sandbox.runCommand("bash", [
       "-c",
-      "source $HOME/.cargo/env && cd turborepo && cargo audit --json 2>&1 || true"
+      "cd turborepo && cargo-audit audit --json 2>&1 || true"
     ]);
     const cargoRaw = await cargoResult.stdout();
 
@@ -108,15 +110,8 @@ export async function runAuditFix(
   });
 
   try {
-    await onProgress?.("Installing Rust toolchain...");
-    await sandbox.runCommand("bash", [
-      "-c",
-      "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y"
-    ]);
-    await sandbox.runCommand("bash", [
-      "-c",
-      "source $HOME/.cargo/env && cargo install cargo-audit"
-    ]);
+    await onProgress?.("Installing tooling...");
+    await installCargoAudit(sandbox);
     await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
 
     await onProgress?.("Cloning repository...");
@@ -305,14 +300,22 @@ export async function runAuditAndFix(): Promise<void> {
     const fixResult = await runAuditFix(onProgress);
     const { agentResults: r, branch, diff } = fixResult;
 
+    // Upload diff to Vercel Blob
+    const { uploadDiff } = await import("./blob");
+    const diffUrl = await uploadDiff(diff, branch);
+
+    const appUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000";
+    const viewUrl = `${appUrl}/vuln-diffs/view?url=${encodeURIComponent(diffUrl)}`;
+
     const statusLine = [
       `${r.vulnerabilitiesFixed} fixed, ${r.vulnerabilitiesRemaining} remaining`,
       `tests: ${r.testsPass ? "passing" : "failing"}`,
-      `audits: ${r.auditsClean ? "clean" : "not clean"}`
+      `audits: ${r.auditsClean ? "clean" : "not clean"}`,
     ].join(" · ");
-
-    const diffPreview =
-      diff.length > 2500 ? diff.slice(0, 2500) + "\n... (truncated)" : diff;
 
     await updateMessage(
       channel,
@@ -323,22 +326,22 @@ export async function runAuditAndFix(): Promise<void> {
           type: "section" as const,
           text: {
             type: "mrkdwn" as const,
-            text: `:white_check_mark: *Audit fix agent finished*\n${statusLine}`
-          }
+            text: `:white_check_mark: *Audit fix agent finished*\n${statusLine}`,
+          },
         },
         {
           type: "section" as const,
           text: {
             type: "mrkdwn" as const,
-            text: `*Summary:* ${r.summary}`
-          }
+            text: `*Summary:* ${r.summary}`,
+          },
         },
         {
           type: "section" as const,
           text: {
             type: "mrkdwn" as const,
-            text: `\`\`\`\n${diffPreview}\n\`\`\``
-          }
+            text: `<${viewUrl}|View diff> · <${diffUrl}|Download .patch>`,
+          },
         },
         {
           type: "actions" as const,
@@ -348,16 +351,16 @@ export async function runAuditAndFix(): Promise<void> {
               text: { type: "plain_text" as const, text: "Open PR" },
               style: "primary" as const,
               action_id: "audit_open_pr",
-              value: JSON.stringify({ branch, agentResults: r })
+              value: JSON.stringify({ branch, agentResults: r }),
             },
             {
               type: "button" as const,
               text: { type: "plain_text" as const, text: "Dismiss" },
-              action_id: "audit_dismiss"
-            }
-          ]
-        }
-      ]
+              action_id: "audit_dismiss",
+            },
+          ],
+        },
+      ],
     );
   } catch (error) {
     console.error("Audit fix agent failed:", error);
