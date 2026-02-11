@@ -1,4 +1,4 @@
-import { put, list, getDownloadUrl } from "@vercel/blob";
+import { put, list, getDownloadUrl, head } from "@vercel/blob";
 
 export type RunStatus =
   | "queued"
@@ -42,6 +42,10 @@ function downloadBlob(url: string): Promise<Response> {
   return fetch(getDownloadUrl(url));
 }
 
+// In-memory cache so updateRun doesn't depend on list() consistency.
+// This only lives for the duration of a single pipeline execution.
+const runCache = new Map<string, RunMeta>();
+
 export async function createRun(trigger: "cron" | "manual"): Promise<RunMeta> {
   const id = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const now = new Date().toISOString();
@@ -59,6 +63,7 @@ export async function createRun(trigger: "cron" | "manual"): Promise<RunMeta> {
     addRandomSuffix: false
   });
 
+  runCache.set(id, meta);
   return meta;
 }
 
@@ -66,7 +71,12 @@ export async function updateRun(
   id: string,
   updates: Partial<Omit<RunMeta, "id" | "createdAt">>
 ): Promise<RunMeta> {
-  const current = await getRun(id);
+  // Prefer in-memory cache to avoid list() eventual consistency issues.
+  // Fall back to reading from blob storage for dashboard/API callers.
+  let current = runCache.get(id);
+  if (!current) {
+    current = (await getRun(id)) ?? undefined;
+  }
   if (!current) {
     throw new Error(`Run ${id} not found`);
   }
@@ -83,17 +93,22 @@ export async function updateRun(
     addRandomSuffix: false
   });
 
+  runCache.set(id, updated);
   return updated;
 }
 
 export async function getRun(id: string): Promise<RunMeta | null> {
-  const { blobs } = await list({ prefix: `${RUNS_PREFIX}${id}/meta` });
-  const blob = blobs[0];
-  if (!blob) return null;
-
-  const res = await downloadBlob(blob.url);
-  if (!res.ok) return null;
-  return res.json() as Promise<RunMeta>;
+  // Try head() first -- it works even when list() hasn't caught up
+  try {
+    const blob = await head(metaPath(id));
+    const res = await downloadBlob(blob.url);
+    if (res.ok) {
+      return res.json() as Promise<RunMeta>;
+    }
+  } catch {
+    // head() throws BlobNotFoundError if not found
+  }
+  return null;
 }
 
 export async function listRuns(limit = 20): Promise<RunMeta[]> {
