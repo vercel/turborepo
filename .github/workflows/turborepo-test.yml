@@ -21,6 +21,7 @@ jobs:
     outputs:
       is-release-pr: ${{ steps.check-release.outputs.is-release-pr }}
       docs: ${{ steps.filter.outputs.docs }}
+      examples: ${{ steps.filter.outputs.examples }}
       rest: ${{ steps.filter.outputs.rest }}
       rust: ${{ steps.filter.outputs.rust }}
       native-lib: ${{ steps.filter.outputs.native-lib }}
@@ -91,6 +92,7 @@ jobs:
           echo "Checking path patterns..."
 
           check_paths "docs" "docs/"
+          check_paths "examples" "examples/"
           check_paths "native-lib" "packages/turbo-repository/,crates/"
 
           # Handle the "rest" pattern - files that are NOT in examples/ or docs/
@@ -516,8 +518,12 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.examples == 'true' }}
     runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -540,7 +546,7 @@ jobs:
           npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Run examples check
-        run: cd examples && pnpm check-examples
+        run: turbo run check-examples --filter=turborepo-examples --env-mode=strict
 
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
