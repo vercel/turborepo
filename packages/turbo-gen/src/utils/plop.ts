@@ -6,6 +6,7 @@ import nodePlop from "node-plop";
 import { Separator } from "@inquirer/prompts";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
 import { GeneratorError } from "./error";
+import { registerTypeScript } from "./registerTypeScript";
 
 const SUPPORTED_CONFIG_EXTENSIONS = ["ts", "js", "cjs"];
 const TURBO_GENERATOR_DIRECTORY = path.join("turbo", "generators");
@@ -33,11 +34,10 @@ export function getPlop({
   project: Project;
   configPath?: string;
 }): NodePlopAPI | undefined {
-  // Register tsx to support TypeScript plop configs
-  // Lazy require to avoid breaking jest's module system
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const tsx = require("tsx/cjs/api") as { register: () => () => void };
-  tsx.register();
+  // Register a TypeScript require hook so that plop can load .ts config files.
+  // Uses sucrase (pure JS) so the entire tool can be compiled to a standalone
+  // binary with no external runtime dependencies.
+  registerTypeScript();
 
   // fetch all the workspace generator configs
   const workspaceConfigs = getWorkspaceGeneratorConfigs({ project });
