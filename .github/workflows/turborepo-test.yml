@@ -91,7 +91,6 @@ jobs:
           echo "Checking path patterns..."
 
           check_paths "docs" "docs/"
-          check_paths "examples" "examples/"
           check_paths "native-lib" "packages/turbo-repository/,crates/"
 
           # Handle the "rest" pattern - files that are NOT in examples/ or docs/
