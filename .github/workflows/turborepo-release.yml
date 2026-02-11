@@ -147,9 +147,6 @@ jobs:
         with:
           ref: ${{ inputs.sha || github.sha }}
 
-      - name: Fetch tags
-        run: git fetch origin --tags
-
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
@@ -166,9 +163,14 @@ jobs:
       - name: Get previous tag
         id: previous-tag
         run: |
-          PREV_TAG=$(git tag --list 'v*-canary.*' --sort=-version:refname | head -n 1)
+          # Use ls-remote to query tags without fetching objects
+          PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
+            | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+            | sort -V | tail -n 1)
           if [ -z "$PREV_TAG" ]; then
-            PREV_TAG=$(git tag --list 'v*' --sort=-version:refname | grep -v canary | head -n 1)
+            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+              | grep -v canary | sort -V | tail -n 1)
           fi
           echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
           echo "Previous tag: $PREV_TAG"
@@ -351,8 +353,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-
-      - run: git fetch origin --tags
 
       - uses: ./.github/actions/setup-node
         with:
