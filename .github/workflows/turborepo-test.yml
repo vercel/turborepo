@@ -21,7 +21,6 @@ jobs:
     outputs:
       is-release-pr: ${{ steps.check-release.outputs.is-release-pr }}
       docs: ${{ steps.filter.outputs.docs }}
-      examples: ${{ steps.filter.outputs.examples }}
       rest: ${{ steps.filter.outputs.rest }}
       rust: ${{ steps.filter.outputs.rust }}
       native-lib: ${{ steps.filter.outputs.native-lib }}
