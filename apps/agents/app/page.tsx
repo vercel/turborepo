@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { triggerAudit } from "./actions";
 
 export default function Home() {
@@ -55,6 +56,16 @@ export default function Home() {
             </p>
           )}
         </div>
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-lg font-semibold">History</h2>
+        <Link
+          href="/diffs"
+          className="inline-block rounded border border-neutral-800 px-4 py-2 text-sm hover:bg-neutral-800"
+        >
+          View saved diffs
+        </Link>
       </section>
     </main>
   );

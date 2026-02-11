@@ -300,14 +300,22 @@ export async function runAuditAndFix(): Promise<void> {
     const fixResult = await runAuditFix(onProgress);
     const { agentResults: r, branch, diff } = fixResult;
 
+    // Upload diff to Vercel Blob
+    const { uploadDiff } = await import("./blob");
+    const diffUrl = await uploadDiff(diff, branch);
+
+    const appUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3000";
+    const viewUrl = `${appUrl}/diffs/view?url=${encodeURIComponent(diffUrl)}`;
+
     const statusLine = [
       `${r.vulnerabilitiesFixed} fixed, ${r.vulnerabilitiesRemaining} remaining`,
       `tests: ${r.testsPass ? "passing" : "failing"}`,
-      `audits: ${r.auditsClean ? "clean" : "not clean"}`
+      `audits: ${r.auditsClean ? "clean" : "not clean"}`,
     ].join(" · ");
-
-    const diffPreview =
-      diff.length > 2500 ? diff.slice(0, 2500) + "\n... (truncated)" : diff;
 
     await updateMessage(
       channel,
@@ -318,22 +326,22 @@ export async function runAuditAndFix(): Promise<void> {
           type: "section" as const,
           text: {
             type: "mrkdwn" as const,
-            text: `:white_check_mark: *Audit fix agent finished*\n${statusLine}`
-          }
+            text: `:white_check_mark: *Audit fix agent finished*\n${statusLine}`,
+          },
         },
         {
           type: "section" as const,
           text: {
             type: "mrkdwn" as const,
-            text: `*Summary:* ${r.summary}`
-          }
+            text: `*Summary:* ${r.summary}`,
+          },
         },
         {
           type: "section" as const,
           text: {
             type: "mrkdwn" as const,
-            text: `\`\`\`\n${diffPreview}\n\`\`\``
-          }
+            text: `<${viewUrl}|View diff> · <${diffUrl}|Download .patch>`,
+          },
         },
         {
           type: "actions" as const,
@@ -343,16 +351,16 @@ export async function runAuditAndFix(): Promise<void> {
               text: { type: "plain_text" as const, text: "Open PR" },
               style: "primary" as const,
               action_id: "audit_open_pr",
-              value: JSON.stringify({ branch, agentResults: r })
+              value: JSON.stringify({ branch, agentResults: r }),
             },
             {
               type: "button" as const,
               text: { type: "plain_text" as const, text: "Dismiss" },
-              action_id: "audit_dismiss"
-            }
-          ]
-        }
-      ]
+              action_id: "audit_dismiss",
+            },
+          ],
+        },
+      ],
     );
   } catch (error) {
     console.error("Audit fix agent failed:", error);
