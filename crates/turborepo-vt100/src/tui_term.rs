@@ -162,3 +162,110 @@ impl From<Color> for ratatui::style::Color {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use ratatui::{
+        Terminal, backend::TestBackend, buffer::Buffer, layout::Rect,
+        widgets::Widget,
+    };
+    use tui_term::widget::PseudoTerminal;
+
+    use super::fill_buf_cell;
+
+    #[test]
+    fn empty_cell_produces_space() {
+        let parser = crate::Parser::new(2, 4, 0);
+        let screen = parser.screen();
+        // Cell at (0,0) has no content since nothing was written
+        let screen_cell = screen.cell(0, 0).unwrap();
+        assert!(!screen_cell.has_contents());
+
+        let mut buf_cell = ratatui::buffer::Cell::EMPTY;
+        fill_buf_cell(screen_cell, &mut buf_cell);
+
+        // Must produce a space, not an empty string. An empty string has
+        // zero width and ratatui's diff algorithm will emit it as a no-op,
+        // leaving stale content from the previous frame visible.
+        assert_eq!(buf_cell.symbol(), " ");
+    }
+
+    #[test]
+    fn cell_with_content_preserves_symbol() {
+        let mut parser = crate::Parser::new(2, 10, 0);
+        parser.process(b"Hello");
+        let screen = parser.screen();
+        let screen_cell = screen.cell(0, 0).unwrap();
+        assert!(screen_cell.has_contents());
+
+        let mut buf_cell = ratatui::buffer::Cell::EMPTY;
+        fill_buf_cell(screen_cell, &mut buf_cell);
+
+        assert_eq!(buf_cell.symbol(), "H");
+    }
+
+    #[test]
+    fn cell_with_bold_sets_modifier() {
+        let mut parser = crate::Parser::new(2, 10, 0);
+        parser.process(b"\x1b[1mX");
+        let screen = parser.screen();
+        let screen_cell = screen.cell(0, 0).unwrap();
+
+        let mut buf_cell = ratatui::buffer::Cell::EMPTY;
+        fill_buf_cell(screen_cell, &mut buf_cell);
+
+        assert_eq!(buf_cell.symbol(), "X");
+        assert!(buf_cell.modifier.contains(ratatui::style::Modifier::BOLD));
+    }
+
+    /// Regression test for #11779: switching between task output buffers
+    /// must fully repaint the pane. When a shorter output replaces a longer
+    /// one, every cell in the area must be a proper space — not an empty
+    /// string that ratatui's diff treats as zero-width.
+    #[test]
+    fn switching_screens_fully_clears_previous_content() {
+        let (cols, rows): (u16, u16) = (20, 5);
+        let backend = TestBackend::new(cols, rows);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        // First draw: a screen with content on every row
+        let mut parser_long = crate::Parser::new(rows, cols, 0);
+        parser_long
+            .process(b"Line 1\r\nLine 2\r\nLine 3\r\nLine 4\r\nLine 5");
+        terminal
+            .draw(|f| {
+                let pt = PseudoTerminal::new(parser_long.screen());
+                pt.render(f.area(), f.buffer_mut());
+            })
+            .unwrap();
+
+        // Second draw: a screen with only one line of content
+        let mut parser_short = crate::Parser::new(rows, cols, 0);
+        parser_short.process(b"Short");
+        terminal
+            .draw(|f| {
+                let pt = PseudoTerminal::new(parser_short.screen());
+                pt.render(f.area(), f.buffer_mut());
+            })
+            .unwrap();
+
+        // After the second draw, the backend buffer must contain no remnants
+        // of the first draw. Every cell outside "Short" and the cursor
+        // should be a space.
+        let buf = terminal.backend().buffer();
+        let cursor_col = 5u16; // cursor sits right after "Short"
+        for row in 0..rows {
+            for col in 0..cols {
+                let cell = &buf[ratatui::layout::Position::new(col, row)];
+                let sym = cell.symbol();
+                let is_text = row == 0 && (col as usize) < 5;
+                let is_cursor = row == 0 && col == cursor_col;
+                assert!(
+                    sym == " " || is_text || is_cursor,
+                    "Cell ({col}, {row}) has unexpected symbol {sym:?} — \
+                     stale content from previous frame leaked through"
+                );
+            }
+        }
+    }
+}
