@@ -20,7 +20,7 @@ async function main() {
   const sandbox = await Sandbox.create({
     runtime: "node22",
     resources: { vcpus: 4 },
-    timeout: 18_000_000
+    timeout: 18_000_000,
   });
   console.log(`Sandbox created: ${sandbox.sandboxId}`);
 
@@ -42,7 +42,7 @@ async function main() {
       "--depth",
       "1",
       REPO_URL,
-      "turborepo"
+      "turborepo",
     ]);
 
     console.log("Installing agent dependencies...");
@@ -51,26 +51,26 @@ async function main() {
     console.log("Uploading agent script...");
     const agentScript = readFileSync("sandbox/audit-fix-agent.mjs");
     await sandbox.writeFiles([
-      { path: "/vercel/sandbox/audit-fix-agent.mjs", content: agentScript }
+      { path: "/vercel/sandbox/audit-fix-agent.mjs", content: agentScript },
     ]);
 
     console.log("Running agent...\n---");
-    const result = await sandbox.runCommand({
-      cmd: "bash",
-      args: [
-        "-c",
-        `AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY} node audit-fix-agent.mjs`
-      ],
-      stdout: process.stdout,
-      stderr: process.stderr
-    });
+    const result = await sandbox.runCommand(
+      "bash",
+      ["-c", `AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY} node audit-fix-agent.mjs`],
+    );
 
+    const stdout = await result.stdout();
+    const stderr = await result.stderr();
+
+    if (stdout) console.log(stdout);
+    if (stderr) console.error(stderr);
     console.log("---\nAgent exited with code:", result.exitCode);
 
     // Read results
     try {
       const resultsBuffer = await sandbox.readFileToBuffer({
-        path: "/vercel/sandbox/results.json"
+        path: "/vercel/sandbox/results.json",
       });
       if (resultsBuffer) {
         const results = JSON.parse(resultsBuffer.toString("utf-8"));
@@ -84,7 +84,7 @@ async function main() {
     // Show the diff
     const diffResult = await sandbox.runCommand("bash", [
       "-c",
-      "cd turborepo && git diff"
+      "cd turborepo && git diff",
     ]);
     const diff = await diffResult.stdout();
     if (diff) {
@@ -95,11 +95,7 @@ async function main() {
     }
   } finally {
     console.log("\nStopping sandbox...");
-    try {
-      await sandbox.stop();
-    } catch {
-      // Sandbox may already be stopped or connection closed
-    }
+    await sandbox.stop();
     console.log("Done.");
   }
 }
