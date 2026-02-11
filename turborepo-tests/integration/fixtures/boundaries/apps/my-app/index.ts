@@ -25,3 +25,9 @@ import { walkThePlank } from "module-package";
 
 // Allow importing own package
 import { walkThePlank } from "my-app";
+
+// Subpath import from a declared dependency should be allowed
+import { anchor } from "another/helpers";
+
+// Subpath import from a package that is NOT a dependency should fail
+import { data } from "utils/data";

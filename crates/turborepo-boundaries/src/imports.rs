@@ -270,7 +270,7 @@ pub(crate) fn check_file_import(
     }
 }
 
-fn get_package_name(import: &str) -> String {
+pub(crate) fn get_package_name(import: &str) -> String {
     if import.starts_with("@") {
         import.split('/').take(2).join("/")
     } else {
@@ -376,6 +376,9 @@ mod test {
     #[test_case("lodash" ; "bare package name lodash")]
     #[test_case("@scope/package" ; "scoped package name")]
     #[test_case("@types/node" ; "types package name")]
+    #[test_case("lodash/fp" ; "subpath import")]
+    #[test_case("@scope/package/sub" ; "scoped subpath import")]
+    #[test_case("@scope/package/deeply/nested" ; "scoped deeply nested subpath import")]
     fn tsconfig_alias_check_skips_bare_package_names(import: &str) {
         let (resolver, package_name, span, file_content, mut result) =
             make_tsconfig_alias_test_args(import);
