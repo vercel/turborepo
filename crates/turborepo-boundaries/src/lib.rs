@@ -316,7 +316,8 @@ impl BoundariesChecker {
     }
 
     fn is_potential_package_name(import: &str) -> bool {
-        PACKAGE_NAME_REGEX.is_match(import)
+        let base = imports::get_package_name(import);
+        PACKAGE_NAME_REGEX.is_match(&base)
     }
 
     /// Patch a file with boundaries-ignore comments
@@ -790,6 +791,13 @@ mod tests {
             "@scope/package"
         ));
         assert!(BoundariesChecker::is_potential_package_name("my-package"));
+        assert!(BoundariesChecker::is_potential_package_name("lodash/fp"));
+        assert!(BoundariesChecker::is_potential_package_name(
+            "@scope/package/sub"
+        ));
+        assert!(BoundariesChecker::is_potential_package_name(
+            "@scope/package/deeply/nested"
+        ));
         assert!(!BoundariesChecker::is_potential_package_name("./relative"));
         assert!(!BoundariesChecker::is_potential_package_name("../parent"));
         assert!(!BoundariesChecker::is_potential_package_name("/absolute"));
