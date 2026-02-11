@@ -1,0 +1,16 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "env": [
+        "$TURBO_EXTENDS$",
+        "SLACK_BOT_TOKEN",
+        "SLACK_SIGNING_SECRET",
+        "SLACK_CHANNEL",
+        "CRON_SECRET",
+        "AI_GATEWAY_API_KEY",
+        "BLOB_READ_WRITE_TOKEN"
+      ]
+    }
+  }
+}
