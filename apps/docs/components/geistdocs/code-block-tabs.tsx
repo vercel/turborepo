@@ -36,7 +36,7 @@ export const CodeBlockTabsTrigger = ({
 );
 
 export const CodeBlockTabs = ({
-  ref: _ref,
+  ref,
   ...props
 }: ComponentProps<typeof Tabs>) => (
   <Tabs
