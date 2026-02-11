@@ -212,8 +212,8 @@ export type MessageBranchSelectorProps = HTMLAttributes<HTMLDivElement> & {
 };
 
 export const MessageBranchSelector = ({
-  className,
-  from,
+  className: _className,
+  from: _from,
   ...props
 }: MessageBranchSelectorProps) => {
   const { totalBranches } = useMessageBranch();
