@@ -26,10 +26,11 @@ async function main() {
 
   try {
     const CARGO_AUDIT_VERSION = "0.22.1";
+    const CARGO_AUDIT_DIR = `cargo-audit-x86_64-unknown-linux-gnu-v${CARGO_AUDIT_VERSION}`;
     console.log("Installing cargo-audit (pre-built binary)...");
     await sandbox.runCommand("bash", [
       "-c",
-      `curl -sL "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/cargo-audit-x86_64-unknown-linux-gnu-v${CARGO_AUDIT_VERSION}.tgz" | tar xz -C /usr/local/bin`
+      `curl -sL "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv${CARGO_AUDIT_VERSION}/${CARGO_AUDIT_DIR}.tgz" | tar xz -C /tmp && mv /tmp/${CARGO_AUDIT_DIR}/cargo-audit /usr/local/bin/cargo-audit && chmod +x /usr/local/bin/cargo-audit`,
     ]);
 
     console.log("Installing pnpm...");
@@ -94,7 +95,11 @@ async function main() {
     }
   } finally {
     console.log("\nStopping sandbox...");
-    await sandbox.stop();
+    try {
+      await sandbox.stop();
+    } catch {
+      // Sandbox may already be stopped or connection closed
+    }
     console.log("Done.");
   }
 }

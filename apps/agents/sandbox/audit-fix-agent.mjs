@@ -10,8 +10,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { z } from "zod";
 
 const REPO_DIR = process.env.REPO_DIR ?? "/vercel/sandbox/turborepo";
-const RESULTS_PATH =
-  process.env.RESULTS_PATH ?? "/vercel/sandbox/results.json";
+const RESULTS_PATH = process.env.RESULTS_PATH ?? "/vercel/sandbox/results.json";
 const MAX_STEPS = 200;
 
 function shell(cmd, opts = {}) {
@@ -54,22 +53,27 @@ const agent = new ToolLoopAgent({
   instructions: [
     "You are a senior engineer fixing security vulnerabilities in the Turborepo monorepo.",
     "",
-    "The repo is cloned at " + REPO_DIR + ". Tools available: cargo-audit (at /usr/local/bin/cargo-audit), pnpm, node.",
+    "The repo is cloned at " +
+      REPO_DIR +
+      ". Tools available: cargo-audit (at /usr/local/bin/cargo-audit), pnpm, node.",
     "Rust toolchain is NOT installed — do not try to install it or run cargo build/check/test.",
     "",
     "RULES:",
     '- ALWAYS use tools. Plain text terminates the loop. Use "think" to reason.',
     "- Be action-oriented. Do not over-research. Make changes, then verify.",
     '- Call "reportResults" when done. This is mandatory — it stops the loop.',
+    "- You may not update package manager lockfiles directly. Update manifests to clear the vulnerabilities.",
+    "- You may update our source code to upgrade through majors or other changes as needed.",
+    '- Avoid using hacks like "overrides" at all costs - only when we have no other option. You might even consider replacing the dependency entirely before using hacks.',
     "",
     "STRATEGY — follow this order:",
     '1. Run "pnpm audit --json" and "cargo-audit audit --json" to get the vulnerability list.',
     "2. For each vulnerability, determine the fix:",
     "   a. If a direct dependency can be bumped to a non-vulnerable version, update it in the relevant package.json or Cargo.toml.",
-    '   b. For transitive dependencies that can\'t be fixed by bumping the direct dep, add a pnpm override in the root package.json (under "pnpm.overrides") to force the patched version.',
-    "   c. For Cargo.toml, update the version constraint to require the patched version.",
+    "   b. For Cargo.toml, update the version constraint to require the patched version.",
     '3. After editing manifests, run "pnpm install --no-frozen-lockfile" to regenerate the lockfile.',
     '4. Run "pnpm audit" again to verify fixes.',
+    '5. Run "cargo build" and "cargo test" to ensure the Rust code is working.',
     '5. Run tests for affected packages: "pnpm run check-types --filter=<package>" if available.',
     "6. Call reportResults with a summary.",
     "",
