@@ -533,6 +533,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
       - name: Setup Vercel credentials
         run: |
           cd examples
@@ -540,7 +543,7 @@ jobs:
           npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Run examples check
-        run: pnpm turbo run check-examples --filter=turborepo-examples --env-mode=strict
+        run: turbo run check-examples --filter=turborepo-examples --env-mode=strict
 
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
