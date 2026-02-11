@@ -163,7 +163,7 @@ jobs:
       - name: Get previous tag
         id: previous-tag
         run: |
-          # Use ls-remote to query tags without fetching objects (avoids ~48s fetch)
+          # Use ls-remote to query tags without fetching objects
           PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
             | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
             | sort -V | tail -n 1)
