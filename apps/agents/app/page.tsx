@@ -61,7 +61,7 @@ export default function Home() {
       <section>
         <h2 className="mb-4 text-lg font-semibold">History</h2>
         <Link
-          href="/diffs"
+          href="/vuln-diffs"
           className="inline-block rounded border border-neutral-800 px-4 py-2 text-sm hover:bg-neutral-800"
         >
           View saved diffs

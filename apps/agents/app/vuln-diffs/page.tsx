@@ -41,7 +41,7 @@ export default async function DiffsPage() {
                   </div>
                   <div className="flex gap-3">
                     <Link
-                      href={`/diffs/view?url=${encodeURIComponent(blob.url)}`}
+                      href={`/vuln-diffs/view?url=${encodeURIComponent(blob.url)}`}
                       className="rounded bg-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-700"
                     >
                       View

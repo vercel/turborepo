@@ -61,7 +61,7 @@ export default async function ViewDiffPage({
         </div>
         <div className="flex gap-3">
           <Link
-            href="/diffs"
+            href="/vuln-diffs"
             className="rounded bg-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-700"
           >
             Back to list

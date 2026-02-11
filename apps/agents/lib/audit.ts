@@ -309,7 +309,7 @@ export async function runAuditAndFix(): Promise<void> {
       : process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
         : "http://localhost:3000";
-    const viewUrl = `${appUrl}/diffs/view?url=${encodeURIComponent(diffUrl)}`;
+    const viewUrl = `${appUrl}/vuln-diffs/view?url=${encodeURIComponent(diffUrl)}`;
 
     const statusLine = [
       `${r.vulnerabilitiesFixed} fixed, ${r.vulnerabilitiesRemaining} remaining`,
