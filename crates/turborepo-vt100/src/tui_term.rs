@@ -258,7 +258,7 @@ mod test {
             for col in 0..cols {
                 let cell = &buf[ratatui::layout::Position::new(col, row)];
                 let sym = cell.symbol();
-                let is_text = row == 0 && (col as usize) < 5;
+                let is_text = row == 0 && col < 5;
                 let is_cursor = row == 0 && col == cursor_col;
                 assert!(
                     sym == " " || is_text || is_cursor,
