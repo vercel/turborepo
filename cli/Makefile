@@ -28,8 +28,7 @@ stage-release:
 	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
 
 	# Fail if git tag already exists (this version was already successfully released)
-	@git fetch origin --tags
-	@if git rev-parse "v$(TURBO_VERSION)" >/dev/null 2>&1; then \
+	@if git ls-remote --tags origin "refs/tags/v$(TURBO_VERSION)" | grep -q .; then \
 		echo "Error: Tag v$(TURBO_VERSION) already exists. This version was already released." && \
 		exit 1; \
 	fi
