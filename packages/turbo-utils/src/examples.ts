@@ -4,7 +4,7 @@ import type { ReadableStream } from "node:stream/web";
 import { createGunzip } from "node:zlib";
 import { createWriteStream, mkdirSync, rmSync, cpSync } from "node:fs";
 import { writeFile, unlink } from "node:fs/promises";
-import { dirname, resolve, relative, join } from "node:path";
+import { dirname, resolve, relative, join, isAbsolute } from "node:path";
 import { tmpdir } from "node:os";
 import { execFileSync } from "node:child_process";
 import { Parser, type ReadEntry, extract } from "tar";
@@ -391,16 +391,20 @@ export async function downloadAndExtractRepo(
  * - Are empty or not a string
  * - Contain NUL bytes (could truncate the argument)
  * - Start with "-" (could be interpreted as a git option)
+ * - Are not absolute filesystem paths (helps ensure they cannot be mistaken
+ *   for URLs or additional git options like "--upload-pack")
  */
 function assertSafeGitArgument(value: string, description: string): void {
   if (
     !value ||
     typeof value !== "string" ||
     value.includes("\0") ||
-    value.startsWith("-")
+    value.includes("\n") ||
+    value.startsWith("-") ||
+    !isAbsolute(value)
   ) {
     throw new Error(
-      `Invalid ${description}: path must be a non-empty string without NUL bytes and cannot start with "-"`
+      `Invalid ${description}: path must be an absolute, non-empty string without NUL or newline characters and cannot start with "-"`
     );
   }
 }
