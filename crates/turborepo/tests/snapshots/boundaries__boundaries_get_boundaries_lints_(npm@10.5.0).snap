@@ -1,5 +1,6 @@
 ---
 source: crates/turborepo/tests/boundaries.rs
+assertion_line: 5
 expression: query_output
 ---
 {
@@ -11,12 +12,24 @@ expression: query_output
           "import": "@vercel/unsafe-package"
         },
         {
+          "message": "Package `another` found without any tag listed in allowlist for `my-app`",
+          "import": "another"
+        },
+        {
           "message": "Package `module-package` found without any tag listed in allowlist for `my-app`",
           "import": "module-package"
         },
         {
+          "message": "Package `utils` found without any tag listed in allowlist for `my-app`",
+          "import": "utils"
+        },
+        {
           "message": "cannot import package `module-package` because it is not a dependency",
           "import": "module-package"
+        },
+        {
+          "message": "cannot import package `utils` because it is not a dependency",
+          "import": "utils"
         },
         {
           "message": "import `!` leaves the package",
