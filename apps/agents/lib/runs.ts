@@ -58,11 +58,6 @@ export async function createRun(trigger: "cron" | "manual"): Promise<RunMeta> {
     contentType: "application/json"
   });
 
-  await put(logsPath(id), "", {
-    access: "private",
-    contentType: "text/plain"
-  });
-
   return meta;
 }
 
