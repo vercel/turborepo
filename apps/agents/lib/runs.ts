@@ -1,4 +1,4 @@
-import { put, list, head } from "@vercel/blob";
+import { put, list, getDownloadUrl } from "@vercel/blob";
 
 export type RunStatus =
   | "queued"
@@ -38,6 +38,10 @@ function logsPath(id: string): string {
   return `${LOGS_PREFIX}${id}.log`;
 }
 
+function downloadBlob(url: string): Promise<Response> {
+  return fetch(getDownloadUrl(url));
+}
+
 export async function createRun(trigger: "cron" | "manual"): Promise<RunMeta> {
   const id = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const now = new Date().toISOString();
@@ -50,13 +54,12 @@ export async function createRun(trigger: "cron" | "manual"): Promise<RunMeta> {
   };
 
   await put(metaPath(id), JSON.stringify(meta), {
-    access: "public",
+    access: "private",
     contentType: "application/json"
   });
 
-  // Initialize empty log file
   await put(logsPath(id), "", {
-    access: "public",
+    access: "private",
     contentType: "text/plain"
   });
 
@@ -79,7 +82,7 @@ export async function updateRun(
   };
 
   await put(metaPath(id), JSON.stringify(updated), {
-    access: "public",
+    access: "private",
     contentType: "application/json",
     addRandomSuffix: false
   });
@@ -92,7 +95,7 @@ export async function getRun(id: string): Promise<RunMeta | null> {
   const blob = blobs[0];
   if (!blob) return null;
 
-  const res = await fetch(blob.url);
+  const res = await downloadBlob(blob.url);
   if (!res.ok) return null;
   return res.json() as Promise<RunMeta>;
 }
@@ -100,10 +103,8 @@ export async function getRun(id: string): Promise<RunMeta | null> {
 export async function listRuns(limit = 20): Promise<RunMeta[]> {
   const { blobs } = await list({ prefix: RUNS_PREFIX });
 
-  // Filter to only meta.json files
   const metaBlobs = blobs.filter((b) => b.pathname.endsWith("meta.json"));
 
-  // Sort by upload date descending
   metaBlobs.sort(
     (a, b) =>
       new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()
@@ -112,7 +113,7 @@ export async function listRuns(limit = 20): Promise<RunMeta[]> {
   const runs: RunMeta[] = [];
   for (const blob of metaBlobs.slice(0, limit)) {
     try {
-      const res = await fetch(blob.url);
+      const res = await downloadBlob(blob.url);
       if (res.ok) {
         runs.push((await res.json()) as RunMeta);
       }
@@ -125,21 +126,19 @@ export async function listRuns(limit = 20): Promise<RunMeta[]> {
 }
 
 export async function appendLogs(id: string, lines: string): Promise<void> {
-  // Vercel Blob is append-unfriendly, so we read + append + rewrite.
-  // For large logs this isn't ideal, but it's simple and works without a DB.
   const { blobs } = await list({ prefix: `${LOGS_PREFIX}${id}` });
   const blob = blobs[0];
 
   let existing = "";
   if (blob) {
-    const res = await fetch(blob.url);
+    const res = await downloadBlob(blob.url);
     if (res.ok) {
       existing = await res.text();
     }
   }
 
   await put(logsPath(id), existing + lines, {
-    access: "public",
+    access: "private",
     contentType: "text/plain",
     addRandomSuffix: false
   });
@@ -150,7 +149,7 @@ export async function getLogs(id: string): Promise<string> {
   const blob = blobs[0];
   if (!blob) return "";
 
-  const res = await fetch(blob.url);
+  const res = await downloadBlob(blob.url);
   if (!res.ok) return "";
   return res.text();
 }

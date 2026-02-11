@@ -1,3 +1,4 @@
+import { getDownloadUrl } from "@vercel/blob";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,8 @@ export default async function ViewDiffPage({
     );
   }
 
-  const res = await fetch(url);
+  const downloadUrl = await getDownloadUrl(url);
+  const res = await fetch(downloadUrl);
   if (!res.ok) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-16 font-mono">
@@ -67,7 +69,7 @@ export default async function ViewDiffPage({
             Back to list
           </Link>
           <a
-            href={url}
+            href={downloadUrl}
             download={filename}
             className="rounded bg-white px-3 py-1.5 text-xs text-black hover:bg-neutral-200"
           >
