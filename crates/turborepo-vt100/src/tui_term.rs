@@ -49,7 +49,12 @@ fn fill_buf_cell(
     let fg = screen_cell.fgcolor();
     let bg = screen_cell.bgcolor();
 
-    buf_cell.set_symbol(screen_cell.contents());
+    let contents = screen_cell.contents();
+    if contents.is_empty() {
+        buf_cell.set_symbol(" ");
+    } else {
+        buf_cell.set_symbol(contents);
+    }
     let fg: Color = fg.into();
     let bg: Color = bg.into();
     let mut style = Style::reset();
