@@ -1,7 +1,7 @@
 // This script runs INSIDE a Vercel Sandbox VM.
 // It is uploaded and executed by the serverless function in lib/audit.ts.
 //
-// The sandbox has: node22, pnpm, rust + cargo-audit, and the repo cloned at ./turborepo.
+// The sandbox has: node22, cargo-audit, pnpm, and the repo cloned at ./turborepo.
 // AI_GATEWAY_API_KEY is passed as an env var.
 
 import { ToolLoopAgent, tool, zodSchema, stepCountIs } from "ai";
@@ -11,7 +11,7 @@ import { z } from "zod";
 
 const REPO_DIR = process.env.REPO_DIR ?? "/vercel/sandbox/turborepo";
 const RESULTS_PATH = process.env.RESULTS_PATH ?? "/vercel/sandbox/results.json";
-const MAX_STEPS = 30;
+const MAX_STEPS = 80;
 
 function shell(cmd, { cwd = REPO_DIR, allowFailure = false } = {}) {
   try {
@@ -35,40 +35,37 @@ const agent = new ToolLoopAgent({
   toolChoice: "required",
   instructions: `You are a senior engineer fixing security vulnerabilities in the Turborepo monorepo.
 
-The repo is already cloned at ${REPO_DIR}. cargo-audit, pnpm, and node are installed.
-cargo-audit is a pre-built binary at /usr/local/bin/cargo-audit. Rust is NOT installed — do not try to install it or use cargo for anything other than cargo-audit.
+The repo is cloned at ${REPO_DIR}. Tools available: cargo-audit (at /usr/local/bin/cargo-audit), pnpm, node.
+Rust toolchain is NOT installed — do not try to install it or run cargo build/check/test.
 
-CRITICAL RULES:
-- You MUST use tools for EVERY step. Never generate plain text — it terminates the loop.
-- If you need to think or reason, use the "think" tool.
-- When you are completely done, you MUST call "reportResults" as your final action.
+RULES:
+- ALWAYS use tools. Plain text terminates the loop. Use "think" to reason.
+- Be action-oriented. Do not over-research. Make changes, then verify.
+- Call "reportResults" when done. This is mandatory.
+- You have ${MAX_STEPS} steps total. Budget them: ~5 for audit, ~5 for planning, ~20 for fixing, ~10 for testing, ~5 for re-audit.
 
-Your job:
-1. Run security audits (cargo audit, pnpm audit) to identify vulnerabilities.
-2. Fix them by updating dependency version constraints in manifest files (Cargo.toml, package.json).
-   Do NOT just update lockfiles — that is not a fix.
-3. After making changes, run the relevant test suites to make sure nothing is broken.
-   - For JS/TS: pnpm run check-types (if it exists), pnpm test --filter=<affected>
-   - Rust is not installed, so you cannot run cargo check/build/test. Focus on manifest changes only for Cargo.toml.
-4. If tests fail, read the errors, diagnose the issue, and fix the source code as needed.
-5. Re-run audits to verify the vulnerabilities are resolved.
-6. Repeat until clean or you've exhausted your options.
+STRATEGY — follow this order:
+1. Run "pnpm audit --json" and "cargo-audit audit --json" to get the vulnerability list.
+2. For each vulnerability, determine the fix:
+   a. If a direct dependency can be bumped to a non-vulnerable version, update it in the relevant package.json or Cargo.toml.
+   b. For transitive dependencies that can't be fixed by bumping the direct dep, add a pnpm override in the root package.json (under "pnpm.overrides") to force the patched version.
+   c. For Cargo.toml, update the version constraint to require the patched version.
+3. After editing manifests, run "pnpm install --no-frozen-lockfile" to regenerate the lockfile.
+4. Run "pnpm audit" again to verify fixes.
+5. Run tests for affected packages: "pnpm run check-types --filter=<package>" if available.
+6. Call reportResults with a summary.
 
-Important:
-- The repo is a monorepo with Rust crates in crates/ and JS/TS packages in packages/ and apps/.
-- Cargo.toml workspace is at the root. Individual crates have their own Cargo.toml.
-- pnpm-workspace.yaml defines the JS workspace.
-- Be conservative. Don't bump major versions unless the audit specifically requires it.
-- If a vulnerability cannot be auto-fixed, note it in your report rather than making risky changes.
-- Always explain what you changed and why in the reportResults summary.`,
+IMPORTANT:
+- pnpm overrides go in the ROOT package.json under "pnpm": { "overrides": { "package": ">=version" } }.
+- False positives: if a workspace package name matches an npm package name (e.g. a workspace called "cli" matching the npm "cli" package), skip it — that's a pnpm audit bug.
+- Don't waste steps investigating whether an override will break something. Make the change, run tests, fix if broken.`,
 
   tools: {
     think: tool({
-      description:
-        "Use this tool to reason, plan, or think through a problem. This keeps the agent loop running. Use it instead of generating plain text.",
+      description: "Reason or plan. Use instead of generating text.",
       inputSchema: zodSchema(
         z.object({
-          thought: z.string().describe("Your reasoning or plan")
+          thought: z.string().describe("Your reasoning")
         })
       ),
       execute: async ({ thought }) => {
@@ -79,7 +76,7 @@ Important:
 
     runCommand: tool({
       description:
-        "Run a shell command in the repo directory. Use for audits, builds, tests, git operations, etc.",
+        "Run a shell command in the repo. Use allowFailure:true for commands that might fail (audits, tests).",
       inputSchema: zodSchema(
         z.object({
           command: z.string().describe("The shell command to run"),
@@ -90,9 +87,7 @@ Important:
           allowFailure: z
             .boolean()
             .optional()
-            .describe(
-              "If true, returns output even on non-zero exit (default false)"
-            )
+            .describe("Return output even on non-zero exit (default false)")
         })
       ),
       execute: async ({ command, cwd, allowFailure }) => {
@@ -101,7 +96,6 @@ Important:
           cwd: cwd ?? REPO_DIR,
           allowFailure: allowFailure ?? false
         });
-        // Truncate very long output to avoid blowing up context
         if (output.length > 15000) {
           return (
             output.slice(0, 7000) +
@@ -114,14 +108,10 @@ Important:
     }),
 
     readFile: tool({
-      description: "Read the contents of a file in the repo.",
+      description: "Read a file in the repo.",
       inputSchema: zodSchema(
         z.object({
-          path: z
-            .string()
-            .describe(
-              "File path relative to repo root, e.g. crates/turborepo-lib/Cargo.toml"
-            )
+          path: z.string().describe("File path relative to repo root")
         })
       ),
       execute: async ({ path }) => {
@@ -157,15 +147,12 @@ Important:
     }),
 
     listFiles: tool({
-      description:
-        "List files matching a glob pattern. Useful for finding Cargo.toml or package.json files.",
+      description: "Find files matching a pattern.",
       inputSchema: zodSchema(
         z.object({
           pattern: z
             .string()
-            .describe(
-              'Glob pattern, e.g. "crates/*/Cargo.toml" or "packages/*/package.json"'
-            )
+            .describe('Glob pattern, e.g. "packages/*/package.json"')
         })
       ),
       execute: async ({ pattern }) => {
@@ -177,38 +164,23 @@ Important:
     }),
 
     reportResults: tool({
-      description:
-        "Write the final results JSON. Call this when you are done. This is mandatory.",
+      description: "Write final results. MUST be called as the last action.",
       inputSchema: zodSchema(
         z.object({
-          success: z
-            .boolean()
-            .describe("Whether all vulnerabilities were resolved"),
+          success: z.boolean().describe("Were all vulnerabilities resolved?"),
           summary: z
             .string()
-            .describe(
-              "Human-readable summary of what was done and what the reviewer should know"
-            ),
-          vulnerabilitiesFixed: z
-            .number()
-            .describe("Number of vulnerabilities fixed"),
-          vulnerabilitiesRemaining: z
-            .number()
-            .describe("Number that could not be auto-fixed"),
+            .describe("What was done and what the reviewer should know"),
+          vulnerabilitiesFixed: z.number(),
+          vulnerabilitiesRemaining: z.number(),
           manifestsUpdated: z
             .array(z.string())
-            .describe(
-              "List of manifest files that were modified (Cargo.toml, package.json)"
-            ),
+            .describe("Manifest files modified (Cargo.toml, package.json)"),
           sourceFilesUpdated: z
             .array(z.string())
-            .describe(
-              "List of source files that were modified for compatibility"
-            ),
-          testsPass: z.boolean().describe("Whether tests passed after changes"),
-          auditsClean: z
-            .boolean()
-            .describe("Whether re-running audits shows 0 vulnerabilities")
+            .describe("Source files modified for compatibility"),
+          testsPass: z.boolean(),
+          auditsClean: z.boolean()
         })
       ),
       execute: async (results) => {
@@ -224,13 +196,11 @@ async function main() {
 
   try {
     const result = await agent.generate({
-      prompt:
-        "Run security audits on this repo, fix the vulnerabilities, verify the fixes with tests, and report the results."
+      prompt: `Run security audits on this repo and fix the vulnerabilities. Follow the strategy in your instructions exactly — audit, fix manifests, reinstall, verify, report. Do not over-analyze. Act quickly.`
     });
 
     console.log("\nAgent finished. Final text:", result.text);
 
-    // Ensure results were written even if agent forgot to call reportResults
     if (!existsSync(RESULTS_PATH)) {
       writeFileSync(
         RESULTS_PATH,
