@@ -55,7 +55,8 @@ export async function createRun(trigger: "cron" | "manual"): Promise<RunMeta> {
 
   await put(metaPath(id), JSON.stringify(meta), {
     access: "private",
-    contentType: "application/json"
+    contentType: "application/json",
+    addRandomSuffix: false
   });
 
   return meta;
