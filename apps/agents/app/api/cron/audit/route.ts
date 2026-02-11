@@ -10,6 +10,6 @@ export async function GET(request: Request) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  waitUntil(runAuditAndFix());
+  waitUntil(runAuditAndFix("cron"));
   return Response.json({ ok: true, message: "Audit started" });
 }
