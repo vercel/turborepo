@@ -45,7 +45,7 @@ function createLogBuffer(runId: string) {
     await flush();
   }
 
-  return { start, push, stop };
+  return { start, push, flush, stop };
 }
 
 async function installCargoAudit(sandbox: InstanceType<typeof Sandbox>) {
@@ -96,6 +96,12 @@ export interface FixPRResult {
 
 export async function runSecurityAudit(runId?: string): Promise<AuditResults> {
   const sandbox = await Sandbox.create({ runtime: "node22" });
+  const logBuffer = runId ? createLogBuffer(runId) : null;
+  logBuffer?.start();
+
+  const log = (msg: string) => {
+    logBuffer?.push(`[${new Date().toISOString()}] ${msg}\n`);
+  };
 
   if (runId) {
     await updateRun(runId, {
@@ -105,8 +111,16 @@ export async function runSecurityAudit(runId?: string): Promise<AuditResults> {
   }
 
   try {
+    log("Installing Rust and cargo-audit...");
+    await logBuffer?.flush();
     await installCargoAudit(sandbox);
+
+    log("Installing pnpm...");
+    await logBuffer?.flush();
     await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
+
+    log("Cloning repository...");
+    await logBuffer?.flush();
     await sandbox.runCommand("git", [
       "clone",
       "--depth",
@@ -115,25 +129,31 @@ export async function runSecurityAudit(runId?: string): Promise<AuditResults> {
       "turborepo"
     ]);
 
+    log("Running cargo audit...");
+    await logBuffer?.flush();
     const cargoResult = await sandbox.runCommand("bash", [
       "-c",
       "cd turborepo && cargo-audit audit --json 2>&1 || true"
     ]);
     const cargoRaw = await cargoResult.stdout();
 
+    log("Running pnpm audit...");
+    await logBuffer?.flush();
     const pnpmResult = await sandbox.runCommand("bash", [
       "-c",
       "cd turborepo && pnpm audit --json 2>&1 || true"
     ]);
     const pnpmRaw = await pnpmResult.stdout();
 
-    return {
-      cargo: parseCargoAudit(cargoRaw),
-      pnpm: parsePnpmAudit(pnpmRaw),
-      cargoRaw,
-      pnpmRaw
-    };
+    const cargo = parseCargoAudit(cargoRaw);
+    const pnpm = parsePnpmAudit(pnpmRaw);
+    log(
+      `Scan complete: ${cargo.length} cargo vulns, ${pnpm.length} pnpm vulns`
+    );
+
+    return { cargo, pnpm, cargoRaw, pnpmRaw };
   } finally {
+    await logBuffer?.stop();
     await sandbox.stop();
   }
 }
@@ -172,11 +192,13 @@ export async function runAuditFix(
     };
 
     log("Installing tooling...");
+    await logBuffer?.flush();
     await onProgress?.("Installing tooling...");
     await installCargoAudit(sandbox);
     await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
 
     log("Cloning repository...");
+    await logBuffer?.flush();
     await onProgress?.("Cloning repository...");
     await sandbox.runCommand("bash", [
       "-c",
@@ -194,6 +216,7 @@ export async function runAuditFix(
     ]);
 
     log("Installing agent dependencies...");
+    await logBuffer?.flush();
     await onProgress?.("Installing agent dependencies...");
     await sandbox.runCommand("npm", ["install", "ai", "zod"]);
 
@@ -203,6 +226,7 @@ export async function runAuditFix(
     ]);
 
     log("Running audit fix agent...");
+    await logBuffer?.flush();
     await onProgress?.("Running audit fix agent...");
 
     // Run the agent in detached mode so we can stream logs in real-time
