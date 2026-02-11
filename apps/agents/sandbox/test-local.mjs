@@ -55,16 +55,16 @@ async function main() {
     ]);
 
     console.log("Running agent...\n---");
-    const result = await sandbox.runCommand(
-      "bash",
-      ["-c", `AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY} node audit-fix-agent.mjs`],
-    );
+    const result = await sandbox.runCommand({
+      cmd: "bash",
+      args: [
+        "-c",
+        `AI_GATEWAY_API_KEY=${AI_GATEWAY_API_KEY} node audit-fix-agent.mjs`,
+      ],
+      stdout: process.stdout,
+      stderr: process.stderr,
+    });
 
-    const stdout = await result.stdout();
-    const stderr = await result.stderr();
-
-    if (stdout) console.log(stdout);
-    if (stderr) console.error(stderr);
     console.log("---\nAgent exited with code:", result.exitCode);
 
     // Read results
@@ -94,6 +94,8 @@ async function main() {
       console.log("\nNo changes made.");
     }
   } finally {
+    // Let streams drain before tearing down the sandbox connection
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     console.log("\nStopping sandbox...");
     await sandbox.stop();
     console.log("Done.");
