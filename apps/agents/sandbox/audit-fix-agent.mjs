@@ -11,19 +11,40 @@ import { z } from "zod";
 
 const REPO_DIR = process.env.REPO_DIR ?? "/vercel/sandbox/turborepo";
 const RESULTS_PATH = process.env.RESULTS_PATH ?? "/vercel/sandbox/results.json";
-const MAX_STEPS = 80;
+const MAX_STEPS = 200;
 
 function shell(cmd, { cwd = REPO_DIR, allowFailure = false } = {}) {
   try {
-    return execSync(cmd, {
-      cwd,
-      encoding: "utf-8",
-      timeout: 120_000,
-      env: process.env
-    }).trim();
-  } catch (e) {
-    if (allowFailure) {
-      return `EXIT CODE ${e.status}\nSTDOUT:\n${e.stdout?.trim() ?? ""}\nSTDERR:\n${e.stderr?.trim() ?? ""}`;
+    const result = await agent.generate({
+      prompt: `Run security audits on this repo and fix the vulnerabilities. Follow the strategy in your instructions exactly — audit, fix manifests, reinstall, verify, report. Do not over-analyze. Act quickly.`,
+    });
+
+    console.log("\nAgent finished.");
+
+    // Extract results from the reportResults tool call (it has no execute, so args are in toolCalls)
+    const reportCall = result.steps
+      .flatMap((s) => s.toolCalls ?? [])
+      .find((tc) => tc.toolName === "reportResults");
+
+    if (reportCall) {
+      console.log("Results from reportResults tool call.");
+      writeFileSync(RESULTS_PATH, JSON.stringify(reportCall.args, null, 2), "utf-8");
+    } else if (!existsSync(RESULTS_PATH)) {
+      console.log("Agent did not call reportResults.");
+      writeFileSync(
+        RESULTS_PATH,
+        JSON.stringify({
+          success: false,
+          summary: `Agent completed without calling reportResults. Final text: ${result.text}`,
+          vulnerabilitiesFixed: 0,
+          vulnerabilitiesRemaining: -1,
+          manifestsUpdated: [],
+          sourceFilesUpdated: [],
+          testsPass: false,
+          auditsClean: false,
+        }),
+        "utf-8",
+      );
     }
     throw e;
   }
@@ -41,8 +62,7 @@ Rust toolchain is NOT installed — do not try to install it or run cargo build/
 RULES:
 - ALWAYS use tools. Plain text terminates the loop. Use "think" to reason.
 - Be action-oriented. Do not over-research. Make changes, then verify.
-- Call "reportResults" when done. This is mandatory.
-- You have ${MAX_STEPS} steps total. Budget them: ~5 for audit, ~5 for planning, ~20 for fixing, ~10 for testing, ~5 for re-audit.
+- Call "reportResults" when done. This is mandatory — it stops the loop.
 
 STRATEGY — follow this order:
 1. Run "pnpm audit --json" and "cargo-audit audit --json" to get the vulnerability list.
@@ -164,7 +184,8 @@ IMPORTANT:
     }),
 
     reportResults: tool({
-      description: "Write final results. MUST be called as the last action.",
+      description:
+        "Write final results. MUST be called as the last action. This stops the agent loop.",
       inputSchema: zodSchema(
         z.object({
           success: z.boolean().describe("Were all vulnerabilities resolved?"),
@@ -180,40 +201,12 @@ IMPORTANT:
             .array(z.string())
             .describe("Source files modified for compatibility"),
           testsPass: z.boolean(),
-          auditsClean: z.boolean()
-        })
-      ),
-      execute: async (results) => {
-        writeFileSync(RESULTS_PATH, JSON.stringify(results, null, 2), "utf-8");
-        return "Results written. Agent complete.";
-      }
-    })
-  }
-});
-
-async function main() {
-  console.log("Starting audit fix agent...");
-
-  try {
-    const result = await agent.generate({
-      prompt: `Run security audits on this repo and fix the vulnerabilities. Follow the strategy in your instructions exactly — audit, fix manifests, reinstall, verify, report. Do not over-analyze. Act quickly.`
-    });
-
-    console.log("\nAgent finished. Final text:", result.text);
-
-    if (!existsSync(RESULTS_PATH)) {
-      writeFileSync(
-        RESULTS_PATH,
-        JSON.stringify({
-          success: false,
-          summary: `Agent completed without calling reportResults. Final text: ${result.text}`,
-          vulnerabilitiesFixed: 0,
-          vulnerabilitiesRemaining: -1,
-          manifestsUpdated: [],
-          sourceFilesUpdated: [],
-          testsPass: false,
-          auditsClean: false
+          auditsClean: z.boolean(),
         }),
+      ),
+      // No execute function — this stops the agent loop.
+      // Results are extracted from the tool call args in main().
+    }),
         "utf-8"
       );
     }
