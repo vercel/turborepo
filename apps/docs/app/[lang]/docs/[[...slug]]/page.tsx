@@ -83,6 +83,11 @@ export const generateMetadata = async ({
     description: page.data.description,
     openGraph: {
       images: getPageImage(page).url
+    },
+    alternates: {
+      types: {
+        "text/markdown": slug ? `/docs/${slug}.md` : "/docs.md"
+      }
     }
   };
 
