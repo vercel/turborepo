@@ -54,8 +54,8 @@ export async function createRun(trigger: "cron" | "manual"): Promise<RunMeta> {
     contentType: "application/json"
   });
 
-  // Initialize empty log file
-  await put(logsPath(id), "", {
+  // Initialize empty log file (use a space — the SDK rejects empty strings as falsy)
+  await put(logsPath(id), " ", {
     access: "private",
     contentType: "text/plain"
   });
@@ -136,11 +136,11 @@ export async function appendLogs(id: string, lines: string): Promise<void> {
   if (blob) {
     const result = await get(blob.url, { access: "private" });
     if (result) {
-      existing = await new Response(result.stream).text();
+      existing = (await new Response(result.stream).text()).trimStart();
     }
   }
 
-  await put(logsPath(id), existing + lines, {
+  await put(logsPath(id), existing + lines || " ", {
     access: "private",
     contentType: "text/plain",
     addRandomSuffix: false
@@ -154,5 +154,5 @@ export async function getLogs(id: string): Promise<string> {
 
   const result = await get(blob.url, { access: "private" });
   if (!result) return "";
-  return new Response(result.stream).text();
+  return (await new Response(result.stream).text()).trimStart();
 }
