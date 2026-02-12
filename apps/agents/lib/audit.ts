@@ -95,7 +95,10 @@ export interface FixPRResult {
 }
 
 export async function runSecurityAudit(runId?: string): Promise<AuditResults> {
-  const sandbox = await Sandbox.create({ runtime: "node22" });
+  const sandbox = await Sandbox.create({
+    runtime: "node22",
+    timeout: 18_000_000 // 5 hours
+  });
 
   if (runId) {
     await updateRun(runId, {
