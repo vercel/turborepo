@@ -1,4 +1,4 @@
-import { put, list, head, get } from "@vercel/blob";
+import { put, list, get } from "@vercel/blob";
 
 export type RunStatus =
   | "queued"

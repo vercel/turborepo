@@ -1,6 +1,5 @@
 import { verifySlackRequest, updateMessage } from "@/lib/slack";
 import { addComment } from "@/lib/github";
-import type { AgentResults } from "@/lib/audit";
 import { REPRODUCTION_REQUEST } from "@/lib/templates";
 
 interface SlackAction {
