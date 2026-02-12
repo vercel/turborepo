@@ -8,7 +8,7 @@ export async function uploadDiff(
   const filename = `diffs/${branch}-${timestamp}.patch`;
 
   const { url } = await put(filename, diff, {
-    access: "public",
+    access: "private",
     contentType: "text/plain"
   });
 

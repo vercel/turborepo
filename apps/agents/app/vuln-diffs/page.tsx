@@ -47,8 +47,7 @@ export default async function DiffsPage() {
                       View
                     </Link>
                     <a
-                      href={blob.url}
-                      download={name}
+                      href={`/api/blob?url=${encodeURIComponent(blob.url)}&filename=${encodeURIComponent(name)}`}
                       className="rounded bg-white px-3 py-1.5 text-xs text-black hover:bg-neutral-200"
                     >
                       Download
