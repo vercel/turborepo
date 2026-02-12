@@ -81,7 +81,8 @@ export async function updateRun(
   await put(metaPath(id), JSON.stringify(updated), {
     access: "private",
     contentType: "application/json",
-    addRandomSuffix: false
+    addRandomSuffix: false,
+    allowOverwrite: true
   });
 
   return updated;
@@ -143,7 +144,8 @@ export async function appendLogs(id: string, lines: string): Promise<void> {
   await put(logsPath(id), existing + lines || " ", {
     access: "private",
     contentType: "text/plain",
-    addRandomSuffix: false
+    addRandomSuffix: false,
+    allowOverwrite: true
   });
 }
 
