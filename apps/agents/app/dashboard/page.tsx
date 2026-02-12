@@ -8,7 +8,6 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   queued: { label: "Queued", color: "text-neutral-400" },
   scanning: { label: "Scanning", color: "text-blue-400" },
   fixing: { label: "Fixing", color: "text-yellow-400" },
-  pushing: { label: "Pushing", color: "text-purple-400" },
   completed: { label: "Completed", color: "text-green-400" },
   failed: { label: "Failed", color: "text-red-400" }
 };
@@ -18,7 +17,7 @@ function StatusBadge({ status }: { status: string }) {
     label: status,
     color: "text-neutral-400"
   };
-  const isActive = ["queued", "scanning", "fixing", "pushing"].includes(status);
+  const isActive = ["queued", "scanning", "fixing"].includes(status);
 
   return (
     <span
@@ -96,7 +95,7 @@ export default function DashboardPage() {
   }, []);
 
   const activeRuns = runs.filter((r) =>
-    ["queued", "scanning", "fixing", "pushing"].includes(r.status)
+    ["queued", "scanning", "fixing"].includes(r.status)
   );
   const pastRuns = runs.filter(
     (r) => r.status === "completed" || r.status === "failed"

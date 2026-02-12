@@ -1,6 +1,5 @@
 import { verifySlackRequest, updateMessage } from "@/lib/slack";
 import { addComment } from "@/lib/github";
-import { openFixPR, type AgentResults } from "@/lib/audit";
 import { REPRODUCTION_REQUEST } from "@/lib/templates";
 
 interface SlackAction {
@@ -60,46 +59,6 @@ export async function POST(request: Request) {
         channel,
         messageTs,
         `:heavy_minus_sign: ${mention} dismissed${issueRef} — no reproduction request needed`
-      );
-      break;
-    }
-
-    case "audit_open_pr": {
-      let parsed: { branch: string; agentResults: AgentResults };
-      try {
-        parsed = JSON.parse(action.value ?? "{}");
-      } catch {
-        await updateMessage(
-          channel,
-          messageTs,
-          `:x: Failed to parse action data`
-        );
-        break;
-      }
-
-      try {
-        const pr = await openFixPR(parsed.branch, parsed.agentResults);
-        await updateMessage(
-          channel,
-          messageTs,
-          `:white_check_mark: ${mention} opened <${pr.prUrl}|PR #${pr.prNumber}>`
-        );
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        await updateMessage(
-          channel,
-          messageTs,
-          `:x: ${mention} failed to open PR: ${msg}`
-        );
-      }
-      break;
-    }
-
-    case "audit_dismiss": {
-      await updateMessage(
-        channel,
-        messageTs,
-        `:heavy_minus_sign: ${mention} dismissed the audit results`
       );
       break;
     }
