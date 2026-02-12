@@ -146,6 +146,18 @@ importers:
       '@shikijs/transformers':
         specifier: ^3.22.0
         version: 3.22.0
+      '@streamdown/cjk':
+        specifier: ^1.0.1
+        version: 1.0.2(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(react@19.2.4)(unified@11.0.5)
+      '@streamdown/code':
+        specifier: ^1.0.1
+        version: 1.0.2(react@19.2.4)
+      '@streamdown/math':
+        specifier: ^1.0.1
+        version: 1.0.2(react@19.2.4)
+      '@streamdown/mermaid':
+        specifier: ^1.0.1
+        version: 1.0.2(react@19.2.4)
       '@upstash/redis':
         specifier: 1.35.7
         version: 1.35.7
@@ -254,9 +266,6 @@ importers:
       recharts:
         specifier: ^3.7.0
         version: 3.7.0(@types/react@19.2.13)(react-dom@19.2.4(react@19.2.4))(react-is@18.3.1)(react@19.2.4)(redux@5.0.1)
-      rehype-harden:
-        specifier: ^1.1.6
-        version: 1.1.7
       shiki:
         specifier: ^3.22.0
         version: 3.22.0
@@ -264,8 +273,8 @@ importers:
         specifier: ^2.0.7
         version: 2.0.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       streamdown:
-        specifier: ^1.6.10
-        version: 1.6.11(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(react@19.2.4)
+        specifier: ^2.1.0
+        version: 2.2.0(react@19.2.4)
       tailwind-merge:
         specifier: ^3.4.0
         version: 3.4.0
@@ -3672,6 +3681,26 @@ packages:
   '@standard-schema/utils@0.3.0':
     resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
 
+  '@streamdown/cjk@1.0.2':
+    resolution: {integrity: sha512-5OOuZjj2Lnae92Zmg2gA5hloSbcKj25gv+QY4iKbYI+iRsiGWbgmYxmgxNUSO9SR6BKOCy783UHN1HM/QEUpdw==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+
+  '@streamdown/code@1.0.2':
+    resolution: {integrity: sha512-QKLS3sC8no5y0YvhGLA+ZjtNhznWU09IvFcjRKgSA35ulckMLw3b5T1ha+o1DaW8BS8l0zceLPFZa3/X9+agWQ==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+
+  '@streamdown/math@1.0.2':
+    resolution: {integrity: sha512-r8Ur9/lBuFnzZAFdEWrLUF2s/gRwRRRwruqltdZibyjbCBnuW7SJbFm26nXqvpJPW/gzpBUMrBVBzd88z05D5g==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+
+  '@streamdown/mermaid@1.0.2':
+    resolution: {integrity: sha512-Fr/4sBWnAeSnxM3PcrV/+DiZe5oPMq9gOkUIAH7ZauJeuwrZ/DVzD4g0zlav6AH0axh2m/sOfrfLtY5aLT7niw==}
+    peerDependencies:
+      react: ^18.0.0 || ^19.0.0
+
   '@svta/cml-608@1.0.1':
     resolution: {integrity: sha512-Y/Ier9VPUSOBnf0bJqdDyTlPrt4dDB+jk5mYHa1bnD2kcRl8qn7KkW3PRuj4w1aVN+BS2eHmsLxodt7P2hylUg==}
     engines: {node: '>=20'}
@@ -6217,10 +6246,6 @@ packages:
   hast-util-whitespace@3.0.0:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
 
-  hast@1.0.0:
-    resolution: {integrity: sha512-vFUqlRV5C+xqP76Wwq2SrM0kipnmpxJm7OfvVXpB35Fp+Fn4MV+ozr+JZr5qFvyR1q/U+Foim2x+3P+x9S1PLA==}
-    deprecated: Renamed to rehype
-
   hastscript@9.0.1:
     resolution: {integrity: sha512-g7df9rMFX/SPi34tyGCyUBREQoKkapwdY/T04Qn9TDWfHhAYt4/I0gMVirzK5wEzeUqIjEB+LXC/ypb7Aqno5w==}
 
@@ -7016,11 +7041,6 @@ packages:
     resolution: {integrity: sha512-jumlc0BIUrS3qJGgIkWZsyfAM7NCWiBcCDhnd+3NNM5KbBmLTgHVfWBcg6W+rLUsIpzpERPsvwUP7CckAQSOoA==}
     engines: {node: '>=12'}
 
-  lucide-react@0.542.0:
-    resolution: {integrity: sha512-w3hD8/SQB7+lzU2r4VdFyzzOzKnUjTZIF/MQJGSSvni7Llewni4vuViRppfRAa2guOsY5k4jZyxw/i9DQHv+dw==}
-    peerDependencies:
-      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
-
   lucide-react@0.555.0:
     resolution: {integrity: sha512-D8FvHUGbxWBRQM90NZeIyhAvkFfsh3u9ekrMvJ30Z6gnpBHS6HC6ldLg7tL45hwiIz/u66eKDtdA23gwwGsAHA==}
     peerDependencies:
@@ -7071,6 +7091,11 @@ packages:
 
   marked@16.4.2:
     resolution: {integrity: sha512-TI3V8YYWvkVf3KJe1dRkpnjs68JUPyEa5vjKrp1XEEJUAOaQc+Qj+L1qWbPd0SJuAdQkFU0h73sXXqwDYxsiDA==}
+    engines: {node: '>= 20'}
+    hasBin: true
+
+  marked@17.0.2:
+    resolution: {integrity: sha512-s5HZGFQea7Huv5zZcAGhJLT3qLpAfnY7v7GWkICUr0+Wd5TFEtdlRR2XUL5Gg+RH7u2Df595ifrxR03mBaw7gA==}
     engines: {node: '>= 20'}
     hasBin: true
 
@@ -8137,8 +8162,8 @@ packages:
   remark@15.0.1:
     resolution: {integrity: sha512-Eht5w30ruCXgFmxVUSlNWQ9iiimq07URKeFS3hNc8cUWy1llX4KDWfyEDZRycMc+znsN9Ux5/tJ/BFdgdOwA3A==}
 
-  remend@1.0.1:
-    resolution: {integrity: sha512-152puVH0qMoRJQFnaMG+rVDdf01Jq/CaED+MBuXExurJgdbkLp0c3TIe4R12o28Klx8uyGsjvFNG05aFG69G9w==}
+  remend@1.2.0:
+    resolution: {integrity: sha512-NbKrdWweTRuByPYErzQCNpNtsR9M1QQ0hK2UzmnmlSaEqHnkQ5Korlyi8KpdbOJ0rImJfRy4EAY0uDxYnL9Plw==}
 
   require-directory@2.1.1:
     resolution: {integrity: sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==}
@@ -8454,8 +8479,8 @@ packages:
     resolution: {integrity: sha512-UhDfHmA92YAlNnCfhmq0VeNL5bDbiZGg7sZ2IvPsXubGkiNa9EC+tUTsjBRsYUAz87btI6/1wf4XoVvQ3uRnmQ==}
     engines: {node: '>=18'}
 
-  streamdown@1.6.11:
-    resolution: {integrity: sha512-Y38fwRx5kCKTluwM+Gf27jbbi9q6Qy+WC9YrC1YbCpMkktT3PsRBJHMWiqYeF8y/JzLpB1IzDoeaB6qkQEDnAA==}
+  streamdown@2.2.0:
+    resolution: {integrity: sha512-Y51o1I/sjpAy4Yn7j7R4TbUl9gcUZ7BTrHS+68IhrUBoYpNQZ28z06vww1MBFu4mSwvgF8xQIxIH2b9S9IHDyQ==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
 
@@ -11754,6 +11779,37 @@ snapshots:
 
   '@standard-schema/utils@0.3.0': {}
 
+  '@streamdown/cjk@1.0.2(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(react@19.2.4)(unified@11.0.5)':
+    dependencies:
+      react: 19.2.4
+      remark-cjk-friendly: 1.2.3(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(unified@11.0.5)
+      remark-cjk-friendly-gfm-strikethrough: 1.2.3(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(unified@11.0.5)
+      unist-util-visit: 5.0.0
+    transitivePeerDependencies:
+      - '@types/mdast'
+      - micromark
+      - micromark-util-types
+      - unified
+
+  '@streamdown/code@1.0.2(react@19.2.4)':
+    dependencies:
+      react: 19.2.4
+      shiki: 3.22.0
+
+  '@streamdown/math@1.0.2(react@19.2.4)':
+    dependencies:
+      katex: 0.16.28
+      react: 19.2.4
+      rehype-katex: 7.0.1
+      remark-math: 6.0.0
+    transitivePeerDependencies:
+      - supports-color
+
+  '@streamdown/mermaid@1.0.2(react@19.2.4)':
+    dependencies:
+      mermaid: 11.12.2
+      react: 19.2.4
+
   '@svta/cml-608@1.0.1': {}
 
   '@svta/cml-cmcd@1.0.1(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)':
@@ -14490,8 +14546,6 @@ snapshots:
     dependencies:
       '@types/hast': 3.0.4
 
-  hast@1.0.0: {}
-
   hastscript@9.0.1:
     dependencies:
       '@types/hast': 3.0.4
@@ -15447,10 +15501,6 @@ snapshots:
 
   lru-cache@7.18.3: {}
 
-  lucide-react@0.542.0(react@19.2.4):
-    dependencies:
-      react: 19.2.4
-
   lucide-react@0.555.0(react@19.2.4):
     dependencies:
       react: 19.2.4
@@ -15499,6 +15549,8 @@ snapshots:
       supports-hyperlinks: 3.2.0
 
   marked@16.4.2: {}
+
+  marked@17.0.2: {}
 
   marked@9.1.6: {}
 
@@ -17097,7 +17149,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  remend@1.0.1: {}
+  remend@1.2.0: {}
 
   require-directory@2.1.1: {}
 
@@ -17481,36 +17533,25 @@ snapshots:
 
   stdin-discarder@0.2.2: {}
 
-  streamdown@1.6.11(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(react@19.2.4):
+  streamdown@2.2.0(react@19.2.4):
     dependencies:
       clsx: 2.1.1
-      hast: 1.0.0
       hast-util-to-jsx-runtime: 2.3.6
       html-url-attributes: 3.0.1
-      katex: 0.16.28
-      lucide-react: 0.542.0(react@19.2.4)
-      marked: 16.4.2
-      mermaid: 11.12.2
+      marked: 17.0.2
       react: 19.2.4
       rehype-harden: 1.1.7
-      rehype-katex: 7.0.1
       rehype-raw: 7.0.0
       rehype-sanitize: 6.0.0
-      remark-cjk-friendly: 1.2.3(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(unified@11.0.5)
-      remark-cjk-friendly-gfm-strikethrough: 1.2.3(@types/mdast@4.0.4)(micromark-util-types@2.0.2)(micromark@4.0.2)(unified@11.0.5)
       remark-gfm: 4.0.1
-      remark-math: 6.0.0
       remark-parse: 11.0.0
       remark-rehype: 11.1.2
-      remend: 1.0.1
-      shiki: 3.22.0
+      remend: 1.2.0
       tailwind-merge: 3.4.0
       unified: 11.0.5
       unist-util-visit: 5.0.0
+      unist-util-visit-parents: 6.0.2
     transitivePeerDependencies:
-      - '@types/mdast'
-      - micromark
-      - micromark-util-types
       - supports-color
 
   streamx@2.23.0:

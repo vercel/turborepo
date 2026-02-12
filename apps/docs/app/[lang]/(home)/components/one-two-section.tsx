@@ -20,6 +20,6 @@ export const OneTwoSection = ({
         {description}
       </p>
     </div>
-    <div className="col-span-2 sm:p-12">{children}</div>
+    <div className="sm:col-span-2 sm:p-12">{children}</div>
   </div>
 );

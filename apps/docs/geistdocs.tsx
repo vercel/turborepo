@@ -85,3 +85,5 @@ export const translations = {
 };
 
 export const basePath: string | undefined = undefined;
+
+export const siteId: string | undefined = "turborepo";

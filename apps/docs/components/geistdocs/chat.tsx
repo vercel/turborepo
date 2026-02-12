@@ -8,7 +8,6 @@ import { ChevronRightIcon, MessagesSquareIcon, Trash } from "lucide-react";
 import { Portal } from "radix-ui";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { defaultRehypePlugins } from "streamdown";
 import type { MyUIMessage } from "@/app/api/chat/types";
 import {
   Conversation,
@@ -22,8 +21,6 @@ import {
 } from "@/components/ai-elements/message";
 import {
   PromptInput,
-  PromptInputAttachment,
-  PromptInputAttachments,
   PromptInputBody,
   PromptInputFooter,
   type PromptInputProps,
@@ -31,7 +28,6 @@ import {
   PromptInputSubmit,
   PromptInputTextarea
 } from "@/components/ai-elements/prompt-input";
-import { Shimmer } from "@/components/ai-elements/shimmer";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
@@ -46,6 +42,17 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { CopyChat } from "./copy-chat";
 import { MessageMetadata } from "./message-metadata";
 
+const isFromPreviousDay = (timestamp: number): boolean => {
+  const messageDate = new Date(timestamp);
+  const today = new Date();
+
+  return (
+    messageDate.getFullYear() !== today.getFullYear() ||
+    messageDate.getMonth() !== today.getMonth() ||
+    messageDate.getDate() !== today.getDate()
+  );
+};
+
 export const useChatPersistence = () => {
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined
@@ -56,8 +63,23 @@ export const useChatPersistence = () => {
     db.messages.orderBy("sequence").toArray()
   );
 
+  // Clear messages if they're from a previous day
+  useEffect(() => {
+    if (storedMessages && storedMessages.length > 0) {
+      const firstMessage = storedMessages[0];
+      if (firstMessage && isFromPreviousDay(firstMessage.timestamp)) {
+        db.messages.clear();
+      }
+    }
+  }, [storedMessages]);
+
+  // Filter out stale messages from previous days
+  const freshMessages = storedMessages?.filter(
+    (msg) => !isFromPreviousDay(msg.timestamp)
+  );
+
   const initialMessages =
-    storedMessages?.map(
+    freshMessages?.map(
       ({ timestamp: _timestamp, sequence: _sequence, ...message }) => message
     ) ?? [];
 
@@ -120,9 +142,12 @@ type ChatProps = {
   suggestions: string[];
 };
 
-const { harden, ...plugins } = defaultRehypePlugins;
+type ChatInnerProps = ChatProps & {
+  isOpen: boolean;
+};
 
-const ChatInner = ({ basePath, suggestions }: ChatProps) => {
+const ChatInner = ({ basePath, suggestions, isOpen }: ChatInnerProps) => {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [isInitialized, setIsInitialized] = useState(false);
   const [localPrompt, setLocalPrompt] = useState("");
   const [providerKey, setProviderKey] = useState(0);
@@ -167,15 +192,32 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
     }
   }, [messages, saveMessages, isInitialized]);
 
-  const handleSuggestionClick = (suggestion: string) => {
-    stop();
+  // Focus textarea when chat opens
+  useEffect(() => {
+    if (isOpen) {
+      // Small delay to ensure the panel/drawer animation has started
+      const timer = setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
+  const handleSuggestionClick = async (text: string) => {
+    if (status === "streaming" || status === "submitted") {
+      return;
+    }
     setLocalPrompt("");
     setPrompt("");
-    void sendMessage({ text: suggestion });
+    await sendMessage({ text });
   };
 
-  const handleSubmit: PromptInputProps["onSubmit"] = (message, event) => {
+  const handleSubmit: PromptInputProps["onSubmit"] = async (message, event) => {
     event.preventDefault();
+
+    if (status === "streaming" || status === "submitted") {
+      return;
+    }
 
     const { text } = message;
 
@@ -183,16 +225,13 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
       return;
     }
 
-    stop();
     setLocalPrompt("");
     setPrompt("");
-    void sendMessage({ text });
+    await sendMessage({ text });
   };
 
   const handleClearChat = async () => {
     try {
-      // Cancel any active stream first
-      stop();
       await clearMessages();
       setMessages([]);
       toast.success("Chat history cleared");
@@ -206,14 +245,14 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
   // Show loading state while initial messages are being loaded
   if (isLoading) {
     return (
-      <div className="flex size-full w-full flex-col items-center justify-center overflow-hidden rounded-xl xl:max-w-md xl:border xl:bg-background">
+      <div className="flex size-full w-full flex-col items-center justify-center overflow-hidden whitespace-nowrap rounded-xl xl:max-w-md xl:border xl:bg-background">
         <Spinner />
       </div>
     );
   }
 
   return (
-    <div className="flex size-full w-full flex-col overflow-hidden bg-background">
+    <div className="flex size-full w-full flex-col overflow-hidden whitespace-nowrap bg-background">
       <div className="flex items-center justify-between px-4 py-2.5">
         <h2 className="font-semibold text-sm">Chat</h2>
         <div className="flex items-center gap-3">
@@ -250,91 +289,32 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
 
       <Conversation>
         <ConversationContent>
-          {messages
-            .filter((message, index, arr) => {
-              const isLastMessage = index === arr.length - 1;
-              const isStreaming =
-                isLastMessage &&
-                message.role === "assistant" &&
-                (status === "streaming" || status === "submitted");
-              const hasText = message.parts.some(
-                (part) => part.type === "text" && part.text
-              );
-              // Include message if it has text OR if it's actively streaming
-              return hasText || isStreaming;
-            })
-            .map((message, index, filteredMessages) => {
-              const isLastMessage = index === filteredMessages.length - 1;
-              const isAssistantMessage = message.role === "assistant";
-              const isStreaming =
-                isLastMessage &&
-                isAssistantMessage &&
-                (status === "streaming" || status === "submitted");
-              const hasTextContent = message.parts.some(
-                (part) => part.type === "text"
-              );
-
-              return (
-                <Message from={message.role} key={message.id}>
-                  {isAssistantMessage && (
-                    <MessageMetadata
-                      messageId={message.id}
-                      inProgress={status === "submitted"}
-                      isStreaming={isStreaming}
-                      parts={message.parts as MyUIMessage["parts"]}
-                    />
-                  )}
-                  {isStreaming && !hasTextContent && (
-                    <div className="flex items-center gap-2">
-                      <Spinner />
-                      <Shimmer>
-                        {message.parts.some((p) => p.type === "source-url")
-                          ? "Generating response..."
-                          : "Looking up sources..."}
-                      </Shimmer>
-                    </div>
-                  )}
-                  {message.parts
-                    .filter((part) => part.type === "text")
-                    .map((part, partIndex) => (
-                      <MessageContent
-                        key={`${message.id}-${part.type}-${partIndex}`}
-                      >
-                        {isAssistantMessage ? (
-                          <MessageResponse
-                            className="text-wrap"
-                            rehypePlugins={[
-                              ...Object.values(plugins),
-                              [
-                                harden,
-                                {
-                                  defaultOrigin:
-                                    process.env
-                                      .NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL,
-                                  allowedLinkPrefixes: ["*"]
-                                }
-                              ]
-                            ]}
-                          >
-                            {part.text}
-                          </MessageResponse>
-                        ) : (
-                          part.text
-                        )}
-                      </MessageContent>
-                    ))}
-                </Message>
-              );
-            })}
-          {(status === "submitted" || status === "streaming") &&
-            !messages.some((m) => m.role === "assistant") && (
-              <Message from="assistant">
-                <div className="flex items-center gap-2">
-                  <Spinner />
-                  <Shimmer>Looking up sources...</Shimmer>
-                </div>
-              </Message>
-            )}
+          {messages.map((message) => (
+            <Message
+              className="max-w-[90%]"
+              from={message.role}
+              key={message.id}
+            >
+              <MessageMetadata
+                inProgress={status === "submitted" || status === "streaming"}
+                parts={message.parts as MyUIMessage["parts"]}
+              />
+              {message.parts
+                .filter((part) => part.type === "text")
+                .map((part, index) => (
+                  <MessageContent key={`${message.id}-${part.type}-${index}`}>
+                    <MessageResponse className="text-wrap">
+                      {part.text}
+                    </MessageResponse>
+                  </MessageContent>
+                ))}
+            </Message>
+          ))}
+          {status === "submitted" && (
+            <div className="size-12 text-muted-foreground text-sm">
+              <Spinner />
+            </div>
+          )}
         </ConversationContent>
         <ConversationScrollButton className="border-none bg-foreground text-background hover:bg-foreground/80 hover:text-background" />
       </Conversation>
@@ -363,10 +343,7 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
           </>
         )}
         <PromptInputProvider initialInput={localPrompt} key={providerKey}>
-          <PromptInput globalDrop multiple onSubmit={handleSubmit}>
-            <PromptInputAttachments>
-              {(attachment) => <PromptInputAttachment data={attachment} />}
-            </PromptInputAttachments>
+          <PromptInput onSubmit={handleSubmit}>
             <PromptInputBody>
               <PromptInputTextarea
                 maxLength={1000}
@@ -374,13 +351,24 @@ const ChatInner = ({ basePath, suggestions }: ChatProps) => {
                   setLocalPrompt(e.target.value);
                   setPrompt(e.target.value);
                 }}
+                ref={textareaRef}
               />
             </PromptInputBody>
             <PromptInputFooter>
               <p className="text-muted-foreground text-xs">
                 {localPrompt.length} / 1000
               </p>
-              <PromptInputSubmit onStop={stop} status={status} />
+              <PromptInputSubmit
+                onClick={
+                  status === "streaming"
+                    ? (e) => {
+                        e.preventDefault();
+                        stop();
+                      }
+                    : undefined
+                }
+                status={status}
+              />
             </PromptInputFooter>
           </PromptInput>
         </PromptInputProvider>
@@ -427,18 +415,20 @@ export const Chat = ({ basePath, suggestions }: ChatProps) => {
         <span>Ask AI</span>
       </Button>
 
-      <Portal.Root>
+      <Portal.Root className="hidden md:block">
         <div
           className={cn(
             "fixed z-50 flex flex-col gap-4 bg-background transition-all",
             "inset-y-0 right-0 h-full w-3/4 border-l sm:max-w-sm",
-            "translate-x-full data-[state=open]:translate-x-0",
-            "pointer-events-none data-[state=open]:pointer-events-auto",
-            "hidden md:flex"
+            "translate-x-full data-[state=open]:translate-x-0"
           )}
           data-state={isOpen ? "open" : "closed"}
         >
-          <ChatInner basePath={basePath} suggestions={suggestions} />
+          <ChatInner
+            basePath={basePath}
+            isOpen={isOpen}
+            suggestions={suggestions}
+          />
         </div>
       </Portal.Root>
       <div className="md:hidden">
@@ -453,7 +443,11 @@ export const Chat = ({ basePath, suggestions }: ChatProps) => {
             </Button>
           </DrawerTrigger>
           <DrawerContent className="h-[80dvh]">
-            <ChatInner basePath={basePath} suggestions={suggestions} />
+            <ChatInner
+              basePath={basePath}
+              isOpen={isOpen}
+              suggestions={suggestions}
+            />
           </DrawerContent>
         </Drawer>
       </div>
