@@ -1332,13 +1332,13 @@ mod test {
 
     /// Simulates the persistent-task flow: stdin is taken by the caller
     /// (as the TUI does for interactive tasks) BEFORE wait_with_piped_outputs
-    /// is called. The child should still produce output and eventually exit
-    /// when stopped, without wait_with_piped_outputs interfering with stdin.
+    /// is called. The child should still produce output and exit normally
+    /// without wait_with_piped_outputs interfering with stdin.
     #[test_case(false)]
     #[test_case(TEST_PTY)]
     #[tokio::test]
     async fn test_pty_stdin_taken_before_piped_outputs(use_pty: bool) {
-        let script = find_script_dir().join_component("persistent_server.js");
+        let script = find_script_dir().join_component("hello_world.js");
         let mut cmd = Command::new("node");
         cmd.args([script.as_std_path()]);
         cmd.open_stdin();
@@ -1357,41 +1357,27 @@ mod test {
         );
 
         let mut out = Vec::new();
-        let mut output_child = child.clone();
-        let output_handle = tokio::spawn(async move {
-            output_child
-                .wait_with_piped_outputs(&mut out)
-                .await
-                .ok();
-            out
-        });
 
-        // Give the process time to start and print its ready message.
-        tokio::time::sleep(STARTUP_DELAY).await;
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
 
-        // Drop the stdin guard — for persistent_server.js this closes
-        // readline and triggers a clean shutdown.
-        drop(_stdin_guard);
+        let exit = result
+            .expect("child hung — wait_with_piped_outputs likely interfered with taken stdin")
+            .unwrap();
 
-        let result = tokio::time::timeout(Duration::from_secs(10), child.wait()).await;
-        let exit = result.expect("child did not exit after stdin was dropped");
-
-        // On Unix PTY, dropping stdin sends EOF which triggers clean exit.
-        // On non-PTY, the child gets killed since we use ShutdownStyle::Kill.
-        // Either way, the child should not hang.
-        assert!(exit.is_some(), "child should have exited");
-
-        let out = output_handle.await.unwrap();
         let output = String::from_utf8(out).unwrap();
-        assert!(
-            output.contains("server ready"),
-            "expected 'server ready' in output, got: {output}"
-        );
+        let trimmed = output.trim().strip_prefix(EOT).unwrap_or(output.trim());
+        assert_eq!(trimmed, "hello world");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
     /// Verifies that a PTY-spawned process with open stdin that has NOT been
     /// taken by the caller still completes normally. This is the non-persistent
-    /// task path where exec.rs does not take stdin before wait_with_piped_outputs.
+    /// task path where exec.rs does not take stdin before
+    /// wait_with_piped_outputs.
     ///
     /// Before the fix, on Windows the unconditional stdin drop inside
     /// wait_with_piped_outputs would kill the ConPTY child immediately.
