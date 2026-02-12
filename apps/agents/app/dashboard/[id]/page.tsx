@@ -8,7 +8,6 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
   queued: { label: "Queued", color: "text-neutral-400" },
   scanning: { label: "Scanning", color: "text-blue-400" },
   fixing: { label: "Fixing", color: "text-yellow-400" },
-  pushing: { label: "Pushing", color: "text-purple-400" },
   completed: { label: "Completed", color: "text-green-400" },
   failed: { label: "Failed", color: "text-red-400" }
 };
@@ -18,7 +17,7 @@ function StatusBadge({ status }: { status: string }) {
     label: status,
     color: "text-neutral-400"
   };
-  const isActive = ["queued", "scanning", "fixing", "pushing"].includes(status);
+  const isActive = ["queued", "scanning", "fixing"].includes(status);
 
   return (
     <span
@@ -56,6 +55,31 @@ function duration(start: string, end: string): string {
   return `${hours}h ${remainingMinutes}m`;
 }
 
+function CopyApplyButton({ diffUrl }: { diffUrl: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    const proxyPath = `/api/blob?url=${encodeURIComponent(diffUrl)}`;
+    const absolute =
+      typeof window !== "undefined"
+        ? `${window.location.origin}${proxyPath}`
+        : proxyPath;
+    const command = `curl -sL '${absolute}' | git apply`;
+    navigator.clipboard.writeText(command);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="rounded border border-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-800"
+    >
+      {copied ? "Copied!" : "Copy apply command"}
+    </button>
+  );
+}
+
 export default function RunDetailPage({
   params
 }: {
@@ -70,7 +94,7 @@ export default function RunDetailPage({
   const logContainerRef = useRef<HTMLPreElement>(null);
 
   const isActive = run
-    ? ["queued", "scanning", "fixing", "pushing"].includes(run.status)
+    ? ["queued", "scanning", "fixing"].includes(run.status)
     : false;
 
   // Fetch run metadata
@@ -267,13 +291,7 @@ export default function RunDetailPage({
             >
               View diff
             </Link>
-            <a
-              href={run.diffUrl}
-              download
-              className="rounded border border-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-800"
-            >
-              Download .patch
-            </a>
+            <CopyApplyButton diffUrl={run.diffUrl} />
           </>
         )}
       </div>

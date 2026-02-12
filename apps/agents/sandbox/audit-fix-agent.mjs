@@ -220,7 +220,7 @@ async function main() {
       console.log("Results from reportResults tool call.");
       writeFileSync(
         RESULTS_PATH,
-        JSON.stringify(reportCall.args, null, 2),
+        JSON.stringify(reportCall.input, null, 2),
         "utf-8"
       );
     } else if (!existsSync(RESULTS_PATH)) {

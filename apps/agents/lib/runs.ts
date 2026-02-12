@@ -4,7 +4,6 @@ export type RunStatus =
   | "queued"
   | "scanning"
   | "fixing"
-  | "pushing"
   | "completed"
   | "failed";
 
@@ -51,13 +50,15 @@ export async function createRun(trigger: "cron" | "manual"): Promise<RunMeta> {
 
   await put(metaPath(id), JSON.stringify(meta), {
     access: "private",
-    contentType: "application/json"
+    contentType: "application/json",
+    addRandomSuffix: false
   });
 
   // Initialize empty log file (use a space — the SDK rejects empty strings as falsy)
   await put(logsPath(id), " ", {
     access: "private",
-    contentType: "text/plain"
+    contentType: "text/plain",
+    addRandomSuffix: false
   });
 
   return meta;
@@ -93,7 +94,7 @@ export async function getRun(id: string): Promise<RunMeta | null> {
   const blob = blobs[0];
   if (!blob) return null;
 
-  const result = await get(blob.url, { access: "private" });
+  const result = await get(blob.url, { access: "private", useCache: false });
   if (!result) return null;
   const text = await new Response(result.stream).text();
   return JSON.parse(text) as RunMeta;
@@ -135,13 +136,14 @@ export async function appendLogs(id: string, lines: string): Promise<void> {
 
   let existing = "";
   if (blob) {
-    const result = await get(blob.url, { access: "private" });
+    const result = await get(blob.url, { access: "private", useCache: false });
     if (result) {
       existing = (await new Response(result.stream).text()).trimStart();
     }
   }
 
-  await put(logsPath(id), existing + lines || " ", {
+  const content = existing + lines;
+  await put(logsPath(id), content || " ", {
     access: "private",
     contentType: "text/plain",
     addRandomSuffix: false,
@@ -154,7 +156,7 @@ export async function getLogs(id: string): Promise<string> {
   const blob = blobs[0];
   if (!blob) return "";
 
-  const result = await get(blob.url, { access: "private" });
+  const result = await get(blob.url, { access: "private", useCache: false });
   if (!result) return "";
   return (await new Response(result.stream).text()).trimStart();
 }
