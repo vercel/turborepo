@@ -5,35 +5,36 @@
 // AI_GATEWAY_API_KEY is passed as an env var.
 
 import { ToolLoopAgent, tool, zodSchema, stepCountIs } from "ai";
-import { execSync } from "node:child_process";
+import { exec as execCb } from "node:child_process";
+import { promisify } from "node:util";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { z } from "zod";
+
+const exec = promisify(execCb);
 
 const REPO_DIR = process.env.REPO_DIR ?? "/vercel/sandbox/turborepo";
 const RESULTS_PATH = process.env.RESULTS_PATH ?? "/vercel/sandbox/results.json";
 const MAX_STEPS = 200;
 
-function shell(cmd, opts = {}) {
+async function shell(cmd, opts = {}) {
   const cwd = opts.cwd ?? REPO_DIR;
-  const allowFailure = opts.allowFailure ?? false;
   try {
-    return execSync(cmd, {
+    const { stdout } = await exec(cmd, {
       cwd,
       encoding: "utf-8",
-      timeout: 120_000,
-      env: process.env
-    }).trim();
+      timeout: 600_000, // 10 minutes — pnpm install can be slow
+      env: process.env,
+      maxBuffer: 50 * 1024 * 1024
+    });
+    return stdout.trim();
   } catch (e) {
-    if (allowFailure) {
-      return [
-        "EXIT CODE " + e.status,
-        "STDOUT:",
-        (e.stdout ?? "").trim(),
-        "STDERR:",
-        (e.stderr ?? "").trim()
-      ].join("\n");
-    }
-    throw e;
+    return [
+      "EXIT CODE " + e.code,
+      "STDOUT:",
+      (e.stdout ?? "").trim(),
+      "STDERR:",
+      (e.stderr ?? "").trim()
+    ].join("\n");
   }
 }
 
@@ -65,6 +66,12 @@ const agent = new ToolLoopAgent({
     "- You may not update package manager lockfiles directly. Update manifests to clear the vulnerabilities.",
     "- You may update our source code to upgrade through majors or other changes as needed.",
     '- Avoid using hacks like "overrides" at all costs - only when we have no other option. You might even consider replacing the dependency entirely before using hacks.',
+    "- NEVER run git push, git remote, or any command that sends data outside this sandbox. Your changes are extracted as a patch file by the host process. Just make your changes locally and call reportResults.",
+    "",
+    "WORKFLOW:",
+    "You are running inside an isolated sandbox. Your job is to make changes to the local repo.",
+    "When you are done, the host process will run `git diff` to extract your changes as a patch",
+    "and upload it. You do NOT need to commit, push, or create branches.",
     "",
     "STRATEGY — follow this order:",
     '1. Run "pnpm audit --json" and "cargo-audit audit --json" to get the vulnerability list.',
@@ -74,8 +81,8 @@ const agent = new ToolLoopAgent({
     '3. After editing manifests, run "pnpm install --no-frozen-lockfile" to regenerate the lockfile.',
     '4. Run "pnpm audit" again to verify fixes.',
     '5. Run "cargo build" and "cargo test" to ensure the Rust code is working.',
-    '5. Run tests for affected packages: "pnpm run check-types --filter=<package>" if available.',
-    "6. Call reportResults with a summary.",
+    '6. Run tests for affected packages: "pnpm run check-types --filter=<package>" if available.',
+    "7. Call reportResults with a summary.",
     "",
     "IMPORTANT:",
     '- pnpm overrides go in the ROOT package.json under "pnpm": { "overrides": { "package": ">=version" } }.',
@@ -99,26 +106,19 @@ const agent = new ToolLoopAgent({
 
     runCommand: tool({
       description:
-        "Run a shell command in the repo. Use allowFailure:true for commands that might fail (audits, tests).",
+        "Run a shell command in the repo. Returns stdout on success, or exit code + stdout + stderr on failure.",
       inputSchema: zodSchema(
         z.object({
           command: z.string().describe("The shell command to run"),
           cwd: z
             .string()
             .optional()
-            .describe("Working directory (defaults to repo root)"),
-          allowFailure: z
-            .boolean()
-            .optional()
-            .describe("Return output even on non-zero exit (default false)")
+            .describe("Working directory (defaults to repo root)")
         })
       ),
-      execute: async function ({ command, cwd, allowFailure }) {
+      execute: async function ({ command, cwd }) {
         console.log("$ " + command);
-        var output = shell(command, {
-          cwd: cwd ?? REPO_DIR,
-          allowFailure: allowFailure ?? false
-        });
+        var output = await shell(command, { cwd: cwd ?? REPO_DIR });
         return truncate(output);
       }
     }),
@@ -148,6 +148,9 @@ const agent = new ToolLoopAgent({
         })
       ),
       execute: async function ({ path, content }) {
+        if (typeof content !== "string") {
+          return "Error: content was empty or missing. Re-call writeFile with the full file content as a string.";
+        }
         var fullPath = REPO_DIR + "/" + path;
         writeFileSync(fullPath, content, "utf-8");
         return "Wrote " + content.length + " bytes to " + path;
@@ -164,9 +167,10 @@ const agent = new ToolLoopAgent({
         })
       ),
       execute: async function ({ pattern }) {
-        var output = shell("find . -path './" + pattern + "' | head -50", {
-          allowFailure: true
-        });
+        var sanitized = pattern.replace(/[;&|`$(){}!\\]/g, "");
+        var output = await shell(
+          "find . -path './" + sanitized + "' | head -50"
+        );
         return output || "(no matches)";
       }
     }),
@@ -218,11 +222,27 @@ async function main() {
 
     if (reportCall) {
       console.log("Results from reportResults tool call.");
-      writeFileSync(
-        RESULTS_PATH,
-        JSON.stringify(reportCall.args, null, 2),
-        "utf-8"
-      );
+      var reportData = reportCall.args ?? reportCall.input ?? reportCall;
+      console.log("reportCall keys:", Object.keys(reportCall));
+      var serialized = JSON.stringify(reportData, null, 2);
+      if (typeof serialized !== "string") {
+        console.error("Could not serialize reportResults args:", reportData);
+        serialized = JSON.stringify(
+          {
+            success: false,
+            summary: "reportResults args could not be serialized",
+            vulnerabilitiesFixed: 0,
+            vulnerabilitiesRemaining: -1,
+            manifestsUpdated: [],
+            sourceFilesUpdated: [],
+            testsPass: false,
+            auditsClean: false
+          },
+          null,
+          2
+        );
+      }
+      writeFileSync(RESULTS_PATH, serialized, "utf-8");
     } else if (!existsSync(RESULTS_PATH)) {
       console.log("Agent did not call reportResults.");
       writeFileSync(

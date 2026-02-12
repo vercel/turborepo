@@ -1,6 +1,6 @@
 import { verifySlackRequest, updateMessage } from "@/lib/slack";
 import { addComment } from "@/lib/github";
-import { openFixPR, type AgentResults } from "@/lib/audit";
+import type { AgentResults } from "@/lib/audit";
 import { REPRODUCTION_REQUEST } from "@/lib/templates";
 
 interface SlackAction {
@@ -65,33 +65,12 @@ export async function POST(request: Request) {
     }
 
     case "audit_open_pr": {
-      let parsed: { branch: string; agentResults: AgentResults };
-      try {
-        parsed = JSON.parse(action.value ?? "{}");
-      } catch {
-        await updateMessage(
-          channel,
-          messageTs,
-          `:x: Failed to parse action data`
-        );
-        break;
-      }
-
-      try {
-        const pr = await openFixPR(parsed.branch, parsed.agentResults);
-        await updateMessage(
-          channel,
-          messageTs,
-          `:white_check_mark: ${mention} opened <${pr.prUrl}|PR #${pr.prNumber}>`
-        );
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        await updateMessage(
-          channel,
-          messageTs,
-          `:x: ${mention} failed to open PR: ${msg}`
-        );
-      }
+      // PR creation from Slack is disabled — patches are uploaded to Blob instead.
+      await updateMessage(
+        channel,
+        messageTs,
+        `:information_source: ${mention} PR creation is disabled. View the patch on the dashboard.`
+      );
       break;
     }
 
