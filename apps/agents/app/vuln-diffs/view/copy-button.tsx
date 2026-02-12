@@ -9,7 +9,7 @@ export function CopyButton({ text }: { text: string }) {
     <button
       onClick={async () => {
         const escaped = text.replace(/'/g, "'\\''");
-        const command = `echo '${escaped}' | git apply`;
+        const command = `printf '%s\\n' '${escaped}' | git apply`;
         await navigator.clipboard.writeText(command);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
