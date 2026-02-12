@@ -71,7 +71,7 @@ export default async function ViewDiffPage({
             href={`/api/blob?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`}
             className="rounded bg-white px-3 py-1.5 text-xs text-black hover:bg-neutral-200"
           >
-            Download .patch
+            Copy "patch | git apply" command
           </a>
         </div>
       </div>
