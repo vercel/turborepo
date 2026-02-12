@@ -1269,4 +1269,146 @@ mod test {
             .is_some()
         {}
     }
+
+    // Regression tests for https://github.com/vercel/turborepo/issues/11808
+    //
+    // On Windows, portable-pty 0.9.0 added PSEUDOCONSOLE_INHERIT_CURSOR to
+    // ConPTY creation, which requires the host to handle DSR (Device Status
+    // Report) escape sequences. Turborepo doesn't, causing ConPTY to hang.
+    //
+    // Additionally, an unconditional `drop(stdin)` in the PTY path of
+    // wait_with_piped_outputs would kill ConPTY children on Windows because
+    // closing ConPTY stdin terminates the session.
+    //
+    // These tests verify the fixes: PTY children start, produce output, and
+    // exit normally without hanging or being killed by stdin closure.
+
+    /// Verifies that a PTY-spawned short-lived process produces output and
+    /// exits cleanly via wait_with_piped_outputs. Uses a timeout to catch
+    /// the ConPTY hang that occurred with PSEUDOCONSOLE_INHERIT_CURSOR.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_pty_child_does_not_hang(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        let mut out = Vec::new();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
+
+        let exit = result
+            .expect("PTY child hung — likely PSEUDOCONSOLE_INHERIT_CURSOR regression")
+            .unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        let trimmed = output.trim().strip_prefix(EOT).unwrap_or(output.trim());
+        assert_eq!(trimmed, "hello world");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Simulates the persistent-task flow: stdin is taken by the caller
+    /// (as the TUI does for interactive tasks) BEFORE wait_with_piped_outputs
+    /// is called. The child should still produce output and eventually exit
+    /// when stopped, without wait_with_piped_outputs interfering with stdin.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_pty_stdin_taken_before_piped_outputs(use_pty: bool) {
+        let script = find_script_dir().join_component("persistent_server.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        // Take stdin before piping outputs, simulating TUI taking ownership.
+        // For PTY children, this returns Some; for non-PTY, stdin() returns None
+        // (Std variant is filtered out), but stdin_inner still removes it.
+        let _stdin_guard = child.stdin();
+
+        // Verify stdin_inner is now empty (already taken).
+        assert!(
+            child.stdin_inner().is_none(),
+            "stdin should already be taken"
+        );
+
+        let mut out = Vec::new();
+        let mut output_child = child.clone();
+        let output_handle = tokio::spawn(async move {
+            output_child
+                .wait_with_piped_outputs(&mut out)
+                .await
+                .ok();
+            out
+        });
+
+        // Give the process time to start and print its ready message.
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        // Drop the stdin guard — for persistent_server.js this closes
+        // readline and triggers a clean shutdown.
+        drop(_stdin_guard);
+
+        let result = tokio::time::timeout(Duration::from_secs(10), child.wait()).await;
+        let exit = result.expect("child did not exit after stdin was dropped");
+
+        // On Unix PTY, dropping stdin sends EOF which triggers clean exit.
+        // On non-PTY, the child gets killed since we use ShutdownStyle::Kill.
+        // Either way, the child should not hang.
+        assert!(exit.is_some(), "child should have exited");
+
+        let out = output_handle.await.unwrap();
+        let output = String::from_utf8(out).unwrap();
+        assert!(
+            output.contains("server ready"),
+            "expected 'server ready' in output, got: {output}"
+        );
+    }
+
+    /// Verifies that a PTY-spawned process with open stdin that has NOT been
+    /// taken by the caller still completes normally. This is the non-persistent
+    /// task path where exec.rs does not take stdin before wait_with_piped_outputs.
+    ///
+    /// Before the fix, on Windows the unconditional stdin drop inside
+    /// wait_with_piped_outputs would kill the ConPTY child immediately.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_pty_untaken_stdin_does_not_kill_child(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        // Do NOT take stdin — this simulates a non-persistent task where
+        // exec.rs skips stdin handling on Windows (closing_stdin_ends_process).
+        // wait_with_piped_outputs should still work without killing the child.
+        let mut out = Vec::new();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
+
+        let exit = result
+            .expect("child process hung or was killed by premature stdin closure")
+            .unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        let trimmed = output.trim().strip_prefix(EOT).unwrap_or(output.trim());
+        assert_eq!(trimmed, "hello world");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
 }
