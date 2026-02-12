@@ -180,6 +180,21 @@ impl ChildHandle {
         let mut stdin = controller.take_writer().ok();
         let output = controller.try_clone_reader().ok().map(ChildOutput::Pty);
 
+        // portable-pty 0.9.0 creates ConPTY with PSEUDOCONSOLE_INHERIT_CURSOR,
+        // which sends a Device Status Report (DSR) cursor position request
+        // (\x1b[6n) on the output pipe during initialization. ConPTY blocks
+        // until the host responds with a Cursor Position Report on stdin.
+        // Without this response the PTY hangs indefinitely.
+        // See https://github.com/vercel/turborepo/issues/11808
+        #[cfg(windows)]
+        if let Some(ref mut writer) = stdin {
+            // Respond with cursor at position (1,1). The actual position
+            // doesn't matter — ConPTY just needs a valid CPR to unblock.
+            if let Err(e) = writer.write_all(b"\x1b[1;1R") {
+                debug!("failed to write ConPTY cursor position response: {e}");
+            }
+        }
+
         // If we don't want to keep stdin open we take it here and it is immediately
         // dropped resulting in a EOF being sent to the child process.
         if !keep_stdin_open {
