@@ -54,6 +54,21 @@ export async function postMessage(
   });
 }
 
+export async function replyInThread(
+  channel: string,
+  threadTs: string,
+  text: string,
+  blocks?: KnownBlock[]
+) {
+  return slackClient().chat.postMessage({
+    channel,
+    text,
+    blocks,
+    thread_ts: threadTs,
+    unfurl_links: false
+  });
+}
+
 export async function updateMessage(
   channel: string,
   ts: string,

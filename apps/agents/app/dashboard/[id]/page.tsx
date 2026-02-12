@@ -233,36 +233,32 @@ export default function RunDetailPage({
           </>
         )}
 
-        {run.branch && (
-          <div className="col-span-2">
-            <p className="text-xs text-neutral-500">Branch</p>
-            <p className="truncate" title={run.branch}>
-              {run.branch}
-            </p>
-          </div>
-        )}
-
         {run.error && (
           <div className="col-span-full">
             <p className="text-xs text-neutral-500">Error</p>
             <p className="text-red-400">{run.error}</p>
           </div>
         )}
-
-        {run.agentResults?.summary && (
-          <div className="col-span-full">
-            <p className="text-xs text-neutral-500">Summary</p>
-            <p>{run.agentResults.summary}</p>
-          </div>
-        )}
       </div>
+
+      {/* Agent summary accordion */}
+      {run.agentResults?.summary && (
+        <details className="group mb-6 rounded border border-neutral-800">
+          <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-neutral-300 hover:text-white select-none">
+            <span className="ml-1">Agent Summary</span>
+          </summary>
+          <div className="border-t border-neutral-800 px-4 py-3 text-sm leading-relaxed text-neutral-400 whitespace-pre-wrap">
+            {run.agentResults.summary}
+          </div>
+        </details>
+      )}
 
       {/* Links */}
       <div className="mb-6 flex gap-3">
         {run.diffUrl && (
           <Link
             href={`/vuln-diffs/view?pathname=${encodeURIComponent(run.diffUrl)}`}
-            className="rounded border border-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-800"
+            className="rounded border border-neutral-300 px-3 py-1.5 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-800"
           >
             View diff
           </Link>

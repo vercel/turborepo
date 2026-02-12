@@ -113,7 +113,7 @@ export default function DashboardPage() {
         </div>
         <Link
           href="/"
-          className="rounded border border-neutral-800 px-3 py-1.5 text-sm hover:bg-neutral-800"
+          className="rounded border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100 dark:border-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-800"
         >
           Home
         </Link>

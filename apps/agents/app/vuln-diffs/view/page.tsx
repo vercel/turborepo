@@ -1,5 +1,6 @@
 import { get } from "@vercel/blob";
 import Link from "next/link";
+import { CopyButton } from "./copy-button";
 
 export const dynamic = "force-dynamic";
 
@@ -78,12 +79,15 @@ export default async function ViewDiffPage({
             lines
           </p>
         </div>
-        <Link
-          href="/vuln-diffs"
-          className="rounded bg-neutral-800 px-3 py-1.5 text-xs hover:bg-neutral-700"
-        >
-          Back to list
-        </Link>
+        <div className="flex gap-2">
+          <CopyButton text={diff} />
+          <Link
+            href="/vuln-diffs"
+            className="rounded border border-neutral-300 bg-white px-3 py-1.5 text-xs text-neutral-700 hover:bg-neutral-100 dark:border-neutral-800 dark:bg-neutral-800 dark:text-neutral-200 dark:hover:bg-neutral-700"
+          >
+            Back to list
+          </Link>
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded border border-neutral-800 bg-neutral-950 py-2 text-xs leading-5">

@@ -1,9 +1,8 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Sandbox } from "@vercel/sandbox";
-import { githubToken } from "./env";
-import { createPullRequest } from "./github";
-import { createRun, updateRun, appendLogs, type RunMeta } from "./runs";
+import { uploadDiff } from "./blob";
+import { createRun, updateRun, appendLogs } from "./runs";
 
 const REPO_URL = "https://github.com/vercel/turborepo.git";
 const AGENT_SCRIPT_PATH = resolve(process.cwd(), "sandbox/audit-fix-agent.mjs");
@@ -48,15 +47,6 @@ function createLogBuffer(runId: string) {
   return { start, push, flush, stop };
 }
 
-async function installCargoAudit(sandbox: InstanceType<typeof Sandbox>) {
-  await sandbox.runCommand({
-    cmd: "dnf",
-    args: ["install", "-y", "rust", "cargo", "gcc", "openssl-devel"],
-    sudo: true
-  });
-  await sandbox.runCommand("cargo", ["install", "cargo-audit"]);
-}
-
 interface AuditVulnerability {
   name: string;
   severity: string;
@@ -84,18 +74,97 @@ export interface AgentResults {
 }
 
 export interface AuditFixResult {
-  branch: string;
+  patchUrl: string;
   diff: string;
   agentResults: AgentResults;
 }
 
-export interface FixPRResult {
-  prUrl: string;
-  prNumber: number;
+async function setupSandbox(
+  sandbox: InstanceType<typeof Sandbox>,
+  log: (msg: string) => void,
+  logBuffer: ReturnType<typeof createLogBuffer> | null
+): Promise<void> {
+  log("Installing system packages (rust, cargo, gcc, openssl-devel)...");
+  await logBuffer?.flush();
+
+  const dnf = await sandbox.runCommand({
+    cmd: "dnf",
+    args: ["install", "-y", "rust", "cargo", "gcc", "openssl-devel"],
+    sudo: true,
+    detached: true
+  });
+  const dnfResult = await dnf.wait();
+  if (dnfResult.exitCode !== 0) {
+    const stderr = await dnfResult.stderr();
+    throw new Error(
+      `dnf install failed (exit ${dnfResult.exitCode}): ${stderr.slice(0, 500)}`
+    );
+  }
+
+  log("Installing cargo-audit...");
+  await logBuffer?.flush();
+
+  const cargoInstall = await sandbox.runCommand({
+    cmd: "cargo",
+    args: ["install", "cargo-audit"],
+    detached: true
+  });
+  const cargoResult = await cargoInstall.wait();
+  if (cargoResult.exitCode !== 0) {
+    const stderr = await cargoResult.stderr();
+    throw new Error(
+      `cargo install failed (exit ${cargoResult.exitCode}): ${stderr.slice(0, 500)}`
+    );
+  }
+
+  log("Installing pnpm...");
+  await logBuffer?.flush();
+  await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
+
+  log("Cloning repository...");
+  await logBuffer?.flush();
+  await sandbox.runCommand("git", [
+    "clone",
+    "--depth",
+    "1",
+    REPO_URL,
+    "turborepo"
+  ]);
+}
+
+async function scanAudits(
+  sandbox: InstanceType<typeof Sandbox>,
+  log: (msg: string) => void,
+  logBuffer: ReturnType<typeof createLogBuffer> | null
+): Promise<AuditResults> {
+  log("Running cargo audit...");
+  await logBuffer?.flush();
+  const cargoResult = await sandbox.runCommand("bash", [
+    "-c",
+    "cd turborepo && cargo-audit audit --json 2>&1 || true"
+  ]);
+  const cargoRaw = await cargoResult.stdout();
+
+  log("Running pnpm audit...");
+  await logBuffer?.flush();
+  const pnpmResult = await sandbox.runCommand("bash", [
+    "-c",
+    "cd turborepo && pnpm audit --json 2>&1 || true"
+  ]);
+  const pnpmRaw = await pnpmResult.stdout();
+
+  const cargo = parseCargoAudit(cargoRaw);
+  const pnpm = parsePnpmAudit(pnpmRaw);
+  log(`Scan complete: ${cargo.length} cargo vulns, ${pnpm.length} pnpm vulns`);
+
+  return { cargo, pnpm, cargoRaw, pnpmRaw };
 }
 
 export async function runSecurityAudit(runId?: string): Promise<AuditResults> {
-  const sandbox = await Sandbox.create({ runtime: "node22" });
+  const sandbox = await Sandbox.create({
+    runtime: "node22",
+    timeout: 18_000_000 // 5 hours
+  });
   const logBuffer = runId ? createLogBuffer(runId) : null;
   logBuffer?.start();
 
@@ -111,47 +180,8 @@ export async function runSecurityAudit(runId?: string): Promise<AuditResults> {
   }
 
   try {
-    log("Installing Rust and cargo-audit...");
-    await logBuffer?.flush();
-    await installCargoAudit(sandbox);
-
-    log("Installing pnpm...");
-    await logBuffer?.flush();
-    await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
-
-    log("Cloning repository...");
-    await logBuffer?.flush();
-    await sandbox.runCommand("git", [
-      "clone",
-      "--depth",
-      "1",
-      REPO_URL,
-      "turborepo"
-    ]);
-
-    log("Running cargo audit...");
-    await logBuffer?.flush();
-    const cargoResult = await sandbox.runCommand("bash", [
-      "-c",
-      "cd turborepo && cargo-audit audit --json 2>&1 || true"
-    ]);
-    const cargoRaw = await cargoResult.stdout();
-
-    log("Running pnpm audit...");
-    await logBuffer?.flush();
-    const pnpmResult = await sandbox.runCommand("bash", [
-      "-c",
-      "cd turborepo && pnpm audit --json 2>&1 || true"
-    ]);
-    const pnpmRaw = await pnpmResult.stdout();
-
-    const cargo = parseCargoAudit(cargoRaw);
-    const pnpm = parsePnpmAudit(pnpmRaw);
-    log(
-      `Scan complete: ${cargo.length} cargo vulns, ${pnpm.length} pnpm vulns`
-    );
-
-    return { cargo, pnpm, cargoRaw, pnpmRaw };
+    await setupSandbox(sandbox, log, logBuffer);
+    return await scanAudits(sandbox, log, logBuffer);
   } finally {
     await logBuffer?.stop();
     await sandbox.stop();
@@ -160,26 +190,27 @@ export async function runSecurityAudit(runId?: string): Promise<AuditResults> {
 
 export async function runAuditFix(
   onProgress?: (message: string) => Promise<void>,
-  runId?: string
+  runId?: string,
+  existingSandbox?: InstanceType<typeof Sandbox>
 ): Promise<AuditFixResult> {
-  const token = githubToken();
   const aiGatewayKey = process.env.AI_GATEWAY_API_KEY;
   if (!aiGatewayKey) {
     throw new Error("AI_GATEWAY_API_KEY is required for the audit fix agent");
   }
 
-  const branch = `fix/security-audit-${Date.now()}`;
-  const sandbox = await Sandbox.create({
-    runtime: "node22",
-    resources: { vcpus: 4 },
-    timeout: 18_000_000 // 5 hours
-  });
+  const ownsBox = !existingSandbox;
+  const sandbox =
+    existingSandbox ??
+    (await Sandbox.create({
+      runtime: "node22",
+      resources: { vcpus: 4 },
+      timeout: 18_000_000 // 5 hours
+    }));
 
   if (runId) {
     await updateRun(runId, {
       status: "fixing",
-      sandboxId: (sandbox as unknown as { sandboxId?: string }).sandboxId,
-      branch
+      sandboxId: (sandbox as unknown as { sandboxId?: string }).sandboxId
     });
   }
 
@@ -191,29 +222,12 @@ export async function runAuditFix(
       logBuffer?.push(`[${new Date().toISOString()}] ${msg}\n`);
     };
 
-    log("Installing tooling...");
-    await logBuffer?.flush();
-    await onProgress?.("Installing tooling...");
-    await installCargoAudit(sandbox);
-    await sandbox.runCommand("npm", ["install", "-g", "pnpm@10"]);
-
-    log("Cloning repository...");
-    await logBuffer?.flush();
-    await onProgress?.("Cloning repository...");
-    await sandbox.runCommand("bash", [
-      "-c",
-      `git clone --depth 1 https://x-access-token:${token}@github.com/vercel/turborepo.git turborepo`
-    ]);
-
-    await sandbox.runCommand("bash", [
-      "-c",
-      [
-        "cd turborepo",
-        'git config user.name "turborepo-agents[bot]"',
-        'git config user.email "turborepo-agents[bot]@users.noreply.github.com"',
-        `git checkout -b ${branch}`
-      ].join(" && ")
-    ]);
+    if (ownsBox) {
+      log("Installing tooling...");
+      await logBuffer?.flush();
+      await onProgress?.("Installing tooling...");
+      await setupSandbox(sandbox, log, logBuffer);
+    }
 
     log("Installing agent dependencies...");
     await logBuffer?.flush();
@@ -277,104 +291,70 @@ export async function runAuditFix(
       );
     }
 
+    // Generate a patch from the agent's changes and upload to Blob
+    log("Generating patch...");
+    await logBuffer?.flush();
+    await onProgress?.("Generating patch...");
+
+    await sandbox.runCommand("bash", ["-c", "cd turborepo && git add -A"]);
     const diffResult = await sandbox.runCommand("bash", [
       "-c",
-      "cd turborepo && git diff && git diff --cached"
+      "cd turborepo && git diff --cached"
     ]);
     const diff = await diffResult.stdout();
 
-    log("Pushing branch...");
-    await onProgress?.("Pushing branch...");
-    if (runId) {
-      await updateRun(runId, { status: "pushing" });
-    }
-
-    const pushResult = await sandbox.runCommand("bash", [
-      "-c",
-      [
-        "cd turborepo",
-        "git add -A",
-        'git commit -m "fix: Patch vulnerable dependencies"',
-        `git push origin ${branch}`
-      ].join(" && ")
-    ]);
-
-    if (pushResult.exitCode !== 0) {
-      const stderr = await pushResult.stderr();
-      throw new Error(`git push failed: ${stderr}`);
-    }
+    log("Uploading patch to Blob...");
+    await logBuffer?.flush();
+    const patchUrl = await uploadDiff(diff, `security-audit-${Date.now()}`);
 
     log("Done.");
-    return { branch, diff, agentResults };
+    return { patchUrl, diff, agentResults };
   } finally {
     await logBuffer?.stop();
-    await sandbox.stop();
+    if (ownsBox) {
+      await sandbox.stop();
+    }
   }
 }
 
-export async function openFixPR(
-  branch: string,
-  agentResults: AgentResults
-): Promise<FixPRResult> {
-  const bodyLines = [
-    "This PR was automatically generated by the Turborepo security audit agent.",
-    "",
-    `**${agentResults.vulnerabilitiesFixed}** vulnerabilities fixed, **${agentResults.vulnerabilitiesRemaining}** remaining.`,
-    `Tests passing: ${agentResults.testsPass ? "yes" : "no"}`,
-    `Audits clean: ${agentResults.auditsClean ? "yes" : "no"}`,
-    "",
-    "## Summary",
-    "",
-    agentResults.summary,
-    ""
-  ];
-
-  if (agentResults.manifestsUpdated.length > 0) {
-    bodyLines.push("## Updated manifests", "");
-    for (const f of agentResults.manifestsUpdated) {
-      bodyLines.push(`- \`${f}\``);
-    }
-    bodyLines.push("");
-  }
-
-  if (agentResults.sourceFilesUpdated.length > 0) {
-    bodyLines.push("## Source code changes", "");
-    for (const f of agentResults.sourceFilesUpdated) {
-      bodyLines.push(`- \`${f}\``);
-    }
-    bodyLines.push("");
-  }
-
-  bodyLines.push(
-    "---",
-    "Review the changes carefully. CI must pass before merging."
-  );
-
-  const pr = await createPullRequest({
-    title: "fix: Patch vulnerable dependencies",
-    body: bodyLines.join("\n"),
-    head: branch
-  });
-
-  return { prUrl: pr.html_url, prNumber: pr.number };
-}
-
-// The full audit-and-fix pipeline: scan, run agent, post results to Slack.
+// The full audit-and-fix pipeline: scan, run agent, upload patch to Blob.
+// Uses a single sandbox for both phases to avoid reinstalling tooling twice.
 export async function runAuditAndFix(
   trigger: "cron" | "manual" = "manual"
 ): Promise<void> {
   const { slackChannel } = await import("./env");
-  const { postMessage, updateMessage } = await import("./slack");
+  const { postMessage, updateMessage, replyInThread } = await import("./slack");
 
   const run = await createRun(trigger);
 
+  const sandbox = await Sandbox.create({
+    runtime: "node22",
+    resources: { vcpus: 4 },
+    timeout: 18_000_000 // 5 hours
+  });
+
+  const logBuffer = createLogBuffer(run.id);
+  logBuffer.start();
+
+  const log = (msg: string) => {
+    logBuffer.push(`[${new Date().toISOString()}] ${msg}\n`);
+  };
+
   let results: AuditResults;
   try {
-    results = await runSecurityAudit(run.id);
+    await updateRun(run.id, {
+      status: "scanning",
+      sandboxId: (sandbox as unknown as { sandboxId?: string }).sandboxId
+    });
+
+    await setupSandbox(sandbox, log, logBuffer);
+    results = await scanAudits(sandbox, log, logBuffer);
   } catch (error) {
     console.error("Audit failed:", error);
     const msg = error instanceof Error ? error.message : String(error);
     await updateRun(run.id, { status: "failed", error: msg });
+    await logBuffer.stop();
+    await sandbox.stop();
     await postMessage(
       slackChannel(),
       ":x: Security audit failed to run. Check the logs."
@@ -389,6 +369,8 @@ export async function runAuditAndFix(
 
   if (totalVulns === 0) {
     await updateRun(run.id, { status: "completed" });
+    await logBuffer.stop();
+    await sandbox.stop();
     await postMessage(
       slackChannel(),
       ":white_check_mark: Security audit passed. 0 vulnerabilities found in cargo and pnpm."
@@ -415,16 +397,12 @@ export async function runAuditAndFix(
   };
 
   try {
-    const fixResult = await runAuditFix(onProgress, run.id);
-    const { agentResults: r, branch, diff } = fixResult;
-
-    const { uploadDiff } = await import("./blob");
-    const diffUrl = await uploadDiff(diff, branch);
+    const fixResult = await runAuditFix(onProgress, run.id, sandbox);
+    const { agentResults: r, patchUrl } = fixResult;
 
     await updateRun(run.id, {
       status: "completed",
-      branch,
-      diffUrl,
+      diffUrl: patchUrl,
       agentResults: {
         success: r.success,
         summary: r.summary,
@@ -437,65 +415,53 @@ export async function runAuditAndFix(
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
       : process.env.VERCEL_URL
         ? `https://${process.env.VERCEL_URL}`
-        : "http://localhost:3000";
-    const viewUrl = `${appUrl}/vuln-diffs/view?pathname=${encodeURIComponent(diffUrl)}`;
+        : null;
 
-    const statusLine = [
-      `${r.vulnerabilitiesFixed} fixed, ${r.vulnerabilitiesRemaining} remaining`,
-      `tests: ${r.testsPass ? "passing" : "failing"}`,
-      `audits: ${r.auditsClean ? "clean" : "not clean"}`
-    ].join(" · ");
+    const parts: string[] = [];
+    if (results.pnpm.length > 0) parts.push(`${results.pnpm.length} JS`);
+    if (results.cargo.length > 0) parts.push(`${results.cargo.length} Rust`);
+    const headline = `:white_check_mark: Audit fix: ${r.vulnerabilitiesFixed} of ${parts.join(" + ")} vulnerabilities patched`;
 
-    await updateMessage(
-      channel,
-      ts,
-      `Audit fix ready for review (branch: ${branch})`,
-      [
-        {
-          type: "section" as const,
-          text: {
-            type: "mrkdwn" as const,
-            text: `:white_check_mark: *Audit fix agent finished*\n${statusLine}`
-          }
-        },
-        {
-          type: "section" as const,
-          text: {
-            type: "mrkdwn" as const,
-            text: `*Summary:* ${r.summary}`
-          }
-        },
-        {
-          type: "section" as const,
-          text: {
-            type: "mrkdwn" as const,
-            text: `<${viewUrl}|View diff>`
-          }
-        },
-        {
-          type: "actions" as const,
-          elements: [
+    await updateMessage(channel, ts, headline, [
+      {
+        type: "section" as const,
+        text: { type: "mrkdwn" as const, text: headline }
+      },
+      ...(appUrl
+        ? [
             {
-              type: "button" as const,
-              text: { type: "plain_text" as const, text: "Open PR" },
-              style: "primary" as const,
-              action_id: "audit_open_pr",
-              value: JSON.stringify({ branch, agentResults: r })
-            },
-            {
-              type: "button" as const,
-              text: { type: "plain_text" as const, text: "Dismiss" },
-              action_id: "audit_dismiss"
+              type: "actions" as const,
+              elements: [
+                {
+                  type: "button" as const,
+                  text: {
+                    type: "plain_text" as const,
+                    text: "View patch & copy apply command"
+                  },
+                  style: "primary" as const,
+                  url: `${appUrl}/vuln-diffs/view?pathname=${encodeURIComponent(patchUrl)}`,
+                  action_id: "audit_view_patch"
+                },
+                {
+                  type: "button" as const,
+                  text: { type: "plain_text" as const, text: "Dismiss" },
+                  action_id: "audit_dismiss"
+                }
+              ]
             }
           ]
-        }
-      ]
-    );
+        : [])
+    ]);
+
+    await replyInThread(channel, ts, r.summary);
   } catch (error) {
     console.error("Audit fix agent failed:", error);
     const msg = error instanceof Error ? error.message : String(error);
     await updateRun(run.id, { status: "failed", error: msg });
     await updateMessage(channel, ts, `:x: Audit fix agent failed: ${msg}`);
+  } finally {
+    await logBuffer.stop();
+    await sandbox.stop();
   }
 }
 
