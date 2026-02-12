@@ -46,8 +46,8 @@ importers:
         specifier: ^7.9.1
         version: 7.13.0
       '@vercel/blob':
-        specifier: ^2.2.0
-        version: 2.2.0
+        specifier: 2.3.0-512846a-20260206231709
+        version: 2.3.0-512846a-20260206231709
       '@vercel/functions':
         specifier: ^3.4.1
         version: 3.4.1
@@ -4396,6 +4396,10 @@ packages:
 
   '@vercel/blob@2.2.0':
     resolution: {integrity: sha512-h9ruqqTyAlLrmLIT55NUDnfc889feZnQXWOBxpXrAiAzWKmHqIokLchuMBKFsT9MDV/jM0HRQlvlTyubMHrOKA==}
+    engines: {node: '>=20.0.0'}
+
+  '@vercel/blob@2.3.0-512846a-20260206231709':
+    resolution: {integrity: sha512-mN5srAvYjTu0eXJBFuVLwe/xaZVx5XUK7U+EHel92H0jM/XJ83w1J1OWKAl1Yfw+hk5c7U23/lY58OJCsC+MgQ==}
     engines: {node: '>=20.0.0'}
 
   '@vercel/edge-config-fs@0.1.0':
@@ -12391,6 +12395,14 @@ snapshots:
       react: 19.2.4
 
   '@vercel/blob@2.2.0':
+    dependencies:
+      async-retry: 1.3.3
+      is-buffer: 2.0.5
+      is-node-process: 1.2.0
+      throttleit: 2.1.0
+      undici: 6.23.0
+
+  '@vercel/blob@2.3.0-512846a-20260206231709':
     dependencies:
       async-retry: 1.3.3
       is-buffer: 2.0.5

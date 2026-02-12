@@ -1,4 +1,4 @@
-import { put, list, head } from "@vercel/blob";
+import { put, list, get } from "@vercel/blob";
 
 export type RunStatus =
   | "queued"
@@ -50,13 +50,13 @@ export async function createRun(trigger: "cron" | "manual"): Promise<RunMeta> {
   };
 
   await put(metaPath(id), JSON.stringify(meta), {
-    access: "public",
+    access: "private",
     contentType: "application/json"
   });
 
   // Initialize empty log file
   await put(logsPath(id), "", {
-    access: "public",
+    access: "private",
     contentType: "text/plain"
   });
 
@@ -79,7 +79,7 @@ export async function updateRun(
   };
 
   await put(metaPath(id), JSON.stringify(updated), {
-    access: "public",
+    access: "private",
     contentType: "application/json",
     addRandomSuffix: false
   });
@@ -92,9 +92,10 @@ export async function getRun(id: string): Promise<RunMeta | null> {
   const blob = blobs[0];
   if (!blob) return null;
 
-  const res = await fetch(blob.url);
-  if (!res.ok) return null;
-  return res.json() as Promise<RunMeta>;
+  const result = await get(blob.url, { access: "private" });
+  if (!result) return null;
+  const text = await new Response(result.stream).text();
+  return JSON.parse(text) as RunMeta;
 }
 
 export async function listRuns(limit = 20): Promise<RunMeta[]> {
@@ -112,9 +113,10 @@ export async function listRuns(limit = 20): Promise<RunMeta[]> {
   const runs: RunMeta[] = [];
   for (const blob of metaBlobs.slice(0, limit)) {
     try {
-      const res = await fetch(blob.url);
-      if (res.ok) {
-        runs.push((await res.json()) as RunMeta);
+      const result = await get(blob.url, { access: "private" });
+      if (result) {
+        const text = await new Response(result.stream).text();
+        runs.push(JSON.parse(text) as RunMeta);
       }
     } catch {
       // Skip corrupt entries
@@ -132,14 +134,14 @@ export async function appendLogs(id: string, lines: string): Promise<void> {
 
   let existing = "";
   if (blob) {
-    const res = await fetch(blob.url);
-    if (res.ok) {
-      existing = await res.text();
+    const result = await get(blob.url, { access: "private" });
+    if (result) {
+      existing = await new Response(result.stream).text();
     }
   }
 
   await put(logsPath(id), existing + lines, {
-    access: "public",
+    access: "private",
     contentType: "text/plain",
     addRandomSuffix: false
   });
@@ -150,7 +152,7 @@ export async function getLogs(id: string): Promise<string> {
   const blob = blobs[0];
   if (!blob) return "";
 
-  const res = await fetch(blob.url);
-  if (!res.ok) return "";
-  return res.text();
+  const result = await get(blob.url, { access: "private" });
+  if (!result) return "";
+  return new Response(result.stream).text();
 }

@@ -1,3 +1,4 @@
+import { get } from "@vercel/blob";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -37,16 +38,16 @@ export default async function ViewDiffPage({
     );
   }
 
-  const res = await fetch(url);
-  if (!res.ok) {
+  const result = await get(url, { access: "private" });
+  if (!result) {
     return (
       <main className="mx-auto max-w-3xl px-6 py-16 font-mono">
-        <p className="text-red-500">Failed to fetch diff: {res.status}</p>
+        <p className="text-red-500">Diff not found.</p>
       </main>
     );
   }
 
-  const diff = await res.text();
+  const diff = await new Response(result.stream).text();
   const filename = decodeURIComponent(url.split("/").pop() ?? "diff.patch");
 
   return (
@@ -67,8 +68,7 @@ export default async function ViewDiffPage({
             Back to list
           </Link>
           <a
-            href={url}
-            download={filename}
+            href={`/api/blob?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename)}`}
             className="rounded bg-white px-3 py-1.5 text-xs text-black hover:bg-neutral-200"
           >
             Download .patch

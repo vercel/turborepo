@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { Sandbox } from "@vercel/sandbox";
 import { githubToken } from "./env";
 import { createPullRequest } from "./github";
-import { createRun, updateRun, appendLogs, type RunMeta } from "./runs";
+import { createRun, updateRun, appendLogs } from "./runs";
 
 const REPO_URL = "https://github.com/vercel/turborepo.git";
 const AGENT_SCRIPT_PATH = resolve(process.cwd(), "sandbox/audit-fix-agent.mjs");
