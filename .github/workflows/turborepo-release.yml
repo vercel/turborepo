@@ -5,11 +5,12 @@
 # 1. Create a staging branch (acts as a lock to prevent concurrent releases)
 # 2. Run some smoke tests on that branch
 # 3. Build the Rust binary
-# 4. Publish JS packages to npm (including turbo itself)
-# 5. Create the git tag (only after npm publish succeeds)
-# 6. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
-# 7. Create a release branch and open a PR
-# 8. On failure, cleanup the staging branch automatically
+# 4. Run security audits (cargo audit + pnpm audit)
+# 5. Publish JS packages to npm (including turbo itself)
+# 6. Create the git tag (only after npm publish succeeds)
+# 7. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
+# 8. Create a release branch and open a PR
+# 9. On failure, cleanup the staging branch and release tag automatically
 #
 # Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
@@ -113,18 +114,19 @@ jobs:
     outputs:
       should_skip: ${{ steps.check.outputs.should_skip }}
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Check if should skip
         id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Find the commit that last updated version.txt (the release PR merge).
           # If no relevant files changed since then, there's nothing new to release.
-          LAST_VERSION_COMMIT=$(git log -1 --format='%H' -- version.txt)
-          CHANGES=$(git diff --name-only "$LAST_VERSION_COMMIT"..HEAD -- crates/ packages/ cli/)
-          if [ -z "$CHANGES" ]; then
+          # Uses the GitHub API instead of a full clone to avoid fetching entire repo history.
+          LAST_VERSION_COMMIT=$(gh api "repos/${{ github.repository }}/commits?path=version.txt&per_page=1" --jq '.[0].sha')
+          CHANGES=$(gh api "repos/${{ github.repository }}/compare/${LAST_VERSION_COMMIT}...${{ github.sha }}" \
+            --jq '[.files[].filename | select(startswith("crates/") or startswith("packages/") or startswith("cli/"))] | length')
+
+          if [ "$CHANGES" = "0" ]; then
             echo "Skipping: No relevant changes since last release (${LAST_VERSION_COMMIT:0:12})"
             echo "should_skip=true" >> $GITHUB_OUTPUT
           else
@@ -145,7 +147,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha || github.sha }}
-          fetch-depth: 0
 
       - uses: ./.github/actions/setup-node
         with:
@@ -163,9 +164,14 @@ jobs:
       - name: Get previous tag
         id: previous-tag
         run: |
-          PREV_TAG=$(git tag --list 'v*-canary.*' --sort=-version:refname | head -n 1)
+          # Use ls-remote to query tags without fetching objects
+          PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
+            | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+            | sort -V | tail -n 1)
           if [ -z "$PREV_TAG" ]; then
-            PREV_TAG=$(git tag --list 'v*' --sort=-version:refname | grep -v canary | head -n 1)
+            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+              | grep -v canary | sort -V | tail -n 1)
           fi
           echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
           echo "Previous tag: $PREV_TAG"
@@ -269,6 +275,10 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           rust: "false"
           capnproto: "false"
+          node-extra-flags: "--no-frozen-lockfile"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -338,22 +348,90 @@ jobs:
           name: turbo-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo/turbo*
 
-  npm-publish:
-    name: "Publish To NPM"
+  security-scan:
+    name: "Security Audit (Non-blocking)"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    needs: [stage, build-rust, rust-smoke-test, js-smoke-test]
-    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.rust-smoke-test.result == 'success' && needs.js-smoke-test.result == 'success' }}
+    timeout-minutes: 15
+    continue-on-error: true
+    needs: [stage]
+    if: ${{ always() && needs.stage.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
 
-      - run: git fetch origin --tags
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          node-extra-flags: "--no-frozen-lockfile"
+
+      - name: Rust dependency audit
+        run: |
+          cargo install cargo-audit --locked --quiet
+          cargo audit --deny warnings
+
+      - name: JS dependency audit
+        run: pnpm audit --prod --audit-level low
+
+  build-gen:
+    name: "Build @turbo/gen Binaries"
+    needs: [stage]
+    if: ${{ always() && needs.stage.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
 
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
+          extra-flags: "--no-frozen-lockfile"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+        with:
+          turbo-version: ${{ inputs.ci-tag-override || '' }}
+
+      - name: Build @turbo/gen (dependencies + embedded templates)
+        run: turbo run build --filter=@turbo/gen
+
+      - name: Cross-compile @turbo/gen for all platforms
+        run: pnpm --filter @turbo/gen run build:all
+
+      - name: Upload gen binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: turbo-gen-binaries
+          path: packages/turbo-gen/dist/turbo-gen-*
+
+  npm-publish:
+    name: "Publish To NPM"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [stage, build-rust, build-gen, rust-smoke-test, js-smoke-test]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.build-gen.result == 'success' && needs.rust-smoke-test.result == 'success' && needs.js-smoke-test.result == 'success' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+          extra-flags: "--no-frozen-lockfile"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -370,6 +448,12 @@ jobs:
         with:
           path: rust-artifacts
 
+      - name: Download @turbo/gen binaries
+        uses: actions/download-artifact@v4
+        with:
+          name: turbo-gen-binaries
+          path: gen-binaries
+
       - name: Move Rust artifacts into place
         run: |
           mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
@@ -378,6 +462,15 @@ jobs:
           mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-x64
           mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-x64
           mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-x64
+
+      - name: Move @turbo/gen binaries into place
+        run: |
+          mkdir -p cli/dist-gen-darwin-arm64 cli/dist-gen-darwin-x64 cli/dist-gen-linux-x64 cli/dist-gen-linux-arm64 cli/dist-gen-windows-x64
+          cp gen-binaries/turbo-gen-darwin-arm64 cli/dist-gen-darwin-arm64/turbo-gen
+          cp gen-binaries/turbo-gen-darwin-x64 cli/dist-gen-darwin-x64/turbo-gen
+          cp gen-binaries/turbo-gen-linux-x64 cli/dist-gen-linux-x64/turbo-gen
+          cp gen-binaries/turbo-gen-linux-arm64 cli/dist-gen-linux-arm64/turbo-gen
+          cp gen-binaries/turbo-gen-windows-x64.exe cli/dist-gen-windows-x64/turbo-gen.exe
 
       - name: Ensure npm version
         run: npm install -g npm@11.5.1
@@ -389,6 +482,14 @@ jobs:
             SKIP_FLAG="--skip-publish"
           fi
           cd cli && make publish-turbo SKIP_PUBLISH=$SKIP_FLAG
+
+      - name: Publish @turbo/gen platform packages
+        run: |
+          SKIP_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            SKIP_FLAG="--skip-publish"
+          fi
+          cd cli && pnpm exec turboreleaser gen --version-path ../version.txt $SKIP_FLAG
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts
@@ -407,7 +508,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-          fetch-depth: 0
 
       - name: Configure git
         run: |
@@ -509,12 +609,45 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
-          fetch-depth: 0
 
-      - name: Fetch main and tags
-        run: git fetch origin main --tags
+      - uses: ./.github/actions/setup-node
+        with:
+          enable-corepack: false
+          extra-flags: "--no-frozen-lockfile"
+
+      - name: Configure git
+        run: |
+          git config --global user.name 'Turbobot'
+          git config --global user.email 'turbobot@vercel.com'
+
+      - name: Commit lockfile if updated by install
+        run: |
+          if git diff --quiet pnpm-lock.yaml; then
+            echo "Lockfile already up to date."
+          else
+            git add pnpm-lock.yaml
+            git commit -m "Update lockfile for release"
+            git push origin "${{ needs.stage.outputs.stage-branch }}"
+          fi
+
+      - name: Bump to next canary for stable releases
+        run: |
+          TAG=$(sed -n '2p' version.txt)
+
+          if [ "$TAG" = "latest" ]; then
+            VERSION="${{ needs.stage.outputs.version }}"
+            echo "Stable release detected (${VERSION}). Bumping to next prepatch canary..."
+            ./scripts/version.js prepatch
+            cat version.txt
+            git commit -anm "bump to next canary after ${VERSION}"
+            git push origin "${{ needs.stage.outputs.stage-branch }}"
+          else
+            echo "Pre-release ($TAG), skipping canary bump."
+          fi
 
       - name: Build PR body
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ needs.stage.outputs.version }}"
           PREVIOUS_TAG="${{ needs.stage.outputs.previous-tag }}"
@@ -532,11 +665,12 @@ jobs:
           fi
           echo "" >> pr-body.md
 
-          # Changelog
+          # Changelog (via GitHub API to avoid needing full git history)
           echo "### Changes" >> pr-body.md
           echo "" >> pr-body.md
           if [ -n "$PREVIOUS_TAG" ]; then
-            git log ${PREVIOUS_TAG}..origin/main --pretty=format:"- %s (\`%h\`)" >> pr-body.md
+            gh api "repos/${{ github.repository }}/compare/${PREVIOUS_TAG}...main" \
+              --jq '.commits[] | "- \(.commit.message | split("\n") | .[0]) (`\(.sha[:7])`)"' >> pr-body.md
           else
             echo "First release - no previous tag." >> pr-body.md
           fi
@@ -583,8 +717,31 @@ jobs:
     name: "Cleanup Failed Release"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [stage, build-rust, rust-smoke-test, js-smoke-test, npm-publish]
-    if: ${{ always() && needs.stage.result == 'success' && (needs.build-rust.result == 'failure' || needs.rust-smoke-test.result == 'failure' || needs.js-smoke-test.result == 'failure' || needs.npm-publish.result == 'failure') }}
+    needs:
+      [
+        stage,
+        build-rust,
+        build-gen,
+        rust-smoke-test,
+        js-smoke-test,
+        npm-publish,
+        create-release-tag,
+        create-release-pr
+      ]
+    if: >-
+      ${{
+        always()
+        && needs.stage.result == 'success'
+        && (
+          needs.build-rust.result == 'failure'
+          || needs.build-gen.result == 'failure'
+          || needs.rust-smoke-test.result == 'failure'
+          || needs.js-smoke-test.result == 'failure'
+          || needs.npm-publish.result == 'failure'
+          || needs.create-release-tag.result == 'failure'
+          || needs.create-release-pr.result == 'failure'
+        )
+      }}
     steps:
       - name: Delete staging branch
         env:
@@ -593,4 +750,12 @@ jobs:
           STAGE_BRANCH="${{ needs.stage.outputs.stage-branch }}"
           echo "::warning::Release failed. Cleaning up staging branch ${STAGE_BRANCH}..."
           gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/${STAGE_BRANCH}" || echo "Branch may already be deleted or not exist"
+
+      - name: Delete release tag if it exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.stage.outputs.version }}"
+          echo "::warning::Cleaning up release tag v${VERSION} if it exists..."
+          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/v${VERSION}" || echo "Tag may not exist"
           echo "Cleanup complete. You can retry the release without using clear-staging-branch."

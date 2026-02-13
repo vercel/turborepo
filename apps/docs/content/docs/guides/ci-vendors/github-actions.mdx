@@ -1,6 +1,14 @@
 ---
 title: GitHub Actions
 description: Learn how to use GitHub Actions with Turborepo.
+product: turborepo
+type: integration
+summary: Configure GitHub Actions workflows to run Turborepo tasks with Remote Caching.
+prerequisites:
+  - /docs/guides/ci-vendors
+related:
+  - /docs/guides/ci-vendors/circleci
+  - /docs/guides/ci-vendors/vercel
 ---
 
 import { CopyPrompt } from "@/components/copy-prompt";
@@ -330,8 +338,8 @@ Example `package.json` with a `build` script:
 Configure your GitHub pipeline with a step which uses the `actions/cache@v4` action before the build steps of your CI file.
 
 - Make sure that the `path` attribute set within the `actions/cache` action matches the output location above. In the example below, `path` was set to `.turbo`.
-- State the cache key for the current run under the `key` attribute. In the example below, we used a combination of the runner os and GitHub sha as the cache key.
-- State the desired cache prefix pattern under the `restore-keys` attribute. Make sure this pattern will remain valid for future ci runs. In the example below, we used the `${{ runner.os }}-turbo-` as the cache key prefix pattern to search against. This allows us to hit the cache on any subsequent ci runs despite `github.sha` changing.
+- State the cache key for the current run under the `key` attribute. In the example below, we used a combination of the runner OS and GitHub SHA as the cache key.
+- State the desired cache prefix pattern under the `restore-keys` attribute. Make sure this pattern will remain valid for future CI runs. In the example below, we used the `${{ runner.os }}-turbo-` as the cache key prefix pattern to search against. This allows us to hit the cache on any subsequent CI runs despite `github.sha` changing.
 
 Example `ci` yaml with `.turbo` as chosen cache folder:
 

@@ -1,0 +1,32 @@
+{
+  "name": "@turbo-internal/agents",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack",
+    "build": "next build",
+    "start": "next start",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@octokit/rest": "^22.0.0",
+    "@slack/web-api": "^7.9.1",
+    "@vercel/blob": "2.3.0-512846a-20260206231709",
+    "@vercel/functions": "^3.4.1",
+    "@vercel/sandbox": "^1.4.1",
+    "ai": "^6.0.0",
+    "next": "^16.1.5",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "zod": "^4.1.13"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.17",
+    "@types/node": "^22.15.3",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17",
+    "typescript": "^5.5.4"
+  }
+}

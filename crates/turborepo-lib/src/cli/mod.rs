@@ -574,8 +574,8 @@ pub enum Command {
     /// Generate a new app / package
     #[clap(aliases = ["g", "gen"])]
     Generate {
-        #[clap(long, default_value_t = String::from("latest"), hide = true)]
-        tag: String,
+        #[clap(long, hide = true)]
+        tag: Option<String>,
         /// The name of the generator to run
         generator_name: Option<String>,
         /// Generator configuration file
@@ -1408,6 +1408,7 @@ pub async fn run(
         } => {
             let event = CommandEventBuilder::new("generate").with_parent(&root_telemetry);
             event.track_call();
+            let tag = tag.clone().unwrap_or_else(|| get_version().to_string());
             // build GeneratorCustomArgs struct
             let args = GeneratorCustomArgs {
                 generator_name: generator_name.clone(),
@@ -1416,7 +1417,7 @@ pub async fn run(
                 args: args.clone(),
             };
             let child_event = event.child();
-            generate::run(tag, command, &args, child_event)?;
+            generate::run(&tag, command, &args, child_event)?;
             Ok(0)
         }
         Command::Info => {
@@ -3033,7 +3034,7 @@ mod test {
     #[test]
     fn test_parse_gen() {
         let default_gen = Command::Generate {
-            tag: "latest".to_string(),
+            tag: None,
             generator_name: None,
             config: None,
             root: None,
@@ -3060,7 +3061,7 @@ mod test {
             .unwrap(),
             Args {
                 command: Some(Command::Generate {
-                    tag: "latest".to_string(),
+                    tag: None,
                     generator_name: None,
                     config: None,
                     root: None,
@@ -3087,7 +3088,7 @@ mod test {
             .unwrap(),
             Args {
                 command: Some(Command::Generate {
-                    tag: "canary".to_string(),
+                    tag: Some("canary".to_string()),
                     generator_name: Some("my-generator".to_string()),
                     config: Some("~/custom-gen-config/gen".to_string()),
                     root: None,
@@ -3096,6 +3097,46 @@ mod test {
                 }),
                 ..Args::default()
             }
+        );
+    }
+
+    #[test]
+    fn test_gen_default_tag_is_not_latest() {
+        let args = Args::try_parse_from(["turbo", "gen"]).unwrap();
+        let tag = match args.command {
+            Some(Command::Generate { tag, .. }) => tag,
+            _ => panic!("expected Generate command"),
+        };
+        assert_eq!(tag, None, "default tag should be None, not \"latest\"");
+    }
+
+    #[test]
+    fn test_gen_default_tag_resolves_to_current_version() {
+        let args = Args::try_parse_from(["turbo", "gen"]).unwrap();
+        let tag = match args.command {
+            Some(Command::Generate { tag, .. }) => tag,
+            _ => panic!("expected Generate command"),
+        };
+        let resolved = tag.unwrap_or_else(|| crate::get_version().to_string());
+        assert_eq!(
+            resolved,
+            crate::get_version(),
+            "gen tag should resolve to the turbo binary version, not \"latest\""
+        );
+    }
+
+    #[test]
+    fn test_gen_explicit_tag_is_preserved() {
+        let args = Args::try_parse_from(["turbo", "gen", "--tag", "1.2.3"]).unwrap();
+        let tag = match args.command {
+            Some(Command::Generate { tag, .. }) => tag,
+            _ => panic!("expected Generate command"),
+        };
+        assert_eq!(tag, Some("1.2.3".to_string()));
+        let resolved = tag.unwrap_or_else(|| crate::get_version().to_string());
+        assert_eq!(
+            resolved, "1.2.3",
+            "explicit --tag should override the default version"
         );
     }
 

@@ -76,6 +76,8 @@ impl From<std::io::Error> for ShutdownFailed {
 struct ChildHandle {
     pid: Option<u32>,
     imp: ChildHandleImpl,
+    #[cfg(windows)]
+    _job: Option<super::job_object::JobObject>,
 }
 
 enum ChildHandleImpl {
@@ -103,6 +105,14 @@ impl ChildHandle {
         let mut child = command.spawn()?;
         let pid = child.id();
 
+        #[cfg(windows)]
+        let job = pid.and_then(|pid| {
+            super::job_object::JobObject::new()
+                .and_then(|job| job.assign_pid(pid).map(|_| job))
+                .map_err(|e| debug!("failed to set up job object for process {pid}: {e}"))
+                .ok()
+        });
+
         let stdin = child.stdin.take().map(ChildInput::Std);
         let stdout = child
             .stdout
@@ -117,6 +127,8 @@ impl ChildHandle {
             handle: Self {
                 pid,
                 imp: ChildHandleImpl::Tokio(child),
+                #[cfg(windows)]
+                _job: job,
             },
             io: ChildIO {
                 stdin,
@@ -177,8 +189,31 @@ impl ChildHandle {
 
         let pid = child.process_id();
 
+        #[cfg(windows)]
+        let job = pid.and_then(|pid| {
+            super::job_object::JobObject::new()
+                .and_then(|job| job.assign_pid(pid).map(|_| job))
+                .map_err(|e| debug!("failed to set up job object for PTY process {pid}: {e}"))
+                .ok()
+        });
+
         let mut stdin = controller.take_writer().ok();
         let output = controller.try_clone_reader().ok().map(ChildOutput::Pty);
+
+        // portable-pty 0.9.0 creates ConPTY with PSEUDOCONSOLE_INHERIT_CURSOR,
+        // which sends a Device Status Report (DSR) cursor position request
+        // (\x1b[6n) on the output pipe during initialization. ConPTY blocks
+        // until the host responds with a Cursor Position Report on stdin.
+        // Without this response the PTY hangs indefinitely.
+        // See https://github.com/vercel/turborepo/issues/11808
+        #[cfg(windows)]
+        if let Some(ref mut writer) = stdin {
+            // Respond with cursor at position (1,1). The actual position
+            // doesn't matter — ConPTY just needs a valid CPR to unblock.
+            if let Err(e) = writer.write_all(b"\x1b[1;1R") {
+                debug!("failed to write ConPTY cursor position response: {e}");
+            }
+        }
 
         // If we don't want to keep stdin open we take it here and it is immediately
         // dropped resulting in a EOF being sent to the child process.
@@ -190,6 +225,8 @@ impl ChildHandle {
             handle: Self {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
+                #[cfg(windows)]
+                _job: job,
             },
             io: ChildIO {
                 stdin: stdin.map(ChildInput::Pty),
@@ -544,10 +581,16 @@ impl Child {
                 .await
             }
             Some(ChildOutput::Pty(output)) => {
-                // Drop stdin before reading so the UnixMasterWriter sends EOT
-                // and releases its fd, allowing the reader to reach EOF once
-                // the controller is dropped after the child exits.
-                drop(self.stdin_inner());
+                // On Unix, drop stdin before reading so the master PTY writer
+                // sends EOT and releases its fd, allowing the reader to reach
+                // EOF once the controller is dropped after the child exits.
+                //
+                // On Windows, do NOT drop stdin here: ConPTY treats a closed
+                // stdin pipe as the session ending and immediately terminates
+                // the child process.
+                if !cfg!(windows) {
+                    drop(self.stdin_inner());
+                }
                 self.wait_with_piped_sync_output(stdout_pipe, std::io::BufReader::new(output))
                     .await
             }
@@ -1262,5 +1305,241 @@ mod test {
             .expect("timed out")
             .is_some()
         {}
+    }
+
+    // Regression tests for https://github.com/vercel/turborepo/issues/11808
+    //
+    // On Windows, portable-pty 0.9.0 added PSEUDOCONSOLE_INHERIT_CURSOR to
+    // ConPTY creation, which requires the host to handle DSR (Device Status
+    // Report) escape sequences. Turborepo doesn't, causing ConPTY to hang.
+    //
+    // Additionally, an unconditional `drop(stdin)` in the PTY path of
+    // wait_with_piped_outputs would kill ConPTY children on Windows because
+    // closing ConPTY stdin terminates the session.
+    //
+    // These tests verify the fixes: PTY children start, produce output, and
+    // exit normally without hanging or being killed by stdin closure.
+
+    /// Verifies that a PTY-spawned short-lived process produces output and
+    /// exits cleanly via wait_with_piped_outputs. Uses a timeout to catch
+    /// the ConPTY hang that occurred with PSEUDOCONSOLE_INHERIT_CURSOR.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_pty_child_does_not_hang(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        let mut out = Vec::new();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
+
+        let exit = result
+            .expect("PTY child hung — likely PSEUDOCONSOLE_INHERIT_CURSOR regression")
+            .unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        let trimmed = output.trim().strip_prefix(EOT).unwrap_or(output.trim());
+        assert_eq!(trimmed, "hello world");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Simulates the persistent-task flow: stdin is taken by the caller
+    /// (as the TUI does for interactive tasks) BEFORE wait_with_piped_outputs
+    /// is called. The child should still produce output and exit normally
+    /// without wait_with_piped_outputs interfering with stdin.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_pty_stdin_taken_before_piped_outputs(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        // Take stdin before piping outputs, simulating TUI taking ownership.
+        // For PTY children, this returns Some; for non-PTY, stdin() returns None
+        // (Std variant is filtered out), but stdin_inner still removes it.
+        let _stdin_guard = child.stdin();
+
+        // Verify stdin_inner is now empty (already taken).
+        assert!(
+            child.stdin_inner().is_none(),
+            "stdin should already be taken"
+        );
+
+        let mut out = Vec::new();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
+
+        let exit = result
+            .expect("child hung — wait_with_piped_outputs likely interfered with taken stdin")
+            .unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        let trimmed = output.trim().strip_prefix(EOT).unwrap_or(output.trim());
+        assert_eq!(trimmed, "hello world");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Verifies that a PTY-spawned process with open stdin that has NOT been
+    /// taken by the caller still completes normally. This is the non-persistent
+    /// task path where exec.rs does not take stdin before
+    /// wait_with_piped_outputs.
+    ///
+    /// Before the fix, on Windows the unconditional stdin drop inside
+    /// wait_with_piped_outputs would kill the ConPTY child immediately.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_pty_untaken_stdin_does_not_kill_child(use_pty: bool) {
+        let script = find_script_dir().join_component("hello_world.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        // Do NOT take stdin — this simulates a non-persistent task where
+        // exec.rs skips stdin handling on Windows (closing_stdin_ends_process).
+        // wait_with_piped_outputs should still work without killing the child.
+        let mut out = Vec::new();
+
+        let result = tokio::time::timeout(
+            Duration::from_secs(10),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
+
+        let exit = result
+            .expect("child process hung or was killed by premature stdin closure")
+            .unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        let trimmed = output.trim().strip_prefix(EOT).unwrap_or(output.trim());
+        assert_eq!(trimmed, "hello world");
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Verifies that stopping a parent process also kills its child processes.
+    ///
+    /// On Unix this works via process groups (setsid + kill(-pgid)).
+    /// On Windows this works via Job Objects
+    /// (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE).
+    ///
+    /// The test spawns a Node.js script that itself spawns a long-running child
+    /// process, captures the grandchild's PID from stdout, stops the parent,
+    /// and then checks that the grandchild is no longer alive.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    #[traced_test]
+    async fn test_process_tree_cleanup(use_pty: bool) {
+        let script = find_script_dir().join_component("spawn_child_sleep.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            use_pty.then(PtySize::default),
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        // Read stdout to get the grandchild PID
+        let grandchild_pid = {
+            let mut out = Vec::new();
+            match child.outputs().unwrap() {
+                ChildOutput::Std { mut stdout, .. } => {
+                    let mut buf = vec![0u8; 256];
+                    let n = tokio::time::timeout(Duration::from_secs(5), stdout.read(&mut buf))
+                        .await
+                        .expect("timed out reading grandchild PID")
+                        .expect("failed to read stdout");
+                    out.extend_from_slice(&buf[..n]);
+                }
+                ChildOutput::Pty(mut reader) => {
+                    let mut buf = vec![0u8; 256];
+                    let n = reader.read(&mut buf).expect("failed to read pty output");
+                    out.extend_from_slice(&buf[..n]);
+                }
+            };
+            let output = String::from_utf8(out).unwrap();
+            let pid_line = output
+                .lines()
+                .find(|line| line.contains("CHILD_PID="))
+                .unwrap_or_else(|| panic!("CHILD_PID not found in output: {output}"));
+            pid_line
+                .split('=')
+                .nth(1)
+                .unwrap()
+                .trim()
+                .parse::<u32>()
+                .unwrap()
+        };
+
+        // Verify grandchild is alive before we stop
+        assert!(
+            is_process_alive(grandchild_pid),
+            "grandchild process {grandchild_pid} should be alive before stop"
+        );
+
+        // Stop the parent process
+        child.stop().await;
+
+        // Give the OS a moment to clean up
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Verify grandchild is dead
+        assert!(
+            !is_process_alive(grandchild_pid),
+            "grandchild process {grandchild_pid} should have been killed"
+        );
+    }
+
+    fn is_process_alive(pid: u32) -> bool {
+        #[cfg(unix)]
+        {
+            // kill(pid, 0) checks if process exists without sending a signal
+            unsafe { libc::kill(pid as i32, 0) == 0 }
+        }
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::{
+                Foundation::CloseHandle,
+                System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
+            };
+            unsafe {
+                let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+                if handle.is_null() {
+                    return false;
+                }
+                // Process handle opened — check if it's actually still running
+                let mut exit_code: u32 = 0;
+                let result = windows_sys::Win32::System::Threading::GetExitCodeProcess(
+                    handle,
+                    &mut exit_code,
+                );
+                CloseHandle(handle);
+                // STILL_ACTIVE (259) means the process is still running
+                result != 0 && exit_code == 259
+            }
+        }
     }
 }

@@ -19,6 +19,10 @@ inputs:
     description: "Setup Capnproto"
     required: false
     default: "true"
+  node-extra-flags:
+    description: "Extra flags to pass to pnpm install"
+    required: false
+    default: ""
 
 runs:
   using: "composite"
@@ -28,6 +32,7 @@ runs:
       uses: ./.github/actions/setup-node
       with:
         node-version: ${{ inputs.node-version }}
+        extra-flags: ${{ inputs.node-extra-flags }}
       env:
         PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 

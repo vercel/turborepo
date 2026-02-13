@@ -1,4 +1,5 @@
 #!/bin/bash
+set -eo pipefail
 
 user_provided_flags="$@"
 script_provided_flags="\

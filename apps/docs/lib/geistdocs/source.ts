@@ -84,7 +84,27 @@ export const getLLMText = async (page: InferPageType<typeof source>) => {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 
-  return `# ${page.data.title}
+  const { title, description, product, type, summary, prerequisites, related } =
+    page.data;
+
+  const frontmatter = [
+    "---",
+    `title: ${title}`,
+    description && `description: ${description}`,
+    product && `product: ${product}`,
+    type && `type: ${type}`,
+    summary && `summary: ${summary}`,
+    prerequisites?.length &&
+      `prerequisites:\n${prerequisites.map((p) => `  - ${p}`).join("\n")}`,
+    related?.length && `related:\n${related.map((r) => `  - ${r}`).join("\n")}`,
+    "---"
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return `${frontmatter}
+
+# ${title}
 
 ${cleaned}
 

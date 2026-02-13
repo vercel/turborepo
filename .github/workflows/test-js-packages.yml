@@ -95,6 +95,9 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 

@@ -1,21 +1,18 @@
-const MD_TRACKING_URL = process.env.MD_TRACKING_URL;
-const MD_TRACKING_API_KEY = process.env.MD_TRACKING_API_KEY;
+import { siteId } from "@/geistdocs";
 
-interface TrackMdRequestParams {
+const PLATFORM_URL = "https://geistdocs.com/md-tracking";
+
+type TrackMdRequestParams = {
   path: string;
   userAgent: string | null;
   referer: string | null;
   acceptHeader: string | null;
-  /**
-   * How the markdown was requested:
-   * - 'md-url' for direct .md URLs
-   * - 'header-negotiated' for Accept header
-   */
+  /** How the markdown was requested: 'md-url' for direct .md URLs, 'header-negotiated' for Accept header */
   requestType?: "md-url" | "header-negotiated";
-}
+};
 
 /**
- * Track a markdown page request to the feedback-app analytics.
+ * Track a markdown page request via the geistdocs platform.
  * Fire-and-forget: errors are logged but don't affect the response.
  */
 export async function trackMdRequest({
@@ -25,21 +22,15 @@ export async function trackMdRequest({
   acceptHeader,
   requestType
 }: TrackMdRequestParams): Promise<void> {
-  if (!MD_TRACKING_URL || !MD_TRACKING_API_KEY) {
-    // Tracking not configured, skip silently
-    return;
-  }
-
   try {
-    const response = await fetch(MD_TRACKING_URL, {
+    const response = await fetch(PLATFORM_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${MD_TRACKING_API_KEY}`
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
         path,
-        source: "turborepo",
+        siteId: siteId ?? "geistdocs-unknown",
         userAgent,
         referer,
         acceptHeader,
@@ -55,7 +46,6 @@ export async function trackMdRequest({
       );
     }
   } catch (error) {
-    // Fire-and-forget: don't let tracking errors affect the response
     console.error("MD tracking error:", error);
   }
 }

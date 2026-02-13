@@ -73,8 +73,8 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
         // check for an existing token with automatic refresh if expired.
         } else if login_url_configuration.contains("vercel.com") {
             match crate::auth::get_token_with_refresh().await {
-                Ok(Some(token_str)) => {
-                    let token = Token::existing(token_str);
+                Ok(Some(token_secret)) => {
+                    let token = Token::existing_secret(token_secret);
                     if token
                         .is_valid_sso(
                             api_client,
@@ -128,11 +128,12 @@ pub async fn sso_login<T: Client + TokenClient + CacheClient>(
     spinner.finish_and_clear();
 
     let token = token_cell.get().ok_or(Error::FailedToGetToken)?;
+    let secret_token = turborepo_api_client::SecretString::new(token.clone());
 
     let token_name = make_token_name()?;
 
     let verified_user = api_client
-        .verify_sso_token(token, &token_name)
+        .verify_sso_token(&secret_token, &token_name)
         .await
         .map_err(Error::FailedToValidateSSOToken)?;
 
@@ -198,8 +199,11 @@ mod tests {
     }
 
     impl Client for MockApiClient {
-        async fn get_user(&self, token: &str) -> turborepo_api_client::Result<UserResponse> {
-            if token.is_empty() {
+        async fn get_user(
+            &self,
+            token: &turborepo_api_client::SecretString,
+        ) -> turborepo_api_client::Result<UserResponse> {
+            if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
             }
 
@@ -213,8 +217,11 @@ mod tests {
                 },
             })
         }
-        async fn get_teams(&self, token: &str) -> turborepo_api_client::Result<TeamsResponse> {
-            if token.is_empty() {
+        async fn get_teams(
+            &self,
+            token: &turborepo_api_client::SecretString,
+        ) -> turborepo_api_client::Result<TeamsResponse> {
+            if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
             }
 
@@ -231,7 +238,7 @@ mod tests {
         }
         async fn get_team(
             &self,
-            _token: &str,
+            _token: &turborepo_api_client::SecretString,
             team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             Ok(Some(Team {
@@ -248,11 +255,11 @@ mod tests {
         }
         async fn verify_sso_token(
             &self,
-            token: &str,
+            token: &turborepo_api_client::SecretString,
             _: &str,
         ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
-                token: token.to_string(),
+                token: token.clone(),
                 team_id: Some("team_id".to_string()),
             })
         }
@@ -268,7 +275,7 @@ mod tests {
     impl TokenClient for MockApiClient {
         async fn get_metadata(
             &self,
-            _token: &str,
+            _token: &turborepo_api_client::SecretString,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             Ok(ResponseTokenMetadata {
                 id: "test".to_string(),
@@ -284,7 +291,10 @@ mod tests {
                 created_at: 0,
             })
         }
-        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+        async fn delete_token(
+            &self,
+            _token: &turborepo_api_client::SecretString,
+        ) -> turborepo_api_client::Result<()> {
             Ok(())
         }
     }
@@ -293,7 +303,7 @@ mod tests {
         async fn get_artifact(
             &self,
             _hash: &str,
-            _token: &str,
+            _token: &turborepo_api_client::SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
             _method: Method,
@@ -311,7 +321,7 @@ mod tests {
             _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
-            _token: &str,
+            _token: &turborepo_api_client::SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> Result<(), turborepo_api_client::Error> {
@@ -320,7 +330,7 @@ mod tests {
         async fn fetch_artifact(
             &self,
             _hash: &str,
-            _token: &str,
+            _token: &turborepo_api_client::SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> Result<Option<Response>, turborepo_api_client::Error> {
@@ -329,7 +339,7 @@ mod tests {
         async fn artifact_exists(
             &self,
             _hash: &str,
-            _token: &str,
+            _token: &turborepo_api_client::SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> Result<Option<Response>, turborepo_api_client::Error> {
@@ -337,7 +347,7 @@ mod tests {
         }
         async fn get_caching_status(
             &self,
-            _token: &str,
+            _token: &turborepo_api_client::SecretString,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> Result<CachingStatusResponse, turborepo_api_client::Error> {
@@ -399,7 +409,7 @@ mod tests {
         let token = sso_login(&options).await.unwrap();
         assert!(!matches!(token, Token::Existing(..)));
 
-        let got_token = token.into_inner().to_string();
+        let got_token = token.into_inner().expose().to_string();
         assert_eq!(got_token, EXPECTED_VERIFICATION_TOKEN.to_owned());
 
         // Call the login function twice to test that we check for existing tokens.
@@ -464,7 +474,7 @@ mod tests {
         };
 
         let result = sso_login(&options).await.unwrap();
-        assert_matches!(result, Token::Existing(token) if token == "existing-token");
+        assert_matches!(result, Token::Existing(ref token) if token.expose() == "existing-token");
     }
 
     #[tokio::test]
@@ -490,7 +500,7 @@ mod tests {
         };
 
         let result = sso_login(&options).await.unwrap();
-        assert_matches!(result, Token::New(token) if token == EXPECTED_VERIFICATION_TOKEN);
+        assert_matches!(result, Token::New(ref token) if token.expose() == EXPECTED_VERIFICATION_TOKEN);
     }
 
     #[test]

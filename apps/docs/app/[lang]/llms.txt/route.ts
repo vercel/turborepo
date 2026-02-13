@@ -37,5 +37,9 @@ Generated at: ${new Date().toUTCString()}
 
 `;
 
-  return new Response(header + links.join("\n"));
+  return new Response(header + links.join("\n"), {
+    headers: {
+      "Content-Type": "text/markdown; charset=utf-8"
+    }
+  });
 };

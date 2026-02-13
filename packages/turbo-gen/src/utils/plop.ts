@@ -1,24 +1,29 @@
 import path from "node:path";
-import nodeFs from "node:fs";
-import os from "node:os";
-import { transformSync } from "esbuild";
 import fs from "fs-extra";
 import type { Project } from "@turbo/workspaces";
-import nodePlop from "node-plop";
 import type { NodePlopAPI, PlopGenerator } from "node-plop";
+import nodePlopModule from "node-plop";
 import { Separator } from "@inquirer/prompts";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
 import { GeneratorError } from "./error";
 
+// Bun's require() of CJS modules with Babel interop wraps exports differently
+const nodePlop = (
+  typeof nodePlopModule === "function"
+    ? nodePlopModule
+    : (nodePlopModule as { default: typeof nodePlopModule }).default
+) as (
+  plopfilePath: string,
+  cfg?: { destBasePath?: string; force?: boolean }
+) => NodePlopAPI | Promise<NodePlopAPI>;
+
 const SUPPORTED_CONFIG_EXTENSIONS = ["ts", "js", "cjs"];
 const TURBO_GENERATOR_DIRECTORY = path.join("turbo", "generators");
 
-// config formats that will be automatically loaded from within workspaces
 const SUPPORTED_WORKSPACE_GENERATOR_CONFIGS = SUPPORTED_CONFIG_EXTENSIONS.map(
   (ext) => path.join(TURBO_GENERATOR_DIRECTORY, `config.${ext}`)
 );
 
-// config formats that will be automatically loaded from the root (support plopfiles so that users with existing configurations can use them immediately)
 const SUPPORTED_ROOT_GENERATOR_CONFIGS = [
   ...SUPPORTED_WORKSPACE_GENERATOR_CONFIGS,
   ...SUPPORTED_CONFIG_EXTENSIONS.map((ext) => path.join(`plopfile.${ext}`))
@@ -29,55 +34,6 @@ export type Generator = PlopGenerator & {
   name: string;
 };
 
-// Tracks compiled temp files so we can clean them up
-const compiledConfigs: Array<string> = [];
-
-// node-plop 0.32+ loads configs via dynamic import(). In projects with
-// "type": "commonjs" (or no type field), Node.js treats .ts files as CJS,
-// which breaks ESM syntax like `export default`. To handle all project
-// configurations, we precompile .ts configs to .mjs temp files that Node.js
-// always loads as ESM regardless of the nearest package.json "type" field.
-function resolveConfig(configPath: string): string {
-  if (!configPath.endsWith(".ts")) {
-    return configPath;
-  }
-
-  try {
-    const source = nodeFs.readFileSync(configPath, "utf-8");
-    const { code } = transformSync(source, {
-      loader: "ts",
-      format: "esm",
-      target: "node18",
-      sourcefile: configPath
-    });
-
-    const tmpDir = path.join(os.tmpdir(), "turbo-gen");
-    nodeFs.mkdirSync(tmpDir, { recursive: true });
-
-    const hash = configPath.replace(/[^a-zA-Z0-9]/g, "_");
-    const compiledPath = path.join(tmpDir, `${hash}.mjs`);
-    nodeFs.writeFileSync(compiledPath, code);
-    compiledConfigs.push(compiledPath);
-
-    return compiledPath;
-  } catch {
-    // If compilation fails, return the original path and let node-plop
-    // attempt to load it directly (may work in ESM projects)
-    return configPath;
-  }
-}
-
-function cleanupCompiledConfigs(): void {
-  for (const f of compiledConfigs) {
-    try {
-      nodeFs.unlinkSync(f);
-    } catch {
-      // ignore cleanup errors
-    }
-  }
-  compiledConfigs.length = 0;
-}
-
 export async function getPlop({
   project,
   configPath
@@ -85,7 +41,8 @@ export async function getPlop({
   project: Project;
   configPath?: string;
 }): Promise<NodePlopAPI | undefined> {
-  // fetch all the workspace generator configs
+  // Bun handles TypeScript transpilation natively -- no tsx registration needed.
+
   const workspaceConfigs = getWorkspaceGeneratorConfigs({ project });
   let plop: NodePlopAPI | undefined;
 
@@ -97,7 +54,7 @@ export async function getPlop({
     }
 
     try {
-      plop = await nodePlop(resolveConfig(configPath), {
+      plop = await nodePlop(configPath, {
         destBasePath: configPath,
         force: false
       });
@@ -105,7 +62,6 @@ export async function getPlop({
       logger.error(e);
     }
   } else {
-    // look for a root config
     for (const possiblePath of SUPPORTED_ROOT_GENERATOR_CONFIGS) {
       const plopFile = path.join(project.paths.root, possiblePath);
       if (!fs.existsSync(plopFile)) {
@@ -113,7 +69,7 @@ export async function getPlop({
       }
 
       try {
-        plop = await nodePlop(resolveConfig(plopFile), {
+        plop = await nodePlop(plopFile, {
           destBasePath: project.paths.root,
           force: false
         });
@@ -124,8 +80,7 @@ export async function getPlop({
     }
 
     if (!plop && workspaceConfigs.length > 0) {
-      // if no root config, use the first workspace config as the entrypoint
-      plop = await nodePlop(resolveConfig(workspaceConfigs[0].config), {
+      plop = await nodePlop(workspaceConfigs[0].config, {
         destBasePath: workspaceConfigs[0].root,
         force: false
       });
@@ -134,10 +89,9 @@ export async function getPlop({
   }
 
   if (plop) {
-    // add in all the workspace configs
     for (const c of workspaceConfigs) {
       try {
-        await plop.load(resolveConfig(c.config), {
+        await plop.load(c.config, {
           destBasePath: c.root,
           force: false
         });
@@ -147,7 +101,6 @@ export async function getPlop({
     }
   }
 
-  cleanupCompiledConfigs();
   return plop;
 }
 
@@ -167,7 +120,6 @@ export async function getCustomGenerators({
   const gens = plop.getGeneratorList();
   const gensWithDetails = gens.map((g) => plop.getGenerator(g.name));
 
-  // group by workspace
   const gensByWorkspace: Record<string, Array<Generator>> = {};
   gensWithDetails.forEach((g) => {
     const generatorDetails = g as Generator;
@@ -175,11 +127,8 @@ export async function getCustomGenerators({
       if (generatorDetails.basePath === project.paths.root) {
         return false;
       }
-      // we can strip two directories to get the workspace root
       const parts = generatorDetails.basePath.split(path.sep);
-      // generators
       parts.pop();
-      // turbo
       parts.pop();
       const workspaceRoot = path.join("/", ...parts);
       return workspaceRoot === w.paths.root;
@@ -198,7 +147,6 @@ export async function getCustomGenerators({
     }
   });
 
-  // add in separators to group by workspace
   const gensWithSeparators: Array<Generator | Separator> = [];
   Object.keys(gensByWorkspace).forEach((group) => {
     gensWithSeparators.push(new Separator(group));
@@ -316,7 +264,6 @@ export async function runCustomGenerator({
   );
 
   if (results.failures.length > 0) {
-    // log all errors:
     results.failures.forEach((f) => {
       if (f instanceof Error) {
         logger.error(`Error - ${f.message}`);

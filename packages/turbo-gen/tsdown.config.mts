@@ -1,13 +1,13 @@
 import { defineConfig } from "tsdown";
 
+// DTS generation for the PlopTypes re-export consumed by user generator configs.
+// The CLI binary is compiled separately via `bun build --compile`.
 export default defineConfig({
-  entry: ["src/cli.ts", "src/types.ts"],
-  format: ["esm"],
+  entry: ["src/types.ts"],
+  format: ["cjs"],
   dts: true,
-  minify: true,
   outExtensions: () => ({
     js: ".js",
     dts: ".ts"
-  }),
-  onSuccess: "cp -r src/templates dist/templates"
+  })
 });
