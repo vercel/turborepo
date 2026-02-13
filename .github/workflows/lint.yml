@@ -24,6 +24,7 @@ jobs:
     outputs:
       rust: ${{ steps.filter.outputs.rust }}
       formatting: ${{ steps.filter.outputs.formatting }}
+      dependencies: ${{ steps.filter.outputs.dependencies }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,6 +45,13 @@ jobs:
               - "**/*.{yml,yaml,md,mdx,js,jsx,ts,tsx,json,toml,css}"
               - "pnpm-lock.yaml"
               - "package.json"
+            dependencies:
+              - "Cargo.lock"
+              - "Cargo.toml"
+              - "crates/**/Cargo.toml"
+              - "pnpm-lock.yaml"
+              - "package.json"
+              - "packages/**/package.json"
 
   rust_fmt:
     name: Rust format
@@ -141,6 +149,44 @@ jobs:
         run: |
           TURBO_API= turbo run quality --env-mode=strict
 
+  rust_audit:
+    name: Rust security audit
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.dependencies == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Run cargo audit
+        run: |
+          cargo install cargo-audit --locked --quiet
+          cargo audit --deny warnings
+
+  js_audit:
+    name: JS security audit
+    needs: determine_changes
+    if: ${{ needs.determine_changes.outputs.dependencies == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+
+      - name: Run pnpm audit
+        run: pnpm audit --prod --audit-level high
+
   cleanup:
     name: Cleanup
     needs:
@@ -149,6 +195,8 @@ jobs:
       - rust_clippy
       - rust_check
       - rust_licenses
+      - rust_audit
+      - js_audit
       - format_lint
     if: always()
     uses: ./.github/workflows/pr-clean-caches.yml
