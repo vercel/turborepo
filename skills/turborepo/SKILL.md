@@ -9,7 +9,7 @@ description: |
   monorepo, shares code between apps, runs changed/affected packages, debugs cache,
   or has apps/packages directories.
 metadata:
-  version: 2.8.5
+  version: 2.8.8-canary.6
 ---
 
 # Turborepo Skill

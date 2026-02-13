@@ -20,6 +20,8 @@ type CodeBlockProps = {
   style?: CSSProperties;
   tabIndex?: number;
   title?: string;
+  "data-line-numbers"?: string;
+  "data-line-highlighting"?: string;
 };
 
 export const CodeBlock = ({
@@ -28,10 +30,12 @@ export const CodeBlock = ({
   icon,
   style,
   tabIndex,
-  title
+  title,
+  ...rest
 }: CodeBlockProps) => {
   const ref = useRef<HTMLPreElement>(null);
   const [isCopied, setIsCopied] = useState(false);
+  const { "data-line-numbers": lineNumbers } = rest;
 
   const copyToClipboard = useCallback(async () => {
     if (typeof window === "undefined" || !navigator?.clipboard?.writeText) {
@@ -64,7 +68,7 @@ export const CodeBlock = ({
       <pre
         className={cn(
           "not-prose flex-1 overflow-x-auto rounded-sm border bg-background py-3 text-sm outline-none",
-          "[&>code]:grid",
+          "[&>code]:grid [&>code]:min-w-max",
           className,
           props.className
         )}
@@ -81,12 +85,11 @@ export const CodeBlock = ({
   if (!title) {
     return (
       <div className="relative mb-6">
-        <CodeBlockComponent />
+        <CodeBlockComponent
+          className={cn(lineNumbers ? "line-numbers" : "", className)}
+        />
         <Button
-          className={cn(
-            "absolute top-1.25 right-1.25 bg-background/80 backdrop-blur-sm",
-            className
-          )}
+          className="absolute top-[5px] right-[5px] bg-background/80 backdrop-blur-sm"
           onClick={copyToClipboard}
           size="icon"
           variant="ghost"
@@ -120,8 +123,9 @@ export const CodeBlock = ({
       <CardContent className="p-0">
         <CodeBlockComponent
           className={cn(
+            className,
             "rounded-none border-none",
-            title !== "Terminal" && "line-numbers"
+            lineNumbers ? "line-numbers" : ""
           )}
         />
       </CardContent>

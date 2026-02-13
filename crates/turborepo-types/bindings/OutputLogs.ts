@@ -11,9 +11,4 @@
  *
  * Documentation: https://turborepo.dev/docs/reference/run#--output-logs-option
  */
-export type OutputLogs =
-  | "full"
-  | "none"
-  | "hash-only"
-  | "new-only"
-  | "errors-only";
+export type OutputLogs = "full" | "none" | "hash-only" | "new-only" | "errors-only";

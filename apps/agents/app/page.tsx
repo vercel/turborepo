@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { triggerAudit } from "./actions";
 
 export default function Home() {
@@ -46,14 +47,43 @@ export default function Home() {
           </div>
           {auditStatus === "done" && (
             <p className="mt-3 text-sm text-green-500">
-              Audit triggered. Check Slack for progress.
+              Audit triggered. Track progress on the{" "}
+              <Link
+                href="/dashboard"
+                className="underline hover:text-green-400"
+              >
+                dashboard
+              </Link>
+              .
             </p>
           )}
           {auditStatus === "error" && (
             <p className="mt-3 text-sm text-red-500">
-              Failed to trigger audit. Check the logs.
+              Failed to trigger audit. Check the{" "}
+              <Link href="/dashboard" className="underline hover:text-red-400">
+                dashboard
+              </Link>{" "}
+              for details.
             </p>
           )}
+        </div>
+      </section>
+
+      <section>
+        <h2 className="mb-4 text-lg font-semibold">History</h2>
+        <div className="flex gap-3">
+          <Link
+            href="/dashboard"
+            className="inline-block rounded border border-neutral-800 px-4 py-2 text-sm hover:bg-neutral-800"
+          >
+            Dashboard
+          </Link>
+          <Link
+            href="/vuln-diffs"
+            className="inline-block rounded border border-neutral-800 px-4 py-2 text-sm hover:bg-neutral-800"
+          >
+            Saved diffs
+          </Link>
         </div>
       </section>
     </main>

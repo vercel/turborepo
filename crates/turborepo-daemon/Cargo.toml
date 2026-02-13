@@ -15,7 +15,7 @@ hex = { workspace = true }
 http-body = "1"
 hyper-util = { version = "0.1", features = ["tokio"] }
 notify = { workspace = true }
-prost = "0.13"
+prost = "0.14"
 semver = { workspace = true }
 sha2 = { workspace = true }
 sysinfo = "0.27.7"
@@ -24,8 +24,9 @@ time = "0.3.20"
 tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = { version = "0.1.12", features = ["net"] }
 tokio-util = { version = "0.7.7", features = ["compat"] }
-tonic = { version = "0.12.3", features = ["transport"] }
-tower = "0.4.13"
+tonic = { version = "0.14", features = ["transport"] }
+tonic-prost = "0.14"
+tower = "0.5"
 tracing = { workspace = true }
 
 pidlock = { path = "../turborepo-pidlock" }
@@ -45,7 +46,7 @@ uds_windows = "1.1.0"
 async-io = "2"
 
 [build-dependencies]
-tonic-build = "0.12.3"
+tonic-prost-build = "0.14"
 
 [dev-dependencies]
 anyhow = { workspace = true }

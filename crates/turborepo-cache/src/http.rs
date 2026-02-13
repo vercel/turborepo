@@ -383,7 +383,7 @@ mod test {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{APIClient, analytics};
+    use turborepo_api_client::{APIClient, SecretString, analytics};
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
@@ -441,7 +441,7 @@ mod test {
         };
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: "my-token".to_string(),
+            token: SecretString::new("my-token".to_string()),
             team_slug: None,
         };
         let (analytics_recorder, analytics_handle) =
@@ -552,7 +552,7 @@ mod test {
 
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: "expired-token".to_string(),
+            token: SecretString::new("expired-token".to_string()),
             team_slug: None,
         };
 
@@ -592,7 +592,7 @@ mod test {
 
         let initial_api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: "initial-token".to_string(),
+            token: SecretString::new("initial-token".to_string()),
             team_slug: None,
         };
 
@@ -600,7 +600,7 @@ mod test {
 
         // Verify initial token
         let initial_auth = cache.api_auth.lock().unwrap().clone();
-        assert_eq!(initial_auth.token, "initial-token");
+        assert_eq!(initial_auth.token.expose(), "initial-token");
 
         // Test the token refresh mechanism (without actual HTTP call)
         // In a real scenario, try_refresh_token would call
@@ -613,10 +613,10 @@ mod test {
 
         if refresh_result {
             // If refresh succeeded, token should have been updated
-            assert_ne!(final_auth.token, "initial-token");
+            assert_ne!(final_auth.token.expose(), "initial-token");
         } else {
             // If refresh failed, token should remain unchanged
-            assert_eq!(final_auth.token, "initial-token");
+            assert_eq!(final_auth.token.expose(), "initial-token");
         }
     }
 
@@ -645,7 +645,7 @@ mod test {
 
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: "thread-test-token".to_string(),
+            token: SecretString::new("thread-test-token".to_string()),
             team_slug: None,
         };
 
@@ -663,7 +663,7 @@ mod test {
                 let cache_clone = Arc::clone(&cache);
                 thread::spawn(move || {
                     let auth = cache_clone.api_auth.lock().unwrap();
-                    assert_eq!(auth.token, "thread-test-token");
+                    assert_eq!(auth.token.expose(), "thread-test-token");
                     assert_eq!(auth.team_id, Some("my-team".to_string()));
                     // Simulate some work
                     thread::sleep(std::time::Duration::from_millis(10));
