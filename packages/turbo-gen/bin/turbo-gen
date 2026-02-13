@@ -1,0 +1,70 @@
+#!/usr/bin/env node
+
+/**
+ * Platform binary resolver for @turbo/gen.
+ *
+ * The actual turbo-gen binary is compiled per-platform and distributed
+ * as optional dependencies (@turbo/gen-darwin-arm64, etc.). This shim
+ * resolves the correct binary for the current platform and executes it.
+ */
+
+const child_process = require('child_process');
+const path = require('path');
+const fs = require('fs');
+
+function getBinaryPath() {
+  // Allow override for development
+  const TURBO_GEN_BINARY_PATH = process.env.TURBO_GEN_BINARY_PATH;
+  if (TURBO_GEN_BINARY_PATH) {
+    if (!fs.existsSync(TURBO_GEN_BINARY_PATH)) {
+      console.error(`TURBO_GEN_BINARY_PATH points to a missing file: ${TURBO_GEN_BINARY_PATH}`);
+      process.exit(1);
+    }
+    return TURBO_GEN_BINARY_PATH;
+  }
+
+  let { platform, arch } = process;
+  if (platform === 'win32') platform = 'windows';
+  const resolvedArch = arch === 'x64' ? '64' : arch;
+  const ext = platform === 'windows' ? '.exe' : '';
+
+  // Try the exact platform match
+  const packageName = `@turbo/gen-${platform}-${resolvedArch}`;
+  const binaryName = `bin/turbo-gen${ext}`;
+
+  try {
+    return require.resolve(`${packageName}/${binaryName}`);
+  } catch (e) {}
+
+  // For dev: check if there's a locally-built binary in dist/
+  const localBinary = path.join(__dirname, '..', 'dist', `turbo-gen${ext}`);
+  if (fs.existsSync(localBinary)) {
+    return localBinary;
+  }
+
+  // macOS and Windows ARM can run x64 under emulation
+  if (arch === 'arm64' && ['darwin', 'windows'].includes(platform)) {
+    const fallbackPackage = `@turbo/gen-${platform}-64`;
+    try {
+      return require.resolve(`${fallbackPackage}/${binaryName}`);
+    } catch (e) {}
+  }
+
+  console.error(`@turbo/gen: Could not find a binary for ${platform} ${resolvedArch}`);
+  console.error(`Expected package: ${packageName}`);
+  console.error();
+  console.error('This usually means the optional dependency was not installed.');
+  console.error('Try running your package manager\'s install command again.');
+  process.exit(1);
+}
+
+try {
+  child_process.execFileSync(
+    getBinaryPath(),
+    process.argv.slice(2),
+    { stdio: 'inherit' }
+  );
+} catch (e) {
+  if (e && e.status) process.exit(e.status);
+  throw e;
+}

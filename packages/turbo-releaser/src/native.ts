@@ -24,11 +24,15 @@ const templateDir = path.join(__dirname, "..", "template");
 async function generateNativePackage({
   platform,
   version,
-  outputDir
+  outputDir,
+  packagePrefix = "turbo",
+  description
 }: {
   platform: Platform;
   version: string;
   outputDir: string;
+  packagePrefix?: string;
+  description?: string;
 }) {
   const { os, arch } = platform;
   console.log(`Generating native package for ${os}-${arch}...`);
@@ -54,9 +58,11 @@ async function generateNativePackage({
 
   console.log("Generating package.json...");
   const packageJson = {
-    name: `turbo-${os}-${archToHuman[arch]}`,
+    name: `${packagePrefix}-${os}-${archToHuman[arch]}`,
     version,
-    description: `The ${os}-${arch} binary for turbo, a monorepo build system.`,
+    description:
+      description ||
+      `The ${os}-${arch} binary for turbo, a monorepo build system.`,
     repository: "https://github.com/vercel/turborepo",
     bugs: "https://github.com/vercel/turborepo/issues",
     homepage: "https://turborepo.dev",

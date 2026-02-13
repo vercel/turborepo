@@ -2,6 +2,7 @@ import path from "node:path";
 import type { Project } from "@turbo/workspaces";
 import fs from "fs-extra";
 import { GeneratorError } from "./error";
+import { TEMPLATES } from "../templates/embedded";
 
 export async function setupFromTemplate({
   project,
@@ -12,10 +13,14 @@ export async function setupFromTemplate({
 }) {
   const configDirectory = path.join(project.paths.root, "turbo", "generators");
 
-  // TODO: could create some more complex starters in the future
-  const toCopy = `simple-${template}`;
+  const templateKey = `simple-${template}`;
+  const embeddedTemplate = TEMPLATES[templateKey];
+  if (!embeddedTemplate) {
+    throw new GeneratorError(`Unknown template "${templateKey}"`, {
+      type: "config_directory_already_exists"
+    });
+  }
 
-  // required to ensure we don't overwrite any existing files at this location
   if (await fs.pathExists(configDirectory)) {
     throw new GeneratorError(
       `Generator config directory already exists at ${configDirectory}`,
@@ -23,8 +28,8 @@ export async function setupFromTemplate({
     );
   }
 
-  // copy templates to project
-  await fs.copy(path.join(__dirname, "templates", toCopy), configDirectory, {
-    recursive: true
-  });
+  for (const file of embeddedTemplate.files) {
+    const filePath = path.join(configDirectory, file.relativePath);
+    await fs.outputFile(filePath, file.content);
+  }
 }

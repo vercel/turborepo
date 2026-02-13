@@ -634,44 +634,13 @@ importers:
   packages/turbo-exe-stub: {}
 
   packages/turbo-gen:
-    dependencies:
-      '@inquirer/prompts':
-        specifier: ^7.10.1
-        version: 7.10.1(@types/node@18.17.4)
-      '@turbo/workspaces':
-        specifier: workspace:*
-        version: link:../turbo-workspaces
-      commander:
-        specifier: 10.0.0
-        version: 10.0.0
-      fs-extra:
-        specifier: 10.1.0
-        version: 10.1.0
-      minimatch:
-        specifier: 9.0.0
-        version: 9.0.0
-      node-plop:
-        specifier: 0.26.3
-        version: 0.26.3
-      picocolors:
-        specifier: 1.0.1
-        version: 1.0.1
-      proxy-agent:
-        specifier: 6.5.0
-        version: 6.5.0
-      tsx:
-        specifier: 4.21.0
-        version: 4.21.0
-      update-check:
-        specifier: 1.5.4
-        version: 1.5.4
-      validate-npm-package-name:
-        specifier: 5.0.0
-        version: 5.0.0
     devDependencies:
       '@arethetypeswrong/cli':
         specifier: 0.18.2
         version: 0.18.2
+      '@inquirer/prompts':
+        specifier: ^7.10.1
+        version: 7.10.1(@types/node@18.17.4)
       '@jest/globals':
         specifier: 30.2.0
         version: 30.2.0
@@ -684,6 +653,9 @@ importers:
       '@turbo/utils':
         specifier: workspace:*
         version: link:../turbo-utils
+      '@turbo/workspaces':
+        specifier: workspace:*
+        version: link:../turbo-workspaces
       '@types/fs-extra':
         specifier: 9.0.13
         version: 9.0.13
@@ -693,9 +665,27 @@ importers:
       '@types/validate-npm-package-name':
         specifier: 4.0.0
         version: 4.0.0
+      commander:
+        specifier: 10.0.0
+        version: 10.0.0
+      fs-extra:
+        specifier: 10.1.0
+        version: 10.1.0
       jest:
         specifier: 30.2.0
         version: 30.2.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.5.4))
+      minimatch:
+        specifier: 9.0.0
+        version: 9.0.0
+      node-plop:
+        specifier: 0.26.3
+        version: 0.26.3
+      picocolors:
+        specifier: 1.0.1
+        version: 1.0.1
+      proxy-agent:
+        specifier: 6.5.0
+        version: 6.5.0
       ts-jest:
         specifier: 29.4.6
         version: 29.4.6(@babel/core@7.29.0)(@jest/transform@30.2.0)(@jest/types@30.2.0)(babel-jest@30.2.0(@babel/core@7.29.0))(jest-util@30.2.0)(jest@30.2.0(@types/node@18.17.4)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.18))(@types/node@18.17.4)(typescript@5.5.4)))(typescript@5.5.4)
@@ -708,6 +698,12 @@ importers:
       typescript:
         specifier: 5.5.4
         version: 5.5.4
+      update-check:
+        specifier: 1.5.4
+        version: 1.5.4
+      validate-npm-package-name:
+        specifier: 5.0.0
+        version: 5.0.0
 
   packages/turbo-ignore:
     dependencies:

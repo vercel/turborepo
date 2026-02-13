@@ -7,13 +7,19 @@ interface PackAndPublishOptions {
   version: string;
   skipPublish: boolean;
   npmTag: string;
+  packagePrefix?: string;
+  binaryName?: string;
+  description?: string;
 }
 
 export async function packAndPublish({
   platforms,
   version,
   skipPublish,
-  npmTag
+  npmTag,
+  packagePrefix,
+  binaryName,
+  description
 }: PackAndPublishOptions) {
   console.log("Starting packAndPublish process...");
   const artifacts: Array<string> = [];
@@ -21,7 +27,13 @@ export async function packAndPublish({
   for (const platform of platforms) {
     console.log(`Processing platform: ${platform.os}-${platform.arch}`);
     // eslint-disable-next-line no-await-in-loop -- We trade of slightly faster releases with more legible logging
-    const artifact = await operations.packPlatform({ platform, version });
+    const artifact = await operations.packPlatform({
+      platform,
+      version,
+      packagePrefix,
+      binaryName,
+      description
+    });
     artifacts.push(artifact);
   }
 

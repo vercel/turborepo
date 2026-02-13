@@ -32,6 +32,7 @@ You will need to have these dependencies installed on your machine to work on th
 
 ### Optional dependencies
 
+- [Bun](https://bun.sh) is required to build `@turbo/gen` (the `turbo gen` code generator). The `@turbo/gen` package is compiled into a standalone binary using `bun build --compile`.
 - For running tests locally, `jq` and `zstd` are also required.
   - macOS: `brew install jq zstd`
   - Linux: `sudo apt update && sudo apt install jq zstd`

@@ -6,7 +6,8 @@
       "dependsOn": ["build"]
     },
     "build": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "bin/**"]
     }
   }
 }
