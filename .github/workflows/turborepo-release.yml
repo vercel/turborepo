@@ -366,7 +366,7 @@ jobs:
           cargo audit --deny warnings
 
       - name: JS dependency audit
-        run: pnpm audit --prod --audit-level high
+        run: pnpm audit --prod --audit-level low
 
   npm-publish:
     name: "Publish To NPM"
