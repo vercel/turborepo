@@ -15,8 +15,10 @@ pub struct SecretString(SecretBox<str>);
 pub const REDACTED: &str = "***";
 
 impl SecretString {
-    pub fn new(value: String) -> Self {
-        Self(SecretBox::new(Box::from(value.as_str())))
+    pub fn new(mut value: String) -> Self {
+        let secret = Self(SecretBox::new(Box::from(value.as_str())));
+        value.zeroize();
+        secret
     }
 
     /// Returns a reference to the underlying secret value.
@@ -66,10 +68,7 @@ impl<'de> Deserialize<'de> for SecretString {
     where
         D: serde::Deserializer<'de>,
     {
-        let mut s = String::deserialize(deserializer)?;
-        let secret = Self::new(s.clone());
-        s.zeroize();
-        Ok(secret)
+        String::deserialize(deserializer).map(Self::new)
     }
 }
 
