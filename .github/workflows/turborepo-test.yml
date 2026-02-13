@@ -158,6 +158,9 @@ jobs:
     timeout-minutes: 30
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
     env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
       RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
@@ -228,7 +231,7 @@ jobs:
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          turbo run test --filter=turborepo-tests-integration --color --env-mode=strict --token=${{ secrets.TURBO_TOKEN }} --team=${{ vars.TURBO_TEAM }} -- "tests/${{ matrix.test-path }}"
+          turbo run test --filter=turborepo-tests-integration --color --env-mode=strict -- "tests/${{ matrix.test-path }}"
         shell: bash
 
   turbo_types_check:
