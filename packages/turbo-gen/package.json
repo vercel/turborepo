@@ -15,6 +15,7 @@
   "bin": "bin/turbo-gen",
   "types": "dist/types.d.ts",
   "scripts": {
+    "postversion": "node bump-version.js",
     "build": "bun run scripts/build.ts",
     "build:all": "bun run scripts/build.ts --all-platforms",
     "build:embed": "bun run scripts/embed-templates.ts",
@@ -22,13 +23,6 @@
     "check-types": "tsc --noEmit"
   },
   "dependencies": {},
-  "optionalDependencies": {
-    "@turbo/gen-darwin-64": "2.8.8-canary.4",
-    "@turbo/gen-darwin-arm64": "2.8.8-canary.4",
-    "@turbo/gen-linux-64": "2.8.8-canary.4",
-    "@turbo/gen-linux-arm64": "2.8.8-canary.4",
-    "@turbo/gen-windows-64": "2.8.8-canary.4"
-  },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
     "@inquirer/prompts": "^7.10.1",

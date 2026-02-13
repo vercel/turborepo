@@ -275,6 +275,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           rust: "false"
           capnproto: "false"
+          node-extra-flags: "--no-frozen-lockfile"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
@@ -363,6 +364,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          node-extra-flags: "--no-frozen-lockfile"
 
       - name: Rust dependency audit
         run: |
@@ -386,6 +388,7 @@ jobs:
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
+          extra-flags: "--no-frozen-lockfile"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -396,9 +399,6 @@ jobs:
         uses: ./.github/actions/install-global-turbo
         with:
           turbo-version: ${{ inputs.ci-tag-override || '' }}
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Build @turbo/gen (dependencies + embedded templates)
         run: turbo run build --filter=@turbo/gen
@@ -426,6 +426,7 @@ jobs:
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
+          extra-flags: "--no-frozen-lockfile"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -612,6 +613,7 @@ jobs:
       - uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
+          extra-flags: "--no-frozen-lockfile"
 
       - name: Configure git
         run: |
