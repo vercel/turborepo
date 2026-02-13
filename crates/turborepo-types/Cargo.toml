@@ -14,8 +14,12 @@ biome_deserialize_macros = { workspace = true }
 clap = { workspace = true, features = ["derive"] }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 schemars = { workspace = true }
+secrecy = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 ts-rs = { workspace = true }
 turbopath = { workspace = true }
 turborepo-errors = { workspace = true }
 turborepo-task-id = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

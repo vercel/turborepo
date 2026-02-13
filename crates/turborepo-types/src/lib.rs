@@ -14,12 +14,14 @@
 //! - [`HashTrackerInfo`]: Provides access to task hash information
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
+pub mod secret;
 use std::{collections::HashMap, fmt, str::FromStr};
 
 use biome_deserialize_macros::Deserializable;
 use clap::ValueEnum;
 use globwalk::{GlobError, ValidatedGlob};
 use schemars::JsonSchema;
+pub use secret::SecretString;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use turbopath::{
@@ -350,7 +352,7 @@ pub enum GraphOpts {
 ///
 /// Contains all settings needed to connect to the Turborepo remote cache API,
 /// including authentication, timeouts, and server URLs.
-#[derive(Clone, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct APIClientOpts {
     /// Base URL for the Turborepo API
     pub api_url: String,
@@ -358,8 +360,11 @@ pub struct APIClientOpts {
     pub timeout: u64,
     /// Upload-specific timeout in seconds
     pub upload_timeout: u64,
-    /// Authentication token (if authenticated)
-    pub token: Option<String>,
+    /// Authentication token (if authenticated).
+    /// Wrapped in `SecretString` to prevent accidental exposure in logs.
+    /// Skipped during serialization.
+    #[serde(skip)]
+    pub token: Option<SecretString>,
     /// Team ID for the remote cache
     pub team_id: Option<String>,
     /// Team slug for the remote cache
@@ -370,22 +375,6 @@ pub struct APIClientOpts {
     pub preflight: bool,
     /// Port for SSO login callback
     pub sso_login_callback_port: Option<u16>,
-}
-
-impl std::fmt::Debug for APIClientOpts {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("APIClientOpts")
-            .field("api_url", &self.api_url)
-            .field("timeout", &self.timeout)
-            .field("upload_timeout", &self.upload_timeout)
-            .field("token", &self.token.as_ref().map(|_| "***"))
-            .field("team_id", &self.team_id)
-            .field("team_slug", &self.team_slug)
-            .field("login_url", &self.login_url)
-            .field("preflight", &self.preflight)
-            .field("sso_login_callback_port", &self.sso_login_callback_port)
-            .finish()
-    }
 }
 
 /// Repository options.

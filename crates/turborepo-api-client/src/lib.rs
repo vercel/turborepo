@@ -21,15 +21,12 @@ use turborepo_vercel_api::{
 };
 use url::Url;
 
-pub use crate::{
-    error::{Error, Result},
-    secret::SecretString,
-};
+pub use crate::error::{Error, Result};
+pub use turborepo_types::SecretString;
 
 pub mod analytics;
 mod error;
 mod retry;
-pub mod secret;
 pub mod telemetry;
 
 pub use bytes::Bytes;
@@ -38,26 +35,21 @@ pub use tokio_stream::Stream;
 static AUTHORIZATION_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap());
 
-/// Construct a Bearer Authorization header value from a raw token string.
-/// Centralizes header construction so token values never appear in `format!`
-/// calls scattered throughout the codebase.
-fn bearer_header(token: &str) -> reqwest::header::HeaderValue {
-    reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
-        .expect("token contained invalid header characters")
-}
-
 pub trait Client {
-    fn get_user(&self, token: &str) -> impl Future<Output = Result<UserResponse>> + Send;
-    fn get_teams(&self, token: &str) -> impl Future<Output = Result<TeamsResponse>> + Send;
+    fn get_user(&self, token: &SecretString) -> impl Future<Output = Result<UserResponse>> + Send;
+    fn get_teams(
+        &self,
+        token: &SecretString,
+    ) -> impl Future<Output = Result<TeamsResponse>> + Send;
     fn get_team(
         &self,
-        token: &str,
+        token: &SecretString,
         team_id: &str,
     ) -> impl Future<Output = Result<Option<Team>>> + Send;
     fn add_ci_header(request_builder: RequestBuilder) -> RequestBuilder;
     fn verify_sso_token(
         &self,
-        token: &str,
+        token: &SecretString,
         token_name: &str,
     ) -> impl Future<Output = Result<VerifiedSsoUser>> + Send;
     fn handle_403(response: Response) -> impl Future<Output = Error> + Send;
@@ -68,7 +60,7 @@ pub trait CacheClient {
     fn get_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
@@ -76,7 +68,7 @@ pub trait CacheClient {
     fn fetch_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<Option<Response>>> + Send;
@@ -88,20 +80,20 @@ pub trait CacheClient {
         body_len: usize,
         duration: u64,
         tag: Option<&str>,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<()>> + Send;
     fn artifact_exists(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<Option<Response>>> + Send;
     fn get_caching_status(
         &self,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = Result<CachingStatusResponse>> + Send;
@@ -110,9 +102,9 @@ pub trait CacheClient {
 pub trait TokenClient {
     fn get_metadata(
         &self,
-        token: &str,
+        token: &SecretString,
     ) -> impl Future<Output = Result<ResponseTokenMetadata>> + Send;
-    fn delete_token(&self, token: &str) -> impl Future<Output = Result<()>> + Send;
+    fn delete_token(&self, token: &SecretString) -> impl Future<Output = Result<()>> + Send;
 }
 
 #[derive(Clone)]
@@ -149,13 +141,13 @@ pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
 
 impl Client for APIClient {
     #[tracing::instrument(skip_all)]
-    async fn get_user(&self, token: &str) -> Result<UserResponse> {
+    async fn get_user(&self, token: &SecretString) -> Result<UserResponse> {
         let url = self.make_url("/v2/user")?;
         let request_builder = self
             .client
             .get(url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", bearer_header(token))
+            .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -167,13 +159,13 @@ impl Client for APIClient {
     }
 
     #[tracing::instrument(skip_all)]
-    async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
+    async fn get_teams(&self, token: &SecretString) -> Result<TeamsResponse> {
         let request_builder = self
             .client
             .get(self.make_url("/v2/teams?limit=100")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", bearer_header(token));
+            .bearer_auth(token.expose());
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -185,14 +177,14 @@ impl Client for APIClient {
     }
 
     #[tracing::instrument(skip_all)]
-    async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
+    async fn get_team(&self, token: &SecretString, team_id: &str) -> Result<Option<Team>> {
         let endpoint = format!("/v2/teams/{team_id}");
         let response = self
             .client
             .get(self.make_url(&endpoint)?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", bearer_header(token))
+            .bearer_auth(token.expose())
             .send()
             .await?
             .error_for_status()?;
@@ -210,11 +202,15 @@ impl Client for APIClient {
     }
 
     #[tracing::instrument(skip_all)]
-    async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
+    async fn verify_sso_token(
+        &self,
+        token: &SecretString,
+        token_name: &str,
+    ) -> Result<VerifiedSsoUser> {
         let request_builder = self
             .client
             .get(self.make_url("/registration/verify")?)
-            .query(&[("token", token), ("tokenName", token_name)])
+            .query(&[("token", token.expose()), ("tokenName", token_name)])
             .header("User-Agent", self.user_agent.clone());
 
         let response =
@@ -289,7 +285,7 @@ impl CacheClient for APIClient {
     async fn get_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
         method: Method,
@@ -317,7 +313,7 @@ impl CacheClient for APIClient {
             .header("User-Agent", self.user_agent.clone());
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", bearer_header(token));
+            request_builder = request_builder.bearer_auth(token.expose());
         }
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
@@ -337,7 +333,7 @@ impl CacheClient for APIClient {
     async fn artifact_exists(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>> {
@@ -349,7 +345,7 @@ impl CacheClient for APIClient {
     async fn fetch_artifact(
         &self,
         hash: &str,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<Option<Response>> {
@@ -365,7 +361,7 @@ impl CacheClient for APIClient {
         body_length: usize,
         duration: u64,
         tag: Option<&str>,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<()> {
@@ -398,7 +394,7 @@ impl CacheClient for APIClient {
             .body(stream);
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", bearer_header(token));
+            request_builder = request_builder.bearer_auth(token.expose());
         }
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
@@ -425,7 +421,7 @@ impl CacheClient for APIClient {
     #[tracing::instrument(skip_all)]
     async fn get_caching_status(
         &self,
-        token: &str,
+        token: &SecretString,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> Result<CachingStatusResponse> {
@@ -434,7 +430,7 @@ impl CacheClient for APIClient {
             .get(self.make_url("/v8/artifacts/status")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", bearer_header(token));
+            .bearer_auth(token.expose());
 
         let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
@@ -450,14 +446,14 @@ impl CacheClient for APIClient {
 
 impl TokenClient for APIClient {
     #[tracing::instrument(skip_all)]
-    async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata> {
+    async fn get_metadata(&self, token: &SecretString) -> Result<ResponseTokenMetadata> {
         let endpoint = "/v5/user/tokens/current";
         let url = self.make_url(endpoint)?;
         let request_builder = self
             .client
             .get(url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", bearer_header(token))
+            .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
 
         #[derive(Deserialize, Debug)]
@@ -510,14 +506,14 @@ impl TokenClient for APIClient {
 
     /// Invalidates the given token on the server.
     #[tracing::instrument(skip_all)]
-    async fn delete_token(&self, token: &str) -> Result<()> {
+    async fn delete_token(&self, token: &SecretString) -> Result<()> {
         let endpoint = "/v3/user/tokens/current";
         let url = self.make_url(endpoint)?;
         let request_builder = self
             .client
             .delete(url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", bearer_header(token))
+            .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
 
         #[derive(Deserialize, Debug)]
@@ -627,7 +623,7 @@ impl APIClient {
     #[tracing::instrument(skip_all)]
     async fn do_preflight(
         &self,
-        token: &str,
+        token: &SecretString,
         request_url: Url,
         request_method: &str,
         request_headers: &str,
@@ -638,7 +634,7 @@ impl APIClient {
             .header("User-Agent", self.user_agent.clone())
             .header("Access-Control-Request-Method", request_method)
             .header("Access-Control-Request-Headers", request_headers)
-            .header("Authorization", bearer_header(token));
+            .bearer_auth(token.expose());
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -703,7 +699,7 @@ impl APIClient {
         if self.use_preflight {
             let preflight_response = self
                 .do_preflight(
-                    token.expose(),
+                    token,
                     url.clone(),
                     method.as_str(),
                     "Authorization, User-Agent",
@@ -720,7 +716,7 @@ impl APIClient {
             .header("Content-Type", "application/json");
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", token.bearer_header());
+            request_builder = request_builder.bearer_auth(token.expose());
         }
 
         request_builder =
@@ -811,7 +807,27 @@ mod test {
     use turborepo_vercel_api_mock::start_test_server;
     use url::Url;
 
-    use crate::{APIClient, AnonAPIClient, CacheClient, Client, telemetry::TelemetryClient};
+    use crate::{
+        APIAuth, APIClient, AnonAPIClient, CacheClient, Client, SecretString,
+        telemetry::TelemetryClient,
+    };
+
+    #[test]
+    fn api_auth_debug_redacts_token() {
+        let auth = APIAuth {
+            team_id: Some("team-123".to_string()),
+            token: SecretString::new("real-secret-token".to_string()),
+            team_slug: Some("my-team".to_string()),
+        };
+        let debug = format!("{:?}", auth);
+        assert!(
+            !debug.contains("real-secret-token"),
+            "Debug output should not contain the raw token"
+        );
+        assert!(debug.contains("***"));
+        assert!(debug.contains("team-123"));
+        assert!(debug.contains("my-team"));
+    }
 
     #[tokio::test]
     async fn test_do_preflight() -> Result<()> {
@@ -834,9 +850,11 @@ mod test {
             true,
         )?;
 
+        let empty_token = SecretString::new(String::new());
+
         let response = client
             .do_preflight(
-                "",
+                &empty_token,
                 Url::parse(&format!("{base_url}/preflight/absolute-location")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
@@ -847,7 +865,7 @@ mod test {
 
         let response = client
             .do_preflight(
-                "",
+                &empty_token,
                 Url::parse(&format!("{base_url}/preflight/relative-location")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
@@ -860,7 +878,7 @@ mod test {
 
         let response = client
             .do_preflight(
-                "",
+                &empty_token,
                 Url::parse(&format!("{base_url}/preflight/allow-auth")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
@@ -871,7 +889,7 @@ mod test {
 
         let response = client
             .do_preflight(
-                "",
+                &empty_token,
                 Url::parse(&format!("{base_url}/preflight/no-allow-auth")).unwrap(),
                 "GET",
                 "Authorization, User-Agent",
@@ -932,6 +950,7 @@ mod test {
         let body = b"hello world!";
         let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
 
+        let token = SecretString::new("token".to_string());
         client
             .put_artifact(
                 "eggs",
@@ -939,7 +958,7 @@ mod test {
                 body.len(),
                 123,
                 None,
-                "token",
+                &token,
                 None,
                 None,
             )

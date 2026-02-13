@@ -2,39 +2,22 @@
 //! the client (`turborepo-api-client`) and for the
 //! mock server (`turborepo-vercel-api-mock`)
 use serde::{Deserialize, Serialize};
+use turborepo_types::SecretString;
 use url::Url;
 pub mod telemetry;
 pub mod token;
 
-#[derive(Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct VerifiedSsoUser {
-    pub token: String,
+    pub token: SecretString,
     pub team_id: Option<String>,
 }
 
-impl std::fmt::Debug for VerifiedSsoUser {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("VerifiedSsoUser")
-            .field("token", &"***")
-            .field("team_id", &self.team_id)
-            .finish()
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerificationResponse {
-    pub token: String,
+    pub token: SecretString,
     pub team_id: Option<String>,
-}
-
-impl std::fmt::Debug for VerificationResponse {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("VerificationResponse")
-            .field("token", &"***")
-            .field("team_id", &self.team_id)
-            .finish()
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -170,8 +153,39 @@ impl AnalyticsEvent {
 #[cfg(test)]
 mod tests {
     use test_case::test_case;
+    use turborepo_types::SecretString;
 
-    use crate::{AnalyticsEvent, CacheEvent, CacheSource};
+    use crate::{AnalyticsEvent, CacheEvent, CacheSource, VerificationResponse, VerifiedSsoUser};
+
+    #[test]
+    fn verified_sso_user_debug_redacts_token() {
+        let user = VerifiedSsoUser {
+            token: SecretString::new("super-secret-sso-token".to_string()),
+            team_id: Some("team_123".to_string()),
+        };
+        let debug = format!("{:?}", user);
+        assert!(
+            !debug.contains("super-secret-sso-token"),
+            "Debug output should not contain the raw token"
+        );
+        assert!(debug.contains("***"));
+        assert!(debug.contains("team_123"));
+    }
+
+    #[test]
+    fn verification_response_debug_redacts_token() {
+        let resp = VerificationResponse {
+            token: SecretString::new("super-secret-verification-token".to_string()),
+            team_id: Some("team_456".to_string()),
+        };
+        let debug = format!("{:?}", resp);
+        assert!(
+            !debug.contains("super-secret-verification-token"),
+            "Debug output should not contain the raw token"
+        );
+        assert!(debug.contains("***"));
+        assert!(debug.contains("team_456"));
+    }
 
     #[test_case(
       AnalyticsEvent {

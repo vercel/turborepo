@@ -77,7 +77,7 @@ impl HTTPCache {
             Ok(Some(new_token)) => {
                 // Update the API auth with the new token
                 if let Ok(mut auth) = self.api_auth.lock() {
-                    auth.token = turborepo_api_client::SecretString::new(new_token);
+                    auth.token = new_token;
                     debug!("Successfully refreshed auth token for cache operations");
                     true
                 } else {
@@ -184,7 +184,7 @@ impl HTTPCache {
                         bytes,
                         duration,
                         tag_ref,
-                        api_auth.token.expose(),
+                        &api_auth.token,
                         api_auth.team_id.as_deref(),
                         api_auth.team_slug.as_deref(),
                     )
@@ -221,7 +221,7 @@ impl HTTPCache {
                     client
                         .artifact_exists(
                             hash,
-                            api_auth.token.expose(),
+                            &api_auth.token,
                             api_auth.team_id.as_deref(),
                             api_auth.team_slug.as_deref(),
                         )
@@ -283,7 +283,7 @@ impl HTTPCache {
                     client
                         .fetch_artifact(
                             hash,
-                            api_auth.token.expose(),
+                            &api_auth.token,
                             api_auth.team_id.as_deref(),
                             api_auth.team_slug.as_deref(),
                         )

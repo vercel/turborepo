@@ -113,7 +113,7 @@ impl CommandBase {
 
         Ok(Some(APIAuth {
             team_id: team_id.map(|s| s.to_string()),
-            token: turborepo_api_client::SecretString::new(token.to_string()),
+            token: token.clone(),
             team_slug: team_slug.map(|s| s.to_string()),
         }))
     }
