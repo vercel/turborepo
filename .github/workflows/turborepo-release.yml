@@ -392,11 +392,16 @@ jobs:
         with:
           bun-version: latest
 
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+        with:
+          turbo-version: ${{ inputs.ci-tag-override || '' }}
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Build @turbo/gen (dependencies + embedded templates)
-        run: pnpm turbo run build --filter=@turbo/gen
+        run: turbo run build --filter=@turbo/gen
 
       - name: Cross-compile @turbo/gen for all platforms
         run: pnpm --filter @turbo/gen run build:all
