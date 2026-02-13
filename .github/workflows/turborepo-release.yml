@@ -633,7 +633,15 @@ jobs:
     name: "Cleanup Failed Release"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [stage, build-rust, rust-smoke-test, js-smoke-test, security-scan, npm-publish]
+    needs:
+      [
+        stage,
+        build-rust,
+        rust-smoke-test,
+        js-smoke-test,
+        security-scan,
+        npm-publish
+      ]
     if: ${{ always() && needs.stage.result == 'success' && (needs.build-rust.result == 'failure' || needs.rust-smoke-test.result == 'failure' || needs.js-smoke-test.result == 'failure' || needs.security-scan.result == 'failure' || needs.npm-publish.result == 'failure') }}
     steps:
       - name: Delete staging branch
