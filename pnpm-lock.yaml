@@ -704,6 +704,22 @@ importers:
       validate-npm-package-name:
         specifier: 5.0.0
         version: 5.0.0
+    optionalDependencies:
+      '@turbo/gen-darwin-64':
+        specifier: 2.8.8-canary.1
+        version: 2.8.8-canary.1
+      '@turbo/gen-darwin-arm64':
+        specifier: 2.8.8-canary.1
+        version: 2.8.8-canary.1
+      '@turbo/gen-linux-64':
+        specifier: 2.8.8-canary.1
+        version: 2.8.8-canary.1
+      '@turbo/gen-linux-arm64':
+        specifier: 2.8.8-canary.1
+        version: 2.8.8-canary.1
+      '@turbo/gen-windows-64':
+        specifier: 2.8.8-canary.1
+        version: 2.8.8-canary.1
 
   packages/turbo-ignore:
     dependencies:
@@ -3994,6 +4010,31 @@ packages:
 
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
+
+  '@turbo/gen-darwin-64@2.8.8-canary.1':
+    resolution: {integrity: sha512-PAzC3UWSLvefWSAcc5tSlbbickwtjm8DQo+RfQrIPUN/Habh65FslTPSmbfGeqlmfjDrACvJw56rjngE7pn7Gg==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@turbo/gen-darwin-arm64@2.8.8-canary.1':
+    resolution: {integrity: sha512-8niL5Y90XMIIyXIvxd2gg5LXrJztRNa0tBBkapYn4b2KCdY3PJYoFclt3/2FoHySQcHEO+2NCxsWwepLoP9iIw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@turbo/gen-linux-64@2.8.8-canary.1':
+    resolution: {integrity: sha512-Qwjg8+VXMPwBg0x6V4w0YygLPL9X6m+XqonDhS1zkU7wtUhvDyG+svzsNd9HEA8DMoLuAPJnxvCps/+/W3tsRA==}
+    cpu: [x64]
+    os: [linux]
+
+  '@turbo/gen-linux-arm64@2.8.8-canary.1':
+    resolution: {integrity: sha512-FrzRGlSsbNV+mnzu9ePXvSMCE74fRGrQFbRqpAyvQnnPHiJaXvhXMs6k0/bResNmuy8kSTtb07HaJX/CvRSfOg==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@turbo/gen-windows-64@2.8.8-canary.1':
+    resolution: {integrity: sha512-5oEDyl4KV0z7ZLS/qDE4aWgqtVwIShPHLiE/C+RvVQdmRWsvZ7GkFJ5AyZyLILXNjxkVyq0r5y1xZwwqtKKJ3g==}
+    cpu: [x64]
+    os: [win32]
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -11999,6 +12040,21 @@ snapshots:
   '@tsconfig/node14@1.0.3': {}
 
   '@tsconfig/node16@1.0.4': {}
+
+  '@turbo/gen-darwin-64@2.8.8-canary.1':
+    optional: true
+
+  '@turbo/gen-darwin-arm64@2.8.8-canary.1':
+    optional: true
+
+  '@turbo/gen-linux-64@2.8.8-canary.1':
+    optional: true
+
+  '@turbo/gen-linux-arm64@2.8.8-canary.1':
+    optional: true
+
+  '@turbo/gen-windows-64@2.8.8-canary.1':
+    optional: true
 
   '@tybys/wasm-util@0.10.1':
     dependencies:
