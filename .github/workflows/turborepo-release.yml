@@ -427,6 +427,11 @@ jobs:
         with:
           enable-corepack: false
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
