@@ -1,9 +1,11 @@
 /**
  * Build script for @turbo/gen.
  *
- * 1. Generates embedded templates from src/templates/
- * 2. Compiles the CLI into a standalone Bun binary for each target platform
- * 3. Generates .d.ts for the types-only export (PlopTypes re-export)
+ * 1. Compiles the CLI into a standalone Bun binary for each target platform
+ * 2. Generates .d.ts for the types-only export (PlopTypes re-export)
+ *
+ * Template embedding is handled by the `build:embed` turbo task
+ * which runs before this script via task dependencies.
  *
  * Run: bun run scripts/build.ts
  * Cross-compile: bun run scripts/build.ts --all-platforms
@@ -40,11 +42,6 @@ const ALL_PLATFORMS: Array<Platform> = [
   { target: "bun-windows-x64", outfile: "turbo-gen-windows-x64.exe" }
 ];
 
-async function embedTemplates() {
-  console.log("Embedding templates...");
-  await $`bun run ${path.join(ROOT, "scripts", "embed-templates.ts")}`.quiet();
-}
-
 async function compileBinary(platform: Platform) {
   const outPath = path.join(DIST, platform.outfile);
   console.log(`Compiling ${platform.target} → ${platform.outfile}`);
@@ -64,8 +61,6 @@ async function main() {
   const allPlatforms = process.argv.includes("--all-platforms");
 
   fs.mkdirSync(DIST, { recursive: true });
-
-  await embedTemplates();
 
   if (allPlatforms) {
     console.log(`\nCross-compiling for ${ALL_PLATFORMS.length} platforms...`);

@@ -2,12 +2,15 @@
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
   "tasks": {
+    "build:embed": {
+      "outputs": ["src/templates/embedded.ts"],
+      "inputs": ["src/templates/simple-ts/**", "src/templates/simple-js/**"]
+    },
     "test": {
       "dependsOn": ["build"]
     },
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": ["dist/**", "bin/**"]
+      "dependsOn": ["^build", "build:embed"]
     }
   }
 }
