@@ -1,6 +1,6 @@
 use std::env;
 
-use base64::{prelude::BASE64_STANDARD, Engine};
+use base64::{Engine, prelude::BASE64_STANDARD};
 use hmac::{Hmac, Mac};
 use os_str_bytes::OsStringBytes;
 use sha2::Sha256;
