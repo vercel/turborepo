@@ -386,6 +386,15 @@ impl PnpmLockfile {
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
+
+        // Prefer the original specifier if it already matches a snapshot,
+        // so overrides don't corrupt resolved peer-dep variants.
+        if override_specifier != specifier
+            && self.has_package(&self.format_key(name, specifier))
+        {
+            return Ok(Some(specifier));
+        }
+
         if resolved_specifier == override_specifier {
             Ok(Some(resolved_version))
         } else if self.has_package_by_parts(name, override_specifier, key_buf) {
@@ -1843,5 +1852,56 @@ snapshots:
                  HashMap iteration order)"
             );
         }
+    }
+
+    #[test]
+    fn test_override_does_not_break_transitive_peer_variant() {
+        // Overrides should not corrupt already-resolved peer-dep variants
+        let lockfile = PnpmLockfile::from_bytes(PNPM_OVERRIDE_PEER_VARIANT).unwrap();
+
+        let result = lockfile
+            .resolve_package(
+                "packages/bar",
+                "foo",
+                "1.0.0(peer-a@1.0.0)(peer-b@2.0.0)",
+            )
+            .unwrap();
+
+        assert_eq!(
+            result,
+            Some(Package {
+                key: "foo@1.0.0(peer-a@1.0.0)(peer-b@2.0.0)".into(),
+                version: "1.0.0(peer-a@1.0.0)(peer-b@2.0.0)".into(),
+            }),
+            "Override should not prevent resolving a different peer-dep variant"
+        );
+
+        // Transitive closure should include both variants
+        let closure = crate::transitive_closure(
+            &lockfile,
+            "packages/bar",
+            [
+                ("foo".to_string(), "~1.0.0".to_string()),
+                ("middleware".to_string(), "^1.0.0".to_string()),
+            ]
+            .into_iter()
+            .collect(),
+            false,
+        )
+        .unwrap();
+
+        let keys: std::collections::HashSet<_> = closure.iter().map(|p| p.key.as_str()).collect();
+        assert!(
+            keys.contains("foo@1.0.0(peer-a@1.0.0)"),
+            "Closure should contain direct foo variant (peer-a only)"
+        );
+        assert!(
+            keys.contains("foo@1.0.0(peer-a@1.0.0)(peer-b@2.0.0)"),
+            "Closure should contain transitive foo variant (peer-a + peer-b)"
+        );
+        assert!(
+            keys.contains("middleware@1.0.0(foo@1.0.0(peer-a@1.0.0)(peer-b@2.0.0))"),
+            "Closure should contain middleware"
+        );
     }
 }
