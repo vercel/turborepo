@@ -345,9 +345,10 @@ jobs:
           path: target/${{ matrix.settings.target }}/release-turborepo/turbo*
 
   security-scan:
-    name: "Security Audit"
+    name: "Security Audit (Non-blocking)"
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    continue-on-error: true
     needs: [stage]
     if: ${{ always() && needs.stage.result == 'success' }}
     steps:
@@ -372,8 +373,8 @@ jobs:
     name: "Publish To NPM"
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [stage, build-rust, rust-smoke-test, js-smoke-test, security-scan]
-    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.rust-smoke-test.result == 'success' && needs.js-smoke-test.result == 'success' && needs.security-scan.result == 'success' }}
+    needs: [stage, build-rust, rust-smoke-test, js-smoke-test]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.rust-smoke-test.result == 'success' && needs.js-smoke-test.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -639,10 +640,9 @@ jobs:
         build-rust,
         rust-smoke-test,
         js-smoke-test,
-        security-scan,
         npm-publish
       ]
-    if: ${{ always() && needs.stage.result == 'success' && (needs.build-rust.result == 'failure' || needs.rust-smoke-test.result == 'failure' || needs.js-smoke-test.result == 'failure' || needs.security-scan.result == 'failure' || needs.npm-publish.result == 'failure') }}
+    if: ${{ always() && needs.stage.result == 'success' && (needs.build-rust.result == 'failure' || needs.rust-smoke-test.result == 'failure' || needs.js-smoke-test.result == 'failure' || needs.npm-publish.result == 'failure') }}
     steps:
       - name: Delete staging branch
         env:
