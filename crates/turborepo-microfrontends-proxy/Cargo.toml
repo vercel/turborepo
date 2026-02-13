@@ -14,7 +14,12 @@ hyper-rustls = { workspace = true, features = [
   "native-tokio",
   "ring",
 ] }
-hyper-util = { version = "0.1", features = ["full"] }
+hyper-util = { version = "0.1", features = [
+  "client-legacy",
+  "http1",
+  "http2",
+  "tokio",
+] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 tokio-tungstenite = "0.21"
