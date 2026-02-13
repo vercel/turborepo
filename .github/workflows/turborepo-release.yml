@@ -620,6 +620,16 @@ jobs:
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
 
+      - name: Commit lockfile if updated by install
+        run: |
+          if git diff --quiet pnpm-lock.yaml; then
+            echo "Lockfile already up to date."
+          else
+            git add pnpm-lock.yaml
+            git commit -m "Update lockfile for release"
+            git push origin "${{ needs.stage.outputs.stage-branch }}"
+          fi
+
       - name: Bump to next canary for stable releases
         run: |
           TAG=$(sed -n '2p' version.txt)
