@@ -49,15 +49,15 @@ cd ./my-turborepo
 
 We use [Prisma ORM](https://prisma.io/) to manage and access our database. As such you will need a database for this project, either locally or hosted in the cloud.
 
-To make this process easier, a [`docker-compose.yml` file](./docker-compose.yml) is included to setup a MySQL server locally with a new database named `turborepo`:
+To make this process easier, a [`docker-compose.yml` file](./docker-compose.yml) is included to setup a PostgreSQL server locally with a new database named `turborepo`:
 
-Start the MySQL database using Docker Compose:
+Start the PostgreSQL database using Docker Compose:
 
 ```sh
 docker-compose up -d
 ```
 
-To change the default database name, update the `MYSQL_DATABASE` environment variable in the [`docker-compose.yml` file](/docker-compose.yml).
+To change the default database name, update the `POSTGRES_DB` environment variable in the [`docker-compose.yml` file](/docker-compose.yml).
 
 ### 3. Setup environment variables
 
