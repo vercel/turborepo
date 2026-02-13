@@ -488,7 +488,7 @@ jobs:
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             SKIP_FLAG="--skip-publish"
           fi
-          cd cli && turboreleaser gen --version-path ../version.txt $SKIP_FLAG
+          cd cli && pnpm exec turboreleaser gen --version-path ../version.txt $SKIP_FLAG
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts
