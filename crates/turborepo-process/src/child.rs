@@ -76,6 +76,8 @@ impl From<std::io::Error> for ShutdownFailed {
 struct ChildHandle {
     pid: Option<u32>,
     imp: ChildHandleImpl,
+    #[cfg(windows)]
+    _job: Option<super::job_object::JobObject>,
 }
 
 enum ChildHandleImpl {
@@ -103,6 +105,14 @@ impl ChildHandle {
         let mut child = command.spawn()?;
         let pid = child.id();
 
+        #[cfg(windows)]
+        let job = pid.and_then(|pid| {
+            super::job_object::JobObject::new()
+                .and_then(|job| job.assign_pid(pid).map(|_| job))
+                .map_err(|e| debug!("failed to set up job object for process {pid}: {e}"))
+                .ok()
+        });
+
         let stdin = child.stdin.take().map(ChildInput::Std);
         let stdout = child
             .stdout
@@ -117,6 +127,8 @@ impl ChildHandle {
             handle: Self {
                 pid,
                 imp: ChildHandleImpl::Tokio(child),
+                #[cfg(windows)]
+                _job: job,
             },
             io: ChildIO {
                 stdin,
@@ -177,6 +189,14 @@ impl ChildHandle {
 
         let pid = child.process_id();
 
+        #[cfg(windows)]
+        let job = pid.and_then(|pid| {
+            super::job_object::JobObject::new()
+                .and_then(|job| job.assign_pid(pid).map(|_| job))
+                .map_err(|e| debug!("failed to set up job object for PTY process {pid}: {e}"))
+                .ok()
+        });
+
         let mut stdin = controller.take_writer().ok();
         let output = controller.try_clone_reader().ok().map(ChildOutput::Pty);
 
@@ -205,6 +225,8 @@ impl ChildHandle {
             handle: Self {
                 pid,
                 imp: ChildHandleImpl::Pty(child),
+                #[cfg(windows)]
+                _job: job,
             },
             io: ChildIO {
                 stdin: stdin.map(ChildInput::Pty),
@@ -1411,5 +1433,113 @@ mod test {
         let trimmed = output.trim().strip_prefix(EOT).unwrap_or(output.trim());
         assert_eq!(trimmed, "hello world");
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Verifies that stopping a parent process also kills its child processes.
+    ///
+    /// On Unix this works via process groups (setsid + kill(-pgid)).
+    /// On Windows this works via Job Objects
+    /// (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE).
+    ///
+    /// The test spawns a Node.js script that itself spawns a long-running child
+    /// process, captures the grandchild's PID from stdout, stops the parent,
+    /// and then checks that the grandchild is no longer alive.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    #[traced_test]
+    async fn test_process_tree_cleanup(use_pty: bool) {
+        let script = find_script_dir().join_component("spawn_child_sleep.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            use_pty.then(PtySize::default),
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        // Read stdout to get the grandchild PID
+        let grandchild_pid = {
+            let mut out = Vec::new();
+            match child.outputs().unwrap() {
+                ChildOutput::Std { mut stdout, .. } => {
+                    let mut buf = vec![0u8; 256];
+                    let n = tokio::time::timeout(Duration::from_secs(5), stdout.read(&mut buf))
+                        .await
+                        .expect("timed out reading grandchild PID")
+                        .expect("failed to read stdout");
+                    out.extend_from_slice(&buf[..n]);
+                }
+                ChildOutput::Pty(mut reader) => {
+                    let mut buf = vec![0u8; 256];
+                    let n = reader.read(&mut buf).expect("failed to read pty output");
+                    out.extend_from_slice(&buf[..n]);
+                }
+            };
+            let output = String::from_utf8(out).unwrap();
+            let pid_line = output
+                .lines()
+                .find(|line| line.contains("CHILD_PID="))
+                .unwrap_or_else(|| panic!("CHILD_PID not found in output: {output}"));
+            pid_line
+                .split('=')
+                .nth(1)
+                .unwrap()
+                .trim()
+                .parse::<u32>()
+                .unwrap()
+        };
+
+        // Verify grandchild is alive before we stop
+        assert!(
+            is_process_alive(grandchild_pid),
+            "grandchild process {grandchild_pid} should be alive before stop"
+        );
+
+        // Stop the parent process
+        child.stop().await;
+
+        // Give the OS a moment to clean up
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        // Verify grandchild is dead
+        assert!(
+            !is_process_alive(grandchild_pid),
+            "grandchild process {grandchild_pid} should have been killed"
+        );
+    }
+
+    fn is_process_alive(pid: u32) -> bool {
+        #[cfg(unix)]
+        {
+            // kill(pid, 0) checks if process exists without sending a signal
+            unsafe { libc::kill(pid as i32, 0) == 0 }
+        }
+        #[cfg(windows)]
+        {
+            use windows_sys::Win32::{
+                Foundation::CloseHandle,
+                System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
+            };
+            unsafe {
+                let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+                if handle.is_null() {
+                    return false;
+                }
+                // Process handle opened — check if it's actually still running
+                let mut exit_code: u32 = 0;
+                let result = windows_sys::Win32::System::Threading::GetExitCodeProcess(
+                    handle,
+                    &mut exit_code,
+                );
+                CloseHandle(handle);
+                // STILL_ACTIVE (259) means the process is still running
+                result != 0 && exit_code == 259
+            }
+        }
     }
 }

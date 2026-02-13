@@ -14,12 +14,14 @@
 //! - [`HashTrackerInfo`]: Provides access to task hash information
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
+pub mod secret;
 use std::{collections::HashMap, fmt, str::FromStr};
 
 use biome_deserialize_macros::Deserializable;
 use clap::ValueEnum;
 use globwalk::{GlobError, ValidatedGlob};
 use schemars::JsonSchema;
+pub use secret::SecretString;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use turbopath::{
@@ -358,8 +360,11 @@ pub struct APIClientOpts {
     pub timeout: u64,
     /// Upload-specific timeout in seconds
     pub upload_timeout: u64,
-    /// Authentication token (if authenticated)
-    pub token: Option<String>,
+    /// Authentication token (if authenticated).
+    /// Wrapped in `SecretString` to prevent accidental exposure in logs.
+    /// Skipped during serialization.
+    #[serde(skip)]
+    pub token: Option<SecretString>,
     /// Team ID for the remote cache
     pub team_id: Option<String>,
     /// Team slug for the remote cache
