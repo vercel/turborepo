@@ -1,6 +1,6 @@
 use std::env;
 
-use base64::{Engine, prelude::BASE64_STANDARD};
+use base64::{prelude::BASE64_STANDARD, Engine};
 use hmac::{Hmac, Mac};
 use os_str_bytes::OsStringBytes;
 use sha2::Sha256;
@@ -244,10 +244,10 @@ mod tests {
     }
 
     fn test_signature(test_case: TestCase) -> Result<()> {
-        unsafe { env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", test_case.secret_key) };
+        let secret_key = test_case.secret_key.as_bytes().to_vec();
         let signature = ArtifactSignatureAuthenticator {
             team_id: test_case.team_id.to_vec(),
-            secret_key_override: None,
+            secret_key_override: Some(secret_key),
         };
 
         let hash = test_case.artifact_hash;
@@ -260,17 +260,19 @@ mod tests {
         let bad_tag = BASE64_STANDARD.encode(b"bad tag");
         assert!(!signature.validate(hash, artifact_body, &bad_tag)?);
 
-        // Change the key
-        unsafe { env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "some other key") };
+        // Use a different key and confirm the original tag is no longer valid
+        let different_signature = ArtifactSignatureAuthenticator {
+            team_id: test_case.team_id.to_vec(),
+            secret_key_override: Some(b"some other key".to_vec()),
+        };
 
-        // Confirm that the tag is no longer valid
-        assert!(!signature.validate_tag(hash, artifact_body, tag.as_ref())?);
+        assert!(!different_signature.validate_tag(hash, artifact_body, tag.as_ref())?);
 
-        // Generate new tag
-        let tag = signature.generate_tag(hash, artifact_body)?;
+        // Generate new tag with the different key
+        let tag = different_signature.generate_tag(hash, artifact_body)?;
 
-        // Confirm it's valid
-        assert!(signature.validate(hash, artifact_body, &tag)?);
+        // Confirm it's valid with the same key
+        assert!(different_signature.validate(hash, artifact_body, &tag)?);
         Ok(())
     }
 }
