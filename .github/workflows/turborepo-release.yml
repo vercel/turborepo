@@ -276,6 +276,11 @@ jobs:
           rust: "false"
           capnproto: "false"
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
@@ -380,20 +385,25 @@ jobs:
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
 
-      - uses: ./.github/actions/setup-node
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
         with:
-          enable-corepack: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          rust: "false"
+          capnproto: "false"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+        with:
+          turbo-version: ${{ inputs.ci-tag-override || '' }}
 
       - name: Build @turbo/gen binaries (all platforms)
-        run: pnpm --filter @turbo/gen run build:all
+        run: turbo run build:all --filter=@turbo/gen --color
 
       - name: Upload gen binaries
         uses: actions/upload-artifact@v4
@@ -689,7 +699,15 @@ jobs:
     name: "Cleanup Failed Release"
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [stage, build-rust, build-gen, rust-smoke-test, js-smoke-test, npm-publish]
+    needs:
+      [
+        stage,
+        build-rust,
+        build-gen,
+        rust-smoke-test,
+        js-smoke-test,
+        npm-publish
+      ]
     if: ${{ always() && needs.stage.result == 'success' && (needs.build-rust.result == 'failure' || needs.build-gen.result == 'failure' || needs.rust-smoke-test.result == 'failure' || needs.js-smoke-test.result == 'failure' || needs.npm-publish.result == 'failure') }}
     steps:
       - name: Delete staging branch

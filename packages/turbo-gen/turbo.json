@@ -12,6 +12,10 @@
     "build": {
       "dependsOn": ["^build", "build:embed"],
       "outputs": ["dist/**", "bin/**"]
+    },
+    "build:all": {
+      "dependsOn": ["^build", "build:embed"],
+      "outputs": ["dist/**"]
     }
   }
 }
