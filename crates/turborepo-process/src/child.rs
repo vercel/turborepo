@@ -1438,7 +1438,8 @@ mod test {
     /// Verifies that stopping a parent process also kills its child processes.
     ///
     /// On Unix this works via process groups (setsid + kill(-pgid)).
-    /// On Windows this works via Job Objects (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE).
+    /// On Windows this works via Job Objects
+    /// (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE).
     ///
     /// The test spawns a Node.js script that itself spawns a long-running child
     /// process, captures the grandchild's PID from stdout, stops the parent,
@@ -1467,13 +1468,10 @@ mod test {
             match child.outputs().unwrap() {
                 ChildOutput::Std { mut stdout, .. } => {
                     let mut buf = vec![0u8; 256];
-                    let n = tokio::time::timeout(
-                        Duration::from_secs(5),
-                        stdout.read(&mut buf),
-                    )
-                    .await
-                    .expect("timed out reading grandchild PID")
-                    .expect("failed to read stdout");
+                    let n = tokio::time::timeout(Duration::from_secs(5), stdout.read(&mut buf))
+                        .await
+                        .expect("timed out reading grandchild PID")
+                        .expect("failed to read stdout");
                     out.extend_from_slice(&buf[..n]);
                 }
                 ChildOutput::Pty(mut reader) => {
@@ -1523,10 +1521,10 @@ mod test {
         }
         #[cfg(windows)]
         {
-            use windows_sys::Win32::System::Threading::{
-                OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION,
+            use windows_sys::Win32::{
+                Foundation::CloseHandle,
+                System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
             };
-            use windows_sys::Win32::Foundation::CloseHandle;
             unsafe {
                 let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
                 if handle.is_null() {
