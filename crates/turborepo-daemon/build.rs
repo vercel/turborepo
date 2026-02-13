@@ -1,5 +1,5 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let tonic_build_result = tonic_build::configure()
+    let tonic_build_result = tonic_prost_build::configure()
         .build_server(true)
         .file_descriptor_set_path("src/file_descriptor_set.bin")
         .compile_protos(&["./src/proto/turbod.proto"], &["./src/proto"]);
