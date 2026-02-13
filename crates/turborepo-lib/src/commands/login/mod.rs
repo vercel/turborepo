@@ -59,7 +59,7 @@ async fn sso_login(base: &mut CommandBase, sso_team: &str, force: bool) -> Resul
     let login_url_config = base.opts.api_client_opts.login_url.to_string();
     let sso_login_callback_port = base.opts.api_client_opts.sso_login_callback_port;
     let options = LoginOptions {
-        existing_token: base.opts.api_client_opts.token.as_deref(),
+        existing_token: base.opts.api_client_opts.token.as_ref().map(|t| t.expose()),
         sso_team: Some(sso_team),
         force,
         sso_login_callback_port,
@@ -85,7 +85,7 @@ async fn login_no_sso(base: &mut CommandBase, force: bool) -> Result<(), Error> 
     let api_client: APIClient = base.api_client()?;
     let color_config = base.color_config;
     let login_url_config = base.opts.api_client_opts.login_url.to_string();
-    let existing_token = base.opts.api_client_opts.token.as_deref();
+    let existing_token = base.opts.api_client_opts.token.as_ref().map(|t| t.expose());
     let sso_login_callback_port = base.opts.api_client_opts.sso_login_callback_port;
 
     let options = LoginOptions {
@@ -146,7 +146,11 @@ fn write_token(base: &CommandBase, token: Token) -> Result<(), Error> {
             error: e,
         })?
         .unwrap_or_else(|| String::from("{}"));
-    let after = set_path(&before, &["token"], &format!("\"{}\"", token.into_inner()))?;
+    let after = set_path(
+        &before,
+        &["token"],
+        &format!("\"{}\"", token.into_inner().expose()),
+    )?;
 
     global_config_path
         .ensure_dir()

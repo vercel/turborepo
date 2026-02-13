@@ -71,12 +71,12 @@ impl ResolvedConfigurationOptions for AuthFile {
         };
 
         // No auth token found in either Vercel or Turbo config.
-        if token.into_inner().is_empty() {
+        if token.into_inner().expose().is_empty() {
             return Ok(ConfigurationOptions::default());
         }
 
         let global_auth: ConfigurationOptions = ConfigurationOptions {
-            token: Some(token.into_inner().to_owned()),
+            token: Some(token.into_inner().expose().to_owned()),
             ..Default::default()
         };
         Ok(global_auth)
