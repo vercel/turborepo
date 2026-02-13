@@ -123,7 +123,7 @@ impl Opts {
 
         let api_auth = config.token().map(|token| APIAuth {
             team_id: team_id.map(|s| s.to_string()),
-            token: token.to_string(),
+            token: turborepo_api_client::SecretString::new(token.to_string()),
             team_slug: team_slug.map(|s| s.to_string()),
         });
 

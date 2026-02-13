@@ -21,11 +21,15 @@ use turborepo_vercel_api::{
 };
 use url::Url;
 
-pub use crate::error::{Error, Result};
+pub use crate::{
+    error::{Error, Result},
+    secret::SecretString,
+};
 
 pub mod analytics;
 mod error;
 mod retry;
+pub mod secret;
 pub mod telemetry;
 
 pub use bytes::Bytes;
@@ -33,6 +37,14 @@ pub use tokio_stream::Stream;
 
 static AUTHORIZATION_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)(?:^|,) *authorization *(?:,|$)").unwrap());
+
+/// Construct a Bearer Authorization header value from a raw token string.
+/// Centralizes header construction so token values never appear in `format!`
+/// calls scattered throughout the codebase.
+fn bearer_header(token: &str) -> reqwest::header::HeaderValue {
+    reqwest::header::HeaderValue::from_str(&format!("Bearer {token}"))
+        .expect("token contained invalid header characters")
+}
 
 pub trait Client {
     fn get_user(&self, token: &str) -> impl Future<Output = Result<UserResponse>> + Send;
@@ -115,7 +127,7 @@ pub struct APIClient {
 #[derive(Clone)]
 pub struct APIAuth {
     pub team_id: Option<String>,
-    pub token: String,
+    pub token: SecretString,
     pub team_slug: Option<String>,
 }
 
@@ -123,7 +135,7 @@ impl std::fmt::Debug for APIAuth {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("APIAuth")
             .field("team_id", &self.team_id)
-            .field("token", &"***")
+            .field("token", &self.token)
             .field("team_slug", &self.team_slug)
             .finish()
     }
@@ -136,13 +148,14 @@ pub fn is_linked(api_auth: &Option<APIAuth>) -> bool {
 }
 
 impl Client for APIClient {
+    #[tracing::instrument(skip_all)]
     async fn get_user(&self, token: &str) -> Result<UserResponse> {
         let url = self.make_url("/v2/user")?;
         let request_builder = self
             .client
             .get(url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {token}"))
+            .header("Authorization", bearer_header(token))
             .header("Content-Type", "application/json");
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -153,13 +166,14 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn get_teams(&self, token: &str) -> Result<TeamsResponse> {
         let request_builder = self
             .client
             .get(self.make_url("/v2/teams?limit=100")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {token}"));
+            .header("Authorization", bearer_header(token));
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -170,6 +184,7 @@ impl Client for APIClient {
         Ok(response.json().await?)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn get_team(&self, token: &str, team_id: &str) -> Result<Option<Team>> {
         let endpoint = format!("/v2/teams/{team_id}");
         let response = self
@@ -177,7 +192,7 @@ impl Client for APIClient {
             .get(self.make_url(&endpoint)?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {token}"))
+            .header("Authorization", bearer_header(token))
             .send()
             .await?
             .error_for_status()?;
@@ -194,6 +209,7 @@ impl Client for APIClient {
         request_builder
     }
 
+    #[tracing::instrument(skip_all)]
     async fn verify_sso_token(&self, token: &str, token_name: &str) -> Result<VerifiedSsoUser> {
         let request_builder = self
             .client
@@ -269,6 +285,7 @@ impl Client for APIClient {
 }
 
 impl CacheClient for APIClient {
+    #[tracing::instrument(skip_all)]
     async fn get_artifact(
         &self,
         hash: &str,
@@ -300,7 +317,7 @@ impl CacheClient for APIClient {
             .header("User-Agent", self.user_agent.clone());
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {token}"));
+            request_builder = request_builder.header("Authorization", bearer_header(token));
         }
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
@@ -381,7 +398,7 @@ impl CacheClient for APIClient {
             .body(stream);
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {token}"));
+            request_builder = request_builder.header("Authorization", bearer_header(token));
         }
 
         request_builder = Self::add_team_params(request_builder, team_id, team_slug);
@@ -405,6 +422,7 @@ impl CacheClient for APIClient {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     async fn get_caching_status(
         &self,
         token: &str,
@@ -416,7 +434,7 @@ impl CacheClient for APIClient {
             .get(self.make_url("/v8/artifacts/status")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
-            .header("Authorization", format!("Bearer {token}"));
+            .header("Authorization", bearer_header(token));
 
         let request_builder = Self::add_team_params(request_builder, team_id, team_slug);
 
@@ -431,6 +449,7 @@ impl CacheClient for APIClient {
 }
 
 impl TokenClient for APIClient {
+    #[tracing::instrument(skip_all)]
     async fn get_metadata(&self, token: &str) -> Result<ResponseTokenMetadata> {
         let endpoint = "/v5/user/tokens/current";
         let url = self.make_url(endpoint)?;
@@ -438,7 +457,7 @@ impl TokenClient for APIClient {
             .client
             .get(url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {token}"))
+            .header("Authorization", bearer_header(token))
             .header("Content-Type", "application/json");
 
         #[derive(Deserialize, Debug)]
@@ -490,6 +509,7 @@ impl TokenClient for APIClient {
     }
 
     /// Invalidates the given token on the server.
+    #[tracing::instrument(skip_all)]
     async fn delete_token(&self, token: &str) -> Result<()> {
         let endpoint = "/v3/user/tokens/current";
         let url = self.make_url(endpoint)?;
@@ -497,7 +517,7 @@ impl TokenClient for APIClient {
             .client
             .delete(url)
             .header("User-Agent", self.user_agent.clone())
-            .header("Authorization", format!("Bearer {token}"))
+            .header("Authorization", bearer_header(token))
             .header("Content-Type", "application/json");
 
         #[derive(Deserialize, Debug)]
@@ -604,6 +624,7 @@ impl APIClient {
         self.base_url = base_url;
     }
 
+    #[tracing::instrument(skip_all)]
     async fn do_preflight(
         &self,
         token: &str,
@@ -617,7 +638,7 @@ impl APIClient {
             .header("User-Agent", self.user_agent.clone())
             .header("Access-Control-Request-Method", request_method)
             .header("Access-Control-Request-Headers", request_headers)
-            .header("Authorization", format!("Bearer {token}"));
+            .header("Authorization", bearer_header(token));
 
         let response =
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout)
@@ -682,7 +703,7 @@ impl APIClient {
         if self.use_preflight {
             let preflight_response = self
                 .do_preflight(
-                    token,
+                    token.expose(),
                     url.clone(),
                     method.as_str(),
                     "Authorization, User-Agent",
@@ -699,7 +720,7 @@ impl APIClient {
             .header("Content-Type", "application/json");
 
         if allow_auth {
-            request_builder = request_builder.header("Authorization", format!("Bearer {token}"));
+            request_builder = request_builder.header("Authorization", token.bearer_header());
         }
 
         request_builder =

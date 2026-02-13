@@ -203,7 +203,7 @@ mod test {
     use tempfile::tempdir;
     use turbopath::AnchoredSystemPath;
     use turborepo_analytics::start_analytics;
-    use turborepo_api_client::{APIAuth, APIClient};
+    use turborepo_api_client::{APIAuth, APIClient, SecretString};
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
@@ -247,7 +247,7 @@ mod test {
         )?;
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: "my-token".to_string(),
+            token: SecretString::new("my-token".to_string()),
             team_slug: None,
         };
         let (analytics_sender, analytics_handle) =

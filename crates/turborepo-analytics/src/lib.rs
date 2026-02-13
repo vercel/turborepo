@@ -188,7 +188,7 @@ mod tests {
         select,
         sync::{mpsc, mpsc::UnboundedReceiver},
     };
-    use turborepo_api_client::{APIAuth, analytics::AnalyticsClient};
+    use turborepo_api_client::{APIAuth, SecretString, analytics::AnalyticsClient};
     use turborepo_vercel_api::{AnalyticsEvent, CacheEvent, CacheSource};
     use uuid::Uuid;
 
@@ -259,7 +259,7 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: "foo".to_string(),
+                token: SecretString::new("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -301,7 +301,7 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: "foo".to_string(),
+                token: SecretString::new("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -349,7 +349,7 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: "foo".to_string(),
+                token: SecretString::new("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -388,7 +388,7 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: "foo".to_string(),
+                token: SecretString::new("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },

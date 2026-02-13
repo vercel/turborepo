@@ -32,17 +32,36 @@ pub const TURBO_TOKEN_FILE: &str = "config.json";
 const VERCEL_OAUTH_CLIENT_ID: &str = "cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp";
 const VERCEL_OAUTH_TOKEN_URL: &str = "https://vercel.com/api/login/oauth/token";
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AuthTokens {
     pub token: Option<String>,
     pub refresh_token: Option<String>,
     pub expires_at: Option<u64>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+impl std::fmt::Debug for AuthTokens {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AuthTokens")
+            .field("token", &self.token.as_ref().map(|_| "***"))
+            .field("refresh_token", &self.refresh_token.as_ref().map(|_| "***"))
+            .field("expires_at", &self.expires_at)
+            .finish()
+    }
+}
+
+#[derive(serde::Deserialize)]
 struct OAuthTokenResponse {
     access_token: String,
     refresh_token: String,
+}
+
+impl std::fmt::Debug for OAuthTokenResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OAuthTokenResponse")
+            .field("access_token", &"***")
+            .field("refresh_token", &"***")
+            .finish()
+    }
 }
 
 /// Token.
@@ -51,12 +70,21 @@ struct OAuthTokenResponse {
 /// a wrapper for a bunch of token operations, like validation. We explicitly do
 /// not store any information about the underlying token for a few reasons, like
 /// having a token invalidated on the web but not locally.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Token {
     /// An existing token on the filesystem
     Existing(String),
     /// A token that was just created, but not yet written to the filesystem
     New(String),
+}
+
+impl std::fmt::Debug for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Existing(_) => f.debug_tuple("Existing").field(&"***").finish(),
+            Self::New(_) => f.debug_tuple("New").field(&"***").finish(),
+        }
+    }
 }
 impl Token {
     pub fn new(token: String) -> Self {

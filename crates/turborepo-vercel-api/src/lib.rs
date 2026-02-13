@@ -6,17 +6,35 @@ use url::Url;
 pub mod telemetry;
 pub mod token;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct VerifiedSsoUser {
     pub token: String,
     pub team_id: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl std::fmt::Debug for VerifiedSsoUser {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VerifiedSsoUser")
+            .field("token", &"***")
+            .field("team_id", &self.team_id)
+            .finish()
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerificationResponse {
     pub token: String,
     pub team_id: Option<String>,
+}
+
+impl std::fmt::Debug for VerificationResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VerificationResponse")
+            .field("token", &"***")
+            .field("team_id", &self.team_id)
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -350,7 +350,7 @@ pub enum GraphOpts {
 ///
 /// Contains all settings needed to connect to the Turborepo remote cache API,
 /// including authentication, timeouts, and server URLs.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Serialize)]
 pub struct APIClientOpts {
     /// Base URL for the Turborepo API
     pub api_url: String,
@@ -370,6 +370,22 @@ pub struct APIClientOpts {
     pub preflight: bool,
     /// Port for SSO login callback
     pub sso_login_callback_port: Option<u16>,
+}
+
+impl std::fmt::Debug for APIClientOpts {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("APIClientOpts")
+            .field("api_url", &self.api_url)
+            .field("timeout", &self.timeout)
+            .field("upload_timeout", &self.upload_timeout)
+            .field("token", &self.token.as_ref().map(|_| "***"))
+            .field("team_id", &self.team_id)
+            .field("team_slug", &self.team_slug)
+            .field("login_url", &self.login_url)
+            .field("preflight", &self.preflight)
+            .field("sso_login_callback_port", &self.sso_login_callback_port)
+            .finish()
+    }
 }
 
 /// Repository options.
