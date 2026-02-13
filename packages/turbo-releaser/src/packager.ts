@@ -9,6 +9,7 @@ interface PackAndPublishOptions {
   npmTag: string;
   packagePrefix?: string;
   binaryName?: string;
+  srcDirPrefix?: string;
   description?: string;
 }
 
@@ -19,6 +20,7 @@ export async function packAndPublish({
   npmTag,
   packagePrefix,
   binaryName,
+  srcDirPrefix,
   description
 }: PackAndPublishOptions) {
   console.log("Starting packAndPublish process...");
@@ -32,6 +34,7 @@ export async function packAndPublish({
       version,
       packagePrefix,
       binaryName,
+      srcDirPrefix,
       description
     });
     artifacts.push(artifact);

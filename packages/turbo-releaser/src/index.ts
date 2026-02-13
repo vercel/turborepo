@@ -78,6 +78,7 @@ async function releaseGen(options: {
       npmTag,
       packagePrefix: "@turbo/gen",
       binaryName: "turbo-gen",
+      srcDirPrefix: "dist-gen",
       description:
         "Platform binary for @turbo/gen, the Turborepo code generator."
     });

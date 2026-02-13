@@ -16,6 +16,8 @@ export interface PackOptions {
   packagePrefix?: string;
   // Binary name (e.g., "turbo" or "turbo-gen")
   binaryName?: string;
+  // Prefix for source binary directories (e.g., "dist" → "dist-darwin-arm64", "dist-gen" → "dist-gen-darwin-arm64")
+  srcDirPrefix?: string;
   // Description override for the generated package.json
   description?: string;
 }
@@ -26,6 +28,7 @@ async function packPlatform({
   srcDir = process.cwd(),
   packagePrefix = "turbo",
   binaryName: binaryBaseName = "turbo",
+  srcDirPrefix = "dist",
   description
 }: PackOptions): Promise<string> {
   const { os, arch } = platform;
@@ -48,7 +51,11 @@ async function packPlatform({
   console.log("Moving prebuilt binary...");
   const binaryName =
     os === "windows" ? `${binaryBaseName}.exe` : binaryBaseName;
-  const sourcePath = path.join(srcDir, `dist-${os}-${arch}`, binaryName);
+  const sourcePath = path.join(
+    srcDir,
+    `${srcDirPrefix}-${os}-${arch}`,
+    binaryName
+  );
   const destPath = path.join(scaffoldDir, "bin", binaryName);
   await fs.mkdir(path.dirname(destPath), { recursive: true });
   await fs.copyFile(sourcePath, destPath);
