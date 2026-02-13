@@ -240,6 +240,7 @@ export default defineConfig({
 ```
 
 **Important:** Project-level configs in the `projects` array cannot extend the root config's `test` object directly. Instead, share configuration by:
+
 1. Creating a shared configuration file that projects import
 2. Using TypeScript to export a config object that projects spread into their settings
 
