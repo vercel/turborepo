@@ -10,7 +10,8 @@
       "dependsOn": ["build"]
     },
     "build": {
-      "dependsOn": ["^build", "build:embed"]
+      "dependsOn": ["^build", "build:embed"],
+      "outputs": ["dist/**", "bin/**"]
     }
   }
 }
