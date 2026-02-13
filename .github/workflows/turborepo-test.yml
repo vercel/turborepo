@@ -525,6 +525,7 @@ jobs:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
       TURBO_TEAM: ${{ vars.TURBO_TEAM }}
       TURBO_CACHE: remote:rw
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -546,8 +547,8 @@ jobs:
       - name: Setup Vercel credentials
         run: |
           cd examples
-          npx vercel link --yes --token=${{ secrets.VERCEL_TOKEN }} --project turborepo-examples-app
-          npx vercel env pull --yes --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel link --yes --token=$VERCEL_TOKEN --project turborepo-examples-app
+          npx vercel env pull --yes --token=$VERCEL_TOKEN
 
       - name: Run examples check
         run: turbo run check-examples --filter=turborepo-examples --env-mode=strict
