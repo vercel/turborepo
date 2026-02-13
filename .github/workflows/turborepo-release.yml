@@ -10,7 +10,7 @@
 # 6. Create the git tag (only after npm publish succeeds)
 # 7. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
 # 8. Create a release branch and open a PR
-# 9. On failure, cleanup the staging branch automatically
+# 9. On failure, cleanup the staging branch and release tag automatically
 #
 # Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
@@ -714,9 +714,24 @@ jobs:
         build-gen,
         rust-smoke-test,
         js-smoke-test,
-        npm-publish
+        npm-publish,
+        create-release-tag,
+        create-release-pr
       ]
-    if: ${{ always() && needs.stage.result == 'success' && (needs.build-rust.result == 'failure' || needs.build-gen.result == 'failure' || needs.rust-smoke-test.result == 'failure' || needs.js-smoke-test.result == 'failure' || needs.npm-publish.result == 'failure') }}
+    if: >-
+      ${{
+        always()
+        && needs.stage.result == 'success'
+        && (
+          needs.build-rust.result == 'failure'
+          || needs.build-gen.result == 'failure'
+          || needs.rust-smoke-test.result == 'failure'
+          || needs.js-smoke-test.result == 'failure'
+          || needs.npm-publish.result == 'failure'
+          || needs.create-release-tag.result == 'failure'
+          || needs.create-release-pr.result == 'failure'
+        )
+      }}
     steps:
       - name: Delete staging branch
         env:
@@ -725,4 +740,12 @@ jobs:
           STAGE_BRANCH="${{ needs.stage.outputs.stage-branch }}"
           echo "::warning::Release failed. Cleaning up staging branch ${STAGE_BRANCH}..."
           gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/${STAGE_BRANCH}" || echo "Branch may already be deleted or not exist"
+
+      - name: Delete release tag if it exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.stage.outputs.version }}"
+          echo "::warning::Cleaning up release tag v${VERSION} if it exists..."
+          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/v${VERSION}" || echo "Tag may not exist"
           echo "Cleanup complete. You can retry the release without using clear-staging-branch."
