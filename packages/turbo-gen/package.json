@@ -22,10 +22,11 @@
     "test": "jest",
     "check-types": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@inquirer/prompts": "^7.10.1"
+  },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
-    "@inquirer/prompts": "^7.10.1",
     "@jest/globals": "30.2.0",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
