@@ -182,7 +182,14 @@ mod tests {
 
         // Verify the token is expired and has vca_ prefix
         assert!(auth_tokens.is_expired());
-        assert!(auth_tokens.token.as_ref().unwrap().expose().starts_with("vca_"));
+        assert!(
+            auth_tokens
+                .token
+                .as_ref()
+                .unwrap()
+                .expose()
+                .starts_with("vca_")
+        );
         assert!(auth_tokens.refresh_token.is_some());
 
         // The actual refresh would happen in get_token_with_refresh, but we
@@ -214,7 +221,14 @@ mod tests {
 
         // Verify the token is expired and does NOT have vca_ prefix
         assert!(auth_tokens.is_expired());
-        assert!(!auth_tokens.token.as_ref().unwrap().expose().starts_with("vca_"));
+        assert!(
+            !auth_tokens
+                .token
+                .as_ref()
+                .unwrap()
+                .expose()
+                .starts_with("vca_")
+        );
         assert!(auth_tokens.refresh_token.is_some());
 
         // The key behavior: legacy tokens should NOT attempt refresh even if
@@ -247,7 +261,14 @@ mod tests {
 
         // Verify the token is expired, has vca_ prefix, but no refresh token
         assert!(auth_tokens.is_expired());
-        assert!(auth_tokens.token.as_ref().unwrap().expose().starts_with("vca_"));
+        assert!(
+            auth_tokens
+                .token
+                .as_ref()
+                .unwrap()
+                .expose()
+                .starts_with("vca_")
+        );
         assert!(auth_tokens.refresh_token.is_none());
 
         // Even vca_ tokens should fall back to turbo config if they don't have
@@ -273,7 +294,14 @@ mod tests {
 
         // Verify the token is NOT expired
         assert!(!auth_tokens.is_expired());
-        assert!(auth_tokens.token.as_ref().unwrap().expose().starts_with("vca_"));
+        assert!(
+            auth_tokens
+                .token
+                .as_ref()
+                .unwrap()
+                .expose()
+                .starts_with("vca_")
+        );
 
         // Non-expired tokens should be returned as-is without any refresh
         // attempt
@@ -298,7 +326,14 @@ mod tests {
 
         // Verify the token is NOT expired
         assert!(!auth_tokens.is_expired());
-        assert!(!auth_tokens.token.as_ref().unwrap().expose().starts_with("vca_"));
+        assert!(
+            !auth_tokens
+                .token
+                .as_ref()
+                .unwrap()
+                .expose()
+                .starts_with("vca_")
+        );
 
         // Non-expired legacy tokens should be returned as-is
     }

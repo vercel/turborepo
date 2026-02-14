@@ -1124,10 +1124,7 @@ mod tests {
             }
         }
 
-        async fn delete_token(
-            &self,
-            _token: &SecretString,
-        ) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
             Ok(())
         }
     }

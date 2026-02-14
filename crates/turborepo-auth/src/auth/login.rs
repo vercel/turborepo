@@ -210,7 +210,10 @@ mod tests {
     }
 
     impl Client for MockApiClient {
-        async fn get_user(&self, token: &turborepo_api_client::SecretString) -> turborepo_api_client::Result<UserResponse> {
+        async fn get_user(
+            &self,
+            token: &turborepo_api_client::SecretString,
+        ) -> turborepo_api_client::Result<UserResponse> {
             if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
             }
@@ -225,7 +228,10 @@ mod tests {
                 },
             })
         }
-        async fn get_teams(&self, token: &turborepo_api_client::SecretString) -> turborepo_api_client::Result<TeamsResponse> {
+        async fn get_teams(
+            &self,
+            token: &turborepo_api_client::SecretString,
+        ) -> turborepo_api_client::Result<TeamsResponse> {
             if token.expose().is_empty() {
                 return Err(MockApiError::EmptyToken.into());
             }
@@ -294,7 +300,10 @@ mod tests {
                 created_at: 123456,
             })
         }
-        async fn delete_token(&self, _token: &turborepo_api_client::SecretString) -> turborepo_api_client::Result<()> {
+        async fn delete_token(
+            &self,
+            _token: &turborepo_api_client::SecretString,
+        ) -> turborepo_api_client::Result<()> {
             Ok(())
         }
     }
