@@ -80,6 +80,54 @@ module.exports = function generator(plop) {
 };
 `;
 
+// Config that imports an external npm package from the project's node_modules.
+const TS_CONFIG_WITH_EXTERNAL_IMPORT = (name: string) => `
+import { helper } from "test-external-pkg";
+
+export default function generator(plop: any): void {
+  plop.setGenerator("${name}", {
+    description: helper("${name}"),
+    prompts: [],
+    actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
+  });
+}
+`;
+
+// Config that imports @inquirer/prompts, which is bundled in the compiled
+// binary but NOT installed in the user's node_modules.
+// Regression test for https://github.com/vercel/turborepo/issues/11855
+const TS_CONFIG_WITH_BINARY_MODULE_IMPORT = (name: string) => `
+import { Separator } from "@inquirer/prompts";
+
+const sep = new Separator();
+
+export default function generator(plop: any): void {
+  plop.setGenerator("${name}", {
+    description: "${name}",
+    prompts: [],
+    actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
+  });
+}
+`;
+
+/**
+ * Creates a fake npm package in the project's node_modules so that
+ * config files can import it without running a real package manager.
+ */
+function createFakePackage(
+  projectRoot: string,
+  packageName: string,
+  code: string
+) {
+  const pkgDir = path.join(projectRoot, "node_modules", packageName);
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(pkgDir, "package.json"),
+    JSON.stringify({ name: packageName, version: "1.0.0", main: "index.js" })
+  );
+  fs.writeFileSync(path.join(pkgDir, "index.js"), code);
+}
+
 // Skip the entire suite if the binary hasn't been built.
 // Unit tests (raw.test.ts) always run; these are integration tests
 // that require `pnpm --filter @turbo/gen run build` first.
@@ -224,6 +272,97 @@ describeIfBinary("compiled binary", () => {
       });
     }
   );
+
+  // Regression test for https://github.com/vercel/turborepo/issues/11855
+  describe("config importing external npm packages", () => {
+    let projectDir: string;
+    const genName = "ext-import-test";
+
+    beforeAll(() => {
+      projectDir = path.join(tmpDir, "external-import");
+      fs.mkdirSync(projectDir, { recursive: true });
+      createProject(projectDir, {
+        type: "commonjs",
+        configFile: "config.ts",
+        configContent: TS_CONFIG_WITH_EXTERNAL_IMPORT(genName),
+        generatorPkgType: "commonjs"
+      });
+      // Install a fake package in node_modules
+      createFakePackage(
+        projectDir,
+        "test-external-pkg",
+        'module.exports.helper = function(name) { return name + " via external"; };'
+      );
+    });
+
+    it("resolves npm packages from the project node_modules", () => {
+      fs.rmSync(path.join(projectDir, "out"), {
+        recursive: true,
+        force: true
+      });
+
+      bin(
+        [
+          "raw",
+          "run",
+          "--json",
+          JSON.stringify({
+            root: projectDir,
+            generator_name: genName
+          })
+        ],
+        projectDir
+      );
+
+      const outFile = path.join(projectDir, "out", `${genName}.md`);
+      expect(fs.existsSync(outFile)).toBe(true);
+      expect(fs.readFileSync(outFile, "utf-8")).toContain(`# ${genName}`);
+    });
+  });
+
+  // Regression test for https://github.com/vercel/turborepo/issues/11855
+  // @inquirer/prompts is bundled in the binary but NOT in the test project's
+  // node_modules, which is the exact scenario from the bug report.
+  describe("config importing binary-bundled modules (@inquirer/prompts)", () => {
+    let projectDir: string;
+    const genName = "binary-module-test";
+
+    beforeAll(() => {
+      projectDir = path.join(tmpDir, "binary-module-import");
+      fs.mkdirSync(projectDir, { recursive: true });
+      createProject(projectDir, {
+        type: "commonjs",
+        configFile: "config.ts",
+        configContent: TS_CONFIG_WITH_BINARY_MODULE_IMPORT(genName),
+        generatorPkgType: "commonjs"
+      });
+      // Intentionally NO node_modules/@inquirer/prompts on disk
+    });
+
+    it("resolves @inquirer/prompts from the compiled binary", () => {
+      fs.rmSync(path.join(projectDir, "out"), {
+        recursive: true,
+        force: true
+      });
+
+      bin(
+        [
+          "raw",
+          "run",
+          "--json",
+          JSON.stringify({
+            root: projectDir,
+            generator_name: genName
+          })
+        ],
+        projectDir
+      );
+
+      const outFile = path.join(projectDir, "out", `${genName}.md`);
+      expect(fs.existsSync(outFile)).toBe(true);
+      expect(fs.readFileSync(outFile, "utf-8")).toContain(`# ${genName}`);
+    });
+  });
 
   describe("raw command (Rust CLI handoff)", () => {
     let projectDir: string;
