@@ -1,2 +1,3 @@
-export { Counter } from './my-counter-class.svelte';
-export { default as MyCounterButton } from './MyCounterButton.svelte';
+export type { Counter } from './types';
+export { newCounter } from './counter.svelte.js';
+export { default as CounterView } from './CounterView.svelte';
