@@ -15,6 +15,7 @@ pub use reqwest::Response;
 use reqwest::{Body, Method, RequestBuilder, StatusCode};
 use serde::Deserialize;
 use turborepo_ci::{Vendor, is_ci};
+pub use turborepo_types::SecretString;
 use turborepo_vercel_api::{
     APIError, CachingStatus, CachingStatusResponse, PreflightResponse, Team, TeamsResponse,
     UserResponse, VerificationResponse, VerifiedSsoUser, token::ResponseTokenMetadata,
@@ -22,7 +23,6 @@ use turborepo_vercel_api::{
 use url::Url;
 
 pub use crate::error::{Error, Result};
-pub use turborepo_types::SecretString;
 
 pub mod analytics;
 mod error;
@@ -37,10 +37,8 @@ static AUTHORIZATION_REGEX: LazyLock<Regex> =
 
 pub trait Client {
     fn get_user(&self, token: &SecretString) -> impl Future<Output = Result<UserResponse>> + Send;
-    fn get_teams(
-        &self,
-        token: &SecretString,
-    ) -> impl Future<Output = Result<TeamsResponse>> + Send;
+    fn get_teams(&self, token: &SecretString)
+    -> impl Future<Output = Result<TeamsResponse>> + Send;
     fn get_team(
         &self,
         token: &SecretString,
