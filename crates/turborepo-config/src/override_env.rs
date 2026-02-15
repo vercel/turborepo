@@ -5,7 +5,7 @@ use std::{
 
 use turborepo_types::UIMode;
 
-use crate::{env::truth_env_var, ConfigurationOptions, Error, ResolvedConfigurationOptions};
+use crate::{ConfigurationOptions, Error, ResolvedConfigurationOptions, env::truth_env_var};
 
 /*
 Hi! If you're new here:

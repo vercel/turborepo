@@ -19,13 +19,13 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
 use turborepo_types::{DryRunMode, EnvMode};
-use turborepo_ui::{color, cprintln, cwriteln, ColorConfig, BOLD, BOLD_CYAN, GREY};
+use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cprintln, cwriteln};
 
 use crate::{
+    EngineInfo, GlobalHashSummary, HashTrackerInfo, RunOptsInfo, SCMState, TaskTracker,
     execution::{ExecutionSummary, ExecutionTracker, TaskState},
     task::{SinglePackageTaskSummary, TaskSummary},
     task_factory::TaskSummaryFactory,
-    EngineInfo, GlobalHashSummary, HashTrackerInfo, RunOptsInfo, SCMState, TaskTracker,
 };
 
 #[derive(Debug, Error)]
@@ -317,18 +317,16 @@ impl<'a> RunSummary<'a> {
             return self.close_dry_run(pkg_dep_graph, ui);
         }
 
-        if self.should_save {
-            if let Err(err) = self.save().await {
-                warn!("Error writing run summary: {}", err)
-            }
+        if self.should_save
+            && let Err(err) = self.save().await
+        {
+            warn!("Error writing run summary: {}", err)
         }
 
-        if !is_watch {
-            if let Some(execution) = &self.execution {
-                let path = self.get_path();
-                let failed_tasks = self.get_failed_tasks();
-                execution.print(ui, path, failed_tasks);
-            }
+        if !is_watch && let Some(execution) = &self.execution {
+            let path = self.get_path();
+            let failed_tasks = self.get_failed_tasks();
+            execution.print(ui, path, failed_tasks);
         }
 
         Ok(())
@@ -510,10 +508,10 @@ impl<'a> RunSummary<'a> {
                 &task.shared.cache.remote
             )?;
 
-            if self.monorepo {
-                if let Some(directory) = &task.shared.directory {
-                    cwriteln!(tab_writer, ui, GREY, "  Directory\t=\t{}", directory)?;
-                }
+            if self.monorepo
+                && let Some(directory) = &task.shared.directory
+            {
+                cwriteln!(tab_writer, ui, GREY, "  Directory\t=\t{}", directory)?;
             }
             cwriteln!(
                 tab_writer,

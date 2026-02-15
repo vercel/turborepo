@@ -15,7 +15,7 @@ pub use global_hash::*;
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
-use tracing::{debug, Span};
+use tracing::{Span, debug};
 use turbopath::{
     AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
 };
@@ -23,13 +23,13 @@ use turborepo_cache::CacheHitMetadata;
 // Re-export turborepo_engine::TaskNode for convenience
 pub use turborepo_engine::TaskNode;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
-use turborepo_frameworks::{infer_framework, Slug as FrameworkSlug};
+use turborepo_frameworks::{Slug as FrameworkSlug, infer_framework};
 use turborepo_hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
-    generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder,
+    EventBuilder, generic::GenericEventBuilder, task::PackageTaskEventBuilder,
 };
 use turborepo_types::{
     EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
@@ -193,9 +193,9 @@ impl PackageInputsHashes {
                                     );
                                 })
                                 .ok() // If we timed out, we don't need to
-                                      // error,
-                                      // just return None so we can move on to
-                                      // local
+                            // error,
+                            // just return None so we can move on to
+                            // local
                         })
                         .and_then(|result| {
                             match result {
