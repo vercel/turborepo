@@ -73,7 +73,7 @@ create-release-tag:
 			echo "Tag v$(TURBO_VERSION) already exists on remote at the correct commit. Skipping."; \
 		else \
 			echo "Warning: Tag v$(TURBO_VERSION) exists on remote but points to $$REMOTE_TAG_SHA, expected $$LOCAL_SHA." && \
-			echo "Replacing tag (likely created prematurely by an external service)..." && \
+			echo "Replacing incorrect tag..." && \
 			git push origin ":refs/tags/v$(TURBO_VERSION)" && \
 			git tag -f "v$(TURBO_VERSION)" && \
 			git push origin "v$(TURBO_VERSION)" && \
