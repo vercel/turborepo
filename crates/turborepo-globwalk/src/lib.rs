@@ -14,7 +14,6 @@ use std::{
     sync::OnceLock,
 };
 
-use camino::Utf8PathBuf;
 use itertools::Itertools;
 use path_clean::PathClean;
 use path_slash::PathExt;
@@ -66,14 +65,12 @@ fn escape_glob_literals(literal_glob: &str) -> Cow<'_, str> {
     glob_literals().replace_all(literal_glob, "\\$literal")
 }
 
-#[tracing::instrument]
-fn preprocess_paths_and_globs(
+#[tracing::instrument(skip(include, exclude))]
+fn preprocess_paths_and_globs<S: AsRef<str>>(
     base_path: &AbsoluteSystemPath,
-    include: &[String],
-    exclude: &[String],
+    include: &[S],
+    exclude: &[S],
 ) -> Result<(PathBuf, Vec<String>, Vec<String>), WalkError> {
-    debug!("processing includes: {include:?}");
-    debug!("processing excludes: {exclude:?}");
     let base_path_slash = base_path
         .as_std_path()
         .to_slash()
@@ -86,7 +83,7 @@ fn preprocess_paths_and_globs(
 
     let (include_paths, lowest_segment) = include
         .iter()
-        .map(|s| fix_glob_pattern(s))
+        .map(|s| fix_glob_pattern(s.as_ref()).into_owned())
         .map(|mut s| {
             // We need to check inclusion globs before the join
             // as to_slash doesn't preserve Windows drive names.
@@ -115,16 +112,14 @@ fn preprocess_paths_and_globs(
     let mut exclude_paths = vec![];
     for split in exclude
         .iter()
-        .map(|s| fix_glob_pattern(s))
-        .map(|s| join_unix_like_paths(&base_path_slash, &s))
+        .map(|s| fix_glob_pattern(s.as_ref()))
+        .map(|s| join_unix_like_paths(&base_path_slash, s.as_ref()))
         .filter_map(|g| collapse_path(&g).map(|(s, _)| s.to_string()))
     {
         // if the glob ends with a slash, then we need to add a double star,
         // unless it already ends with a double star
         add_trailing_double_star(&mut exclude_paths, &split);
     }
-    debug!("processed includes: {include_paths:?}");
-    debug!("processed excludes: {exclude_paths:?}");
 
     Ok((base_path, include_paths, exclude_paths))
 }
@@ -144,30 +139,54 @@ fn trailing_doublestar() -> &'static Regex {
     RE.get_or_init(|| Regex::new(r"(?P<prefix>[^*/]+)\*\*").unwrap())
 }
 
-pub fn fix_glob_pattern(pattern: &str) -> String {
-    // This is a no-op on unix systems, but converts to slashes on windows
+pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
+    // On Unix, Path::new(pattern).to_slash() is a no-op that returns Cow::Borrowed.
+    // Skip the roundtrip entirely on Unix to avoid the overhead.
     #[cfg(not(windows))]
-    let needs_trailing_slash = false;
+    let p0: Cow<'_, str> = Cow::Borrowed(pattern);
+
     #[cfg(windows)]
-    let needs_trailing_slash = pattern.ends_with('/') || pattern.ends_with('\\');
-    let converted = Path::new(pattern)
-        .to_slash()
-        .expect("failed to roundtrip through Path");
-    // TODO: consider inlining path-slash to handle this bug
-    // technically this won't happen on unix, the to_slash conversion
-    // is a no-op, so it doesn't strip trailing slashes. path-slash
-    // strips trailing _unix_ slashes from windows paths, rather than
-    // "converting" (leaving) them.
-    let p0 = if needs_trailing_slash {
-        format!("{converted}/")
-    } else {
-        converted.to_string()
+    let p0: Cow<'_, str> = {
+        // path-slash strips trailing slashes from Windows paths, so we need to restore
+        // them.
+        let needs_trailing_slash = pattern.ends_with('/') || pattern.ends_with('\\');
+        let converted = Path::new(pattern)
+            .to_slash()
+            .expect("failed to roundtrip through Path");
+        if needs_trailing_slash && !converted.ends_with('/') {
+            Cow::Owned(format!("{converted}/"))
+        } else {
+            converted
+        }
     };
+
+    // Chain regex replacements, taking advantage of Cow<str>:
+    // - If no match, replace() returns Cow::Borrowed pointing to the input
+    // - If match, replace() returns Cow::Owned with the replacement
+    // This avoids allocations when patterns don't need modification.
     let p1 = double_doublestar().replace(&p0, "**");
     let p2 = leading_doublestar().replace(&p1, "**/*$suffix");
     let p3 = trailing_doublestar().replace(&p2, "$prefix*/**");
 
-    p3.to_string()
+    // Determine if we can return a borrowed reference to the original pattern.
+    // On Unix, if no regex matched, all Cows in the chain are Borrowed and
+    // transitively reference `pattern`. We can detect this by checking if
+    // p3's pointer equals pattern's pointer.
+    //
+    // On Windows, p0 may be Owned (if path conversion changed something), so
+    // we can only return Borrowed if p0 was also Borrowed.
+    match p3 {
+        Cow::Borrowed(s) if std::ptr::eq(s, pattern) => {
+            // No allocations occurred anywhere in the chain
+            Cow::Borrowed(pattern)
+        }
+        Cow::Borrowed(s) => {
+            // p3 is borrowed from an intermediate owned string (some regex matched).
+            // We need to allocate to return an owned copy.
+            Cow::Owned(s.to_string())
+        }
+        Cow::Owned(s) => Cow::Owned(s),
+    }
 }
 
 /// collapse a path, returning a new path with all the dots and dotdots removed
@@ -321,6 +340,12 @@ impl ValidatedGlob {
     }
 }
 
+impl AsRef<str> for ValidatedGlob {
+    fn as_ref(&self) -> &str {
+        self.inner.as_str()
+    }
+}
+
 impl FromStr for ValidatedGlob {
     type Err = GlobError;
 
@@ -332,20 +357,55 @@ impl FromStr for ValidatedGlob {
         // 4. single `.`s removed
         // 5. colons escaped on unix, error on windows
 
-        // Lexically clean the path
-        let path_buf = Utf8PathBuf::from_str(s).expect("infallible");
-        let cleaned_path = path_buf.as_std_path().clean();
-        // TODO: fully deprecate allowing absolute paths (that won't work anyways),
-        // and return an error here if cleaned_path is absolute
-        let cleaned = cleaned_path.to_str().expect("valid utf-8");
-
-        // Check slashes + ':'
         #[cfg(not(windows))]
-        let cross_platform = cleaned.trim_start_matches('/').replace(':', "\\:");
+        {
+            // Fast path: check if cleaning is needed by looking for `.` or `..` segments
+            let needs_cleaning = needs_path_cleaning(s);
+
+            let cleaned: Cow<'_, str> = if needs_cleaning {
+                // Only allocate when we actually need to clean
+                let path = Path::new(s);
+                let cleaned_path = path.clean();
+                Cow::Owned(cleaned_path.to_str().expect("valid utf-8").to_owned())
+            } else {
+                Cow::Borrowed(s)
+            };
+
+            // Strip leading slashes
+            let without_leading_slash = cleaned.trim_start_matches('/');
+
+            // Only allocate for colon escaping if colons are present (rare case)
+            let result = if without_leading_slash.contains(':') {
+                without_leading_slash.replace(':', "\\:")
+            } else {
+                without_leading_slash.to_owned()
+            };
+
+            Ok(Self { inner: result })
+        }
+
         #[cfg(windows)]
-        let cross_platform = {
-            let to_slashed = cleaned.replace('\\', "/");
-            if let Some(index) = to_slashed.find(':') {
+        {
+            // On Windows, we need to convert backslashes to forward slashes
+            let needs_slash_conversion = s.contains('\\');
+            let needs_cleaning = needs_path_cleaning(s);
+
+            // If we need either conversion, we have to allocate
+            let processed: Cow<'_, str> = if needs_slash_conversion || needs_cleaning {
+                let path = Path::new(s);
+                let cleaned_path = path.clean();
+                let cleaned_str = cleaned_path.to_str().expect("valid utf-8");
+                if needs_slash_conversion || cleaned_str.contains('\\') {
+                    Cow::Owned(cleaned_str.replace('\\', "/"))
+                } else {
+                    Cow::Owned(cleaned_str.to_owned())
+                }
+            } else {
+                Cow::Borrowed(s)
+            };
+
+            // Check for invalid ':' character on Windows
+            if let Some(index) = processed.find(':') {
                 return Err(GlobError {
                     raw_input: s.to_owned(),
                     reason: format!(
@@ -353,13 +413,41 @@ impl FromStr for ValidatedGlob {
                     ),
                 });
             }
-            to_slashed
-        };
 
-        Ok(Self {
-            inner: cross_platform,
-        })
+            Ok(Self {
+                inner: processed.into_owned(),
+            })
+        }
     }
+}
+
+/// Check if a path string needs cleaning (contains `.` or `..` segments).
+/// This is a fast check to avoid allocations in the common case.
+#[inline]
+fn needs_path_cleaning(s: &str) -> bool {
+    // We need to check for actual path segments, not just any dot
+    // A segment is defined by being surrounded by '/' or at start/end
+    let bytes = s.as_bytes();
+    let len = bytes.len();
+
+    let mut i = 0;
+    while i < len {
+        // Check for segment start (beginning of string or after '/')
+        let at_segment_start = i == 0 || bytes[i - 1] == b'/';
+
+        if at_segment_start && bytes[i] == b'.' {
+            // Check for "." segment (single dot followed by '/' or end)
+            if i + 1 == len || bytes[i + 1] == b'/' {
+                return true;
+            }
+            // Check for ".." segment (double dot followed by '/' or end)
+            if i + 1 < len && bytes[i + 1] == b'.' && (i + 2 == len || bytes[i + 2] == b'/') {
+                return true;
+            }
+        }
+        i += 1;
+    }
+    false
 }
 
 pub fn globwalk_with_settings(
@@ -369,9 +457,7 @@ pub fn globwalk_with_settings(
     walk_type: WalkType,
     settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    let include = include.iter().map(|i| i.inner.clone()).collect::<Vec<_>>();
-    let exclude = exclude.iter().map(|e| e.inner.clone()).collect::<Vec<_>>();
-    globwalk_internal(base_path, &include, &exclude, walk_type, settings)
+    globwalk_internal(base_path, include, exclude, walk_type, settings)
 }
 
 pub fn globwalk(
@@ -380,16 +466,14 @@ pub fn globwalk(
     exclude: &[ValidatedGlob],
     walk_type: WalkType,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    let include = include.iter().map(|i| i.inner.clone()).collect::<Vec<_>>();
-    let exclude = exclude.iter().map(|e| e.inner.clone()).collect::<Vec<_>>();
-    globwalk_internal(base_path, &include, &exclude, walk_type, Default::default())
+    globwalk_internal(base_path, include, exclude, walk_type, Default::default())
 }
 
-#[tracing::instrument]
-pub fn globwalk_internal(
+#[tracing::instrument(skip(include, exclude))]
+pub fn globwalk_internal<S: AsRef<str>>(
     base_path: &AbsoluteSystemPath,
-    include: &[String],
-    exclude: &[String],
+    include: &[S],
+    exclude: &[S],
     walk_type: WalkType,
     settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
@@ -487,7 +571,7 @@ mod test {
 
     use crate::{
         Settings, ValidatedGlob, WalkError, WalkType, add_doublestar_to_dir, collapse_path,
-        escape_glob_literals, fix_glob_pattern, globwalk,
+        escape_glob_literals, fix_glob_pattern, globwalk, needs_path_cleaning,
     };
 
     #[cfg(unix)]
@@ -506,7 +590,36 @@ mod test {
     #[test_case("**token**", "**/*token*/**")]
     fn test_fix_glob_pattern(input: &str, expected: &str) {
         let output = fix_glob_pattern(input);
-        assert_eq!(output, expected);
+        assert_eq!(output.as_ref(), expected);
+    }
+
+    #[test]
+    #[cfg(not(windows))]
+    fn test_fix_glob_pattern_returns_borrowed_when_no_change() {
+        use std::borrow::Cow;
+        // On Unix, when no regex matches, we should get a borrowed reference
+        // to the original string, avoiding allocation.
+        let input = "packages/*/src/**/*.ts";
+        let output = fix_glob_pattern(input);
+        assert!(
+            matches!(output, Cow::Borrowed(_)),
+            "expected Cow::Borrowed for pattern that needs no modification"
+        );
+        // Verify it's actually the same memory
+        assert!(std::ptr::eq(output.as_ref(), input));
+    }
+
+    #[test]
+    fn test_fix_glob_pattern_returns_owned_when_changed() {
+        use std::borrow::Cow;
+        // When a regex matches, we should get an owned string
+        let input = "**/**";
+        let output = fix_glob_pattern(input);
+        assert!(
+            matches!(output, Cow::Owned(_)),
+            "expected Cow::Owned for pattern that needs modification"
+        );
+        assert_eq!(output.as_ref(), "**");
     }
 
     #[test_case("a/./././b", "a/b", 1 ; "test path with dot segments")]
@@ -1585,6 +1698,32 @@ mod test {
         assert_eq!(
             escape_glob_literals("?*$:<>()[]{},"),
             r"\?\*\$\:\<\>\(\)\[\]\{\}\,"
+        );
+    }
+
+    #[test_case("**/*.ts", false ; "simple glob no cleaning")]
+    #[test_case("src/lib.rs", false ; "simple path no cleaning")]
+    #[test_case("a/b/c", false ; "multi segment no cleaning")]
+    #[test_case("./a/b", true ; "leading dot segment")]
+    #[test_case("a/./b", true ; "middle dot segment")]
+    #[test_case("a/b/.", true ; "trailing dot segment")]
+    #[test_case("../a/b", true ; "leading dotdot segment")]
+    #[test_case("a/../b", true ; "middle dotdot segment")]
+    #[test_case("a/b/..", true ; "trailing dotdot segment")]
+    #[test_case(".", true ; "just dot")]
+    #[test_case("..", true ; "just dotdot")]
+    #[test_case(".hidden", false ; "hidden file not a dot segment")]
+    #[test_case("a/.hidden/b", false ; "hidden dir not a dot segment")]
+    #[test_case("..hidden", false ; "dotdot prefix not a segment")]
+    #[test_case("a/..hidden", false ; "dotdot prefix in middle not a segment")]
+    #[test_case("a.b/c.d", false ; "dots in names not segments")]
+    #[test_case("a/b./c", false ; "trailing dot in name not a segment")]
+    #[test_case("a/b../c", false ; "trailing dotdot in name not a segment")]
+    fn test_needs_path_cleaning(input: &str, expected: bool) {
+        assert_eq!(
+            needs_path_cleaning(input),
+            expected,
+            "needs_path_cleaning({input:?}) should be {expected}"
         );
     }
 
