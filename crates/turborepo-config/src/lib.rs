@@ -631,8 +631,8 @@ mod test {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::{
-        ConfigurationOptions, TurborepoConfigBuilder, CONFIG_FILE, CONFIG_FILE_JSONC,
-        DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
+        CONFIG_FILE, CONFIG_FILE_JSONC, ConfigurationOptions, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
+        DEFAULT_TIMEOUT, TurborepoConfigBuilder,
     };
 
     #[test]

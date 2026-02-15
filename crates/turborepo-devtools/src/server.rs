@@ -6,20 +6,20 @@
 use std::sync::Arc;
 
 use axum::{
+    Router,
     extract::{
-        ws::{Message, WebSocket},
         State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     http::Method,
     response::IntoResponse,
     routing::get,
-    Router,
 };
 use futures::{SinkExt, StreamExt};
 use thiserror::Error;
 use tokio::{
     net::TcpListener,
-    sync::{broadcast, RwLock},
+    sync::{RwLock, broadcast},
 };
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{debug, error, info, warn};
