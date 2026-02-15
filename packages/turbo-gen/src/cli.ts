@@ -107,6 +107,12 @@ In this case, you must specify the path to the example separately:
       "Do not filter available dependencies by the workspace type"
     ).default(false)
   )
+  .addOption(
+    new Option(
+      "--add-dependencies",
+      "Add workspace dependencies to the new package.",
+    ).default(true),
+  )
   .action(workspace);
 
 turboGenCli

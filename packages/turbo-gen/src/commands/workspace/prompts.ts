@@ -186,12 +186,14 @@ export async function dependencies({
   workspaceName,
   project,
   workspaceSource,
-  showAllDependencies
+  showAllDependencies,
+  ...opts
 }: {
   workspaceName: string;
   project: Project;
   workspaceSource?: Workspace;
   showAllDependencies?: boolean;
+  addDependencies?: boolean;
 }) {
   const selectedDependencies: DependencyGroups = {
     dependencies: {},
@@ -199,6 +201,9 @@ export async function dependencies({
     peerDependencies: {},
     optionalDependencies: {}
   };
+  if (opts.addDependencies === false) {
+    return selectedDependencies;
+  }
   const { answer: addDependencies } = await confirm({
     message: `Add workspace dependencies to "${workspaceName}"?`
   });
