@@ -67,14 +67,17 @@ stage-release:
 create-release-tag:
 	@echo "Creating release tag v$(TURBO_VERSION)..."
 	@REMOTE_TAG_SHA=$$(git ls-remote --tags origin "refs/tags/v$(TURBO_VERSION)" | awk '{print $$1}'); \
+	LOCAL_SHA=$$(git rev-parse HEAD); \
 	if [ -n "$$REMOTE_TAG_SHA" ]; then \
-		LOCAL_SHA=$$(git rev-parse HEAD); \
 		if [ "$$REMOTE_TAG_SHA" = "$$LOCAL_SHA" ]; then \
 			echo "Tag v$(TURBO_VERSION) already exists on remote at the correct commit. Skipping."; \
 		else \
-			echo "Error: Tag v$(TURBO_VERSION) exists on remote but points to $$REMOTE_TAG_SHA, expected $$LOCAL_SHA." && \
-			echo "This tag may have been pushed prematurely by a previous step." && \
-			exit 1; \
+			echo "Warning: Tag v$(TURBO_VERSION) exists on remote but points to $$REMOTE_TAG_SHA, expected $$LOCAL_SHA." && \
+			echo "Replacing tag (likely created prematurely by an external service)..." && \
+			git push origin ":refs/tags/v$(TURBO_VERSION)" && \
+			git tag -f "v$(TURBO_VERSION)" && \
+			git push origin "v$(TURBO_VERSION)" && \
+			echo "Release tag v$(TURBO_VERSION) replaced and pushed."; \
 		fi; \
 	else \
 		git tag "v$(TURBO_VERSION)" && \
