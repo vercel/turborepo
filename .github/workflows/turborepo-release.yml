@@ -222,6 +222,18 @@ jobs:
             exit 1
           fi
 
+          # If this is a canary, check whether its stable version was already
+          # published to npm. This catches the window between a stable publish
+          # and the release PR merging back into main (which bumps version.txt).
+          if [[ "$VERSION" == *"-canary."* ]]; then
+            STABLE_VERSION="${VERSION%%-canary.*}"
+            if npm view "turbo@${STABLE_VERSION}" version >/dev/null 2>&1; then
+              echo "::error::turbo@${STABLE_VERSION} already exists on npm. Skipping stale canary ${VERSION}."
+              echo "::error::The release PR that bumps version.txt likely hasn't merged yet."
+              exit 1
+            fi
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "New version: $VERSION"
           cat version.txt
