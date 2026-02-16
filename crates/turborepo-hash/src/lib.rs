@@ -105,10 +105,6 @@ pub struct GlobalHashable<'a> {
 
 pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
 
-/// Reference-based variant of [`LockFilePackages`] that avoids cloning packages.
-///
-/// This is used in hot paths where we have a borrowed collection of packages
-/// (e.g. from a `HashSet`) and want to hash them without cloning each one.
 pub struct LockFilePackagesRef<'a>(pub Vec<&'a turborepo_lockfiles::Package>);
 
 #[derive(Debug, Clone)]
