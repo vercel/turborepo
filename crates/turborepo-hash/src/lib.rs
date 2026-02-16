@@ -240,8 +240,6 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             // and set the entries in the capnp message
 
             let mut hashable: Vec<_> = file_hashes.into_iter().collect();
-            // sort_unstable_by is faster than sort_by (no auxiliary allocation) and
-            // produces identical results here since HashMap keys are unique.
             hashable.sort_unstable_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
 
             for (i, (key, value)) in hashable.iter().enumerate() {
