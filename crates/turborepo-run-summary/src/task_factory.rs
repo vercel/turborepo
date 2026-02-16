@@ -235,7 +235,6 @@ pub fn get_external_deps_hash(transitive_dependencies: &Option<HashSet<Package>>
         return "".into();
     };
 
-    // Collect references instead of cloning each Package (which has two Strings).
     let mut transitive_deps: Vec<&Package> = transitive_dependencies.iter().collect();
 
     transitive_deps.sort_unstable_by(|a, b| match a.key.cmp(&b.key) {
