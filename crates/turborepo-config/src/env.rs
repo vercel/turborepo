@@ -94,24 +94,24 @@ impl ResolvedConfigurationOptions for EnvVars {
             .map(|c| c.parse())
             .transpose()?;
 
-        if remote_only.is_some_and(|t| t) {
-            if let Some(cache) = cache {
-                // If TURBO_REMOTE_ONLY and TURBO_CACHE result in the same behavior, remove
-                // REMOTE_ONLY to avoid deprecation warning or mixing of old/new
-                // cache flag error.
-                if cache == CacheConfig::remote_only() {
-                    remote_only = None;
-                }
+        if remote_only.is_some_and(|t| t)
+            && let Some(cache) = cache
+        {
+            // If TURBO_REMOTE_ONLY and TURBO_CACHE result in the same behavior, remove
+            // REMOTE_ONLY to avoid deprecation warning or mixing of old/new
+            // cache flag error.
+            if cache == CacheConfig::remote_only() {
+                remote_only = None;
             }
         }
-        if remote_cache_read_only.is_some_and(|t| t) {
-            if let Some(cache) = cache {
-                // If TURBO_REMOTE_CACHE_READ_ONLY and TURBO_CACHE result in the same behavior,
-                // remove REMOTE_CACHE_READ_ONLY to avoid deprecation warning or
-                // mixing of old/new cache flag error.
-                if cache == CacheConfig::remote_read_only() {
-                    remote_cache_read_only = None;
-                }
+        if remote_cache_read_only.is_some_and(|t| t)
+            && let Some(cache) = cache
+        {
+            // If TURBO_REMOTE_CACHE_READ_ONLY and TURBO_CACHE result in the same behavior,
+            // remove REMOTE_CACHE_READ_ONLY to avoid deprecation warning or
+            // mixing of old/new cache flag error.
+            if cache == CacheConfig::remote_read_only() {
+                remote_cache_read_only = None;
             }
         }
 
@@ -158,10 +158,10 @@ impl ResolvedConfigurationOptions for EnvVars {
             .map_err(Error::InvalidTuiScrollbackLength)?;
 
         // Process ui
-        let ui =
-            self.truthy_value("ui")
-                .flatten()
-                .map(|ui| if ui { UIMode::Tui } else { UIMode::Stream });
+        let ui = self
+            .truthy_value("ui")
+            .flatten()
+            .map(|ui| if ui { UIMode::Tui } else { UIMode::Stream });
 
         let allow_no_package_manager = self.truthy_value("allow_no_package_manager").flatten();
 

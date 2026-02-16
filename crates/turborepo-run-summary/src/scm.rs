@@ -26,15 +26,15 @@ impl SCMState {
             branch: None,
         };
 
-        if turborepo_ci::is_ci() {
-            if let Some(vendor) = Vendor::infer() {
-                if let Some(sha_env_var) = vendor.sha_env_var {
-                    state.sha = env_vars.get(sha_env_var).cloned()
-                }
+        if turborepo_ci::is_ci()
+            && let Some(vendor) = Vendor::infer()
+        {
+            if let Some(sha_env_var) = vendor.sha_env_var {
+                state.sha = env_vars.get(sha_env_var).cloned()
+            }
 
-                if let Some(branch_env_var) = vendor.branch_env_var {
-                    state.branch = env_vars.get(branch_env_var).cloned()
-                }
+            if let Some(branch_env_var) = vendor.branch_env_var {
+                state.branch = env_vars.get(branch_env_var).cloned()
             }
         }
 

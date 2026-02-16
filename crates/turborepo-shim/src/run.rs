@@ -12,7 +12,7 @@ use shared_child::SharedChild;
 use thiserror::Error;
 use tiny_gradient::{GradientStr, RGB};
 use tracing::{debug, warn};
-use turbo_updater::{display_update_check, UpdateCheckConfig};
+use turbo_updater::{UpdateCheckConfig, display_update_check};
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_repository::{
     inference::{RepoMode, RepoState},
@@ -23,10 +23,10 @@ use turborepo_ui::ColorConfig;
 use which::which;
 
 use crate::{
-    local_turbo_config::LocalTurboConfig,
-    local_turbo_state::{turbo_version_has_shim, LocalTurboState},
-    parser::ShimArgs,
     ChildSpawner, ConfigProvider, ShimConfigurationOptions, TurboRunner, VersionProvider,
+    local_turbo_config::LocalTurboConfig,
+    local_turbo_state::{LocalTurboState, turbo_version_has_shim},
+    parser::ShimArgs,
 };
 
 const TURBO_GLOBAL_WARNING_DISABLED: &str = "TURBO_GLOBAL_WARNING_DISABLED";
@@ -299,7 +299,9 @@ where
         try_check_for_updates(&shim_args, turbo_state.version(), &config, package_manager);
 
         if turbo_state.local_is_self() {
-            env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
+            unsafe {
+                env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
+            }
             debug!("Currently running turbo is local turbo.");
             run_cli(runtime, Some(repo_state), ui)
         } else {
@@ -325,7 +327,9 @@ where
 
         // cli::run checks for this env var, rather than an arg, so that we can support
         // calling old versions without passing unknown flags.
-        env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
+        unsafe {
+            env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
+        }
         debug!("Running command as global turbo");
 
         let should_warn_on_global = env::var(TURBO_GLOBAL_WARNING_DISABLED)
@@ -382,7 +386,7 @@ where
         Err(_) => {
             return ShimResult::ShimError(Error::LocalTurboPath(
                 local_turbo_state.binary().to_string_lossy().to_string(),
-            ))
+            ));
         }
     };
     debug!(
@@ -547,7 +551,7 @@ fn normalize_config_dir_env_vars() {
                 }
                 Err(turbopath::PathError::NotAbsolute(_)) => {
                     match turbopath::AbsoluteSystemPathBuf::from_cwd(Utf8PathBuf::from(val)) {
-                        Ok(abs) => env::set_var(var, abs.as_str()),
+                        Ok(abs) => unsafe { env::set_var(var, abs.as_str()) },
                         Err(_) => {
                             // invalid value; leave as-is so downstream error
                             // handling can report it
@@ -651,7 +655,9 @@ mod tests {
     #[test]
     fn test_is_turbo_binary_path_set() {
         // This tests the function when env var is not set
-        std::env::remove_var("TURBO_BINARY_PATH");
+        unsafe {
+            std::env::remove_var("TURBO_BINARY_PATH");
+        }
         assert!(!is_turbo_binary_path_set());
     }
 }
