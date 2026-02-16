@@ -229,22 +229,18 @@ fn workspace_relative_log_file(task_name: &str) -> turbopath::AnchoredSystemPath
 /// Computes a hash of external dependencies from transitive dependencies.
 /// This is a pure function that doesn't require any trait access.
 pub fn get_external_deps_hash(transitive_dependencies: &Option<HashSet<Package>>) -> String {
-    use turborepo_hash::{LockFilePackages, TurboHash};
+    use turborepo_hash::{LockFilePackagesRef, TurboHash};
 
     let Some(transitive_dependencies) = transitive_dependencies else {
         return "".into();
     };
 
-    let mut transitive_deps = Vec::with_capacity(transitive_dependencies.len());
+    let mut transitive_deps: Vec<&Package> = transitive_dependencies.iter().collect();
 
-    for dependency in transitive_dependencies.iter() {
-        transitive_deps.push(dependency.clone());
-    }
-
-    transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {
+    transitive_deps.sort_unstable_by(|a, b| match a.key.cmp(&b.key) {
         std::cmp::Ordering::Equal => a.version.cmp(&b.version),
         other => other,
     });
 
-    LockFilePackages(transitive_deps).hash()
+    LockFilePackagesRef(transitive_deps).hash()
 }

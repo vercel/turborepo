@@ -24,7 +24,7 @@ use turborepo_cache::CacheHitMetadata;
 pub use turborepo_engine::TaskNode;
 use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
 use turborepo_frameworks::{Slug as FrameworkSlug, infer_framework};
-use turborepo_hash::{FileHashes, LockFilePackages, TaskHashable, TurboHash};
+use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
@@ -245,7 +245,8 @@ impl PackageInputsHashes {
                 };
 
                 let file_hashes = FileHashes(hash_object);
-                let hash = file_hashes.clone().hash();
+                // Use reference-based hashing to avoid cloning the entire HashMap.
+                let hash = (&file_hashes).hash();
 
                 Some(Ok((
                     (task_id.clone(), hash),
@@ -474,7 +475,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         }
 
         let mut dependency_hash_list = dependency_hash_set.into_iter().collect::<Vec<_>>();
-        dependency_hash_list.sort();
+        dependency_hash_list.sort_unstable();
 
         Ok(dependency_hash_list)
     }
@@ -588,18 +589,16 @@ pub fn get_external_deps_hash(
         return "".into();
     };
 
-    let mut transitive_deps = Vec::with_capacity(transitive_dependencies.len());
+    // Collect references instead of cloning each Package (which has two Strings).
+    let mut transitive_deps: Vec<&turborepo_lockfiles::Package> =
+        transitive_dependencies.iter().collect();
 
-    for dependency in transitive_dependencies.iter() {
-        transitive_deps.push(dependency.clone());
-    }
-
-    transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {
+    transitive_deps.sort_unstable_by(|a, b| match a.key.cmp(&b.key) {
         std::cmp::Ordering::Equal => a.version.cmp(&b.version),
         other => other,
     });
 
-    LockFilePackages(transitive_deps).hash()
+    LockFilePackagesRef(transitive_deps).hash()
 }
 
 pub fn get_internal_deps_hash(

@@ -105,6 +105,8 @@ pub struct GlobalHashable<'a> {
 
 pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
 
+pub struct LockFilePackagesRef<'a>(pub Vec<&'a turborepo_lockfiles::Package>);
+
 #[derive(Debug, Clone)]
 pub struct FileHashes(pub HashMap<turbopath::RelativeUnixPathBuf, String>);
 
@@ -185,6 +187,42 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
     }
 }
 
+impl<'a> From<LockFilePackagesRef<'a>> for Builder<HeapAllocator> {
+    fn from(LockFilePackagesRef(packages): LockFilePackagesRef<'a>) -> Self {
+        let mut message = ::capnp::message::TypedBuilder::<
+            proto_capnp::lock_file_packages::Owned,
+            HeapAllocator,
+        >::new_default();
+        let mut builder = message.init_root();
+
+        {
+            let mut packages_builder = builder.reborrow().init_packages(packages.len() as u32);
+            for (i, pkg) in packages.iter().enumerate() {
+                let mut package = packages_builder.reborrow().get(i as u32);
+                package.set_key(&pkg.key);
+                package.set_version(&pkg.version);
+                // we don't track this in rust, set it to true
+                package.set_found(true);
+            }
+        }
+
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1; // + 1 to solve an off by one error inside capnp
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
+    }
+}
+
 impl From<FileHashes> for Builder<HeapAllocator> {
     fn from(FileHashes(file_hashes): FileHashes) -> Self {
         let mut message = ::capnp::message::TypedBuilder::<
@@ -202,7 +240,47 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             // and set the entries in the capnp message
 
             let mut hashable: Vec<_> = file_hashes.into_iter().collect();
-            hashable.sort_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
+            hashable.sort_unstable_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
+
+            for (i, (key, value)) in hashable.iter().enumerate() {
+                let mut entry = entries.reborrow().get(i as u32);
+                entry.set_key(key.as_str());
+                entry.set_value(value);
+            }
+        }
+
+        // We're okay to unwrap here because we haven't hit the nesting
+        // limit and the message will not have cycles.
+        let size = builder
+            .total_size()
+            .expect("unable to calculate total size")
+            .word_count
+            + 1; // + 1 to solve an off by one error inside capnp
+        let mut canon_builder =
+            Builder::new(HeapAllocator::default().first_segment_words(size as u32));
+        canon_builder
+            .set_root_canonical(builder.reborrow_as_reader())
+            .expect("can't fail");
+
+        canon_builder
+    }
+}
+
+impl From<&FileHashes> for Builder<HeapAllocator> {
+    fn from(FileHashes(file_hashes): &FileHashes) -> Self {
+        let mut message = ::capnp::message::TypedBuilder::<
+            proto_capnp::file_hashes::Owned,
+            HeapAllocator,
+        >::new_default();
+        let mut builder = message.init_root();
+
+        {
+            let mut entries = builder
+                .reborrow()
+                .init_file_hashes(file_hashes.len() as u32);
+
+            let mut hashable: Vec<_> = file_hashes.iter().collect();
+            hashable.sort_unstable_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
 
             for (i, (key, value)) in hashable.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
@@ -332,7 +410,7 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
             // and set the entries in the capnp message
 
             let mut hashable: Vec<_> = hashable.global_file_hash_map.iter().collect();
-            hashable.sort_by(|a, b| a.0.cmp(b.0));
+            hashable.sort_unstable_by(|a, b| a.0.cmp(b.0));
 
             for (i, (key, value)) in hashable.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
@@ -350,7 +428,7 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
             // and set the entries in the capnp message
 
             let mut hashable: Vec<_> = hashable.engines.iter().collect();
-            hashable.sort_by(|a, b| a.0.cmp(b.0));
+            hashable.sort_unstable_by(|a, b| a.0.cmp(b.0));
 
             for (i, (key, value)) in hashable.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
@@ -422,7 +500,9 @@ mod test {
     use turborepo_lockfiles::Package;
     use turborepo_types::{EnvMode, TaskOutputs};
 
-    use super::{FileHashes, GlobalHashable, LockFilePackages, TaskHashable, TurboHash};
+    use super::{
+        FileHashes, GlobalHashable, LockFilePackages, LockFilePackagesRef, TaskHashable, TurboHash,
+    };
 
     #[test]
     fn task_hashable() {
@@ -527,5 +607,80 @@ mod test {
                 .collect(),
         );
         assert_eq!(file_hashes.hash(), expected);
+    }
+
+    #[test]
+    fn file_hashes_ref_matches_owned() {
+        // Verify that hashing via &FileHashes produces the same result as FileHashes
+        let file_hashes = FileHashes(
+            vec![
+                ("c".to_string(), "d".to_string()),
+                ("a".to_string(), "b".to_string()),
+            ]
+            .into_iter()
+            .map(|(a, b)| (turbopath::RelativeUnixPathBuf::new(a).unwrap(), b))
+            .collect(),
+        );
+
+        let ref_hash = (&file_hashes).hash();
+        let owned_hash = file_hashes.hash();
+        assert_eq!(ref_hash, owned_hash);
+        assert_eq!(ref_hash, "c9301c0bf1899c07");
+    }
+
+    #[test]
+    fn file_hashes_ref_large() {
+        // Verify reference-based hashing with a larger dataset
+        let file_hashes = FileHashes(
+            (0..500)
+                .map(|i| {
+                    (
+                        turbopath::RelativeUnixPathBuf::new(format!("path/to/file_{i}")).unwrap(),
+                        format!("hash_{i}"),
+                    )
+                })
+                .collect(),
+        );
+
+        let ref_hash = (&file_hashes).hash();
+        let owned_hash = file_hashes.hash();
+        assert_eq!(ref_hash, owned_hash);
+    }
+
+    #[test_case(vec![], "459c029558afe716" ; "empty")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }], "1b266409f3ae154e" ; "non-empty")]
+    #[test_case(vec![Package {
+        key: "key".to_string(),
+        version: "version".to_string(),
+    }, Package {
+        key: "zey".to_string(),
+        version: "version".to_string(),
+    }], "6c0185544234b6dc" ; "multiple in-order")]
+    fn lock_file_packages_ref(vec: Vec<Package>, expected: &str) {
+        // Verify LockFilePackagesRef produces the same hash as LockFilePackages
+        let refs: Vec<&Package> = vec.iter().collect();
+        let ref_hash = LockFilePackagesRef(refs).hash();
+        let owned_hash = LockFilePackages(vec).hash();
+        assert_eq!(ref_hash, owned_hash);
+        assert_eq!(ref_hash, expected);
+    }
+
+    #[test]
+    fn long_lock_file_packages_ref() {
+        let packages: Vec<Package> = (0..100)
+            .map(|i| Package {
+                key: format!("key{}", i),
+                version: format!("version{}", i),
+            })
+            .collect();
+
+        let refs: Vec<&Package> = packages.iter().collect();
+        let ref_hash = LockFilePackagesRef(refs).hash();
+        let owned_hash = LockFilePackages(packages).hash();
+        assert_eq!(ref_hash, owned_hash);
+        assert_eq!(ref_hash, "4fd770c37194168e");
     }
 }
