@@ -266,11 +266,6 @@ impl From<FileHashes> for Builder<HeapAllocator> {
     }
 }
 
-/// Reference-based hashing for [`FileHashes`] that avoids cloning the inner HashMap.
-///
-/// On the hot path, tasks need their file hashes both for computing the task hash
-/// and for storing in the expanded hashes tracker. Previously this required cloning
-/// the entire HashMap just to hash it. This implementation borrows instead.
 impl From<&FileHashes> for Builder<HeapAllocator> {
     fn from(FileHashes(file_hashes): &FileHashes) -> Self {
         let mut message = ::capnp::message::TypedBuilder::<
