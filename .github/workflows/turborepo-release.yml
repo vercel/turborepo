@@ -222,6 +222,18 @@ jobs:
             exit 1
           fi
 
+          # If this is a canary, check whether its stable version was already
+          # published to npm. This catches the window between a stable publish
+          # and the release PR merging back into main (which bumps version.txt).
+          if [[ "$VERSION" == *"-canary."* ]]; then
+            STABLE_VERSION="${VERSION%%-canary.*}"
+            if npm view "turbo@${STABLE_VERSION}" version >/dev/null 2>&1; then
+              echo "::error::turbo@${STABLE_VERSION} already exists on npm. Skipping stale canary ${VERSION}."
+              echo "::error::The release PR that bumps version.txt likely hasn't merged yet."
+              exit 1
+            fi
+          fi
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "New version: $VERSION"
           cat version.txt
@@ -757,5 +769,12 @@ jobs:
         run: |
           VERSION="${{ needs.stage.outputs.version }}"
           echo "::warning::Cleaning up release tag v${VERSION} if it exists..."
-          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/v${VERSION}" || echo "Tag may not exist"
+          HTTP_STATUS=$(gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/v${VERSION}" 2>&1) && echo "Tag deleted." || {
+            if echo "$HTTP_STATUS" | grep -q "Reference does not exist"; then
+              echo "Tag does not exist, nothing to clean up."
+            else
+              echo "::error::Failed to delete tag v${VERSION}: ${HTTP_STATUS}"
+              exit 1
+            fi
+          }
           echo "Cleanup complete. You can retry the release without using clear-staging-branch."
