@@ -180,6 +180,40 @@ impl AbsoluteSystemPath {
         Ok(())
     }
 
+    /// Creates or truncates a file with owner-only permissions (0o600),
+    /// then writes the given contents to it. On Unix, the mode is set
+    /// atomically at creation time to avoid a window of permissive access.
+    /// If the file already exists, permissions are explicitly tightened.
+    /// On Windows, this behaves identically to `create_with_contents`.
+    #[cfg(unix)]
+    pub fn create_with_contents_secret<B: AsRef<[u8]>>(
+        &self,
+        contents: B,
+    ) -> Result<(), io::Error> {
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+        let mut opts = OpenOptions::new();
+        opts.write(true).create(true).truncate(true).mode(0o600);
+        let mut f = opts.open(&self.0)?;
+        // OpenOptions::mode only applies when the file is newly created.
+        // If the file already existed, we must explicitly restrict permissions.
+        f.set_permissions(Permissions::from_mode(0o600))?;
+        f.write_all(contents.as_ref())?;
+        Ok(())
+    }
+
+    /// Creates or truncates a file with owner-only permissions (0o600),
+    /// then writes the given contents to it. On Unix, the mode is set
+    /// atomically at creation time to avoid a window of permissive access.
+    /// On Windows, this behaves identically to `create_with_contents`.
+    #[cfg(windows)]
+    pub fn create_with_contents_secret<B: AsRef<[u8]>>(
+        &self,
+        contents: B,
+    ) -> Result<(), io::Error> {
+        self.create_with_contents(contents)
+    }
+
     /// Removes a directory at this path, after removing all its contents. Use
     /// carefully! This function does not follow symbolic links and it will
     /// simply remove the symbolic link itself.
@@ -684,6 +718,50 @@ mod tests {
                 actual.permissions().mode() & PERMISSION_MASK,
                 expected.mode()
             );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_create_with_contents_secret_sets_owner_only_permissions() -> Result<()> {
+            let test_dir = tempfile::TempDir::with_prefix("secret-file")?;
+            let test_path = test_dir.path().join("secret.json");
+            let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
+
+            path.create_with_contents_secret(r#"{"token":"secret"}"#)?;
+
+            let metadata = fs::metadata(path.as_path())?;
+            let mode = metadata.permissions().mode() & PERMISSION_MASK;
+            assert_eq!(mode, 0o600, "secret file should be owner-only (0o600)");
+
+            let contents = path.read_to_string()?;
+            assert_eq!(contents, r#"{"token":"secret"}"#);
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_create_with_contents_secret_overwrites_permissive_file() -> Result<()> {
+            let test_dir = tempfile::TempDir::with_prefix("secret-overwrite")?;
+            let test_path = test_dir.path().join("secret.json");
+            let path = AbsoluteSystemPathBuf::new(test_path.to_str().unwrap())?;
+
+            // Create a file with world-readable permissions first
+            path.create_with_contents("old contents")?;
+            path.set_mode(0o644)?;
+
+            // Overwrite with secret contents
+            path.create_with_contents_secret(r#"{"token":"new_secret"}"#)?;
+
+            let metadata = fs::metadata(path.as_path())?;
+            let mode = metadata.permissions().mode() & PERMISSION_MASK;
+            assert_eq!(
+                mode, 0o600,
+                "overwritten file should have restricted permissions"
+            );
+
+            let contents = path.read_to_string()?;
+            assert_eq!(contents, r#"{"token":"new_secret"}"#);
 
             Ok(())
         }

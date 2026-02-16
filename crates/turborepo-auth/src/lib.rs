@@ -429,7 +429,7 @@ impl AuthTokens {
 
         let json_string = serde_json::to_string_pretty(&content)?;
         path.ensure_dir()?;
-        path.create_with_contents(json_string)?;
+        path.create_with_contents_secret(json_string)?;
         Ok(())
     }
 }
@@ -765,6 +765,34 @@ mod tests {
         assert!(content.contains(
             "https://vercel.com/docs/projects/project-configuration/global-configuration#auth.json"
         ));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_write_to_auth_file_sets_restricted_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let tmp_dir = tempdir().expect("Failed to create temp dir");
+        let tmp_path = tmp_dir.path().join("test_auth_perms.json");
+        let file_path = AbsoluteSystemPathBuf::try_from(tmp_path)
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let tokens = AuthTokens {
+            token: Some(SecretString::new("vca_test_token".to_string())),
+            refresh_token: Some(SecretString::new("test_refresh_token".to_string())),
+            expires_at: Some(1234567890),
+        };
+
+        tokens
+            .write_to_auth_file(&file_path)
+            .expect("Failed to write auth file");
+
+        let metadata = std::fs::metadata(file_path.as_path()).expect("Failed to read metadata");
+        let mode = metadata.permissions().mode() & 0o777;
+        assert_eq!(
+            mode, 0o600,
+            "auth file should have owner-only permissions (0o600), got {mode:o}"
+        );
     }
 
     #[tokio::test]

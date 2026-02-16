@@ -51,7 +51,7 @@ impl<T: TokenClient> LogoutOptions<T> {
         let new_content = serde_json::to_string_pretty(&data)?;
 
         // Write the updated content back to the file
-        path.create_with_contents(new_content)?;
+        path.create_with_contents_secret(new_content)?;
 
         Ok(())
     }

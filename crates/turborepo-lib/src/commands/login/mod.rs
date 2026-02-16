@@ -160,7 +160,7 @@ fn write_token(base: &CommandBase, token: Token) -> Result<(), Error> {
         })?;
 
     global_config_path
-        .create_with_contents(after)
+        .create_with_contents_secret(after)
         .map_err(|e| config::Error::FailedToSetConfig {
             config_path: global_config_path.clone(),
             error: e,
