@@ -17,12 +17,7 @@ turborepo-types = { workspace = true }
 twox-hash = "1.6.3"
 
 [dev-dependencies]
-codspeed-criterion-compat = { workspace = true }
 test-case = { workspace = true }
 
 [build-dependencies]
 capnpc = "0.24"
-
-[[bench]]
-name = "hash"
-harness = false
