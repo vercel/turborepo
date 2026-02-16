@@ -9,7 +9,7 @@ license = "MIT OR Apache-2.0"
 workspace = true
 
 [dependencies]
-futures = { version = "0.3.26" }
+futures = { workspace = true }
 itertools.workspace = true
 merge-streams = "0.1.2"
 notify = { workspace = true }
@@ -19,10 +19,10 @@ tokio = { version = "1.25.0", features = ["sync"] }
 tokio-stream = "0.1.12"
 tracing = "0.1.37"
 turbopath = { workspace = true }
-unic-segment = "0.9.0"
+unicode-segmentation = "1.12.0"
 
 [dev-dependencies]
-test-case = "3.0.0"
+test-case = { workspace = true }
 tokio = { version = "1.25.0", features = [
   "rt",
   "rt-multi-thread",

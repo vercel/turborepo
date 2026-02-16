@@ -15,14 +15,14 @@ biome_json_formatter = { workspace = true }
 biome_json_parser = { workspace = true }
 itertools = { workspace = true }
 nom = "7"
-pest = "2.7.9"
-pest_derive = "2.7.9"
+pest = "2.8.6"
+pest_derive = "2.8.6"
 rayon = "1"
 regex = "1"
 semver = "1.0.17"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 serde_json = "1.0.86"
-serde_yaml = "0.9.27"
+serde_yaml_ng = { workspace = true }
 thiserror = "1.0.38"
 tracing.workspace = true
 turbopath = { path = "../turborepo-paths" }
@@ -31,4 +31,4 @@ turborepo-errors = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true }
 pretty_assertions = "1.3"
-test-case = "3.1.0"
+test-case = { workspace = true }

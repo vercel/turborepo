@@ -117,7 +117,7 @@ pub struct PackageSnapshot {
     patched: Option<bool>,
 
     #[serde(flatten)]
-    other: Map<String, serde_yaml::Value>,
+    other: Map<String, serde_yaml_ng::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -180,7 +180,7 @@ struct LockfileSettings {
 
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
-        let this = serde_yaml::from_slice(bytes)?;
+        let this = serde_yaml_ng::from_slice(bytes)?;
         Ok(this)
     }
 
@@ -510,7 +510,7 @@ impl crate::Lockfile for PnpmLockfile {
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
-        Ok(serde_yaml::to_string(&self)?.into_bytes())
+        Ok(serde_yaml_ng::to_string(&self)?.into_bytes())
     }
 
     fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, crate::Error> {
@@ -676,9 +676,9 @@ mod tests {
     #[test_case(PNPM10_PATCH)]
     fn test_roundtrip(fixture: &[u8]) {
         let lockfile = PnpmLockfile::from_bytes(fixture).unwrap();
-        let serialized_lockfile = serde_yaml::to_string(&lockfile).unwrap();
+        let serialized_lockfile = serde_yaml_ng::to_string(&lockfile).unwrap();
         let lockfile_from_serialized =
-            serde_yaml::from_slice(serialized_lockfile.as_bytes()).unwrap();
+            serde_yaml_ng::from_slice(serialized_lockfile.as_bytes()).unwrap();
         assert_eq!(lockfile, lockfile_from_serialized);
     }
 
@@ -1107,9 +1107,13 @@ c:
   dev: false
 ";
         let original_parsed: Map<String, PackageSnapshot> =
-            serde_yaml::from_str(original_contents).unwrap();
-        let contents = serde_yaml::to_string(&original_parsed).unwrap();
-        assert_eq!(original_contents, &contents);
+            serde_yaml_ng::from_str(original_contents).unwrap();
+        let contents = serde_yaml_ng::to_string(&original_parsed).unwrap();
+
+        // serde_yml quotes strings like "0.0.0" that could be ambiguous,
+        // so we verify the round-trip by re-parsing instead of comparing raw strings
+        let reparsed: Map<String, PackageSnapshot> = serde_yaml_ng::from_str(&contents).unwrap();
+        assert_eq!(original_parsed, reparsed);
     }
 
     #[test]

@@ -13,10 +13,11 @@ use axum::{
     routing::{get, head, options, post, put},
 };
 use futures_util::StreamExt;
+use serde::Serialize;
 use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
     AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
-    User, UserResponse, VerificationResponse, telemetry::TelemetryEvent,
+    User, UserResponse, telemetry::TelemetryEvent,
 };
 
 pub const EXPECTED_TOKEN: &str = "expected_token";
@@ -89,7 +90,13 @@ pub async fn start_test_server(
         .route(
             "/registration/verify",
             get(|| async move {
-                Json(VerificationResponse {
+                #[derive(Serialize)]
+                #[serde(rename_all = "camelCase")]
+                struct MockVerificationResponse {
+                    token: String,
+                    team_id: Option<String>,
+                }
+                Json(MockVerificationResponse {
                     token: EXPECTED_TOKEN.to_string(),
                     team_id: Some(EXPECTED_SSO_TEAM_ID.to_string()),
                 })

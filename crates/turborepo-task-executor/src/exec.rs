@@ -425,7 +425,17 @@ where
             task.set_stdin(stdin);
         }
 
-        // Keep stdin open for persistent tasks
+        // For persistent tasks not using TUI, take stdin and hold it so it
+        // stays alive until the process exits. Without this, the PTY read
+        // path in `wait_with_piped_outputs` would drop stdin immediately,
+        // sending EOF to tools like Vite that exit when stdin closes.
+        let _stdin_guard = if self.takes_input {
+            process.stdin()
+        } else {
+            None
+        };
+
+        // Close stdin for non-persistent tasks
         if !self.takes_input && !self.manager.closing_stdin_ends_process() {
             process.stdin();
         }

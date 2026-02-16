@@ -1,7 +1,7 @@
 [package]
 name = "turborepo-shim"
 version = "0.1.0"
-edition = "2021"
+edition = { workspace = true }
 license = "MIT"
 description = "Shim for invoking the correct turbo binary version in Turborepo"
 
@@ -28,7 +28,7 @@ tracing = { workspace = true }
 # Serialization/Parsing
 semver = { workspace = true }
 serde = { workspace = true }
-serde_yaml = { workspace = true }
+serde_yaml_ng = { workspace = true }
 
 # Path utilities
 camino = { workspace = true }

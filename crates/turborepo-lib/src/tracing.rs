@@ -213,9 +213,9 @@ impl Drop for TurboSubscriber {
         // drop the guard so that the non-blocking file writer stops
         #[cfg(feature = "pprof")]
         if let Ok(report) = self.pprof_guard.report().build() {
-            use std::io::Write; // only import trait if we need it
+            use std::io::Write;
 
-            use prost::Message;
+            use pprof::protos::Message;
 
             let mut file = std::fs::File::create("pprof.pb").unwrap();
             let mut content = Vec::new();

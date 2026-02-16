@@ -30,7 +30,7 @@ which = { workspace = true }
 [dev-dependencies]
 git2 = { workspace = true, default-features = false }
 tempfile = { workspace = true }
-test-case = "3.1.0"
+test-case = { workspace = true }
 
 [features]
 git2 = ["dep:git2"]

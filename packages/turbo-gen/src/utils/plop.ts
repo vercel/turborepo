@@ -1,21 +1,32 @@
 import path from "node:path";
+import { createRequire } from "node:module";
 import fs from "fs-extra";
 import type { Project } from "@turbo/workspaces";
 import type { NodePlopAPI, PlopGenerator } from "node-plop";
-import nodePlop from "node-plop";
-import { Separator } from "@inquirer/prompts";
+import nodePlopModule from "node-plop";
+import * as inquirerPrompts from "@inquirer/prompts";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
 import { GeneratorError } from "./error";
+
+const { Separator } = inquirerPrompts;
+
+// Bun's require() of CJS modules with Babel interop wraps exports differently
+const nodePlop = (
+  typeof nodePlopModule === "function"
+    ? nodePlopModule
+    : (nodePlopModule as { default: typeof nodePlopModule }).default
+) as (
+  plopfilePath: string,
+  cfg?: { destBasePath?: string; force?: boolean }
+) => NodePlopAPI | Promise<NodePlopAPI>;
 
 const SUPPORTED_CONFIG_EXTENSIONS = ["ts", "js", "cjs"];
 const TURBO_GENERATOR_DIRECTORY = path.join("turbo", "generators");
 
-// config formats that will be automatically loaded from within workspaces
 const SUPPORTED_WORKSPACE_GENERATOR_CONFIGS = SUPPORTED_CONFIG_EXTENSIONS.map(
   (ext) => path.join(TURBO_GENERATOR_DIRECTORY, `config.${ext}`)
 );
 
-// config formats that will be automatically loaded from the root (support plopfiles so that users with existing configurations can use them immediately)
 const SUPPORTED_ROOT_GENERATOR_CONFIGS = [
   ...SUPPORTED_WORKSPACE_GENERATOR_CONFIGS,
   ...SUPPORTED_CONFIG_EXTENSIONS.map((ext) => path.join(`plopfile.${ext}`))
@@ -26,92 +37,91 @@ export type Generator = PlopGenerator & {
   name: string;
 };
 
-export function getPlop({
+export async function getPlop({
   project,
   configPath
 }: {
   project: Project;
   configPath?: string;
-}): NodePlopAPI | undefined {
-  // Register tsx to support TypeScript plop configs
-  // Lazy require to avoid breaking jest's module system
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const tsx = require("tsx/cjs/api") as { register: () => () => void };
-  tsx.register();
+}): Promise<NodePlopAPI | undefined> {
+  // Bun handles TypeScript transpilation natively -- no tsx registration needed.
 
-  // fetch all the workspace generator configs
   const workspaceConfigs = getWorkspaceGeneratorConfigs({ project });
   let plop: NodePlopAPI | undefined;
 
-  if (configPath) {
-    if (!fs.existsSync(configPath)) {
-      throw new GeneratorError(`No config at "${configPath}"`, {
-        type: "plop_no_config"
-      });
-    }
-
-    try {
-      plop = nodePlop(configPath, {
-        destBasePath: configPath,
-        force: false
-      });
-    } catch (e) {
-      logger.error(e);
-    }
-  } else {
-    // look for a root config
-    for (const possiblePath of SUPPORTED_ROOT_GENERATOR_CONFIGS) {
-      const plopFile = path.join(project.paths.root, possiblePath);
-      if (!fs.existsSync(plopFile)) {
-        continue;
-      }
-
-      try {
-        plop = nodePlop(plopFile, {
-          destBasePath: project.paths.root,
-          force: false
+  try {
+    if (configPath) {
+      if (!fs.existsSync(configPath)) {
+        throw new GeneratorError(`No config at "${configPath}"`, {
+          type: "plop_no_config"
         });
-        break;
-      } catch (e) {
-        logger.error(e);
       }
-    }
 
-    if (!plop && workspaceConfigs.length > 0) {
-      // if no root config, use the first workspace config as the entrypoint
-      plop = nodePlop(workspaceConfigs[0].config, {
-        destBasePath: workspaceConfigs[0].root,
-        force: false
-      });
-      workspaceConfigs.shift();
-    }
-  }
-
-  if (plop) {
-    // add in all the workspace configs
-    workspaceConfigs.forEach((c) => {
       try {
-        plop.load(c.config, {
-          destBasePath: c.root,
+        plop = await nodePlop(await bundleConfigForLoading(configPath), {
+          destBasePath: configPath,
           force: false
         });
       } catch (e) {
         logger.error(e);
       }
-    });
+    } else {
+      for (const possiblePath of SUPPORTED_ROOT_GENERATOR_CONFIGS) {
+        const plopFile = path.join(project.paths.root, possiblePath);
+        if (!fs.existsSync(plopFile)) {
+          continue;
+        }
+
+        try {
+          plop = await nodePlop(await bundleConfigForLoading(plopFile), {
+            destBasePath: project.paths.root,
+            force: false
+          });
+          break;
+        } catch (e) {
+          logger.error(e);
+        }
+      }
+
+      if (!plop && workspaceConfigs.length > 0) {
+        plop = await nodePlop(
+          await bundleConfigForLoading(workspaceConfigs[0].config),
+          {
+            destBasePath: workspaceConfigs[0].root,
+            force: false
+          }
+        );
+        workspaceConfigs.shift();
+      }
+    }
+
+    if (plop) {
+      for (const c of workspaceConfigs) {
+        try {
+          await plop.load(await bundleConfigForLoading(c.config), {
+            destBasePath: c.root,
+            force: false
+          });
+        } catch (e) {
+          logger.error(e);
+        }
+      }
+    }
+  } finally {
+    cleanupBundledConfigs();
   }
 
   return plop;
 }
 
-export function getCustomGenerators({
+export async function getCustomGenerators({
   project,
   configPath
 }: {
   project: Project;
   configPath?: string;
-}): Array<Generator | Separator> {
-  const plop = getPlop({ project, configPath });
+}): Promise<Array<Generator | InstanceType<typeof Separator>>> {
+  const plop = await getPlop({ project, configPath });
 
   if (!plop) {
     return [];
@@ -120,7 +130,6 @@ export function getCustomGenerators({
   const gens = plop.getGeneratorList();
   const gensWithDetails = gens.map((g) => plop.getGenerator(g.name));
 
-  // group by workspace
   const gensByWorkspace: Record<string, Array<Generator>> = {};
   gensWithDetails.forEach((g) => {
     const generatorDetails = g as Generator;
@@ -128,11 +137,8 @@ export function getCustomGenerators({
       if (generatorDetails.basePath === project.paths.root) {
         return false;
       }
-      // we can strip two directories to get the workspace root
       const parts = generatorDetails.basePath.split(path.sep);
-      // generators
       parts.pop();
-      // turbo
       parts.pop();
       const workspaceRoot = path.join("/", ...parts);
       return workspaceRoot === w.paths.root;
@@ -151,8 +157,8 @@ export function getCustomGenerators({
     }
   });
 
-  // add in separators to group by workspace
-  const gensWithSeparators: Array<Generator | Separator> = [];
+  const gensWithSeparators: Array<Generator | InstanceType<typeof Separator>> =
+    [];
   Object.keys(gensByWorkspace).forEach((group) => {
     gensWithSeparators.push(new Separator(group));
     gensWithSeparators.push(...gensByWorkspace[group]);
@@ -161,7 +167,7 @@ export function getCustomGenerators({
   return gensWithSeparators;
 }
 
-export function getCustomGenerator({
+export async function getCustomGenerator({
   project,
   generator,
   configPath
@@ -169,8 +175,8 @@ export function getCustomGenerator({
   project: Project;
   generator: string;
   configPath?: string;
-}): string | undefined {
-  const plop = getPlop({ project, configPath });
+}): Promise<string | undefined> {
+  const plop = await getPlop({ project, configPath });
   if (!plop) {
     return undefined;
   }
@@ -215,6 +221,124 @@ function injectTurborepoData({
   };
 }
 
+// In standalone Bun-compiled binaries, node-plop's require() cannot resolve
+// npm packages from dynamically loaded config files because the binary's module
+// resolution doesn't see the project's node_modules. We use Bun.build() at
+// runtime to bundle the user's config into a single CJS file before node-plop
+// loads it.
+//
+// A subtlety: packages that the binary itself bundles (like @inquirer/prompts)
+// won't exist on disk in the user's project. A Bun.build() plugin intercepts
+// these unresolvable bare specifiers and redirects them to a globalThis
+// registry where the binary's own module references are stored at runtime.
+const bundled = new Set<string>();
+
+// Modules bundled in the compiled binary that user configs may import.
+// These are registered on globalThis before bundling so the generated CJS
+// code can access them without require() (which can't resolve from the
+// binary's virtual filesystem).
+const BINARY_MODULES: Record<string, unknown> = {
+  "@inquirer/prompts": inquirerPrompts
+};
+
+async function bundleConfigForLoading(configPath: string): Promise<string> {
+  const BunAPI = (globalThis as unknown as { Bun?: { build: Function } }).Bun;
+  if (!BunAPI?.build) return configPath;
+
+  try {
+    const outName = path
+      .basename(configPath)
+      .replace(/\.(ts|js|cjs)$/, ".turbo-gen-bundled.cjs");
+    const outDir = path.dirname(configPath);
+    const outPath = path.join(outDir, outName);
+
+    // Expose binary-bundled modules on globalThis so the generated CJS code
+    // can reference them without going through require().
+    const g = globalThis as unknown as Record<string, unknown>;
+    g.__turboGenModules = BINARY_MODULES;
+
+    const result = await BunAPI.build({
+      entrypoints: [configPath],
+      outdir: outDir,
+      naming: outName,
+      target: "bun",
+      format: "cjs",
+      plugins: [binaryResolvePlugin(configPath)]
+    });
+
+    if (
+      !result.success ||
+      !result.outputs ||
+      (result.outputs as Array<unknown>).length === 0
+    ) {
+      return configPath;
+    }
+
+    bundled.add(outPath);
+    return outPath;
+  } catch {
+    return configPath;
+  }
+}
+
+// Bun.build() plugin: when the user's config imports a bare specifier that
+// can't be resolved from disk (the project's node_modules), check if it's a
+// module the binary ships. If so, redirect to a virtual module that reads
+// from the globalThis.__turboGenModules registry at runtime.
+function binaryResolvePlugin(configPath: string) {
+  return {
+    name: "turbo-gen-binary-resolve",
+    setup(build: {
+      onResolve: (
+        opts: { filter: RegExp },
+        cb: (args: {
+          path: string;
+          resolveDir?: string;
+        }) => { path: string; namespace: string } | undefined
+      ) => void;
+      onLoad: (
+        opts: { filter: RegExp; namespace: string },
+        cb: (args: { path: string }) => { contents: string; loader: string }
+      ) => void;
+    }) {
+      build.onResolve({ filter: /^[^./]/ }, (args) => {
+        const resolveDir = args.resolveDir || path.dirname(configPath);
+        try {
+          const localRequire = createRequire(path.join(resolveDir, "noop.js"));
+          localRequire.resolve(args.path);
+          // Found on disk — let Bun bundle it normally
+          return undefined;
+        } catch {
+          // Not on disk — redirect to virtual namespace if the binary has it
+          if (args.path in BINARY_MODULES) {
+            return { path: args.path, namespace: "turbo-gen-builtin" };
+          }
+          return undefined;
+        }
+      });
+
+      build.onLoad(
+        { filter: /.*/, namespace: "turbo-gen-builtin" },
+        (args) => ({
+          contents: `module.exports = globalThis.__turboGenModules[${JSON.stringify(args.path)}];`,
+          loader: "js"
+        })
+      );
+    }
+  };
+}
+
+function cleanupBundledConfigs() {
+  for (const p of bundled) {
+    try {
+      fs.removeSync(p);
+    } catch {
+      // ignore cleanup failures
+    }
+  }
+  bundled.clear();
+}
+
 function getWorkspaceGeneratorConfigs({ project }: { project: Project }) {
   const workspaceGeneratorConfigs: Array<{
     config: string;
@@ -244,7 +368,7 @@ export async function runCustomGenerator({
   bypassArgs?: Array<string>;
   configPath?: string;
 }): Promise<void> {
-  const plop = getPlop({ project, configPath });
+  const plop = await getPlop({ project, configPath });
   if (!plop) {
     throw new GeneratorError("Unable to load generators", {
       type: "plop_unable_to_load_config"
@@ -269,7 +393,6 @@ export async function runCustomGenerator({
   );
 
   if (results.failures.length > 0) {
-    // log all errors:
     results.failures.forEach((f) => {
       if (f instanceof Error) {
         logger.error(`Error - ${f.message}`);

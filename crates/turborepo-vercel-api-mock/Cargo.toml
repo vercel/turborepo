@@ -12,8 +12,9 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true }
-futures-util = "0.3.28"
+futures-util = "0.3.31"
 port_scanner = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 turborepo-vercel-api = { workspace = true }

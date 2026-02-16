@@ -5,7 +5,6 @@
 mod config;
 mod imports;
 mod tags;
-mod tsconfig;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -20,7 +19,6 @@ use git2::Repository;
 use globwalk::Settings;
 use indicatif::{ProgressBar, ProgressIterator};
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
-use oxc_resolver::Resolver;
 use regex::Regex;
 use swc_common::{
     FileName, SourceMap, Span,
@@ -39,8 +37,9 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName, PackageNode};
 use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, color};
+use unrs_resolver::Resolver;
 
-use crate::{imports::DependencyLocations, tsconfig::TsConfigLoader};
+use crate::imports::DependencyLocations;
 
 pub trait PackageGraphProvider {
     fn packages(&self) -> Box<dyn Iterator<Item = (&PackageName, &PackageInfo)> + '_>;
@@ -317,7 +316,8 @@ impl BoundariesChecker {
     }
 
     fn is_potential_package_name(import: &str) -> bool {
-        PACKAGE_NAME_REGEX.is_match(import)
+        let base = imports::get_package_name(import);
+        PACKAGE_NAME_REGEX.is_match(&base)
     }
 
     /// Patch a file with boundaries-ignore comments
@@ -566,7 +566,6 @@ impl BoundariesChecker {
             Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
         let mut not_supported_extensions = HashSet::new();
-        let mut tsconfig_loader = TsConfigLoader::new(&resolver);
 
         for file_path in &files {
             if let Some(ext @ ("svelte" | "vue")) = file_path.extension() {
@@ -582,7 +581,6 @@ impl BoundariesChecker {
             };
             Self::process_file(
                 ctx,
-                &mut tsconfig_loader,
                 result,
                 package_name,
                 &package_root,
@@ -652,7 +650,6 @@ impl BoundariesChecker {
             Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
 
         let mut not_supported_extensions = HashSet::new();
-        let mut tsconfig_loader = TsConfigLoader::new(&resolver);
 
         for file_path in &files {
             if let Some(ext @ ("svelte" | "vue")) = file_path.extension() {
@@ -662,7 +659,6 @@ impl BoundariesChecker {
 
             Self::process_file(
                 ctx,
-                &mut tsconfig_loader,
                 result,
                 package_name,
                 &package_root,
@@ -690,7 +686,6 @@ impl BoundariesChecker {
     #[allow(clippy::too_many_arguments)]
     async fn process_file<G, T>(
         _ctx: &BoundariesContext<'_, G, T>,
-        tsconfig_loader: &mut TsConfigLoader<'_>,
         result: &mut BoundariesResult,
         package_name: &PackageName,
         package_root: &AbsoluteSystemPath,
@@ -767,7 +762,6 @@ impl BoundariesChecker {
         for (import, span, import_type) in finder.imports() {
             imports::check_import(
                 &comments,
-                tsconfig_loader,
                 result,
                 &source_file,
                 package_name,
@@ -797,6 +791,13 @@ mod tests {
             "@scope/package"
         ));
         assert!(BoundariesChecker::is_potential_package_name("my-package"));
+        assert!(BoundariesChecker::is_potential_package_name("lodash/fp"));
+        assert!(BoundariesChecker::is_potential_package_name(
+            "@scope/package/sub"
+        ));
+        assert!(BoundariesChecker::is_potential_package_name(
+            "@scope/package/deeply/nested"
+        ));
         assert!(!BoundariesChecker::is_potential_package_name("./relative"));
         assert!(!BoundariesChecker::is_potential_package_name("../parent"));
         assert!(!BoundariesChecker::is_potential_package_name("/absolute"));

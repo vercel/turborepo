@@ -88,6 +88,8 @@ turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-vt100 = { path = "crates/turborepo-vt100" }
 
 reqwest = { version = "0.12.28", default-features = false }
+rustls-native-certs = "0.8.3"
+hyper-rustls = { version = "0.27.7", default-features = false }
 
 anyhow = "1.0.69"
 assert_cmd = "2.0.8"
@@ -112,25 +114,25 @@ camino = { version = "1.1.4", features = ["serde1"] }
 chrono = "0.4.23"
 clap = "4.5.16"
 clap_complete = "4.5.24"
-console = "0.15.5"
+console = "0.16.0"
 crossbeam-channel = "0.5.15"
 dashmap = "5.4.0"
 derive_setters = "0.1.6"
-dialoguer = "0.11.0"
+dialoguer = "0.12.0"
 dunce = "1.0.3"
 either = "1.9.0"
-futures = "0.3.30"
-git2 = { version = "0.20.0", default-features = false }
+futures = "0.3.31"
+git2 = { version = "0.20.4", default-features = false }
 hex = "0.4.3"
 httpmock = { version = "0.8.0", default-features = false }
-indicatif = "0.17.3"
+indicatif = "0.18.3"
 indoc = "2.0.0"
 insta = { version = "1.34.0", features = ["json"] }
 itertools = "0.10.5"
-merge = "0.1.0"
+merge = "0.2.0"
 notify = "6.1.1"
 owo-colors = "3.5.0"
-oxc_resolver = "4.2.0"
+unrs_resolver = "1.11.1"
 path-clean = "1.0.1"
 petgraph = "0.6.5"
 port_scanner = "0.1.5"
@@ -139,17 +141,18 @@ radix_trie = "0.2.1"
 rand = "0.8.5"
 ratatui = "0.30.0"
 regex = "1.7.0"
+secrecy = "0.10.3"
 semver = "1.0.16"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.93"
-serde_yaml = "0.9.17"
+serde_yaml_ng = "0.10.0"
 sha2 = "0.10.6"
 swc_common = "18.0.1"
 swc_ecma_ast = "20.0.0"
 swc_ecma_parser = "33.0.0"
 swc_ecma_visit = "20.0.0"
 tempfile = "3.3.0"
-test-case = "3.0.0"
+test-case = "3.3.1"
 thiserror = "2.0.18"
 tiny-gradient = "0.1.0"
 tokio = "1.25.0"

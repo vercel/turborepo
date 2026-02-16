@@ -1,3 +1,9 @@
+import {
+  transformerNotationDiff,
+  transformerNotationFocus,
+  transformerNotationHighlight,
+  transformerNotationWordHighlight
+} from "@shikijs/transformers";
 import { remarkMdxMermaid } from "fumadocs-core/mdx-plugins";
 import {
   defineConfig,
@@ -24,7 +30,38 @@ const transformerAddLanguage: ShikiTransformer = {
 export const docs = defineDocs({
   dir: "content/docs",
   docs: {
-    schema: frontmatterSchema,
+    schema: frontmatterSchema.extend({
+      product: z.string().optional(),
+      url: z
+        .string()
+        .regex(/^\/.*/, { message: "url must start with a slash" })
+        .optional(),
+      type: z
+        .enum([
+          "conceptual", // Explains what something is and why it exists. Architecture, mental models, design decisions.
+          "guide", // Walks through how to accomplish a goal. Tutorials, getting started, workflows.
+          "reference", // Lookup-oriented, exhaustive details. API docs, config options, function signatures.
+          "troubleshooting", // Diagnoses problems and solutions. FAQs, errors, known issues, debugging guides.
+          "integration", // Connects multiple systems. 3rd-party setup, plugins, webhooks, migrations.
+          "overview" // High-level introductions. Landing pages, changelogs, release notes.
+        ])
+        .optional(),
+      prerequisites: z
+        .array(
+          z.string().regex(/^\/.*/, {
+            message: "prerequisites must start with a slash"
+          })
+        )
+        .optional(),
+      related: z
+        .array(
+          z
+            .string()
+            .regex(/^\/.*/, { message: "related must start with a slash" })
+        )
+        .optional(),
+      summary: z.string().optional()
+    }),
     postprocess: {
       includeProcessedMarkdown: true
     }
@@ -38,6 +75,38 @@ export const { docs: blogDocs, meta: blogMeta } = defineDocs({
   dir: "content/blog",
   docs: {
     schema: frontmatterSchema
+      .extend({
+        product: z.string().optional(),
+        url: z
+          .string()
+          .regex(/^\/.*/, { message: "url must start with a slash" })
+          .optional(),
+        type: z
+          .enum([
+            "conceptual", // Explains what something is and why it exists. Architecture, mental models, design decisions.
+            "guide", // Walks through how to accomplish a goal. Tutorials, getting started, workflows.
+            "reference", // Lookup-oriented, exhaustive details. API docs, config options, function signatures.
+            "troubleshooting", // Diagnoses problems and solutions. FAQs, errors, known issues, debugging guides.
+            "integration", // Connects multiple systems. 3rd-party setup, plugins, webhooks, migrations.
+            "overview" // High-level introductions. Landing pages, changelogs, release notes.
+          ])
+          .optional(),
+        prerequisites: z
+          .array(
+            z.string().regex(/^\/.*/, {
+              message: "prerequisites must start with a slash"
+            })
+          )
+          .optional(),
+        related: z
+          .array(
+            z
+              .string()
+              .regex(/^\/.*/, { message: "related must start with a slash" })
+          )
+          .optional(),
+        summary: z.string().optional()
+      })
       .extend({
         description: z.string(),
         date: z.string(),
@@ -55,12 +124,45 @@ export const { docs: blogDocs, meta: blogMeta } = defineDocs({
 export const { docs: externalBlogDocs, meta: externalBlogMeta } = defineDocs({
   dir: "content/external-blog",
   docs: {
-    schema: frontmatterSchema.extend({
-      description: z.string(),
-      date: z.string(),
-      isExternal: z.literal(true),
-      href: z.string()
-    })
+    schema: frontmatterSchema
+      .extend({
+        product: z.string().optional(),
+        url: z
+          .string()
+          .regex(/^\/.*/, { message: "url must start with a slash" })
+          .optional(),
+        type: z
+          .enum([
+            "conceptual", // Explains what something is and why it exists. Architecture, mental models, design decisions.
+            "guide", // Walks through how to accomplish a goal. Tutorials, getting started, workflows.
+            "reference", // Lookup-oriented, exhaustive details. API docs, config options, function signatures.
+            "troubleshooting", // Diagnoses problems and solutions. FAQs, errors, known issues, debugging guides.
+            "integration", // Connects multiple systems. 3rd-party setup, plugins, webhooks, migrations.
+            "overview" // High-level introductions. Landing pages, changelogs, release notes.
+          ])
+          .optional(),
+        prerequisites: z
+          .array(
+            z.string().regex(/^\/.*/, {
+              message: "prerequisites must start with a slash"
+            })
+          )
+          .optional(),
+        related: z
+          .array(
+            z
+              .string()
+              .regex(/^\/.*/, { message: "related must start with a slash" })
+          )
+          .optional(),
+        summary: z.string().optional()
+      })
+      .extend({
+        description: z.string(),
+        date: z.string(),
+        isExternal: z.literal(true),
+        href: z.string()
+      })
   }
 });
 
@@ -71,9 +173,42 @@ export const { docs: openapiDocs, meta: openapiMeta } = defineDocs({
 export const { docs: extraDocs, meta: extraMeta } = defineDocs({
   dir: "content/extra",
   docs: {
-    schema: frontmatterSchema.extend({
-      description: z.string()
-    })
+    schema: frontmatterSchema
+      .extend({
+        product: z.string().optional(),
+        url: z
+          .string()
+          .regex(/^\/.*/, { message: "url must start with a slash" })
+          .optional(),
+        type: z
+          .enum([
+            "conceptual", // Explains what something is and why it exists. Architecture, mental models, design decisions.
+            "guide", // Walks through how to accomplish a goal. Tutorials, getting started, workflows.
+            "reference", // Lookup-oriented, exhaustive details. API docs, config options, function signatures.
+            "troubleshooting", // Diagnoses problems and solutions. FAQs, errors, known issues, debugging guides.
+            "integration", // Connects multiple systems. 3rd-party setup, plugins, webhooks, migrations.
+            "overview" // High-level introductions. Landing pages, changelogs, release notes.
+          ])
+          .optional(),
+        prerequisites: z
+          .array(
+            z.string().regex(/^\/.*/, {
+              message: "prerequisites must start with a slash"
+            })
+          )
+          .optional(),
+        related: z
+          .array(
+            z
+              .string()
+              .regex(/^\/.*/, { message: "related must start with a slash" })
+          )
+          .optional(),
+        summary: z.string().optional()
+      })
+      .extend({
+        description: z.string()
+      })
   }
 });
 
@@ -91,7 +226,13 @@ export default defineConfig({
         light: theme,
         dark: theme
       },
-      transformers: [transformerAddLanguage]
+      transformers: [
+        transformerNotationHighlight({ matchAlgorithm: "v3" }),
+        transformerNotationWordHighlight({ matchAlgorithm: "v3" }),
+        transformerNotationDiff({ matchAlgorithm: "v3" }),
+        transformerNotationFocus({ matchAlgorithm: "v3" }),
+        transformerAddLanguage
+      ]
     }
   },
   plugins: [lastModified()]

@@ -28,8 +28,7 @@ stage-release:
 	@test "" != "`git diff -- $(CLI_DIR)/../version.txt`" || (echo "Refusing to publish with unupdated version.txt" && false)
 
 	# Fail if git tag already exists (this version was already successfully released)
-	@git fetch origin --tags
-	@if git rev-parse "v$(TURBO_VERSION)" >/dev/null 2>&1; then \
+	@if git ls-remote --tags origin "refs/tags/v$(TURBO_VERSION)" | grep -q .; then \
 		echo "Error: Tag v$(TURBO_VERSION) already exists. This version was already released." && \
 		exit 1; \
 	fi
@@ -47,15 +46,15 @@ stage-release:
 	fi
 
 	# Prepare the packages.
-	cd $(CLI_DIR)/../packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-gen && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version
-	cd $(CLI_DIR)/../packages/turbo-types && pnpm version "$(TURBO_VERSION)" --allow-same-version
+	cd $(CLI_DIR)/../packages/turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/create-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/turbo-codemod && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/turbo-ignore && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/turbo-workspaces && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/turbo-gen && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/eslint-plugin-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/eslint-config-turbo && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
+	cd $(CLI_DIR)/../packages/turbo-types && pnpm version "$(TURBO_VERSION)" --allow-same-version --no-git-tag-version
 
 	# Update turborepo skill version (in YAML frontmatter metadata block only)
 	node -e "const fs=require('fs'),p='$(CLI_DIR)/../skills/turborepo/SKILL.md',c=fs.readFileSync(p,'utf-8');fs.writeFileSync(p,c.replace(/^(---\n[\s\S]*?metadata:\n\s*version:\s*).+?(\n[\s\S]*?---)/,'\$$1$(TURBO_VERSION)\$$2'))"
@@ -67,9 +66,24 @@ stage-release:
 .PHONY: create-release-tag
 create-release-tag:
 	@echo "Creating release tag v$(TURBO_VERSION)..."
-	git tag "v$(TURBO_VERSION)"
-	git push origin "v$(TURBO_VERSION)"
-	@echo "Release tag v$(TURBO_VERSION) created and pushed."
+	@REMOTE_TAG_SHA=$$(git ls-remote --tags origin "refs/tags/v$(TURBO_VERSION)" | awk '{print $$1}'); \
+	LOCAL_SHA=$$(git rev-parse HEAD); \
+	if [ -n "$$REMOTE_TAG_SHA" ]; then \
+		if [ "$$REMOTE_TAG_SHA" = "$$LOCAL_SHA" ]; then \
+			echo "Tag v$(TURBO_VERSION) already exists on remote at the correct commit. Skipping."; \
+		else \
+			echo "Warning: Tag v$(TURBO_VERSION) exists on remote but points to $$REMOTE_TAG_SHA, expected $$LOCAL_SHA." && \
+			echo "Replacing incorrect tag..." && \
+			git push origin ":refs/tags/v$(TURBO_VERSION)" && \
+			git tag -f "v$(TURBO_VERSION)" && \
+			git push origin "v$(TURBO_VERSION)" && \
+			echo "Release tag v$(TURBO_VERSION) replaced and pushed."; \
+		fi; \
+	else \
+		git tag "v$(TURBO_VERSION)" && \
+		git push origin "v$(TURBO_VERSION)" && \
+		echo "Release tag v$(TURBO_VERSION) created and pushed."; \
+	fi
 
 .PHONY: publish-turbo
 publish-turbo: build

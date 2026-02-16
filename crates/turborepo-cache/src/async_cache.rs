@@ -222,7 +222,7 @@ mod tests {
     use futures::future::try_join_all;
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_api_client::{APIAuth, APIClient};
+    use turborepo_api_client::{APIAuth, APIClient, SecretString};
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
@@ -288,7 +288,7 @@ mod tests {
         )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
-            token: "my-token".to_string(),
+            token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
         let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
@@ -379,7 +379,7 @@ mod tests {
         )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
-            token: "my-token".to_string(),
+            token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
         let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
@@ -476,7 +476,7 @@ mod tests {
         )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
-            token: "my-token".to_string(),
+            token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
         let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;

@@ -9,8 +9,8 @@ use turborepo_ui::ColorConfig;
 use crate::{
     cli,
     config::{
-        resolve_turbo_config_path, ConfigurationOptions, Error as ConfigError,
-        TurborepoConfigBuilder,
+        resolve_configuration_from_args, resolve_turbo_config_path, ConfigurationOptions,
+        Error as ConfigError,
     },
     opts::Opts,
     Args,
@@ -80,57 +80,7 @@ impl CommandBase {
         repo_root: &AbsoluteSystemPath,
         args: &Args,
     ) -> Result<ConfigurationOptions, ConfigError> {
-        TurborepoConfigBuilder::new(repo_root)
-            // The below should be deprecated and removed.
-            .with_api_url(args.api.clone())
-            .with_login_url(args.login.clone())
-            .with_team_slug(args.team.clone())
-            .with_token(args.token.clone())
-            .with_timeout(args.remote_cache_timeout)
-            .with_preflight(args.preflight.then_some(true))
-            .with_ui(args.ui)
-            .with_allow_no_package_manager(
-                args.dangerously_disable_package_manager_check
-                    .then_some(true),
-            )
-            .with_daemon(args.run_args().and_then(|args| args.daemon()))
-            .with_env_mode(
-                args.execution_args()
-                    .and_then(|execution_args| execution_args.env_mode),
-            )
-            .with_cache_dir(
-                args.execution_args()
-                    .and_then(|execution_args| execution_args.cache_dir.clone()),
-            )
-            .with_root_turbo_json_path(
-                args.root_turbo_json
-                    .clone()
-                    .map(AbsoluteSystemPathBuf::from_cwd)
-                    .transpose()?,
-            )
-            .with_force(
-                args.run_args()
-                    .and_then(|args| args.force.map(|value| value.unwrap_or(true))),
-            )
-            .with_log_order(args.execution_args().and_then(|args| args.log_order))
-            .with_remote_only(args.run_args().and_then(|args| args.remote_only()))
-            .with_remote_cache_read_only(
-                args.run_args()
-                    .and_then(|args| args.remote_cache_read_only()),
-            )
-            .with_cache(
-                args.run_args()
-                    .and_then(|args| args.cache.as_deref())
-                    .map(|cache| cache.parse())
-                    .transpose()?,
-            )
-            .with_run_summary(args.run_args().and_then(|args| args.summarize()))
-            .with_allow_no_turbo_json(args.allow_no_turbo_json.then_some(true))
-            .with_concurrency(
-                args.execution_args()
-                    .and_then(|args| args.concurrency.clone()),
-            )
-            .build()
+        resolve_configuration_from_args(repo_root, args)
     }
 
     pub fn opts(&self) -> &Opts {
@@ -163,7 +113,7 @@ impl CommandBase {
 
         Ok(Some(APIAuth {
             team_id: team_id.map(|s| s.to_string()),
-            token: token.to_string(),
+            token: token.clone(),
             team_slug: team_slug.map(|s| s.to_string()),
         }))
     }

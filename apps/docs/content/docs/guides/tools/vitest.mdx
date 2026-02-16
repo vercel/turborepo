@@ -1,6 +1,15 @@
 ---
 title: Vitest
 description: Learn how to use Vitest in a monorepo.
+product: turborepo
+type: integration
+summary: Configure Vitest for cached, parallelized testing across monorepo packages with optional merged coverage.
+prerequisites:
+  - /docs/crafting-your-repository/configuring-tasks
+related:
+  - /docs/guides/tools/jest
+  - /docs/guides/tools/playwright
+  - /docs/guides/tools/typescript
 ---
 
 import { CopyPrompt } from "@/components/copy-prompt";
@@ -193,16 +202,51 @@ Turborepo tasks to accomplish will look like:
 
 With this in place, run `turbo test && turbo report` to create a merged coverage report.
 
-<Callout type="info">
-  The [`with-vitest`
-  example](https://github.com/vercel/turborepo/tree/main/examples/with-vitest)
-  shows a complete example that you may adapt for your needs. You can get
-  started with it quickly using `npx create-turbo@latest --example with-vitest`.
-</Callout>
-
 ### Using Vitest's Projects feature
 
-The Vitest Projects feature doesn't follow the same model as a [package manager Workspace](/docs/crafting-your-repository/structuring-a-repository). Instead, it uses a root script that then reaches out into each package in the repository to handle the tests in that respective package.
+The Vitest Projects feature doesn't follow the same model as a [package manager Workspace](/docs/crafting-your-repository/structuring-a-repository). Instead, it uses a root configuration that discovers and runs tests across multiple projects from a single command.
+
+#### Root configuration behavior
+
+When using projects, the root `vitest.config.ts` serves as the entry point that defines which projects to include via the `projects` array. Each project can have its own configuration that extends or overrides the root settings:
+
+```ts title="./vitest.config.ts"
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    // Root-level config applies to ALL projects
+    globals: true,
+    environment: "jsdom",
+  },
+  projects: [
+    {
+      name: "web",
+      root: "./apps/web",
+      test: {
+        // Project-specific config
+        include: ["src/**/*.test.ts"],
+      },
+    },
+    {
+      name: "ui",
+      root: "./packages/ui",
+      test: {
+        include: ["src/**/*.spec.ts"],
+      },
+    },
+  ],
+});
+```
+
+**Important:** Project-level configs in the `projects` array cannot extend the root config's `test` object directly. Instead, share configuration by:
+
+1. Creating a shared configuration file that projects import
+2. Using TypeScript to export a config object that projects spread into their settings
+
+<Callout type="info">
+  This separation ensures each project can be configured independently while sharing common settings through imports.
+</Callout>
 
 In this model, there aren't package boundaries, from a modern JavaScript ecosystem perspective. This means you can't rely on Turborepo's caching, since Turborepo leans on those package boundaries.
 
@@ -223,6 +267,23 @@ Because of this, you'll need to use [Root Tasks](/docs/crafting-your-repository/
 ```
 
 **Notably, the file inputs for a Root Task include all packages by default, so any change in any package will result in a cache miss.** While this does make for a simplified configuration to create merged coverage reports, you'll be missing out on opportunities to cache repeated work.
+
+#### Running specific projects
+
+When using Vitest's projects feature, you can run tests for specific projects using the `--project` (or `-p`) CLI flag:
+
+```bash title="Terminal"
+# Run tests for a specific project
+vitest run --project=web
+
+# Run tests for multiple projects
+vitest run --project=web --project=ui
+
+# Watch mode for a specific project
+vitest --watch --project=web
+```
+
+This is useful when you want to run tests for only certain packages without affecting the entire monorepo's test suite.
 
 ### Using a hybrid approach
 

@@ -17,7 +17,6 @@ globwalk = { path = "../turborepo-globwalk" }
 indicatif = { workspace = true }
 itertools = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
-oxc_resolver = { workspace = true }
 regex = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -36,8 +35,10 @@ turborepo-errors = { workspace = true }
 turborepo-lockfiles = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-ui = { workspace = true }
+unrs_resolver = { workspace = true }
 
 [dev-dependencies]
+tempfile = { workspace = true }
 test-case = { workspace = true }
 
 [features]

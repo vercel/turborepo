@@ -6,15 +6,20 @@ license = "MIT"
 
 [dependencies]
 dashmap = "6.1"
-futures-util = "0.3"
+futures-util = "0.3.31"
 http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }
-hyper-rustls = { version = "0.27.7", default-features = false, features = [
+hyper-rustls = { workspace = true, features = [
   "http1",
   "native-tokio",
   "ring",
 ] }
-hyper-util = { version = "0.1", features = ["full"] }
+hyper-util = { version = "0.1", features = [
+  "client-legacy",
+  "http1",
+  "http2",
+  "tokio",
+] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros"] }
 tokio-tungstenite = "0.21"

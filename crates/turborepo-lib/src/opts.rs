@@ -123,7 +123,7 @@ impl Opts {
 
         let api_auth = config.token().map(|token| APIAuth {
             team_id: team_id.map(|s| s.to_string()),
-            token: token.to_string(),
+            token: token.into(),
             team_slug: team_slug.map(|s| s.to_string()),
         });
 
@@ -391,7 +391,7 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
         let timeout = inputs.config.timeout();
         let upload_timeout = inputs.config.upload_timeout();
         let preflight = inputs.config.preflight();
-        let token = inputs.config.token().map(|s| s.to_string());
+        let token = inputs.config.token().map(|s| s.into());
         let team_id = inputs.config.team_id().map(|s| s.to_string());
         let team_slug = inputs.config.team_slug().map(|s| s.to_string());
         let login_url = inputs.config.login_url().to_string();

@@ -59,7 +59,7 @@ pub struct LogoutOptions<T> {
 
 /// Attempts to get a valid token with automatic refresh if expired.
 /// Falls back to turborepo/config.json if refresh fails.
-pub async fn get_token_with_refresh() -> Result<Option<String>, Error> {
+pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::SecretString>, Error> {
     use crate::{TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token};
 
     let vercel_config_dir = match turborepo_dirs::vercel_config_dir()? {
@@ -74,7 +74,7 @@ pub async fn get_token_with_refresh() -> Result<Option<String>, Error> {
     if let Some(token) = &auth_tokens.token {
         if auth_tokens.is_expired() {
             // Only attempt refresh for Vercel tokens that start with "vca_"
-            if token.starts_with("vca_")
+            if token.expose().starts_with("vca_")
                 && auth_tokens.refresh_token.is_some()
                 && let Ok(new_tokens) = auth_tokens.refresh_token().await
             {
@@ -86,7 +86,7 @@ pub async fn get_token_with_refresh() -> Result<Option<String>, Error> {
                 let turbo_config_path =
                     config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
                 if let Ok(turbo_token) = Token::from_file(&turbo_config_path) {
-                    return Ok(Some(turbo_token.into_inner().to_string()));
+                    return Ok(Some(turbo_token.into_inner().clone()));
                 }
             }
 
@@ -100,7 +100,7 @@ pub async fn get_token_with_refresh() -> Result<Option<String>, Error> {
             let turbo_config_path =
                 config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
             if let Ok(turbo_token) = Token::from_file(&turbo_config_path) {
-                return Ok(Some(turbo_token.into_inner().to_string()));
+                return Ok(Some(turbo_token.into_inner().clone()));
             }
         }
         Ok(None)
@@ -138,8 +138,8 @@ mod tests {
         let auth_file = auth_dir.join_component("auth.json");
 
         let auth_tokens = AuthTokens {
-            token: Some(token.to_string()),
-            refresh_token: refresh_token.map(|s| s.to_string()),
+            token: Some(token.into()),
+            refresh_token: refresh_token.map(|s| s.into()),
             expires_at,
         };
 
@@ -182,7 +182,14 @@ mod tests {
 
         // Verify the token is expired and has vca_ prefix
         assert!(auth_tokens.is_expired());
-        assert!(auth_tokens.token.as_ref().unwrap().starts_with("vca_"));
+        assert!(
+            auth_tokens
+                .token
+                .as_ref()
+                .unwrap()
+                .expose()
+                .starts_with("vca_")
+        );
         assert!(auth_tokens.refresh_token.is_some());
 
         // The actual refresh would happen in get_token_with_refresh, but we
@@ -214,7 +221,14 @@ mod tests {
 
         // Verify the token is expired and does NOT have vca_ prefix
         assert!(auth_tokens.is_expired());
-        assert!(!auth_tokens.token.as_ref().unwrap().starts_with("vca_"));
+        assert!(
+            !auth_tokens
+                .token
+                .as_ref()
+                .unwrap()
+                .expose()
+                .starts_with("vca_")
+        );
         assert!(auth_tokens.refresh_token.is_some());
 
         // The key behavior: legacy tokens should NOT attempt refresh even if
@@ -247,7 +261,14 @@ mod tests {
 
         // Verify the token is expired, has vca_ prefix, but no refresh token
         assert!(auth_tokens.is_expired());
-        assert!(auth_tokens.token.as_ref().unwrap().starts_with("vca_"));
+        assert!(
+            auth_tokens
+                .token
+                .as_ref()
+                .unwrap()
+                .expose()
+                .starts_with("vca_")
+        );
         assert!(auth_tokens.refresh_token.is_none());
 
         // Even vca_ tokens should fall back to turbo config if they don't have
@@ -273,7 +294,14 @@ mod tests {
 
         // Verify the token is NOT expired
         assert!(!auth_tokens.is_expired());
-        assert!(auth_tokens.token.as_ref().unwrap().starts_with("vca_"));
+        assert!(
+            auth_tokens
+                .token
+                .as_ref()
+                .unwrap()
+                .expose()
+                .starts_with("vca_")
+        );
 
         // Non-expired tokens should be returned as-is without any refresh
         // attempt
@@ -298,7 +326,14 @@ mod tests {
 
         // Verify the token is NOT expired
         assert!(!auth_tokens.is_expired());
-        assert!(!auth_tokens.token.as_ref().unwrap().starts_with("vca_"));
+        assert!(
+            !auth_tokens
+                .token
+                .as_ref()
+                .unwrap()
+                .expose()
+                .starts_with("vca_")
+        );
 
         // Non-expired legacy tokens should be returned as-is
     }
@@ -320,8 +355,10 @@ mod tests {
 
         for (token, should_attempt_refresh) in test_cases {
             let _auth_tokens = AuthTokens {
-                token: Some(token.to_string()),
-                refresh_token: Some("refresh_token".to_string()),
+                token: Some(turborepo_api_client::SecretString::new(token.to_string())),
+                refresh_token: Some(turborepo_api_client::SecretString::new(
+                    "refresh_token".to_string(),
+                )),
                 expires_at: Some(current_time - 3600), // Expired
             };
 

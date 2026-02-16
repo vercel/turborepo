@@ -98,7 +98,7 @@ impl ManualLoginOptions<'_> {
                 // figure out
                 let ask_for_team_id = dialoguer::Select::new()
                     .with_prompt("How do you want to specify your team?")
-                    .items(&["id", "slug"])
+                    .items(["id", "slug"])
                     .default(0)
                     .interact()?
                     == 0;

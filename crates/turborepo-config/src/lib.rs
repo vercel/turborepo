@@ -194,6 +194,7 @@ impl From<turborepo_turbo_json::LoaderError> for Error {
 // of the code that want to display the config can tune how they
 // want to display and what fields they want to include.
 #[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable, Merge, Setters)]
+#[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 // Generate setters for the builder type that set these values on its override_config field
 #[setters(
@@ -540,6 +541,12 @@ impl TurborepoConfigBuilder {
         self
     }
 
+    /// Applies a fully-formed override layer as the highest-precedence source.
+    pub fn with_override_config(mut self, override_config: ConfigurationOptions) -> Self {
+        self.override_config.merge(override_config);
+        self
+    }
+
     fn get_environment(&self) -> HashMap<OsString, OsString> {
         self.environment
             .clone()
@@ -624,8 +631,8 @@ mod test {
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
     use crate::{
-        ConfigurationOptions, TurborepoConfigBuilder, CONFIG_FILE, CONFIG_FILE_JSONC,
-        DEFAULT_API_URL, DEFAULT_LOGIN_URL, DEFAULT_TIMEOUT,
+        CONFIG_FILE, CONFIG_FILE_JSONC, ConfigurationOptions, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
+        DEFAULT_TIMEOUT, TurborepoConfigBuilder,
     };
 
     #[test]

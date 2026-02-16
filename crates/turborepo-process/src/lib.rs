@@ -14,6 +14,8 @@
 
 mod child;
 mod command;
+#[cfg(windows)]
+mod job_object;
 
 use std::{
     collections::HashMap,

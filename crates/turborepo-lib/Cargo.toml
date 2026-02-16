@@ -64,14 +64,13 @@ merge = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
 notify = { workspace = true }
 owo-colors = { workspace = true }
-oxc_resolver = { workspace = true }
 petgraph = { workspace = true }
 pidlock = { path = "../turborepo-pidlock" }
-pprof = { version = "0.12.1", features = [
+pprof = { version = "0.15.0", features = [
   "prost-codec",
   "frame-pointer",
 ], optional = true }
-prost = "0.13"
+prost = "0.14"
 radix_trie = { workspace = true }
 rand = { workspace = true }
 rayon = "1.7.0"
@@ -80,7 +79,7 @@ reqwest = { workspace = true, default-features = false, features = ["json"] }
 semver = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-serde_yaml = { workspace = true }
+serde_yaml_ng = { workspace = true }
 sha2 = { workspace = true }
 shared_child = "1.0.0"
 swc_common = { workspace = true }
@@ -92,7 +91,7 @@ time = "0.3.20"
 tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = { version = "0.1.12", features = ["net"] }
-tonic = { version = "0.12.3", features = ["transport"] }
+tonic = { version = "0.14", features = ["transport"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
 tracing-appender = "0.2.2"
 tracing-chrome = "0.7.1"
@@ -143,10 +142,11 @@ turborepo-types = { workspace = true }
 turborepo-ui = { workspace = true }
 turborepo-unescape = { workspace = true }
 turborepo-vercel-api = { path = "../turborepo-vercel-api" }
+unrs_resolver = { workspace = true }
 wax = { workspace = true }
 webbrowser = { workspace = true }
 which = { workspace = true }
 
 
 [target.'cfg(target_os = "windows")'.dependencies]
-async-io = "1.12.0"
+async-io = "2"

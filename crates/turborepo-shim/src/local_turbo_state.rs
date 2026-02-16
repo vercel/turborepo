@@ -104,7 +104,7 @@ impl LocalTurboState {
         let yarn_rc_filepath = root_path.as_path().join(yarn_rc_filename);
 
         let yarn_rc_yaml_string = fs::read_to_string(yarn_rc_filepath).unwrap_or_default();
-        let yarn_rc: YarnRc = serde_yaml::from_str(&yarn_rc_yaml_string).unwrap_or_default();
+        let yarn_rc: YarnRc = serde_yaml_ng::from_str(&yarn_rc_yaml_string).unwrap_or_default();
 
         root_path.as_path().join(yarn_rc.pnp_unplugged_folder)
     }

@@ -3,9 +3,6 @@ use std::{collections::HashMap, fmt, sync::Arc};
 use camino::{Utf8Path, Utf8PathBuf};
 use globwalk::WalkType;
 use miette::{Diagnostic, Report, SourceSpan};
-use oxc_resolver::{
-    EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
-};
 use swc_common::{
     FileName, SourceMap,
     comments::SingleThreadedComments,
@@ -19,6 +16,9 @@ use thiserror::Error;
 use tokio::task::JoinSet;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
+use unrs_resolver::{
+    EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
+};
 
 use crate::import_finder::ImportFinder;
 
@@ -369,7 +369,7 @@ impl Tracer {
             .with_main_field("module")
             .with_main_field("types")
             // Condition names are used to determine which export to use when importing a module.
-            // We add a bunch so oxc_resolver can resolve all kinds of imports.
+            // We add a bunch so unrs_resolver can resolve all kinds of imports.
             .with_condition_names(&["import", "require", "node", "types", "default"]);
 
         if let Some(ts_config) = ts_config {

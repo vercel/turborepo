@@ -99,15 +99,21 @@ mod tests {
     }
 
     impl Client for MockApiClient {
-        async fn get_user(&self, _token: &str) -> turborepo_api_client::Result<UserResponse> {
+        async fn get_user(
+            &self,
+            _token: &turborepo_api_client::SecretString,
+        ) -> turborepo_api_client::Result<UserResponse> {
             unimplemented!("get_user")
         }
-        async fn get_teams(&self, _token: &str) -> turborepo_api_client::Result<TeamsResponse> {
+        async fn get_teams(
+            &self,
+            _token: &turborepo_api_client::SecretString,
+        ) -> turborepo_api_client::Result<TeamsResponse> {
             unimplemented!("get_teams")
         }
         async fn get_team(
             &self,
-            _token: &str,
+            _token: &turborepo_api_client::SecretString,
             _team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             unimplemented!("get_team")
@@ -117,11 +123,11 @@ mod tests {
         }
         async fn verify_sso_token(
             &self,
-            token: &str,
+            token: &turborepo_api_client::SecretString,
             _: &str,
         ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
-                token: token.to_string(),
+                token: token.clone(),
                 team_id: Some("team_id".to_string()),
             })
         }
@@ -134,7 +140,10 @@ mod tests {
     }
 
     impl TokenClient for MockApiClient {
-        async fn delete_token(&self, _token: &str) -> turborepo_api_client::Result<()> {
+        async fn delete_token(
+            &self,
+            _token: &turborepo_api_client::SecretString,
+        ) -> turborepo_api_client::Result<()> {
             if self.succeed_delete_request {
                 Ok(())
             } else {
@@ -147,7 +156,7 @@ mod tests {
         }
         async fn get_metadata(
             &self,
-            _token: &str,
+            _token: &turborepo_api_client::SecretString,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             unimplemented!("get_metadata")
         }
