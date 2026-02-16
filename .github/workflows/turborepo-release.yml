@@ -757,5 +757,12 @@ jobs:
         run: |
           VERSION="${{ needs.stage.outputs.version }}"
           echo "::warning::Cleaning up release tag v${VERSION} if it exists..."
-          gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/v${VERSION}" || echo "Tag may not exist"
+          HTTP_STATUS=$(gh api -X DELETE "repos/${{ github.repository }}/git/refs/tags/v${VERSION}" 2>&1) && echo "Tag deleted." || {
+            if echo "$HTTP_STATUS" | grep -q "Reference does not exist"; then
+              echo "Tag does not exist, nothing to clean up."
+            else
+              echo "::error::Failed to delete tag v${VERSION}: ${HTTP_STATUS}"
+              exit 1
+            fi
+          }
           echo "Cleanup complete. You can retry the release without using clear-staging-branch."
