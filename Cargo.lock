@@ -7330,6 +7330,7 @@ dependencies = [
  "turborepo-microfrontends",
  "turborepo-microfrontends-proxy",
  "turborepo-process",
+ "turborepo-profile-md",
  "turborepo-repository",
  "turborepo-run-cache",
  "turborepo-run-summary",
@@ -7469,6 +7470,16 @@ dependencies = [
  "turbopath",
  "turborepo-task-id",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "turborepo-profile-md"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 1.0.63",
 ]
 
 [[package]]

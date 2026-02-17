@@ -1,0 +1,16 @@
+[package]
+name = "turborepo-profile-md"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+thiserror = "1.0.38"
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true
