@@ -2,13 +2,13 @@
 use std::str::FromStr;
 
 use globwalk::ValidatedGlob;
-use tracing::debug;
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
 #[cfg(feature = "git2")]
 use crate::hash_object::hash_objects;
-use crate::{Error, GitHashes, GitRepo, SCM};
+use crate::{Error, GitHashes, GitRepo, RepoGitIndex, SCM};
 
 impl SCM {
     pub fn get_hashes_for_files(
@@ -24,7 +24,7 @@ impl SCM {
         }
     }
 
-    #[tracing::instrument(skip(self, turbo_root, package_path, inputs))]
+    #[tracing::instrument(skip(self, turbo_root, package_path, inputs, repo_index))]
     pub fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -32,6 +32,7 @@ impl SCM {
         inputs: &[S],
         include_default_files: bool,
         telemetry: Option<PackageTaskEventBuilder>,
+        repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
         match self {
             SCM::Manual => {
@@ -51,6 +52,7 @@ impl SCM {
                     package_path,
                     inputs,
                     include_default_files,
+                    repo_index,
                 );
                 match result {
                     Ok(hashes) => {
@@ -60,9 +62,20 @@ impl SCM {
                         Ok(hashes)
                     }
                     Err(err) => {
+                        // If the error is a resource exhaustion (e.g. too many
+                        // open files), falling back to manual hashing will fail
+                        // too. Propagate directly.
+                        if err.is_resource_exhaustion() {
+                            warn!(
+                                "git hashing failed for {:?} with resource error: {}",
+                                package_path, err,
+                            );
+                            return Err(err);
+                        }
+
                         debug!(
-                            "failed to use git to hash files: {}. Falling back to manual",
-                            err
+                            "git hashing failed for {:?}: {}. Falling back to manual",
+                            package_path, err,
                         );
                         if let Some(telemetry) = telemetry {
                             telemetry.track_file_hash_method(FileHashMethod::Manual);
@@ -109,11 +122,16 @@ impl GitRepo {
         package_path: &AnchoredSystemPath,
         inputs: &[S],
         include_default_files: bool,
+        repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
-        // no inputs, and no $TURBO_DEFAULT$
+        // no inputs, and no $TURBO_DEFAULT$ — index lookup + hash_objects.
+        // hash_objects opens one file at a time so it's fd-safe at any
+        // concurrency. No semaphore needed.
         if inputs.is_empty() {
-            return self.get_package_file_hashes_from_index(turbo_root, package_path);
+            return self.get_package_file_hashes_from_index(turbo_root, package_path, repo_index);
         }
+
+        let _permit = repo_index.map(|idx| idx.io_semaphore.acquire());
 
         // we have inputs, but no $TURBO_DEFAULT$
         if !include_default_files {
@@ -126,21 +144,34 @@ impl GitRepo {
         }
 
         // we have inputs, and $TURBO_DEFAULT$
-        self.get_package_file_hashes_from_inputs_and_index(turbo_root, package_path, inputs)
+        self.get_package_file_hashes_from_inputs_and_index(
+            turbo_root,
+            package_path,
+            inputs,
+            repo_index,
+        )
     }
 
-    #[tracing::instrument(skip(self, turbo_root))]
+    #[tracing::instrument(skip(self, turbo_root, repo_index))]
     fn get_package_file_hashes_from_index(
         &self,
         turbo_root: &AbsoluteSystemPath,
         package_path: &AnchoredSystemPath,
+        repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
         let git_to_pkg_path = self.root.anchor(&full_pkg_path)?;
         let pkg_prefix = git_to_pkg_path.to_unix();
-        let mut hashes = self.git_ls_tree(&full_pkg_path)?;
+
+        let (mut hashes, to_hash) = if let Some(index) = repo_index {
+            index.get_package_hashes(&pkg_prefix)?
+        } else {
+            let mut hashes = self.git_ls_tree(&full_pkg_path)?;
+            let to_hash = self.append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
+            (hashes, to_hash)
+        };
+
         // Note: to_hash is *git repo relative*
-        let to_hash = self.append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
         hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
         Ok(hashes)
     }
@@ -235,16 +266,17 @@ impl GitRepo {
         Ok(hashes)
     }
 
-    #[tracing::instrument(skip(self, turbo_root, inputs))]
+    #[tracing::instrument(skip(self, turbo_root, inputs, repo_index))]
     fn get_package_file_hashes_from_inputs_and_index<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
         package_path: &AnchoredSystemPath,
         inputs: &[S],
+        repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
         // collect the default files and the inputs
         let default_file_hashes =
-            self.get_package_file_hashes_from_index(turbo_root, package_path)?;
+            self.get_package_file_hashes_from_index(turbo_root, package_path, repo_index)?;
 
         // we need to get hashes for excludes separately so we can remove them from the
         // defaults later on
@@ -371,6 +403,7 @@ mod tests {
                 &[],
                 false,
                 Some(PackageTaskEventBuilder::new("my-pkg", "test")),
+                None,
             )
             .unwrap();
         let mut expected = GitHashes::new();
@@ -481,7 +514,8 @@ mod tests {
                 "bfe53d766e64d78f80050b73cd1c88095bc70abb",
             ),
         ]);
-        let hashes = git.get_package_file_hashes::<&str>(&repo_root, &package_path, &[], false)?;
+        let hashes =
+            git.get_package_file_hashes::<&str>(&repo_root, &package_path, &[], false, None)?;
         assert_eq!(hashes, all_expected);
 
         // add the new root file as an option
@@ -607,7 +641,13 @@ mod tests {
             }));
 
             let hashes = git
-                .get_package_file_hashes(&repo_root, &package_path, inputs, *include_default_files)
+                .get_package_file_hashes(
+                    &repo_root,
+                    &package_path,
+                    inputs,
+                    *include_default_files,
+                    None,
+                )
                 .unwrap();
             assert_eq!(hashes, expected);
         }

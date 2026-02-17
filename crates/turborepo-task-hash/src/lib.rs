@@ -125,6 +125,8 @@ impl PackageInputsHashes {
     {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
+        let repo_index = scm.build_repo_index(workspaces.len());
+
         let span = Span::current();
         let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
             .filter_map(|task| {
@@ -236,6 +238,7 @@ impl PackageInputsHashes {
                             &inputs.globs,
                             inputs.default,
                             Some(scm_telemetry),
+                            repo_index.as_ref(),
                         );
                         match local_hash_result {
                             Ok(hash_object) => hash_object,
@@ -610,9 +613,20 @@ pub fn get_internal_deps_hash(
         return Ok("".into());
     }
 
+    let repo_index = scm.build_repo_index(package_dirs.len());
+
     let file_hashes = package_dirs
         .into_par_iter()
-        .map(|package_dir| scm.get_package_file_hashes::<&str>(root, package_dir, &[], false, None))
+        .map(|package_dir| {
+            scm.get_package_file_hashes::<&str>(
+                root,
+                package_dir,
+                &[],
+                false,
+                None,
+                repo_index.as_ref(),
+            )
+        })
         .reduce(
             || Ok(HashMap::new()),
             |acc, hashes| {

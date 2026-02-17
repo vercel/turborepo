@@ -32,6 +32,13 @@ impl GitRepo {
         wait_for_success(git, &mut stderr, "git ls-tree", root_path, parse_result)?;
         Ok(hashes)
     }
+
+    /// Run `git ls-tree` once at the git repo root, returning all committed
+    /// file hashes keyed by git-root-relative paths.
+    #[tracing::instrument(skip(self))]
+    pub fn git_ls_tree_repo_root(&self) -> Result<GitHashes, Error> {
+        self.git_ls_tree(&self.root)
+    }
 }
 
 fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error> {
