@@ -1,15 +1,28 @@
 import path from "node:path";
 import childProcess from "node:child_process";
+import type { SpawnSyncReturns } from "node:child_process";
 import fs from "node:fs";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect, jest } from "@jest/globals";
 import {
   DEFAULT_IGNORE,
-  GIT_REPO_COMMAND,
-  HG_REPO_COMMAND,
   tryGitInit,
   removeGitDirectory
 } from "../src/utils/git";
+
+function spawnResult(status: number): SpawnSyncReturns<Buffer> {
+  return {
+    pid: 1,
+    output: [],
+    stdout: Buffer.from(""),
+    stderr: Buffer.from(""),
+    status,
+    signal: null
+  };
+}
+
+const SUCCESS = spawnResult(0);
+const FAILURE = spawnResult(1);
 
 describe("git", () => {
   // just to make sure this doesn't get lost
@@ -25,224 +38,178 @@ describe("git", () => {
 
     it("inits a repo with a single commit", async () => {
       const { root } = useFixture({ fixture: `git` });
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementationOnce(() => {
-          // git repo check fails (not in git repo)
-          throw new Error(
-            "fatal: not a git repository (or any of the parent directories): .git"
-          );
-        })
-        .mockImplementationOnce(() => {
-          // hg repo check fails (not in hg repo)
-          throw new Error("abort: no repository found (.hg not found)");
-        })
-        .mockReturnValue("success");
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValueOnce(FAILURE) // git rev-parse (not in git repo)
+        .mockReturnValueOnce(FAILURE) // hg --cwd . root (not in hg repo)
+        .mockReturnValue(SUCCESS);
 
       const result = tryGitInit(root);
       expect(result).toBe(true);
 
-      // Verify the exact sequence of commands (all with cwd: root)
-      const calls = [
-        GIT_REPO_COMMAND,
-        HG_REPO_COMMAND,
-        "git init",
-        "git checkout -b main",
-        "git add -A",
-        'git commit -m "Initial commit from create-turbo"'
+      const expectedCalls: Array<[string, Array<string>]> = [
+        ["git", ["rev-parse", "--is-inside-work-tree"]],
+        ["hg", ["--cwd", ".", "root"]],
+        ["git", ["init"]],
+        ["git", ["checkout", "-b", "main"]],
+        ["git", ["add", "-A"]],
+        ["git", ["commit", "-m", "Initial commit from create-turbo"]]
       ];
-      expect(mockExecSync).toHaveBeenCalledTimes(calls.length);
-      calls.forEach((call) => {
-        expect(mockExecSync).toHaveBeenCalledWith(call, {
+      expect(mockSpawnSync).toHaveBeenCalledTimes(expectedCalls.length);
+      expectedCalls.forEach(([cmd, args]) => {
+        expect(mockSpawnSync).toHaveBeenCalledWith(cmd, args, {
           stdio: "ignore",
           cwd: root
         });
       });
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
     });
 
     it("creates exactly one commit with all changes", async () => {
       const { root } = useFixture({ fixture: `git` });
-      const commitCalls: Array<string> = [];
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementation((command) => {
-          const cmd = command.toString();
-          if (cmd === GIT_REPO_COMMAND) {
-            throw new Error(
-              "fatal: not a git repository (or any of the parent directories): .git"
-            );
+      const commitCalls: Array<Array<string>> = [];
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockImplementation((command, args) => {
+          const cmd = String(command);
+          const argList = (args ?? []) as Array<string>;
+          if (cmd === "git" && argList[0] === "rev-parse") {
+            return FAILURE;
           }
-          if (cmd === HG_REPO_COMMAND) {
-            throw new Error("abort: no repository found (.hg not found)");
+          if (cmd === "hg") {
+            return FAILURE;
           }
-          if (cmd.startsWith("git commit")) {
-            commitCalls.push(cmd);
+          if (cmd === "git" && argList[0] === "commit") {
+            commitCalls.push(argList);
           }
-          return "success";
+          return SUCCESS;
         });
 
       tryGitInit(root);
 
-      // Should have exactly one commit call
       expect(commitCalls).toHaveLength(1);
-      expect(commitCalls[0]).toBe(
-        'git commit -m "Initial commit from create-turbo"'
-      );
-      mockExecSync.mockRestore();
+      expect(commitCalls[0]).toEqual([
+        "commit",
+        "-m",
+        "Initial commit from create-turbo"
+      ]);
+      mockSpawnSync.mockRestore();
     });
 
     it("runs all git commands in the project root directory", async () => {
       const { root } = useFixture({ fixture: `git` });
       const cwdValues: Array<string | undefined> = [];
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementation((command, options) => {
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockImplementation((command, args, options) => {
           const opts = options as { cwd?: string };
-          cwdValues.push(opts.cwd);
-          const cmd = command.toString();
-          if (cmd === GIT_REPO_COMMAND) {
-            throw new Error("not in git repo");
+          cwdValues.push(opts?.cwd);
+          const cmd = String(command);
+          const argList = (args ?? []) as Array<string>;
+          if (cmd === "git" && argList[0] === "rev-parse") {
+            return FAILURE;
           }
-          if (cmd === HG_REPO_COMMAND) {
-            throw new Error("not in hg repo");
+          if (cmd === "hg") {
+            return FAILURE;
           }
-          return "success";
+          return SUCCESS;
         });
 
       tryGitInit(root);
 
-      // All commands should have cwd set to root
       expect(cwdValues.every((cwd) => cwd === root)).toBe(true);
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
     });
 
     it("skips init if already in a git repo", async () => {
       const { root } = useFixture({
         fixture: `git`
       });
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockReturnValueOnce("true") // git repo check succeeds
-        .mockReturnValue("success");
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValueOnce(SUCCESS) // git rev-parse succeeds
+        .mockReturnValue(SUCCESS);
 
       const result = tryGitInit(root);
       expect(result).toBe(false);
 
-      // Should only call git repo check
-      expect(mockExecSync).toHaveBeenCalledTimes(1);
-      expect(mockExecSync).toHaveBeenCalledWith(GIT_REPO_COMMAND, {
-        stdio: "ignore",
-        cwd: root
-      });
-      mockExecSync.mockRestore();
+      expect(mockSpawnSync).toHaveBeenCalledTimes(1);
+      expect(mockSpawnSync).toHaveBeenCalledWith(
+        "git",
+        ["rev-parse", "--is-inside-work-tree"],
+        { stdio: "ignore", cwd: root }
+      );
+      mockSpawnSync.mockRestore();
     });
 
     it("returns false on unexpected error during init", async () => {
       const { root } = useFixture({ fixture: `git` });
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementationOnce(() => {
-          // not in git repo
-          throw new Error(
-            "fatal: not a git repository (or any of the parent directories): .git"
-          );
-        })
-        .mockImplementationOnce(() => {
-          // not in hg repo
-          throw new Error("abort: no repository found (.hg not found)");
-        })
-        .mockImplementationOnce(() => {
-          // git init fails
-          throw new Error("fatal: 128");
-        });
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValueOnce(FAILURE) // not in git repo
+        .mockReturnValueOnce(FAILURE) // not in hg repo
+        .mockReturnValueOnce(FAILURE); // git init fails
 
       const result = tryGitInit(root);
       expect(result).toBe(false);
 
-      const calls: Array<string> = [
-        GIT_REPO_COMMAND,
-        HG_REPO_COMMAND,
-        "git init"
+      const expectedCalls: Array<[string, Array<string>]> = [
+        ["git", ["rev-parse", "--is-inside-work-tree"]],
+        ["hg", ["--cwd", ".", "root"]],
+        ["git", ["init"]]
       ];
 
-      expect(mockExecSync).toHaveBeenCalledTimes(calls.length);
-      calls.forEach((call) => {
-        expect(mockExecSync).toHaveBeenCalledWith(call, {
+      expect(mockSpawnSync).toHaveBeenCalledTimes(expectedCalls.length);
+      expectedCalls.forEach(([cmd, args]) => {
+        expect(mockSpawnSync).toHaveBeenCalledWith(cmd, args, {
           stdio: "ignore",
           cwd: root
         });
       });
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
     });
 
     it("cleans up .git directory on failure after init", async () => {
       const { root } = useFixture({ fixture: `git` });
       const mockRmSync = jest.spyOn(fs, "rmSync").mockImplementation(() => {});
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementationOnce(() => {
-          // not in git repo
-          throw new Error(
-            "fatal: not a git repository (or any of the parent directories): .git"
-          );
-        })
-        .mockImplementationOnce(() => {
-          // not in hg repo
-          throw new Error("abort: no repository found (.hg not found)");
-        })
-        .mockReturnValueOnce("success") // git init succeeds
-        .mockImplementationOnce(() => {
-          // git checkout -b main fails
-          throw new Error("fatal: could not checkout branch");
-        });
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValueOnce(FAILURE) // not in git repo
+        .mockReturnValueOnce(FAILURE) // not in hg repo
+        .mockReturnValueOnce(SUCCESS) // git init succeeds
+        .mockReturnValueOnce(FAILURE); // git checkout -b main fails
 
       const result = tryGitInit(root);
       expect(result).toBe(false);
 
-      // Should clean up the .git directory
       expect(mockRmSync).toHaveBeenCalledWith(path.join(root, ".git"), {
         recursive: true,
         force: true
       });
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
       mockRmSync.mockRestore();
     });
 
     it("cleans up .git directory when user has no git config (commit fails)", async () => {
       const { root } = useFixture({ fixture: `git` });
       const mockRmSync = jest.spyOn(fs, "rmSync").mockImplementation(() => {});
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementationOnce(() => {
-          // not in git repo
-          throw new Error(
-            "fatal: not a git repository (or any of the parent directories): .git"
-          );
-        })
-        .mockImplementationOnce(() => {
-          // not in hg repo
-          throw new Error("abort: no repository found (.hg not found)");
-        })
-        .mockReturnValueOnce("success") // git init
-        .mockReturnValueOnce("success") // git checkout -b main
-        .mockReturnValueOnce("success") // git add -A
-        .mockImplementationOnce(() => {
-          // git commit fails due to missing user config
-          throw new Error(
-            "fatal: unable to auto-detect email address (got 'user@localhost')"
-          );
-        });
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValueOnce(FAILURE) // not in git repo
+        .mockReturnValueOnce(FAILURE) // not in hg repo
+        .mockReturnValueOnce(SUCCESS) // git init
+        .mockReturnValueOnce(SUCCESS) // git checkout -b main
+        .mockReturnValueOnce(SUCCESS) // git add -A
+        .mockReturnValueOnce(FAILURE); // git commit fails
 
       const result = tryGitInit(root);
       expect(result).toBe(false);
 
-      // Should clean up the .git directory since init succeeded but commit failed
       expect(mockRmSync).toHaveBeenCalledWith(path.join(root, ".git"), {
         recursive: true,
         force: true
       });
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
       mockRmSync.mockRestore();
     });
 
@@ -250,31 +217,42 @@ describe("git", () => {
       const { root } = useFixture({
         fixture: `git`
       });
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementationOnce(() => {
-          // not in git repo
-          throw new Error(
-            "fatal: not a git repository (or any of the parent directories): .git"
-          );
-        })
-        .mockReturnValueOnce("true") // hg repo check succeeds (is in hg repo)
-        .mockReturnValue("success");
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValueOnce(FAILURE) // not in git repo
+        .mockReturnValueOnce(SUCCESS) // hg repo check succeeds
+        .mockReturnValue(SUCCESS);
 
       const result = tryGitInit(root);
       expect(result).toBe(false);
 
-      // Should call git repo check, then hg repo check, then stop
-      expect(mockExecSync).toHaveBeenCalledTimes(2);
-      expect(mockExecSync).toHaveBeenCalledWith(GIT_REPO_COMMAND, {
+      expect(mockSpawnSync).toHaveBeenCalledTimes(2);
+      expect(mockSpawnSync).toHaveBeenCalledWith(
+        "git",
+        ["rev-parse", "--is-inside-work-tree"],
+        { stdio: "ignore", cwd: root }
+      );
+      expect(mockSpawnSync).toHaveBeenCalledWith("hg", ["--cwd", ".", "root"], {
         stdio: "ignore",
         cwd: root
       });
-      expect(mockExecSync).toHaveBeenCalledWith(HG_REPO_COMMAND, {
-        stdio: "ignore",
-        cwd: root
-      });
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
+    });
+
+    it("rejects directory paths with shell metacharacters", async () => {
+      const dangerousPaths = [
+        "/tmp/$(whoami)",
+        "/tmp/`id`",
+        "/tmp/foo;rm -rf /",
+        "/tmp/foo|cat /etc/passwd",
+        "/tmp/foo&bg"
+      ];
+
+      for (const unsafePath of dangerousPaths) {
+        expect(() => tryGitInit(unsafePath)).toThrow(
+          "Directory path contains potentially unsafe characters"
+        );
+      }
     });
   });
 

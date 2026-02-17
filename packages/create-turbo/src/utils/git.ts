@@ -1,4 +1,4 @@
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import path from "node:path";
 import { rmSync } from "node:fs";
 
@@ -29,12 +29,27 @@ yarn-error.log*
 .vercel
 `;
 
-export const GIT_REPO_COMMAND = "git rev-parse --is-inside-work-tree";
-export const HG_REPO_COMMAND = "hg --cwd . root";
+const SHELL_METACHARACTERS = /[`$(){}|;&<>!#]/;
+
+function assertSafeDirectory(dir: string): void {
+  if (SHELL_METACHARACTERS.test(dir)) {
+    throw new Error(
+      `Directory path contains potentially unsafe characters: ${dir}`
+    );
+  }
+}
+
+function git(args: Array<string>, cwd: string): boolean {
+  const result = spawnSync("git", args, { stdio: "ignore", cwd });
+  if (result.status !== 0) {
+    throw new Error(`git ${args[0]} failed`);
+  }
+  return true;
+}
 
 function isInGitRepository(root: string): boolean {
   try {
-    execSync(GIT_REPO_COMMAND, { stdio: "ignore", cwd: root });
+    git(["rev-parse", "--is-inside-work-tree"], root);
     return true;
   } catch (_) {
     return false;
@@ -43,7 +58,13 @@ function isInGitRepository(root: string): boolean {
 
 function isInMercurialRepository(root: string): boolean {
   try {
-    execSync(HG_REPO_COMMAND, { stdio: "ignore", cwd: root });
+    const result = spawnSync("hg", ["--cwd", ".", "root"], {
+      stdio: "ignore",
+      cwd: root
+    });
+    if (result.status !== 0) {
+      throw new Error("hg check failed");
+    }
     return true;
   } catch (_) {
     return false;
@@ -59,6 +80,8 @@ function isInMercurialRepository(root: string): boolean {
  * @returns true if the repository was initialized successfully, false otherwise
  */
 export function tryGitInit(root: string): boolean {
+  assertSafeDirectory(root);
+
   // Skip if already in a git or mercurial repository
   if (isInGitRepository(root) || isInMercurialRepository(root)) {
     return false;
@@ -66,15 +89,12 @@ export function tryGitInit(root: string): boolean {
 
   let didInit = false;
   try {
-    execSync("git init", { stdio: "ignore", cwd: root });
+    git(["init"], root);
     didInit = true;
 
-    execSync("git checkout -b main", { stdio: "ignore", cwd: root });
-    execSync("git add -A", { stdio: "ignore", cwd: root });
-    execSync('git commit -m "Initial commit from create-turbo"', {
-      stdio: "ignore",
-      cwd: root
-    });
+    git(["checkout", "-b", "main"], root);
+    git(["add", "-A"], root);
+    git(["commit", "-m", "Initial commit from create-turbo"], root);
 
     return true;
   } catch (err) {
