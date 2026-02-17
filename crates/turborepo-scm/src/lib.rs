@@ -331,6 +331,32 @@ impl SCM {
             SCM::Manual => None,
         }
     }
+
+    /// Build the repo index without a package-count threshold.
+    ///
+    /// This is intended for early, speculative construction: we spawn it on a
+    /// background thread before the package graph is built so the git I/O
+    /// overlaps with package discovery. If the repo turns out to be small the
+    /// caller can simply ignore the result.
+    #[cfg(feature = "git2")]
+    pub fn build_repo_index_eager(&self) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new(git) {
+                Ok(index) => {
+                    debug!("repo git index built eagerly");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index eagerly: {}. Will hash per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
 }
 
 #[cfg(test)]

@@ -32,7 +32,7 @@ use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
 use turborepo_run_summary::RunTracker;
-use turborepo_scm::SCM;
+use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
@@ -79,6 +79,7 @@ pub struct Run {
     daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
+    repo_index: Arc<Option<RepoGitIndex>>,
 }
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
@@ -585,6 +586,7 @@ impl Run {
         )>,
     ) -> Result<i32, Error> {
         let workspaces = self.pkg_dep_graph.packages().collect();
+        let repo_index = self.repo_index.as_ref().as_ref();
         let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
             &self.scm,
             self.engine.tasks().par_bridge(),
@@ -593,6 +595,7 @@ impl Run {
             &self.repo_root,
             &self.run_telemetry,
             &self.daemon,
+            repo_index,
         )?;
 
         let root_workspace = self
@@ -612,6 +615,7 @@ impl Run {
                     &self.repo_root,
                     self.pkg_dep_graph
                         .root_internal_package_dependencies_paths(),
+                    repo_index,
                 )
             })
             .transpose()?;

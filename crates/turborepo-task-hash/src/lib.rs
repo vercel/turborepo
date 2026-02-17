@@ -26,7 +26,7 @@ use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
 use turborepo_frameworks::{Slug as FrameworkSlug, infer_framework};
 use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
-use turborepo_scm::SCM;
+use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     EventBuilder, generic::GenericEventBuilder, task::PackageTaskEventBuilder,
@@ -108,7 +108,8 @@ impl PackageInputsHashes {
         repo_root,
         scm,
         telemetry,
-        daemon
+        daemon,
+        pre_built_index
     ))]
     pub fn calculate_file_hashes<'a, T, D>(
         scm: &SCM,
@@ -118,6 +119,7 @@ impl PackageInputsHashes {
         repo_root: &AbsoluteSystemPath,
         telemetry: &GenericEventBuilder,
         daemon: &Option<D>,
+        pre_built_index: Option<&RepoGitIndex>,
     ) -> Result<PackageInputsHashes, Error>
     where
         T: TaskDefinitionHashInfo + Sync,
@@ -125,7 +127,15 @@ impl PackageInputsHashes {
     {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
-        let repo_index = scm.build_repo_index(workspaces.len());
+        // Use the pre-built index if provided, otherwise build one on the spot.
+        let owned_index;
+        let repo_index = match pre_built_index {
+            Some(idx) => Some(idx),
+            None => {
+                owned_index = scm.build_repo_index(workspaces.len());
+                owned_index.as_ref()
+            }
+        };
 
         let span = Span::current();
         let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
@@ -238,7 +248,7 @@ impl PackageInputsHashes {
                             &inputs.globs,
                             inputs.default,
                             Some(scm_telemetry),
-                            repo_index.as_ref(),
+                            repo_index,
                         );
                         match local_hash_result {
                             Ok(hash_object) => hash_object,
@@ -608,24 +618,25 @@ pub fn get_internal_deps_hash(
     scm: &SCM,
     root: &AbsoluteSystemPath,
     package_dirs: Vec<&AnchoredSystemPath>,
+    pre_built_index: Option<&RepoGitIndex>,
 ) -> Result<String, Error> {
     if package_dirs.is_empty() {
         return Ok("".into());
     }
 
-    let repo_index = scm.build_repo_index(package_dirs.len());
+    let owned_index;
+    let repo_index = match pre_built_index {
+        Some(idx) => Some(idx),
+        None => {
+            owned_index = scm.build_repo_index(package_dirs.len());
+            owned_index.as_ref()
+        }
+    };
 
     let file_hashes = package_dirs
         .into_par_iter()
         .map(|package_dir| {
-            scm.get_package_file_hashes::<&str>(
-                root,
-                package_dir,
-                &[],
-                false,
-                None,
-                repo_index.as_ref(),
-            )
+            scm.get_package_file_hashes::<&str>(root, package_dir, &[], false, None, repo_index)
         })
         .reduce(
             || Ok(HashMap::new()),
