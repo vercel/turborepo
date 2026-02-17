@@ -81,10 +81,15 @@ describe("create-turbo", () => {
           })
         );
 
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementation(() => {
-          return "success";
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValue({
+          pid: 1,
+          output: [],
+          stdout: Buffer.from(""),
+          stderr: Buffer.from(""),
+          status: 0,
+          signal: null
         });
 
       await create(root as CreateCommandArgument, {
@@ -128,7 +133,7 @@ describe("create-turbo", () => {
       mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
     }
   );
 
@@ -170,10 +175,15 @@ describe("create-turbo", () => {
           })
         );
 
-      const mockExecSync = jest
-        .spyOn(childProcess, "execSync")
-        .mockImplementation(() => {
-          return "success";
+      const mockSpawnSync = jest
+        .spyOn(childProcess, "spawnSync")
+        .mockReturnValue({
+          pid: 1,
+          output: [],
+          stdout: Buffer.from(""),
+          stderr: Buffer.from(""),
+          status: 0,
+          signal: null
         });
 
       await create(root as CreateCommandArgument, {
@@ -216,7 +226,7 @@ describe("create-turbo", () => {
       mockAvailablePackageManagers.mockRestore();
       mockCreateProject.mockRestore();
       mockGetWorkspaceDetails.mockRestore();
-      mockExecSync.mockRestore();
+      mockSpawnSync.mockRestore();
     }
   );
 
@@ -245,10 +255,15 @@ describe("create-turbo", () => {
         })
       );
 
-    const mockExecSync = jest
-      .spyOn(childProcess, "execSync")
-      .mockImplementation(() => {
-        return "success";
+    const mockSpawnSync = jest
+      .spyOn(childProcess, "spawnSync")
+      .mockReturnValue({
+        pid: 1,
+        output: [],
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        status: 0,
+        signal: null
       });
 
     await create(root as CreateCommandArgument, {
@@ -274,7 +289,7 @@ describe("create-turbo", () => {
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
-    mockExecSync.mockRestore();
+    mockSpawnSync.mockRestore();
   });
 
   it("does not initialize git and removes .git directory when --no-git flag is used", async () => {
@@ -307,10 +322,15 @@ describe("create-turbo", () => {
         })
       );
 
-    const mockExecSync = jest
-      .spyOn(childProcess, "execSync")
-      .mockImplementation(() => {
-        return "success";
+    const mockSpawnSync = jest
+      .spyOn(childProcess, "spawnSync")
+      .mockReturnValue({
+        pid: 1,
+        output: [],
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        status: 0,
+        signal: null
       });
 
     const mockTryGitInit = jest
@@ -335,7 +355,7 @@ describe("create-turbo", () => {
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
-    mockExecSync.mockRestore();
+    mockSpawnSync.mockRestore();
     mockTryGitInit.mockRestore();
     mockRemoveGitDirectory.mockRestore();
   });
@@ -370,10 +390,15 @@ describe("create-turbo", () => {
         })
       );
 
-    const mockExecSync = jest
-      .spyOn(childProcess, "execSync")
-      .mockImplementation(() => {
-        return "success";
+    const mockSpawnSync = jest
+      .spyOn(childProcess, "spawnSync")
+      .mockReturnValue({
+        pid: 1,
+        output: [],
+        stdout: Buffer.from(""),
+        stderr: Buffer.from(""),
+        status: 0,
+        signal: null
       });
 
     const mockTryGitInit = jest
@@ -398,7 +423,7 @@ describe("create-turbo", () => {
     mockAvailablePackageManagers.mockRestore();
     mockCreateProject.mockRestore();
     mockGetWorkspaceDetails.mockRestore();
-    mockExecSync.mockRestore();
+    mockSpawnSync.mockRestore();
     mockTryGitInit.mockRestore();
     mockRemoveGitDirectory.mockRestore();
   });
