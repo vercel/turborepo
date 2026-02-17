@@ -62,7 +62,7 @@ fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, Er
     let fixed = fix_glob_pattern(raw);
     Glob::new(&fixed)
         .map(|g| g.into_owned())
-        .map_err(|e| Error::invalid_glob(fixed, e))
+        .map_err(|e| Error::invalid_glob(fixed.into_owned(), e))
 }
 
 fn any_with_contextual_error(
