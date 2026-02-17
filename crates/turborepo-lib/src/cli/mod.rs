@@ -1573,7 +1573,8 @@ pub async fn run(
                 return Ok(1);
             }
 
-            if let Some((file_path, include_args)) = run_args.profile_file_and_include_args() {
+            let profile_file = run_args.profile_file_and_include_args();
+            if let Some((file_path, include_args)) = profile_file {
                 // TODO: Do we want to handle the result / error?
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
@@ -1584,6 +1585,21 @@ pub async fn run(
                     error!("run failed: command  exited ({code})");
                 }
             })?;
+
+            if let Some((file_path, _)) = profile_file {
+                // Flush the chrome trace so the file is fully written
+                // before we read it for markdown generation.
+                let _ = logger.flush_chrome_tracing();
+
+                let md_path = format!("{file_path}.md");
+                if let Err(e) = turborepo_profile_md::trace_to_markdown(
+                    std::path::Path::new(file_path),
+                    std::path::Path::new(&md_path),
+                ) {
+                    warn!("Failed to generate profile markdown: {e}");
+                }
+            }
+
             Ok(exit_code)
         }
         Command::Query {

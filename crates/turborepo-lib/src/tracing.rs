@@ -206,6 +206,17 @@ impl TurboSubscriber {
 
         Ok(())
     }
+
+    /// Flushes and closes the chrome tracing layer so the trace file is
+    /// fully written. This must be called before reading the trace file
+    /// for post-processing (e.g., markdown generation).
+    pub fn flush_chrome_tracing(&self) -> Result<(), Error> {
+        // Disable the layer by replacing it with None
+        self.chrome_update.reload(None)?;
+        // Drop the flush guard to finalize the file
+        self.chrome_guard.lock().expect("not poisoned").take();
+        Ok(())
+    }
 }
 
 impl Drop for TurboSubscriber {
