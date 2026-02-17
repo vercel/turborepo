@@ -309,9 +309,7 @@ turbo run test --filter=@acme/*{./packages/*}[HEAD^1]
 
 Ignore existing cached artifacts and re-execute all tasks.
 
-<Callout type="info">
-  `--force` will overwrite existing task caches.
-</Callout>
+<Callout type="info">`--force` will overwrite existing task caches.</Callout>
 
 ```bash title="Terminal"
 turbo run build --force
@@ -502,15 +500,24 @@ The same behavior can also be set via the `TURBO_PREFLIGHT=true` system variable
 
 ### `--profile`
 
-Generates a trace of the run in Chrome Tracing format that you can use to analyze performance.
+Produces two traces of the run for analyzing performance.
 
-You must provide a verbosity flag (`-v`, `-vv`, or `-vvv`) with `--profile` to produce a trace.
+- Chrome Tracing format: Visually inspect a trace in a tool like [Perfetto](https://ui.perfetto.dev/)
+- Markdown format: Output a Markdown file to simplify consumption for LLMs
 
 ```bash title="Terminal"
-turbo run build --profile=profile.json -vvv
+# Produces a file with a timestamp for name
+turbo run build --profile
+
+# Produces a file with provided name
+turbo run build --profile=my-profile
 ```
 
-Profiles can be viewed in a tool like [Perfetto](https://ui.perfetto.dev/).
+### `---anon-profile`
+
+This flag works the same as `--profile`, but attempts to redacts sensitive information. This is useful for sharing your profiles.
+
+Recommended: Make sure to check that `--anon-profile` has redacted all information that you would like to keep secret, like file paths, environment variables, or any identifying information.
 
 ### `--remote-cache-timeout`
 

@@ -1,10 +1,7 @@
 use std::{backtrace::Backtrace, env, ffi::OsString, fmt, io, mem, process};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{
-    builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
-    ValueEnum,
-};
+use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::Serialize;
@@ -1007,11 +1004,11 @@ pub struct RunArgs {
     /// File to write turbo's performance profile output into.
     /// You can load the file up in chrome://tracing to see
     /// which parts of your build were slow.
-    #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "anon_profile")]
+    #[clap(long, num_args = 0..=1, default_missing_value = "", conflicts_with = "anon_profile")]
     pub profile: Option<String>,
     /// File to write turbo's performance profile output into.
     /// All identifying data omitted from the profile.
-    #[clap(long, value_parser=NonEmptyStringValueParser::new(), conflicts_with = "profile")]
+    #[clap(long, num_args = 0..=1, default_missing_value = "", conflicts_with = "profile")]
     pub anon_profile: Option<String>,
     /// Generate a summary of the turbo run
     #[clap(long, default_missing_value = "true")]
@@ -1061,10 +1058,22 @@ impl RunArgs {
         }
     }
 
-    pub fn profile_file_and_include_args(&self) -> Option<(&str, bool)> {
+    pub fn profile_file_and_include_args(&self) -> Option<(String, bool)> {
+        let resolve = |file: &str| -> String {
+            if file.is_empty() {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("system clock is before unix epoch")
+                    .as_millis();
+                format!("profile.{now}")
+            } else {
+                file.to_string()
+            }
+        };
+
         match (self.profile.as_deref(), self.anon_profile.as_deref()) {
-            (Some(file), None) => Some((file, true)),
-            (None, Some(file)) => Some((file, false)),
+            (Some(file), None) => Some((resolve(file), true)),
+            (None, Some(file)) => Some((resolve(file), false)),
             (Some(_), Some(_)) => unreachable!(),
             (None, None) => None,
         }
@@ -1574,7 +1583,7 @@ pub async fn run(
             }
 
             let profile_file = run_args.profile_file_and_include_args();
-            if let Some((file_path, include_args)) = profile_file {
+            if let Some((ref file_path, include_args)) = profile_file {
                 // TODO: Do we want to handle the result / error?
                 let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
@@ -1586,7 +1595,7 @@ pub async fn run(
                 }
             })?;
 
-            if let Some((file_path, _)) = profile_file {
+            if let Some((ref file_path, _)) = profile_file {
                 // Flush the chrome trace so the file is fully written
                 // before we read it for markdown generation.
                 let _ = logger.flush_chrome_tracing();
@@ -2382,6 +2391,23 @@ mod test {
         } ;
         "profile"
 	)]
+    #[test_case::test_case(
+		&["turbo", "run", "build", "--profile"],
+        Args {
+            command: Some(Command::Run {
+                execution_args: Box::new(ExecutionArgs {
+                    tasks: vec!["build".to_string()],
+                    ..get_default_execution_args()
+                }),
+                run_args: Box::new(RunArgs {
+                  profile: Some(String::new()),
+                  ..get_default_run_args()
+                })
+            }),
+            ..Args::default()
+        } ;
+        "profile_no_value"
+	)]
     // remote-only flag tests
     #[test_case::test_case(
 		&["turbo", "run", "build"],
@@ -3158,10 +3184,13 @@ mod test {
 
     #[test]
     fn test_profile_usage() {
-        assert!(Args::try_parse_from(["turbo", "build", "--profile", ""]).is_err());
-        assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", ""]).is_err());
+        // Without a filename, profile should still be accepted
+        assert!(Args::try_parse_from(["turbo", "build", "--profile"]).is_ok());
+        assert!(Args::try_parse_from(["turbo", "build", "--anon-profile"]).is_ok());
+        // With a filename, profile should be accepted
         assert!(Args::try_parse_from(["turbo", "build", "--profile", "foo.json"]).is_ok());
         assert!(Args::try_parse_from(["turbo", "build", "--anon-profile", "foo.json"]).is_ok());
+        // Both flags simultaneously should be rejected
         assert!(Args::try_parse_from([
             "turbo",
             "build",
@@ -3171,6 +3200,39 @@ mod test {
             "bar.json"
         ])
         .is_err());
+    }
+
+    #[test]
+    fn test_profile_default_filename() {
+        let run_args = RunArgs {
+            profile: Some(String::new()),
+            ..get_default_run_args()
+        };
+        let (file, include_args) = run_args.profile_file_and_include_args().unwrap();
+        assert!(
+            file.starts_with("profile."),
+            "expected default profile filename, got: {file}"
+        );
+        assert!(include_args);
+
+        let run_args = RunArgs {
+            anon_profile: Some(String::new()),
+            ..get_default_run_args()
+        };
+        let (file, include_args) = run_args.profile_file_and_include_args().unwrap();
+        assert!(
+            file.starts_with("profile."),
+            "expected default profile filename, got: {file}"
+        );
+        assert!(!include_args);
+
+        let run_args = RunArgs {
+            profile: Some("custom.json".to_string()),
+            ..get_default_run_args()
+        };
+        let (file, include_args) = run_args.profile_file_and_include_args().unwrap();
+        assert_eq!(file, "custom.json");
+        assert!(include_args);
     }
 
     #[test]

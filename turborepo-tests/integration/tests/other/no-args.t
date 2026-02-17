@@ -89,9 +89,9 @@ Make sure exit code is 2 when no args are passed
             Force turbo to use the local daemon. If unset turbo will use the default detection logic
         --no-daemon
             Force turbo to not use the local daemon. If unset turbo will use the default detection logic
-        --profile <PROFILE>
+        --profile [<PROFILE>]
             File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
-        --anon-profile <ANON_PROFILE>
+        --anon-profile [<ANON_PROFILE>]
             File to write turbo's performance profile output into. All identifying data omitted from the profile
         --summarize [<SUMMARIZE>]
             Generate a summary of the turbo run [possible values: true, false]
