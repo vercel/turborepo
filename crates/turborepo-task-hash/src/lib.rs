@@ -636,14 +636,7 @@ pub fn get_internal_deps_hash(
     let file_hashes = package_dirs
         .into_par_iter()
         .map(|package_dir| {
-            scm.get_package_file_hashes::<&str>(
-                root,
-                package_dir,
-                &[],
-                false,
-                None,
-                repo_index,
-            )
+            scm.get_package_file_hashes::<&str>(root, package_dir, &[], false, None, repo_index)
         })
         .reduce(
             || Ok(HashMap::new()),

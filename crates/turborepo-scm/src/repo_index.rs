@@ -8,7 +8,7 @@ use std::{
 use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
-use crate::{status::RepoStatusEntry, Error, GitHashes, GitRepo};
+use crate::{Error, GitHashes, GitRepo, status::RepoStatusEntry};
 
 /// Limits concurrent file-system operations to avoid exhausting file
 /// descriptors when many rayon threads are hashing simultaneously.
