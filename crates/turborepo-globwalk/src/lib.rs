@@ -21,7 +21,10 @@ use rayon::prelude::*;
 use regex::Regex;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
-use wax::{BuildError, Glob, walk::FileIterator};
+use wax::{
+    BuildError, Glob,
+    walk::{FileIterator, FilterAny},
+};
 
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum WalkType {
@@ -485,6 +488,9 @@ pub fn globwalk_internal<S: AsRef<str>>(
         .map(glob_with_contextual_error)
         .collect::<Result<_, _>>()?;
 
+    let ex_filter = FilterAny::any(ex_patterns)
+        .map_err(|e| WalkError::BadPattern("exclusion".into(), Box::new(e)))?;
+
     let include_patterns = include_paths
         .into_par_iter()
         .map(glob_with_contextual_error)
@@ -496,33 +502,20 @@ pub fn globwalk_internal<S: AsRef<str>>(
         // over the results.
         // See https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html#method.flat_map_iter
         .flat_map_iter(|glob| {
-            walk_glob(
-                walk_type,
-                &base_path_new,
-                ex_patterns.clone(),
-                glob,
-                settings,
-            )
+            walk_glob(walk_type, &base_path_new, ex_filter.clone(), glob, settings)
         })
         .collect()
 }
 
-#[tracing::instrument(skip(ex_patterns), fields(glob=glob.to_string().as_str()))]
+#[tracing::instrument(skip(ex_filter), fields(glob=glob.to_string().as_str()))]
 fn walk_glob(
     walk_type: WalkType,
     base_path_new: &Path,
-    ex_patterns: Vec<Glob>,
+    ex_filter: FilterAny,
     glob: Glob,
     settings: Settings,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
-    let iter = glob
-        .walk(base_path_new)
-        .not(ex_patterns)
-        .unwrap_or_else(|e| {
-            // Per docs, only fails if exclusion list is too large, since we're using
-            // pre-compiled globs
-            panic!("Failed to compile exclusion globs: {e}")
-        });
+    let iter = glob.walk(base_path_new).not_any(ex_filter);
 
     if settings.ignore_nested_packages {
         iter.filter_entry(|entry| {

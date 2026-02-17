@@ -82,15 +82,12 @@ use std::{
 use thiserror::Error;
 use walkdir::{DirEntry, Error, WalkDir};
 
-pub use crate::walk::glob::{GlobEntry, GlobWalker};
+pub use crate::walk::glob::{FilterAny, GlobEntry, GlobWalker};
 use crate::{
     BuildError, Pattern,
-    walk::{
-        filter::{
-            CancelWalk, HierarchicalIterator, Isomeric, SeparatingFilter, SeparatingFilterInput,
-            Separation, TreeResidue, WalkCancellation,
-        },
-        glob::FilterAny,
+    walk::filter::{
+        CancelWalk, HierarchicalIterator, Isomeric, SeparatingFilter, SeparatingFilterInput,
+        Separation, TreeResidue, WalkCancellation,
     },
 };
 
@@ -902,6 +899,24 @@ pub trait FileIterator:
             input: self,
             filter,
         })
+    }
+
+    /// Filters file entries against a pre-compiled [`FilterAny`].
+    ///
+    /// This is the pre-compiled equivalent of [`not`]. Use this when the same
+    /// exclusion patterns are applied to multiple iterators to avoid
+    /// re-compiling the patterns each time.
+    ///
+    /// [`FilterAny`]: crate::walk::glob::FilterAny
+    /// [`not`]: crate::walk::FileIterator::not
+    fn not_any(self, filter: FilterAny) -> Not<Self>
+    where
+        Self: Sized,
+    {
+        Not {
+            input: self,
+            filter,
+        }
     }
 }
 
