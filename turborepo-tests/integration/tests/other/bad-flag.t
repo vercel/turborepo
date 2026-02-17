@@ -48,8 +48,8 @@ Bad flag with an implied run command should display run flags
       --graph \[<GRAPH>\] (re)
       --daemon <DAEMON>
       --no-daemon <NO_DAEMON>
-      --profile <PROFILE>
-      --anon-profile <ANON_PROFILE>
+      --profile [<PROFILE>]
+      --anon-profile [<ANON_PROFILE>]
       --summarize \[<SUMMARIZE>\] (re)
       --parallel <PARALLEL>
   
