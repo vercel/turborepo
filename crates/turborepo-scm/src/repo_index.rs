@@ -8,7 +8,7 @@ use std::{
 use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
-use crate::{Error, GitHashes, GitRepo, status::RepoStatusEntry};
+use crate::{status::RepoStatusEntry, Error, GitHashes, GitRepo};
 
 /// Limits concurrent file-system operations to avoid exhausting file
 /// descriptors when many rayon threads are hashing simultaneously.
@@ -62,8 +62,20 @@ pub struct RepoGitIndex {
 impl RepoGitIndex {
     #[tracing::instrument(skip(git))]
     pub fn new(git: &GitRepo) -> Result<Self, Error> {
-        let raw_hashes = git.git_ls_tree_repo_root()?;
-        let status_entries = git.git_status_repo_root()?;
+        // These two git commands are independent: ls-tree reads the committed
+        // tree while status reads the working directory. Run them on separate
+        // threads so the wall-clock cost is max(ls_tree, status) instead of
+        // their sum.
+        let (raw_hashes, status_entries) = std::thread::scope(|s| {
+            let ls_tree = s.spawn(|| git.git_ls_tree_repo_root());
+            let status = s.spawn(|| git.git_status_repo_root());
+            (
+                ls_tree.join().expect("ls-tree thread panicked"),
+                status.join().expect("status thread panicked"),
+            )
+        });
+        let raw_hashes = raw_hashes?;
+        let status_entries = status_entries?;
 
         // Convert HashMap to BTreeMap for sorted prefix-range lookups
         let ls_tree_hashes: BTreeMap<RelativeUnixPathBuf, String> =

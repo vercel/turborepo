@@ -207,9 +207,13 @@ impl RunBuilder {
         );
         let start_at = Local::now();
 
-        let scm = {
+        let scm_task = {
             let repo_root = self.repo_root.clone();
-            tokio::task::spawn_blocking(move || SCM::new(&repo_root))
+            tokio::task::spawn_blocking(move || {
+                let scm = SCM::new(&repo_root);
+                let repo_index = scm.build_repo_index_eager();
+                (scm, repo_index)
+            })
         };
         let package_json_path = self.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&package_json_path)?;
@@ -382,7 +386,8 @@ impl RunBuilder {
                 }
             };
 
-        let scm = scm.await.expect("detecting scm panicked");
+        let (scm, repo_index) = scm_task.await.expect("detecting scm panicked");
+        let repo_index = Arc::new(repo_index);
         debug!(
             "RunBuilder creating AsyncCache with cache_dir={}, repo_root={}",
             self.opts.cache_opts.cache_dir, self.repo_root
@@ -507,6 +512,7 @@ impl RunBuilder {
             daemon,
             should_print_prelude,
             micro_frontend_configs,
+            repo_index,
         })
     }
 
