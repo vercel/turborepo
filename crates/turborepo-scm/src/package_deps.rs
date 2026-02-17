@@ -131,12 +131,6 @@ impl GitRepo {
             return self.get_package_file_hashes_from_index(turbo_root, package_path, repo_index);
         }
 
-        // Paths below use globwalk, which does parallel directory traversal
-        // via rayon and can hold hundreds of directory handles open. Before
-        // the repo index optimization, per-package git subprocesses blocked
-        // rayon threads, limiting how many globwalks ran at once. With the
-        // index, threads reach globwalk near-instantly. Serialize globwalk
-        // operations to prevent fd exhaustion.
         let _permit = repo_index.map(|idx| idx.io_semaphore.acquire());
 
         // we have inputs, but no $TURBO_DEFAULT$
