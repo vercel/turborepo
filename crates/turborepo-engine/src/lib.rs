@@ -250,15 +250,11 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         // reversed). Uses a multi-source DFS which is O(V+E), replacing the
         // previous O(V^3) Floyd-Warshall approach.
         let mut reachable = HashSet::new();
-        depth_first_search(
-            Reversed(&self.task_graph),
-            entrypoint_indices,
-            |event| {
-                if let DfsEvent::Discover(n, _) = event {
-                    reachable.insert(n);
-                }
-            },
-        );
+        depth_first_search(Reversed(&self.task_graph), entrypoint_indices, |event| {
+            if let DfsEvent::Discover(n, _) = event {
+                reachable.insert(n);
+            }
+        });
 
         let new_graph = self.task_graph.filter_map(
             |node_idx, node| {
