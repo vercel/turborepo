@@ -1,6 +1,6 @@
 #![cfg(feature = "git2")]
 use tracing::Span;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
 
 use crate::{Error, GitHashes};
 
@@ -12,16 +12,26 @@ pub(crate) fn hash_objects(
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
     let parent = Span::current();
+    let pkg_prefix = git_root.anchor(pkg_path).ok().map(|a| a.to_unix());
+
     for filename in to_hash {
         let span = tracing::info_span!(parent: &parent, "hash_object", ?filename);
         let _enter = span.enter();
 
-        let full_file_path = git_root.join_unix_path(filename);
+        let full_file_path = git_root.join_unix_path(&filename);
         match git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path) {
             Ok(hash) => {
-                let package_relative_path =
-                    AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
-                        .to_unix();
+                let package_relative_path = pkg_prefix
+                    .as_ref()
+                    .and_then(|prefix| {
+                        RelativeUnixPath::strip_prefix(&filename, prefix)
+                            .ok()
+                            .map(|stripped| stripped.to_owned())
+                    })
+                    .unwrap_or_else(|| {
+                        AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
+                            .to_unix()
+                    });
                 hashes.insert(package_relative_path, hash.to_string());
             }
             Err(e) => {
