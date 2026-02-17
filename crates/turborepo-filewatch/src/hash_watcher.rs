@@ -548,6 +548,7 @@ impl Subscriber {
                     &inputs,
                     spec.inputs.include_default_files(),
                     telemetry,
+                    None,
                 );
                 trace!("hashing complete for {:?}", spec);
                 let _ = tx.blocking_send(HashUpdate {

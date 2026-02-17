@@ -11,6 +11,11 @@ use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 
 use crate::{Error, GitHashes, GitRepo, wait_for_success};
 
+pub(crate) struct RepoStatusEntry {
+    pub path: RelativeUnixPathBuf,
+    pub is_delete: bool,
+}
+
 impl GitRepo {
     #[tracing::instrument(skip(self, root_path, hashes))]
     pub(crate) fn append_git_status(
@@ -45,6 +50,30 @@ impl GitRepo {
         let parse_result = read_status(stdout, root_path, pkg_prefix, hashes);
         wait_for_success(git, &mut stderr, "git status", root_path, parse_result)
     }
+
+    /// Run `git status` once at the git repo root, returning all status entries
+    /// with git-root-relative paths.
+    #[tracing::instrument(skip(self))]
+    pub(crate) fn git_status_repo_root(&self) -> Result<Vec<RepoStatusEntry>, Error> {
+        let mut git = Command::new(self.bin.as_std_path())
+            .args(["status", "--untracked-files", "--no-renames", "-z"])
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .current_dir(&self.root)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let stdout = git
+            .stdout
+            .as_mut()
+            .ok_or_else(|| Error::git_error("failed to get stdout for git status"))?;
+        let mut stderr = git
+            .stderr
+            .take()
+            .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
+        let parse_result = read_status_raw(stdout);
+        wait_for_success(git, &mut stderr, "git status", &self.root, parse_result)
+    }
 }
 
 fn read_status<R: Read>(
@@ -73,6 +102,22 @@ fn read_status<R: Read>(
         buffer.clear();
     }
     Ok(to_hash)
+}
+
+fn read_status_raw<R: Read>(reader: R) -> Result<Vec<RepoStatusEntry>, Error> {
+    let mut entries = Vec::new();
+    let mut reader = BufReader::new(reader);
+    let mut buffer = Vec::new();
+    while reader.read_until(b'\0', &mut buffer)? != 0 {
+        let entry = parse_status(&buffer)?;
+        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_owned())?)?;
+        entries.push(RepoStatusEntry {
+            path,
+            is_delete: entry.is_delete,
+        });
+        buffer.clear();
+    }
+    Ok(entries)
 }
 
 struct StatusEntry<'a> {

@@ -25,9 +25,12 @@ mod hash_object;
 mod ls_tree;
 pub mod manual;
 pub mod package_deps;
+mod repo_index;
 mod status;
 pub mod worktree;
 
+#[cfg(feature = "git2")]
+pub use repo_index::RepoGitIndex;
 pub use worktree::WorktreeInfo;
 
 #[derive(Debug, Error)]
@@ -73,6 +76,31 @@ pub enum Error {
 
 pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
 
+fn is_os_resource_error(e: &std::io::Error) -> bool {
+    matches!(
+        e.raw_os_error(),
+        Some(24) // EMFILE: too many open files
+        | Some(12) // ENOMEM: out of memory
+    )
+}
+
+fn walk_error_is_resource_exhaustion(e: &globwalk::WalkError) -> bool {
+    // Walk the error source chain looking for an underlying io::Error.
+    let mut source: Option<&dyn std::error::Error> = Some(e);
+    while let Some(err) = source {
+        if let Some(io_err) = err.downcast_ref::<std::io::Error>()
+            && is_os_resource_error(io_err)
+        {
+            return true;
+        }
+        source = err.source();
+    }
+    // wax wraps errors in ways that can break the downcast chain.
+    // Fall back to checking the Display string.
+    let msg = e.to_string();
+    msg.contains("Too many open files") || msg.contains("os error 24")
+}
+
 impl From<wax::BuildError> for Error {
     fn from(value: wax::BuildError) -> Self {
         Error::Glob(Box::new(value), Backtrace::capture())
@@ -87,6 +115,18 @@ impl Error {
     #[cfg(feature = "git2")]
     pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
         Error::Git2(error, error_context, Backtrace::capture())
+    }
+
+    /// Returns true if this error indicates OS resource exhaustion (e.g. too
+    /// many open files) where a fallback to manual hashing would also fail.
+    pub fn is_resource_exhaustion(&self) -> bool {
+        match self {
+            #[cfg(feature = "git2")]
+            Error::Git2(e, _, _) => e.class() == git2::ErrorClass::Os,
+            Error::Io(e, _) => is_os_resource_error(e),
+            Error::Walk(e) => walk_error_is_resource_exhaustion(e),
+            _ => false,
+        }
     }
 }
 
@@ -255,6 +295,41 @@ impl SCM {
 
     pub fn is_manual(&self) -> bool {
         matches!(self, SCM::Manual)
+    }
+
+    /// Build a repo-wide git index that caches `git ls-tree` and `git status`
+    /// results. Returns `None` for manual SCM mode or when the package count
+    /// is too small to benefit. Callers should build this once before parallel
+    /// file hashing and pass it through to `get_package_file_hashes`.
+    #[cfg(feature = "git2")]
+    pub fn build_repo_index(&self, package_count: usize) -> Option<RepoGitIndex> {
+        // The repo index trades 2N subprocess spawns for 2 repo-wide git
+        // commands + a BTreeMap build. For small repos, the overhead of
+        // scanning the entire repo outweighs the subprocess savings.
+        if package_count < 16 {
+            debug!(
+                "skipping repo index for small repo (package_count={})",
+                package_count,
+            );
+            return None;
+        }
+
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new(git) {
+                Ok(index) => {
+                    debug!("repo git index built successfully");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index: {}. Will hash per-package.",
+                        e
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
     }
 }
 
