@@ -1,6 +1,6 @@
 use std::{fmt, str::FromStr as _};
 
-use globwalk::{fix_glob_pattern, ValidatedGlob};
+use globwalk::{ValidatedGlob, fix_glob_pattern};
 use itertools::Itertools as _;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 use wax::{Any, Glob, Program as _};
