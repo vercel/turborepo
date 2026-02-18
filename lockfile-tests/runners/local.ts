@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { exec as execCb } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -8,24 +8,38 @@ function exec(
   command: string,
   cwd: string,
   env?: Record<string, string>
-): { exitCode: number; stdout: string; stderr: string } {
-  try {
-    const stdout = execSync(command, {
-      cwd,
-      env: { ...process.env, ...env },
-      stdio: ["pipe", "pipe", "pipe"],
-      timeout: 5 * 60 * 1000,
-      maxBuffer: 10 * 1024 * 1024
-    });
-    return { exitCode: 0, stdout: stdout.toString(), stderr: "" };
-  } catch (err: unknown) {
-    const e = err as { status?: number; stdout?: Buffer; stderr?: Buffer };
-    return {
-      exitCode: e.status ?? 1,
-      stdout: e.stdout?.toString() ?? "",
-      stderr: e.stderr?.toString() ?? ""
-    };
-  }
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    execCb(
+      command,
+      {
+        cwd,
+        env: { ...process.env, ...env },
+        timeout: 5 * 60 * 1000,
+        maxBuffer: 10 * 1024 * 1024
+      },
+      (error, stdout, stderr) => {
+        if (error) {
+          // error.code is the exit code (number at runtime, typed as string)
+          const exitCode =
+            typeof error.code === "number"
+              ? error.code
+              : ((error as unknown as { status?: number }).status ?? 1);
+          resolve({
+            exitCode,
+            stdout: stdout?.toString() ?? "",
+            stderr: stderr?.toString() ?? ""
+          });
+          return;
+        }
+        resolve({
+          exitCode: 0,
+          stdout: stdout?.toString() ?? "",
+          stderr: stderr?.toString() ?? ""
+        });
+      }
+    );
+  });
 }
 
 function copyDirSync(src: string, dest: string): void {
@@ -61,7 +75,6 @@ export class LocalRunner {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lockfile-test-"));
 
     try {
-      // Copy committed fixture into temp dir
       log(`[${label}] Copying fixture to ${tmpDir}`);
       copyDirSync(fixture.filepath, tmpDir);
 
@@ -73,15 +86,16 @@ export class LocalRunner {
       // Set up corepack
       const corepackBin = path.join(tmpDir, ".corepack-bin");
       fs.mkdirSync(corepackBin);
-      exec(`corepack enable --install-directory "${corepackBin}"`, tmpDir);
+      await exec(
+        `corepack enable --install-directory "${corepackBin}"`,
+        tmpDir
+      );
       const fullPath = `${corepackBin}:${localBin}:${process.env.PATH}`;
 
       if (fixture.packageManager === "bun") {
-        // Bun doesn't use corepack. Install the specific version into a local dir
-        // so we can put it on PATH.
         const bunVersion = fixture.packageManagerVersion.replace("bun@", "");
         log(`[${label}] Installing bun@${bunVersion}`);
-        const bunInstall = exec(
+        const bunInstall = await exec(
           `bunx --bun bun@${bunVersion} --version`,
           tmpDir,
           { PATH: fullPath }
@@ -91,7 +105,7 @@ export class LocalRunner {
         }
       } else {
         log(`[${label}] corepack prepare ${fixture.packageManagerVersion}`);
-        const prep = exec(
+        const prep = await exec(
           `corepack prepare ${fixture.packageManagerVersion} --activate`,
           tmpDir,
           { PATH: fullPath, COREPACK_ENABLE_STRICT: "0" }
@@ -104,7 +118,7 @@ export class LocalRunner {
       }
 
       // Git init (turbo requires it)
-      exec(
+      await exec(
         'git init && git add . && git commit --allow-empty -m "init"',
         tmpDir,
         {
@@ -118,9 +132,11 @@ export class LocalRunner {
 
       // turbo prune
       log(`[${label}] turbo prune ${targetWorkspace.name}`);
-      const pruneResult = exec(`turbo prune ${targetWorkspace.name}`, tmpDir, {
-        PATH: fullPath
-      });
+      const pruneResult = await exec(
+        `turbo prune ${targetWorkspace.name}`,
+        tmpDir,
+        { PATH: fullPath }
+      );
 
       result.pruneOutput = [pruneResult.stdout, pruneResult.stderr]
         .filter(Boolean)
@@ -139,7 +155,6 @@ export class LocalRunner {
       const outDir = path.join(tmpDir, "out");
       let installCmd = fixture.frozenInstallCommand.join(" ");
 
-      // For bun, use bunx to run the specific version
       if (fixture.packageManager === "bun") {
         const bunVersion = fixture.packageManagerVersion.replace("bun@", "");
         const bunArgs = fixture.frozenInstallCommand.slice(1).join(" ");
@@ -148,7 +163,7 @@ export class LocalRunner {
 
       log(`[${label}] ${installCmd} (in out/)`);
 
-      const installResult = exec(installCmd, outDir, {
+      const installResult = await exec(installCmd, outDir, {
         PATH: fullPath,
         COREPACK_ENABLE_STRICT: "0"
       });
