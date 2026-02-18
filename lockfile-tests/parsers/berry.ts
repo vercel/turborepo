@@ -132,17 +132,6 @@ function detectPatches(content: string): {
   };
 }
 
-function detectResolutions(
-  content: string,
-  entries: BerryEntry[]
-): Record<string, string> {
-  // Berry resolutions appear as multiple descriptors mapping to the same resolution.
-  // Not all fixtures use resolutions, and we don't need to reconstruct them perfectly,
-  // but some lockfiles have root-level `resolutions` in package.json that affect
-  // resolution behavior.
-  return {};
-}
-
 export function parseBerryLockfile(
   content: string,
   filename: string,
