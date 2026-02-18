@@ -21,7 +21,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
-import type { PackageManagerType, TestCase, TestResult } from "./parsers/types";
+import type { PackageManagerType, TestCase, TestResult } from "./types";
 import { LocalRunner } from "./runners/local";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -165,20 +165,9 @@ function buildTestCases(
           packageManager: fixture.meta.packageManager,
           lockfileName: fixture.meta.lockfileName,
           frozenInstallCommand: fixture.meta.frozenInstallCommand,
-          workspaces: [],
-          packageManagerVersion: fixture.meta.packageManagerVersion,
-          hasPatches: false,
-          patchFiles: [],
-          lockfileVersion: "",
-          rootExtras: {}
+          packageManagerVersion: fixture.meta.packageManagerVersion
         },
-        targetWorkspace: {
-          path: "",
-          name: target,
-          dependencies: {},
-          devDependencies: {},
-          peerDependencies: {}
-        },
+        targetWorkspace: { name: target },
         label,
         expectedFailure: isExpected
       });

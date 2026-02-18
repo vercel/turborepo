@@ -2,7 +2,7 @@ import { exec as execCb } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import type { TestCase, TestResult } from "../parsers/types";
+import type { TestCase, TestResult } from "../types";
 
 function exec(
   command: string,
