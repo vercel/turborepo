@@ -108,11 +108,8 @@ export class LocalRunner {
           result.error = `Failed to install bun@${bunVersion}: ${bunInstall.stderr}`;
           return result;
         }
-
-        // Put the installed bun at the front of PATH
         fullPath = `${bunDir}/bin:${fullPath}`;
 
-        // Verify it's the right version and log the binary path
         const whichBun = await exec("which bun", tmpDir, { PATH: fullPath });
         const versionCheck = await exec("bun --version", tmpDir, {
           PATH: fullPath
@@ -145,9 +142,21 @@ export class LocalRunner {
         COREPACK_ENABLE_STRICT: "0"
       });
       if (validateResult.exitCode !== 0) {
-        const output = [validateResult.stdout, validateResult.stderr]
-          .filter(Boolean)
-          .join("\n");
+        // Re-run with --verbose to get more info on what went wrong
+        const verboseResult = await exec(`${installCmd} --verbose`, tmpDir, {
+          PATH: fullPath,
+          COREPACK_ENABLE_STRICT: "0"
+        });
+        const output = [
+          "--- stdout ---",
+          validateResult.stdout,
+          "--- stderr ---",
+          validateResult.stderr,
+          "--- verbose stdout ---",
+          verboseResult.stdout,
+          "--- verbose stderr ---",
+          verboseResult.stderr
+        ].join("\n");
         result.error =
           `INVALID FIXTURE: frozen install fails on unpruned original (exit ${validateResult.exitCode}).\n` +
           `This means the fixture's package.jsons don't match its lockfile.\n` +
