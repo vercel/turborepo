@@ -1,0 +1,53 @@
+lockfileVersion: "9.0"
+
+overrides:
+  foo: ~1.0.0
+
+importers:
+  .:
+    dependencies:
+      bar:
+        specifier: workspace:*
+        version: link:packages/bar
+
+  packages/bar:
+    dependencies:
+      foo:
+        specifier: ~1.0.0
+        version: 1.0.0(peer-a@1.0.0)
+      middleware:
+        specifier: ^1.0.0
+        version: 1.0.0(foo@1.0.0(peer-a@1.0.0)(peer-b@2.0.0))
+
+packages:
+  foo@1.0.0:
+    resolution: {integrity: sha512-fake1}
+
+  middleware@1.0.0:
+    resolution: {integrity: sha512-fake2}
+    peerDependencies:
+      foo: ~1.0.0
+
+  peer-a@1.0.0:
+    resolution: {integrity: sha512-fake3}
+
+  peer-b@2.0.0:
+    resolution: {integrity: sha512-fake4}
+
+snapshots:
+  foo@1.0.0(peer-a@1.0.0):
+    dependencies:
+      peer-a: 1.0.0
+
+  foo@1.0.0(peer-a@1.0.0)(peer-b@2.0.0):
+    dependencies:
+      peer-a: 1.0.0
+      peer-b: 2.0.0
+
+  middleware@1.0.0(foo@1.0.0(peer-a@1.0.0)(peer-b@2.0.0)):
+    dependencies:
+      foo: 1.0.0(peer-a@1.0.0)(peer-b@2.0.0)
+
+  peer-a@1.0.0: {}
+
+  peer-b@2.0.0: {}
