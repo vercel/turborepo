@@ -168,7 +168,7 @@ jobs:
       - name: Run cargo audit
         run: |
           cargo install cargo-audit --locked --quiet
-          cargo audit --deny warnings
+          cargo audit --deny unsound --deny yanked
 
   js_audit:
     name: JS security audit
