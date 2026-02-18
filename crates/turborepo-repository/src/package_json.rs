@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::Result;
-use biome_deserialize::{json::deserialize_from_json_str, Text};
+use biome_deserialize::{Text, json::deserialize_from_json_str};
 use biome_deserialize_macros::Deserializable;
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;

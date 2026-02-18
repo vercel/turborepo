@@ -8,7 +8,7 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
-use super::{dep_path::DepPath, Error, LockfileVersion, SupportedLockfileVersion};
+use super::{Error, LockfileVersion, SupportedLockfileVersion, dep_path::DepPath};
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
