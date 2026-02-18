@@ -142,21 +142,9 @@ export class LocalRunner {
         COREPACK_ENABLE_STRICT: "0"
       });
       if (validateResult.exitCode !== 0) {
-        // Re-run with --verbose to get more info on what went wrong
-        const verboseResult = await exec(`${installCmd} --verbose`, tmpDir, {
-          PATH: fullPath,
-          COREPACK_ENABLE_STRICT: "0"
-        });
-        const output = [
-          "--- stdout ---",
-          validateResult.stdout,
-          "--- stderr ---",
-          validateResult.stderr,
-          "--- verbose stdout ---",
-          verboseResult.stdout,
-          "--- verbose stderr ---",
-          verboseResult.stderr
-        ].join("\n");
+        const output = [validateResult.stdout, validateResult.stderr]
+          .filter(Boolean)
+          .join("\n");
         result.error =
           `INVALID FIXTURE: frozen install fails on unpruned original (exit ${validateResult.exitCode}).\n` +
           `This means the fixture's package.jsons don't match its lockfile.\n` +
