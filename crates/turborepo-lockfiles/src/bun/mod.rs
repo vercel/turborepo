@@ -1134,7 +1134,6 @@ impl BunLockfile {
             .unwrap_or(version)
     }
 
-    /// Checks if a version string is a workspace dependency reference
     /// Resolves a catalog reference to the actual version
     /// Supports both default catalog ("catalog:") and named catalogs
     /// ("catalog:group:")
