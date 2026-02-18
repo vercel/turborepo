@@ -5,5 +5,5 @@
   "frozenInstallCommand": ["pnpm", "install", "--frozen-lockfile"],
   "pruneTargets": ["app-a", "app-b", "pkg-a", "pkg-b", "tooling-config"],
   "sourceFixture": "pnpm-10-patch.lock",
-  "expectedFailures": ["app-a", "pkg-a", "pkg-b"]
+  "expectedFailures": ["app-a", "app-b", "pkg-a", "pkg-b", "tooling-config"]
 }

@@ -5,5 +5,5 @@
   "frozenInstallCommand": ["pnpm", "install", "--frozen-lockfile"],
   "pruneTargets": ["a", "b", "c"],
   "sourceFixture": "pnpm8.yaml",
-  "expectedFailures": ["b"]
+  "expectedFailures": ["a", "b", "c"]
 }

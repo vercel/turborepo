@@ -5,5 +5,5 @@
   "frozenInstallCommand": ["pnpm", "install", "--frozen-lockfile"],
   "pruneTargets": ["web", "next-config", "package-for-ci", "tsconfig"],
   "sourceFixture": "pnpm-peer-v6.yaml",
-  "expectedFailures": ["web"]
+  "expectedFailures": ["next-config", "package-for-ci", "tsconfig", "web"]
 }

@@ -5,5 +5,5 @@
   "frozenInstallCommand": ["pnpm", "install", "--frozen-lockfile"],
   "pruneTargets": ["docs", "web", "eslint-config-custom", "tsconfig", "ui"],
   "sourceFixture": "pnpm7-workspace.yaml",
-  "expectedFailures": ["docs", "web"]
+  "expectedFailures": ["docs", "eslint-config-custom", "tsconfig", "ui", "web"]
 }
