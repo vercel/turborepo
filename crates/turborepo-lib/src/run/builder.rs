@@ -539,6 +539,7 @@ impl RunBuilder {
             daemon,
             should_print_prelude,
             micro_frontend_configs,
+            repo_index,
             observability_handle,
         })
     }

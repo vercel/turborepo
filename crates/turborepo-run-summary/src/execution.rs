@@ -5,7 +5,7 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_task_id::TaskId;
-use turborepo_ui::{color, cprintln, ColorConfig, BOLD, BOLD_GREEN, BOLD_RED, MAGENTA, YELLOW};
+use turborepo_ui::{BOLD, BOLD_GREEN, BOLD_RED, ColorConfig, MAGENTA, YELLOW, color, cprintln};
 
 use crate::{TurboDuration, task::TaskExecutionSummary};
 

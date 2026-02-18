@@ -1,4 +1,5 @@
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turborepo_config::ExperimentalObservabilityOptions;
 
 use super::{ConfigurationOptions, Error, TurborepoConfigBuilder};
 use crate::Args;
@@ -71,6 +72,10 @@ pub fn cli_overrides_from_args(args: &Args) -> Result<ConfigurationOptions, Erro
             .execution_args()
             .and_then(|execution_args| execution_args.concurrency.clone()),
         no_update_notifier: args.no_update_notifier.then_some(true),
+        experimental_observability: args
+            .experimental_otel_args
+            .to_config()
+            .map(|otel| ExperimentalObservabilityOptions { otel: Some(otel) }),
         ..Default::default()
     })
 }

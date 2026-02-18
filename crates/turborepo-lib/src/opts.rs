@@ -21,7 +21,7 @@ use turborepo_types::{
 
 use crate::{
     cli::{Command, ExecutionArgs, RunArgs},
-    config::{CacheDirResult, ConfigurationOptions, ExperimentalOtelOptions, CONFIG_FILE},
+    config::{CacheDirResult, ConfigurationOptions, CONFIG_FILE},
     turbo_json::FutureFlags,
     Args,
 };

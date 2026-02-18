@@ -1,16 +1,7 @@
-use std::{
-    backtrace::Backtrace,
-    env,
-    ffi::OsString,
-    fmt::{self, Display},
-    io, mem, process,
-};
+use std::{backtrace::Backtrace, env, ffi::OsString, fmt, io, mem, process};
 
 use camino::{Utf8Path, Utf8PathBuf};
-use clap::{
-    builder::NonEmptyStringValueParser, ArgAction, ArgGroup, CommandFactory, Parser, Subcommand,
-    ValueEnum,
-};
+use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::{generate, Shell};
 pub use error::Error;
 use serde::Serialize;

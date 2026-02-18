@@ -98,11 +98,9 @@ impl<'a> TurboJsonReader<'a> {
             .future_flags
             .map(|f| f.experimental_observability)
             .unwrap_or(false)
+            && let Some(raw_observability) = turbo_json.experimental_observability
         {
-            if let Some(raw_observability) = turbo_json.experimental_observability {
-                opts.experimental_observability =
-                    Some(convert_raw_observability(raw_observability)?);
-            }
+            opts.experimental_observability = Some(convert_raw_observability(raw_observability)?);
         }
         Ok(opts)
     }
@@ -174,12 +172,7 @@ fn convert_raw_observability_otel(
 
 fn convert_key_values(raw: Vec<RawKeyValue>) -> BTreeMap<String, String> {
     raw.into_iter()
-        .map(|kv| {
-            (
-                kv.key.into_inner().into(),
-                kv.value.into_inner().into(),
-            )
-        })
+        .map(|kv| (kv.key.into_inner().into(), kv.value.into_inner().into()))
         .collect()
 }
 
@@ -412,14 +405,14 @@ mod test {
                     "otel": {
                         "enabled": true,
                         "endpoint": "https://example.com/otel",
-                        "headers": {
-                            "Authorization": "Bearer token123",
-                            "X-Custom-Header": "custom-value"
-                        },
-                        "resource": {
-                            "service.name": "turborepo",
-                            "service.version": "1.0.0"
-                        }
+                        "headers": [
+                            { "key": "Authorization", "value": "Bearer token123" },
+                            { "key": "X-Custom-Header", "value": "custom-value" }
+                        ],
+                        "resource": [
+                            { "key": "service.name", "value": "turborepo" },
+                            { "key": "service.version", "value": "1.0.0" }
+                        ]
                     }
                 }
             }))

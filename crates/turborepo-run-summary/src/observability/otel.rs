@@ -5,8 +5,8 @@ use turborepo_otel::{RunMetricsPayload, TaskCacheStatus, TaskMetricsPayload};
 
 use super::{Handle, RunObserver};
 use crate::{
-    task::{CacheStatus, TaskSummary},
     RunSummary,
+    task::{CacheStatus, TaskSummary},
 };
 
 /// OpenTelemetry-based observer implementation.
