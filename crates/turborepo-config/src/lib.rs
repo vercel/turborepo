@@ -53,6 +53,7 @@ pub use experimental_otel::{
 };
 
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
+#[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalObservabilityOptions {
     pub otel: Option<ExperimentalOtelOptions>,

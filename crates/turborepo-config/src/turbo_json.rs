@@ -3,8 +3,8 @@ use std::{collections::BTreeMap, str::FromStr};
 use camino::Utf8PathBuf;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_turbo_json::{
-    RawExperimentalObservability, RawObservabilityOtel, RawRemoteCacheOptions, RawRootTurboJson,
-    RawTurboJson,
+    RawExperimentalObservability, RawKeyValue, RawObservabilityOtel, RawRemoteCacheOptions,
+    RawRootTurboJson, RawTurboJson,
 };
 
 use crate::{
@@ -155,17 +155,9 @@ fn convert_raw_observability_otel(
         task_details: metrics.task_details.map(|flag| *flag.as_inner()),
     });
 
-    let headers = raw.headers.map(|h| {
-        h.into_iter()
-            .map(|(k, v)| (k.into(), v.into()))
-            .collect::<BTreeMap<String, String>>()
-    });
+    let headers = raw.headers.map(convert_key_values);
 
-    let resource = raw.resource.map(|r| {
-        r.into_iter()
-            .map(|(k, v)| (k.into(), v.into()))
-            .collect::<BTreeMap<String, String>>()
-    });
+    let resource = raw.resource.map(convert_key_values);
 
     Ok(ExperimentalOtelOptions {
         enabled: raw.enabled.map(|flag| *flag.as_inner()),
@@ -178,6 +170,17 @@ fn convert_raw_observability_otel(
         metrics,
         use_remote_cache_token: raw.use_remote_cache_token.map(|flag| *flag.as_inner()),
     })
+}
+
+fn convert_key_values(raw: Vec<RawKeyValue>) -> BTreeMap<String, String> {
+    raw.into_iter()
+        .map(|kv| {
+            (
+                kv.key.into_inner().into(),
+                kv.value.into_inner().into(),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]

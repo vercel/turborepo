@@ -212,8 +212,10 @@ pub struct RawObservabilityOtel {
     pub endpoint: Option<Spanned<UnescapedString>>,
     pub headers: Option<Vec<RawKeyValue>>,
     pub timeout_ms: Option<Spanned<u64>>,
+    pub interval_ms: Option<Spanned<u64>>,
     pub resource: Option<Vec<RawKeyValue>>,
     pub metrics: Option<RawObservabilityOtelMetrics>,
+    pub use_remote_cache_token: Option<Spanned<bool>>,
 }
 
 /// Experimental observability configuration

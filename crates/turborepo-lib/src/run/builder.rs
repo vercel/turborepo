@@ -511,7 +511,7 @@ impl RunBuilder {
                     .as_ref()
                     .and_then(|otel| otel.use_remote_cache_token)
                     .unwrap_or(false)
-                    .then(|| self.api_auth.as_ref().map(|auth| auth.token.as_str()))
+                    .then(|| self.api_auth.as_ref().map(|auth| auth.token.expose()))
                     .flatten();
                 observability::Handle::try_init(opts, token)
             });

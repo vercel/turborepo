@@ -3,58 +3,12 @@ use std::{collections::BTreeMap, str::FromStr};
 use merge::Merge;
 use serde::{Deserialize, Serialize};
 // Re-export Protocol from turborepo-otel to avoid duplicating the enum.
-// turborepo-config depends on turborepo-otel (the lighter crate), keeping
-// clap CLI parsing here while the core Protocol type lives in turborepo-otel.
 pub use turborepo_otel::Protocol as ExperimentalOtelProtocol;
 
 use crate::Error;
 
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    Default,
-    Hash,
-    PartialOrd,
-    Ord,
-    ValueEnum,
-)]
-#[serde(rename_all = "kebab-case")]
-pub enum ExperimentalOtelProtocol {
-    #[default]
-    #[serde(alias = "grpc")]
-    Grpc,
-    #[serde(alias = "http")]
-    #[serde(alias = "http/protobuf")]
-    HttpProtobuf,
-}
-
-impl fmt::Display for ExperimentalOtelProtocol {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ExperimentalOtelProtocol::Grpc => write!(f, "grpc"),
-            ExperimentalOtelProtocol::HttpProtobuf => write!(f, "http/protobuf"),
-        }
-    }
-}
-
-impl FromStr for ExperimentalOtelProtocol {
-    type Err = ();
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s.to_ascii_lowercase().as_str() {
-            "grpc" => Ok(Self::Grpc),
-            "http" | "http/protobuf" | "http_protobuf" => Ok(Self::HttpProtobuf),
-            _ => Err(()),
-        }
-    }
-}
-
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
+#[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelMetricsOptions {
     pub run_summary: Option<bool>,
@@ -62,6 +16,7 @@ pub struct ExperimentalOtelMetricsOptions {
 }
 
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
+#[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelOptions {
     pub enabled: Option<bool>,
@@ -72,6 +27,7 @@ pub struct ExperimentalOtelOptions {
     pub interval_ms: Option<u64>,
     pub resource: Option<BTreeMap<String, String>>,
     pub metrics: Option<ExperimentalOtelMetricsOptions>,
+    pub use_remote_cache_token: Option<bool>,
 }
 
 impl ExperimentalOtelOptions {

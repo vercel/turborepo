@@ -30,8 +30,8 @@ use turborepo_ui::{ColorConfig, GREY};
 use crate::{
     cli::error::print_potential_tasks,
     commands::{
-        bin, boundaries, clone, config, daemon, docs, generate, get_mfe_port, info, link, login,
-        logout, ls, prune, query, run, scan, telemetry, unlink, CommandBase,
+        bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link, login, logout,
+        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
