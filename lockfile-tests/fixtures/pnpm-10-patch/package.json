@@ -1,0 +1,12 @@
+{
+  "name": "root",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "pnpm": {
+    "patchedDependencies": {
+      "is-number@7.0.0": "patches/is-number@7.0.0.patch",
+      "is-odd": "patches/is-odd.patch"
+    }
+  }
+}

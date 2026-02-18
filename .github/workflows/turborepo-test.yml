@@ -553,6 +553,90 @@ jobs:
       - name: Run examples check
         run: turbo run check-examples --filter=turborepo-examples --env-mode=strict
 
+  check-lockfiles:
+    name: Check lockfiles
+    timeout-minutes: 40
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
+    runs-on: ubuntu-latest
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Build turbo binary
+        run: cargo build
+
+      - name: Run lockfile tests (local)
+        run: pnpm check-lockfiles
+        working-directory: lockfile-tests
+
+      # Sandbox mode: builds turbo inside a Vercel Sandbox, snapshots it,
+      # then runs all tests from the snapshot. This tests in a clean Linux
+      # environment independent of the CI runner.
+      #
+      # Uses snapshot caching: if Cargo.lock and rust-toolchain.toml haven't
+      # changed, reuses the previous build snapshot.
+      - name: Compute snapshot cache key
+        id: snapshot-cache-key
+        run: |
+          HASH=$(cat Cargo.lock rust-toolchain.toml | sha256sum | cut -d' ' -f1)
+          echo "key=lockfile-snapshot-${HASH}" >> $GITHUB_OUTPUT
+
+      - name: Restore snapshot cache
+        id: snapshot-cache
+        uses: actions/cache@v4
+        with:
+          path: lockfile-tests/.snapshot-id
+          key: ${{ steps.snapshot-cache-key.outputs.key }}
+
+      - name: Read cached snapshot ID
+        id: read-snapshot
+        if: steps.snapshot-cache.outputs.cache-hit == 'true'
+        run: |
+          if [ -f lockfile-tests/.snapshot-id ]; then
+            echo "id=$(cat lockfile-tests/.snapshot-id)" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run lockfile tests (sandbox)
+        working-directory: lockfile-tests
+        run: |
+          ARGS="--sandbox --git-ref ${{ github.sha }}"
+          if [ -n "${{ steps.read-snapshot.outputs.id }}" ]; then
+            ARGS="$ARGS --snapshot-id ${{ steps.read-snapshot.outputs.id }}"
+          fi
+          pnpm check-lockfiles:sandbox $ARGS
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+
+      - name: Save snapshot ID for cache
+        if: steps.snapshot-cache.outputs.cache-hit != 'true'
+        run: |
+          if [ -f lockfile-tests/.snapshot-id ]; then
+            echo "Snapshot ID saved for caching: $(cat lockfile-tests/.snapshot-id)"
+          fi
+
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
     needs:
@@ -616,6 +700,7 @@ jobs:
       - rust_test_ubuntu
       - coverage_report
       - check-examples
+      - check-lockfiles
       - js_native_packages
     steps:
       - name: Skip for release PR
@@ -645,6 +730,7 @@ jobs:
           subjob ${{needs.rust_test_ubuntu.result}}
           subjob ${{needs.coverage_report.result}}
           subjob ${{needs.check-examples.result}}
+          subjob ${{needs.check-lockfiles.result}}
           subjob ${{needs.js_native_packages.result}}
 
           if [ "$cancelled" = "true" ]; then

@@ -1,0 +1,15 @@
+{
+  "name": "npm-prune",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "npm@8.19.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "devDependencies": {
+    "eslint-config-custom": "*",
+    "prettier": "latest",
+    "turbo": "latest"
+  }
+}

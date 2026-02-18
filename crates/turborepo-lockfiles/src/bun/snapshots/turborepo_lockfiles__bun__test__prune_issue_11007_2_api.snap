@@ -39,9 +39,9 @@ expression: pruned_str
     },
   },
   "packages": {
-    "@bun-issue/api": ["@bun-issue/api@workspace:apps/api"],
+    "@bun-issue/api": ["@bun-issue/api@workspace:apps/api", {}],
 
-    "@bun-issue/validation": ["@bun-issue/validation@workspace:packages/validation"],
+    "@bun-issue/validation": ["@bun-issue/validation@workspace:packages/validation", {}],
 
     "@types/bun": ["@types/bun@1.3.1", "", { "dependencies": { "bun-types": "1.3.1" } }, "sha512-4jNMk2/K9YJtfqwoAa28c8wK+T7nvJFOjxI4h/7sORWcypRNxBpr+TPNaCfVWq70tLCJsqoFwcf0oI0JU/fvMQ=="],
 

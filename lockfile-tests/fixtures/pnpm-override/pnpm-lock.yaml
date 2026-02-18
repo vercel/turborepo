@@ -1,0 +1,24 @@
+lockfileVersion: 5.4
+
+overrides:
+  "@nomiclabs/hardhat-ethers": npm:hardhat-deploy-ethers@^0.3.0-beta.13
+
+importers:
+  config/hardhat:
+    specifiers:
+      "@nomiclabs/hardhat-ethers": npm:hardhat-deploy-ethers@^0.3.0-beta.13
+    dependencies:
+      "@nomiclabs/hardhat-ethers": /hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy
+
+packages:
+  /hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy:
+    resolution:
+      {
+        integrity: sha512-PdWVcKB9coqWV1L7JTpfXRCI91Cgwsm7KLmBcwZ8f0COSm1xtABHZTyz3fvF6p42cTnz1VM0QnfDvMFlIRkSNw==,
+      }
+    peerDependencies:
+      ethers: ^5.0.0
+      hardhat: ^2.0.0
+    dependencies:
+      ethers: 5.7.2
+      hardhat: 2.12.4_typescript@4.9.4

@@ -1,0 +1,34 @@
+{
+  "lockfileVersion": 0,
+  "workspaces": {
+    "": {
+      "name": "minimal-bun",
+    },
+    "apps/a": {
+      "name": "a",
+      "dependencies": {
+        "is-odd": "3.0.1",
+      },
+    },
+    "apps/b": {
+      "name": "b",
+      "dependencies": {
+        "is-odd": "3.0.0",
+      },
+    },
+  },
+  "patchedDependencies": {
+    "is-odd@3.0.0": "patches/is-odd@3.0.0.patch",
+  },
+  "packages": {
+    "a": ["a@workspace:apps/a", { "dependencies": { "is-odd": "3.0.1" } }],
+
+    "b": ["b@workspace:apps/b", { "dependencies": { "is-odd": "3.0.0" } }],
+
+    "is-number": ["is-number@6.0.0", "", {}, "sha512-Wu1VHeILBK8KAWJUAiSZQX94GmOE45Rg6/538fKwiloUu21KncEkYGPqob2oSZ5mUT73vLGrHQjKw3KMPwfDzg=="],
+
+    "is-odd": ["is-odd@3.0.1", "", { "dependencies": { "is-number": "^6.0.0" } }, "sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA=="],
+
+    "b/is-odd": ["is-odd@3.0.0", "", { "dependencies": { "is-number": "^6.0.0" } }, "sha512-204vE5IJ0Cd6pA6x1dMyLooGk6/xeKuq90imFuJN/ndMDBP4Sk9tJpBlTedHPvt6KDbtTDTsjVzzgctFqNV7FQ=="],
+  }
+}

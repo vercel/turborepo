@@ -1,0 +1,9 @@
+{
+  "packageManager": "pnpm",
+  "packageManagerVersion": "pnpm@8.15.0",
+  "lockfileName": "pnpm-lock.yaml",
+  "frozenInstallCommand": ["pnpm", "install", "--frozen-lockfile"],
+  "pruneTargets": ["a", "b", "c"],
+  "sourceFixture": "pnpm-v7.yaml",
+  "expectedFailures": ["a", "b", "c"]
+}

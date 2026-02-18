@@ -1,0 +1,25 @@
+{
+  "name": "@maxmove/i18n",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "echo 'No build step'",
+    "clean": "rm -rf node_modules bun.lock*",
+    "lint": "eslint ."
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "eslint": "^9.26.0",
+    "typescript-config": "workspace:*"
+  }
+}

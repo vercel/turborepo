@@ -1,0 +1,15 @@
+{
+  "name": "lockfile-tests",
+  "private": true,
+  "scripts": {
+    "check-lockfiles": "tsx check-lockfiles.ts",
+    "check-lockfiles:sandbox": "tsx --env-file=.env.local check-lockfiles.ts --sandbox",
+    "generate-fixtures": "tsx generate-fixtures.ts"
+  },
+  "devDependencies": {
+    "@vercel/sandbox": "^1.4.1",
+    "js-yaml": "^4.1.0",
+    "@types/js-yaml": "^4.0.9",
+    "tsx": "4.21.0"
+  }
+}

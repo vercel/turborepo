@@ -1,0 +1,9 @@
+{
+  "packageManager": "pnpm",
+  "packageManagerVersion": "pnpm@7.33.0",
+  "lockfileName": "pnpm-lock.yaml",
+  "frozenInstallCommand": ["pnpm", "install", "--frozen-lockfile"],
+  "pruneTargets": ["dependency"],
+  "sourceFixture": "pnpm-patch.yaml",
+  "expectedFailures": ["dependency"]
+}

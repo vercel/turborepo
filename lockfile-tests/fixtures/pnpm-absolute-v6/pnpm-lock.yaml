@@ -1,0 +1,18 @@
+lockfileVersion: "6.0"
+importers:
+  packages/a:
+    dependencies:
+      "@scope/parent":
+        specifier: ^1.0.0
+        version: 1.0.0
+
+packages:
+  /@scope/parent@1.0.0:
+    resolution: { integrity: junk }
+    dependencies:
+      child: /@scope/child@1.0.0
+    dev: false
+
+  /@scope/child@1.0.0:
+    resolution: { integrity: junk }
+    dev: false

@@ -1,0 +1,30 @@
+{
+  "name": "@maxmove/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "maxmove": "src/index.ts",
+    "mm": "src/index.ts"
+  },
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "dev": "bun run src/index.ts",
+    "test": "bun test",
+    "lint": "eslint . --no-error-on-unmatched-pattern",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@maxmove/sdk": "workspace:*",
+    "@connectrpc/connect": "catalog:",
+    "@connectrpc/connect-web": "catalog:"
+  },
+  "devDependencies": {
+    "bun-types": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:"
+  },
+  "engines": {
+    "bun": ">=1.2.0"
+  }
+}
