@@ -26,6 +26,7 @@ use std::{
 
 pub use berry::{Error as BerryError, *};
 pub use bun::{BunLockfile, bun_global_change};
+use dashmap::DashMap;
 pub use error::Error;
 pub use npm::*;
 pub use pnpm::{PnpmLockfile, pnpm_global_change, pnpm_subgraph};
@@ -33,6 +34,8 @@ use rayon::prelude::*;
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
+
+type ResolveCache = DashMap<(String, String, String), Option<Package>>;
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
@@ -125,14 +128,16 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     workspaces: HashMap<String, HashMap<String, String>>,
     ignore_missing_packages: bool,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
+    let resolve_cache: ResolveCache = DashMap::new();
     workspaces
         .into_par_iter()
         .map(|(workspace, unresolved_deps)| {
-            let closure = transitive_closure(
+            let closure = transitive_closure_cached(
                 lockfile,
                 &workspace,
                 unresolved_deps,
                 ignore_missing_packages,
+                &resolve_cache,
             )?;
             Ok((workspace, closure))
         })
@@ -146,6 +151,23 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
     unresolved_deps: HashMap<String, String>,
     ignore_missing_packages: bool,
 ) -> Result<HashSet<Package>, Error> {
+    let resolve_cache: ResolveCache = DashMap::new();
+    transitive_closure_cached(
+        lockfile,
+        workspace_path,
+        unresolved_deps,
+        ignore_missing_packages,
+        &resolve_cache,
+    )
+}
+
+fn transitive_closure_cached<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspace_path: &str,
+    unresolved_deps: HashMap<String, String>,
+    ignore_missing_packages: bool,
+    resolve_cache: &ResolveCache,
+) -> Result<HashSet<Package>, Error> {
     let mut transitive_deps = HashSet::new();
     transitive_closure_helper(
         lockfile,
@@ -153,6 +175,7 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
         unresolved_deps,
         &mut transitive_deps,
         ignore_missing_packages,
+        resolve_cache,
     )?;
 
     Ok(transitive_deps)
@@ -164,31 +187,30 @@ fn transitive_closure_helper<L: Lockfile + ?Sized>(
     unresolved_deps: HashMap<String, impl AsRef<str>>,
     resolved_deps: &mut HashSet<Package>,
     ignore_missing_packages: bool,
-) -> Result<(), Error> {
-    transitive_closure_helper_impl(
-        lockfile,
-        workspace_path,
-        unresolved_deps,
-        resolved_deps,
-        ignore_missing_packages,
-    )
-}
-
-/// Core transitive closure implementation that walks dependencies.
-fn transitive_closure_helper_impl<L: Lockfile + ?Sized>(
-    lockfile: &L,
-    workspace_path: &str,
-    unresolved_deps: HashMap<String, impl AsRef<str>>,
-    resolved_deps: &mut HashSet<Package>,
-    ignore_missing_packages: bool,
+    resolve_cache: &ResolveCache,
 ) -> Result<(), Error> {
     for (name, specifier) in unresolved_deps {
-        let pkg = match lockfile.resolve_package(workspace_path, &name, specifier.as_ref()) {
-            Ok(pkg) => pkg,
-            Err(Error::MissingWorkspace(_)) if ignore_missing_packages => {
-                continue;
+        let specifier_ref = specifier.as_ref();
+        let cache_key = (
+            workspace_path.to_string(),
+            name.clone(),
+            specifier_ref.to_string(),
+        );
+
+        let pkg = match resolve_cache.get(&cache_key) {
+            Some(cached) => cached.clone(),
+            None => {
+                let result = match lockfile.resolve_package(workspace_path, &name, specifier_ref) {
+                    Ok(pkg) => pkg,
+                    Err(Error::MissingWorkspace(_)) if ignore_missing_packages => {
+                        resolve_cache.insert(cache_key, None);
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                };
+                resolve_cache.insert(cache_key, result.clone());
+                result
             }
-            Err(e) => return Err(e),
         };
 
         match pkg {
@@ -202,14 +224,13 @@ fn transitive_closure_helper_impl<L: Lockfile + ?Sized>(
                 let all_deps = lockfile.all_dependencies(&pkg.key)?;
                 resolved_deps.insert(pkg);
                 if let Some(deps) = all_deps {
-                    // we've already found one unresolved dependency, so we can't ignore its set of
-                    // dependencies.
-                    transitive_closure_helper_impl(
+                    transitive_closure_helper(
                         lockfile,
                         workspace_path,
                         deps,
                         resolved_deps,
                         false,
+                        resolve_cache,
                     )?;
                 }
             }

@@ -5,20 +5,39 @@ use std::{
 };
 
 use semver::Version;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use turbopath::RelativeUnixPathBuf;
 
 use super::{Error, LockfileVersion, SupportedLockfileVersion, dep_path::DepPath};
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
-type Packages = Map<String, PackageSnapshot>;
-type Snapshots = Map<String, PackageSnapshotV7>;
+type Packages = HashMap<String, PackageSnapshot>;
+type Snapshots = HashMap<String, PackageSnapshotV7>;
+
+fn serialize_optional_hashmap_as_sorted<S, V>(
+    value: &Option<HashMap<String, V>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    V: Serialize,
+{
+    match value {
+        Some(map) => {
+            let sorted: BTreeMap<_, _> = map.iter().collect();
+            sorted.serialize(serializer)
+        }
+        None => serializer.serialize_none(),
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PnpmLockfile {
     lockfile_version: LockfileVersion,
+    #[serde(skip)]
+    cached_version: SupportedLockfileVersion,
     #[serde(skip_serializing_if = "Option::is_none")]
     settings: Option<LockfileSettings>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -38,10 +57,18 @@ pub struct PnpmLockfile {
     #[serde(skip_serializing_if = "Option::is_none")]
     patched_dependencies: Option<Map<String, PatchFile>>,
     importers: Map<String, ProjectSnapshot>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_optional_hashmap_as_sorted"
+    )]
     packages: Option<Packages>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        serialize_with = "serialize_optional_hashmap_as_sorted"
+    )]
     snapshots: Option<Snapshots>,
+    #[serde(skip)]
+    dependency_index: HashMap<String, HashMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
 }
@@ -181,8 +208,27 @@ struct LockfileSettings {
 
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
-        let this = serde_yaml_ng::from_slice(bytes)?;
+        let mut this: Self = serde_yaml_ng::from_slice(bytes)?;
+        this.cached_version = this.compute_version();
+        this.build_dependency_index();
         Ok(this)
+    }
+
+    fn build_dependency_index(&mut self) {
+        let mut index = HashMap::new();
+        if let Some(snapshots) = &self.snapshots {
+            for (key, snapshot) in snapshots {
+                index.insert(key.clone(), snapshot.dependencies());
+            }
+        }
+        if let Some(packages) = &self.packages {
+            for (key, entry) in packages {
+                index
+                    .entry(key.clone())
+                    .or_insert_with(|| entry.snapshot.dependencies());
+            }
+        }
+        self.dependency_index = index;
     }
 
     fn get_packages(&self, key: &str) -> Option<&PackageSnapshot> {
@@ -226,6 +272,10 @@ impl PnpmLockfile {
     }
 
     fn version(&self) -> SupportedLockfileVersion {
+        self.cached_version
+    }
+
+    fn compute_version(&self) -> SupportedLockfileVersion {
         if matches!(self.lockfile_version.format, super::VersionFormat::Float) {
             return SupportedLockfileVersion::V5;
         }
@@ -236,11 +286,37 @@ impl PnpmLockfile {
     }
 
     fn format_key(&self, name: &str, version: &str) -> String {
-        match self.version() {
-            SupportedLockfileVersion::V5 => format!("/{name}/{version}"),
-            SupportedLockfileVersion::V6 => format!("/{name}@{version}"),
-            SupportedLockfileVersion::V7AndV9 => format!("{name}@{version}"),
+        let mut buf = String::with_capacity(name.len() + version.len() + 2);
+        self.format_key_into(&mut buf, name, version);
+        buf
+    }
+
+    fn format_key_into(&self, buf: &mut String, name: &str, version: &str) {
+        buf.clear();
+        match self.cached_version {
+            SupportedLockfileVersion::V5 => {
+                buf.push('/');
+                buf.push_str(name);
+                buf.push('/');
+                buf.push_str(version);
+            }
+            SupportedLockfileVersion::V6 => {
+                buf.push('/');
+                buf.push_str(name);
+                buf.push('@');
+                buf.push_str(version);
+            }
+            SupportedLockfileVersion::V7AndV9 => {
+                buf.push_str(name);
+                buf.push('@');
+                buf.push_str(version);
+            }
         }
+    }
+
+    fn has_package_by_parts(&self, name: &str, version: &str, key_buf: &mut String) -> bool {
+        self.format_key_into(key_buf, name, version);
+        self.has_package(key_buf)
     }
 
     // Extracts the version from a dependency path
@@ -268,28 +344,27 @@ impl PnpmLockfile {
             .unwrap_or(specifier)
     }
 
-    // Given a package and version specifier resolves it to an exact version
     fn resolve_specifier<'a>(
         &'a self,
         workspace_path: &str,
         name: &str,
         specifier: &'a str,
+        key_buf: &mut String,
     ) -> Result<Option<&'a str>, crate::Error> {
         let importer = self.get_workspace(workspace_path)?;
 
         let Some((resolved_specifier, resolved_version)) =
             importer.dependencies.find_resolution(name)
         else {
-            // Check if the specifier is already an exact version
             return Ok(self
-                .has_package(&self.format_key(name, specifier))
+                .has_package_by_parts(name, specifier, key_buf)
                 .then_some(specifier));
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
         if resolved_specifier == override_specifier {
             Ok(Some(resolved_version))
-        } else if self.has_package(&self.format_key(name, override_specifier)) {
+        } else if self.has_package_by_parts(name, override_specifier, key_buf) {
             Ok(Some(override_specifier))
         } else {
             Ok(None)
@@ -299,7 +374,7 @@ impl PnpmLockfile {
     fn prune_patches(
         &self,
         patches: &Map<String, PatchFile>,
-        pruned_packages: &Map<String, PackageSnapshot>,
+        pruned_packages: &Packages,
     ) -> Result<Map<String, PatchFile>, Error> {
         let mut pruned_patches = Map::new();
         for dependency in pruned_packages.keys() {
@@ -339,9 +414,9 @@ impl PnpmLockfile {
         &self,
         packages: &[String],
     ) -> Result<(Packages, Option<Snapshots>), crate::Error> {
-        let mut pruned_packages = Map::new();
+        let mut pruned_packages = HashMap::new();
         if let Some(snapshots) = self.snapshots.as_ref() {
-            let mut pruned_snapshots = Map::new();
+            let mut pruned_snapshots = HashMap::new();
             for package in packages {
                 let entry = snapshots
                     .get(package.as_str())
@@ -396,18 +471,25 @@ impl crate::Lockfile for PnpmLockfile {
             }));
         }
 
-        let Some(resolved_version) = self.resolve_specifier(workspace_path, name, version)? else {
+        let mut key_buf = String::with_capacity(name.len() + version.len() + 2);
+
+        let Some(resolved_version) =
+            self.resolve_specifier(workspace_path, name, version, &mut key_buf)?
+        else {
             return Ok(None);
         };
 
-        let key = self.format_key(name, resolved_version);
+        self.format_key_into(&mut key_buf, name, resolved_version);
 
-        if self.has_package(&key) {
+        if self.has_package(&key_buf) {
             let version = self
-                .package_version(&key)
+                .package_version(&key_buf)
                 .unwrap_or(resolved_version)
                 .to_owned();
-            Ok(Some(crate::Package { key, version }))
+            Ok(Some(crate::Package {
+                key: key_buf,
+                version,
+            }))
         } else if self.has_package(resolved_version) {
             let version = self.package_version(resolved_version).map_or_else(
                 || {
@@ -430,18 +512,7 @@ impl crate::Lockfile for PnpmLockfile {
         &self,
         key: &str,
     ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
-        // Check snapshots for v7
-        if let Some(snapshot) = self
-            .snapshots
-            .as_ref()
-            .and_then(|snapshots| snapshots.get(key))
-        {
-            return Ok(Some(snapshot.dependencies()));
-        }
-        let Some(entry) = self.packages.as_ref().and_then(|pkgs| pkgs.get(key)) else {
-            return Ok(None);
-        };
-        Ok(Some(entry.snapshot.dependencies()))
+        Ok(self.dependency_index.get(key).cloned())
     }
 
     fn subgraph(
@@ -496,6 +567,7 @@ impl crate::Lockfile for PnpmLockfile {
                 true => None,
             },
             lockfile_version: self.lockfile_version.clone(),
+            cached_version: self.cached_version,
             never_built_dependencies: self.never_built_dependencies.clone(),
             only_built_dependencies: self.only_built_dependencies.clone(),
             ignored_optional_dependencies: self.ignored_optional_dependencies.clone(),
@@ -503,6 +575,7 @@ impl crate::Lockfile for PnpmLockfile {
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
             snapshots: pruned_snapshots,
+            dependency_index: HashMap::new(),
             time: None,
             settings: self.settings.clone(),
             pnpmfile_checksum: self.pnpmfile_checksum.clone(),
