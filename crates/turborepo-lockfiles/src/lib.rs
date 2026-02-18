@@ -172,107 +172,118 @@ fn transitive_closure_cached<L: Lockfile + ?Sized>(
     ignore_missing_packages: bool,
     resolve_cache: &ResolveCache,
 ) -> Result<HashSet<Package>, Error> {
-    let mut transitive_deps = HashSet::new();
-    let mut key_buf = String::new();
-    transitive_closure_helper(
+    let mut ctx = ClosureContext {
         lockfile,
         workspace_path,
+        resolve_cache,
+        key_buf: String::new(),
+    };
+    let mut transitive_deps = HashSet::new();
+    ctx.walk(
         &unresolved_deps,
         &mut transitive_deps,
         ignore_missing_packages,
-        resolve_cache,
-        &mut key_buf,
+        true,
     )?;
-
     Ok(transitive_deps)
 }
 
-fn make_cache_key(buf: &mut String, workspace_path: &str, name: &str, specifier: &str) {
-    buf.clear();
-    buf.reserve(workspace_path.len() + name.len() + specifier.len() + 2);
-    buf.push_str(workspace_path);
-    buf.push('\0');
-    buf.push_str(name);
-    buf.push('\0');
-    buf.push_str(specifier);
+struct ClosureContext<'a, L: Lockfile + ?Sized> {
+    lockfile: &'a L,
+    workspace_path: &'a str,
+    resolve_cache: &'a ResolveCache,
+    key_buf: String,
 }
 
-fn resolve_deps<L: Lockfile + ?Sized>(
-    lockfile: &L,
-    workspace_path: &str,
-    unresolved_deps: &HashMap<String, String>,
-    ignore_missing_packages: bool,
-    resolve_cache: &ResolveCache,
-    key_buf: &mut String,
-) -> Result<Vec<Package>, Error> {
-    let mut newly_resolved = Vec::new();
+impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
+    fn make_cache_key(&mut self, workspace_path: Option<&str>, name: &str, specifier: &str) {
+        self.key_buf.clear();
+        if let Some(wp) = workspace_path {
+            self.key_buf
+                .reserve(wp.len() + name.len() + specifier.len() + 2);
+            self.key_buf.push_str(wp);
+            self.key_buf.push('\0');
+        } else {
+            self.key_buf.reserve(name.len() + specifier.len() + 1);
+        }
+        self.key_buf.push_str(name);
+        self.key_buf.push('\0');
+        self.key_buf.push_str(specifier);
+    }
 
-    for (name, specifier) in unresolved_deps {
-        make_cache_key(key_buf, workspace_path, name, specifier);
+    fn resolve_deps(
+        &mut self,
+        unresolved_deps: &HashMap<String, String>,
+        ignore_missing_packages: bool,
+        is_workspace_root_deps: bool,
+    ) -> Result<Vec<Package>, Error> {
+        let mut newly_resolved = Vec::new();
 
-        let pkg = match resolve_cache.get(key_buf.as_str()) {
-            Some(cached) => cached.clone(),
-            None => {
-                let result = match lockfile.resolve_package(workspace_path, name, specifier) {
-                    Ok(pkg) => pkg,
-                    Err(Error::MissingWorkspace(_)) if ignore_missing_packages => {
-                        resolve_cache.insert(key_buf.clone(), None);
-                        continue;
-                    }
-                    Err(e) => return Err(e),
-                };
-                resolve_cache.insert(key_buf.clone(), result.clone());
-                result
+        for (name, specifier) in unresolved_deps {
+            // For direct workspace dependencies, include workspace_path in the cache key
+            // since resolution depends on the workspace's importer entry.
+            // For transitive sub-dependencies, the resolution is workspace-independent
+            // (the version is already a resolved lockfile key), so we omit workspace_path
+            // to enable cross-workspace cache sharing.
+            let wp = is_workspace_root_deps.then_some(self.workspace_path);
+            self.make_cache_key(wp, name, specifier);
+
+            let pkg = match self.resolve_cache.get(self.key_buf.as_str()) {
+                Some(cached) => cached.clone(),
+                None => {
+                    let result =
+                        match self
+                            .lockfile
+                            .resolve_package(self.workspace_path, name, specifier)
+                        {
+                            Ok(pkg) => pkg,
+                            Err(Error::MissingWorkspace(_)) if ignore_missing_packages => {
+                                self.resolve_cache.insert(self.key_buf.clone(), None);
+                                continue;
+                            }
+                            Err(e) => return Err(e),
+                        };
+                    self.resolve_cache
+                        .insert(self.key_buf.clone(), result.clone());
+                    result
+                }
+            };
+
+            if let Some(pkg) = pkg {
+                newly_resolved.push(pkg);
             }
-        };
-
-        if let Some(pkg) = pkg {
-            newly_resolved.push(pkg);
         }
+
+        Ok(newly_resolved)
     }
 
-    Ok(newly_resolved)
-}
+    fn walk(
+        &mut self,
+        unresolved_deps: &HashMap<String, String>,
+        resolved_deps: &mut HashSet<Package>,
+        ignore_missing_packages: bool,
+        is_workspace_root_deps: bool,
+    ) -> Result<(), Error> {
+        let newly_resolved = self.resolve_deps(
+            unresolved_deps,
+            ignore_missing_packages,
+            is_workspace_root_deps,
+        )?;
 
-fn transitive_closure_helper<L: Lockfile + ?Sized>(
-    lockfile: &L,
-    workspace_path: &str,
-    unresolved_deps: &HashMap<String, String>,
-    resolved_deps: &mut HashSet<Package>,
-    ignore_missing_packages: bool,
-    resolve_cache: &ResolveCache,
-    key_buf: &mut String,
-) -> Result<(), Error> {
-    let newly_resolved = resolve_deps(
-        lockfile,
-        workspace_path,
-        unresolved_deps,
-        ignore_missing_packages,
-        resolve_cache,
-        key_buf,
-    )?;
+        for pkg in newly_resolved {
+            if resolved_deps.contains(&pkg) {
+                continue;
+            }
 
-    for pkg in newly_resolved {
-        if resolved_deps.contains(&pkg) {
-            continue;
+            let all_deps = self.lockfile.all_dependencies(&pkg.key)?;
+            resolved_deps.insert(pkg);
+            if let Some(deps) = all_deps {
+                self.walk(&deps, resolved_deps, false, false)?;
+            }
         }
 
-        let all_deps = lockfile.all_dependencies(&pkg.key)?;
-        resolved_deps.insert(pkg);
-        if let Some(deps) = all_deps {
-            transitive_closure_helper(
-                lockfile,
-                workspace_path,
-                &deps,
-                resolved_deps,
-                false,
-                resolve_cache,
-                key_buf,
-            )?;
-        }
+        Ok(())
     }
-
-    Ok(())
 }
 
 impl Package {

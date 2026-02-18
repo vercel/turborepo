@@ -468,7 +468,6 @@ struct GlobalFields<'a> {
 }
 
 impl crate::Lockfile for PnpmLockfile {
-    #[tracing::instrument(skip(self))]
     fn resolve_package(
         &self,
         workspace_path: &str,
@@ -520,7 +519,6 @@ impl crate::Lockfile for PnpmLockfile {
         }
     }
 
-    #[tracing::instrument(skip(self))]
     fn all_dependencies(
         &self,
         key: &str,
