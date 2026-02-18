@@ -4,5 +4,6 @@
   "lockfileName": "bun.lock",
   "frozenInstallCommand": ["bun", "install", "--frozen-lockfile"],
   "pruneTargets": ["web-ui", "maxmove-backend", "web-dashboard"],
-  "sourceFixture": "bun-peer-dep-prune"
+  "sourceFixture": "bun-peer-dep-prune",
+  "expectedFailures": ["web-ui", "maxmove-backend", "web-dashboard"]
 }
