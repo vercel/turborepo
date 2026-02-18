@@ -36,7 +36,6 @@ interface FixtureMeta {
   packageManagerVersion: string;
   lockfileName: string;
   frozenInstallCommand: string[];
-  pruneTargets: string[];
   sourceFixture: string;
   /** Workspace names where pruning or frozen install is known to fail. */
   expectedFailures?: string[];
@@ -100,6 +99,45 @@ interface DiscoveredFixture {
   name: string;
   dir: string;
   meta: FixtureMeta;
+  pruneTargets: string[];
+}
+
+/**
+ * Discovers workspace package names by finding all package.json files in the
+ * fixture directory (excluding root and node_modules).
+ */
+function discoverPruneTargets(fixtureDir: string): string[] {
+  const rootPkgPath = path.join(fixtureDir, "package.json");
+  const rootName = fs.existsSync(rootPkgPath)
+    ? JSON.parse(fs.readFileSync(rootPkgPath, "utf-8")).name
+    : null;
+
+  const targets: string[] = [];
+
+  function walk(dir: string) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (
+        entry.name === "node_modules" ||
+        entry.name === ".git" ||
+        entry.name === "out"
+      )
+        continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        const pkgPath = path.join(full, "package.json");
+        if (fs.existsSync(pkgPath)) {
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+          if (pkg.name && pkg.name !== rootName) {
+            targets.push(pkg.name);
+          }
+        }
+        walk(full);
+      }
+    }
+  }
+
+  walk(fixtureDir);
+  return targets.sort();
 }
 
 function discoverFixtures(args: CliArgs): DiscoveredFixture[] {
@@ -124,10 +162,12 @@ function discoverFixtures(args: CliArgs): DiscoveredFixture[] {
     if (args.pm && meta.packageManager !== args.pm) continue;
     if (args.fixture && !entry.name.includes(args.fixture)) continue;
 
+    const fixtureDir = path.join(FIXTURES_DIR, entry.name);
     fixtures.push({
       name: entry.name,
-      dir: path.join(FIXTURES_DIR, entry.name),
-      meta
+      dir: fixtureDir,
+      meta,
+      pruneTargets: discoverPruneTargets(fixtureDir)
     });
   }
 
@@ -147,8 +187,8 @@ function buildTestCases(
 
   for (const fixture of fixtures) {
     const targets = args.workspace
-      ? fixture.meta.pruneTargets.filter((t) => t === args.workspace)
-      : fixture.meta.pruneTargets;
+      ? fixture.pruneTargets.filter((t) => t === args.workspace)
+      : fixture.pruneTargets;
 
     const expectedSet = new Set(fixture.meta.expectedFailures ?? []);
 
