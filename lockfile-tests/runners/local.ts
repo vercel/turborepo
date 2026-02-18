@@ -15,7 +15,7 @@ function exec(
       {
         cwd,
         env: { ...process.env, ...env },
-        timeout: 5 * 60 * 1000,
+        timeout: 10 * 60 * 1000,
         maxBuffer: 10 * 1024 * 1024
       },
       (error, stdout, stderr) => {
@@ -112,11 +112,14 @@ export class LocalRunner {
         // Put the installed bun at the front of PATH
         fullPath = `${bunDir}/bin:${fullPath}`;
 
-        // Verify it's the right version
+        // Verify it's the right version and log the binary path
+        const whichBun = await exec("which bun", tmpDir, { PATH: fullPath });
         const versionCheck = await exec("bun --version", tmpDir, {
           PATH: fullPath
         });
-        log(`[${label}] bun version: ${versionCheck.stdout.trim()}`);
+        log(
+          `[${label}] bun binary: ${whichBun.stdout.trim()}, version: ${versionCheck.stdout.trim()}`
+        );
       } else {
         log(`[${label}] corepack prepare ${fixture.packageManagerVersion}`);
         const prep = await exec(
@@ -146,7 +149,7 @@ export class LocalRunner {
           .filter(Boolean)
           .join("\n");
         result.error =
-          `INVALID FIXTURE: frozen install fails on unpruned original.\n` +
+          `INVALID FIXTURE: frozen install fails on unpruned original (exit ${validateResult.exitCode}).\n` +
           `This means the fixture's package.jsons don't match its lockfile.\n` +
           `Fix the fixture or rebuild it from a real repo.\n\n${output}`;
         // For expected failures, this is a known issue with parser-generated
