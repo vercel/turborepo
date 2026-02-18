@@ -1,3 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+patchedDependencies:
+  is-number@7.0.0: patches/is-number@7.0.0.patch
+  is-odd: patches/is-odd.patch

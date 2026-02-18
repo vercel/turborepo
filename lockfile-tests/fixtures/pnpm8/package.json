@@ -2,5 +2,10 @@
   "name": "root",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@8.15.0"
+  "packageManager": "pnpm@8.15.0",
+  "pnpm": {
+    "patchedDependencies": {
+      "is-even@1.0.0": "patches/is-even@1.0.0.patch"
+    }
+  }
 }

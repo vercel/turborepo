@@ -2,5 +2,11 @@
   "name": "root",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@8.15.0"
+  "packageManager": "pnpm@8.15.0",
+  "pnpm": {
+    "patchedDependencies": {
+      "lodash@4.17.21": "patches/lodash@4.17.21.patch",
+      "@babel/helper-string-parser@7.19.4": "patches/@babel__helper-string-parser@7.19.4.patch"
+    }
+  }
 }

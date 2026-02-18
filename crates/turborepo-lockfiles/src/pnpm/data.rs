@@ -8,7 +8,7 @@ use semver::Version;
 use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
-use super::{Error, LockfileVersion, SupportedLockfileVersion, dep_path::DepPath};
+use super::{dep_path::DepPath, Error, LockfileVersion, SupportedLockfileVersion};
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
@@ -175,6 +175,7 @@ pub struct PackageResolution {
 struct LockfileSettings {
     auto_install_peers: Option<bool>,
     exclude_links_from_lockfile: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     inject_workspace_packages: Option<bool>,
 }
 
