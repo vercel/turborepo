@@ -2,7 +2,7 @@ import { execSync } from "child_process";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import type { TestCase, TestResult, Runner } from "../parsers/types";
+import type { TestCase, TestResult } from "../parsers/types";
 
 function exec(
   command: string,
@@ -41,7 +41,7 @@ function copyDirSync(src: string, dest: string): void {
   }
 }
 
-export class LocalRunner implements Runner {
+export class LocalRunner {
   async runTestCase(
     testCase: TestCase,
     turboBinaryPath: string

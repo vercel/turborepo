@@ -55,19 +55,3 @@ export interface TestResult {
   error?: string;
   durationMs: number;
 }
-
-/**
- * A runner encapsulates the environment where we copy a fixture, run turbo
- * prune, and run the frozen install. Implementations exist for local (temp
- * directory + child_process) and remote (Vercel Sandbox).
- *
- * The fixture directory path is in testCase.fixture.filepath.
- */
-export interface Runner {
-  /** One-time setup before any tests run (e.g. build snapshot). */
-  prepare?(): Promise<void>;
-  /** Run a single test case. */
-  runTestCase(testCase: TestCase, turboBinaryPath: string): Promise<TestResult>;
-  /** Cleanup after all tests complete (e.g. delete snapshot). */
-  cleanup?(): Promise<void>;
-}

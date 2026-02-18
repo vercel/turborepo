@@ -7,16 +7,11 @@
  * Each fixture under lockfile-tests/fixtures/ is a complete monorepo with a
  * meta.json describing the package manager, frozen install command, and which
  * workspaces to prune to. This script copies each fixture into a temp
- * directory (or sandbox), runs `turbo prune` for every target workspace, then
- * runs the frozen install to prove the pruned lockfile is valid.
- *
- * Supports two execution modes:
- *   --local    (default) Uses temp directories on the local machine
- *   --sandbox  Uses Vercel Sandboxes (requires VERCEL_TOKEN)
+ * directory, runs `turbo prune` for every target workspace, then runs the
+ * frozen install to prove the pruned lockfile is valid.
  *
  * Usage:
- *   pnpm check-lockfiles                                         # All fixtures, local
- *   pnpm check-lockfiles --sandbox                               # All fixtures, sandbox
+ *   pnpm check-lockfiles                                         # All fixtures
  *   pnpm check-lockfiles --fixture pnpm8                         # Match fixture name
  *   pnpm check-lockfiles --pm pnpm                               # Only pnpm fixtures
  *   pnpm check-lockfiles --fixture pnpm8 --workspace a           # Specific target
@@ -26,12 +21,8 @@
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
-import type {
-  PackageManagerType,
-  Runner,
-  TestCase,
-  TestResult
-} from "./parsers/types";
+import type { PackageManagerType, TestCase, TestResult } from "./parsers/types";
+import { LocalRunner } from "./runners/local";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,15 +52,10 @@ interface CliArgs {
   workspace?: string;
   turboPath?: string;
   concurrency: number;
-  mode: "local" | "sandbox";
-  /** Git ref to build turbo from in sandbox mode (commit SHA or branch). */
-  gitRef?: string;
-  /** Reuse an existing snapshot instead of building a new one. */
-  snapshotId?: string;
 }
 
 function parseArgs(): CliArgs {
-  const args: CliArgs = { concurrency: 10, mode: "local" };
+  const args: CliArgs = { concurrency: 10 };
   const argv = process.argv.slice(2);
 
   for (let i = 0; i < argv.length; i++) {
@@ -97,16 +83,6 @@ function parseArgs(): CliArgs {
       i++;
     } else if (arg === "--concurrency" && next) {
       args.concurrency = parseInt(next, 10);
-      i++;
-    } else if (arg === "--sandbox") {
-      args.mode = "sandbox";
-    } else if (arg === "--local") {
-      args.mode = "local";
-    } else if (arg === "--git-ref" && next) {
-      args.gitRef = next;
-      i++;
-    } else if (arg === "--snapshot-id" && next) {
-      args.snapshotId = next;
       i++;
     }
   }
@@ -274,30 +250,12 @@ async function runWithConcurrency<T, R>(
 }
 
 // ---------------------------------------------------------------------------
-// Runner factory
-// ---------------------------------------------------------------------------
-
-async function createRunner(args: CliArgs): Promise<Runner> {
-  if (args.mode === "sandbox") {
-    const { SandboxRunner } = await import("./runners/sandbox");
-    return new SandboxRunner({
-      gitRef: args.gitRef,
-      snapshotId: args.snapshotId
-    });
-  }
-  const { LocalRunner } = await import("./runners/local");
-  return new LocalRunner();
-}
-
-// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
   const totalStart = Date.now();
   const args = parseArgs();
-
-  console.log(`Mode: ${args.mode}\n`);
 
   const fixtures = discoverFixtures(args);
   console.log(`Found ${fixtures.length} fixtures\n`);
@@ -318,33 +276,21 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Sandbox mode builds turbo inside the sandbox; local mode needs a local binary
-  const turboBinary = args.mode === "local" ? findTurboBinary(args) : "";
-  const runner = await createRunner(args);
+  const turboBinary = findTurboBinary(args);
+  const runner = new LocalRunner();
 
-  if (runner.prepare) {
-    await runner.prepare();
+  console.log("\nTest plan:");
+  for (const tc of testCases) {
+    console.log(`  ${tc.label}`);
   }
 
-  let results: TestResult[];
-  try {
-    console.log("\nTest plan:");
-    for (const tc of testCases) {
-      console.log(`  ${tc.label}`);
-    }
+  console.log(
+    `\nRunning ${testCases.length} tests (concurrency: ${args.concurrency})...\n`
+  );
 
-    console.log(
-      `\nRunning ${testCases.length} tests (concurrency: ${args.concurrency})...\n`
-    );
-
-    results = await runWithConcurrency(testCases, args.concurrency, (tc) =>
-      runner.runTestCase(tc, turboBinary)
-    );
-  } finally {
-    if (runner.cleanup) {
-      await runner.cleanup();
-    }
-  }
+  const results = await runWithConcurrency(testCases, args.concurrency, (tc) =>
+    runner.runTestCase(tc, turboBinary)
+  );
 
   // Summary
   const totalDuration = Date.now() - totalStart;

@@ -588,54 +588,9 @@ jobs:
       - name: Build turbo binary
         run: cargo build
 
-      - name: Run lockfile tests (local)
+      - name: Run lockfile tests
         run: pnpm check-lockfiles
         working-directory: lockfile-tests
-
-      # Sandbox mode: builds turbo inside a Vercel Sandbox, snapshots it,
-      # then runs all tests from the snapshot. This tests in a clean Linux
-      # environment independent of the CI runner.
-      #
-      # Uses snapshot caching: if Cargo.lock and rust-toolchain.toml haven't
-      # changed, reuses the previous build snapshot.
-      - name: Compute snapshot cache key
-        id: snapshot-cache-key
-        run: |
-          HASH=$(cat Cargo.lock rust-toolchain.toml | sha256sum | cut -d' ' -f1)
-          echo "key=lockfile-snapshot-${HASH}" >> $GITHUB_OUTPUT
-
-      - name: Restore snapshot cache
-        id: snapshot-cache
-        uses: actions/cache@v4
-        with:
-          path: lockfile-tests/.snapshot-id
-          key: ${{ steps.snapshot-cache-key.outputs.key }}
-
-      - name: Read cached snapshot ID
-        id: read-snapshot
-        if: steps.snapshot-cache.outputs.cache-hit == 'true'
-        run: |
-          if [ -f lockfile-tests/.snapshot-id ]; then
-            echo "id=$(cat lockfile-tests/.snapshot-id)" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run lockfile tests (sandbox)
-        working-directory: lockfile-tests
-        run: |
-          ARGS="--sandbox --git-ref ${{ github.sha }}"
-          if [ -n "${{ steps.read-snapshot.outputs.id }}" ]; then
-            ARGS="$ARGS --snapshot-id ${{ steps.read-snapshot.outputs.id }}"
-          fi
-          pnpm check-lockfiles:sandbox $ARGS
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-
-      - name: Save snapshot ID for cache
-        if: steps.snapshot-cache.outputs.cache-hit != 'true'
-        run: |
-          if [ -f lockfile-tests/.snapshot-id ]; then
-            echo "Snapshot ID saved for caching: $(cat lockfile-tests/.snapshot-id)"
-          fi
 
   js_native_packages:
     name: "@turbo/repository (${{matrix.os.name}}, Node ${{matrix.node-version}})"
