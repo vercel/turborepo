@@ -32,6 +32,18 @@ where
     }
 }
 
+fn serialize_hashmap_as_sorted<S, V>(
+    value: &HashMap<String, V>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    V: Serialize,
+{
+    let sorted: BTreeMap<_, _> = value.iter().collect();
+    sorted.serialize(serializer)
+}
+
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct PnpmLockfile {
@@ -56,7 +68,8 @@ pub struct PnpmLockfile {
     package_extensions_checksum: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     patched_dependencies: Option<Map<String, PatchFile>>,
-    importers: Map<String, ProjectSnapshot>,
+    #[serde(serialize_with = "serialize_hashmap_as_sorted")]
+    importers: HashMap<String, ProjectSnapshot>,
     #[serde(
         skip_serializing_if = "Option::is_none",
         serialize_with = "serialize_optional_hashmap_as_sorted"
@@ -511,8 +524,12 @@ impl crate::Lockfile for PnpmLockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
-        Ok(self.dependency_index.get(key).cloned())
+    ) -> Result<Option<std::borrow::Cow<'_, std::collections::HashMap<String, String>>>, crate::Error>
+    {
+        Ok(self
+            .dependency_index
+            .get(key)
+            .map(std::borrow::Cow::Borrowed))
     }
 
     fn subgraph(
@@ -520,12 +537,12 @@ impl crate::Lockfile for PnpmLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn crate::Lockfile>, crate::Error> {
-        let importers = self
+        let importers: HashMap<_, _> = self
             .importers
             .iter()
             .filter(|(key, _)| key.as_str() == "." || workspace_packages.contains(key))
             .map(|(k, v)| (k.clone(), v.clone()))
-            .collect::<Map<_, _>>();
+            .collect();
 
         let (mut pruned_packages, pruned_snapshots) =
             self.pruned_packages_and_snapshots(packages)?;

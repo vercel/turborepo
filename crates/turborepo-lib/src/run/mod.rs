@@ -19,7 +19,6 @@ use std::{
 use chrono::{DateTime, Local};
 use futures::StreamExt;
 use itertools::Itertools;
-use rayon::iter::ParallelBridge;
 use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
@@ -589,7 +588,7 @@ impl Run {
         let repo_index = self.repo_index.as_ref().as_ref();
         let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
             &self.scm,
-            self.engine.tasks().par_bridge(),
+            self.engine.tasks(),
             workspaces,
             self.engine.task_definitions(),
             &self.repo_root,

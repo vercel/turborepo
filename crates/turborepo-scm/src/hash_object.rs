@@ -1,8 +1,40 @@
 #![cfg(feature = "git2")]
-use tracing::Span;
+use tracing::{Span, debug};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
 
 use crate::{Error, GitHashes};
+
+const MAX_RETRIES: u32 = 10;
+const BASE_DELAY_MS: u64 = 10;
+const MAX_DELAY_MS: u64 = 1000;
+
+fn hash_file_with_retry(path: &AbsoluteSystemPath) -> Result<git2::Oid, git2::Error> {
+    for attempt in 0..MAX_RETRIES {
+        match git2::Oid::hash_file(git2::ObjectType::Blob, path) {
+            Ok(oid) => return Ok(oid),
+            Err(e) if is_too_many_open_files(&e) => {
+                let delay = std::cmp::min(BASE_DELAY_MS * 2u64.pow(attempt), MAX_DELAY_MS);
+                debug!(
+                    attempt = attempt + 1,
+                    delay_ms = delay,
+                    "too many open files, retrying hash_file"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    git2::Oid::hash_file(git2::ObjectType::Blob, path)
+}
+
+fn is_too_many_open_files(e: &git2::Error) -> bool {
+    if e.class() != git2::ErrorClass::Os {
+        return false;
+    }
+    // git2 wraps the OS error message; check for the standard text.
+    let msg = e.message();
+    msg.contains("Too many open files") || msg.contains("EMFILE")
+}
 
 #[tracing::instrument(skip(git_root, hashes, to_hash))]
 pub(crate) fn hash_objects(
@@ -19,7 +51,7 @@ pub(crate) fn hash_objects(
         let _enter = span.enter();
 
         let full_file_path = git_root.join_unix_path(&filename);
-        match git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path) {
+        match hash_file_with_retry(&full_file_path) {
             Ok(hash) => {
                 let package_relative_path = pkg_prefix
                     .as_ref()
@@ -35,9 +67,6 @@ pub(crate) fn hash_objects(
                 hashes.insert(package_relative_path, hash.to_string());
             }
             Err(e) => {
-                // FIXME: we currently do not hash symlinks. "git hash-object" cannot handle
-                // them, and the Go implementation errors on them, switches to
-                // manual, and then skips them. For now, we'll skip them too.
                 if e.class() == git2::ErrorClass::Os
                     && full_file_path
                         .symlink_metadata()
@@ -46,7 +75,6 @@ pub(crate) fn hash_objects(
                 {
                     continue;
                 } else {
-                    // For any other error, ensure we attach some context to it
                     return Err(Error::git2_error_context(e, full_file_path.to_string()));
                 }
             }

@@ -460,7 +460,7 @@ pub fn globwalk_with_settings(
     walk_type: WalkType,
     settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    globwalk_internal(base_path, include, exclude, walk_type, settings)
+    retry_on_emfile(|| globwalk_internal(base_path, include, exclude, walk_type, settings))
 }
 
 pub fn globwalk(
@@ -469,7 +469,58 @@ pub fn globwalk(
     exclude: &[ValidatedGlob],
     walk_type: WalkType,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    globwalk_internal(base_path, include, exclude, walk_type, Default::default())
+    retry_on_emfile(|| {
+        globwalk_internal(base_path, include, exclude, walk_type, Default::default())
+    })
+}
+
+fn is_too_many_open_files(err: &WalkError) -> bool {
+    // visit_file converts all walkdir/wax errors into WalkError::IO,
+    // so this is the only variant we need to check.
+    let WalkError::IO(e) = err else {
+        return false;
+    };
+
+    #[cfg(unix)]
+    {
+        e.raw_os_error() == Some(24)
+    } // EMFILE
+    #[cfg(windows)]
+    {
+        e.raw_os_error() == Some(4)
+    } // ERROR_TOO_MANY_OPEN_FILES
+    #[cfg(not(any(unix, windows)))]
+    {
+        false
+    }
+}
+
+fn retry_on_emfile<F>(mut f: F) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError>
+where
+    F: FnMut() -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError>,
+{
+    const MAX_RETRIES: u32 = 10;
+    const BASE_DELAY_MS: u64 = 10;
+    const MAX_DELAY_MS: u64 = 1000;
+
+    for attempt in 0..MAX_RETRIES {
+        match f() {
+            Ok(result) => return Ok(result),
+            Err(err) if is_too_many_open_files(&err) => {
+                let delay = std::cmp::min(BASE_DELAY_MS * 2u64.pow(attempt), MAX_DELAY_MS);
+                debug!(
+                    attempt = attempt + 1,
+                    delay_ms = delay,
+                    "too many open files, retrying globwalk"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
+    // Final attempt — propagate whatever happens.
+    f()
 }
 
 #[tracing::instrument(skip(include, exclude))]

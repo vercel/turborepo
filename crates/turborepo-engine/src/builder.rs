@@ -1167,7 +1167,8 @@ mod test {
         fn all_dependencies(
             &self,
             _key: &str,
-        ) -> Result<Option<HashMap<String, String>>, turborepo_lockfiles::Error> {
+        ) -> Result<Option<std::borrow::Cow<'_, HashMap<String, String>>>, turborepo_lockfiles::Error>
+        {
             unreachable!()
         }
 

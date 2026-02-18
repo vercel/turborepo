@@ -79,14 +79,15 @@ impl Lockfile for Yarn1Lockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
+    ) -> Result<Option<std::borrow::Cow<'_, std::collections::HashMap<String, String>>>, crate::Error>
+    {
         let Some(entry) = self.inner.get(key) else {
             return Ok(None);
         };
 
         let all_deps: std::collections::HashMap<_, _> = entry.dependency_entries().collect();
         Ok(match all_deps.is_empty() {
-            false => Some(all_deps),
+            false => Some(std::borrow::Cow::Owned(all_deps)),
             true => None,
         })
     }
