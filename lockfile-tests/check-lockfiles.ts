@@ -21,7 +21,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { fileURLToPath } from "url";
-import type { PackageManagerType, TestCase, TestResult } from "./types";
+import type { PackageManagerType, TestCase } from "./types";
 import { LocalRunner } from "./runners/local";
 
 const __filename = fileURLToPath(import.meta.url);
