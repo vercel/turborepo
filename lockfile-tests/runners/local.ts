@@ -20,7 +20,6 @@ function exec(
       },
       (error, stdout, stderr) => {
         if (error) {
-          // error.code is the exit code (number at runtime, typed as string)
           const exitCode =
             typeof error.code === "number"
               ? error.code
@@ -55,7 +54,141 @@ function copyDirSync(src: string, dest: string): void {
   }
 }
 
+interface SetupResult {
+  installCmd: string;
+  fullPath: string;
+}
+
 export class LocalRunner {
+  // Tracks which fixtures have been validated (keyed by filepath)
+  private validated = new Map<string, string | null>();
+  // In-flight validation promises so concurrent tests for the same fixture wait
+  private validating = new Map<string, Promise<string | null>>();
+
+  /**
+   * Validates a fixture once. Returns null if valid, or an error message.
+   * Concurrent calls for the same fixture share a single validation run.
+   */
+  private validateFixture(
+    fixture: TestCase["fixture"],
+    turboBinaryPath: string
+  ): Promise<string | null> {
+    const key = fixture.filepath;
+
+    if (this.validated.has(key)) {
+      return Promise.resolve(this.validated.get(key)!);
+    }
+
+    if (this.validating.has(key)) {
+      return this.validating.get(key)!;
+    }
+
+    const promise = this.doValidate(fixture, turboBinaryPath).then((err) => {
+      this.validated.set(key, err);
+      this.validating.delete(key);
+      return err;
+    });
+    this.validating.set(key, promise);
+    return promise;
+  }
+
+  private async doValidate(
+    fixture: TestCase["fixture"],
+    turboBinaryPath: string
+  ): Promise<string | null> {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lockfile-validate-"));
+
+    try {
+      copyDirSync(fixture.filepath, tmpDir);
+      const { installCmd, fullPath } = await this.setupEnv(
+        fixture,
+        tmpDir,
+        turboBinaryPath,
+        console.log
+      );
+
+      console.log(`[${fixture.filename}] Validating fixture...`);
+      const result = await exec(installCmd, tmpDir, {
+        PATH: fullPath,
+        COREPACK_ENABLE_STRICT: "0"
+      });
+
+      if (result.exitCode !== 0) {
+        const output = [result.stdout, result.stderr]
+          .filter(Boolean)
+          .join("\n");
+        return (
+          `INVALID FIXTURE: frozen install fails on unpruned original (exit ${result.exitCode}).\n` +
+          `This means the fixture's package.jsons don't match its lockfile.\n` +
+          `Fix the fixture or rebuild it from a real repo.\n\n${output}`
+        );
+      }
+
+      console.log(`[${fixture.filename}] Fixture validated`);
+      return null;
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+
+  /**
+   * Sets up the environment in a temp dir: corepack, bun, PATH.
+   * Returns the install command and PATH to use.
+   */
+  private async setupEnv(
+    fixture: TestCase["fixture"],
+    tmpDir: string,
+    turboBinaryPath: string,
+    log: (...args: unknown[]) => void
+  ): Promise<SetupResult> {
+    const localBin = path.join(tmpDir, ".bin");
+    fs.mkdirSync(localBin, { recursive: true });
+    if (turboBinaryPath) {
+      fs.symlinkSync(turboBinaryPath, path.join(localBin, "turbo"));
+    }
+
+    const corepackBin = path.join(tmpDir, ".corepack-bin");
+    fs.mkdirSync(corepackBin, { recursive: true });
+    await exec(`corepack enable --install-directory "${corepackBin}"`, tmpDir);
+    let fullPath = `${corepackBin}:${localBin}:${process.env.PATH}`;
+
+    let installCmd = fixture.frozenInstallCommand.join(" ");
+
+    if (fixture.packageManager === "bun") {
+      const bunVersion = fixture.packageManagerVersion.replace("bun@", "");
+      const bunDir = path.join(tmpDir, ".bun-install");
+
+      log(`[${fixture.filename}] Installing bun@${bunVersion}`);
+      const bunInstall = await exec(
+        `curl -fsSL https://bun.sh/install | BUN_INSTALL="${bunDir}" bash -s "bun-v${bunVersion}"`,
+        tmpDir,
+        { PATH: fullPath }
+      );
+      if (bunInstall.exitCode !== 0) {
+        throw new Error(
+          `Failed to install bun@${bunVersion}: ${bunInstall.stderr}`
+        );
+      }
+      fullPath = `${bunDir}/bin:${fullPath}`;
+    } else {
+      log(
+        `[${fixture.filename}] corepack prepare ${fixture.packageManagerVersion}`
+      );
+      const prep = await exec(
+        `corepack prepare ${fixture.packageManagerVersion} --activate`,
+        tmpDir,
+        { PATH: fullPath, COREPACK_ENABLE_STRICT: "0" }
+      );
+      if (prep.exitCode !== 0) {
+        log(
+          `[${fixture.filename}] corepack prepare warning: ${prep.stderr || prep.stdout}`
+        );
+      }
+    }
+
+    return { installCmd, fullPath };
+  }
+
   async runTestCase(
     testCase: TestCase,
     turboBinaryPath: string
@@ -72,110 +205,29 @@ export class LocalRunner {
       durationMs: 0
     };
 
+    // Validate once per fixture
+    const validationError = await this.validateFixture(
+      fixture,
+      turboBinaryPath
+    );
+    if (validationError) {
+      result.error = validationError;
+      result.durationMs = Date.now() - startTime;
+      return result;
+    }
+
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "lockfile-test-"));
 
     try {
       log(`[${label}] Copying fixture to ${tmpDir}`);
       copyDirSync(fixture.filepath, tmpDir);
 
-      // Put turbo on PATH via symlink
-      const localBin = path.join(tmpDir, ".bin");
-      fs.mkdirSync(localBin);
-      fs.symlinkSync(turboBinaryPath, path.join(localBin, "turbo"));
-
-      // Set up corepack
-      const corepackBin = path.join(tmpDir, ".corepack-bin");
-      fs.mkdirSync(corepackBin);
-      await exec(
-        `corepack enable --install-directory "${corepackBin}"`,
-        tmpDir
+      const { installCmd, fullPath } = await this.setupEnv(
+        fixture,
+        tmpDir,
+        turboBinaryPath,
+        log
       );
-      let fullPath = `${corepackBin}:${localBin}:${process.env.PATH}`;
-
-      // Compute the install command (used for both validation and post-prune)
-      let installCmd = fixture.frozenInstallCommand.join(" ");
-      if (fixture.packageManager === "bun") {
-        const bunVersion = fixture.packageManagerVersion.replace("bun@", "");
-        const bunDir = path.join(tmpDir, ".bun-install");
-
-        log(`[${label}] Installing bun@${bunVersion}`);
-        const bunInstall = await exec(
-          `curl -fsSL https://bun.sh/install | BUN_INSTALL="${bunDir}" bash -s "bun-v${bunVersion}"`,
-          tmpDir,
-          { PATH: fullPath }
-        );
-        if (bunInstall.exitCode !== 0) {
-          result.error = `Failed to install bun@${bunVersion}: ${bunInstall.stderr}`;
-          return result;
-        }
-        fullPath = `${bunDir}/bin:${fullPath}`;
-
-        const whichBun = await exec("which bun", tmpDir, { PATH: fullPath });
-        const versionCheck = await exec("bun --version", tmpDir, {
-          PATH: fullPath
-        });
-        log(
-          `[${label}] bun binary: ${whichBun.stdout.trim()}, version: ${versionCheck.stdout.trim()}`
-        );
-      } else {
-        log(`[${label}] corepack prepare ${fixture.packageManagerVersion}`);
-        const prep = await exec(
-          `corepack prepare ${fixture.packageManagerVersion} --activate`,
-          tmpDir,
-          { PATH: fullPath, COREPACK_ENABLE_STRICT: "0" }
-        );
-        if (prep.exitCode !== 0) {
-          log(
-            `[${label}] corepack prepare warning: ${prep.stderr || prep.stdout}`
-          );
-        }
-      }
-
-      // Validate the unpruned fixture: frozen install must work on the
-      // original before we trust it as a test case. If this fails, the
-      // fixture's package.jsons don't match its lockfile — either the
-      // fixture was generated incorrectly or it needs to be rebuilt from
-      // a real repo.
-      log(`[${label}] Validating fixture (frozen install on original)...`);
-      const validateResult = await exec(installCmd, tmpDir, {
-        PATH: fullPath,
-        COREPACK_ENABLE_STRICT: "0"
-      });
-      if (validateResult.exitCode !== 0) {
-        const output = [validateResult.stdout, validateResult.stderr]
-          .filter(Boolean)
-          .join("\n");
-        result.error =
-          `INVALID FIXTURE: frozen install fails on unpruned original (exit ${validateResult.exitCode}).\n` +
-          `This means the fixture's package.jsons don't match its lockfile.\n` +
-          `Fix the fixture or rebuild it from a real repo.\n\n${output}`;
-        // For expected failures, this is a known issue with parser-generated
-        // fixtures. For unexpected tests, this is a hard error.
-        return result;
-      }
-      log(`[${label}] Fixture validated`);
-      // Clean up node_modules from validation so turbo prune sees a clean tree
-      await exec("rm -rf node_modules .pnp* .yarn/cache .bun", tmpDir);
-      // Also clean workspace node_modules
-      const cleanDirs = async (dir: string) => {
-        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-          if (!entry.isDirectory()) continue;
-          if (entry.name === "node_modules") {
-            fs.rmSync(path.join(dir, entry.name), {
-              recursive: true,
-              force: true
-            });
-          } else if (
-            entry.name !== ".bin" &&
-            entry.name !== ".corepack-bin" &&
-            entry.name !== ".git" &&
-            entry.name !== "out"
-          ) {
-            await cleanDirs(path.join(dir, entry.name));
-          }
-        }
-      };
-      await cleanDirs(tmpDir);
 
       // Git init (turbo requires it)
       await exec(
