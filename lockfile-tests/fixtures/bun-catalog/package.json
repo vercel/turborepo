@@ -1,0 +1,15 @@
+{
+  "name": "bun-catalog",
+  "private": true,
+  "packageManager": "bun@1.3.5",
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "lodash": "^4.17.21",
+      "is-odd": "^3.0.1"
+    }
+  }
+}

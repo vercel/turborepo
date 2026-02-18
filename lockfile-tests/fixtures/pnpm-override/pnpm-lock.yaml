@@ -1,0 +1,50 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+overrides:
+  is-number: ^7.0.0
+
+importers:
+
+  .: {}
+
+  apps/web:
+    dependencies:
+      '@repo/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      is-odd:
+        specifier: ^3.0.1
+        version: 3.0.1
+
+  packages/ui:
+    dependencies:
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.23
+
+packages:
+
+  is-number@7.0.0:
+    resolution: {integrity: sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng==}
+    engines: {node: '>=0.12.0'}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA==}
+    engines: {node: '>=4'}
+
+  lodash@4.17.23:
+    resolution: {integrity: sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w==}
+
+snapshots:
+
+  is-number@7.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 7.0.0
+
+  lodash@4.17.23: {}

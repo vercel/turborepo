@@ -324,7 +324,7 @@ struct WorkspaceEntry {
 struct PackageEntry {
     ident: String,
     registry: Option<String>,
-    // Present except for workspace & root deps
+    // Present for all package types except root deps
     info: Option<PackageInfo>,
     // Present on registry
     checksum: Option<String>,
@@ -877,8 +877,15 @@ impl BunLockfile {
 
             let ident = PackageIdent::parse(&entry.ident);
             if ident.is_workspace() {
+                // Workspace entries: [ident, info] — bun requires the info
+                // object even when empty
                 let ident_json = serde_json::to_string(&entry.ident)?;
-                output.push_str(&format!("    \"{key}\": [{ident_json}],"));
+                let info_json =
+                    serde_json::to_string(&entry.info.as_ref().unwrap_or(&PackageInfo::default()))?;
+                let info_json_spaced = self.format_info_json(&info_json);
+                output.push_str(&format!(
+                    "    \"{key}\": [{ident_json}, {info_json_spaced}],"
+                ));
             } else {
                 let ident_json = serde_json::to_string(&entry.ident)?;
                 let info_json =
@@ -1125,25 +1132,6 @@ impl BunLockfile {
             .get(name)
             .map(|s| s.as_str())
             .unwrap_or(version)
-    }
-
-    /// Checks if a version string is a workspace dependency reference
-    /// Returns the workspace path if it is (e.g., "packages/ui" ->
-    /// Some("packages/ui"))
-    #[cfg(test)]
-    fn resolve_workspace_dependency<'a>(&self, version: &'a str) -> Option<&'a str> {
-        // Quick filter: if it starts with version characters, it's definitely not a
-        // workspace
-        if version.starts_with('^') || version.starts_with('~') || version.starts_with('=') {
-            return None;
-        }
-
-        // Definitive check: does this path exist in our workspaces?
-        if self.data.workspaces.contains_key(version) {
-            Some(version)
-        } else {
-            None
-        }
     }
 
     /// Resolves a catalog reference to the actual version
@@ -1474,7 +1462,7 @@ impl BunLockfile {
             } else {
                 // Key doesn't exist in original lockfile - check if it's a workspace name
                 // and create a workspace mapping entry for it
-                if let Some((ws_path, _ws_entry)) = pruned_data
+                if let Some((ws_path, ws_entry)) = pruned_data
                     .workspaces
                     .iter()
                     .find(|(_, ws)| &ws.name == key)
@@ -1482,10 +1470,28 @@ impl BunLockfile {
                     // Skip root workspace
                     if !ws_path.is_empty() {
                         let ident = format!("{key}@workspace:{ws_path}");
+                        let info = PackageInfo {
+                            dependencies: ws_entry.dependencies.clone().unwrap_or_default(),
+                            dev_dependencies: ws_entry.dev_dependencies.clone().unwrap_or_default(),
+                            optional_dependencies: ws_entry
+                                .optional_dependencies
+                                .clone()
+                                .unwrap_or_default(),
+                            peer_dependencies: ws_entry
+                                .peer_dependencies
+                                .clone()
+                                .unwrap_or_default(),
+                            optional_peers: ws_entry
+                                .optional_peers
+                                .as_ref()
+                                .map(|v| v.iter().cloned().collect())
+                                .unwrap_or_default(),
+                            ..Default::default()
+                        };
                         let entry = PackageEntry {
                             ident,
                             registry: None,
-                            info: None,
+                            info: Some(info),
                             checksum: None,
                             root: None,
                         };
@@ -1635,6 +1641,32 @@ impl BunLockfile {
             Err(_e) => {}
         }
 
+        // After pruning, some packages may have required peer dependencies that
+        // are no longer present in the pruned set (e.g. expo-network is provided
+        // by mobile workspaces that were pruned away). Bun refuses to parse a
+        // lockfile with unresolvable required peers, so we move them to
+        // optionalPeers.
+        let pruned_package_names: HashSet<String> = pruned_data.packages.keys().cloned().collect();
+        for entry in pruned_data.packages.values_mut() {
+            if let Some(info) = &mut entry.info {
+                if info.peer_dependencies.is_empty() {
+                    continue;
+                }
+                let missing_peers: Vec<String> = info
+                    .peer_dependencies
+                    .keys()
+                    .filter(|peer_name| {
+                        !info.optional_peers.contains(*peer_name)
+                            && !pruned_package_names.contains(*peer_name)
+                    })
+                    .cloned()
+                    .collect();
+                for peer_name in missing_peers {
+                    info.optional_peers.insert(peer_name);
+                }
+            }
+        }
+
         // Rebuild key_to_entry HashMap for the pruned lockfile
         let mut key_to_entry: HashMap<String, String> =
             HashMap::with_capacity(pruned_data.packages.len());
@@ -1777,229 +1809,8 @@ pub fn bun_global_change(prev_contents: &[u8], curr_contents: &[u8]) -> Result<b
 mod test {
     use pretty_assertions::assert_eq;
     use serde_json::json;
-    use test_case::test_case;
 
     use super::*;
-
-    const BASIC_LOCKFILE_V0: &str = include_str!("../../fixtures/basic-bun-v0.lock");
-    const PATCH_LOCKFILE: &str = include_str!("../../fixtures/bun-patch-v0.lock");
-    const CATALOG_LOCKFILE: &str = include_str!("../../fixtures/bun-catalog-v0.lock");
-    const PRUNE_BASIC_ORIGINAL: &str = include_str!("./snapshots/original-basic.lock");
-    const PRUNE_TAILWIND_ORIGINAL: &str = include_str!("./snapshots/original-with-tailwind.lock");
-    const PRUNE_KITCHEN_SINK_ORIGINAL: &str =
-        include_str!("./snapshots/original-kitchen-sink.lock");
-    const PRUNE_ISSUE_11007_ORIGINAL_1: &str =
-        include_str!("./snapshots/original-issue-11007-1.lock");
-    const PRUNE_ISSUE_11007_ORIGINAL_2: &str =
-        include_str!("./snapshots/original-issue-11007-2.lock");
-    const PRUNE_ISSUE_11074_ORIGINAL: &str = include_str!("./snapshots/original-issue-11074.lock");
-
-    #[test_case("", "turbo", "^2.3.3", "turbo@2.3.3" ; "root")]
-    #[test_case("apps/docs", "is-odd", "3.0.1", "is-odd@3.0.1" ; "docs is odd")]
-    #[test_case("apps/web", "is-odd", "3.0.0", "is-odd@3.0.0" ; "web is odd")]
-    #[test_case("packages/ui", "node-plop/inquirer/rxjs/tslib", "^1.14.0", "tslib@1.14.1" ; "full key")]
-    fn test_resolve_package(workspace: &str, name: &str, version: &str, expected: &str) {
-        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
-        let result = lockfile
-            .resolve_package(workspace, name, version)
-            .unwrap()
-            .unwrap();
-        assert_eq!(result.key, expected);
-    }
-
-    #[test]
-    fn test_subgraph() {
-        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
-        let subgraph = lockfile
-            .subgraph(&["apps/docs".into()], &["is-odd@3.0.1".into()])
-            .unwrap();
-        let subgraph_data = subgraph.lockfile().unwrap();
-
-        assert_eq!(
-            subgraph_data
-                .packages
-                .iter()
-                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
-                .collect::<Vec<_>>(),
-            vec![("is-odd", "is-odd@3.0.1")]
-        );
-        assert_eq!(
-            subgraph_data.workspaces.keys().collect::<Vec<_>>(),
-            vec!["", "apps/docs"]
-        );
-    }
-
-    #[test]
-    fn test_subgraph_filters_key_to_entry() {
-        // Test that subgraph properly filters key_to_entry to only include
-        // entries for packages that exist in the filtered packages map.
-        // This maintains the invariant that every value in key_to_entry
-        // must be a valid key in data.packages.
-        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
-
-        // Verify the original lockfile has multiple packages
-        let original_package_count = lockfile.data.packages.len();
-        let original_key_to_entry_count = lockfile.key_to_entry.len();
-        assert!(
-            original_package_count > 1,
-            "Test requires lockfile with multiple packages"
-        );
-        assert!(
-            original_key_to_entry_count > 0,
-            "Test requires lockfile with key_to_entry mappings"
-        );
-
-        // Create a subgraph with only a subset of packages
-        let subgraph = lockfile
-            .subgraph(&["apps/docs".into()], &["is-odd@3.0.1".into()])
-            .unwrap();
-
-        // Verify the subgraph has fewer packages
-        let subgraph_package_count = subgraph.data.packages.len();
-        assert!(
-            subgraph_package_count < original_package_count,
-            "Subgraph should have fewer packages than original"
-        );
-
-        // Verify all keys in key_to_entry map to valid packages in data.packages
-        for (lookup_key, package_key) in &subgraph.key_to_entry {
-            assert!(
-                subgraph.data.packages.contains_key(package_key),
-                "key_to_entry[{lookup_key:?}] = {package_key:?}, but {package_key:?} not in \
-                 packages"
-            );
-        }
-
-        // Verify that filtered-out packages are not in key_to_entry
-        // For example, "chalk" should be in the original but not in the subgraph
-        let has_chalk_in_original = lockfile
-            .key_to_entry
-            .values()
-            .any(|key| key.contains("chalk"));
-        let has_chalk_in_subgraph = subgraph
-            .key_to_entry
-            .values()
-            .any(|key| key.contains("chalk"));
-
-        if has_chalk_in_original {
-            assert!(
-                !has_chalk_in_subgraph,
-                "chalk should be filtered out of subgraph's key_to_entry"
-            );
-        }
-
-        // Verify the subgraph only has packages we requested
-        assert_eq!(subgraph.data.packages.len(), 1);
-        assert!(subgraph.data.packages.contains_key("is-odd"));
-    }
-
-    #[test]
-    fn test_patch_subgraph() {
-        let lockfile = BunLockfile::from_str(PATCH_LOCKFILE).unwrap();
-        let subgraph_a = lockfile
-            .subgraph(&["apps/a".into()], &["is-odd@3.0.1".into()])
-            .unwrap();
-        let subgraph_a_data = subgraph_a.lockfile().unwrap();
-
-        assert_eq!(
-            subgraph_a_data
-                .packages
-                .iter()
-                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
-                .collect::<Vec<_>>(),
-            vec![("is-odd", "is-odd@3.0.1")]
-        );
-        assert_eq!(
-            subgraph_a_data.workspaces.keys().collect::<Vec<_>>(),
-            vec!["", "apps/a"]
-        );
-        assert_eq!(
-            subgraph_a_data
-                .patched_dependencies
-                .iter()
-                .map(|(key, patch)| (key.as_str(), patch.as_str()))
-                .collect::<Vec<_>>(),
-            vec![]
-        );
-
-        let subgraph_b = lockfile
-            .subgraph(&["apps/b".into()], &["is-odd@3.0.0".into()])
-            .unwrap();
-        let subgraph_b_data = subgraph_b.lockfile().unwrap();
-
-        assert_eq!(
-            subgraph_b_data
-                .packages
-                .iter()
-                .map(|(key, pkg)| (key.as_str(), pkg.ident.as_str()))
-                .collect::<Vec<_>>(),
-            vec![("is-odd", "is-odd@3.0.0")]
-        );
-        assert_eq!(
-            subgraph_b_data.workspaces.keys().collect::<Vec<_>>(),
-            vec!["", "apps/b"]
-        );
-        assert_eq!(
-            subgraph_b_data
-                .patched_dependencies
-                .iter()
-                .map(|(key, patch)| (key.as_str(), patch.as_str()))
-                .collect::<Vec<_>>(),
-            vec![("is-odd@3.0.0", "patches/is-odd@3.0.0.patch")]
-        );
-    }
-
-    const TURBO_GEN_DEPS: &[&str] = [
-        "@turbo/workspaces",
-        "chalk",
-        "commander",
-        "fs-extra",
-        "inquirer",
-        "minimatch",
-        "node-plop",
-        "proxy-agent",
-        "ts-node",
-        "update-check",
-        "validate-npm-package-name",
-    ]
-    .as_slice();
-    // Both @turbo/gen and log-symbols depend on the same version of chalk
-    // log-symbols version wins out, but this is okay since they are the same exact
-    // version of chalk.
-    const TURBO_GEN_CHALK_DEPS: &[&str] =
-        ["ansi-styles", "escape-string-regexp", "supports-color"].as_slice();
-    const CHALK_DEPS: &[&str] = ["ansi-styles", "supports-color"].as_slice();
-
-    #[test_case("@turbo/gen@1.13.4", TURBO_GEN_DEPS)]
-    #[test_case("chalk@2.4.2", TURBO_GEN_CHALK_DEPS)]
-    #[test_case("chalk@4.1.2", CHALK_DEPS)]
-    fn test_all_dependencies(key: &str, expected: &[&str]) {
-        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
-        let mut expected = expected.to_vec();
-        expected.sort();
-
-        let mut actual = lockfile
-            .all_dependencies(key)
-            .unwrap()
-            .unwrap()
-            .into_keys()
-            .collect::<Vec<_>>();
-        actual.sort();
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_patch_is_captured_in_package() {
-        let lockfile = BunLockfile::from_str(PATCH_LOCKFILE).unwrap();
-        let pkg = lockfile
-            .resolve_package("apps/b", "is-odd", "3.0.0")
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            pkg,
-            crate::Package::new("is-odd@3.0.0", "3.0.0+patches/is-odd@3.0.0.patch")
-        );
-    }
 
     #[test]
     fn test_global_change_version_mismatch() {
@@ -2272,93 +2083,6 @@ mod test {
     }
 
     #[test]
-    fn test_catalog_resolution_methods() {
-        let lockfile = BunLockfile::from_str(CATALOG_LOCKFILE).unwrap();
-
-        // Test resolving from default catalog
-        assert_eq!(
-            lockfile.resolve_catalog_version("react", "catalog:"),
-            Some("^18.2.0")
-        );
-        assert_eq!(
-            lockfile.resolve_catalog_version("lodash", "catalog:"),
-            Some("^4.17.21")
-        );
-
-        // Test resolving from named catalog
-        assert_eq!(
-            lockfile.resolve_catalog_version("react", "catalog:frontend"),
-            Some("^19.0.0")
-        );
-        assert_eq!(
-            lockfile.resolve_catalog_version("next", "catalog:frontend"),
-            Some("^14.0.0")
-        );
-
-        // Test resolving non-existent package from default catalog
-        assert_eq!(
-            lockfile.resolve_catalog_version("non-existent", "catalog:"),
-            None
-        );
-
-        // Test resolving from non-existent catalog
-        assert_eq!(
-            lockfile.resolve_catalog_version("react", "catalog:non-existent"),
-            None
-        );
-
-        // Test resolving package not in named catalog
-        assert_eq!(
-            lockfile.resolve_catalog_version("lodash", "catalog:frontend"),
-            None
-        );
-
-        // Test non-catalog version
-        assert_eq!(lockfile.resolve_catalog_version("react", "^18.0.0"), None);
-    }
-
-    #[test_case("apps/web", "react", "catalog:", "react@18.2.0" ; "default catalog react")]
-    #[test_case("apps/web", "lodash", "catalog:", "lodash@4.17.21" ; "default catalog lodash")]
-    #[test_case("apps/docs", "react", "catalog:frontend", "react@19.0.0" ; "frontend catalog react")]
-    #[test_case("apps/docs", "next", "catalog:frontend", "next@14.0.0" ; "frontend catalog next")]
-    fn test_resolve_package_with_catalog(
-        workspace: &str,
-        name: &str,
-        version: &str,
-        expected: &str,
-    ) {
-        let lockfile = BunLockfile::from_str(CATALOG_LOCKFILE).unwrap();
-        let result = lockfile
-            .resolve_package(workspace, name, version)
-            .unwrap()
-            .unwrap();
-        assert_eq!(result.key, expected);
-    }
-
-    #[test]
-    fn test_resolve_package_catalog_not_found() {
-        let lockfile = BunLockfile::from_str(CATALOG_LOCKFILE).unwrap();
-
-        // Test resolving non-existent package from catalog
-        let result = lockfile
-            .resolve_package("apps/web", "non-existent", "catalog:")
-            .unwrap();
-        assert!(result.is_none());
-
-        // Test resolving from non-existent catalog
-        let result = lockfile
-            .resolve_package("apps/web", "react", "catalog:non-existent")
-            .unwrap();
-        assert!(result.is_none());
-
-        // Test resolving package not in named catalog
-        let result = lockfile
-            .resolve_package("apps/docs", "lodash", "catalog:frontend")
-            .unwrap();
-        assert!(result.is_none());
-    }
-
-    #[test]
     fn test_catalog_with_overrides() {
         let contents = serde_json::to_string(&json!({
             "lockfileVersion": 0,
@@ -2394,139 +2118,6 @@ mod test {
         // Should resolve to overridden version
         assert_eq!(result.key, "react@19.0.0");
         assert_eq!(result.version, "19.0.0");
-    }
-
-    #[test]
-    fn test_catalog_subgraph_preservation() {
-        let lockfile = BunLockfile::from_str(CATALOG_LOCKFILE).unwrap();
-        let subgraph = lockfile
-            .subgraph(&["apps/web".into()], &["react@18.2.0".into()])
-            .unwrap();
-        let subgraph_data = subgraph.lockfile().unwrap();
-
-        // Check that catalogs are preserved in subgraph
-        assert_eq!(subgraph_data.catalog.len(), 2);
-        assert_eq!(
-            subgraph_data.catalog.get("react"),
-            Some(&"^18.2.0".to_string())
-        );
-        assert_eq!(
-            subgraph_data.catalog.get("lodash"),
-            Some(&"^4.17.21".to_string())
-        );
-
-        assert_eq!(subgraph_data.catalogs.len(), 1);
-        let frontend_catalog = subgraph_data.catalogs.get("frontend").unwrap();
-        assert_eq!(frontend_catalog.len(), 2);
-        assert_eq!(frontend_catalog.get("react"), Some(&"^19.0.0".to_string()));
-        assert_eq!(frontend_catalog.get("next"), Some(&"^14.0.0".to_string()));
-    }
-
-    const V1_WORKSPACE_LOCKFILE_1: &str = include_str!("../../fixtures/bun-v1-1.lock");
-    const V1_CREATE_TURBO_LOCKFILE: &str = include_str!("../../fixtures/bun-v1-create-turbo.lock");
-    const V1_ISSUE_10410_LOCKFILE: &str = include_str!("../../fixtures/bun-v1-issue-10410.lock");
-
-    #[test]
-    fn test_v1_workspace_dependency_resolution() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
-
-        // Test resolving a workspace dependency from apps/web to packages/ui
-        let result = lockfile
-            .resolve_package("apps/web", "@repo/ui", "packages/ui")
-            .unwrap()
-            .unwrap();
-
-        // Should resolve directly from workspace entry without needing packages entry
-        assert_eq!(result.key, "@repo/ui@0.1.0");
-        assert_eq!(result.version, "0.1.0");
-    }
-
-    #[test]
-    fn test_v1_nested_workspace_dependency_resolution() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
-
-        // Test resolving a workspace dependency from packages/ui to
-        // packages/shared-utils
-        let result = lockfile
-            .resolve_package("packages/ui", "@repo/shared-utils", "packages/shared-utils")
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(result.key, "@repo/shared-utils@0.2.0");
-        assert_eq!(result.version, "0.2.0");
-    }
-
-    #[test]
-    fn test_v1_non_workspace_dependency_resolution() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
-
-        // Test resolving a regular dependency - should still work normally
-        let result = lockfile
-            .resolve_package("packages/shared-utils", "lodash", "^4.17.21")
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(result.key, "lodash@4.17.21");
-        assert_eq!(result.version, "4.17.21");
-    }
-
-    #[test]
-    fn test_v1_workspace_dependency_not_found() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
-
-        // Test resolving a non-existent workspace dependency
-        let result = lockfile
-            .resolve_package("apps/web", "@repo/non-existent", "packages/non-existent")
-            .unwrap();
-
-        // Should return None since workspace doesn't exist
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn test_v1_lockfile_version_detection() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
-
-        // Verify lockfile version is correctly parsed as 1
-        assert_eq!(lockfile.data.lockfile_version, 1);
-    }
-
-    #[test]
-    fn test_v1_create_turbo_lockfile_parse() {
-        let lockfile = BunLockfile::from_str(V1_CREATE_TURBO_LOCKFILE).unwrap();
-        assert_eq!(lockfile.data.lockfile_version, 1);
-
-        // Verify workspaces are parsed correctly
-        assert_eq!(lockfile.data.workspaces.len(), 6);
-        assert!(lockfile.data.workspaces.contains_key(""));
-        assert!(lockfile.data.workspaces.contains_key("apps/docs"));
-        assert!(lockfile.data.workspaces.contains_key("apps/web"));
-        assert!(lockfile.data.workspaces.contains_key("packages/ui"));
-        assert!(
-            lockfile
-                .data
-                .workspaces
-                .contains_key("packages/eslint-config")
-        );
-        assert!(
-            lockfile
-                .data
-                .workspaces
-                .contains_key("packages/typescript-config")
-        );
-
-        // Verify packages are parsed
-        assert!(!lockfile.data.packages.is_empty());
-        assert!(lockfile.data.packages.contains_key("react"));
-        assert!(lockfile.data.packages.contains_key("next"));
-        assert!(lockfile.data.packages.contains_key("turbo"));
-    }
-
-    #[test]
-    fn test_v1_create_turbo_turbo_version() {
-        let lockfile = BunLockfile::from_str(V1_CREATE_TURBO_LOCKFILE).unwrap();
-        let turbo_version = lockfile.turbo_version();
-        assert_eq!(turbo_version, Some("2.5.8".to_string()));
     }
 
     #[test]
@@ -2581,227 +2172,6 @@ mod test {
         assert!(keys[0].contains("tslib"));
         assert!(!deps.values().any(|v| v.contains("@emnapi/wasi-threads")));
     }
-
-    #[test]
-    fn test_v1_issue_10410_bundled_dependencies() {
-        let lockfile = BunLockfile::from_str(V1_ISSUE_10410_LOCKFILE).unwrap();
-        assert_eq!(lockfile.data.lockfile_version, 1);
-
-        // This lockfile has bundled dependencies which should be resolved correctly
-        // @tailwindcss/oxide-wasm32-wasi has scoped bundled dependencies
-        let result = lockfile
-            .resolve_package("apps/web", "@tailwindcss/vite", "^4.1.13")
-            .unwrap()
-            .unwrap();
-
-        assert_eq!(result.key, "@tailwindcss/vite@4.1.13");
-
-        // Test that we can get all dependencies without errors
-        // This should not fail with "No lockfile entry found for
-        // '@emnapi/wasi-threads'"
-        let deps = lockfile
-            .all_dependencies("@tailwindcss/oxide-wasm32-wasi@4.1.13")
-            .unwrap()
-            .unwrap();
-
-        // Should be able to find bundled dependencies under the scoped path
-        assert!(!deps.is_empty());
-
-        // Test transitive closure calculation for apps/web
-        // This is the scenario that was failing with the warning
-        let workspace_entry = &lockfile.data.workspaces["apps/web"];
-        let mut unresolved_deps = HashMap::new();
-        if let Some(deps) = &workspace_entry.dependencies {
-            for (name, version) in deps {
-                unresolved_deps.insert(name.clone(), version.clone());
-            }
-        }
-        if let Some(dev_deps) = &workspace_entry.dev_dependencies {
-            for (name, version) in dev_deps {
-                unresolved_deps.insert(name.clone(), version.clone());
-            }
-        }
-
-        // This should complete without errors - previously threw warning about
-        // '@emnapi/wasi-threads'
-        let closure = crate::transitive_closure(&lockfile, "apps/web", unresolved_deps, false);
-        assert!(
-            closure.is_ok(),
-            "Transitive closure failed: {}",
-            closure.unwrap_err()
-        );
-    }
-
-    #[test]
-    fn test_resolve_bundled_dependency() {
-        // Test that bundled dependencies can be resolved even when called with
-        // workspace context (not parent package context)
-        let lockfile = BunLockfile::from_str(V1_ISSUE_10410_LOCKFILE).unwrap();
-
-        // @emnapi/core exists only as a bundled dependency under
-        // @tailwindcss/oxide-wasm32-wasi, not as a standalone package
-        // When resolve_package is called with the workspace path, it should
-        // still find the bundled entry
-        let result = lockfile
-            .resolve_package("apps/web", "@emnapi/core", "^1.4.5")
-            .unwrap();
-
-        assert!(
-            result.is_some(),
-            "Should be able to resolve bundled dependency @emnapi/core"
-        );
-
-        let package = result.unwrap();
-        assert_eq!(package.key, "@emnapi/core@1.5.0");
-
-        // Verify this works for other bundled dependencies too
-        let runtime_result = lockfile
-            .resolve_package("apps/web", "@emnapi/runtime", "^1.4.5")
-            .unwrap();
-
-        assert!(
-            runtime_result.is_some(),
-            "Should be able to resolve bundled dependency @emnapi/runtime"
-        );
-
-        let runtime_package = runtime_result.unwrap();
-        assert_eq!(runtime_package.key, "@emnapi/runtime@1.5.0");
-    }
-
-    #[test]
-    fn test_resolve_workspace_dependency_helper() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
-
-        // Should recognize workspace paths
-        assert_eq!(
-            lockfile.resolve_workspace_dependency("packages/ui"),
-            Some("packages/ui")
-        );
-        assert_eq!(
-            lockfile.resolve_workspace_dependency("packages/shared-utils"),
-            Some("packages/shared-utils")
-        );
-
-        // Should not recognize version strings
-        assert_eq!(lockfile.resolve_workspace_dependency("^4.17.21"), None);
-        assert_eq!(lockfile.resolve_workspace_dependency("~1.0.0"), None);
-        assert_eq!(lockfile.resolve_workspace_dependency("=1.0.0"), None);
-
-        // Should not recognize non-existent paths
-        assert_eq!(
-            lockfile.resolve_workspace_dependency("packages/non-existent"),
-            None
-        );
-
-        // Should not recognize strings without slashes
-        assert_eq!(lockfile.resolve_workspace_dependency("react"), None);
-    }
-
-    #[test]
-    fn test_v1_subgraph_with_workspace_dependencies() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
-
-        // Create subgraph including apps/web but not packages/ui
-        // Note: In v1, workspace packages don't appear in packages section, so we
-        // don't need to include them in the packages list for subgraph
-        let subgraph = lockfile
-            .subgraph(&["apps/web".into()], &["react@18.0.0".into()])
-            .unwrap();
-
-        // Test resolution before getting data to avoid move
-        let ui_result = subgraph
-            .resolve_package("apps/web", "@repo/ui", "packages/ui")
-            .unwrap();
-        assert!(ui_result.is_none()); // UI workspace not included in subgraph workspaces
-
-        // Now get the data
-        let subgraph_data = subgraph.lockfile().unwrap();
-
-        // Check that the workspace is included
-        assert!(subgraph_data.workspaces.contains_key("apps/web"));
-        assert!(subgraph_data.workspaces.contains_key("")); // root always included
-
-        // Check that external packages are filtered correctly
-        assert_eq!(subgraph_data.packages.len(), 1);
-        assert!(subgraph_data.packages.contains_key("react"));
-    }
-
-    #[test]
-    fn test_v1_subgraph_includes_workspace_dependencies() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
-
-        // Create subgraph that includes both apps/web and the workspace it depends on
-        let subgraph = lockfile
-            .subgraph(
-                &["apps/web".into(), "packages/ui".into()],
-                &["react@18.0.0".into()],
-            )
-            .unwrap();
-
-        // Test resolution before getting data to avoid move
-        let ui_result = subgraph
-            .resolve_package("apps/web", "@repo/ui", "packages/ui")
-            .unwrap()
-            .unwrap();
-        assert_eq!(ui_result.key, "@repo/ui@0.1.0");
-        assert_eq!(ui_result.version, "0.1.0");
-
-        // Now get the data
-        let subgraph_data = subgraph.lockfile().unwrap();
-
-        // Check that both workspaces are included
-        assert!(subgraph_data.workspaces.contains_key("apps/web"));
-        assert!(subgraph_data.workspaces.contains_key("packages/ui"));
-        assert!(subgraph_data.workspaces.contains_key("")); // root always
-        // included
-    }
-
-    #[test]
-    fn test_v1_subgraph_transitively_includes_workspace_deps() {
-        let lockfile = BunLockfile::from_str(V1_WORKSPACE_LOCKFILE_1).unwrap();
-
-        // Create subgraph that includes packages/ui and its dependencies
-        // packages/ui depends on packages/shared-utils (workspace) and react (external)
-        let subgraph = lockfile
-            .subgraph(
-                &["packages/ui".into(), "packages/shared-utils".into()],
-                &["react@18.0.0".into(), "lodash@4.17.21".into()],
-            )
-            .unwrap();
-
-        // Test resolution before getting data to avoid move
-        let shared_utils_result = subgraph
-            .resolve_package("packages/ui", "@repo/shared-utils", "packages/shared-utils")
-            .unwrap()
-            .unwrap();
-        assert_eq!(shared_utils_result.key, "@repo/shared-utils@0.2.0");
-
-        let lodash_result = subgraph
-            .resolve_package("packages/shared-utils", "lodash", "^4.17.21")
-            .unwrap()
-            .unwrap();
-        assert_eq!(lodash_result.key, "lodash@4.17.21");
-
-        // Now get the data
-        let subgraph_data = subgraph.lockfile().unwrap();
-
-        // Check workspaces
-        assert!(subgraph_data.workspaces.contains_key("packages/ui"));
-        assert!(
-            subgraph_data
-                .workspaces
-                .contains_key("packages/shared-utils")
-        );
-        assert!(subgraph_data.workspaces.contains_key("")); // root always included
-
-        // Check packages
-        assert!(subgraph_data.packages.contains_key("react"));
-        assert!(subgraph_data.packages.contains_key("lodash"));
-    }
-
-    // ============================================================================
-    // COMPREHENSIVE INTEGRATION TESTS
-    // ============================================================================
 
     #[test]
     fn test_integration_v1_catalog_override_patch_combined() {
@@ -3091,309 +2461,6 @@ mod test {
                 .any(|entry| entry.ident == "react-hook-form@7.62.0"),
             "react-hook-form should be in subgraph as peer dependency"
         );
-    }
-
-    /// Test helper to prune a lockfile for a single target workspace.
-    /// Uses the same approach as production code: compute transitive closure
-    /// via all_transitive_closures, then call subgraph with the results.
-    fn prune_for_workspace(lockfile: &BunLockfile, target_workspace: &str) -> BunLockfile {
-        use crate::all_transitive_closures;
-
-        // Helper to extract all dependencies from a workspace entry
-        fn get_workspace_deps(
-            lockfile: &BunLockfile,
-            ws_path: &str,
-        ) -> std::collections::HashMap<String, String> {
-            lockfile
-                .data
-                .workspaces
-                .get(ws_path)
-                .map(|entry| {
-                    let mut deps = std::collections::HashMap::new();
-                    if let Some(d) = &entry.dependencies {
-                        deps.extend(d.clone());
-                    }
-                    if let Some(dd) = &entry.dev_dependencies {
-                        deps.extend(dd.clone());
-                    }
-                    if let Some(od) = &entry.optional_dependencies {
-                        deps.extend(od.clone());
-                    }
-                    deps
-                })
-                .unwrap_or_default()
-        }
-
-        // Start with root and target workspace
-        let mut workspace_deps = std::collections::HashMap::new();
-        workspace_deps.insert("".to_string(), get_workspace_deps(lockfile, ""));
-        workspace_deps.insert(
-            target_workspace.to_string(),
-            get_workspace_deps(lockfile, target_workspace),
-        );
-
-        // Discover transitive workspace dependencies (workspace:* protocol)
-        loop {
-            let mut added_new = false;
-            let current_workspaces: Vec<_> = workspace_deps.keys().cloned().collect();
-
-            for (ws_path, ws_entry) in &lockfile.data.workspaces {
-                if current_workspaces.contains(ws_path) {
-                    continue;
-                }
-
-                let workspace_name = &ws_entry.name;
-                let is_referenced = workspace_deps.iter().any(|(_ws, deps)| {
-                    deps.iter().any(|(dep_name, dep_value)| {
-                        (dep_name == workspace_name
-                            || dep_name.starts_with(&format!("{workspace_name}/")))
-                            && dep_value.starts_with("workspace:")
-                    })
-                });
-
-                if is_referenced {
-                    workspace_deps.insert(ws_path.clone(), get_workspace_deps(lockfile, ws_path));
-                    added_new = true;
-                }
-            }
-
-            if !added_new {
-                break;
-            }
-        }
-
-        // Compute transitive external dependencies for all workspaces
-        let mut closures = all_transitive_closures(lockfile, workspace_deps.clone(), false)
-            .expect("Failed to compute transitive closures");
-
-        // Discover additional workspaces referenced via @workspace: in package idents
-        loop {
-            let mut added_new = false;
-            let current_workspaces: Vec<_> = closures.keys().cloned().collect();
-
-            for ws_path in lockfile.data.workspaces.keys() {
-                if current_workspaces.contains(ws_path) {
-                    continue;
-                }
-
-                let workspace_marker = format!("@workspace:{ws_path}");
-
-                // Check if any resolved package references this workspace
-                let is_referenced = closures.values().any(|closure| {
-                    closure.iter().any(|pkg| {
-                        // Look up the actual lockfile entry to check its ident
-                        lockfile
-                            .key_to_entry
-                            .get(&pkg.key)
-                            .and_then(|lockfile_key| lockfile.data.packages.get(lockfile_key))
-                            .map(|entry| entry.ident.contains(&workspace_marker))
-                            .unwrap_or(false)
-                    })
-                });
-
-                if is_referenced {
-                    workspace_deps
-                        .insert(ws_path.to_string(), get_workspace_deps(lockfile, ws_path));
-                    closures = all_transitive_closures(lockfile, workspace_deps.clone(), false)
-                        .expect("Failed to recompute transitive closures");
-                    added_new = true;
-                    break;
-                }
-            }
-
-            if !added_new {
-                break;
-            }
-        }
-
-        // Collect all packages and workspace paths
-        let mut packages: std::collections::HashSet<String> = closures
-            .values()
-            .flat_map(|closure| closure.iter().map(|p| p.key.clone()))
-            .collect();
-        let workspace_paths: Vec<String> = closures.keys().cloned().collect();
-
-        // Add workspace names to packages list so subgraph creates mapping entries
-        for ws_path in &workspace_paths {
-            if !ws_path.is_empty()
-                && let Some(workspace_entry) = lockfile.data.workspaces.get(ws_path.as_str())
-            {
-                packages.insert(workspace_entry.name.clone());
-            }
-        }
-
-        // Add workspace peer dependencies that are actually installed
-        // (mimics the logic in the Lockfile trait's subgraph method)
-        for ws_path in &workspace_paths {
-            if let Some(workspace_entry) = lockfile.data.workspaces.get(ws_path.as_str())
-                && let Some(peer_deps) = &workspace_entry.peer_dependencies
-            {
-                for peer_name in peer_deps.keys() {
-                    if lockfile.data.packages.contains_key(peer_name) {
-                        packages.insert(peer_name.clone());
-                    }
-                }
-            }
-        }
-
-        // Add nested package entries (e.g., "parent/dep") for any packages we've
-        // collected This handles cases where a package has a nested version of
-        // a dependency (e.g., @hatchet-dev/typescript-sdk/zod for a different
-        // zod version)
-        let collected_packages: Vec<String> = packages.iter().cloned().collect();
-        for pkg_ident in &collected_packages {
-            // Convert ident to lockfile key using key_to_entry
-            if let Some(lockfile_key) = lockfile.key_to_entry.get(pkg_ident) {
-                let prefix = format!("{}/", lockfile_key);
-                for nested_key in lockfile.data.packages.keys() {
-                    if nested_key.starts_with(&prefix) {
-                        // Add the nested key directly (it's a lockfile key, not an ident)
-                        // We need to add both the key itself and its ident
-                        packages.insert(nested_key.clone());
-                        if let Some(nested_entry) = lockfile.data.packages.get(nested_key) {
-                            packages.insert(nested_entry.ident.clone());
-                        }
-                    }
-                }
-            }
-        }
-
-        let packages: Vec<String> = packages.into_iter().collect();
-
-        // Call internal subgraph method
-        lockfile
-            .subgraph(&workspace_paths, &packages)
-            .expect("Failed to create subgraph")
-    }
-
-    #[test]
-    fn test_prune_basic_docs() {
-        let lockfile = BunLockfile::from_str(PRUNE_BASIC_ORIGINAL).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/docs");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_basic_web() {
-        let lockfile = BunLockfile::from_str(PRUNE_BASIC_ORIGINAL).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/web");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_tailwind_docs() {
-        let lockfile = BunLockfile::from_str(PRUNE_TAILWIND_ORIGINAL).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/docs");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_tailwind_web() {
-        let lockfile = BunLockfile::from_str(PRUNE_TAILWIND_ORIGINAL).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/web");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_kitchen_sink_admin() {
-        let lockfile = BunLockfile::from_str(PRUNE_KITCHEN_SINK_ORIGINAL).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/admin");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_kitchen_sink_blog() {
-        let lockfile = BunLockfile::from_str(PRUNE_KITCHEN_SINK_ORIGINAL).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/blog");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_kitchen_sink_api() {
-        let lockfile = BunLockfile::from_str(PRUNE_KITCHEN_SINK_ORIGINAL).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/api");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_kitchen_sink_storefront() {
-        let lockfile = BunLockfile::from_str(PRUNE_KITCHEN_SINK_ORIGINAL).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/storefront");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_issue_11007_1_app_a() {
-        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_1).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/app-a");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_issue_11007_1_app_b() {
-        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_1).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/app-b");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_issue_11007_1_app_c() {
-        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_1).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/app-c");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_issue_11007_1_app_d() {
-        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_1).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/app-d");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    /// Edge case: Workspace package name is the same as a name of one from the
-    /// npm registry!
-    #[test]
-    fn test_prune_issue_11007_1_storybook() {
-        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_1).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/storybook");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_issue_11007_2_api() {
-        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_2).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/api");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_issue_11007_2_web() {
-        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11007_ORIGINAL_2).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/web");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
-    }
-
-    #[test]
-    fn test_prune_issue_11074() {
-        let lockfile = BunLockfile::from_str(PRUNE_ISSUE_11074_ORIGINAL).unwrap();
-        let pruned = prune_for_workspace(&lockfile, "apps/app-a");
-        let pruned_str = String::from_utf8(pruned.encode().unwrap()).unwrap();
-        insta::assert_snapshot!(pruned_str);
     }
 
     /// Test that pruning a lockfile with GitHub dependencies doesn't corrupt
@@ -3809,12 +2876,6 @@ mod test {
             packages_pos < patched_deps_pos,
             "packages should come before patchedDependencies"
         );
-    }
-
-    #[test]
-    fn test_turbo_version() {
-        let lockfile = BunLockfile::from_str(BASIC_LOCKFILE_V0).unwrap();
-        assert_eq!(lockfile.turbo_version().as_deref(), Some("2.3.3"));
     }
 
     #[test]
