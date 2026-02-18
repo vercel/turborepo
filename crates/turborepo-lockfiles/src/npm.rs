@@ -81,7 +81,10 @@ impl Lockfile for NpmLockfile {
     }
 
     #[tracing::instrument(skip(self))]
-    fn all_dependencies(&self, key: &str) -> Result<Option<HashMap<String, String>>, Error> {
+    fn all_dependencies(
+        &self,
+        key: &str,
+    ) -> Result<Option<std::borrow::Cow<'_, HashMap<String, String>>>, Error> {
         self.packages
             .get(key)
             .map(|pkg| {
@@ -98,7 +101,8 @@ impl Lockfile for NpmLockfile {
                                 }
                             })
                     })
-                    .collect()
+                    .collect::<Result<HashMap<_, _>, _>>()
+                    .map(std::borrow::Cow::Owned)
             })
             .transpose()
     }

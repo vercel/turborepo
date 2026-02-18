@@ -826,21 +826,23 @@ mod test {
         fn all_dependencies(
             &self,
             key: &str,
-        ) -> std::result::Result<Option<HashMap<String, String>>, turborepo_lockfiles::Error>
-        {
+        ) -> std::result::Result<
+            Option<std::borrow::Cow<'_, HashMap<String, String>>>,
+            turborepo_lockfiles::Error,
+        > {
             match key {
-                "key:a" => Ok(Some(
+                "key:a" => Ok(Some(std::borrow::Cow::Owned(
                     [("c", "1")]
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_string()))
                         .collect(),
-                )),
-                "key:b" => Ok(Some(
+                ))),
+                "key:b" => Ok(Some(std::borrow::Cow::Owned(
                     [("c", "1")]
                         .iter()
                         .map(|(k, v)| (k.to_string(), v.to_string()))
                         .collect(),
-                )),
+                ))),
                 "key:c" => Ok(None),
                 _ => Ok(None),
             }

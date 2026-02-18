@@ -498,7 +498,8 @@ impl Lockfile for BerryLockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
+    ) -> Result<Option<std::borrow::Cow<'_, std::collections::HashMap<String, String>>>, crate::Error>
+    {
         let locator = Locator::try_from(key).map_err(Error::from)?;
 
         let Some(package) = self.locator_package.get(&locator) else {
@@ -518,8 +519,7 @@ impl Lockfile for BerryLockfile {
             }
             map.insert(dependency.ident.to_string(), dependency.range.to_string());
         }
-        // For each dependency we need to check if there's an override
-        Ok(Some(map))
+        Ok(Some(std::borrow::Cow::Owned(map)))
     }
 
     fn subgraph(

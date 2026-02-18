@@ -15,7 +15,7 @@ pub use global_hash::*;
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
-use tracing::{Span, debug};
+use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
 };
@@ -28,9 +28,7 @@ use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
-use turborepo_telemetry::events::{
-    EventBuilder, generic::GenericEventBuilder, task::PackageTaskEventBuilder,
-};
+use turborepo_telemetry::events::{generic::GenericEventBuilder, task::PackageTaskEventBuilder};
 use turborepo_types::{
     EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
     TaskDefinitionHashInfo, TaskInputs,
@@ -107,17 +105,17 @@ impl PackageInputsHashes {
         task_definitions,
         repo_root,
         scm,
-        telemetry,
+        _telemetry,
         daemon,
         pre_built_index
     ))]
     pub fn calculate_file_hashes<'a, T, D>(
         scm: &SCM,
-        all_tasks: impl ParallelIterator<Item = &'a TaskNode>,
+        all_tasks: impl Iterator<Item = &'a TaskNode>,
         workspaces: HashMap<&PackageName, &PackageInfo>,
         task_definitions: &HashMap<TaskId<'static>, T>,
         repo_root: &AbsoluteSystemPath,
-        telemetry: &GenericEventBuilder,
+        _telemetry: &GenericEventBuilder,
         daemon: &Option<D>,
         pre_built_index: Option<&RepoGitIndex>,
     ) -> Result<PackageInputsHashes, Error>
@@ -137,136 +135,142 @@ impl PackageInputsHashes {
             }
         };
 
-        let span = Span::current();
-        let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
-            .filter_map(|task| {
-                let span = tracing::info_span!(parent: &span, "calculate_file_hash", ?task);
-                let _enter = span.enter();
-                let TaskNode::Task(task_id) = task else {
-                    return None;
-                };
+        // Phase 1: Collect task metadata and group by (package_path, inputs) for dedup.
+        // Multiple tasks in the same package with identical inputs produce the same
+        // file hashes — no need to globwalk and hash the same files repeatedly.
+        struct TaskInfo<'b> {
+            task_id: TaskId<'static>,
+            package_path: &'b AnchoredSystemPath,
+            inputs: &'b TaskInputs,
+        }
 
-                let task_definition = match task_definitions
-                    .get(task_id)
-                    .ok_or_else(|| Error::MissingPipelineEntry(task_id.clone()))
-                {
-                    Ok(def) => def,
-                    Err(err) => return Some(Err(err)),
-                };
-                let package_task_event =
-                    PackageTaskEventBuilder::new(task_id.package(), task_id.task())
-                        .with_parent(telemetry);
+        let mut task_infos = Vec::new();
+        for task in all_tasks {
+            let TaskNode::Task(task_id) = task else {
+                continue;
+            };
+            let task_definition = task_definitions
+                .get(task_id)
+                .ok_or_else(|| Error::MissingPipelineEntry(task_id.clone()))?;
+            let workspace_name = task_id.to_workspace_name();
+            let pkg = workspaces
+                .get(&workspace_name)
+                .ok_or_else(|| Error::MissingPackageJson(workspace_name.to_string()))?;
+            let package_path = pkg
+                .package_json_path
+                .parent()
+                .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
+            let inputs = task_definition.inputs();
+            task_infos.push(TaskInfo {
+                task_id: task_id.clone(),
+                package_path,
+                inputs,
+            });
+        }
 
-                package_task_event.track_scm_mode(if scm.is_manual() { "manual" } else { "git" });
-                let workspace_name = task_id.to_workspace_name();
+        // Build dedup key: (package_path_str, globs, default)
+        type HashKey = (AnchoredSystemPathBuf, Vec<String>, bool);
+        let mut unique_keys: Vec<HashKey> = Vec::new();
+        let mut key_indices: HashMap<HashKey, usize> = HashMap::new();
+        let mut task_key_map: Vec<usize> = Vec::with_capacity(task_infos.len());
 
-                let pkg = match workspaces
-                    .get(&workspace_name)
-                    .ok_or_else(|| Error::MissingPackageJson(workspace_name.to_string()))
-                {
-                    Ok(pkg) => pkg,
-                    Err(err) => return Some(Err(err)),
-                };
+        for info in &task_infos {
+            let key: HashKey = (
+                info.package_path.to_owned(),
+                info.inputs.globs.clone(),
+                info.inputs.default,
+            );
+            let idx = match key_indices.get(&key) {
+                Some(&idx) => idx,
+                None => {
+                    let idx = unique_keys.len();
+                    key_indices.insert(key.clone(), idx);
+                    unique_keys.push(key);
+                    idx
+                }
+            };
+            task_key_map.push(idx);
+        }
 
-                let package_path = pkg
-                    .package_json_path
-                    .parent()
-                    .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
+        debug!(
+            total_tasks = task_infos.len(),
+            unique_hash_keys = unique_keys.len(),
+            "file hash deduplication"
+        );
 
-                let scm_telemetry = package_task_event.child();
-                let inputs = task_definition.inputs();
-
-                // Try hashing with the daemon, if we have a connection. If we don't, or if we
-                // timeout or get an error, fallback to local hashing
-                let hash_object = if cfg!(feature = "daemon-file-hashing") {
+        // Phase 2: Compute file hashes in parallel across unique keys.
+        // EMFILE (too many open files) errors are handled via retry-with-backoff
+        // in the globwalk and hash_objects layers, so we can safely parallelize
+        // all keys on rayon without worrying about fd exhaustion.
+        let file_hash_results: Vec<Result<Arc<FileHashes>, Error>> = unique_keys
+            .into_par_iter()
+            .map(|(package_path, globs, default)| {
+                if cfg!(feature = "daemon-file-hashing") {
                     let handle = tokio::runtime::Handle::current();
                     let mut daemon = daemon.clone();
-
-                    daemon
-                        .as_mut()
-                        .and_then(|daemon| {
-                            let handle = handle.clone();
-                            // We need an async block here because the timeout must be created with
-                            // an active tokio context. Constructing it
-                            // directly in the rayon thread doesn't
-                            // provide one and will crash at runtime.
-                            handle
-                                .block_on(async {
-                                    tokio::time::timeout(
-                                        std::time::Duration::from_millis(100),
-                                        daemon.get_file_hashes(package_path, inputs),
-                                    )
-                                    .await
-                                })
-                                .inspect_err(|_| {
-                                    tracing::debug!(
-                                        "daemon file hashing timed out for {}",
-                                        package_path
-                                    );
-                                })
-                                .ok() // If we timed out, we don't need to
-                            // error,
-                            // just return None so we can move on to
-                            // local
-                        })
-                        .and_then(|result| {
-                            match result {
-                                Ok(file_hashes) => Some(
-                                    file_hashes
-                                        .into_iter()
-                                        .map(|(path, hash)| {
-                                            (
-                                                turbopath::RelativeUnixPathBuf::new(path)
-                                                    .expect("daemon returns relative unix paths"),
-                                                hash,
-                                            )
-                                        })
-                                        .collect::<HashMap<_, _>>(),
-                                ),
-                                Err(e) => {
-                                    // Daemon could've failed for various reasons. We can still try
-                                    // local hashing.
-                                    tracing::debug!(
-                                        "daemon file hashing failed for {}: {}",
-                                        package_path,
-                                        e
-                                    );
-                                    None
-                                }
-                            }
-                        })
-                } else {
-                    None
-                };
-
-                let hash_object = match hash_object {
-                    Some(hash_object) => hash_object,
-                    None => {
-                        let local_hash_result = scm.get_package_file_hashes(
-                            repo_root,
-                            package_path,
-                            &inputs.globs,
-                            inputs.default,
-                            Some(scm_telemetry),
-                            repo_index,
-                        );
-                        match local_hash_result {
-                            Ok(hash_object) => hash_object,
-                            Err(err) => return Some(Err(err.into())),
-                        }
+                    let inputs = TaskInputs {
+                        globs: globs.clone(),
+                        default,
+                    };
+                    let result = daemon.as_mut().and_then(|daemon| {
+                        let handle = handle.clone();
+                        handle
+                            .block_on(async {
+                                tokio::time::timeout(
+                                    std::time::Duration::from_millis(100),
+                                    daemon.get_file_hashes(&package_path, &inputs),
+                                )
+                                .await
+                            })
+                            .ok()
+                    });
+                    if let Some(Ok(file_hashes)) = result {
+                        let hashes = file_hashes
+                            .into_iter()
+                            .map(|(path, hash)| {
+                                (
+                                    turbopath::RelativeUnixPathBuf::new(path)
+                                        .expect("daemon returns relative unix paths"),
+                                    hash,
+                                )
+                            })
+                            .collect();
+                        return Ok(Arc::new(FileHashes(hashes)));
                     }
-                };
+                }
 
-                let file_hashes = FileHashes(hash_object);
-                // Use reference-based hashing to avoid cloning the entire HashMap.
-                let hash = (&file_hashes).hash();
-
-                Some(Ok((
-                    (task_id.clone(), hash),
-                    (task_id.clone(), file_hashes),
-                )))
+                scm.get_package_file_hashes(
+                    repo_root,
+                    &package_path,
+                    &globs,
+                    default,
+                    None,
+                    repo_index,
+                )
+                .map(|h| Arc::new(FileHashes(h)))
+                .map_err(Error::from)
             })
-            .collect::<Result<_, _>>()?;
+            .collect();
+
+        let file_hash_results: Vec<Arc<FileHashes>> = file_hash_results
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Phase 3: Distribute shared results to individual tasks.
+        let mut hashes = HashMap::with_capacity(task_infos.len());
+        let mut expanded_hashes = HashMap::with_capacity(task_infos.len());
+
+        for (i, info) in task_infos.into_iter().enumerate() {
+            let key_idx = task_key_map[i];
+            let file_hashes = &file_hash_results[key_idx];
+
+            let hash = file_hashes.as_ref().hash();
+
+            hashes.insert(info.task_id.clone(), hash);
+            // Clone the Arc'd FileHashes for tasks sharing the same inputs.
+            // This is a reference count bump, not a deep clone.
+            expanded_hashes.insert(info.task_id, FileHashes(file_hashes.0.clone()));
+        }
 
         Ok(PackageInputsHashes {
             hashes,

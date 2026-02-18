@@ -124,16 +124,10 @@ impl GitRepo {
         include_default_files: bool,
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
-        // no inputs, and no $TURBO_DEFAULT$ — index lookup + hash_objects.
-        // hash_objects opens one file at a time so it's fd-safe at any
-        // concurrency. No semaphore needed.
         if inputs.is_empty() {
             return self.get_package_file_hashes_from_index(turbo_root, package_path, repo_index);
         }
 
-        let _permit = repo_index.map(|idx| idx.io_semaphore.acquire());
-
-        // we have inputs, but no $TURBO_DEFAULT$
         if !include_default_files {
             return self.get_package_file_hashes_from_inputs(
                 turbo_root,
@@ -143,7 +137,6 @@ impl GitRepo {
             );
         }
 
-        // we have inputs, and $TURBO_DEFAULT$
         self.get_package_file_hashes_from_inputs_and_index(
             turbo_root,
             package_path,

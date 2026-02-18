@@ -588,7 +588,8 @@ impl Lockfile for BunLockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::collections::HashMap<String, String>>, crate::Error> {
+    ) -> Result<Option<std::borrow::Cow<'_, std::collections::HashMap<String, String>>>, crate::Error>
+    {
         let entry_key = self
             .key_to_entry
             .get(key)
@@ -602,7 +603,7 @@ impl Lockfile for BunLockfile {
         let mut deps = HashMap::new();
 
         let Some(info) = &entry.info else {
-            return Ok(Some(deps));
+            return Ok(Some(std::borrow::Cow::Owned(deps)));
         };
 
         for (dependency, version) in info.all_dependencies() {
@@ -610,10 +611,6 @@ impl Lockfile for BunLockfile {
                 || info.optional_peers.contains(dependency);
 
             if is_optional {
-                // Optional peers without nested entries should be skipped (prevents pulling
-                // unrelated packages like "next" into @vercel/analytics). But declared
-                // optionalDependencies (platform-specific binaries) should include hoisted
-                // versions when no nested version exists.
                 let parent_key = format!("{entry_key}/{dependency}");
                 let has_nested = self.data.packages.contains_key(&parent_key);
 
@@ -631,7 +628,7 @@ impl Lockfile for BunLockfile {
             deps.insert(dependency.to_string(), version.to_string());
         }
 
-        Ok(Some(deps))
+        Ok(Some(std::borrow::Cow::Owned(deps)))
     }
 
     fn subgraph(
