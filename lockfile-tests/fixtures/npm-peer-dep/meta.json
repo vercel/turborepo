@@ -1,0 +1,9 @@
+{
+  "packageManager": "npm",
+  "packageManagerVersion": "npm@10.0.0",
+  "lockfileName": "package-lock.json",
+  "frozenInstallCommand": ["npm", "ci"],
+  "pruneTargets": ["web", "@repo/ui", "@repo/config"],
+  "sourceFixture": "npm-peer-dep",
+  "expectedFailures": ["@repo/ui"]
+}

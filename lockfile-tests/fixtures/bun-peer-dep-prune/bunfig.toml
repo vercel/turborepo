@@ -1,0 +1,32 @@
+# Runtime - auto-replace node with bun for better performance
+[run]
+bun = true
+shell = "bun"
+
+# Package Manager
+[install]
+peer =true
+linker = "isolated"
+auto = "fallback"
+linkWorkspacePackages = true
+
+# Cache
+[install.cache]
+disable = false
+disableManifest = false
+
+# Lockfile
+[install.lockfile]
+save = true
+
+# JSX for React 19
+jsx = "react-jsx"
+jsxImportSource = "react"
+
+# Performance
+logLevel = "warn"
+smol = false
+
+# Console
+[console]
+depth = 3

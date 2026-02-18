@@ -1,0 +1,27 @@
+{
+  "name": "@maxmove/utils",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "libphonenumber-js": "^1.12.24"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "echo 'No build step'",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "@types/node": "^22.10.1",
+    "typescript-config": "workspace:*"
+  }
+}
