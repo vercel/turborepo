@@ -554,8 +554,8 @@ jobs:
         run: turbo run check-examples --filter=turborepo-examples --env-mode=strict
 
   check-lockfiles:
-    name: Check lockfiles
-    timeout-minutes: 40
+    name: Integration - Lockfile parsers
+    timeout-minutes: 15
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
