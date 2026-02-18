@@ -36,7 +36,6 @@ interface FixtureMeta {
   packageManagerVersion: string;
   lockfileName: string;
   frozenInstallCommand: string[];
-  sourceFixture: string;
   /** Workspace names where pruning or frozen install is known to fail. */
   expectedFailures?: string[];
 }
