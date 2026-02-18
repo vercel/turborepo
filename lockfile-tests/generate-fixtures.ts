@@ -1,8 +1,7 @@
 /**
  * generate-fixtures.ts
  *
- * One-time script that reads the raw lockfile fixtures from
- * crates/turborepo-lockfiles/fixtures/ and generates complete, committed
+ * Reads raw lockfiles from a source directory and generates complete, committed
  * fixture directories under lockfile-tests/fixtures/.
  *
  * Each generated fixture is a minimal monorepo with:
@@ -15,8 +14,8 @@
  *   - Empty patch file stubs if the fixture uses patches
  *
  * Usage:
- *   npx tsx generate-fixtures.ts              # Generate all
- *   npx tsx generate-fixtures.ts --fixture pnpm8   # Generate one
+ *   npx tsx generate-fixtures.ts --from /path/to/raw/lockfiles
+ *   npx tsx generate-fixtures.ts --from /path/to/raw/lockfiles --fixture pnpm8
  */
 
 import * as fs from "fs";
@@ -31,10 +30,6 @@ import { parseBunLockfile } from "./parsers/bun";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const RAW_FIXTURES_DIR = path.resolve(
-  __dirname,
-  "../crates/turborepo-lockfiles/fixtures"
-);
 const OUTPUT_DIR = path.resolve(__dirname, "fixtures");
 
 const SKIP_FIXTURES = new Set(["yarn1.lock", "yarn1full.lock", "gh_8849.lock"]);
@@ -244,11 +239,25 @@ function writeJson(filepath: string, data: unknown): void {
 
 function main(): void {
   const filterArg = process.argv.find((_, i, a) => a[i - 1] === "--fixture");
+  const fromArg = process.argv.find((_, i, a) => a[i - 1] === "--from");
 
-  console.log("Generating lockfile test fixtures...\n");
+  if (!fromArg) {
+    console.error(
+      "Usage: npx tsx generate-fixtures.ts --from /path/to/raw/lockfiles"
+    );
+    process.exit(1);
+  }
+
+  const rawDir = path.resolve(fromArg);
+  if (!fs.existsSync(rawDir)) {
+    console.error(`Source directory not found: ${rawDir}`);
+    process.exit(1);
+  }
+
+  console.log(`Generating lockfile test fixtures from ${rawDir}...\n`);
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
-  const entries = fs.readdirSync(RAW_FIXTURES_DIR);
+  const entries = fs.readdirSync(rawDir);
   let count = 0;
 
   for (const entry of entries) {
@@ -257,7 +266,7 @@ function main(): void {
     const pm = classifyFixture(entry);
     if (!pm) continue;
 
-    const filepath = path.join(RAW_FIXTURES_DIR, entry);
+    const filepath = path.join(rawDir, entry);
     if (!fs.statSync(filepath).isFile()) continue;
 
     const content = fs.readFileSync(filepath, "utf-8");

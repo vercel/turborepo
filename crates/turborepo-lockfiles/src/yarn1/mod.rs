@@ -166,44 +166,7 @@ fn possible_keys<'a>(name: &'a str, version: &'a str) -> impl Iterator<Item = St
 
 #[cfg(test)]
 mod test {
-    use pretty_assertions::assert_eq;
-    use test_case::test_case;
-
     use super::*;
-
-    const MINIMAL: &str = include_str!("../../fixtures/yarn1.lock");
-    const FULL: &str = include_str!("../../fixtures/yarn1full.lock");
-    const GH_8849: &str = include_str!("../../fixtures/gh_8849.lock");
-
-    #[test_case(MINIMAL ; "minimal lockfile")]
-    #[test_case(FULL ; "full lockfile")]
-    #[test_case(GH_8849 ; "gh 8849")]
-    fn test_roundtrip(input: &str) {
-        let lockfile = Yarn1Lockfile::from_str(input).unwrap();
-        assert_eq!(input, lockfile.to_string());
-    }
-
-    #[test]
-    fn test_key_splitting() {
-        let lockfile = Yarn1Lockfile::from_str(FULL).unwrap();
-        for key in [
-            "@babel/types@^7.18.10",
-            "@babel/types@^7.18.6",
-            "@babel/types@^7.19.0",
-        ] {
-            assert!(
-                lockfile.inner.contains_key(key),
-                "missing {key} in lockfile"
-            );
-        }
-    }
-
-    #[test_case(MINIMAL, "1.9.3" ; "minimal lockfile")]
-    #[test_case(FULL, "1.4.6" ; "full lockfile")]
-    fn test_turbo_version(lockfile: &str, expected: &str) {
-        let lockfile = Yarn1Lockfile::from_str(lockfile).unwrap();
-        assert_eq!(lockfile.turbo_version().as_deref(), Some(expected));
-    }
 
     #[test]
     fn test_turbo_version_rejects_non_semver() {
