@@ -90,24 +90,33 @@ export class LocalRunner {
         `corepack enable --install-directory "${corepackBin}"`,
         tmpDir
       );
-      const fullPath = `${corepackBin}:${localBin}:${process.env.PATH}`;
+      let fullPath = `${corepackBin}:${localBin}:${process.env.PATH}`;
 
       // Compute the install command (used for both validation and post-prune)
       let installCmd = fixture.frozenInstallCommand.join(" ");
       if (fixture.packageManager === "bun") {
         const bunVersion = fixture.packageManagerVersion.replace("bun@", "");
-        const bunArgs = fixture.frozenInstallCommand.slice(1).join(" ");
-        installCmd = `bunx --bun bun@${bunVersion} ${bunArgs}`;
+        const bunDir = path.join(tmpDir, ".bun-install");
 
         log(`[${label}] Installing bun@${bunVersion}`);
         const bunInstall = await exec(
-          `bunx --bun bun@${bunVersion} --version`,
+          `curl -fsSL https://bun.sh/install | BUN_INSTALL="${bunDir}" bash -s "bun-v${bunVersion}"`,
           tmpDir,
           { PATH: fullPath }
         );
         if (bunInstall.exitCode !== 0) {
-          log(`[${label}] bun install warning: ${bunInstall.stderr}`);
+          result.error = `Failed to install bun@${bunVersion}: ${bunInstall.stderr}`;
+          return result;
         }
+
+        // Put the installed bun at the front of PATH
+        fullPath = `${bunDir}/bin:${fullPath}`;
+
+        // Verify it's the right version
+        const versionCheck = await exec("bun --version", tmpDir, {
+          PATH: fullPath
+        });
+        log(`[${label}] bun version: ${versionCheck.stdout.trim()}`);
       } else {
         log(`[${label}] corepack prepare ${fixture.packageManagerVersion}`);
         const prep = await exec(
