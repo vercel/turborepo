@@ -1,24 +1,50 @@
-lockfileVersion: 5.4
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
 
 overrides:
-  "@nomiclabs/hardhat-ethers": npm:hardhat-deploy-ethers@^0.3.0-beta.13
+  is-number: ^7.0.0
 
 importers:
-  config/hardhat:
-    specifiers:
-      "@nomiclabs/hardhat-ethers": npm:hardhat-deploy-ethers@^0.3.0-beta.13
+
+  .: {}
+
+  apps/web:
     dependencies:
-      "@nomiclabs/hardhat-ethers": /hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy
+      '@repo/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      is-odd:
+        specifier: ^3.0.1
+        version: 3.0.1
+
+  packages/ui:
+    dependencies:
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.23
 
 packages:
-  /hardhat-deploy-ethers/0.3.0-beta.13_yab2ug5tvye2kp6e24l5x3z7uy:
-    resolution:
-      {
-        integrity: sha512-PdWVcKB9coqWV1L7JTpfXRCI91Cgwsm7KLmBcwZ8f0COSm1xtABHZTyz3fvF6p42cTnz1VM0QnfDvMFlIRkSNw==,
-      }
-    peerDependencies:
-      ethers: ^5.0.0
-      hardhat: ^2.0.0
+
+  is-number@7.0.0:
+    resolution: {integrity: sha512-41Cifkg6e8TylSpdtTpeLVMqvSBEVzTttHvERD741+pnZ8ANv0004MRL43QKPDlK9cGvNp6NZWZUBlbGXYxxng==}
+    engines: {node: '>=0.12.0'}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA==}
+    engines: {node: '>=4'}
+
+  lodash@4.17.23:
+    resolution: {integrity: sha512-LgVTMpQtIopCi79SJeDiP0TfWi5CNEc/L/aRdTh3yIvmZXTnheWpKjSZhnvMl8iXbC1tFg9gdHHDMLoV7CnG+w==}
+
+snapshots:
+
+  is-number@7.0.0: {}
+
+  is-odd@3.0.1:
     dependencies:
-      ethers: 5.7.2
-      hardhat: 2.12.4_typescript@4.9.4
+      is-number: 7.0.0
+
+  lodash@4.17.23: {}
