@@ -92,8 +92,13 @@ export class LocalRunner {
       );
       const fullPath = `${corepackBin}:${localBin}:${process.env.PATH}`;
 
+      // Compute the install command (used for both validation and post-prune)
+      let installCmd = fixture.frozenInstallCommand.join(" ");
       if (fixture.packageManager === "bun") {
         const bunVersion = fixture.packageManagerVersion.replace("bun@", "");
+        const bunArgs = fixture.frozenInstallCommand.slice(1).join(" ");
+        installCmd = `bunx --bun bun@${bunVersion} ${bunArgs}`;
+
         log(`[${label}] Installing bun@${bunVersion}`);
         const bunInstall = await exec(
           `bunx --bun bun@${bunVersion} --version`,
@@ -116,6 +121,52 @@ export class LocalRunner {
           );
         }
       }
+
+      // Validate the unpruned fixture: frozen install must work on the
+      // original before we trust it as a test case. If this fails, the
+      // fixture's package.jsons don't match its lockfile — either the
+      // fixture was generated incorrectly or it needs to be rebuilt from
+      // a real repo.
+      log(`[${label}] Validating fixture (frozen install on original)...`);
+      const validateResult = await exec(installCmd, tmpDir, {
+        PATH: fullPath,
+        COREPACK_ENABLE_STRICT: "0"
+      });
+      if (validateResult.exitCode !== 0) {
+        const output = [validateResult.stdout, validateResult.stderr]
+          .filter(Boolean)
+          .join("\n");
+        result.error =
+          `INVALID FIXTURE: frozen install fails on unpruned original.\n` +
+          `This means the fixture's package.jsons don't match its lockfile.\n` +
+          `Fix the fixture or rebuild it from a real repo.\n\n${output}`;
+        // For expected failures, this is a known issue with parser-generated
+        // fixtures. For unexpected tests, this is a hard error.
+        return result;
+      }
+      log(`[${label}] Fixture validated`);
+      // Clean up node_modules from validation so turbo prune sees a clean tree
+      await exec("rm -rf node_modules .pnp* .yarn/cache .bun", tmpDir);
+      // Also clean workspace node_modules
+      const cleanDirs = async (dir: string) => {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          if (entry.name === "node_modules") {
+            fs.rmSync(path.join(dir, entry.name), {
+              recursive: true,
+              force: true
+            });
+          } else if (
+            entry.name !== ".bin" &&
+            entry.name !== ".corepack-bin" &&
+            entry.name !== ".git" &&
+            entry.name !== "out"
+          ) {
+            await cleanDirs(path.join(dir, entry.name));
+          }
+        }
+      };
+      await cleanDirs(tmpDir);
 
       // Git init (turbo requires it)
       await exec(
@@ -153,14 +204,6 @@ export class LocalRunner {
 
       // Frozen install in pruned output
       const outDir = path.join(tmpDir, "out");
-      let installCmd = fixture.frozenInstallCommand.join(" ");
-
-      if (fixture.packageManager === "bun") {
-        const bunVersion = fixture.packageManagerVersion.replace("bun@", "");
-        const bunArgs = fixture.frozenInstallCommand.slice(1).join(" ");
-        installCmd = `bunx --bun bun@${bunVersion} ${bunArgs}`;
-      }
-
       log(`[${label}] ${installCmd} (in out/)`);
 
       const installResult = await exec(installCmd, outDir, {
