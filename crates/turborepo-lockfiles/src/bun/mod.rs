@@ -1135,24 +1135,6 @@ impl BunLockfile {
     }
 
     /// Checks if a version string is a workspace dependency reference
-    /// Returns the workspace path if it is (e.g., "packages/ui" ->
-    /// Some("packages/ui"))
-    #[cfg(test)]
-    fn resolve_workspace_dependency<'a>(&self, version: &'a str) -> Option<&'a str> {
-        // Quick filter: if it starts with version characters, it's definitely not a
-        // workspace
-        if version.starts_with('^') || version.starts_with('~') || version.starts_with('=') {
-            return None;
-        }
-
-        // Definitive check: does this path exist in our workspaces?
-        if self.data.workspaces.contains_key(version) {
-            Some(version)
-        } else {
-            None
-        }
-    }
-
     /// Resolves a catalog reference to the actual version
     /// Supports both default catalog ("catalog:") and named catalogs
     /// ("catalog:group:")
