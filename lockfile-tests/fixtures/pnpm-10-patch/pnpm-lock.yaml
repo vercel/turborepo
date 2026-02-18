@@ -4,14 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-patchedDependencies:
-  is-number@7.0.0:
-    hash: 0bae9732f8037300debc03db26de9b8823a5dc7bb7c3a6a346d9462c70167a75
-    path: patches/is-number@7.0.0.patch
-  is-odd:
-    hash: e861997dbe1a5bbcd8e52a8ebab33faf7531f71876fb8dd37694f3d11da81de2
-    path: patches/is-odd.patch
-
 importers:
 
   .: {}
@@ -35,7 +27,7 @@ importers:
     dependencies:
       is-odd:
         specifier: ^3.0.1
-        version: 3.0.1(patch_hash=e861997dbe1a5bbcd8e52a8ebab33faf7531f71876fb8dd37694f3d11da81de2)
+        version: 3.0.1
       tooling-config:
         specifier: workspace:*
         version: link:../tooling-config
@@ -44,7 +36,7 @@ importers:
     dependencies:
       is-number:
         specifier: ^7.0.0
-        version: 7.0.0(patch_hash=0bae9732f8037300debc03db26de9b8823a5dc7bb7c3a6a346d9462c70167a75)
+        version: 7.0.0
       tooling-config:
         specifier: workspace:*
         version: link:../tooling-config
@@ -69,8 +61,8 @@ snapshots:
 
   is-number@6.0.0: {}
 
-  is-number@7.0.0(patch_hash=0bae9732f8037300debc03db26de9b8823a5dc7bb7c3a6a346d9462c70167a75): {}
+  is-number@7.0.0: {}
 
-  is-odd@3.0.1(patch_hash=e861997dbe1a5bbcd8e52a8ebab33faf7531f71876fb8dd37694f3d11da81de2):
+  is-odd@3.0.1:
     dependencies:
       is-number: 6.0.0

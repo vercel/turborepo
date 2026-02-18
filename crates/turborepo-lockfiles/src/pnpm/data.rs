@@ -175,6 +175,7 @@ pub struct PackageResolution {
 struct LockfileSettings {
     auto_install_peers: Option<bool>,
     exclude_links_from_lockfile: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     inject_workspace_packages: Option<bool>,
 }
 

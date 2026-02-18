@@ -1,38 +1,54 @@
 lockfileVersion: 5.4
+
 importers:
+
+  .:
+    specifiers: {}
+
   packages/a:
     specifiers:
-      another: ^1.0.0
-      "@scope/parent": ^1.0.0
-      special: npm:Special@1.2.3
+      '@babel/parser': 7.21.0
+      special: npm:is-odd@3.0.1
     dependencies:
-      another: 1.0.0
-      "@scope/parent": 1.0.0
-      special: /Special/1.2.3
+      '@babel/parser': 7.21.0
+      special: /is-odd/3.0.1
 
 packages:
-  /@scope/parent/1.0.0:
-    resolution: { integrity: junk }
+
+  /@babel/helper-string-parser/7.27.1:
+    resolution: {integrity: sha512-qMlSxKbpRlAridDExk92nSobyDdpPijUq2DW6oDnUqd0iOGxmQjyqhMIihI9+zv4LPyZdRje2cavWPbCbWm3eA==}
+    engines: {node: '>=6.9.0'}
+    dev: false
+
+  /@babel/helper-validator-identifier/7.28.5:
+    resolution: {integrity: sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==}
+    engines: {node: '>=6.9.0'}
+    dev: false
+
+  /@babel/parser/7.21.0:
+    resolution: {integrity: sha512-ONjtg4renj14A9pj3iA5T5+r5Eijxbr2eNIkMBTC74occDSsRZUpe8vowmowAjFR1imWlkD8eEmjYXiREZpGZg==}
+    engines: {node: '>=6.0.0'}
+    hasBin: true
     dependencies:
-      child: /@scope/child/1.0.0
+      '@babel/types': 7.29.0
     dev: false
 
-  /@scope/child/1.0.0:
-    resolution: { integrity: junk }
-    dev: false
-
-  /another/1.0.0:
-    resolution: { integrity: junk }
-    dev: false
+  /@babel/types/7.29.0:
+    resolution: {integrity: sha512-LwdZHpScM4Qz8Xw2iKSzS+cfglZzJGvofQICy7W7v4caru4EaAmyUuO6BGrbyQ2mYV11W0U8j5mBhd14dd3B0A==}
+    engines: {node: '>=6.9.0'}
     dependencies:
-      foo: 1.0.0
-
-  /foo/1.0.0:
-    resolution: { integrity: junk }
+      '@babel/helper-string-parser': 7.27.1
+      '@babel/helper-validator-identifier': 7.28.5
     dev: false
-    dependencies:
-      Special: 1.2.3
 
-  /Special/1.2.3:
-    resolution: { integrity: junk }
+  /is-number/6.0.0:
+    resolution: {integrity: sha512-Wu1VHeILBK8KAWJUAiSZQX94GmOE45Rg6/538fKwiloUu21KncEkYGPqob2oSZ5mUT73vLGrHQjKw3KMPwfDzg==}
+    engines: {node: '>=0.10.0'}
+    dev: false
+
+  /is-odd/3.0.1:
+    resolution: {integrity: sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA==}
+    engines: {node: '>=4'}
+    dependencies:
+      is-number: 6.0.0
     dev: false

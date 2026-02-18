@@ -207,6 +207,7 @@ impl PackageJson {
             .flatten()
             .chain(self.optional_dependencies.iter().flatten())
             .chain(self.dependencies.iter().flatten())
+            .chain(self.peer_dependencies.iter().flatten())
     }
 
     /// Returns the command for script_name if it is non-empty
