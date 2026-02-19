@@ -419,7 +419,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             .lock()
             .expect("hash tracker mutex poisoned");
 
-        let mut dependency_hash_set = HashSet::new();
+        let mut dependency_hash_set = HashSet::with_capacity(dependency_set.len());
         for dependency_task in dependency_set {
             let TaskNode::Task(dependency_task_id) = dependency_task else {
                 continue;
@@ -429,11 +429,14 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 .package_task_hashes
                 .get(dependency_task_id)
                 .ok_or_else(|| Error::MissingDependencyTaskHash(dependency_task.to_string()))?;
-            dependency_hash_set.insert(dependency_hash.clone());
+            dependency_hash_set.insert(dependency_hash.as_str());
         }
-        drop(state);
 
-        let mut dependency_hash_list = dependency_hash_set.into_iter().collect::<Vec<_>>();
+        let mut dependency_hash_list: Vec<String> = dependency_hash_set
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect();
+        drop(state);
         dependency_hash_list.sort_unstable();
 
         Ok(dependency_hash_list)

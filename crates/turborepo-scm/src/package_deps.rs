@@ -200,45 +200,33 @@ impl GitRepo {
         let package_unix_path_buf = package_path.to_unix();
         let package_unix_path = package_unix_path_buf.as_str();
 
-        let mut inputs = inputs
+        static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
+        let extra_inputs = if include_configs { CONFIG_FILES } else { &[] };
+        let total_inputs = inputs.len() + extra_inputs.len();
+
+        // Build glob lists directly from &str references — no need to clone
+        // every input into an owned String. We only allocate for the joined
+        // "package_path/glob" strings that globwalk requires.
+        let mut inclusions = Vec::with_capacity(total_inputs);
+        let mut exclusions = Vec::with_capacity(total_inputs);
+        let mut glob_buf = String::with_capacity(package_unix_path.len() + 1 + 64);
+
+        let all_inputs = inputs
             .iter()
-            .map(|s| s.as_ref().to_string())
-            .collect::<Vec<String>>();
-
-        if include_configs {
-            // Add in package.json and turbo.json to input patterns. Both file paths are
-            // relative to pkgPath
-            //
-            // - package.json is an input because if the `scripts` in the package.json
-            //   change (i.e. the tasks that turbo executes), we want a cache miss, since
-            //   any existing cache could be invalid.
-            // - turbo.json because it's the definition of the tasks themselves. The root
-            //   turbo.json is similarly included in the global hash. This file may not
-            //   exist in the workspace, but that is ok, because it will get ignored
-            //   downstream.
-            inputs.push("package.json".to_string());
-            inputs.push("turbo.json".to_string());
-            inputs.push("turbo.jsonc".to_string());
-        }
-
-        // The input patterns are relative to the package.
-        // However, we need to change the globbing to be relative to the repo root.
-        // Prepend the package path to each of the input patterns.
-        //
-        // FIXME: we don't yet error on absolute unix paths being passed in as inputs,
-        // and instead tack them on as if they were relative paths. This should be an
-        // error further upstream, but since we haven't pulled the switch yet,
-        // we need to mimic the Go behavior here and trim leading `/`
-        // characters.
-        let mut inclusions = vec![];
-        let mut exclusions = vec![];
-        for raw_glob in inputs {
+            .map(|s| s.as_ref())
+            .chain(extra_inputs.iter().copied());
+        for raw_glob in all_inputs {
+            glob_buf.clear();
             if let Some(exclusion) = raw_glob.strip_prefix('!') {
-                let glob_str = [package_unix_path, exclusion.trim_start_matches('/')].join("/");
-                exclusions.push(ValidatedGlob::from_str(&glob_str)?);
+                glob_buf.push_str(package_unix_path);
+                glob_buf.push('/');
+                glob_buf.push_str(exclusion.trim_start_matches('/'));
+                exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
             } else {
-                let glob_str = [package_unix_path, raw_glob.trim_start_matches('/')].join("/");
-                inclusions.push(ValidatedGlob::from_str(&glob_str)?);
+                glob_buf.push_str(package_unix_path);
+                glob_buf.push('/');
+                glob_buf.push_str(raw_glob.trim_start_matches('/'));
+                inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
             }
         }
         let files = globwalk::globwalk(
@@ -247,14 +235,11 @@ impl GitRepo {
             &exclusions,
             globwalk::WalkType::Files,
         )?;
-        let to_hash = files
-            .iter()
-            .map(|entry| {
-                let path = self.root.anchor(entry)?.to_unix();
-                Ok(path)
-            })
-            .collect::<Result<Vec<_>, Error>>()?;
-        let mut hashes = GitHashes::new();
+        let mut to_hash = Vec::with_capacity(files.len());
+        for entry in &files {
+            to_hash.push(self.root.anchor(entry)?.to_unix());
+        }
+        let mut hashes = GitHashes::with_capacity(files.len());
         hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
         Ok(hashes)
     }
@@ -283,16 +268,66 @@ impl GitRepo {
         }
 
         // Include globs can find files not in the git index (e.g. gitignored files
-        // that a user explicitly wants to track). We still need globwalk for these
-        // but can skip re-hashing files already known from the index.
+        // that a user explicitly wants to track). Walk the filesystem for these
+        // files but skip re-hashing any already known from the index.
         if !includes.is_empty() {
-            let include_hashes = self.get_package_file_hashes_from_inputs(
+            let full_pkg_path = turbo_root.resolve(package_path);
+            let package_unix_path_buf = package_path.to_unix();
+            let package_unix_path = package_unix_path_buf.as_str();
+
+            static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
+            let mut inclusions = Vec::with_capacity(includes.len() + CONFIG_FILES.len());
+            let mut exclusions = Vec::new();
+            let mut glob_buf = String::with_capacity(package_unix_path.len() + 1 + 64);
+
+            let all = includes.iter().copied().chain(CONFIG_FILES.iter().copied());
+            for raw_glob in all {
+                glob_buf.clear();
+                if let Some(exclusion) = raw_glob.strip_prefix('!') {
+                    glob_buf.push_str(package_unix_path);
+                    glob_buf.push('/');
+                    glob_buf.push_str(exclusion.trim_start_matches('/'));
+                    exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+                } else {
+                    glob_buf.push_str(package_unix_path);
+                    glob_buf.push('/');
+                    glob_buf.push_str(raw_glob.trim_start_matches('/'));
+                    inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+                }
+            }
+
+            let files = globwalk::globwalk(
                 turbo_root,
-                package_path,
-                &includes,
-                true,
+                &inclusions,
+                &exclusions,
+                globwalk::WalkType::Files,
             )?;
-            hashes.extend(include_hashes);
+
+            // Only hash files not already present from the git index
+            let mut to_hash = Vec::new();
+            for entry in &files {
+                let git_relative = self.root.anchor(entry)?.to_unix();
+                let pkg_relative = turbopath::RelativeUnixPath::strip_prefix(
+                    &git_relative,
+                    &package_unix_path_buf,
+                )
+                .ok()
+                .map(|s| s.to_owned());
+
+                let already_known = pkg_relative
+                    .as_ref()
+                    .is_some_and(|rel| hashes.contains_key(rel));
+
+                if !already_known {
+                    to_hash.push(git_relative);
+                }
+            }
+
+            if !to_hash.is_empty() {
+                let mut new_hashes = GitHashes::with_capacity(to_hash.len());
+                hash_objects(&self.root, &full_pkg_path, to_hash, &mut new_hashes)?;
+                hashes.extend(new_hashes);
+            }
         }
 
         // Apply excludes via in-memory matching — no filesystem walk needed since

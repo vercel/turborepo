@@ -71,26 +71,32 @@ impl GitRepo {
 }
 
 fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error> {
-    let mut reader = BufReader::new(reader);
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_ls_tree(&buffer)?;
-        let hash = String::from_utf8(entry.hash.to_vec())?;
-        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_vec())?)?;
-        hashes.insert(path, hash);
+        let hash = std::str::from_utf8(entry.hash)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree hash: {e}")))?;
+        let filename = std::str::from_utf8(entry.filename)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree filename: {e}")))?;
+        let path = RelativeUnixPathBuf::new(filename)?;
+        hashes.insert(path, hash.to_owned());
         buffer.clear();
     }
     Ok(())
 }
 
 fn read_ls_tree_sorted<R: Read>(reader: R, hashes: &mut SortedGitHashes) -> Result<(), Error> {
-    let mut reader = BufReader::new(reader);
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_ls_tree(&buffer)?;
-        let hash = String::from_utf8(entry.hash.to_vec())?;
-        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_vec())?)?;
-        hashes.insert(path, hash);
+        let hash = std::str::from_utf8(entry.hash)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree hash: {e}")))?;
+        let filename = std::str::from_utf8(entry.filename)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree filename: {e}")))?;
+        let path = RelativeUnixPathBuf::new(filename)?;
+        hashes.insert(path, hash.to_owned());
         buffer.clear();
     }
     Ok(())

@@ -45,6 +45,7 @@ pub(crate) fn hash_objects(
 ) -> Result<(), Error> {
     let pkg_prefix = git_root.anchor(pkg_path).ok().map(|a| a.to_unix());
 
+    hashes.reserve(to_hash.len());
     let results: Vec<Result<Option<(RelativeUnixPathBuf, String)>, Error>> = to_hash
         .into_par_iter()
         .map(|filename| {
