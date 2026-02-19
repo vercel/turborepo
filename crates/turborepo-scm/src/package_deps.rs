@@ -204,9 +204,6 @@ impl GitRepo {
         let extra_inputs = if include_configs { CONFIG_FILES } else { &[] };
         let total_inputs = inputs.len() + extra_inputs.len();
 
-        // Build glob lists directly from &str references — no need to clone
-        // every input into an owned String. We only allocate for the joined
-        // "package_path/glob" strings that globwalk requires.
         let mut inclusions = Vec::with_capacity(total_inputs);
         let mut exclusions = Vec::with_capacity(total_inputs);
         let mut glob_buf = String::with_capacity(package_unix_path.len() + 1 + 64);
