@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Task-aware caching layer that wraps `turborepo-cache` with task-specific semantics. Handles log files, output modes, and integration with the daemon for output tracking.
+Task-aware caching layer that wraps `turborepo-cache` with task-specific semantics. Handles log files, output modes, and task output tracking.
 
 ## Architecture
 
@@ -19,7 +19,6 @@ turborepo-run-cache
 
 Key responsibilities:
 - Log file handling and output mode management
-- Integration with daemon for file watching
 - Task definition-aware output glob handling
 - Cache hit/miss telemetry
 

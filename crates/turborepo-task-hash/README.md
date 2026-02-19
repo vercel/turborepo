@@ -8,7 +8,7 @@ Computes cache keys for tasks based on their inputs. Determines when a task's ca
 
 ```
 Task inputs
-    ├── File contents (via daemon or SCM)
+    ├── File contents (via SCM)
     ├── Environment variables
     ├── Task definition (from turbo.json)
     ├── Dependencies' hashes
@@ -25,4 +25,4 @@ Key components:
 
 ## Notes
 
-Uses the daemon for fast file hashing when available, falling back to SCM-based hashing. Framework detection (Next.js, Vite, etc.) automatically includes framework-specific environment variables in the hash.
+Uses SCM-based hashing for file contents. Framework detection (Next.js, Vite, etc.) automatically includes framework-specific environment variables in the hash.

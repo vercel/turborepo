@@ -34,31 +34,6 @@ use turborepo_types::{
     TaskDefinitionHashInfo, TaskInputs,
 };
 
-/// Trait for daemon client operations needed for file hashing.
-pub trait DaemonFileHasher: Clone + Send {
-    /// Get file hashes for a package path with the given inputs
-    fn get_file_hashes(
-        &mut self,
-        package_path: &AnchoredSystemPath,
-        inputs: &TaskInputs,
-    ) -> impl std::future::Future<
-        Output = Result<HashMap<String, String>, turborepo_daemon::DaemonError>,
-    > + Send;
-}
-
-// Implement DaemonFileHasher for the actual daemon client
-impl DaemonFileHasher for turborepo_daemon::DaemonClient<turborepo_daemon::DaemonConnector> {
-    async fn get_file_hashes(
-        &mut self,
-        package_path: &AnchoredSystemPath,
-        inputs: &TaskInputs,
-    ) -> Result<HashMap<String, String>, turborepo_daemon::DaemonError> {
-        let response =
-            turborepo_daemon::DaemonClient::get_file_hashes(self, package_path, inputs).await?;
-        Ok(response.file_hashes)
-    }
-}
-
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Missing pipeline entry: {0}")]
@@ -106,22 +81,19 @@ impl PackageInputsHashes {
         repo_root,
         scm,
         _telemetry,
-        daemon,
         pre_built_index
     ))]
-    pub fn calculate_file_hashes<'a, T, D>(
+    pub fn calculate_file_hashes<'a, T>(
         scm: &SCM,
         all_tasks: impl Iterator<Item = &'a TaskNode>,
         workspaces: HashMap<&PackageName, &PackageInfo>,
         task_definitions: &HashMap<TaskId<'static>, T>,
         repo_root: &AbsoluteSystemPath,
         _telemetry: &GenericEventBuilder,
-        daemon: &Option<D>,
         pre_built_index: Option<&RepoGitIndex>,
     ) -> Result<PackageInputsHashes, Error>
     where
         T: TaskDefinitionHashInfo + Sync,
-        D: DaemonFileHasher + Send + Sync,
     {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
@@ -205,40 +177,6 @@ impl PackageInputsHashes {
         let file_hash_results: Vec<Result<Arc<FileHashes>, Error>> = unique_keys
             .into_par_iter()
             .map(|(package_path, globs, default)| {
-                if cfg!(feature = "daemon-file-hashing") {
-                    let handle = tokio::runtime::Handle::current();
-                    let mut daemon = daemon.clone();
-                    let inputs = TaskInputs {
-                        globs: globs.clone(),
-                        default,
-                    };
-                    let result = daemon.as_mut().and_then(|daemon| {
-                        let handle = handle.clone();
-                        handle
-                            .block_on(async {
-                                tokio::time::timeout(
-                                    std::time::Duration::from_millis(100),
-                                    daemon.get_file_hashes(&package_path, &inputs),
-                                )
-                                .await
-                            })
-                            .ok()
-                    });
-                    if let Some(Ok(file_hashes)) = result {
-                        let hashes = file_hashes
-                            .into_iter()
-                            .map(|(path, hash)| {
-                                (
-                                    turbopath::RelativeUnixPathBuf::new(path)
-                                        .expect("daemon returns relative unix paths"),
-                                    hash,
-                                )
-                            })
-                            .collect();
-                        return Ok(Arc::new(FileHashes(hashes)));
-                    }
-                }
-
                 scm.get_package_file_hashes(
                     repo_root,
                     &package_path,

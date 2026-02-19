@@ -342,16 +342,15 @@ impl ConfigurationOptions {
     }
 
     pub fn daemon(&self) -> Option<bool> {
-        // hardcode to off in CI
-        if turborepo_ci::is_ci() {
-            if Some(true) == self.daemon {
-                debug!("Ignoring daemon setting and disabling the daemon because we're in CI");
-            }
-
-            return Some(false);
+        // The daemon is no longer used for `turbo run`. Always return None
+        // (no daemon preference) regardless of configuration.
+        if self.daemon.is_some() {
+            tracing::warn!(
+                "the `daemon` configuration option is deprecated and will be removed in version \
+                 3.0. The daemon is no longer used for `turbo run`."
+            );
         }
-
-        self.daemon
+        None
     }
 
     pub fn env_mode(&self) -> EnvMode {

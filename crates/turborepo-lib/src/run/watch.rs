@@ -8,7 +8,7 @@ use futures::{future::join_all, StreamExt};
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{select, sync::Notify, task::JoinHandle};
-use tracing::{instrument, trace, warn};
+use tracing::{instrument, trace};
 use turborepo_daemon::{proto, DaemonConnector, DaemonConnectorError, DaemonError, Paths};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
@@ -120,10 +120,6 @@ impl WatchClient {
         let handler = SignalHandler::new(signal);
 
         let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
-
-        if matches!(base.opts.run_opts.daemon, Some(false)) {
-            warn!("daemon is required for watch, ignoring request to disable daemon");
-        }
 
         let new_base = base.clone();
         let run = Arc::new(

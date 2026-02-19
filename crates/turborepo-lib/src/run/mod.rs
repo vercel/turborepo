@@ -51,7 +51,6 @@ use crate::{
         get_external_deps_hash, get_global_hash_inputs, get_internal_deps_hash, PackageInputsHashes,
     },
     turbo_json::{TurboJson, UnifiedTurboJsonLoader},
-    DaemonClient, DaemonConnector,
 };
 
 #[derive(Clone)]
@@ -75,7 +74,6 @@ pub struct Run {
     signal_handler: SignalHandler,
     engine: Arc<Engine>,
     task_access: TaskAccess,
-    daemon: Option<DaemonClient<DaemonConnector>>,
     should_print_prelude: bool,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: Arc<Option<RepoGitIndex>>,
@@ -593,7 +591,6 @@ impl Run {
             self.engine.task_definitions(),
             &self.repo_root,
             &self.run_telemetry,
-            &self.daemon,
             repo_index,
         )?;
 

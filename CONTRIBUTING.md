@@ -127,7 +127,7 @@ devturbo run build --skip-infer
 A non-exhaustive list of things to check on:
 
 - Features related to your changes
-- Test with and without daemon
+- Test with and without daemon (daemon is deprecated for `turbo run` but still used by `turbo watch`)
 - Installation scenarios
   - Global only. `turbo` is installed as global binary without a local `turbo` in repository.
   - Local only. `turbo` is installed as local binary without global `turbo` in PATH. `turbo` is invoked via a root package

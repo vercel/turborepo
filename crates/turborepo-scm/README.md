@@ -22,4 +22,4 @@ Two backends:
 
 ## Notes
 
-SCM integration enables `--affected` filtering and efficient file hashing. When the daemon is unavailable, SCM-based hashing is the fallback. Requires git 2.18+ for full functionality.
+SCM integration enables `--affected` filtering and efficient file hashing. Requires git 2.18+ for full functionality.

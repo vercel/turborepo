@@ -19,15 +19,12 @@ use tracing::{debug, log::warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
-use turborepo_cache::{
-    AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheSource, http::UploadMap,
-};
-use turborepo_daemon::{DaemonClient, DaemonConnector};
+use turborepo_cache::{AsyncCache, CacheError, CacheHitMetadata, CacheOpts, http::UploadMap};
 use turborepo_hash::{FileHashes, TurboHash};
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
-use turborepo_telemetry::events::{TrackedErrors, task::PackageTaskEventBuilder};
+use turborepo_telemetry::events::task::PackageTaskEventBuilder;
 // Re-export for backwards compatibility
 pub use turborepo_types::RunCacheOpts;
 use turborepo_types::{
@@ -46,20 +43,10 @@ pub enum Error {
     Globwalk(#[from] globwalk::WalkError),
     #[error("Invalid globwalk pattern: {0}")]
     Glob(#[from] globwalk::GlobError),
-    #[error("Error with daemon: {0}")]
-    Daemon(Box<turborepo_daemon::DaemonError>),
-    #[error("No connection to daemon")]
-    NoDaemon,
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
-}
-
-impl From<turborepo_daemon::DaemonError> for Error {
-    fn from(err: turborepo_daemon::DaemonError) -> Self {
-        Error::Daemon(Box::new(err))
-    }
 }
 
 /// The run cache wraps an AsyncCache with task-aware semantics.
@@ -75,7 +62,6 @@ pub struct RunCache {
     reads_disabled: bool,
     writes_disabled: bool,
     repo_root: AbsoluteSystemPathBuf,
-    daemon_client: Option<DaemonClient<DaemonConnector>>,
     ui: ColorConfig,
     /// When using `outputLogs: "errors-only"`, show task hashes when tasks
     /// complete successfully. Controlled by the `errorsOnlyShowHash` future
@@ -96,7 +82,6 @@ impl RunCache {
         repo_root: &AbsoluteSystemPath,
         run_cache_opts: RunCacheOpts,
         cache_opts: &CacheOpts,
-        daemon_client: Option<DaemonClient<DaemonConnector>>,
         ui: ColorConfig,
         is_dry_run: bool,
     ) -> Self {
@@ -112,7 +97,6 @@ impl RunCache {
             reads_disabled: !cache_opts.cache.remote.read && !cache_opts.cache.local.read,
             writes_disabled: !cache_opts.cache.remote.write && !cache_opts.cache.local.write,
             repo_root: repo_root.to_owned(),
-            daemon_client,
             ui,
             errors_only_show_hash: run_cache_opts.errors_only_show_hash,
         }
@@ -149,7 +133,6 @@ impl RunCache {
             task_output_logs,
             caching_disabled,
             log_file_path,
-            daemon_client: self.daemon_client.clone(),
             ui: self.ui,
             warnings: self.warnings.clone(),
             errors_only_show_hash: self.errors_only_show_hash,
@@ -183,7 +166,6 @@ pub struct TaskCache {
     task_output_logs: OutputLogsMode,
     caching_disabled: bool,
     log_file_path: AbsoluteSystemPathBuf,
-    daemon_client: Option<DaemonClient<DaemonConnector>>,
     ui: ColorConfig,
     task_id: TaskId<'static>,
     warnings: Arc<Mutex<Vec<String>>>,
@@ -254,7 +236,7 @@ impl TaskCache {
     pub async fn restore_outputs(
         &mut self,
         terminal_output: &mut impl CacheOutput,
-        telemetry: &PackageTaskEventBuilder,
+        _telemetry: &PackageTaskEventBuilder,
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
             // Always send the cache miss status so TUI knows to start rendering.
@@ -283,110 +265,51 @@ impl TaskCache {
             return Ok(None);
         }
 
-        let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
+        // Note that we currently don't use the output globs when restoring, but we
+        // could in the future to avoid doing unnecessary file I/O. We also
+        // need to pass along the exclusion globs as well.
+        let cache_status = self
+            .run_cache
+            .cache
+            .fetch(&self.run_cache.repo_root, &self.hash)
+            .await?;
 
-        let changed_output_count = if let Some(daemon_client) = &mut self.daemon_client {
-            match daemon_client
-                .get_changed_outputs(self.hash.to_string(), &validated_inclusions)
-                .await
+        let Some((cache_hit_metadata, restored_files)) = cache_status else {
+            // Always send the cache miss status so TUI knows to start rendering.
+            // The message is only shown based on output_logs setting.
+            let message = if self.task_output_logs == OutputLogsMode::ErrorsOnly
+                && self.errors_only_show_hash
             {
-                Ok(changed_output_globs) => changed_output_globs.len(),
-                Err(err) => {
-                    telemetry.track_error(TrackedErrors::DaemonSkipOutputRestoreCheckFailed);
-                    debug!(
-                        "Failed to check if we can skip restoring outputs for {}: {}. Proceeding \
-                         to check cache",
-                        self.task_id, err
-                    );
-                    self.repo_relative_globs.inclusions.len()
-                }
-            }
-        } else {
-            self.repo_relative_globs.inclusions.len()
-        };
-
-        let has_changed_outputs = changed_output_count > 0;
-
-        let cache_status = if has_changed_outputs {
-            // Note that we currently don't use the output globs when restoring, but we
-            // could in the future to avoid doing unnecessary file I/O. We also
-            // need to pass along the exclusion globs as well.
-            let cache_status = self
-                .run_cache
-                .cache
-                .fetch(&self.run_cache.repo_root, &self.hash)
-                .await?;
-
-            let Some((cache_hit_metadata, restored_files)) = cache_status else {
-                // Always send the cache miss status so TUI knows to start rendering.
-                // The message is only shown based on output_logs setting.
-                let message = if self.task_output_logs == OutputLogsMode::ErrorsOnly
-                    && self.errors_only_show_hash
-                {
-                    format!(
-                        "cache miss, executing {} {}",
-                        color!(self.ui, GREY, "{}", self.hash),
-                        color!(self.ui, GREY, "(only logging errors)")
-                    )
-                } else if matches!(
-                    self.task_output_logs,
-                    OutputLogsMode::None | OutputLogsMode::ErrorsOnly
-                ) {
-                    String::new()
-                } else {
-                    format!(
-                        "cache miss, executing {}",
-                        color!(self.ui, GREY, "{}", self.hash)
-                    )
-                };
-                terminal_output.status(&message, CacheResult::Miss);
-
-                return Ok(None);
+                format!(
+                    "cache miss, executing {} {}",
+                    color!(self.ui, GREY, "{}", self.hash),
+                    color!(self.ui, GREY, "(only logging errors)")
+                )
+            } else if matches!(
+                self.task_output_logs,
+                OutputLogsMode::None | OutputLogsMode::ErrorsOnly
+            ) {
+                String::new()
+            } else {
+                format!(
+                    "cache miss, executing {}",
+                    color!(self.ui, GREY, "{}", self.hash)
+                )
             };
+            terminal_output.status(&message, CacheResult::Miss);
 
-            self.expanded_outputs = restored_files;
-
-            if let Some(daemon_client) = &mut self.daemon_client {
-                // Do we want to error the process if we can't parse the globs? We probably
-                // won't have even gotten this far if this fails...
-                let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
-                if let Err(err) = daemon_client
-                    .notify_outputs_written(
-                        self.hash.clone(),
-                        &validated_inclusions,
-                        &validated_exclusions,
-                        cache_hit_metadata.time_saved,
-                    )
-                    .await
-                {
-                    // Don't fail the whole operation just because we failed to
-                    // watch the outputs
-                    telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
-                    let task_id = &self.task_id;
-                    debug!("Failed to mark outputs as cached for {task_id}: {err}");
-                }
-            }
-
-            Some(cache_hit_metadata)
-        } else {
-            Some(CacheHitMetadata {
-                source: CacheSource::Local,
-                time_saved: 0,
-            })
+            return Ok(None);
         };
 
-        let more_context = if has_changed_outputs {
-            ""
-        } else {
-            " (outputs already on disk)"
-        };
+        self.expanded_outputs = restored_files;
+
+        let cache_status = Some(cache_hit_metadata);
 
         match self.task_output_logs {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
                 terminal_output.status(
                     &format!(
-                        "cache hit{}, suppressing logs {}",
-                        more_context,
+                        "cache hit, suppressing logs {}",
                         color!(self.ui, GREY, "{}", self.hash)
                     ),
                     CacheResult::Hit,
@@ -396,8 +319,7 @@ impl TaskCache {
                 debug!("log file path: {}", self.log_file_path);
                 terminal_output.status(
                     &format!(
-                        "cache hit{}, replaying logs {}",
-                        more_context,
+                        "cache hit, replaying logs {}",
                         color!(self.ui, GREY, "{}", self.hash)
                     ),
                     CacheResult::Hit,
@@ -408,8 +330,7 @@ impl TaskCache {
                 debug!("log file path: {}", self.log_file_path);
                 terminal_output.status(
                     &format!(
-                        "cache hit{}, replaying logs (no errors) {}",
-                        more_context,
+                        "cache hit, replaying logs (no errors) {}",
                         color!(self.ui, GREY, "{}", self.hash)
                     ),
                     CacheResult::Hit,
@@ -426,7 +347,7 @@ impl TaskCache {
     pub async fn save_outputs(
         &mut self,
         duration: Duration,
-        telemetry: &PackageTaskEventBuilder,
+        _telemetry: &PackageTaskEventBuilder,
     ) -> Result<(), Error> {
         if self.caching_disabled || self.run_cache.writes_disabled {
             return Ok(());
@@ -471,24 +392,6 @@ impl TaskCache {
                 duration.as_millis() as u64,
             )
             .await?;
-
-        if let Some(daemon_client) = self.daemon_client.as_mut() {
-            let notify_result = daemon_client
-                .notify_outputs_written(
-                    self.hash.to_string(),
-                    &validated_inclusions,
-                    &validated_exclusions,
-                    duration.as_millis() as u64,
-                )
-                .await
-                .map_err(Error::from);
-
-            if let Err(err) = notify_result {
-                telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
-                let task_id = &self.task_id;
-                debug!("failed to mark outputs as cached for {task_id}: {err}");
-            }
-        }
 
         self.expanded_outputs = relative_paths;
 

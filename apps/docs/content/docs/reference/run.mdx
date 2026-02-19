@@ -415,11 +415,9 @@ turbo run dev --no-cache
 
 ### `--daemon` and `--no-daemon`
 
-`turbo` can run a background process to pre-calculate values used for determining work that needs to be done. This standalone process (daemon) is an optimization, and not required for proper functioning of `turbo`.
+**Deprecated**: The daemon is no longer used for `turbo run`. These flags are ignored and will be removed in version 3.0.
 
-The default daemon usage is set for your repository using [the `daemon` field in `turbo.json`](/docs/reference/configuration#daemon). Passing `--daemon` requires `turbo` to use the standalone process, while `--no-daemon` instructs `turbo` to avoid using or creating the standalone process.
-
-The same behavior can also be set via the `TURBO_DAEMON=true` system variable.
+The daemon is still used by `turbo watch` and the Turborepo LSP.
 
 ### `--output-logs <option>`
 

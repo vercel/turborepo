@@ -50,15 +50,7 @@ Custom cache location. Default: `node_modules/.cache/turbo`.
 
 ## daemon
 
-Background process for faster subsequent runs. Default: `true`.
-
-```json
-{
-  "daemon": false
-}
-```
-
-Disable in CI or when debugging.
+**Deprecated**: The daemon is no longer used for `turbo run` and this option will be removed in version 3.0. The daemon is still used by `turbo watch` and the Turborepo LSP.
 
 ## envMode
 

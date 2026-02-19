@@ -49,7 +49,7 @@
       ]
     },
     "daemon": {
-      "description": "Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#daemon",
+      "description": "Deprecated: The daemon is no longer used for `turbo run` and this option will be removed in version 3.0.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#daemon",
       "anyOf": [
         {
           "$ref": "#/definitions/Boolean"

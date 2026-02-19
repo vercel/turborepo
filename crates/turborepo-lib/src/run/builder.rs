@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 use chrono::Local;
@@ -31,25 +31,15 @@ use turborepo_telemetry::events::{
 };
 use turborepo_types::{DryRunMode, UIMode};
 use turborepo_ui::ColorConfig;
-#[cfg(feature = "daemon-package-discovery")]
-use {
-    crate::run::package_discovery::DaemonPackageDiscovery,
-    turborepo_repository::discovery::{
-        Error as DiscoveryError, FallbackPackageDiscovery, LocalPackageDiscoveryBuilder,
-        PackageDiscoveryBuilder,
-    },
-};
 
 use crate::{
     commands::CommandBase,
-    config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
-    DaemonConnector,
 };
 
 pub struct RunBuilder {
@@ -243,118 +233,19 @@ impl RunBuilder {
             RepoType::Monorepo
         });
 
-        let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
 
-        // Remove allow when daemon is flagged back on
-        let daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
-            (true, None) => {
-                run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
-                debug!("skipping turbod since we appear to be in a non-interactive context");
-                None
-            }
-            (_, Some(true)) | (false, None) => {
-                let can_start_server = true;
-                let can_kill_server = true;
-
-                // Determine custom turbo.json path if different from standard path
-                let custom_turbo_json_path =
-                    if let Ok(standard_path) = resolve_turbo_config_path(&self.repo_root) {
-                        if self.opts.repo_opts.root_turbo_json_path != standard_path {
-                            Some(self.opts.repo_opts.root_turbo_json_path.clone())
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-
-                let connector = DaemonConnector::new(
-                    can_start_server,
-                    can_kill_server,
-                    &self.repo_root,
-                    custom_turbo_json_path,
-                );
-
-                match (connector.connect().await, self.opts.run_opts.daemon) {
-                    (Ok(client), _) => {
-                        run_telemetry.track_daemon_init(DaemonInitStatus::Started);
-                        debug!("running in daemon mode");
-                        Some(client)
-                    }
-                    (Err(e), Some(true)) => {
-                        run_telemetry.track_daemon_init(DaemonInitStatus::Failed);
-                        debug!("failed to connect to daemon when forced {e}, exiting");
-                        return Err(e.into());
-                    }
-                    (Err(e), None) => {
-                        run_telemetry.track_daemon_init(DaemonInitStatus::Failed);
-                        debug!("failed to connect to daemon {e}");
-                        None
-                    }
-                    (_, Some(false)) => unreachable!(),
-                }
-            }
-            (_, Some(false)) => {
-                run_telemetry.track_daemon_init(DaemonInitStatus::Disabled);
-                debug!("skipping turbod since --no-daemon was passed");
-                None
-            }
-        };
+        // The daemon is no longer used for `turbo run`. It provided no measurable
+        // performance benefit and added IPC overhead. The daemon is still used by
+        // `turbo watch` which connects independently.
+        run_telemetry.track_daemon_init(DaemonInitStatus::Disabled);
 
         let mut pkg_dep_graph = {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
                 .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
 
-            // Daemon package discovery depends on packageManager existing in package.json
-            let graph = if cfg!(feature = "daemon-package-discovery")
-                && !self.opts.repo_opts.allow_no_package_manager
-            {
-                match (&daemon, self.opts.run_opts.daemon) {
-                    (None, Some(true)) => {
-                        // We've asked for the daemon, but it's not available. This is an error
-                        return Err(turborepo_repository::package_graph::Error::Discovery(
-                            DiscoveryError::Unavailable,
-                        )
-                        .into());
-                    }
-                    (Some(daemon), Some(true)) => {
-                        // We have the daemon, and have explicitly asked to only use that
-                        let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
-                        builder
-                            .with_package_discovery(daemon_discovery)
-                            .build()
-                            .await
-                    }
-                    (_, Some(false)) | (None, _) => {
-                        // We have explicitly requested to not use the daemon, or we don't have it
-                        // No change to default.
-                        builder.build().await
-                    }
-                    (Some(daemon), None) => {
-                        // We have the daemon, and it's not flagged off. Use the fallback strategy
-                        let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
-                        let local_discovery = LocalPackageDiscoveryBuilder::new(
-                            self.repo_root.clone(),
-                            None,
-                            Some(root_package_json.clone()),
-                        )
-                        .build()?;
-                        let fallback_discover = FallbackPackageDiscovery::new(
-                            daemon_discovery,
-                            local_discovery,
-                            Duration::from_millis(10),
-                        );
-                        builder
-                            .with_package_discovery(fallback_discover)
-                            .build()
-                            .await
-                    }
-                }
-            } else {
-                builder.build().await
-            };
+            let graph = builder.build().await;
 
             match graph {
                 Ok(graph) => graph,
@@ -480,7 +371,6 @@ impl RunBuilder {
             &self.repo_root,
             self.opts.runcache_opts,
             &self.opts.cache_opts,
-            daemon.clone(),
             self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));
@@ -509,7 +399,6 @@ impl RunBuilder {
             engine: Arc::new(engine),
             run_cache,
             signal_handler: signal_handler.clone(),
-            daemon,
             should_print_prelude,
             micro_frontend_configs,
             repo_index,

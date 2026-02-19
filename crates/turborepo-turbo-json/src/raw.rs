@@ -369,9 +369,8 @@ pub struct RawTurboJson {
     #[ts(optional, rename = "dangerouslyDisablePackageManagerCheck")]
     pub allow_no_package_manager: Option<Spanned<bool>>,
 
-    /// Turborepo runs a background process to pre-calculate some expensive
-    /// operations. This standalone process (daemon) is a performance
-    /// optimization, and not required for proper functioning of `turbo`.
+    /// Deprecated: The daemon is no longer used for `turbo run` and this
+    /// option will be removed in version 3.0.
     ///
     /// Documentation: https://turborepo.dev/docs/reference/configuration#daemon
     #[serde(skip_serializing_if = "Option::is_none")]
