@@ -95,7 +95,7 @@ pub enum Error {
 #[derive(Debug, Default)]
 pub struct PackageInputsHashes {
     hashes: HashMap<TaskId<'static>, String>,
-    expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
+    expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,
 }
 
 impl PackageInputsHashes {
@@ -267,9 +267,7 @@ impl PackageInputsHashes {
             let hash = file_hashes.as_ref().hash();
 
             hashes.insert(info.task_id.clone(), hash);
-            // Clone the Arc'd FileHashes for tasks sharing the same inputs.
-            // This is a reference count bump, not a deep clone.
-            expanded_hashes.insert(info.task_id, FileHashes(file_hashes.0.clone()));
+            expanded_hashes.insert(info.task_id, Arc::clone(file_hashes));
         }
 
         Ok(PackageInputsHashes {
@@ -296,7 +294,7 @@ pub struct TaskHashTrackerState {
     #[serde(skip)]
     package_task_cache: HashMap<TaskId<'static>, CacheHitMetadata>,
     #[serde(skip)]
-    package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
+    package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,
 }
 
 /// Caches package-inputs hashes, and package-task hashes.
@@ -477,19 +475,25 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         &self,
         dependency_set: HashSet<&TaskNode>,
     ) -> Result<Vec<String>, Error> {
-        let mut dependency_hash_set = HashSet::new();
+        let state = self
+            .task_hash_tracker
+            .state
+            .lock()
+            .expect("hash tracker mutex poisoned");
 
+        let mut dependency_hash_set = HashSet::new();
         for dependency_task in dependency_set {
             let TaskNode::Task(dependency_task_id) = dependency_task else {
                 continue;
             };
 
-            let dependency_hash = self
-                .task_hash_tracker
-                .hash(dependency_task_id)
+            let dependency_hash = state
+                .package_task_hashes
+                .get(dependency_task_id)
                 .ok_or_else(|| Error::MissingDependencyTaskHash(dependency_task.to_string()))?;
             dependency_hash_set.insert(dependency_hash.clone());
         }
+        drop(state);
 
         let mut dependency_hash_list = dependency_hash_set.into_iter().collect::<Vec<_>>();
         dependency_hash_list.sort_unstable();
@@ -656,7 +660,7 @@ pub fn get_internal_deps_hash(
 }
 
 impl TaskHashTracker {
-    pub fn new(input_expanded_hashes: HashMap<TaskId<'static>, FileHashes>) -> Self {
+    pub fn new(input_expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>) -> Self {
         Self {
             state: Arc::new(Mutex::new(TaskHashTrackerState {
                 package_task_inputs_expanded_hashes: input_expanded_hashes,
@@ -723,7 +727,7 @@ impl TaskHashTracker {
         state.package_task_cache.insert(task_id, cache_status);
     }
 
-    pub fn get_expanded_inputs(&self, task_id: &TaskId) -> Option<FileHashes> {
+    pub fn get_expanded_inputs(&self, task_id: &TaskId) -> Option<Arc<FileHashes>> {
         let state = self.state.lock().expect("hash tracker mutex poisoned");
         state
             .package_task_inputs_expanded_hashes
@@ -773,7 +777,7 @@ impl HashTrackerInfo for TaskHashTracker {
         &self,
         task_id: &TaskId,
     ) -> Option<std::collections::HashMap<RelativeUnixPathBuf, String>> {
-        TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| file_hashes.0)
+        TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| file_hashes.0.clone())
     }
 }
 
