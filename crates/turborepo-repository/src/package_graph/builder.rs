@@ -10,7 +10,8 @@ use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
 use super::{
-    PackageGraph, PackageInfo, PackageName, PackageNode, dep_splitter::DependencySplitter,
+    PackageGraph, PackageInfo, PackageName, PackageNode,
+    dep_splitter::{DependencySplitter, WorkspacePathIndex},
 };
 use crate::{
     discovery::{
@@ -392,6 +393,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         &mut self,
         package_manager: &PackageManager,
     ) -> Result<(), Error> {
+        let path_index = WorkspacePathIndex::new(&self.workspaces);
         let split_deps = self
             .workspaces
             .iter()
@@ -405,6 +407,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                         &self.workspaces,
                         package_manager,
                         entry.package_json.all_dependencies(),
+                        &path_index,
                     ),
                 )
             })
@@ -601,6 +604,7 @@ impl Dependencies {
         workspaces: &HashMap<PackageName, PackageInfo>,
         package_manager: &PackageManager,
         dependencies: I,
+        path_index: &WorkspacePathIndex<'_>,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
         let workspace_dir = resolved_workspace_json_path
@@ -608,8 +612,13 @@ impl Dependencies {
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();
         let mut external = BTreeMap::new();
-        let splitter =
-            DependencySplitter::new(repo_root, workspace_dir, workspaces, package_manager);
+        let splitter = DependencySplitter::new(
+            repo_root,
+            workspace_dir,
+            workspaces,
+            package_manager,
+            path_index,
+        );
         for (name, version) in dependencies.into_iter() {
             if let Some(workspace) = splitter.is_internal(name, version) {
                 internal.insert(workspace);
