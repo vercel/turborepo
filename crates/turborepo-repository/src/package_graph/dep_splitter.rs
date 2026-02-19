@@ -8,10 +8,26 @@ use turbopath::{
 use super::{PackageInfo, PackageName};
 use crate::package_manager::PackageManager;
 
+/// Reverse index from package path to package name, built once and shared
+/// across all `DependencySplitter` instances.
+pub struct WorkspacePathIndex<'a>(HashMap<&'a AnchoredSystemPath, &'a PackageName>);
+
+impl<'a> WorkspacePathIndex<'a> {
+    pub fn new(workspaces: &'a HashMap<PackageName, PackageInfo>) -> Self {
+        Self(
+            workspaces
+                .iter()
+                .map(|(name, info)| (info.package_path(), name))
+                .collect(),
+        )
+    }
+}
+
 pub struct DependencySplitter<'a> {
     repo_root: &'a AbsoluteSystemPath,
     workspace_dir: &'a AbsoluteSystemPath,
     workspaces: &'a HashMap<PackageName, PackageInfo>,
+    path_index: &'a WorkspacePathIndex<'a>,
     link_workspace_packages: bool,
 }
 
@@ -21,12 +37,14 @@ impl<'a> DependencySplitter<'a> {
         workspace_dir: &'a AbsoluteSystemPath,
         workspaces: &'a HashMap<PackageName, PackageInfo>,
         package_manager: &PackageManager,
+        path_index: &'a WorkspacePathIndex<'a>,
     ) -> Self {
         let link_workspace_packages = package_manager.link_workspace_packages(repo_root);
         Self {
             repo_root,
             workspace_dir,
             workspaces,
+            path_index,
             link_workspace_packages,
         }
     }
@@ -86,9 +104,9 @@ impl<'a> DependencySplitter<'a> {
     }
 
     fn workspace(&self, path: &AnchoredSystemPath) -> Option<(&PackageName, &PackageInfo)> {
-        self.workspaces
-            .iter()
-            .find(|(_, info)| info.package_path() == path)
+        let name = self.path_index.0.get(path)?;
+        let info = self.workspaces.get(name)?;
+        Some((name, info))
     }
 }
 
@@ -305,10 +323,12 @@ mod test {
             map
         };
 
+        let path_index = WorkspacePathIndex::new(&workspaces);
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,
             workspaces: &workspaces,
+            path_index: &path_index,
             link_workspace_packages,
         };
 
