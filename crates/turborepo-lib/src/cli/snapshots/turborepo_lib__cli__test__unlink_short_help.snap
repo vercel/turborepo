@@ -1,0 +1,11 @@
+---
+source: crates/turborepo-lib/src/cli/mod.rs
+expression: "String::from_utf8(buf).unwrap()"
+---
+Unlink the current directory from your Vercel organization and disable Remote Caching
+
+Usage: unlink [OPTIONS]
+
+Options:
+      --target <TARGET>  DEPRECATED: Specify what should be unlinked (default "remote cache") [possible values: remote-cache, spaces]
+  -h, --help             Print help

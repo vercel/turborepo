@@ -1,0 +1,14 @@
+---
+source: crates/turborepo-lib/src/cli/mod.rs
+expression: "String::from_utf8(buf).unwrap()"
+---
+Link your local directory to a Vercel organization and enable remote caching
+
+Usage: link [OPTIONS]
+
+Options:
+      --no-gitignore     Do not create or modify .gitignore (default false)
+      --scope <SCOPE>    The scope, i.e. Vercel team, to which you are linking
+  -y, --yes              Answer yes to all prompts (default false)
+      --target <TARGET>  DEPRECATED: Specify what should be linked (default "remote cache") [possible values: remote-cache, spaces]
+  -h, --help             Print help

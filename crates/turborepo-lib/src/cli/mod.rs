@@ -1718,12 +1718,67 @@ mod test {
     use std::{assert_matches::assert_matches, ffi::OsString};
 
     use camino::Utf8PathBuf;
-    use clap::Parser;
+    use clap::{CommandFactory, Parser};
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
     use crate::cli::{ContinueMode, ExecutionArgs, LinkTarget, RunArgs};
+
+    fn get_subcommand(name: &str) -> clap::Command {
+        Args::command()
+            .find_subcommand(name)
+            .unwrap_or_else(|| panic!("subcommand '{name}' not found"))
+            .clone()
+    }
+
+    #[test]
+    fn turbo_short_help() {
+        let mut cmd = Args::command();
+        let mut buf = Vec::new();
+        cmd.write_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
+
+    #[test]
+    fn turbo_long_help() {
+        let mut cmd = Args::command();
+        let mut buf = Vec::new();
+        cmd.write_long_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
+
+    #[test]
+    fn link_short_help() {
+        let mut cmd = get_subcommand("link");
+        let mut buf = Vec::new();
+        cmd.write_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
+
+    #[test]
+    fn unlink_short_help() {
+        let mut cmd = get_subcommand("unlink");
+        let mut buf = Vec::new();
+        cmd.write_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
+
+    #[test]
+    fn login_short_help() {
+        let mut cmd = get_subcommand("login");
+        let mut buf = Vec::new();
+        cmd.write_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
+
+    #[test]
+    fn logout_short_help() {
+        let mut cmd = get_subcommand("logout");
+        let mut buf = Vec::new();
+        cmd.write_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
 
     struct CommandTestCase {
         command: &'static str,
