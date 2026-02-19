@@ -83,11 +83,13 @@ fn read_status<R: Read>(
     hashes: &mut GitHashes,
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
     let mut to_hash = Vec::new();
-    let mut reader = BufReader::new(reader);
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_status(&buffer)?;
-        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_owned())?)?;
+        let filename = std::str::from_utf8(entry.filename)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in git status: {e}")))?;
+        let path = RelativeUnixPathBuf::new(filename)?;
         if entry.is_delete {
             let path = path.strip_prefix(pkg_prefix).map_err(|_| {
                 Error::git_error(format!(
@@ -106,11 +108,13 @@ fn read_status<R: Read>(
 
 fn read_status_raw<R: Read>(reader: R) -> Result<Vec<RepoStatusEntry>, Error> {
     let mut entries = Vec::new();
-    let mut reader = BufReader::new(reader);
+    let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_status(&buffer)?;
-        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_owned())?)?;
+        let filename = std::str::from_utf8(entry.filename)
+            .map_err(|e| Error::git_error(format!("invalid utf8 in git status: {e}")))?;
+        let path = RelativeUnixPathBuf::new(filename)?;
         entries.push(RepoStatusEntry {
             path,
             is_delete: entry.is_delete,

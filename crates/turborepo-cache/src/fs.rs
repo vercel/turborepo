@@ -125,19 +125,29 @@ impl FSCache {
 
     #[tracing::instrument(skip_all)]
     pub(crate) fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
-        let uncompressed_cache_path = self.cache_directory.join_component(&format!("{hash}.tar"));
-        let compressed_cache_path = self
-            .cache_directory
-            .join_component(&format!("{hash}.tar.zst"));
+        let cache_dir = self.cache_directory.as_str();
+        let mut buf = String::with_capacity(cache_dir.len() + 1 + hash.len() + "-meta.json".len());
+        buf.push_str(cache_dir);
+        buf.push(std::path::MAIN_SEPARATOR);
+        buf.push_str(hash);
+        let prefix_len = buf.len();
 
-        if !uncompressed_cache_path.exists() && !compressed_cache_path.exists() {
+        buf.push_str(".tar");
+        let uncompressed_exists = std::path::Path::new(&buf).exists();
+
+        buf.push_str(".zst");
+        let compressed_exists = std::path::Path::new(&buf).exists();
+
+        if !uncompressed_exists && !compressed_exists {
             return Ok(None);
         }
 
+        buf.truncate(prefix_len);
+        buf.push_str("-meta.json");
+
         let duration = CacheMetadata::read(
-            &self
-                .cache_directory
-                .join_component(&format!("{hash}-meta.json")),
+            &AbsoluteSystemPathBuf::try_from(buf.as_str())
+                .map_err(|_| CacheError::ConfigCacheInvalidBase)?,
         )
         .map(|meta| meta.duration)
         .unwrap_or(0);

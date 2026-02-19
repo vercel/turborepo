@@ -80,25 +80,22 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
         .ok_or(WalkError::InvalidPath)?;
     let base_path_slash = escape_glob_literals(&raw_slash);
 
-    let (include_paths, lowest_segment) = include
-        .iter()
-        .map(|s| fix_glob_pattern(s.as_ref()).into_owned())
-        .map(|mut s| {
+    let (include_paths, lowest_segment) = {
+        let mut paths = Vec::with_capacity(include.len());
+        let mut lowest = usize::MAX;
+        for s in include {
+            let mut fixed = fix_glob_pattern(s.as_ref()).into_owned();
             // We need to check inclusion globs before the join
             // as to_slash doesn't preserve Windows drive names.
-            add_doublestar_to_dir(base_path, &mut s);
-            s
-        })
-        .map(|s| join_unix_like_paths(&base_path_slash, &s))
-        .filter_map(|s| collapse_path(&s).map(|(s, v)| (s.to_string(), v)))
-        .fold(
-            (vec![], usize::MAX),
-            |(mut vec, lowest_segment), (path, lowest_segment_next)| {
-                let lowest_segment = std::cmp::min(lowest_segment, lowest_segment_next);
-                vec.push(path); // we stringify here due to lifetime issues
-                (vec, lowest_segment)
-            },
-        );
+            add_doublestar_to_dir(base_path, &mut fixed);
+            let joined = join_unix_like_paths(&base_path_slash, &fixed);
+            if let Some((collapsed, segment)) = collapse_path(&joined) {
+                lowest = std::cmp::min(lowest, segment);
+                paths.push(collapsed.into_owned());
+            }
+        }
+        (paths, lowest)
+    };
 
     let base_path = base_path
         .components()
@@ -108,16 +105,13 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
         )
         .collect::<PathBuf>();
 
-    let mut exclude_paths = vec![];
-    for split in exclude
-        .iter()
-        .map(|s| fix_glob_pattern(s.as_ref()))
-        .map(|s| join_unix_like_paths(&base_path_slash, s.as_ref()))
-        .filter_map(|g| collapse_path(&g).map(|(s, _)| s.to_string()))
-    {
-        // if the glob ends with a slash, then we need to add a double star,
-        // unless it already ends with a double star
-        add_trailing_double_star(&mut exclude_paths, &split);
+    let mut exclude_paths = Vec::with_capacity(exclude.len() * 2);
+    for s in exclude {
+        let fixed = fix_glob_pattern(s.as_ref());
+        let joined = join_unix_like_paths(&base_path_slash, fixed.as_ref());
+        if let Some((collapsed, _)) = collapse_path(&joined) {
+            add_trailing_double_star(&mut exclude_paths, &collapsed);
+        }
     }
 
     Ok((base_path, include_paths, exclude_paths))
