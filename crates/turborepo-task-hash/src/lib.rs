@@ -22,7 +22,9 @@ use turbopath::{
 use turborepo_cache::CacheHitMetadata;
 // Re-export turborepo_engine::TaskNode for convenience
 pub use turborepo_engine::TaskNode;
-use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
+use turborepo_env::{
+    BUILTIN_PASS_THROUGH_ENV, BySource, CompiledWildcards, DetailedMap, EnvironmentVariableMap,
+};
 use turborepo_frameworks::{Slug as FrameworkSlug, infer_framework};
 use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
@@ -244,6 +246,7 @@ pub struct TaskHasher<'a, R> {
     global_env_patterns: &'a [String],
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
+    compiled_builtins: CompiledWildcards,
 }
 
 impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
@@ -259,6 +262,13 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             hashes,
             expanded_hashes,
         } = package_inputs_hashes;
+
+        let compiled_builtins = CompiledWildcards::compile(BUILTIN_PASS_THROUGH_ENV)
+            .unwrap_or_else(|_| {
+                let empty: &[&str] = &[];
+                CompiledWildcards::compile(empty).unwrap()
+            });
+
         Self {
             hashes,
             run_opts,
@@ -267,6 +277,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             global_env,
             global_env_patterns,
             task_hash_tracker: TaskHashTracker::new(expanded_hashes),
+            compiled_builtins,
         }
     }
 
@@ -460,71 +471,8 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     ) -> Result<EnvironmentVariableMap, Error> {
         match task_env_mode {
             EnvMode::Strict => {
-                let mut full_task_env = EnvironmentVariableMap::default();
-                let builtin_pass_through = &[
-                    "HOME",
-                    "USER",
-                    "TZ",
-                    "LANG",
-                    "SHELL",
-                    "PWD",
-                    "XDG_RUNTIME_DIR",
-                    "XAUTHORITY",
-                    "DBUS_SESSION_BUS_ADDRESS",
-                    "CI",
-                    "NODE_OPTIONS",
-                    "COREPACK_HOME",
-                    "LD_LIBRARY_PATH",
-                    "DYLD_FALLBACK_LIBRARY_PATH",
-                    "LIBPATH",
-                    "LD_PRELOAD",
-                    "DYLD_INSERT_LIBRARIES",
-                    "COLORTERM",
-                    "TERM",
-                    "TERM_PROGRAM",
-                    "DISPLAY",
-                    "TMP",
-                    "TEMP",
-                    // Windows
-                    "WINDIR",
-                    "ProgramFiles",
-                    "ProgramFiles(x86)",
-                    // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
-                    "VSCODE_*",
-                    "ELECTRON_RUN_AS_NODE",
-                    // Docker - https://docs.docker.com/engine/reference/commandline/cli/#environment-variables
-                    "DOCKER_*",
-                    "BUILDKIT_*",
-                    // Docker compose - https://docs.docker.com/compose/environment-variables/envvars/
-                    "COMPOSE_*",
-                    // Jetbrains IDE
-                    "JB_IDE_*",
-                    "JB_INTERPRETER",
-                    "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
-                    // Vercel specific
-                    "VERCEL",
-                    "VERCEL_*",
-                    "NEXT_*",
-                    "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
-                    "NOW_BUILDER",
-                    "VC_MICROFRONTENDS_CONFIG_FILE_NAME",
-                    // GitHub Actions - https://docs.github.com/en/actions/reference/workflows-and-actions/variables
-                    "GITHUB_*",
-                    "RUNNER_*",
-                    // Command Prompt casing of env variables
-                    "APPDATA",
-                    "PATH",
-                    "PROGRAMDATA",
-                    "SYSTEMROOT",
-                    "SYSTEMDRIVE",
-                    "USERPROFILE",
-                    "HOMEDRIVE",
-                    "HOMEPATH",
-                    "PNPM_HOME",
-                    "NPM_CONFIG_STORE_DIR",
-                ];
-                let pass_through_env_vars = self.env_at_execution_start.pass_through_env(
-                    builtin_pass_through,
+                let pass_through_env_vars = self.env_at_execution_start.pass_through_env_compiled(
+                    &self.compiled_builtins,
                     &self.global_env,
                     task_definition.pass_through_env().unwrap_or_default(),
                 )?;
@@ -534,6 +482,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                     .env_vars(task_id)
                     .ok_or_else(|| Error::MissingEnvVars(task_id.clone().into_owned()))?;
 
+                let mut full_task_env = EnvironmentVariableMap::default();
                 full_task_env.union(&pass_through_env_vars);
                 full_task_env.union(&tracker_env.all);
 
