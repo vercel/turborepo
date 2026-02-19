@@ -1,11 +1,9 @@
 #![cfg(feature = "git2")]
 
-use std::collections::BTreeMap;
-
 use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
-use crate::{Error, GitHashes, GitRepo, status::RepoStatusEntry};
+use crate::{Error, GitHashes, GitRepo, ls_tree::SortedGitHashes, status::RepoStatusEntry};
 
 /// Pre-computed repo-wide git index that caches the results of `git ls-tree`
 /// and `git status` so they can be filtered per-package without spawning
@@ -14,7 +12,7 @@ use crate::{Error, GitHashes, GitRepo, status::RepoStatusEntry};
 /// Uses a `BTreeMap` for the ls-tree data so that per-package lookups can
 /// use `range()` on the sorted keys instead of scanning every entry.
 pub struct RepoGitIndex {
-    ls_tree_hashes: BTreeMap<RelativeUnixPathBuf, String>,
+    ls_tree_hashes: SortedGitHashes,
     status_entries: Vec<RepoStatusEntry>,
 }
 
@@ -25,20 +23,16 @@ impl RepoGitIndex {
         // tree while status reads the working directory. Run them on separate
         // threads so the wall-clock cost is max(ls_tree, status) instead of
         // their sum.
-        let (raw_hashes, status_entries) = std::thread::scope(|s| {
-            let ls_tree = s.spawn(|| git.git_ls_tree_repo_root());
+        let (ls_tree_hashes, status_entries) = std::thread::scope(|s| {
+            let ls_tree = s.spawn(|| git.git_ls_tree_repo_root_sorted());
             let status = s.spawn(|| git.git_status_repo_root());
             (
                 ls_tree.join().expect("ls-tree thread panicked"),
                 status.join().expect("status thread panicked"),
             )
         });
-        let raw_hashes = raw_hashes?;
+        let ls_tree_hashes = ls_tree_hashes?;
         let status_entries = status_entries?;
-
-        // Convert HashMap to BTreeMap for sorted prefix-range lookups
-        let ls_tree_hashes: BTreeMap<RelativeUnixPathBuf, String> =
-            raw_hashes.into_iter().collect();
 
         debug!(
             "built repo git index: ls_tree_count={}, status_count={}",

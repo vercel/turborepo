@@ -1,5 +1,6 @@
 #![cfg(feature = "git2")]
-use tracing::{Span, debug};
+use rayon::prelude::*;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
 
 use crate::{Error, GitHashes};
@@ -31,7 +32,6 @@ fn is_too_many_open_files(e: &git2::Error) -> bool {
     if e.class() != git2::ErrorClass::Os {
         return false;
     }
-    // git2 wraps the OS error message; check for the standard text.
     let msg = e.message();
     msg.contains("Too many open files") || msg.contains("EMFILE")
 }
@@ -43,41 +43,46 @@ pub(crate) fn hash_objects(
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
-    let parent = Span::current();
     let pkg_prefix = git_root.anchor(pkg_path).ok().map(|a| a.to_unix());
 
-    for filename in to_hash {
-        let span = tracing::info_span!(parent: &parent, "hash_object", ?filename);
-        let _enter = span.enter();
-
-        let full_file_path = git_root.join_unix_path(&filename);
-        match hash_file_with_retry(&full_file_path) {
-            Ok(hash) => {
-                let package_relative_path = pkg_prefix
-                    .as_ref()
-                    .and_then(|prefix| {
-                        RelativeUnixPath::strip_prefix(&filename, prefix)
-                            .ok()
-                            .map(|stripped| stripped.to_owned())
-                    })
-                    .unwrap_or_else(|| {
-                        AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
-                            .to_unix()
-                    });
-                hashes.insert(package_relative_path, hash.to_string());
-            }
-            Err(e) => {
-                if e.class() == git2::ErrorClass::Os
-                    && full_file_path
-                        .symlink_metadata()
-                        .map(|md| md.is_symlink())
-                        .unwrap_or(false)
-                {
-                    continue;
-                } else {
-                    return Err(Error::git2_error_context(e, full_file_path.to_string()));
+    let results: Vec<Result<Option<(RelativeUnixPathBuf, String)>, Error>> = to_hash
+        .into_par_iter()
+        .map(|filename| {
+            let full_file_path = git_root.join_unix_path(&filename);
+            match hash_file_with_retry(&full_file_path) {
+                Ok(hash) => {
+                    let package_relative_path = pkg_prefix
+                        .as_ref()
+                        .and_then(|prefix| {
+                            RelativeUnixPath::strip_prefix(&filename, prefix)
+                                .ok()
+                                .map(|stripped| stripped.to_owned())
+                        })
+                        .unwrap_or_else(|| {
+                            AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
+                                .to_unix()
+                        });
+                    Ok(Some((package_relative_path, hash.to_string())))
+                }
+                Err(e) => {
+                    if e.class() == git2::ErrorClass::Os
+                        && full_file_path
+                            .symlink_metadata()
+                            .map(|md| md.is_symlink())
+                            .unwrap_or(false)
+                    {
+                        Ok(None)
+                    } else {
+                        Err(Error::git2_error_context(e, full_file_path.to_string()))
+                    }
                 }
             }
+        })
+        .collect();
+
+    for result in results {
+        if let Some((path, hash)) = result? {
+            hashes.insert(path, hash);
         }
     }
     Ok(())
