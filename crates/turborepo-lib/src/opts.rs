@@ -66,6 +66,7 @@ pub struct Opts {
     pub scope_opts: ScopeOpts,
     pub tui_opts: TuiOpts,
     pub future_flags: FutureFlags,
+    pub experimental_observability: Option<crate::config::ExperimentalObservabilityOptions>,
 }
 
 impl Opts {
@@ -179,6 +180,7 @@ impl Opts {
         let repo_opts = RepoOpts::from(inputs);
         let tui_opts = TuiOpts::from(inputs);
         let future_flags = config.future_flags();
+        let experimental_observability = config.experimental_observability().cloned();
 
         Ok(Self {
             repo_opts,
@@ -189,6 +191,7 @@ impl Opts {
             api_client_opts,
             tui_opts,
             future_flags,
+            experimental_observability,
         })
     }
 }
@@ -733,6 +736,7 @@ mod test {
             runcache_opts,
             tui_opts,
             future_flags: Default::default(),
+            experimental_observability: None,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);

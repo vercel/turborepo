@@ -30,7 +30,7 @@ use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
-use turborepo_run_summary::RunTracker;
+use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
@@ -79,6 +79,7 @@ pub struct Run {
     should_print_prelude: bool,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: Arc<Option<RepoGitIndex>>,
+    observability_handle: Option<ObservabilityHandle>,
 }
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
@@ -666,6 +667,7 @@ impl Run {
             self.version,
             Vendor::get_user(),
             &self.scm,
+            self.observability_handle.clone(),
         );
 
         let mut visitor = Visitor::new(

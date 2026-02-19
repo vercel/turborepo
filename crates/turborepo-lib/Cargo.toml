@@ -7,12 +7,13 @@ license = "MIT"
 [features]
 # Allows configuring a specific tls backend for reqwest.
 # See top level Cargo.toml for more details.
-default = ["rustls-tls", "daemon-package-discovery"]
+default = ["rustls-tls", "daemon-package-discovery", "otel"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
 
 daemon-package-discovery = []
 daemon-file-hashing = []
+otel = ["turborepo-run-summary/otel"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
@@ -125,6 +126,7 @@ turborepo-json-rewrite = { path = "../turborepo-json-rewrite" }
 turborepo-lockfiles = { workspace = true }
 turborepo-microfrontends = { workspace = true }
 turborepo-microfrontends-proxy = { workspace = true }
+turborepo-otel = { workspace = true }
 turborepo-process = { workspace = true }
 turborepo-profile-md = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }

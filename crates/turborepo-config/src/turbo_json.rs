@@ -1,8 +1,16 @@
+use std::{collections::BTreeMap, str::FromStr};
+
 use camino::Utf8PathBuf;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
-use turborepo_turbo_json::{RawRemoteCacheOptions, RawRootTurboJson, RawTurboJson};
+use turborepo_turbo_json::{
+    RawExperimentalObservability, RawKeyValue, RawObservabilityOtel, RawRemoteCacheOptions,
+    RawRootTurboJson, RawTurboJson,
+};
 
-use crate::{ConfigurationOptions, Error, ResolvedConfigurationOptions};
+use crate::{
+    ConfigurationOptions, Error, ExperimentalObservabilityOptions, ExperimentalOtelMetricsOptions,
+    ExperimentalOtelOptions, ExperimentalOtelProtocol, ResolvedConfigurationOptions,
+};
 
 pub struct TurboJsonReader<'a> {
     repo_root: &'a AbsoluteSystemPath,
@@ -81,7 +89,19 @@ impl<'a> TurboJsonReader<'a> {
             .map(|no_update_notifier| *no_update_notifier.as_inner());
         opts.cache_dir = cache_dir;
         opts.concurrency = turbo_json.concurrency.map(|c| c.as_inner().clone());
+
         opts.future_flags = turbo_json.future_flags.map(|f| *f.as_inner());
+
+        // Only read observability config if futureFlags.experimentalObservability is
+        // enabled
+        if opts
+            .future_flags
+            .map(|f| f.experimental_observability)
+            .unwrap_or(false)
+            && let Some(raw_observability) = turbo_json.experimental_observability
+        {
+            opts.experimental_observability = Some(convert_raw_observability(raw_observability)?);
+        }
         Ok(opts)
     }
 }
@@ -104,6 +124,56 @@ impl<'a> ResolvedConfigurationOptions for TurboJsonReader<'a> {
         };
         Self::turbo_json_to_config_options(turbo_json)
     }
+}
+
+fn convert_raw_observability(
+    raw: RawExperimentalObservability,
+) -> Result<ExperimentalObservabilityOptions, Error> {
+    Ok(ExperimentalObservabilityOptions {
+        otel: raw.otel.map(convert_raw_observability_otel).transpose()?,
+    })
+}
+
+fn convert_raw_observability_otel(
+    raw: RawObservabilityOtel,
+) -> Result<ExperimentalOtelOptions, Error> {
+    let protocol = if let Some(protocol) = raw.protocol {
+        let proto_str = protocol.as_inner().as_str();
+        Some(ExperimentalOtelProtocol::from_str(proto_str).map_err(|e| {
+            Error::InvalidExperimentalOtelConfig {
+                message: e.to_string(),
+            }
+        })?)
+    } else {
+        None
+    };
+
+    let metrics = raw.metrics.map(|metrics| ExperimentalOtelMetricsOptions {
+        run_summary: metrics.run_summary.map(|flag| *flag.as_inner()),
+        task_details: metrics.task_details.map(|flag| *flag.as_inner()),
+    });
+
+    let headers = raw.headers.map(convert_key_values);
+
+    let resource = raw.resource.map(convert_key_values);
+
+    Ok(ExperimentalOtelOptions {
+        enabled: raw.enabled.map(|flag| *flag.as_inner()),
+        protocol,
+        endpoint: raw.endpoint.map(|endpoint| endpoint.into_inner().into()),
+        headers,
+        timeout_ms: raw.timeout_ms.map(|timeout| *timeout.as_inner()),
+        interval_ms: raw.interval_ms.map(|interval| *interval.as_inner()),
+        resource,
+        metrics,
+        use_remote_cache_token: raw.use_remote_cache_token.map(|flag| *flag.as_inner()),
+    })
+}
+
+fn convert_key_values(raw: Vec<RawKeyValue>) -> BTreeMap<String, String> {
+    raw.into_iter()
+        .map(|kv| (kv.key.into_inner().into(), kv.value.into_inner().into()))
+        .collect()
 }
 
 #[cfg(test)]
@@ -245,5 +315,132 @@ mod test {
         let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
 
         assert!(config.no_update_notifier());
+    }
+
+    #[test]
+    fn test_experimental_observability_otel_with_future_flag_disabled() {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "futureFlags": {
+                    "experimentalObservability": false
+                },
+                "experimentalObservability": {
+                    "otel": {
+                        "enabled": true,
+                        "endpoint": "https://example.com/otel"
+                    }
+                }
+            }))
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .into();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        // Should be None because future flag is disabled
+        assert_eq!(config.experimental_observability(), None);
+    }
+
+    #[test]
+    fn test_experimental_observability_otel_with_future_flag_enabled() {
+        let endpoint = "https://example.com/otel";
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "futureFlags": {
+                    "experimentalObservability": true
+                },
+                "experimentalObservability": {
+                    "otel": {
+                        "enabled": true,
+                        "endpoint": endpoint,
+                        "protocol": "grpc",
+                        "timeoutMs": 5000
+                    }
+                }
+            }))
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .into();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        let observability_config = config.experimental_observability();
+        assert!(observability_config.is_some());
+        let otel_config = observability_config.unwrap().otel.as_ref().unwrap();
+        assert_eq!(otel_config.enabled, Some(true));
+        assert_eq!(otel_config.endpoint.as_ref(), Some(&endpoint.to_string()));
+        assert_eq!(otel_config.protocol, Some(ExperimentalOtelProtocol::Grpc));
+        assert_eq!(otel_config.timeout_ms, Some(5000));
+    }
+
+    #[test]
+    fn test_experimental_observability_without_future_flag() {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "experimentalObservability": {
+                    "otel": {
+                        "enabled": true,
+                        "endpoint": "https://example.com/otel"
+                    }
+                }
+            }))
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .into();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        // Should be None because future flag is not set (defaults to false)
+        assert_eq!(config.experimental_observability(), None);
+    }
+
+    #[test]
+    fn test_experimental_observability_otel_with_headers_and_resource() {
+        let turbo_json = RawRootTurboJson::parse(
+            &serde_json::to_string_pretty(&json!({
+                "futureFlags": {
+                    "experimentalObservability": true
+                },
+                "experimentalObservability": {
+                    "otel": {
+                        "enabled": true,
+                        "endpoint": "https://example.com/otel",
+                        "headers": [
+                            { "key": "Authorization", "value": "Bearer token123" },
+                            { "key": "X-Custom-Header", "value": "custom-value" }
+                        ],
+                        "resource": [
+                            { "key": "service.name", "value": "turborepo" },
+                            { "key": "service.version", "value": "1.0.0" }
+                        ]
+                    }
+                }
+            }))
+            .unwrap(),
+            "turbo.json",
+        )
+        .unwrap()
+        .into();
+        let config = TurboJsonReader::turbo_json_to_config_options(turbo_json).unwrap();
+        let observability_config = config.experimental_observability();
+        assert!(observability_config.is_some());
+        let otel_config = observability_config.unwrap().otel.as_ref().unwrap();
+        assert_eq!(otel_config.enabled, Some(true));
+
+        // Verify headers are parsed correctly
+        let headers = otel_config.headers.as_ref().unwrap();
+        assert_eq!(
+            headers.get("Authorization"),
+            Some(&"Bearer token123".to_string())
+        );
+        assert_eq!(
+            headers.get("X-Custom-Header"),
+            Some(&"custom-value".to_string())
+        );
+
+        // Verify resource is parsed correctly
+        let resource = otel_config.resource.as_ref().unwrap();
+        assert_eq!(resource.get("service.name"), Some(&"turborepo".to_string()));
+        assert_eq!(resource.get("service.version"), Some(&"1.0.0".to_string()));
     }
 }

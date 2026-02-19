@@ -61,6 +61,26 @@ Make sure exit code is 2 when no args are passed
             Specify a file to save a pprof trace
         --verbosity <COUNT>
             Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
+        --experimental-otel-enabled [<ENABLED>]
+            Enable OpenTelemetry metrics export [possible values: true, false]
+        --experimental-otel-protocol <PROTOCOL>
+            OTLP transport protocol (grpc or http-protobuf)
+        --experimental-otel-endpoint <URL>
+            OTLP collector endpoint URL
+        --experimental-otel-timeout-ms <MILLISECONDS>
+            OTLP export timeout in milliseconds (default: 10000)
+        --experimental-otel-interval-ms <MILLISECONDS>
+            OTLP export interval in milliseconds (default: 15000)
+        --experimental-otel-header <KEY=VALUE>
+            Add header to OTLP requests (can be repeated)
+        --experimental-otel-resource <KEY=VALUE>
+            Add resource attribute to metrics (can be repeated)
+        --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+            Emit run-level summary metrics (default: true) [possible values: true, false]
+        --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+            Emit per-task detail metrics (default: false) [possible values: true, false]
+        --experimental-otel-use-remote-cache-token [<USE_REMOTE_CACHE_TOKEN>]
+            Use remote cache token for OTLP authentication [possible values: true, false]
         --dangerously-disable-package-manager-check
             Allow for missing `packageManager` in `package.json`
         --root-turbo-json <ROOT_TURBO_JSON>

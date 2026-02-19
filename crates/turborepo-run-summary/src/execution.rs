@@ -164,6 +164,24 @@ impl<'a> ExecutionSummary<'a> {
     fn successful(&self) -> usize {
         self.success + self.cached
     }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.attempted_tasks
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
+    pub(crate) fn attempted(&self) -> usize {
+        self.attempted
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.failed_tasks
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
+    pub(crate) fn failed(&self) -> usize {
+        self.failed
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.cached_tasks
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
+    pub(crate) fn cached(&self) -> usize {
+        self.cached
+    }
 }
 
 /// Trait for types that can provide task summary information for printing

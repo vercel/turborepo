@@ -24,6 +24,7 @@ use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cprintln, cwriteln
 use crate::{
     EngineInfo, GlobalHashSummary, HashTrackerInfo, RunOptsInfo, SCMState, TaskTracker,
     execution::{ExecutionSummary, ExecutionTracker, TaskState},
+    observability::Handle as ObservabilityHandle,
     task::{SinglePackageTaskSummary, TaskSummary},
     task_factory::TaskSummaryFactory,
 };
@@ -81,6 +82,8 @@ pub struct RunSummary<'a> {
     should_save: bool,
     #[serde(skip)]
     run_type: RunType,
+    #[serde(skip)]
+    observability_handle: Option<ObservabilityHandle>,
 }
 
 /// We use this to track the run, so it's constructed before the run.
@@ -92,6 +95,7 @@ pub struct RunTracker {
     execution_tracker: ExecutionTracker,
     user: Option<String>,
     synthesized_command: String,
+    observability_handle: Option<ObservabilityHandle>,
 }
 
 impl RunTracker {
@@ -104,6 +108,7 @@ impl RunTracker {
         version: &'static str,
         user: Option<String>,
         scm: &SCM,
+        observability_handle: Option<ObservabilityHandle>,
     ) -> Self {
         let scm = SCMState::get(env_at_execution_start, scm, repo_root);
 
@@ -114,6 +119,7 @@ impl RunTracker {
             execution_tracker: ExecutionTracker::new(),
             user,
             synthesized_command,
+            observability_handle,
         }
     }
 
@@ -185,6 +191,7 @@ impl RunTracker {
             repo_root,
             should_save,
             run_type,
+            observability_handle: self.observability_handle.clone(),
         })
     }
 
@@ -304,6 +311,36 @@ impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
 }
 
 impl<'a> RunSummary<'a> {
+    // Used in observability/otel.rs to populate RunMetricsPayload.run_id
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
+    pub(crate) fn id(&self) -> &Ksuid {
+        &self.id
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.turbo_version
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
+    pub(crate) fn turbo_version(&self) -> &'static str {
+        self.turbo_version
+    }
+
+    // Used in observability/otel.rs to access execution summary for metrics
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
+    pub(crate) fn execution_summary(&self) -> Option<&ExecutionSummary<'a>> {
+        self.execution.as_ref()
+    }
+
+    // Used in observability/otel.rs to iterate over tasks for TaskMetricsPayload
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
+    pub(crate) fn tasks(&self) -> &[TaskSummary] {
+        &self.tasks
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload SCM fields
+    #[cfg_attr(not(feature = "otel"), allow(dead_code))]
+    pub(crate) fn scm_state(&self) -> &SCMState {
+        &self.scm
+    }
+
     #[tracing::instrument(skip(self, pkg_dep_graph, ui))]
     async fn finish(
         mut self,
@@ -313,6 +350,18 @@ impl<'a> RunSummary<'a> {
         ui: ColorConfig,
         is_watch: bool,
     ) -> Result<(), Error> {
+        // Handle observability shutdown before the dry run check to ensure graceful
+        // cleanup even when metrics are not being emitted.
+        // Note: shutdown respects the configured timeout_ms (default 10s) to prevent
+        // hanging indefinitely on network issues.
+        if let Some(handle) = self.observability_handle.take() {
+            // Only record metrics for actual runs, not dry runs
+            if !matches!(self.run_type, RunType::DryJson | RunType::DryText) {
+                handle.record(&self);
+            }
+            handle.shutdown();
+        }
+
         if matches!(self.run_type, RunType::DryJson | RunType::DryText) {
             return self.close_dry_run(pkg_dep_graph, ui);
         }

@@ -846,3 +846,199 @@ Must start with `team_` or it will not be used.
 
 The slug of the Remote Cache team.
 Value will be passed as `slug` in the querystring for all Remote Cache HTTP calls.
+
+## Future flags
+
+Future flags allow you to opt-in to experimental features before they become the default behavior.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalObservability": true
+  }
+}
+```
+
+### `experimentalObservability`
+
+Default: `false`
+
+When enabled, Turborepo will honor the `experimentalObservability.otel` configuration block (if present) to send run summaries to an OpenTelemetry Protocol (OTLP) collector.
+
+<Callout type="info">
+  Invalid or incomplete OTEL configuration (e.g., missing endpoint, invalid
+  protocol) results in metrics being disabled rather than causing runs to fail.
+  Turborepo will continue executing tasks normally even if the exporter cannot
+  be initialized.
+</Callout>
+
+## Experimental observability
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+Configure Turborepo to export metrics to observability backends like Datadog, Prometheus, or other OTLP-compatible collectors.
+
+### `experimentalObservability`
+
+The `experimentalObservability` block is only read when `futureFlags.experimentalObservability` is set to `true` in your root `turbo.json`. Environment variables and CLI flags can still enable observability even if the future flag is disabled.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalObservability": true
+  },
+  "experimentalObservability": {
+    "otel": {
+      "enabled": true,
+      "protocol": "grpc",
+      "endpoint": "https://api.datadoghq.com/api/v2/otlp",
+      "headers": {
+        "X-Custom-Header": "value"
+      },
+      "timeoutMs": 10000,
+      "intervalMs": 15000,
+      "resource": {
+        "service.name": "turborepo"
+      },
+      "metrics": {
+        "runSummary": true,
+        "taskDetails": false
+      }
+    }
+  }
+}
+```
+
+#### `experimentalObservability.otel.enabled`
+
+Default: `true` (when endpoint is provided)
+
+Enable or disable the OpenTelemetry metrics exporter.
+
+#### `experimentalObservability.otel.protocol`
+
+Default: `"grpc"`
+
+The OTLP protocol to use. Supported values:
+
+- `"grpc"` - OTLP over gRPC
+- `"http/protobuf"` - OTLP over HTTP with protobuf encoding
+
+#### `experimentalObservability.otel.endpoint`
+
+**Required** when using file-based configuration.
+
+The OTLP collector endpoint URL. For example:
+
+- Datadog: `"https://api.datadoghq.com/api/v2/otlp"`
+- Custom collector: `"http://localhost:4317"` (gRPC) or `"http://localhost:4318"` (HTTP)
+
+If the endpoint is missing or empty when OTEL is enabled, the exporter will not be initialized and metrics will be disabled. The run will continue normally.
+
+#### `experimentalObservability.otel.headers`
+
+Optional HTTP headers to include with export requests. Useful for authentication (e.g., API keys) or custom metadata.
+
+```jsonc title="./turbo.json"
+{
+  "experimentalObservability": {
+    "otel": {
+      "headers": {
+        "X-Custom-Header": "value"
+      }
+    }
+  }
+}
+```
+
+#### `experimentalObservability.otel.timeoutMs`
+
+Default: `10000` (10 seconds)
+
+Timeout in milliseconds for export requests to the collector.
+
+#### `experimentalObservability.otel.intervalMs`
+
+Default: `15000` (15 seconds)
+
+Interval in milliseconds between periodic exports to the collector. This controls how frequently metrics are batched and sent to the OTLP collector during a run. A final flush is always performed when the run completes, regardless of this setting.
+
+#### `experimentalObservability.otel.resource`
+
+Optional resource attributes to attach to all exported metrics. These help identify the source of metrics in your observability platform.
+
+```jsonc title="./turbo.json"
+{
+  "experimentalObservability": {
+    "otel": {
+      "resource": {
+        "service.name": "turborepo",
+        "service.namespace": "ci",
+        "deployment.environment": "production"
+      }
+    }
+  }
+}
+```
+
+#### `experimentalObservability.otel.metrics`
+
+Control which metric groups are exported.
+
+##### `metrics.runSummary`
+
+Default: `true`
+
+Export run-level metrics:
+
+- Run duration
+- Tasks attempted, failed, and cached
+- Exit code
+- SCM branch and revision
+
+##### `metrics.taskDetails`
+
+Default: `false`
+
+Export per-task metrics:
+
+- Task execution duration
+- Cache hit/miss status and source
+- Cache time saved
+- Task identifiers (task ID, package, hash)
+
+<Callout type="info">
+  Exporter failures are logged but do not cause the run to fail. If the
+  collector is unavailable or misconfigured, Turborepo will continue executing
+  tasks normally. Invalid or incomplete configuration (e.g., missing endpoint
+  when enabled) results in the exporter not being initialized, and metrics will
+  be disabled for that run.
+</Callout>
+
+### Environment variables
+
+You can also configure observability via environment variables, which take precedence over `turbo.json` settings:
+
+- `TURBO_EXPERIMENTAL_OTEL_ENABLED` - Enable/disable exporter (`1` or `0`)
+- `TURBO_EXPERIMENTAL_OTEL_PROTOCOL` - Protocol (`grpc` or `http/protobuf`)
+- `TURBO_EXPERIMENTAL_OTEL_ENDPOINT` - Collector endpoint URL
+- `TURBO_EXPERIMENTAL_OTEL_TIMEOUT_MS` - Timeout in milliseconds
+- `TURBO_EXPERIMENTAL_OTEL_INTERVAL_MS` - Export interval in milliseconds
+- `TURBO_EXPERIMENTAL_OTEL_HEADERS` - Comma-separated key=value pairs (e.g., `"Header=value,Other=value"`)
+- `TURBO_EXPERIMENTAL_OTEL_RESOURCE` - Comma-separated key=value pairs for resource attributes
+- `TURBO_EXPERIMENTAL_OTEL_METRICS_RUN_SUMMARY` - Enable run summary metrics (`1` or `0`)
+- `TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS` - Enable task details metrics (`1` or `0`)
+
+### CLI flags
+
+You can override observability settings via CLI flags:
+
+- `--experimental-otel-enabled` - Enable/disable exporter
+- `--experimental-otel-protocol` - Protocol (`grpc` or `http/protobuf`)
+- `--experimental-otel-endpoint` - Collector endpoint URL
+- `--experimental-otel-timeout-ms` - Timeout in milliseconds
+- `--experimental-otel-interval-ms` - Export interval in milliseconds
+- `--experimental-otel-header KEY=VALUE` - Add HTTP header (can be repeated)
+- `--experimental-otel-resource KEY=VALUE` - Add resource attribute (can be repeated)
+- `--experimental-otel-metrics-run-summary` - Enable run summary metrics
+- `--experimental-otel-metrics-task-details` - Enable task details metrics
