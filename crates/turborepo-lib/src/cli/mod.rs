@@ -356,6 +356,18 @@ impl Args {
                      version. Use --cache=local:rw,remote:r"
                 );
             }
+            if run_args.daemon {
+                warn!(
+                    "--daemon is deprecated and will be removed in version 3.0. The daemon is no \
+                     longer used for `turbo run`."
+                );
+            }
+            if run_args.no_daemon {
+                warn!(
+                    "--no-daemon is deprecated and will be removed in version 3.0. The daemon is \
+                     no longer used for `turbo run`."
+                );
+            }
         }
 
         clap_args
@@ -991,13 +1003,13 @@ pub struct RunArgs {
     // clap does not have negation flags such as --daemon and --no-daemon
     // so we need to use a group to enforce that only one of them is set.
     // -----------------------
-    /// Force turbo to use the local daemon. If unset
-    /// turbo will use the default detection logic.
+    /// [DEPRECATED] The daemon is no longer used for `turbo run`.
+    /// This flag will be removed in version 3.0.
     #[clap(long, group = "daemon-group")]
     pub daemon: bool,
 
-    /// Force turbo to not use the local daemon. If unset
-    /// turbo will use the default detection logic.
+    /// [DEPRECATED] The daemon is no longer used for `turbo run`.
+    /// This flag will be removed in version 3.0.
     #[clap(long, group = "daemon-group")]
     pub no_daemon: bool,
 

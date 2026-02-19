@@ -86,9 +86,9 @@ Test help flag
         --graph [<GRAPH>]
             Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
         --daemon
-            Force turbo to use the local daemon. If unset turbo will use the default detection logic
+            [DEPRECATED] The daemon is no longer used for `turbo run`. This flag will be removed in version 3.0
         --no-daemon
-            Force turbo to not use the local daemon. If unset turbo will use the default detection logic
+            [DEPRECATED] The daemon is no longer used for `turbo run`. This flag will be removed in version 3.0
         --profile [<PROFILE>]
             File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
         --anon-profile [<ANON_PROFILE>]
@@ -255,10 +255,10 @@ Test help flag
             Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
   
         --daemon
-            Force turbo to use the local daemon. If unset turbo will use the default detection logic
+            [DEPRECATED] The daemon is no longer used for `turbo run`. This flag will be removed in version 3.0
   
         --no-daemon
-            Force turbo to not use the local daemon. If unset turbo will use the default detection logic
+            [DEPRECATED] The daemon is no longer used for `turbo run`. This flag will be removed in version 3.0
   
         --profile [<PROFILE>]
             File to write turbo's performance profile output into. You can load the file up in chrome://tracing to see which parts of your build were slow
