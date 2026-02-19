@@ -261,6 +261,17 @@ fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
         return;
     }
 
+    // Known config file names are never directories. Skip the stat syscall.
+    // This saves ~3000 stat calls in large monorepos where these files are
+    // appended to every package's include list.
+    let last_component = glob.rsplit('/').next().unwrap_or(glob.as_str());
+    if matches!(
+        last_component,
+        "package.json" | "turbo.json" | "turbo.jsonc"
+    ) {
+        return;
+    }
+
     // Globs are given in unix style
     let Ok(glob_path) = RelativeUnixPath::new(&*glob) else {
         // Glob isn't valid relative unix path so can't check if dir
@@ -520,6 +531,171 @@ struct CompiledGlobs {
     base_path: PathBuf,
     include_patterns: Vec<Glob<'static>>,
     ex_filter: FilterAny,
+}
+
+/// Pre-compiled set of include/exclude glob patterns that can be reused
+/// across multiple base directories. This is the key optimization for large
+/// monorepos: compile glob patterns once (e.g. `src/**`, `!test/**`) and
+/// walk each package directory with the same compiled set.
+///
+/// The patterns are base-path-relative — the base path is supplied at walk
+/// time, not at compilation time.
+pub struct GlobSet {
+    include_patterns: Vec<Glob<'static>>,
+    ex_filter: FilterAny,
+    /// Literal include paths (invariant globs) that resolve to a single file.
+    /// These are checked via stat instead of directory walking.
+    literal_includes: Vec<PathBuf>,
+}
+
+impl GlobSet {
+    /// Compile include/exclude patterns into a reusable `GlobSet`.
+    ///
+    /// Patterns should be relative (e.g. `src/**`, not `/repo/pkg/src/**`).
+    /// The base path for walking is supplied later via [`GlobSet::walk`].
+    pub fn compile(
+        include: &[ValidatedGlob],
+        exclude: &[ValidatedGlob],
+    ) -> Result<Self, WalkError> {
+        let mut include_patterns = Vec::with_capacity(include.len());
+        let mut literal_includes = Vec::new();
+
+        for raw in include {
+            let fixed = fix_glob_pattern(raw.as_ref());
+            let glob = glob_with_contextual_error(fixed.as_ref())?;
+            if let Some(path) = glob.variance().path() {
+                literal_includes.push(path.to_path_buf());
+            } else {
+                include_patterns.push(glob);
+            }
+        }
+
+        let ex_patterns: Vec<_> = exclude
+            .iter()
+            .map(|raw| {
+                let fixed = fix_glob_pattern(raw.as_ref());
+                // Exclusions need trailing /** like the existing code
+                let mut processed = vec![];
+                add_trailing_double_star(&mut processed, fixed.as_ref());
+                processed
+                    .into_iter()
+                    .map(glob_with_contextual_error)
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+
+        let ex_filter = FilterAny::any(ex_patterns)
+            .map_err(|e| WalkError::BadPattern("exclusion".into(), Box::new(e)))?;
+
+        Ok(GlobSet {
+            include_patterns,
+            ex_filter,
+            literal_includes,
+        })
+    }
+
+    /// Walk a directory using these pre-compiled patterns.
+    ///
+    /// `base_path` is the directory to walk (e.g. the package directory).
+    /// Returns all matching file paths.
+    pub fn walk(
+        &self,
+        base_path: &AbsoluteSystemPath,
+        walk_type: WalkType,
+    ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+        retry_on_emfile(|| self.walk_inner(base_path, walk_type))
+    }
+
+    fn walk_inner(
+        &self,
+        base_path: &AbsoluteSystemPath,
+        walk_type: WalkType,
+    ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+        let base = base_path.as_std_path();
+
+        // Handle literal (invariant) paths via stat.
+        // If a literal turns out to be a directory, walk its contents
+        // (mirroring the add_doublestar_to_dir behavior from the original path).
+        let mut results: HashSet<AbsoluteSystemPathBuf> = HashSet::new();
+        let mut extra_walk_globs: Vec<Glob<'static>> = Vec::new();
+        for literal in &self.literal_includes {
+            let full_path = base.join(literal);
+            match full_path.symlink_metadata() {
+                Ok(m) if m.is_dir() => {
+                    // Directory literal: expand to dir/** like add_doublestar_to_dir does
+                    let pattern = format!("{}/**", literal.display());
+                    if let Ok(glob) = glob_with_contextual_error(&pattern) {
+                        extra_walk_globs.push(glob);
+                    }
+                }
+                Ok(m) => {
+                    let dominated = match walk_type {
+                        WalkType::Files => !m.is_dir(),
+                        WalkType::Folders => m.is_dir(),
+                        WalkType::All => true,
+                    };
+                    if dominated
+                        && let Ok(abs) = AbsoluteSystemPathBuf::try_from(full_path.as_path())
+                    {
+                        results.insert(abs);
+                    }
+                }
+                Err(_) => {} // Path doesn't exist — skip
+            }
+        }
+
+        // Walk any directory literals that were expanded
+        if !extra_walk_globs.is_empty() {
+            let extra: HashSet<AbsoluteSystemPathBuf> = extra_walk_globs
+                .par_iter()
+                .flat_map_iter(|glob| {
+                    walk_glob(
+                        walk_type,
+                        base,
+                        self.ex_filter.clone(),
+                        glob,
+                        Default::default(),
+                    )
+                })
+                .collect::<Result<HashSet<_>, _>>()?;
+            results.extend(extra);
+        }
+
+        // Walk variant (pattern) globs in parallel
+        let walked: HashSet<AbsoluteSystemPathBuf> = self
+            .include_patterns
+            .par_iter()
+            .flat_map_iter(|glob| {
+                walk_glob(
+                    walk_type,
+                    base,
+                    self.ex_filter.clone(),
+                    glob,
+                    Default::default(),
+                )
+            })
+            .collect::<Result<HashSet<_>, _>>()?;
+
+        results.extend(walked);
+        Ok(results)
+    }
+
+    /// Test whether a path matches any of the include patterns in this set.
+    /// Used for in-memory filtering (e.g. exclude matching against known
+    /// paths).
+    pub fn matches(&self, path: &str) -> bool {
+        let path_as_path = Path::new(path);
+        self.literal_includes
+            .iter()
+            .any(|literal| literal == path_as_path)
+            || self
+                .include_patterns
+                .iter()
+                .any(|glob| wax::Program::is_match(glob, path))
+    }
 }
 
 #[tracing::instrument(skip(include, exclude))]
@@ -1836,5 +2012,427 @@ mod test {
         add_doublestar_to_dir(base, &mut glob);
 
         assert_eq!(glob, expected);
+    }
+
+    mod glob_set_tests {
+        use std::str::FromStr;
+
+        use itertools::Itertools;
+        use turbopath::AbsoluteSystemPathBuf;
+
+        use crate::{GlobSet, ValidatedGlob, WalkType, globwalk};
+
+        fn setup_package_dirs(
+            prefix: &str,
+            shared_files: &[&str],
+            package_names: &[&str],
+        ) -> tempfile::TempDir {
+            let tmp = tempfile::TempDir::with_prefix(prefix).unwrap();
+            for pkg in package_names {
+                for file in shared_files {
+                    let path = tmp.path().join(pkg).join(file);
+                    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+                    std::fs::File::create(&path).unwrap();
+                }
+            }
+            tmp
+        }
+
+        #[test]
+        fn glob_set_walk_matches_globwalk_for_wildcard_patterns() {
+            let files = &[
+                "src/index.ts",
+                "src/utils/helpers.ts",
+                "src/utils/deep/nested.ts",
+                "test/index.test.ts",
+                "package.json",
+                "turbo.json",
+                "README.md",
+            ];
+            let packages = &["pkg-a", "pkg-b", "pkg-c"];
+            let tmp = setup_package_dirs("equiv", files, packages);
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+            let include_patterns = &["src/**"];
+            let exclude_patterns: &[&str] = &[];
+            let include_validated: Vec<ValidatedGlob> = include_patterns
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+            let exclude_validated: Vec<ValidatedGlob> = exclude_patterns
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+
+            let glob_set = GlobSet::compile(&include_validated, &exclude_validated).unwrap();
+
+            for pkg in packages {
+                let pkg_dir = root.join_component(pkg);
+
+                // GlobSet::walk result
+                let gs_result: Vec<String> = glob_set
+                    .walk(&pkg_dir, WalkType::Files)
+                    .unwrap()
+                    .into_iter()
+                    .map(|p| {
+                        p.as_path()
+                            .strip_prefix(pkg_dir.as_path())
+                            .unwrap()
+                            .as_str()
+                            .to_string()
+                    })
+                    .sorted()
+                    .collect();
+
+                // globwalk result (the original path)
+                let gw_include: Vec<ValidatedGlob> = include_patterns
+                    .iter()
+                    .map(|s| ValidatedGlob::from_str(s).unwrap())
+                    .collect();
+                let gw_exclude: Vec<ValidatedGlob> = exclude_patterns
+                    .iter()
+                    .map(|s| ValidatedGlob::from_str(s).unwrap())
+                    .collect();
+                let gw_result: Vec<String> =
+                    globwalk(&pkg_dir, &gw_include, &gw_exclude, WalkType::Files)
+                        .unwrap()
+                        .into_iter()
+                        .map(|p| {
+                            p.as_path()
+                                .strip_prefix(pkg_dir.as_path())
+                                .unwrap()
+                                .as_str()
+                                .to_string()
+                        })
+                        .sorted()
+                        .collect();
+
+                assert_eq!(
+                    gs_result, gw_result,
+                    "GlobSet::walk and globwalk disagree for package {pkg}"
+                );
+                assert!(
+                    gs_result.iter().all(|f| f.starts_with("src/")),
+                    "expected only src/ files, got: {gs_result:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn glob_set_walk_matches_globwalk_with_excludes() {
+            let files = &[
+                "src/index.ts",
+                "src/generated/types.ts",
+                "src/utils.ts",
+                "test/index.test.ts",
+                "package.json",
+            ];
+            let packages = &["alpha", "beta"];
+            let tmp = setup_package_dirs("excl", files, packages);
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+            let include = &["src/**"];
+            let exclude = &["src/generated/**"];
+            let inc_v: Vec<ValidatedGlob> = include
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+            let exc_v: Vec<ValidatedGlob> = exclude
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+
+            let glob_set = GlobSet::compile(&inc_v, &exc_v).unwrap();
+
+            for pkg in packages {
+                let pkg_dir = root.join_component(pkg);
+
+                let gs_result: Vec<String> = glob_set
+                    .walk(&pkg_dir, WalkType::Files)
+                    .unwrap()
+                    .into_iter()
+                    .map(|p| {
+                        p.as_path()
+                            .strip_prefix(pkg_dir.as_path())
+                            .unwrap()
+                            .as_str()
+                            .to_string()
+                    })
+                    .sorted()
+                    .collect();
+
+                let gw_result: Vec<String> = globwalk(&pkg_dir, &inc_v, &exc_v, WalkType::Files)
+                    .unwrap()
+                    .into_iter()
+                    .map(|p| {
+                        p.as_path()
+                            .strip_prefix(pkg_dir.as_path())
+                            .unwrap()
+                            .as_str()
+                            .to_string()
+                    })
+                    .sorted()
+                    .collect();
+
+                assert_eq!(
+                    gs_result, gw_result,
+                    "GlobSet::walk and globwalk disagree on excludes for {pkg}"
+                );
+                assert!(
+                    !gs_result.iter().any(|f| f.contains("generated")),
+                    "excluded files should not appear: {gs_result:?}"
+                );
+            }
+        }
+
+        #[test]
+        fn glob_set_walk_matches_globwalk_for_literal_files() {
+            let files = &["package.json", "turbo.json", "turbo.jsonc", "src/index.ts"];
+            let packages = &["pkg-x"];
+            let tmp = setup_package_dirs("literal", files, packages);
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+            let include = &["package.json", "turbo.json", "turbo.jsonc"];
+            let exclude: &[&str] = &[];
+            let inc_v: Vec<ValidatedGlob> = include
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+            let exc_v: Vec<ValidatedGlob> = exclude
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+
+            let glob_set = GlobSet::compile(&inc_v, &exc_v).unwrap();
+            let pkg_dir = root.join_component("pkg-x");
+
+            let gs_result: Vec<String> = glob_set
+                .walk(&pkg_dir, WalkType::Files)
+                .unwrap()
+                .into_iter()
+                .map(|p| {
+                    p.as_path()
+                        .strip_prefix(pkg_dir.as_path())
+                        .unwrap()
+                        .as_str()
+                        .to_string()
+                })
+                .sorted()
+                .collect();
+
+            let gw_result: Vec<String> = globwalk(&pkg_dir, &inc_v, &exc_v, WalkType::Files)
+                .unwrap()
+                .into_iter()
+                .map(|p| {
+                    p.as_path()
+                        .strip_prefix(pkg_dir.as_path())
+                        .unwrap()
+                        .as_str()
+                        .to_string()
+                })
+                .sorted()
+                .collect();
+
+            assert_eq!(gs_result, gw_result, "literal file results should match");
+            assert_eq!(gs_result.len(), 3, "expected 3 config files");
+        }
+
+        #[test]
+        fn glob_set_walk_expands_directory_literals() {
+            let files = &["src/index.ts", "src/deep/nested.ts", "other.txt"];
+            let tmp = setup_package_dirs("dirlit", files, &["pkg"]);
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+            let pkg_dir = root.join_component("pkg");
+
+            // "src" is a directory — GlobSet should expand it to "src/**"
+            let inc_v = vec![ValidatedGlob::from_str("src").unwrap()];
+            let exc_v: Vec<ValidatedGlob> = vec![];
+
+            let glob_set = GlobSet::compile(&inc_v, &exc_v).unwrap();
+
+            let gs_result: Vec<String> = glob_set
+                .walk(&pkg_dir, WalkType::Files)
+                .unwrap()
+                .into_iter()
+                .map(|p| {
+                    p.as_path()
+                        .strip_prefix(pkg_dir.as_path())
+                        .unwrap()
+                        .as_str()
+                        .to_string()
+                })
+                .sorted()
+                .collect();
+
+            let gw_result: Vec<String> = globwalk(&pkg_dir, &inc_v, &exc_v, WalkType::Files)
+                .unwrap()
+                .into_iter()
+                .map(|p| {
+                    p.as_path()
+                        .strip_prefix(pkg_dir.as_path())
+                        .unwrap()
+                        .as_str()
+                        .to_string()
+                })
+                .sorted()
+                .collect();
+
+            assert_eq!(
+                gs_result, gw_result,
+                "directory literal expansion should match globwalk"
+            );
+            assert_eq!(gs_result.len(), 2, "expected 2 files under src/");
+        }
+
+        #[test]
+        fn glob_set_matches_includes_literals_and_patterns() {
+            let include = &["package.json", "src/**"];
+            let inc_v: Vec<ValidatedGlob> = include
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+
+            let glob_set = GlobSet::compile(&inc_v, &[]).unwrap();
+
+            // Literal match
+            assert!(glob_set.matches("package.json"));
+            // Pattern match
+            assert!(glob_set.matches("src/index.ts"));
+            assert!(glob_set.matches("src/deep/nested.ts"));
+            // Non-matches
+            assert!(!glob_set.matches("turbo.json"));
+            assert!(!glob_set.matches("test/foo.ts"));
+        }
+
+        #[test]
+        fn glob_set_shared_across_packages_produces_correct_results() {
+            let files = &["src/a.ts", "src/b.ts", "lib/c.ts", "package.json"];
+            let packages = &["p1", "p2", "p3", "p4", "p5"];
+            let tmp = setup_package_dirs("shared", files, packages);
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+            let inc_v: Vec<ValidatedGlob> = ["src/**", "package.json"]
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+
+            // Compile ONCE
+            let glob_set = GlobSet::compile(&inc_v, &[]).unwrap();
+
+            // Walk each package with the same compiled set
+            for pkg in packages {
+                let pkg_dir = root.join_component(pkg);
+                let result: Vec<String> = glob_set
+                    .walk(&pkg_dir, WalkType::Files)
+                    .unwrap()
+                    .into_iter()
+                    .map(|p| {
+                        p.as_path()
+                            .strip_prefix(pkg_dir.as_path())
+                            .unwrap()
+                            .as_str()
+                            .to_string()
+                    })
+                    .sorted()
+                    .collect();
+
+                assert_eq!(
+                    result,
+                    vec!["package.json", "src/a.ts", "src/b.ts"],
+                    "wrong results for {pkg} — shared GlobSet should work identically for each \
+                     package"
+                );
+            }
+        }
+
+        #[test]
+        fn glob_set_nonexistent_literal_is_skipped() {
+            let files = &["src/index.ts"];
+            let tmp = setup_package_dirs("nofile", files, &["pkg"]);
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+            let pkg_dir = root.join_component("pkg");
+
+            // turbo.json doesn't exist on disk
+            let inc_v: Vec<ValidatedGlob> = ["turbo.json", "src/**"]
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+
+            let glob_set = GlobSet::compile(&inc_v, &[]).unwrap();
+            let result: Vec<String> = glob_set
+                .walk(&pkg_dir, WalkType::Files)
+                .unwrap()
+                .into_iter()
+                .map(|p| {
+                    p.as_path()
+                        .strip_prefix(pkg_dir.as_path())
+                        .unwrap()
+                        .as_str()
+                        .to_string()
+                })
+                .sorted()
+                .collect();
+
+            assert_eq!(result, vec!["src/index.ts"]);
+        }
+
+        #[test]
+        fn glob_set_mixed_literal_and_wildcard_with_excludes() {
+            let files = &[
+                "package.json",
+                "src/index.ts",
+                "src/generated/api.ts",
+                "src/generated/types.ts",
+                "src/utils.ts",
+            ];
+            let tmp = setup_package_dirs("mixed", files, &["pkg"]);
+            let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+            let pkg_dir = root.join_component("pkg");
+
+            let inc = &["src/**", "package.json"];
+            let exc = &["src/generated/**"];
+            let inc_v: Vec<ValidatedGlob> = inc
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+            let exc_v: Vec<ValidatedGlob> = exc
+                .iter()
+                .map(|s| ValidatedGlob::from_str(s).unwrap())
+                .collect();
+
+            let glob_set = GlobSet::compile(&inc_v, &exc_v).unwrap();
+            let gs_result: Vec<String> = glob_set
+                .walk(&pkg_dir, WalkType::Files)
+                .unwrap()
+                .into_iter()
+                .map(|p| {
+                    p.as_path()
+                        .strip_prefix(pkg_dir.as_path())
+                        .unwrap()
+                        .as_str()
+                        .to_string()
+                })
+                .sorted()
+                .collect();
+
+            let gw_result: Vec<String> = globwalk(&pkg_dir, &inc_v, &exc_v, WalkType::Files)
+                .unwrap()
+                .into_iter()
+                .map(|p| {
+                    p.as_path()
+                        .strip_prefix(pkg_dir.as_path())
+                        .unwrap()
+                        .as_str()
+                        .to_string()
+                })
+                .sorted()
+                .collect();
+
+            assert_eq!(gs_result, gw_result);
+            assert_eq!(
+                gs_result,
+                vec!["package.json", "src/index.ts", "src/utils.ts"]
+            );
+        }
     }
 }

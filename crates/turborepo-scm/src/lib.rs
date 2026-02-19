@@ -30,6 +30,8 @@ mod status;
 pub mod worktree;
 
 #[cfg(feature = "git2")]
+pub use package_deps::PrecompiledGlobs;
+#[cfg(feature = "git2")]
 pub use repo_index::RepoGitIndex;
 pub use worktree::WorktreeInfo;
 

@@ -12,6 +12,7 @@ use std::{
 };
 
 pub use global_hash::*;
+use globwalk::GlobSet;
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
@@ -26,7 +27,7 @@ use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
 use turborepo_frameworks::{Slug as FrameworkSlug, infer_framework};
 use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
-use turborepo_scm::{RepoGitIndex, SCM};
+use turborepo_scm::{PrecompiledGlobs, RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{generic::GenericEventBuilder, task::PackageTaskEventBuilder};
 use turborepo_types::{
@@ -165,26 +166,166 @@ impl PackageInputsHashes {
         }
 
         debug!(
-            total_tasks = task_infos.len(),
-            unique_hash_keys = unique_keys.len(),
-            "file hash deduplication"
+            "file hash deduplication: total_tasks={}, unique_hash_keys={}",
+            task_infos.len(),
+            unique_keys.len(),
+        );
+
+        // Phase 1.5: Pre-compile glob patterns once per unique (globs, default)
+        // combination. In a large monorepo, hundreds of packages share the same
+        // task inputs (e.g. "src/**"). Compiling each wax::Glob involves regex
+        // compilation — doing it once and sharing across packages avoids ~300ms
+        // of redundant work on a 1000-package repo.
+        type GlobSignature = (Vec<String>, bool);
+        type GlobSetPair = (Option<Arc<GlobSet>>, Option<Arc<GlobSet>>);
+        let mut glob_set_cache: HashMap<GlobSignature, Option<GlobSetPair>> = HashMap::new();
+
+        // Build glob set index: maps each unique key to its glob set
+        let mut key_glob_sets: Vec<Option<GlobSetPair>> = Vec::with_capacity(unique_keys.len());
+
+        for (_pkg_path, globs, default) in &unique_keys {
+            let sig: GlobSignature = (globs.clone(), *default);
+            let entry = glob_set_cache.entry(sig).or_insert_with(|| {
+                // Only compile glob sets when there are actual globs to compile.
+                // The empty-globs path uses the git index directly and skips globwalk.
+                if globs.is_empty() {
+                    debug!(
+                        "glob signature has empty globs (default={}), skipping precompilation",
+                        default
+                    );
+                    return None;
+                }
+                debug!(
+                    "precompiling glob signature: globs={:?}, default={}",
+                    globs, default
+                );
+
+                // Separate includes and excludes, then compile with config files appended
+                let mut include_strs: Vec<String> = Vec::new();
+                let mut exclude_strs: Vec<String> = Vec::new();
+                for g in globs {
+                    if let Some(excl) = g.strip_prefix('!') {
+                        exclude_strs.push(excl.to_string());
+                    } else {
+                        include_strs.push(g.clone());
+                    }
+                }
+
+                // Always include config files when walking inputs
+                include_strs.push("package.json".to_string());
+                include_strs.push("turbo.json".to_string());
+                include_strs.push("turbo.jsonc".to_string());
+
+                let include_validated: Vec<globwalk::ValidatedGlob> = include_strs
+                    .iter()
+                    .filter_map(|s| match std::str::FromStr::from_str(s) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            debug!(
+                                "failed to validate glob pattern '{}': {}, skipping precompilation",
+                                s, e
+                            );
+                            None
+                        }
+                    })
+                    .collect();
+
+                let exclude_validated: Vec<globwalk::ValidatedGlob> = exclude_strs
+                    .iter()
+                    .filter_map(|s| match std::str::FromStr::from_str(s) {
+                        Ok(v) => Some(v),
+                        Err(e) => {
+                            debug!(
+                                "failed to validate exclude pattern '{}': {}, skipping \
+                                 precompilation",
+                                s, e
+                            );
+                            None
+                        }
+                    })
+                    .collect();
+
+                let include_gs = match GlobSet::compile(&include_validated, &exclude_validated) {
+                    Ok(gs) => Some(Arc::new(gs)),
+                    Err(e) => {
+                        debug!(
+                            "failed to precompile glob set: {}, falling back to per-package \
+                             compilation",
+                            e
+                        );
+                        None
+                    }
+                };
+
+                // Pre-compile exclude patterns for in-memory retain filtering
+                let exclude_gs = if !exclude_strs.is_empty() {
+                    let ex_validated: Vec<globwalk::ValidatedGlob> = exclude_strs
+                        .iter()
+                        .filter_map(|s| std::str::FromStr::from_str(s).ok())
+                        .collect();
+                    match GlobSet::compile(&ex_validated, &[]) {
+                        Ok(gs) => Some(Arc::new(gs)),
+                        Err(e) => {
+                            debug!(
+                                "failed to precompile exclude glob set: {}, falling back to \
+                                 per-package compilation",
+                                e
+                            );
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                Some((include_gs, exclude_gs))
+            });
+            key_glob_sets.push(entry.clone());
+        }
+
+        debug!(
+            "glob compilation deduplication: unique_glob_signatures={}, precompiled={}",
+            glob_set_cache.len(),
+            glob_set_cache
+                .values()
+                .filter(|v| v.as_ref().and_then(|(inc, _)| inc.as_ref()).is_some())
+                .count(),
         );
 
         // Phase 2: Compute file hashes in parallel across unique keys.
         // EMFILE (too many open files) errors are handled via retry-with-backoff
         // in the globwalk and hash_objects layers, so we can safely parallelize
         // all keys on rayon without worrying about fd exhaustion.
-        let file_hash_results: Vec<Result<Arc<FileHashes>, Error>> = unique_keys
+        let keys_with_globs: Vec<(HashKey, Option<GlobSetPair>)> =
+            unique_keys.into_iter().zip(key_glob_sets).collect();
+
+        let file_hash_results: Vec<Result<Arc<FileHashes>, Error>> = keys_with_globs
             .into_par_iter()
-            .map(|(package_path, globs, default)| {
-                scm.get_package_file_hashes(
-                    repo_root,
-                    &package_path,
-                    &globs,
-                    default,
-                    None,
-                    repo_index,
-                )
+            .map(|((package_path, globs, default), glob_sets)| {
+                match glob_sets {
+                    Some((ref include_gs, ref exclude_gs)) => {
+                        let precompiled = PrecompiledGlobs {
+                            include: include_gs.as_deref(),
+                            exclude: exclude_gs.as_deref(),
+                        };
+                        scm.get_package_file_hashes_with_precompiled(
+                            repo_root,
+                            &package_path,
+                            &globs,
+                            default,
+                            repo_index,
+                            &precompiled,
+                        )
+                    }
+                    None => scm.get_package_file_hashes(
+                        repo_root,
+                        &package_path,
+                        &globs,
+                        default,
+                        None,
+                        repo_index,
+                    ),
+                }
                 .map(|h| Arc::new(FileHashes(h)))
                 .map_err(Error::from)
             })

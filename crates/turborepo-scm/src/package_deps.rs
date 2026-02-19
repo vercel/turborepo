@@ -1,7 +1,7 @@
 #![cfg(feature = "git2")]
 use std::str::FromStr;
 
-use globwalk::ValidatedGlob;
+use globwalk::{GlobSet, ValidatedGlob};
 use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
@@ -9,6 +9,14 @@ use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder}
 #[cfg(feature = "git2")]
 use crate::hash_object::hash_objects;
 use crate::{Error, GitHashes, GitRepo, RepoGitIndex, SCM};
+
+/// Bundle of pre-compiled glob sets for include and exclude patterns.
+/// Passed through to avoid redundant glob compilation when multiple
+/// packages share the same task input patterns.
+pub struct PrecompiledGlobs<'a> {
+    pub include: Option<&'a GlobSet>,
+    pub exclude: Option<&'a GlobSet>,
+}
 
 impl SCM {
     pub fn get_hashes_for_files(
@@ -92,6 +100,56 @@ impl SCM {
         }
     }
 
+    /// Like `get_package_file_hashes`, but accepts pre-compiled glob sets
+    /// to avoid redundant glob compilation when multiple packages share the
+    /// same input patterns.
+    pub fn get_package_file_hashes_with_precompiled<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        inputs: &[S],
+        include_default_files: bool,
+        repo_index: Option<&RepoGitIndex>,
+        precompiled: &PrecompiledGlobs<'_>,
+    ) -> Result<GitHashes, Error> {
+        match self {
+            SCM::Manual => crate::manual::get_package_file_hashes_without_git(
+                turbo_root,
+                package_path,
+                inputs,
+                include_default_files,
+            ),
+            SCM::Git(git) => {
+                let result = git.get_package_file_hashes_precompiled(
+                    turbo_root,
+                    package_path,
+                    inputs,
+                    include_default_files,
+                    repo_index,
+                    precompiled,
+                );
+                match result {
+                    Ok(hashes) => Ok(hashes),
+                    Err(err) => {
+                        if err.is_resource_exhaustion() {
+                            return Err(err);
+                        }
+                        debug!(
+                            "git hashing failed for {:?}: {}. Falling back to manual",
+                            package_path, err,
+                        );
+                        crate::manual::get_package_file_hashes_without_git(
+                            turbo_root,
+                            package_path,
+                            inputs,
+                            include_default_files,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     pub fn hash_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -142,6 +200,41 @@ impl GitRepo {
             package_path,
             inputs,
             repo_index,
+        )
+    }
+
+    fn get_package_file_hashes_precompiled<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        inputs: &[S],
+        include_default_files: bool,
+        repo_index: Option<&RepoGitIndex>,
+        precompiled: &PrecompiledGlobs<'_>,
+    ) -> Result<GitHashes, Error> {
+        if inputs.is_empty() {
+            return self.get_package_file_hashes_from_index(turbo_root, package_path, repo_index);
+        }
+
+        if !include_default_files {
+            return match precompiled.include {
+                Some(gs) => self.get_package_file_hashes_from_inputs_precompiled(
+                    turbo_root,
+                    package_path,
+                    gs,
+                ),
+                None => {
+                    self.get_package_file_hashes_from_inputs(turbo_root, package_path, inputs, true)
+                }
+            };
+        }
+
+        self.get_package_file_hashes_from_inputs_and_index_precompiled(
+            turbo_root,
+            package_path,
+            inputs,
+            repo_index,
+            precompiled,
         )
     }
 
@@ -310,6 +403,114 @@ impl GitRepo {
                         .iter()
                         .any(|glob| wax::Program::is_match(glob, path_str))
                 });
+            }
+        }
+
+        Ok(hashes)
+    }
+
+    /// Like `get_package_file_hashes_from_inputs` but uses a pre-compiled
+    /// `GlobSet` instead of compiling patterns from scratch.
+    fn get_package_file_hashes_from_inputs_precompiled(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        glob_set: &GlobSet,
+    ) -> Result<GitHashes, Error> {
+        let full_pkg_path = turbo_root.resolve(package_path);
+
+        let files = glob_set.walk(&full_pkg_path, globwalk::WalkType::Files)?;
+
+        let to_hash = files
+            .iter()
+            .map(|entry| {
+                let path = self.root.anchor(entry)?.to_unix();
+                Ok(path)
+            })
+            .collect::<Result<Vec<_>, Error>>()?;
+        let mut hashes = GitHashes::new();
+        hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
+        Ok(hashes)
+    }
+
+    /// Like `get_package_file_hashes_from_inputs_and_index` but uses
+    /// pre-compiled glob sets for both include walking and exclude
+    /// matching.
+    fn get_package_file_hashes_from_inputs_and_index_precompiled<S: AsRef<str>>(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        package_path: &AnchoredSystemPath,
+        inputs: &[S],
+        repo_index: Option<&RepoGitIndex>,
+        precompiled: &PrecompiledGlobs<'_>,
+    ) -> Result<GitHashes, Error> {
+        let mut hashes =
+            self.get_package_file_hashes_from_index(turbo_root, package_path, repo_index)?;
+
+        let mut has_includes = false;
+        let mut has_excludes = false;
+        for input in inputs {
+            let input_str = input.as_ref();
+            if input_str.starts_with('!') {
+                has_excludes = true;
+            } else {
+                has_includes = true;
+            }
+        }
+
+        if has_includes {
+            match precompiled.include {
+                Some(gs) => {
+                    let include_hashes = self.get_package_file_hashes_from_inputs_precompiled(
+                        turbo_root,
+                        package_path,
+                        gs,
+                    )?;
+                    hashes.extend(include_hashes);
+                }
+                None => {
+                    let includes: Vec<&str> = inputs
+                        .iter()
+                        .map(|s| s.as_ref())
+                        .filter(|s| !s.starts_with('!'))
+                        .collect();
+                    let include_hashes = self.get_package_file_hashes_from_inputs(
+                        turbo_root,
+                        package_path,
+                        &includes,
+                        true,
+                    )?;
+                    hashes.extend(include_hashes);
+                }
+            }
+        }
+
+        if has_excludes {
+            match precompiled.exclude {
+                Some(gs) => {
+                    hashes.retain(|key, _| !gs.matches(key.as_str()));
+                }
+                None => {
+                    let excludes: Vec<&str> = inputs
+                        .iter()
+                        .map(|s| s.as_ref())
+                        .filter_map(|s| s.strip_prefix('!'))
+                        .collect();
+
+                    let exclude_globs: Vec<wax::Glob<'static>> = excludes
+                        .iter()
+                        .filter_map(|pattern| wax::Glob::new(pattern).ok().map(|g| g.into_owned()))
+                        .collect();
+
+                    if !exclude_globs.is_empty() {
+                        hashes.retain(|key, _| {
+                            let path_str = key.as_str();
+                            !exclude_globs
+                                .iter()
+                                .any(|glob| wax::Program::is_match(glob, path_str))
+                        });
+                    }
+                }
             }
         }
 
@@ -664,5 +865,175 @@ mod tests {
                 .iter()
                 .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
         )
+    }
+
+    /// Verify that the precompiled GlobSet path produces identical hashes
+    /// to the original per-package compilation path. This is the key
+    /// correctness guarantee for the glob compilation cache.
+    #[test]
+    fn test_precompiled_matches_original_with_includes() -> Result<(), Error> {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+
+        // Setup git repo with multiple packages sharing the same inputs
+        setup_repository(&repo_root);
+
+        let packages = &["pkg-a", "pkg-b"];
+        for pkg in packages {
+            let pkg_dir = repo_root.join_component(pkg);
+            pkg_dir.create_dir_all()?;
+            pkg_dir
+                .join_component("package.json")
+                .create_with_contents("{}")?;
+            pkg_dir
+                .join_component("turbo.json")
+                .create_with_contents("{}")?;
+            let src_dir = pkg_dir.join_component("src");
+            src_dir.create_dir_all()?;
+            src_dir
+                .join_component("index.ts")
+                .create_with_contents("export default 1;")?;
+            src_dir
+                .join_component("utils.ts")
+                .create_with_contents("export const x = 2;")?;
+        }
+        commit_all(&repo_root);
+
+        let git = SCM::new(&repo_root);
+        let SCM::Git(ref git_repo) = git else {
+            panic!("expected git");
+        };
+
+        let inputs = &["src/**"];
+
+        // Pre-compile a GlobSet for these patterns (with config files)
+        let mut include_strs: Vec<String> = inputs.iter().map(|s| s.to_string()).collect();
+        include_strs.push("package.json".to_string());
+        include_strs.push("turbo.json".to_string());
+        include_strs.push("turbo.jsonc".to_string());
+
+        let inc_validated: Vec<globwalk::ValidatedGlob> = include_strs
+            .iter()
+            .filter_map(|s| std::str::FromStr::from_str(s).ok())
+            .collect();
+        let glob_set =
+            globwalk::GlobSet::compile(&inc_validated, &[]).expect("compile should succeed");
+
+        for pkg in packages {
+            let pkg_path = AnchoredSystemPathBuf::from_raw(pkg)?;
+
+            // Original path
+            let original = git_repo
+                .get_package_file_hashes_from_inputs(&repo_root, &pkg_path, inputs, true)?;
+
+            // Precompiled path
+            let precompiled = git_repo.get_package_file_hashes_from_inputs_precompiled(
+                &repo_root, &pkg_path, &glob_set,
+            )?;
+
+            assert_eq!(
+                original, precompiled,
+                "precompiled and original hashes differ for {pkg}"
+            );
+            assert!(!original.is_empty(), "expected non-empty hashes for {pkg}");
+        }
+        Ok(())
+    }
+
+    /// Verify precompiled path produces identical results when exclude patterns
+    /// are used alongside the default file index.
+    #[test]
+    fn test_precompiled_matches_original_with_includes_and_excludes() -> Result<(), Error> {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        setup_repository(&repo_root);
+
+        let pkg_dir = repo_root.join_component("my-pkg");
+        pkg_dir.create_dir_all()?;
+        pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        pkg_dir
+            .join_component("turbo.json")
+            .create_with_contents("{}")?;
+        let src_dir = pkg_dir.join_component("src");
+        src_dir.create_dir_all()?;
+        src_dir
+            .join_component("index.ts")
+            .create_with_contents("main")?;
+        let gen_dir = src_dir.join_component("generated");
+        gen_dir.create_dir_all()?;
+        gen_dir
+            .join_component("types.ts")
+            .create_with_contents("generated")?;
+        commit_all(&repo_root);
+
+        let git = SCM::new(&repo_root);
+        let SCM::Git(ref git_repo) = git else {
+            panic!("expected git");
+        };
+
+        let inputs: &[&str] = &["src/**", "!src/generated/**"];
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg")?;
+
+        // Original path (inputs_and_index with excludes)
+        let original = git_repo.get_package_file_hashes(
+            &repo_root, &pkg_path, inputs, true, // include_default_files
+            None,
+        )?;
+
+        // Precompiled path: build include and exclude glob sets
+        let mut include_strs: Vec<String> = Vec::new();
+        let mut exclude_strs: Vec<String> = Vec::new();
+        for input in inputs {
+            if let Some(excl) = input.strip_prefix('!') {
+                exclude_strs.push(excl.to_string());
+            } else {
+                include_strs.push(input.to_string());
+            }
+        }
+        include_strs.push("package.json".to_string());
+        include_strs.push("turbo.json".to_string());
+        include_strs.push("turbo.jsonc".to_string());
+
+        let inc_v: Vec<globwalk::ValidatedGlob> = include_strs
+            .iter()
+            .filter_map(|s| std::str::FromStr::from_str(s).ok())
+            .collect();
+        let exc_v: Vec<globwalk::ValidatedGlob> = exclude_strs
+            .iter()
+            .filter_map(|s| std::str::FromStr::from_str(s).ok())
+            .collect();
+        let include_gs = globwalk::GlobSet::compile(&inc_v, &exc_v).expect("include compile");
+        let ex_v: Vec<globwalk::ValidatedGlob> = exclude_strs
+            .iter()
+            .filter_map(|s| std::str::FromStr::from_str(s).ok())
+            .collect();
+        let exclude_gs = globwalk::GlobSet::compile(&ex_v, &[]).expect("exclude compile");
+
+        let precompiled_globs = PrecompiledGlobs {
+            include: Some(&include_gs),
+            exclude: Some(&exclude_gs),
+        };
+        let precompiled = git_repo.get_package_file_hashes_precompiled(
+            &repo_root,
+            &pkg_path,
+            inputs,
+            true,
+            None,
+            &precompiled_globs,
+        )?;
+
+        assert_eq!(
+            original, precompiled,
+            "precompiled with excludes should match original"
+        );
+
+        // Verify the exclude actually worked: generated/types.ts should not be present
+        assert!(
+            !original.keys().any(|k| k.as_str().contains("generated")),
+            "excluded files should not appear in hashes: {:?}",
+            original.keys().collect::<Vec<_>>()
+        );
+
+        Ok(())
     }
 }
