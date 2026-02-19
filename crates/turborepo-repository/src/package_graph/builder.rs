@@ -266,21 +266,23 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
             package_json_path: relative_json_path,
             ..Default::default()
         };
-        if let Some(existing) = self.workspaces.insert(name.clone(), entry) {
-            let path = self
-                .workspaces
-                .get(&name)
-                .expect("just inserted entry to be present")
-                .package_json_path
-                .clone();
-            return Err(Error::DuplicateWorkspace {
-                name: name.to_string(),
-                path: path.to_string(),
-                existing_path: existing.package_json_path.to_string(),
-            });
+        match self.workspaces.entry(name) {
+            std::collections::hash_map::Entry::Vacant(vacant) => {
+                let name = vacant.key().clone();
+                vacant.insert(entry);
+                self.add_node(PackageNode::Workspace(name));
+                Ok(())
+            }
+            std::collections::hash_map::Entry::Occupied(occupied) => {
+                let existing_path = occupied.get().package_json_path.to_string();
+                let name = occupied.key().to_string();
+                Err(Error::DuplicateWorkspace {
+                    name,
+                    path: entry.package_json_path.to_string(),
+                    existing_path,
+                })
+            }
         }
-        self.add_node(PackageNode::Workspace(name));
-        Ok(())
     }
 
     // need our own type
@@ -293,14 +295,30 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
         let package_jsons = match self.package_jsons.take() {
             Some(jsons) => Ok(jsons),
             None => {
-                let mut jsons = HashMap::new();
-                for path in self.package_discovery.discover_packages().await?.workspaces {
-                    let json = PackageJson::load(&path.package_json)?;
-                    jsons.insert(path.package_json, json);
+                let workspace_paths: Vec<_> =
+                    self.package_discovery.discover_packages().await?.workspaces;
+
+                let results: Vec<_> = {
+                    use rayon::prelude::*;
+                    workspace_paths
+                        .into_par_iter()
+                        .map(|path| {
+                            let json = PackageJson::load(&path.package_json)?;
+                            Ok((path.package_json, json))
+                        })
+                        .collect::<Result<Vec<_>, Error>>()?
+                };
+
+                let mut jsons = HashMap::with_capacity(results.len());
+                for (path, json) in results {
+                    jsons.insert(path, json);
                 }
                 Ok::<_, Error>(jsons)
             }
         }?;
+
+        self.workspaces.reserve(package_jsons.len());
+        self.node_lookup.reserve(package_jsons.len());
 
         for (path, json) in package_jsons {
             match self.add_json(path, json) {
