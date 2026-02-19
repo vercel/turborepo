@@ -22,7 +22,7 @@ use regex::Regex;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
 use wax::{
-    BuildError, Glob,
+    BuildError, Glob, Program,
     walk::{FileIterator, FilterAny},
 };
 
@@ -74,15 +74,11 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
     include: &[S],
     exclude: &[S],
 ) -> Result<(PathBuf, Vec<String>, Vec<String>), WalkError> {
-    let base_path_slash = base_path
+    let raw_slash = base_path
         .as_std_path()
         .to_slash()
-        .map(|s| {
-            // Paths can contain various tokens that have special meaning when parsing as a
-            // glob We escape them to avoid any unintended consequences.
-            escape_glob_literals(&s).into_owned()
-        })
         .ok_or(WalkError::InvalidPath)?;
+    let base_path_slash = escape_glob_literals(&raw_slash);
 
     let (include_paths, lowest_segment) = include
         .iter()
@@ -292,10 +288,7 @@ fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
     glob.push_str("**");
 }
 
-#[tracing::instrument]
-fn glob_with_contextual_error<S: AsRef<str> + std::fmt::Debug>(
-    raw: S,
-) -> Result<Glob<'static>, WalkError> {
+fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, WalkError> {
     let raw = raw.as_ref();
     Glob::new(raw)
         .map(|g| g.into_owned())
@@ -460,7 +453,8 @@ pub fn globwalk_with_settings(
     walk_type: WalkType,
     settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    retry_on_emfile(|| globwalk_internal(base_path, include, exclude, walk_type, settings))
+    let compiled = compile_globs(base_path, include, exclude)?;
+    retry_on_emfile(|| walk_compiled_globs(&compiled, walk_type, settings))
 }
 
 pub fn globwalk(
@@ -469,9 +463,8 @@ pub fn globwalk(
     exclude: &[ValidatedGlob],
     walk_type: WalkType,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    retry_on_emfile(|| {
-        globwalk_internal(base_path, include, exclude, walk_type, Default::default())
-    })
+    let compiled = compile_globs(base_path, include, exclude)?;
+    retry_on_emfile(|| walk_compiled_globs(&compiled, walk_type, Default::default()))
 }
 
 fn is_too_many_open_files(err: &WalkError) -> bool {
@@ -523,14 +516,18 @@ where
     f()
 }
 
+struct CompiledGlobs {
+    base_path: PathBuf,
+    include_patterns: Vec<Glob<'static>>,
+    ex_filter: FilterAny,
+}
+
 #[tracing::instrument(skip(include, exclude))]
-pub fn globwalk_internal<S: AsRef<str>>(
+fn compile_globs<S: AsRef<str>>(
     base_path: &AbsoluteSystemPath,
     include: &[S],
     exclude: &[S],
-    walk_type: WalkType,
-    settings: Settings,
-) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+) -> Result<CompiledGlobs, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
 
@@ -547,23 +544,72 @@ pub fn globwalk_internal<S: AsRef<str>>(
         .map(glob_with_contextual_error)
         .collect::<Result<Vec<_>, _>>()?;
 
-    include_patterns
-        .into_par_iter()
-        // Use flat_map_iter as we only want parallelism for walking the globs and not iterating
-        // over the results.
-        // See https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html#method.flat_map_iter
-        .flat_map_iter(|glob| {
-            walk_glob(walk_type, &base_path_new, ex_filter.clone(), glob, settings)
-        })
-        .collect()
+    Ok(CompiledGlobs {
+        base_path: base_path_new,
+        include_patterns,
+        ex_filter,
+    })
 }
 
-#[tracing::instrument(skip(ex_filter), fields(glob=glob.to_string().as_str()))]
+fn walk_compiled_globs(
+    compiled: &CompiledGlobs,
+    walk_type: WalkType,
+    settings: Settings,
+) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+    // Partition globs into literal paths (invariant) and patterns (variant).
+    // Invariant globs like "packages/foo/package.json" resolve to exactly one
+    // path. A single stat syscall replaces the directory walk that wax would
+    // otherwise perform, saving thousands of syscalls in large monorepos where
+    // package.json/turbo.json are appended to every task's include list.
+    let mut literal_results: Vec<AbsoluteSystemPathBuf> = Vec::new();
+    let mut variant_globs: Vec<&Glob<'static>> = Vec::new();
+
+    for glob in &compiled.include_patterns {
+        if let Some(path) = glob.variance().path() {
+            let full_path = compiled.base_path.join(path);
+            // Use symlink_metadata to detect broken symlinks (exists() returns
+            // false for those, but they should still be yielded).
+            // symlink_metadata doesn't follow symlinks, so broken symlinks
+            // are still detected (exists() would return false).
+            let dominated = full_path
+                .symlink_metadata()
+                .ok()
+                .is_some_and(|m| match walk_type {
+                    WalkType::Files => !m.is_dir(),
+                    WalkType::Folders => m.is_dir(),
+                    WalkType::All => true,
+                });
+            if dominated && let Ok(abs) = AbsoluteSystemPathBuf::try_from(full_path.as_path()) {
+                literal_results.push(abs);
+            }
+        } else {
+            variant_globs.push(glob);
+        }
+    }
+
+    let mut results: HashSet<AbsoluteSystemPathBuf> = variant_globs
+        .par_iter()
+        .flat_map_iter(|glob| {
+            walk_glob(
+                walk_type,
+                &compiled.base_path,
+                compiled.ex_filter.clone(),
+                glob,
+                settings,
+            )
+        })
+        .collect::<Result<HashSet<_>, _>>()?;
+
+    results.extend(literal_results);
+    Ok(results)
+}
+
+#[tracing::instrument(skip_all)]
 fn walk_glob(
     walk_type: WalkType,
     base_path_new: &Path,
     ex_filter: FilterAny,
-    glob: Glob,
+    glob: &Glob<'static>,
     settings: Settings,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
     let iter = glob.walk(base_path_new).not_any(ex_filter);
@@ -585,7 +631,6 @@ fn walk_glob(
     }
 }
 
-#[tracing::instrument]
 fn visit_file(
     walk_type: WalkType,
     entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,

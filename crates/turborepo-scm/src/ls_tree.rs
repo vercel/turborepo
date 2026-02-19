@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     io::{BufRead, BufReader, Read},
     process::{Command, Stdio},
 };
@@ -7,6 +8,8 @@ use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
 use crate::{Error, GitHashes, GitRepo, wait_for_success};
+
+pub(crate) type SortedGitHashes = BTreeMap<RelativeUnixPathBuf, String>;
 
 impl GitRepo {
     #[tracing::instrument(skip(self))]
@@ -34,6 +37,32 @@ impl GitRepo {
     }
 
     /// Run `git ls-tree` once at the git repo root, returning all committed
+    /// file hashes in a sorted `BTreeMap` for efficient prefix-range lookups.
+    #[tracing::instrument(skip(self))]
+    pub fn git_ls_tree_repo_root_sorted(&self) -> Result<SortedGitHashes, Error> {
+        let mut hashes = BTreeMap::new();
+        let mut git = Command::new(self.bin.as_std_path())
+            .args(["ls-tree", "-r", "-z", "HEAD"])
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .current_dir(&self.root)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+
+        let stdout = git
+            .stdout
+            .as_mut()
+            .ok_or_else(|| Error::git_error("failed to get stdout for git ls-tree"))?;
+        let mut stderr = git
+            .stderr
+            .take()
+            .ok_or_else(|| Error::git_error("failed to get stderr for git ls-tree"))?;
+        let parse_result = read_ls_tree_sorted(stdout, &mut hashes);
+        wait_for_success(git, &mut stderr, "git ls-tree", &self.root, parse_result)?;
+        Ok(hashes)
+    }
+
+    /// Run `git ls-tree` once at the git repo root, returning all committed
     /// file hashes keyed by git-root-relative paths.
     #[tracing::instrument(skip(self))]
     pub fn git_ls_tree_repo_root(&self) -> Result<GitHashes, Error> {
@@ -42,6 +71,19 @@ impl GitRepo {
 }
 
 fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error> {
+    let mut reader = BufReader::new(reader);
+    let mut buffer = Vec::new();
+    while reader.read_until(b'\0', &mut buffer)? != 0 {
+        let entry = parse_ls_tree(&buffer)?;
+        let hash = String::from_utf8(entry.hash.to_vec())?;
+        let path = RelativeUnixPathBuf::new(String::from_utf8(entry.filename.to_vec())?)?;
+        hashes.insert(path, hash);
+        buffer.clear();
+    }
+    Ok(())
+}
+
+fn read_ls_tree_sorted<R: Read>(reader: R, hashes: &mut SortedGitHashes) -> Result<(), Error> {
     let mut reader = BufReader::new(reader);
     let mut buffer = Vec::new();
     while reader.read_until(b'\0', &mut buffer)? != 0 {

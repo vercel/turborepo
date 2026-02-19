@@ -199,6 +199,7 @@ impl<'a> Visitor<'a> {
         let span = Span::current();
 
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine)?;
+        let cached_vendor_behavior = Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
 
         while let Some(message) = node_stream.recv().await {
             let span = tracing::debug_span!(parent: &span, "queue_task", task = %message.info);
@@ -299,8 +300,7 @@ impl<'a> Visitor<'a> {
                         continue;
                     };
 
-                    let vendor_behavior =
-                        Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
+                    let vendor_behavior = cached_vendor_behavior;
 
                     let output_client = if let Some(handle) = &self.ui_sender {
                         TaskOutput::UI(handle.task(info.to_string()))

@@ -267,12 +267,10 @@ impl GitRepo {
         inputs: &[S],
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
-        // collect the default files and the inputs
-        let default_file_hashes =
+        // Start with ALL files from the git index (committed + dirty).
+        let mut hashes =
             self.get_package_file_hashes_from_index(turbo_root, package_path, repo_index)?;
 
-        // we need to get hashes for excludes separately so we can remove them from the
-        // defaults later on
         let mut includes = Vec::new();
         let mut excludes = Vec::new();
         for input in inputs {
@@ -283,24 +281,37 @@ impl GitRepo {
                 includes.push(input_str);
             }
         }
-        // we have to always run the includes search because we add default files to the
-        // includes
-        let manual_includes_hashes =
-            self.get_package_file_hashes_from_inputs(turbo_root, package_path, &includes, true)?;
 
-        // only run the excludes search if there are excludes
-        let manual_excludes_hashes = if !excludes.is_empty() {
-            self.get_package_file_hashes_from_inputs(turbo_root, package_path, &excludes, false)?
-        } else {
-            GitHashes::new()
-        };
+        // Include globs can find files not in the git index (e.g. gitignored files
+        // that a user explicitly wants to track). We still need globwalk for these
+        // but can skip re-hashing files already known from the index.
+        if !includes.is_empty() {
+            let include_hashes = self.get_package_file_hashes_from_inputs(
+                turbo_root,
+                package_path,
+                &includes,
+                true,
+            )?;
+            hashes.extend(include_hashes);
+        }
 
-        // merge the two includes
-        let mut hashes = default_file_hashes;
-        hashes.extend(manual_includes_hashes);
+        // Apply excludes via in-memory matching — no filesystem walk needed since
+        // we already know all the paths from the combined index + includes.
+        if !excludes.is_empty() {
+            let exclude_globs: Vec<wax::Glob<'static>> = excludes
+                .iter()
+                .filter_map(|pattern| wax::Glob::new(pattern).ok().map(|g| g.into_owned()))
+                .collect();
 
-        // remove the excludes
-        hashes.retain(|key, _| !manual_excludes_hashes.contains_key(key));
+            if !exclude_globs.is_empty() {
+                hashes.retain(|key, _| {
+                    let path_str = key.as_str();
+                    !exclude_globs
+                        .iter()
+                        .any(|glob| wax::Program::is_match(glob, path_str))
+                });
+            }
+        }
 
         Ok(hashes)
     }
