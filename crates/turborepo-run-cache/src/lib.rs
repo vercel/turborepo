@@ -215,7 +215,14 @@ impl TaskCache {
     pub fn output_writer<W: Write>(&self, writer: W) -> Result<LogWriter<W>, Error> {
         let mut log_writer = LogWriter::default();
 
-        if !self.caching_disabled && !self.run_cache.writes_disabled {
+        let cache_enabled = !self.caching_disabled && !self.run_cache.writes_disabled;
+        // We need the log file when caching is enabled (normal case), but also
+        // when the output mode is errors-only so that on_error can replay the
+        // log file to show the output of a failed task.
+        let needs_log_file =
+            cache_enabled || self.task_output_logs == OutputLogsMode::ErrorsOnly;
+
+        if needs_log_file {
             log_writer.with_log_file(&self.log_file_path)?;
         }
 
