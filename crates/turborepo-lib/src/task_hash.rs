@@ -6,8 +6,7 @@
 // Re-export all public types from turborepo-task-hash
 pub use turborepo_task_hash::{
     collect_global_file_hash_inputs, get_external_deps_hash, get_internal_deps_hash, global_hash,
-    Error, GlobalHashableInputs, PackageInputsHashes,
-    TaskHashTracker, TaskHashTrackerState,
+    Error, GlobalHashableInputs, PackageInputsHashes, TaskHashTracker, TaskHashTrackerState,
 };
 
 use crate::opts::RunOpts;

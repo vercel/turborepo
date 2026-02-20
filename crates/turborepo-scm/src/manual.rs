@@ -495,13 +495,8 @@ mod tests {
         // "*.ts" matches both shared.ts and default-only.ts in the first walk
         // (since git_ignore=false for explicit inputs). The second walk with
         // git_ignore=true should not re-hash files already found.
-        let hashes = get_package_file_hashes_without_git(
-            &turbo_root,
-            &pkg_path,
-            &["*.ts"],
-            true,
-        )
-        .unwrap();
+        let hashes =
+            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["*.ts"], true).unwrap();
 
         // All four files should appear exactly once
         assert!(
@@ -522,13 +517,8 @@ mod tests {
         );
 
         // Verify the hash values are deterministic (same content = same hash)
-        let hashes2 = get_package_file_hashes_without_git(
-            &turbo_root,
-            &pkg_path,
-            &["*.ts"],
-            true,
-        )
-        .unwrap();
+        let hashes2 =
+            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["*.ts"], true).unwrap();
         assert_eq!(hashes, hashes2, "hashes should be deterministic");
     }
 

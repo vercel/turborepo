@@ -92,10 +92,7 @@ impl<'a> ExecContextFactory<'a> {
         let task_id_for_display = self.visitor.display_task_id(&task_id);
         self.populate_env(&mut execution_env, &task_hash, &task_access);
 
-        let Some(cmd) = self
-            .command_factory
-            .command(&task_id, &execution_env)?
-        else {
+        let Some(cmd) = self.command_factory.command(&task_id, &execution_env)? else {
             return Ok(None);
         };
 

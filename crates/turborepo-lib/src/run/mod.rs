@@ -48,8 +48,8 @@ use crate::{
     run::task_access::TaskAccess,
     task_graph::Visitor,
     task_hash::{
-        GlobalHashableInputs, collect_global_file_hash_inputs, get_external_deps_hash,
-        get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY, PackageInputsHashes,
+        collect_global_file_hash_inputs, get_external_deps_hash, get_internal_deps_hash,
+        global_hash::GLOBAL_CACHE_KEY, GlobalHashableInputs, PackageInputsHashes,
     },
     turbo_json::{TurboJson, UnifiedTurboJsonLoader},
 };
@@ -651,8 +651,7 @@ impl Run {
             });
         });
 
-        let package_inputs_hashes =
-            file_hash_result.expect("file hash task did not complete")?;
+        let package_inputs_hashes = file_hash_result.expect("file hash task did not complete")?;
         let root_internal_dependencies_hash =
             internal_deps_result.expect("internal deps task did not complete")?;
         let global_file_inputs =

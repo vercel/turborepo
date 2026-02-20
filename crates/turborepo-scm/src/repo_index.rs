@@ -3,7 +3,7 @@
 use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
-use crate::{ls_tree::SortedGitHashes, status::RepoStatusEntry, Error, GitHashes, GitRepo};
+use crate::{Error, GitHashes, GitRepo, ls_tree::SortedGitHashes, status::RepoStatusEntry};
 
 /// Pre-computed repo-wide git index that caches the results of `git ls-tree`
 /// and `git status` so they can be filtered per-package without spawning
