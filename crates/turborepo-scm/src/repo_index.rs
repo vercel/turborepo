@@ -59,14 +59,29 @@ impl RepoGitIndex {
         let prefix_str = pkg_prefix.as_str();
         let prefix_is_empty = prefix_str.is_empty();
 
-        let mut hashes = GitHashes::new();
+        let mut hashes = if prefix_is_empty {
+            GitHashes::with_capacity(self.ls_tree_hashes.len())
+        } else {
+            GitHashes::new()
+        };
         if prefix_is_empty {
             for (path, hash) in &self.ls_tree_hashes {
                 hashes.insert(path.clone(), hash.clone());
             }
         } else {
-            let range_start = RelativeUnixPathBuf::new(format!("{}/", prefix_str)).unwrap();
-            let range_end = RelativeUnixPathBuf::new(format!("{}0", prefix_str)).unwrap();
+            // Build range boundary strings in a reusable buffer to avoid two
+            // separate format!() heap allocations per call. The '/' and '0'
+            // characters are adjacent in ASCII, so `prefix/`..`prefix0`
+            // captures exactly the entries under this package prefix.
+            let mut key_buf = String::with_capacity(prefix_str.len() + 1);
+            key_buf.push_str(prefix_str);
+            key_buf.push('/');
+            let range_start = RelativeUnixPathBuf::new(&key_buf).unwrap();
+            // Replace trailing '/' with '0' (the next ASCII char after '/')
+            // to form the exclusive upper bound.
+            key_buf.pop();
+            key_buf.push('0');
+            let range_end = RelativeUnixPathBuf::new(&key_buf).unwrap();
             for (path, hash) in self.ls_tree_hashes.range(range_start..range_end) {
                 if let Ok(stripped) = path.strip_prefix(pkg_prefix) {
                     hashes.insert(stripped, hash.clone());

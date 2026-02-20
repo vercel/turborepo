@@ -1,4 +1,6 @@
 #![cfg(feature = "git2")]
+use std::fmt::Write;
+
 use rayon::prelude::*;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
@@ -63,7 +65,11 @@ pub(crate) fn hash_objects(
                             AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
                                 .to_unix()
                         });
-                    Ok(Some((package_relative_path, hash.to_string())))
+                    // Format the OID hex directly into a pre-sized String to
+                    // avoid the intermediate allocations of Display + to_string().
+                    let mut hex = String::with_capacity(40);
+                    write!(hex, "{hash}").expect("writing to String cannot fail");
+                    Ok(Some((package_relative_path, hex)))
                 }
                 Err(e) => {
                     if e.class() == git2::ErrorClass::Os

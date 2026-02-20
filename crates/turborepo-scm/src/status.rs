@@ -84,7 +84,9 @@ fn read_status<R: Read>(
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
     let mut to_hash = Vec::new();
     let mut reader = BufReader::with_capacity(64 * 1024, reader);
-    let mut buffer = Vec::new();
+    // Status entries are typically ~6 bytes overhead + filename; pre-allocate
+    // to avoid repeated growth from zero.
+    let mut buffer = Vec::with_capacity(256);
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_status(&buffer)?;
         let filename = std::str::from_utf8(entry.filename)
@@ -109,7 +111,7 @@ fn read_status<R: Read>(
 fn read_status_raw<R: Read>(reader: R) -> Result<Vec<RepoStatusEntry>, Error> {
     let mut entries = Vec::new();
     let mut reader = BufReader::with_capacity(64 * 1024, reader);
-    let mut buffer = Vec::new();
+    let mut buffer = Vec::with_capacity(256);
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_status(&buffer)?;
         let filename = std::str::from_utf8(entry.filename)

@@ -4,7 +4,6 @@
 use std::io::{ErrorKind, Read};
 
 use globwalk::fix_glob_pattern;
-use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
@@ -12,27 +11,54 @@ use wax::{Glob, Program, any};
 
 use crate::{Error, GitHashes};
 
+/// Hex-encode a 20-byte SHA1 digest into a stack-allocated buffer, returning
+/// a `&str`. Avoids the heap allocation that `encode_hex::<String>()` performs.
+#[inline]
+fn hex_encode_sha1(digest: &[u8; 20]) -> [u8; 40] {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut buf = [0u8; 40];
+    for (i, &b) in digest.iter().enumerate() {
+        buf[i * 2] = HEX[(b >> 4) as usize];
+        buf[i * 2 + 1] = HEX[(b & 0x0f) as usize];
+    }
+    buf
+}
+
 fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     let mut hasher = Sha1::new();
     let mut f = path.open()?;
-    // Pre-allocate the buffer based on file metadata to avoid repeated
-    // reallocations during read_to_end. The +1 accounts for read_to_end's
-    // probe read that confirms EOF.
-    let estimated_size = f.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
-    let mut buffer = Vec::with_capacity(estimated_size);
-    // Note that read_to_end reads the target if f is a symlink. Currently, this can
+    let metadata = f.metadata()?;
+    let file_size = metadata.len();
+
+    // Write the git blob header: "blob <size>\0"
+    // This must use the exact byte count that will follow.
+    hasher.update(b"blob ");
+    hasher.update(file_size.to_string().as_bytes());
+    hasher.update([b'\0']);
+
+    // Stream file contents through the hasher using a fixed stack buffer
+    // instead of reading the entire file into a heap-allocated Vec. This
+    // reduces per-file memory from O(file_size) to O(1) (8 KiB).
+    //
+    // Note that read reads the target if f is a symlink. Currently, this can
     // happen when we are hashing a specific set of files, which in turn only
     // happens for handling dotEnv files. It is likely that in the future we
     // will want to ensure that the target is better accounted for in the set of
     // inputs to the task. Manual hashing, as well as global deps and other
     // places that support globs all ignore symlinks.
-    let size = f.read_to_end(&mut buffer)?;
-    hasher.update("blob ".as_bytes());
-    hasher.update(size.to_string().as_bytes());
-    hasher.update([b'\0']);
-    hasher.update(buffer.as_slice());
-    let result = hasher.finalize();
-    Ok(result.encode_hex::<String>())
+    let mut buf = [0u8; 8192];
+    loop {
+        let n = f.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+
+    let digest: [u8; 20] = hasher.finalize().into();
+    let hex_buf = hex_encode_sha1(&digest);
+    // SAFETY: hex_buf contains only ASCII hex characters.
+    Ok(unsafe { String::from_utf8_unchecked(hex_buf.to_vec()) })
 }
 
 fn to_glob(input: &str) -> Result<Glob<'_>, Error> {

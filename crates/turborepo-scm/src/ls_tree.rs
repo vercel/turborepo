@@ -72,7 +72,9 @@ impl GitRepo {
 
 fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error> {
     let mut reader = BufReader::with_capacity(64 * 1024, reader);
-    let mut buffer = Vec::new();
+    // Typical ls-tree entries are ~80-120 bytes; pre-allocate to avoid
+    // repeated growth from zero.
+    let mut buffer = Vec::with_capacity(256);
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_ls_tree(&buffer)?;
         let hash = std::str::from_utf8(entry.hash)
@@ -88,7 +90,7 @@ fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error>
 
 fn read_ls_tree_sorted<R: Read>(reader: R, hashes: &mut SortedGitHashes) -> Result<(), Error> {
     let mut reader = BufReader::with_capacity(64 * 1024, reader);
-    let mut buffer = Vec::new();
+    let mut buffer = Vec::with_capacity(256);
     while reader.read_until(b'\0', &mut buffer)? != 0 {
         let entry = parse_ls_tree(&buffer)?;
         let hash = std::str::from_utf8(entry.hash)
