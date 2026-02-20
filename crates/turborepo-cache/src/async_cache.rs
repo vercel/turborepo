@@ -49,7 +49,10 @@ impl AsyncCache {
             api_auth,
             analytics_recorder,
         )?);
-        let (writer_sender, mut write_consumer) = mpsc::channel(1);
+        // Buffer up to max_workers requests so that callers don't block
+        // waiting for a semaphore permit inside the worker loop. The
+        // semaphore already limits actual concurrency.
+        let (writer_sender, mut write_consumer) = mpsc::channel(max_workers);
 
         // start a task to manage workers
         let worker_real_cache = real_cache.clone();

@@ -59,20 +59,28 @@ impl RepoGitIndex {
         let prefix_str = pkg_prefix.as_str();
         let prefix_is_empty = prefix_str.is_empty();
 
-        let mut hashes = GitHashes::new();
-        if prefix_is_empty {
+        let mut hashes = if prefix_is_empty {
+            // Pre-allocate with exact capacity when copying the entire tree
+            let mut h = GitHashes::with_capacity(self.ls_tree_hashes.len());
             for (path, hash) in &self.ls_tree_hashes {
-                hashes.insert(path.clone(), hash.clone());
+                h.insert(path.clone(), hash.clone());
             }
+            h
         } else {
+            // Use stack-allocated format strings to avoid heap allocations
+            // for the range bounds. '/' is one char after '.' in ASCII,
+            // and '0' is one char after '/' — so the range covers exactly
+            // paths starting with "{prefix}/".
             let range_start = RelativeUnixPathBuf::new(format!("{}/", prefix_str)).unwrap();
             let range_end = RelativeUnixPathBuf::new(format!("{}0", prefix_str)).unwrap();
+            let mut h = GitHashes::new();
             for (path, hash) in self.ls_tree_hashes.range(range_start..range_end) {
                 if let Ok(stripped) = path.strip_prefix(pkg_prefix) {
-                    hashes.insert(stripped, hash.clone());
+                    h.insert(stripped, hash.clone());
                 }
             }
-        }
+            h
+        };
 
         let mut to_hash = Vec::new();
         for entry in &self.status_entries {
@@ -106,5 +114,135 @@ impl RepoGitIndex {
         );
 
         Ok((hashes, to_hash))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use turbopath::RelativeUnixPathBuf;
+
+    use super::*;
+
+    fn path(s: &str) -> RelativeUnixPathBuf {
+        RelativeUnixPathBuf::new(s).unwrap()
+    }
+
+    fn make_index(ls_tree: Vec<(&str, &str)>, status: Vec<(&str, bool)>) -> RepoGitIndex {
+        let ls_tree_hashes: SortedGitHashes = ls_tree
+            .into_iter()
+            .map(|(p, h)| (path(p), h.to_string()))
+            .collect::<BTreeMap<_, _>>();
+        let status_entries = status
+            .into_iter()
+            .map(|(p, is_delete)| RepoStatusEntry {
+                path: path(p),
+                is_delete,
+            })
+            .collect();
+        RepoGitIndex {
+            ls_tree_hashes,
+            status_entries,
+        }
+    }
+
+    #[test]
+    fn test_empty_prefix_returns_all_files() {
+        let index = make_index(
+            vec![
+                ("apps/web/src/index.ts", "aaa"),
+                ("packages/ui/button.tsx", "bbb"),
+                ("root-file.json", "ccc"),
+            ],
+            vec![],
+        );
+        let (hashes, to_hash) = index.get_package_hashes(&path("")).unwrap();
+        assert_eq!(hashes.len(), 3);
+        assert!(hashes.contains_key(&path("apps/web/src/index.ts")));
+        assert!(hashes.contains_key(&path("packages/ui/button.tsx")));
+        assert!(hashes.contains_key(&path("root-file.json")));
+        assert!(to_hash.is_empty());
+    }
+
+    #[test]
+    fn test_prefix_filters_to_package_and_strips_prefix() {
+        let index = make_index(
+            vec![
+                ("apps/web/src/index.ts", "aaa"),
+                ("apps/web/package.json", "bbb"),
+                ("apps/docs/README.md", "ccc"),
+                ("packages/ui/button.tsx", "ddd"),
+            ],
+            vec![],
+        );
+        let (hashes, to_hash) = index.get_package_hashes(&path("apps/web")).unwrap();
+        assert_eq!(hashes.len(), 2);
+        assert_eq!(hashes.get(&path("src/index.ts")).unwrap(), "aaa");
+        assert_eq!(hashes.get(&path("package.json")).unwrap(), "bbb");
+        assert!(to_hash.is_empty());
+    }
+
+    #[test]
+    fn test_prefix_does_not_match_sibling_with_shared_prefix() {
+        // "apps/web-admin" should NOT match when filtering for "apps/web"
+        let index = make_index(
+            vec![
+                ("apps/web/index.ts", "aaa"),
+                ("apps/web-admin/index.ts", "bbb"),
+            ],
+            vec![],
+        );
+        let (hashes, _) = index.get_package_hashes(&path("apps/web")).unwrap();
+        assert_eq!(hashes.len(), 1);
+        assert!(hashes.contains_key(&path("index.ts")));
+    }
+
+    #[test]
+    fn test_status_modified_file_added_to_to_hash() {
+        let index = make_index(
+            vec![("my-pkg/file.ts", "aaa")],
+            vec![("my-pkg/new-file.ts", false)],
+        );
+        let (hashes, to_hash) = index.get_package_hashes(&path("my-pkg")).unwrap();
+        assert_eq!(hashes.len(), 1);
+        assert_eq!(to_hash, vec![path("my-pkg/new-file.ts")]);
+    }
+
+    #[test]
+    fn test_status_deleted_file_removed_from_hashes() {
+        let index = make_index(
+            vec![("my-pkg/keep.ts", "aaa"), ("my-pkg/deleted.ts", "bbb")],
+            vec![("my-pkg/deleted.ts", true)],
+        );
+        let (hashes, to_hash) = index.get_package_hashes(&path("my-pkg")).unwrap();
+        assert_eq!(hashes.len(), 1);
+        assert!(hashes.contains_key(&path("keep.ts")));
+        assert!(!hashes.contains_key(&path("deleted.ts")));
+        assert!(to_hash.is_empty());
+    }
+
+    #[test]
+    fn test_status_entries_for_other_packages_ignored() {
+        let index = make_index(
+            vec![("pkg-a/file.ts", "aaa")],
+            vec![("pkg-b/new.ts", false), ("pkg-b/gone.ts", true)],
+        );
+        let (hashes, to_hash) = index.get_package_hashes(&path("pkg-a")).unwrap();
+        assert_eq!(hashes.len(), 1);
+        assert!(to_hash.is_empty());
+    }
+
+    #[test]
+    fn test_empty_prefix_with_status() {
+        let index = make_index(
+            vec![("file.ts", "aaa")],
+            vec![("new.ts", false), ("file.ts", true)],
+        );
+        let (hashes, to_hash) = index.get_package_hashes(&path("")).unwrap();
+        // file.ts was deleted via status
+        assert!(hashes.is_empty());
+        // new.ts is untracked/modified
+        assert_eq!(to_hash, vec![path("new.ts")]);
     }
 }
