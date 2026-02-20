@@ -6,7 +6,7 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{Error, GitHashes, GitRepo, wait_for_success};
+use crate::{wait_for_success, Error, GitHashes, GitRepo};
 
 /// Sorted list of (path, hash) pairs from `git ls-tree`. Uses a `Vec` instead
 /// of `BTreeMap` because git output is already sorted by pathname, giving us
@@ -165,7 +165,7 @@ mod tests {
 
     use turbopath::RelativeUnixPathBuf;
 
-    use crate::{GitHashes, ls_tree::read_ls_tree};
+    use crate::{ls_tree::read_ls_tree, GitHashes};
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
         HashMap::from_iter(
