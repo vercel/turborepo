@@ -123,10 +123,12 @@ where
             .hash(task_id)
             .unwrap_or_else(|| panic!("hash not found for {task_id}"));
 
-        let expanded_inputs = self
+        let expanded_inputs: std::collections::BTreeMap<_, _> = self
             .hash_tracker
             .expanded_inputs(task_id)
-            .expect("inputs not found");
+            .expect("inputs not found")
+            .into_iter()
+            .collect();
 
         let env_vars = self
             .hash_tracker
