@@ -24,6 +24,7 @@ use turborepo_errors::TURBO_SITE;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker};
+use turborepo_scm::SCM;
 // Re-export output types and shared functions from turborepo-task-executor
 pub use turborepo_task_executor::{turbo_regex, StdWriter, TaskOutput};
 use turborepo_task_id::TaskId;
@@ -369,7 +370,8 @@ impl<'a> Visitor<'a> {
         packages,
         global_hash_inputs,
         engine,
-        env_at_execution_start
+        env_at_execution_start,
+        scm,
     ))]
     pub(crate) async fn finish(
         self,
@@ -378,6 +380,7 @@ impl<'a> Visitor<'a> {
         global_hash_inputs: GlobalHashableInputs<'_>,
         engine: &Engine,
         env_at_execution_start: &EnvironmentVariableMap,
+        scm: &SCM,
         pkg_inference_root: Option<&AnchoredSystemPath>,
     ) -> Result<(), Error> {
         let Self {
@@ -427,6 +430,7 @@ impl<'a> Visitor<'a> {
                 engine,
                 &task_hasher.task_hash_tracker(),
                 env_at_execution_start,
+                scm,
                 is_watch,
             )
             .await?)

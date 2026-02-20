@@ -19,6 +19,11 @@ pub struct SCMState {
 }
 
 impl SCMState {
+    /// Resolve SCM state from CI environment variables, falling back to git
+    /// subprocess calls if not in CI. The git fallback spawns two subprocesses
+    /// (`git branch --show-current` and `git rev-parse HEAD`), so callers
+    /// should defer this until the data is actually needed (e.g., summary
+    /// generation) rather than calling it eagerly at run start.
     pub fn get(env_vars: &EnvironmentVariableMap, scm: &SCM, dir: &AbsoluteSystemPath) -> Self {
         let mut state = SCMState {
             ty: SCMType::Git,

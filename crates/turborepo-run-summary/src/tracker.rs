@@ -86,7 +86,6 @@ pub struct RunSummary<'a> {
 /// We use this to track the run, so it's constructed before the run.
 #[derive(Debug)]
 pub struct RunTracker {
-    scm: SCMState,
     version: &'static str,
     started_at: DateTime<Local>,
     execution_tracker: ExecutionTracker,
@@ -95,20 +94,13 @@ pub struct RunTracker {
 }
 
 impl RunTracker {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         started_at: DateTime<Local>,
         synthesized_command: String,
-        env_at_execution_start: &EnvironmentVariableMap,
-        repo_root: &AbsoluteSystemPath,
         version: &'static str,
         user: Option<String>,
-        scm: &SCM,
     ) -> Self {
-        let scm = SCMState::get(env_at_execution_start, scm, repo_root);
-
         RunTracker {
-            scm,
             version,
             started_at,
             execution_tracker: ExecutionTracker::new(),
@@ -137,6 +129,8 @@ impl RunTracker {
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: EnvMode,
         task_factory: TaskSummaryFactory<'a, E, H, R>,
+        env_at_execution_start: &EnvironmentVariableMap,
+        scm: &SCM,
     ) -> Result<RunSummary<'a>, Error>
     where
         E: EngineInfo,
@@ -151,6 +145,10 @@ impl RunTracker {
             Some(DryRunMode::Json) => RunType::DryJson,
             Some(DryRunMode::Text) => RunType::DryText,
         };
+
+        // Deferred to summary time so we don't pay the cost of git subprocess
+        // calls (branch + sha) during the critical path of task execution.
+        let scm_state = SCMState::get(env_at_execution_start, scm, repo_root);
 
         let summary_state = self.execution_tracker.finish().await?;
 
@@ -179,7 +177,7 @@ impl RunTracker {
             framework_inference: run_opts.framework_inference(),
             tasks,
             global_hash_summary,
-            scm: self.scm,
+            scm: scm_state,
             user: self.user.unwrap_or_default(),
             monorepo: !single_package,
             repo_root,
@@ -196,7 +194,8 @@ impl RunTracker {
         global_hash_summary,
         engine,
         hash_tracker,
-        env_at_execution_start
+        env_at_execution_start,
+        scm,
     ))]
     #[allow(clippy::too_many_arguments)]
     pub async fn finish<'a, E, H, R>(
@@ -213,6 +212,7 @@ impl RunTracker {
         engine: &'a E,
         hash_tracker: &'a H,
         env_at_execution_start: &'a EnvironmentVariableMap,
+        scm: &SCM,
         is_watch: bool,
     ) -> Result<(), Error>
     where
@@ -242,6 +242,8 @@ impl RunTracker {
                 global_hash_summary,
                 global_env_mode,
                 task_factory,
+                env_at_execution_start,
+                scm,
             )
             .await?;
 

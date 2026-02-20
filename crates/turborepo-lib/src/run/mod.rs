@@ -698,11 +698,8 @@ impl Run {
         let run_tracker = RunTracker::new(
             self.start_at,
             self.opts.synthesize_command(),
-            &self.env_at_execution_start,
-            &self.repo_root,
             self.version,
             Vendor::get_user(),
-            &self.scm,
         );
 
         let mut visitor = Visitor::new(
@@ -766,6 +763,7 @@ impl Run {
                 global_hash_inputs,
                 &self.engine,
                 &self.env_at_execution_start,
+                &self.scm,
                 self.opts.scope_opts.pkg_inference_root.as_deref(),
             )
             .await?;

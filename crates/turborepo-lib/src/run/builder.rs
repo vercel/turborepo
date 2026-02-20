@@ -203,8 +203,12 @@ impl RunBuilder {
 
         let scm_task = {
             let repo_root = self.repo_root.clone();
+            let git_root = self.opts.git_root.clone();
             tokio::task::spawn_blocking(move || {
-                let scm = SCM::new(&repo_root);
+                let scm = match git_root {
+                    Some(root) => SCM::new_with_git_root(&repo_root, root),
+                    None => SCM::new(&repo_root),
+                };
                 let repo_index = scm.build_repo_index_eager();
                 (scm, repo_index)
             })

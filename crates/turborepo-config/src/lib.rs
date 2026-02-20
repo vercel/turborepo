@@ -63,6 +63,9 @@ pub struct CacheDirResult {
     /// This is used for messaging to inform users when worktree cache sharing
     /// is active.
     pub is_shared_worktree: bool,
+    /// The git repository root, if detected during worktree resolution.
+    /// Captured here so `SCM::new` can skip its own `git rev-parse` call.
+    pub git_root: Option<AbsoluteSystemPathBuf>,
 }
 
 /// Configuration errors for turborepo.
@@ -393,6 +396,7 @@ impl ConfigurationOptions {
             return CacheDirResult {
                 path: explicit_cache_dir.clone(),
                 is_shared_worktree: false,
+                git_root: None,
             };
         }
 
@@ -405,6 +409,7 @@ impl ConfigurationOptions {
                     worktree_info.main_worktree_root,
                     worktree_info.is_linked_worktree()
                 );
+                let git_root = Some(worktree_info.git_root.clone());
                 if worktree_info.is_linked_worktree() {
                     // We're in a linked worktree - use the main worktree's cache
                     // Use turbopath's join_component to ensure consistent path separators
@@ -415,6 +420,7 @@ impl ConfigurationOptions {
                     let result = CacheDirResult {
                         path: Utf8PathBuf::from(main_cache_path.as_str()),
                         is_shared_worktree: true,
+                        git_root,
                     };
                     debug!("Using shared worktree cache at: {}", result.path);
                     result
@@ -427,6 +433,7 @@ impl ConfigurationOptions {
                     CacheDirResult {
                         path: Utf8PathBuf::from(Self::DEFAULT_CACHE_DIR),
                         is_shared_worktree: false,
+                        git_root,
                     }
                 }
             }
@@ -440,6 +447,7 @@ impl ConfigurationOptions {
                 CacheDirResult {
                     path: Utf8PathBuf::from(Self::DEFAULT_CACHE_DIR),
                     is_shared_worktree: false,
+                    git_root: None,
                 }
             }
         }
