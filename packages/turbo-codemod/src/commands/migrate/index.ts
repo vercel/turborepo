@@ -114,9 +114,11 @@ export async function migrate(
   }
 
   // step 2
-  let toVersion = options.to;
+  let toVersion = options.to ?? null;
   try {
-    toVersion = await getLatestVersion(options);
+    if (!toVersion) {
+      toVersion = await getLatestVersion(options);
+    }
   } catch (err) {
     let message = "UNKNOWN_ERROR";
     if (err instanceof Error) {
