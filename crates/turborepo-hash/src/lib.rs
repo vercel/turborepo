@@ -692,7 +692,7 @@ mod test {
     // the old HashMap-based construction produced. Pinned hash values.
     #[test]
     fn file_hashes_sorted_vec_pinned_values() {
-        let pairs = vec![
+        let pairs = [
             ("c/z.ts", "hash_cz"),
             ("a/b.ts", "hash_ab"),
             ("a/a.ts", "hash_aa"),
