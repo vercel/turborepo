@@ -59,20 +59,28 @@ impl RepoGitIndex {
         let prefix_str = pkg_prefix.as_str();
         let prefix_is_empty = prefix_str.is_empty();
 
-        let mut hashes = GitHashes::new();
-        if prefix_is_empty {
+        let mut hashes = if prefix_is_empty {
+            // Pre-allocate with exact capacity when copying the entire tree
+            let mut h = GitHashes::with_capacity(self.ls_tree_hashes.len());
             for (path, hash) in &self.ls_tree_hashes {
-                hashes.insert(path.clone(), hash.clone());
+                h.insert(path.clone(), hash.clone());
             }
+            h
         } else {
+            // Use stack-allocated format strings to avoid heap allocations
+            // for the range bounds. '/' is one char after '.' in ASCII,
+            // and '0' is one char after '/' — so the range covers exactly
+            // paths starting with "{prefix}/".
             let range_start = RelativeUnixPathBuf::new(format!("{}/", prefix_str)).unwrap();
             let range_end = RelativeUnixPathBuf::new(format!("{}0", prefix_str)).unwrap();
+            let mut h = GitHashes::new();
             for (path, hash) in self.ls_tree_hashes.range(range_start..range_end) {
                 if let Ok(stripped) = path.strip_prefix(pkg_prefix) {
-                    hashes.insert(stripped, hash.clone());
+                    h.insert(stripped, hash.clone());
                 }
             }
-        }
+            h
+        };
 
         let mut to_hash = Vec::new();
         for entry in &self.status_entries {

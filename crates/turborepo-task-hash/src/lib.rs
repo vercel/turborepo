@@ -8,7 +8,7 @@ pub mod global_hash;
 
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
 pub use global_hash::*;
@@ -219,7 +219,7 @@ impl PackageInputsHashes {
 
 #[derive(Default, Debug, Clone)]
 pub struct TaskHashTracker {
-    state: Arc<Mutex<TaskHashTrackerState>>,
+    state: Arc<RwLock<TaskHashTrackerState>>,
 }
 
 #[derive(Default, Debug, Serialize)]
@@ -427,11 +427,15 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         let state = self
             .task_hash_tracker
             .state
-            .lock()
-            .expect("hash tracker mutex poisoned");
+            .read()
+            .expect("hash tracker rwlock poisoned");
 
-        let mut dependency_hash_set = HashSet::with_capacity(dependency_set.len());
-        for dependency_task in dependency_set {
+        // Collect owned strings directly to avoid borrow lifetime issues with
+        // the RwLock guard. We sort + dedup instead of using a HashSet to avoid
+        // the overhead of hashing the hash strings.
+        let mut dependency_hash_list: Vec<String> =
+            Vec::with_capacity(dependency_set.len());
+        for dependency_task in &dependency_set {
             let TaskNode::Task(dependency_task_id) = dependency_task else {
                 continue;
             };
@@ -440,23 +444,20 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 .package_task_hashes
                 .get(dependency_task_id)
                 .ok_or_else(|| Error::MissingDependencyTaskHash(dependency_task.to_string()))?;
-            dependency_hash_set.insert(dependency_hash.as_str());
+            dependency_hash_list.push(dependency_hash.clone());
         }
-
-        let mut dependency_hash_list: Vec<String> = dependency_hash_set
-            .into_iter()
-            .map(|s| s.to_owned())
-            .collect();
         drop(state);
+
         dependency_hash_list.sort_unstable();
+        dependency_hash_list.dedup();
 
         Ok(dependency_hash_list)
     }
 
     pub fn into_task_hash_tracker_state(self) -> TaskHashTrackerState {
-        let mutex = Arc::into_inner(self.task_hash_tracker.state)
+        let rwlock = Arc::into_inner(self.task_hash_tracker.state)
             .expect("multiple references to tracker state still exist");
-        mutex.into_inner().unwrap()
+        rwlock.into_inner().unwrap()
     }
 
     pub fn task_hash_tracker(&self) -> TaskHashTracker {
@@ -552,7 +553,7 @@ pub fn get_internal_deps_hash(
 impl TaskHashTracker {
     pub fn new(input_expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>) -> Self {
         Self {
-            state: Arc::new(Mutex::new(TaskHashTrackerState {
+            state: Arc::new(RwLock::new(TaskHashTrackerState {
                 package_task_inputs_expanded_hashes: input_expanded_hashes,
                 ..Default::default()
             })),
@@ -560,7 +561,7 @@ impl TaskHashTracker {
     }
 
     pub fn hash(&self, task_id: &TaskId) -> Option<String> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_hashes.get(task_id).cloned()
     }
 
@@ -571,7 +572,7 @@ impl TaskHashTracker {
         hash: String,
         framework_slug: Option<FrameworkSlug>,
     ) {
-        let mut state = self.state.lock().expect("hash tracker mutex poisoned");
+        let mut state = self.state.write().expect("hash tracker rwlock poisoned");
         state
             .package_task_env_vars
             .insert(task_id.clone(), env_vars);
@@ -584,17 +585,17 @@ impl TaskHashTracker {
     }
 
     pub fn env_vars(&self, task_id: &TaskId) -> Option<DetailedMap> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_env_vars.get(task_id).cloned()
     }
 
     pub fn framework(&self, task_id: &TaskId) -> Option<FrameworkSlug> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_framework.get(task_id).cloned()
     }
 
     pub fn expanded_outputs(&self, task_id: &TaskId) -> Option<Vec<AnchoredSystemPathBuf>> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_outputs.get(task_id).cloned()
     }
 
@@ -603,22 +604,22 @@ impl TaskHashTracker {
         task_id: TaskId<'static>,
         outputs: Vec<AnchoredSystemPathBuf>,
     ) {
-        let mut state = self.state.lock().expect("hash tracker mutex poisoned");
+        let mut state = self.state.write().expect("hash tracker rwlock poisoned");
         state.package_task_outputs.insert(task_id, outputs);
     }
 
     pub fn cache_status(&self, task_id: &TaskId) -> Option<CacheHitMetadata> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_cache.get(task_id).copied()
     }
 
     pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheHitMetadata) {
-        let mut state = self.state.lock().expect("hash tracker mutex poisoned");
+        let mut state = self.state.write().expect("hash tracker rwlock poisoned");
         state.package_task_cache.insert(task_id, cache_status);
     }
 
     pub fn get_expanded_inputs(&self, task_id: &TaskId) -> Option<Arc<FileHashes>> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state
             .package_task_inputs_expanded_hashes
             .get(task_id)

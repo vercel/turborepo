@@ -48,7 +48,8 @@ use crate::{
     run::task_access::TaskAccess,
     task_graph::Visitor,
     task_hash::{
-        get_external_deps_hash, get_global_hash_inputs, get_internal_deps_hash, PackageInputsHashes,
+        GlobalHashableInputs, collect_global_file_hash_inputs, get_external_deps_hash,
+        get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY, PackageInputsHashes,
     },
     turbo_json::{TurboJson, UnifiedTurboJsonLoader},
 };
@@ -584,15 +585,6 @@ impl Run {
     ) -> Result<i32, Error> {
         let workspaces = self.pkg_dep_graph.packages().collect();
         let repo_index = self.repo_index.as_ref().as_ref();
-        let package_inputs_hashes = PackageInputsHashes::calculate_file_hashes(
-            &self.scm,
-            self.engine.tasks(),
-            workspaces,
-            self.engine.task_definitions(),
-            &self.repo_root,
-            &self.run_telemetry,
-            repo_index,
-        )?;
 
         let root_workspace = self
             .pkg_dep_graph
@@ -601,46 +593,94 @@ impl Run {
 
         let is_monorepo = !self.opts.run_opts.single_package;
 
+        // Run three expensive I/O-bound operations concurrently using rayon::scope:
+        // 1. Package file hashing - walks every package's files and computes hashes
+        // 2. Internal deps hashing - walks root internal dependency packages
+        // 3. Global file hash inputs - globwalks global deps and hashes them
+        //
+        // These are completely independent and dominate the pre-execution phase.
+        // Running them in parallel can significantly reduce wall-clock time.
+        let internal_dep_paths = is_monorepo.then(|| {
+            self.pkg_dep_graph
+                .root_internal_package_dependencies_paths()
+        });
+
+        let env_mode = self.opts.run_opts.env_mode;
+
+        let mut file_hash_result = None;
+        let mut internal_deps_result = None;
+        let mut global_file_result = None;
+
+        rayon::scope(|s| {
+            s.spawn(|_| {
+                file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
+                    &self.scm,
+                    self.engine.tasks(),
+                    workspaces,
+                    self.engine.task_definitions(),
+                    &self.repo_root,
+                    &self.run_telemetry,
+                    repo_index,
+                ));
+            });
+            s.spawn(|_| {
+                internal_deps_result = Some(
+                    internal_dep_paths
+                        .map(|dep_paths| {
+                            get_internal_deps_hash(
+                                &self.scm,
+                                &self.repo_root,
+                                dep_paths,
+                                repo_index,
+                            )
+                        })
+                        .transpose(),
+                );
+            });
+            s.spawn(|_| {
+                global_file_result = Some(collect_global_file_hash_inputs(
+                    root_workspace,
+                    &self.repo_root,
+                    self.pkg_dep_graph.package_manager(),
+                    self.pkg_dep_graph.lockfile(),
+                    &self.root_turbo_json.global_deps,
+                    &self.env_at_execution_start,
+                    &self.root_turbo_json.global_env,
+                    &self.scm,
+                ));
+            });
+        });
+
+        let package_inputs_hashes =
+            file_hash_result.expect("file hash task did not complete")?;
+        let root_internal_dependencies_hash =
+            internal_deps_result.expect("internal deps task did not complete")?;
+        let global_file_inputs =
+            global_file_result.expect("global file hash task did not complete")?;
+
         let root_external_dependencies_hash =
             is_monorepo.then(|| get_external_deps_hash(&root_workspace.transitive_dependencies));
 
-        let root_internal_dependencies_hash = is_monorepo
-            .then(|| {
-                get_internal_deps_hash(
-                    &self.scm,
-                    &self.repo_root,
-                    self.pkg_dep_graph
-                        .root_internal_package_dependencies_paths(),
-                    repo_index,
-                )
-            })
-            .transpose()?;
+        let pass_through_env = match env_mode {
+            EnvMode::Loose => {
+                // Remove the passthroughs from hash consideration if we're explicitly loose.
+                None
+            }
+            EnvMode::Strict => self.root_turbo_json.global_pass_through_env.as_deref(),
+        };
 
-        let global_hash_inputs = {
-            let env_mode = self.opts.run_opts.env_mode;
-            let pass_through_env = match env_mode {
-                EnvMode::Loose => {
-                    // Remove the passthroughs from hash consideration if we're explicitly loose.
-                    None
-                }
-                EnvMode::Strict => self.root_turbo_json.global_pass_through_env.as_deref(),
-            };
-
-            get_global_hash_inputs(
-                root_external_dependencies_hash.as_deref(),
-                root_internal_dependencies_hash.as_deref(),
-                root_workspace,
-                &self.repo_root,
-                self.pkg_dep_graph.package_manager(),
-                self.pkg_dep_graph.lockfile(),
-                &self.root_turbo_json.global_deps,
-                &self.env_at_execution_start,
-                &self.root_turbo_json.global_env,
-                pass_through_env,
-                env_mode,
-                self.opts.run_opts.framework_inference,
-                &self.scm,
-            )?
+        let global_hash_inputs = GlobalHashableInputs {
+            global_cache_key: GLOBAL_CACHE_KEY,
+            global_file_hash_map: global_file_inputs.global_file_hash_map,
+            root_external_dependencies_hash: root_external_dependencies_hash.as_deref(),
+            root_internal_dependencies_hash: root_internal_dependencies_hash.as_deref(),
+            engines: global_file_inputs.engines,
+            env: &self.root_turbo_json.global_env,
+            resolved_env_vars: Some(global_file_inputs.global_hashable_env_vars),
+            pass_through_env,
+            env_mode,
+            framework_inference: self.opts.run_opts.framework_inference,
+            env_at_execution_start: &self.env_at_execution_start,
         };
         let global_hash = global_hash_inputs.calculate_global_hash();
 
