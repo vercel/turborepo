@@ -41,8 +41,35 @@ impl WorktreeInfo {
     /// - The worktree structure cannot be determined
     #[tracing::instrument]
     pub fn detect(path: &AbsoluteSystemPath) -> Result<Self, Error> {
-        let worktree_root = get_worktree_root(path)?;
-        let main_worktree_root = get_main_worktree_root(path)?;
+        // Single git subprocess for both queries instead of two separate calls.
+        let output = Command::new("git")
+            .args(["rev-parse", "--show-toplevel", "--git-common-dir"])
+            .current_dir(path)
+            .output()?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(Error::git_error(format!(
+                "git rev-parse --show-toplevel --git-common-dir failed: {stderr}"
+            )));
+        }
+
+        let stdout = String::from_utf8(output.stdout)?;
+        let mut lines = stdout.lines();
+
+        let toplevel = lines
+            .next()
+            .ok_or_else(|| Error::git_error("git rev-parse produced no output"))?
+            .trim();
+        let worktree_root = AbsoluteSystemPathBuf::try_from(toplevel)?;
+
+        let git_common_dir = lines
+            .next()
+            .ok_or_else(|| Error::git_error("git rev-parse --git-common-dir produced no output"))?
+            .trim()
+            .to_string();
+
+        let main_worktree_root = resolve_main_worktree_root(path, &git_common_dir)?;
 
         Ok(Self {
             worktree_root,
@@ -51,58 +78,24 @@ impl WorktreeInfo {
     }
 }
 
-/// Get the root of the current worktree using `git rev-parse --show-toplevel`.
-fn get_worktree_root(path: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBuf, Error> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .current_dir(path)
-        .output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(Error::git_error(format!(
-            "git rev-parse --show-toplevel failed: {stderr}"
-        )));
-    }
-
-    let toplevel = String::from_utf8(output.stdout)?.trim().to_string();
-    AbsoluteSystemPathBuf::try_from(toplevel.as_str()).map_err(|e| e.into())
-}
-
-/// Get the main worktree root by examining the git common directory.
+/// Derive the main worktree root from the git common directory path.
 ///
-/// The git common directory (`git rev-parse --git-common-dir`) points to:
+/// The git common directory (`--git-common-dir`) points to:
 /// - For the main worktree: `.git` (relative) or the absolute path to `.git`
 /// - For linked worktrees: The path to the main repo's `.git` directory
 ///
 /// The main worktree root is the parent of the git common directory.
-fn get_main_worktree_root(path: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBuf, Error> {
-    let output = Command::new("git")
-        .args(["rev-parse", "--git-common-dir"])
-        .current_dir(path)
-        .output()?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(Error::git_error(format!(
-            "git rev-parse --git-common-dir failed: {stderr}"
-        )));
-    }
-
-    let git_common_dir = String::from_utf8(output.stdout)?.trim().to_string();
-
-    // The git-common-dir output may be relative or absolute
-    let git_common_path = if std::path::Path::new(&git_common_dir).is_absolute() {
-        AbsoluteSystemPathBuf::try_from(git_common_dir.as_str())?
+fn resolve_main_worktree_root(
+    cwd: &AbsoluteSystemPath,
+    git_common_dir: &str,
+) -> Result<AbsoluteSystemPathBuf, Error> {
+    let git_common_path = if std::path::Path::new(git_common_dir).is_absolute() {
+        AbsoluteSystemPathBuf::try_from(git_common_dir)?
     } else {
-        // Relative path - resolve it relative to the current directory
-        // Use std::path to handle complex relative paths (e.g., "../../../.git")
-        let resolved = path.as_std_path().join(&git_common_dir);
+        let resolved = cwd.as_std_path().join(git_common_dir);
         AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?
     };
 
-    // The main worktree root is the parent of the .git directory
-    // Handle both bare repos and regular repos
     git_common_path
         .parent()
         .map(|p| p.to_owned())
