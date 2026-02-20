@@ -5,8 +5,6 @@
 //! This enables linked worktrees to share the local cache with the main
 //! worktree.
 
-use std::process::Command;
-
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::Error;
@@ -31,22 +29,47 @@ impl WorktreeInfo {
 
     /// Detect worktree configuration from a path within a Git repository.
     ///
-    /// Uses Git commands to determine:
-    /// - The current worktree root (`git rev-parse --show-toplevel`)
-    /// - The shared git directory (`git rev-parse --git-common-dir`)
-    /// - The main worktree root (derived from the git common directory)
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if:
-    /// - The path is not within a Git repository
-    /// - Git commands fail to execute
-    /// - The worktree structure cannot be determined
+    /// When the `git2` feature is enabled, uses libgit2 to resolve worktree
+    /// info in-process (avoiding subprocess overhead). Otherwise falls back
+    /// to spawning `git rev-parse`.
     #[tracing::instrument]
     pub fn detect(path: &AbsoluteSystemPath) -> Result<Self, Error> {
-        // Single git subprocess for all three queries. --show-cdup is included
-        // so that SCM::new can reuse the git root without spawning another
-        // subprocess later.
+        #[cfg(feature = "git2")]
+        {
+            Self::detect_git2(path)
+        }
+        #[cfg(not(feature = "git2"))]
+        {
+            Self::detect_subprocess(path)
+        }
+    }
+
+    #[cfg(feature = "git2")]
+    fn detect_git2(path: &AbsoluteSystemPath) -> Result<Self, Error> {
+        let repo = git2::Repository::discover(path.as_std_path())
+            .map_err(|e| Error::git_error(format!("git2 repository discovery failed: {e}")))?;
+
+        let worktree_root = repo
+            .workdir()
+            .ok_or_else(|| Error::git_error("bare repository has no workdir"))?;
+        let worktree_root = AbsoluteSystemPathBuf::try_from(worktree_root)?.to_realpath()?;
+
+        let git_common_dir = repo.commondir().to_string_lossy().to_string();
+
+        let main_worktree_root = resolve_main_worktree_root(path, &git_common_dir)?;
+        let git_root = main_worktree_root.clone();
+
+        Ok(Self {
+            worktree_root,
+            main_worktree_root,
+            git_root,
+        })
+    }
+
+    #[cfg(not(feature = "git2"))]
+    fn detect_subprocess(path: &AbsoluteSystemPath) -> Result<Self, Error> {
+        use std::process::Command;
+
         let output = Command::new("git")
             .args([
                 "rev-parse",
@@ -82,7 +105,6 @@ impl WorktreeInfo {
             .ok_or_else(|| Error::git_error("git rev-parse --show-cdup produced no output"))?
             .trim();
         let git_root = if show_cdup.is_empty() {
-            // Empty --show-cdup means we're already at the git root
             path.to_owned()
         } else {
             let resolved = path.as_std_path().join(show_cdup);

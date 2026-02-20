@@ -159,7 +159,7 @@ where
 
         Ok(SharedTaskSummary {
             hash,
-            inputs: expanded_inputs.into_iter().collect(),
+            inputs: expanded_inputs,
             hash_of_external_dependencies,
             cache: cache_summary,
             command,

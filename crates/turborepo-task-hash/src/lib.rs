@@ -666,8 +666,14 @@ impl HashTrackerInfo for TaskHashTracker {
     fn expanded_inputs(
         &self,
         task_id: &TaskId,
-    ) -> Option<std::collections::HashMap<RelativeUnixPathBuf, String>> {
-        TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| file_hashes.0.clone())
+    ) -> Option<std::collections::BTreeMap<RelativeUnixPathBuf, String>> {
+        TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| {
+            file_hashes
+                .0
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect()
+        })
     }
 }
 
@@ -765,6 +771,65 @@ mod test {
                 });
             }
         });
+    }
+
+    #[test]
+    fn test_expanded_inputs_returns_cloned_data() {
+        use turborepo_types::HashTrackerInfo;
+
+        let task_id: TaskId<'static> = TaskId::new("pkg", "build");
+        let file_hashes = FileHashes(HashMap::from([
+            (
+                RelativeUnixPathBuf::new("src/index.ts").unwrap(),
+                "abc123".to_string(),
+            ),
+            (
+                RelativeUnixPathBuf::new("package.json").unwrap(),
+                "def456".to_string(),
+            ),
+            (
+                RelativeUnixPathBuf::new("src/utils/helper.ts").unwrap(),
+                "ghi789".to_string(),
+            ),
+        ]));
+
+        let mut input_hashes = HashMap::new();
+        input_hashes.insert(task_id.clone(), Arc::new(file_hashes));
+        let tracker = TaskHashTracker::new(input_hashes);
+
+        // Via concrete method
+        let arc_result = tracker.get_expanded_inputs(&task_id);
+        assert!(arc_result.is_some());
+        let arc_hashes = arc_result.unwrap();
+        assert_eq!(arc_hashes.0.len(), 3);
+        assert_eq!(
+            arc_hashes
+                .0
+                .get(&RelativeUnixPathBuf::new("src/index.ts").unwrap()),
+            Some(&"abc123".to_string())
+        );
+
+        // Via trait method — returns BTreeMap (sorted, no intermediate HashMap clone)
+        let trait_result: Option<std::collections::BTreeMap<RelativeUnixPathBuf, String>> =
+            HashTrackerInfo::expanded_inputs(&tracker, &task_id);
+        assert!(trait_result.is_some());
+        let trait_hashes = trait_result.unwrap();
+        assert_eq!(trait_hashes.len(), 3);
+        assert_eq!(
+            trait_hashes.get(&RelativeUnixPathBuf::new("package.json").unwrap()),
+            Some(&"def456".to_string())
+        );
+        // BTreeMap should be sorted by key
+        let keys: Vec<_> = trait_hashes.keys().collect();
+        assert!(
+            keys.windows(2).all(|w| w[0] < w[1]),
+            "expanded_inputs should return sorted keys"
+        );
+
+        // Missing task returns None
+        let missing = TaskId::new("other", "test");
+        assert!(tracker.get_expanded_inputs(&missing).is_none());
+        assert!(HashTrackerInfo::expanded_inputs(&tracker, &missing).is_none());
     }
 
     // Validates that sort+dedup produces the same result as the previous
