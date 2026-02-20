@@ -29,6 +29,7 @@ pub struct PackageGraphBuilder<'a, T> {
     package_jsons: Option<HashMap<AbsoluteSystemPathBuf, PackageJson>>,
     lockfile: Option<Box<dyn Lockfile>>,
     package_discovery: T,
+    package_manager: Option<PackageManager>,
 }
 
 #[derive(Debug, Diagnostic, thiserror::Error)]
@@ -88,6 +89,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
             is_single_package: false,
             package_jsons: None,
             lockfile: None,
+            package_manager: None,
         }
     }
 
@@ -98,6 +100,7 @@ impl<'a> PackageGraphBuilder<'a, LocalPackageDiscoveryBuilder> {
     }
 
     pub fn with_package_manager(mut self, package_manager: PackageManager) -> Self {
+        self.package_manager = Some(package_manager.clone());
         self.package_discovery
             .with_package_manager(Some(package_manager));
         self
@@ -137,6 +140,7 @@ impl<'a, P> PackageGraphBuilder<'a, P> {
             package_jsons: self.package_jsons,
             lockfile: self.lockfile,
             package_discovery: discovery,
+            package_manager: self.package_manager,
         }
     }
 }
@@ -149,14 +153,49 @@ where
 {
     /// Build the `PackageGraph`.
     #[tracing::instrument(skip(self))]
-    pub async fn build(self) -> Result<PackageGraph, Error> {
+    pub async fn build(mut self) -> Result<PackageGraph, Error> {
         let is_single_package = self.is_single_package;
+
+        // If no pre-supplied lockfile, start reading it on a blocking thread
+        // concurrently with package discovery + JSON parsing.
+        let known_pm = self.package_manager.take().or_else(|| {
+            PackageManager::get_package_manager(self.repo_root, &self.root_package_json).ok()
+        });
+        let lockfile_future = if !is_single_package && self.lockfile.is_none() {
+            if let Some(pm) = known_pm {
+                let repo_root = self.repo_root.to_owned();
+                let root_package_json = self.root_package_json.clone();
+                Some(tokio::task::spawn_blocking(
+                    move || -> Option<Box<dyn Lockfile>> {
+                        pm.read_lockfile(&repo_root, &root_package_json).ok()
+                    },
+                ))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let state = BuildState::new(self)?;
 
         match is_single_package {
             true => Ok(state.build_single_package_graph().await?),
             false => {
                 let state = state.parse_package_jsons().await?;
+
+                // If we started a lockfile read, collect the result before
+                // entering resolve_lockfile so it becomes a cache hit.
+                let state = if let Some(handle) = lockfile_future {
+                    if let Ok(Some(lockfile)) = handle.await {
+                        state.with_lockfile(lockfile)
+                    } else {
+                        state
+                    }
+                } else {
+                    state
+                };
+
                 let state = state.resolve_lockfile().await?;
                 Ok(state.build_inner().await?)
             }
@@ -220,6 +259,7 @@ where
             package_jsons,
             lockfile,
             package_discovery,
+            package_manager: _,
         } = builder;
         let mut workspaces = HashMap::new();
         workspaces.insert(
@@ -388,6 +428,11 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
 }
 
 impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
+    fn with_lockfile(mut self, lockfile: Box<dyn Lockfile>) -> Self {
+        self.lockfile = Some(lockfile);
+        self
+    }
+
     #[tracing::instrument(skip(self))]
     fn connect_internal_dependencies(
         &mut self,
