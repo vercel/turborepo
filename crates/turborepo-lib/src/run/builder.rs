@@ -64,8 +64,11 @@ pub struct RunBuilder {
 
 impl RunBuilder {
     #[tracing::instrument(skip_all)]
-    pub fn new(base: CommandBase) -> Result<Self, Error> {
-        let api_client = base.api_client()?;
+    pub fn new(base: CommandBase, http_client: Option<&reqwest::Client>) -> Result<Self, Error> {
+        let api_client = match http_client {
+            Some(client) => base.api_client_with_http(client),
+            None => base.api_client()?,
+        };
 
         let opts = base.opts();
         let api_auth = base.api_auth()?;

@@ -142,6 +142,30 @@ impl CommandBase {
         .map_err(ConfigError::ApiClient)
     }
 
+    /// Creates an API client using a pre-built HTTP client to avoid
+    /// redundant TLS initialization.
+    pub fn api_client_with_http(&self, http_client: &reqwest::Client) -> APIClient {
+        let timeout = self.opts.api_client_opts.timeout;
+        let upload_timeout = self.opts.api_client_opts.upload_timeout;
+
+        APIClient::new_with_client(
+            http_client.clone(),
+            &self.opts.api_client_opts.api_url,
+            if timeout > 0 {
+                Some(Duration::from_secs(timeout))
+            } else {
+                None
+            },
+            if upload_timeout > 0 {
+                Some(Duration::from_secs(upload_timeout))
+            } else {
+                None
+            },
+            self.version,
+            self.opts.api_client_opts.preflight,
+        )
+    }
+
     /// Current working directory for the turbo command
     pub fn cwd(&self) -> &AbsoluteSystemPath {
         // Earlier in execution
