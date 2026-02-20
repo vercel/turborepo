@@ -63,6 +63,7 @@ pub struct RunBuilder {
 }
 
 impl RunBuilder {
+    #[tracing::instrument(skip_all)]
     pub fn new(base: CommandBase) -> Result<Self, Error> {
         let api_client = base.api_client()?;
 
@@ -405,6 +406,7 @@ impl RunBuilder {
         })
     }
 
+    #[tracing::instrument(skip_all)]
     fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,

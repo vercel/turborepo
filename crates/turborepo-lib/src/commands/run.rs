@@ -7,6 +7,7 @@ use turborepo_ui::sender::UISender;
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder};
 
+#[tracing::instrument(skip_all)]
 pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, run::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);

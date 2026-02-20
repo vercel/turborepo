@@ -1292,6 +1292,7 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
 ///
 /// returns: Result<Payload, Error>
 #[tokio::main]
+#[tracing::instrument(skip_all)]
 pub async fn run(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
@@ -1586,18 +1587,19 @@ pub async fn run(
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
             event.track_call();
 
+            // Enable chrome tracing before any real work so that config
+            // resolution and CommandBase construction are captured.
+            let profile_file = run_args.profile_file_and_include_args();
+            if let Some((ref file_path, include_args)) = profile_file {
+                let _ = logger.enable_chrome_tracing(file_path, include_args);
+            }
+
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             if execution_args.tasks.is_empty() {
                 print_potential_tasks(base, event).await?;
                 return Ok(1);
-            }
-
-            let profile_file = run_args.profile_file_and_include_args();
-            if let Some((ref file_path, include_args)) = profile_file {
-                // TODO: Do we want to handle the result / error?
-                let _ = logger.enable_chrome_tracing(file_path, include_args);
             }
 
             run_args.track(&event);

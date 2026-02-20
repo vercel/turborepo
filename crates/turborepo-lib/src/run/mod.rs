@@ -573,6 +573,7 @@ impl Run {
         info!("Proxy shutdown complete, proceeding with visitor cleanup");
     }
 
+    #[instrument(skip_all)]
     async fn execute_visitor(
         &self,
         ui_sender: Option<UISender>,
@@ -735,6 +736,7 @@ impl Run {
         Ok(exit_code)
     }
 
+    #[instrument(skip_all)]
     pub async fn run(&self, ui_sender: Option<UISender>, is_watch: bool) -> Result<i32, Error> {
         let proxy_shutdown = self.start_proxy_if_needed().await?;
         self.setup_cache_shutdown_handler();

@@ -45,6 +45,7 @@ pub struct CommandBase {
 }
 
 impl CommandBase {
+    #[tracing::instrument(skip_all)]
     pub fn new(
         args: Args,
         repo_root: AbsoluteSystemPathBuf,
@@ -76,6 +77,7 @@ impl CommandBase {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     pub fn load_config(
         repo_root: &AbsoluteSystemPath,
         args: &Args,
