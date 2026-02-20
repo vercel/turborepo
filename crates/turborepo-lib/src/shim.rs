@@ -66,9 +66,62 @@ impl ConfigProvider for TurboConfigProvider {
         root: &AbsoluteSystemPath,
         root_turbo_json: Option<&AbsoluteSystemPathBuf>,
     ) -> ShimConfigurationOptions {
-        let config = crate::config::resolve_configuration_for_shim(root, root_turbo_json)
-            .unwrap_or_default();
-        ShimConfigurationOptions::new(Some(config.no_update_notifier()))
+        let config = match crate::config::resolve_configuration_for_shim(root, root_turbo_json) {
+            Ok(config) => config,
+            Err(e) => {
+                tracing::debug!("Failed to resolve configuration for shim: {e}");
+                Default::default()
+            }
+        };
+
+        // If the full config pipeline didn't yield no_update_notifier, read it
+        // directly from turbo.json as a fallback. The full config pipeline can
+        // fail (e.g. malformed global config or auth files) before it reaches
+        // the turbo.json source, silently losing this setting.
+        let no_update_notifier = if config.no_update_notifier() {
+            true
+        } else {
+            read_no_update_notifier_from_turbo_json(root, root_turbo_json)
+        };
+
+        ShimConfigurationOptions::new(Some(no_update_notifier))
+    }
+}
+
+/// Reads `noUpdateNotifier` directly from turbo.json as a fallback.
+///
+/// This is used when the full configuration pipeline does not yield a
+/// `no_update_notifier` value, which can happen if a higher-priority
+/// configuration source (global config, auth file, environment variable)
+/// errors during resolution, aborting the pipeline before turbo.json is
+/// processed.
+fn read_no_update_notifier_from_turbo_json(
+    root: &AbsoluteSystemPath,
+    root_turbo_json: Option<&AbsoluteSystemPathBuf>,
+) -> bool {
+    let turbo_json_path = root_turbo_json
+        .cloned()
+        .or_else(|| {
+            turborepo_config::resolve_turbo_config_path(root)
+                .ok()
+        });
+
+    let Some(path) = turbo_json_path else {
+        return false;
+    };
+
+    let contents = match path.read_existing_to_string() {
+        Ok(Some(contents)) => contents,
+        _ => return false,
+    };
+
+    // Parse the turbo.json and check for noUpdateNotifier
+    match turborepo_turbo_json::RawRootTurboJson::parse(&contents, "turbo.json") {
+        Ok(raw) => raw
+            .no_update_notifier
+            .map(|v| *v.as_inner())
+            .unwrap_or(false),
+        Err(_) => false,
     }
 }
 

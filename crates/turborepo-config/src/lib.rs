@@ -958,4 +958,28 @@ mod test {
             "Linked worktree should be marked as shared"
         );
     }
+
+    #[test]
+    fn test_no_update_notifier_from_turbo_json_full_build() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{"noUpdateNotifier": true}"#)
+            .unwrap();
+
+        let builder = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions::default(),
+            global_config_path: None,
+            environment: Some(HashMap::default()),
+        };
+
+        let config = builder.build().unwrap();
+        assert!(
+            config.no_update_notifier(),
+            "noUpdateNotifier from turbo.json should be respected"
+        );
+    }
 }
