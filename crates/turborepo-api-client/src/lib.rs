@@ -108,10 +108,11 @@ pub trait TokenClient {
 #[derive(Clone)]
 pub struct APIClient {
     client: reqwest::Client,
-    cache_client: reqwest::Client,
     base_url: String,
     user_agent: String,
     use_preflight: bool,
+    timeout: Option<Duration>,
+    upload_timeout: Option<Duration>,
 }
 
 #[derive(Clone)]
@@ -142,8 +143,7 @@ impl Client for APIClient {
     async fn get_user(&self, token: &SecretString) -> Result<UserResponse> {
         let url = self.make_url("/v2/user")?;
         let request_builder = self
-            .client
-            .get(url)
+            .api_request(Method::GET, url)
             .header("User-Agent", self.user_agent.clone())
             .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
@@ -159,8 +159,7 @@ impl Client for APIClient {
     #[tracing::instrument(skip_all)]
     async fn get_teams(&self, token: &SecretString) -> Result<TeamsResponse> {
         let request_builder = self
-            .client
-            .get(self.make_url("/v2/teams?limit=100")?)
+            .api_request(Method::GET, self.make_url("/v2/teams?limit=100")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .bearer_auth(token.expose());
@@ -178,8 +177,7 @@ impl Client for APIClient {
     async fn get_team(&self, token: &SecretString, team_id: &str) -> Result<Option<Team>> {
         let endpoint = format!("/v2/teams/{team_id}");
         let response = self
-            .client
-            .get(self.make_url(&endpoint)?)
+            .api_request(Method::GET, self.make_url(&endpoint)?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .bearer_auth(token.expose())
@@ -206,8 +204,7 @@ impl Client for APIClient {
         token_name: &str,
     ) -> Result<VerifiedSsoUser> {
         let request_builder = self
-            .client
-            .get(self.make_url("/registration/verify")?)
+            .api_request(Method::GET, self.make_url("/registration/verify")?)
             .query(&[("token", token.expose()), ("tokenName", token_name)])
             .header("User-Agent", self.user_agent.clone());
 
@@ -306,8 +303,7 @@ impl CacheClient for APIClient {
         };
 
         let mut request_builder = self
-            .client
-            .request(method, request_url)
+            .api_request(method, request_url)
             .header("User-Agent", self.user_agent.clone());
 
         if allow_auth {
@@ -383,8 +379,7 @@ impl CacheClient for APIClient {
         let stream = Body::wrap_stream(artifact_body);
 
         let mut request_builder = self
-            .cache_client
-            .put(request_url)
+            .upload_request(Method::PUT, request_url)
             .header("Content-Type", "application/octet-stream")
             .header("x-artifact-duration", duration.to_string())
             .header("User-Agent", self.user_agent.clone())
@@ -424,8 +419,7 @@ impl CacheClient for APIClient {
         team_slug: Option<&str>,
     ) -> Result<CachingStatusResponse> {
         let request_builder = self
-            .client
-            .get(self.make_url("/v8/artifacts/status")?)
+            .api_request(Method::GET, self.make_url("/v8/artifacts/status")?)
             .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json")
             .bearer_auth(token.expose());
@@ -448,8 +442,7 @@ impl TokenClient for APIClient {
         let endpoint = "/v5/user/tokens/current";
         let url = self.make_url(endpoint)?;
         let request_builder = self
-            .client
-            .get(url)
+            .api_request(Method::GET, url)
             .header("User-Agent", self.user_agent.clone())
             .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
@@ -508,8 +501,7 @@ impl TokenClient for APIClient {
         let endpoint = "/v3/user/tokens/current";
         let url = self.make_url(endpoint)?;
         let request_builder = self
-            .client
-            .delete(url)
+            .api_request(Method::DELETE, url)
             .header("User-Agent", self.user_agent.clone())
             .bearer_auth(token.expose())
             .header("Content-Type", "application/json");
@@ -577,37 +569,48 @@ impl APIClient {
         version: &str,
         use_preflight: bool,
     ) -> Result<Self> {
-        // for the api client, the timeout applies for the entire duration
-        // of the request, including the connection phase
-        let client = reqwest::Client::builder();
-        let client = if let Some(dur) = timeout {
-            client.timeout(dur)
-        } else {
-            client
-        }
-        .build()
-        .map_err(Error::TlsError)?;
-
-        // for the cache client, the timeout applies only to the request
-        // connection time, while the upload timeout applies to the entire
-        // request
-        let cache_client = reqwest::Client::builder();
-        let cache_client = match (timeout, upload_timeout) {
-            (Some(dur), Some(upload_dur)) => cache_client.connect_timeout(dur).timeout(upload_dur),
-            (Some(dur), None) | (None, Some(dur)) => cache_client.timeout(dur),
-            (None, None) => cache_client,
-        }
-        .build()
-        .map_err(Error::TlsError)?;
-
+        let client = Self::build_http_client(timeout)?;
         let user_agent = build_user_agent(version);
         Ok(APIClient {
             client,
-            cache_client,
             base_url: base_url.as_ref().to_string(),
             user_agent,
             use_preflight,
+            timeout,
+            upload_timeout,
         })
+    }
+
+    /// Creates an APIClient using a pre-built `reqwest::Client`, avoiding
+    /// redundant TLS initialization when a client already exists.
+    pub fn new_with_client(
+        client: reqwest::Client,
+        base_url: impl AsRef<str>,
+        timeout: Option<Duration>,
+        upload_timeout: Option<Duration>,
+        version: &str,
+        use_preflight: bool,
+    ) -> Self {
+        let user_agent = build_user_agent(version);
+        APIClient {
+            client,
+            base_url: base_url.as_ref().to_string(),
+            user_agent,
+            use_preflight,
+            timeout,
+            upload_timeout,
+        }
+    }
+
+    /// Builds a shared HTTP client with optional connect timeout. This is
+    /// the single TLS initialization point — all consumers should share the
+    /// resulting client.
+    pub fn build_http_client(connect_timeout: Option<Duration>) -> Result<reqwest::Client> {
+        let mut builder = reqwest::Client::builder();
+        if let Some(dur) = connect_timeout {
+            builder = builder.connect_timeout(dur);
+        }
+        builder.build().map_err(Error::TlsError)
     }
 
     pub fn base_url(&self) -> &str {
@@ -616,6 +619,27 @@ impl APIClient {
 
     pub fn with_base_url(&mut self, base_url: String) {
         self.base_url = base_url;
+    }
+
+    /// Creates a request builder with the standard API timeout applied.
+    fn api_request(&self, method: Method, url: impl reqwest::IntoUrl) -> RequestBuilder {
+        let builder = self.client.request(method, url);
+        match self.timeout {
+            Some(dur) => builder.timeout(dur),
+            None => builder,
+        }
+    }
+
+    /// Creates a request builder with upload timeout semantics:
+    /// connect_timeout is set on the shared client, and the total
+    /// request timeout uses upload_timeout (falling back to api timeout).
+    fn upload_request(&self, method: Method, url: impl reqwest::IntoUrl) -> RequestBuilder {
+        let builder = self.client.request(method, url);
+        let effective_timeout = self.upload_timeout.or(self.timeout);
+        match effective_timeout {
+            Some(dur) => builder.timeout(dur),
+            None => builder,
+        }
     }
 
     #[tracing::instrument(skip_all)]
@@ -627,8 +651,7 @@ impl APIClient {
         request_headers: &str,
     ) -> Result<PreflightResponse> {
         let request_builder = self
-            .client
-            .request(Method::OPTIONS, request_url)
+            .api_request(Method::OPTIONS, request_url)
             .header("User-Agent", self.user_agent.clone())
             .header("Access-Control-Request-Method", request_method)
             .header("Access-Control-Request-Headers", request_headers)
@@ -709,8 +732,7 @@ impl APIClient {
         }
 
         let mut request_builder = self
-            .client
-            .request(method, url)
+            .api_request(method, url)
             .header("Content-Type", "application/json");
 
         if allow_auth {
@@ -781,6 +803,21 @@ impl AnonAPIClient {
             base_url: base_url.as_ref().to_string(),
             user_agent,
         })
+    }
+
+    /// Creates an AnonAPIClient using a pre-built `reqwest::Client`, avoiding
+    /// redundant TLS initialization.
+    pub fn new_with_client(
+        client: reqwest::Client,
+        base_url: impl AsRef<str>,
+        version: &str,
+    ) -> Self {
+        let user_agent = build_user_agent(version);
+        AnonAPIClient {
+            client,
+            base_url: base_url.as_ref().to_string(),
+            user_agent,
+        }
     }
 }
 
@@ -1070,6 +1107,254 @@ mod test {
         handle.abort();
         let _ = handle.await;
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_user() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let response = client.get_user(&token).await?;
+        assert_eq!(
+            response.user.id,
+            turborepo_vercel_api_mock::EXPECTED_USER_ID
+        );
+        assert_eq!(
+            response.user.username,
+            turborepo_vercel_api_mock::EXPECTED_USERNAME
+        );
+        assert_eq!(
+            response.user.email,
+            turborepo_vercel_api_mock::EXPECTED_EMAIL
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_teams() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let response = client.get_teams(&token).await?;
+        assert_eq!(response.teams.len(), 1);
+        assert_eq!(
+            response.teams[0].id,
+            turborepo_vercel_api_mock::EXPECTED_TEAM_ID
+        );
+        assert_eq!(
+            response.teams[0].slug,
+            turborepo_vercel_api_mock::EXPECTED_TEAM_SLUG
+        );
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_get_caching_status() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let response = client.get_caching_status(&token, None, None).await?;
+        assert!(matches!(
+            response.status,
+            turborepo_vercel_api::CachingStatus::Enabled
+        ));
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_put_and_fetch_artifact() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            Some(Duration::from_secs(10)),
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        let body = b"cached artifact data";
+        let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
+        client
+            .put_artifact(
+                "test-hash-123",
+                artifact_body,
+                body.len(),
+                456,
+                None,
+                &token,
+                None,
+                None,
+            )
+            .await?;
+
+        let response = client
+            .fetch_artifact("test-hash-123", &token, None, None)
+            .await?;
+        assert!(response.is_some());
+
+        let exists = client
+            .artifact_exists("test-hash-123", &token, None, None)
+            .await?;
+        assert!(exists.is_some());
+
+        let missing = client
+            .artifact_exists("nonexistent-hash", &token, None, None)
+            .await?;
+        assert!(missing.is_none());
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_api_client_with_upload_timeout() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        // Ensure separate timeout and upload_timeout both work
+        let client = APIClient::new(
+            &base_url,
+            Some(Duration::from_secs(5)),
+            Some(Duration::from_secs(30)),
+            "2.0.0",
+            false,
+        )?;
+        let token = SecretString::new("test-token".to_string());
+
+        // Regular API calls should work (uses client with regular timeout)
+        let user = client.get_user(&token).await?;
+        assert_eq!(user.user.id, turborepo_vercel_api_mock::EXPECTED_USER_ID);
+
+        // Cache upload should work (uses cache_client with upload timeout)
+        let body = b"upload timeout test";
+        let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
+        client
+            .put_artifact(
+                "upload-test",
+                artifact_body,
+                body.len(),
+                789,
+                None,
+                &token,
+                None,
+                None,
+            )
+            .await?;
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_api_client_no_timeout() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        // No timeout specified — should still work
+        let client = APIClient::new(&base_url, None, None, "2.0.0", false)?;
+        let token = SecretString::new("test-token".to_string());
+
+        let user = client.get_user(&token).await?;
+        assert_eq!(user.user.id, turborepo_vercel_api_mock::EXPECTED_USER_ID);
+
+        let body = b"no timeout test";
+        let artifact_body = tokio_stream::once(Ok(Bytes::copy_from_slice(body)));
+        client
+            .put_artifact(
+                "no-timeout",
+                artifact_body,
+                body.len(),
+                100,
+                None,
+                &token,
+                None,
+                None,
+            )
+            .await?;
+
+        handle.abort();
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_anon_client_no_timeout() -> Result<()> {
+        let port = port_scanner::request_open_port().unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let handle = tokio::spawn(start_test_server(port, Some(ready_tx)));
+        tokio::time::timeout(Duration::from_secs(5), ready_rx).await??;
+
+        let base_url = format!("http://localhost:{port}");
+        // timeout=0 means no timeout
+        let client = AnonAPIClient::new(&base_url, 0, "2.0.0")?;
+
+        let events = vec![TelemetryEvent::Generic(TelemetryGenericEvent {
+            id: "no-timeout-id".to_string(),
+            key: "key".to_string(),
+            value: "value".to_string(),
+            parent_id: None,
+        })];
+
+        let result = client
+            .record_telemetry(events, "test-id", "test-session")
+            .await;
+        assert!(result.is_ok());
+
+        handle.abort();
         Ok(())
     }
 }

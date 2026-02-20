@@ -7,7 +7,7 @@ pub use error::Error;
 use serde::Serialize;
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_api_client::AnonAPIClient;
+use turborepo_api_client::{APIClient, AnonAPIClient};
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
@@ -1140,25 +1140,22 @@ impl RunArgs {
 
 #[tracing::instrument(skip_all)]
 fn initialize_telemetry_client(
+    http_client: &reqwest::Client,
     color_config: ColorConfig,
     version: &str,
 ) -> Option<TelemetryHandle> {
-    let mut telemetry_handle: Option<TelemetryHandle> = None;
-    match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
-        Ok(anonymous_api_client) => {
-            let handle = init_telemetry(anonymous_api_client, color_config);
-            match handle {
-                Ok(h) => telemetry_handle = Some(h),
-                Err(error) => {
-                    debug!("failed to start telemetry: {:?}", error)
-                }
-            }
-        }
+    let anonymous_api_client = AnonAPIClient::new_with_client(
+        http_client.clone(),
+        "https://telemetry.vercel.com",
+        version,
+    );
+    match init_telemetry(anonymous_api_client, color_config) {
+        Ok(h) => Some(h),
         Err(error) => {
-            debug!("Failed to create AnonAPIClient: {:?}", error);
+            debug!("failed to start telemetry: {:?}", error);
+            None
         }
     }
-    telemetry_handle
 }
 
 #[derive(PartialEq)]
@@ -1305,8 +1302,13 @@ pub async fn run(
     let mut cli_args = Args::new(env::args_os().collect());
     let version = get_version();
 
+    // Build a single HTTP client to share across telemetry, API, and cache
+    // operations. This avoids redundant TLS initialization (~150ms savings).
+    let http_client = APIClient::build_http_client(None)
+        .expect("Failed to create HTTP client: TLS initialization failed");
+
     // track telemetry handle to close at the end of the run
-    let telemetry_handle = initialize_telemetry_client(color_config, version);
+    let telemetry_handle = initialize_telemetry_client(&http_client, color_config, version);
 
     if should_print_version() {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
@@ -1599,7 +1601,7 @@ pub async fn run(
             }
 
             run_args.track(&event);
-            let exit_code = run::run(base, event).await.inspect(|code| {
+            let exit_code = run::run(base, event, &http_client).await.inspect(|code| {
                 if *code != 0 {
                     error!("run failed: command  exited ({code})");
                 }
