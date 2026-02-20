@@ -4,7 +4,7 @@ use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_api_client::APIAuth;
 use turborepo_cache::{CacheOpts, RemoteCacheOpts};
 // Re-export RunCacheOpts from turborepo-run-cache
@@ -66,6 +66,9 @@ pub struct Opts {
     pub scope_opts: ScopeOpts,
     pub tui_opts: TuiOpts,
     pub future_flags: FutureFlags,
+    /// Pre-resolved git root from worktree detection, if available.
+    /// Allows `SCM::new` to skip its own `git rev-parse` subprocess.
+    pub git_root: Option<AbsoluteSystemPathBuf>,
 }
 
 impl Opts {
@@ -189,6 +192,7 @@ impl Opts {
             api_client_opts,
             tui_opts,
             future_flags,
+            git_root: cache_dir_result.git_root,
         })
     }
 }

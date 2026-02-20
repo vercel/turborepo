@@ -293,6 +293,29 @@ impl SCM {
             })
     }
 
+    /// Creates an SCM instance using a pre-resolved git root, avoiding the
+    /// `git rev-parse --show-cdup` subprocess call that `new` would perform.
+    /// Falls back to `new` if the git binary cannot be found.
+    #[tracing::instrument]
+    pub fn new_with_git_root(
+        path_in_repo: &AbsoluteSystemPath,
+        git_root: AbsoluteSystemPathBuf,
+    ) -> SCM {
+        match GitRepo::find_bin() {
+            Ok(bin) => SCM::Git(GitRepo {
+                root: git_root,
+                bin,
+            }),
+            Err(e) => {
+                debug!(
+                    "git binary not found: {}, continuing with manual hashing",
+                    e
+                );
+                SCM::Manual
+            }
+        }
+    }
+
     pub fn is_manual(&self) -> bool {
         matches!(self, SCM::Manual)
     }

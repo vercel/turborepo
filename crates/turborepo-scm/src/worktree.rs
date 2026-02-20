@@ -18,6 +18,9 @@ pub struct WorktreeInfo {
     pub worktree_root: AbsoluteSystemPathBuf,
     /// The root of the main worktree
     pub main_worktree_root: AbsoluteSystemPathBuf,
+    /// The root of the git repository (resolved from `--show-cdup`).
+    /// Captured here to avoid a redundant subprocess in `SCM::new`.
+    pub git_root: AbsoluteSystemPathBuf,
 }
 
 impl WorktreeInfo {
@@ -41,17 +44,22 @@ impl WorktreeInfo {
     /// - The worktree structure cannot be determined
     #[tracing::instrument]
     pub fn detect(path: &AbsoluteSystemPath) -> Result<Self, Error> {
-        // Single git subprocess for both queries instead of two separate calls.
+        // Single git subprocess for all three queries. --show-cdup is included
+        // so that SCM::new can reuse the git root without spawning another
+        // subprocess later.
         let output = Command::new("git")
-            .args(["rev-parse", "--show-toplevel", "--git-common-dir"])
+            .args([
+                "rev-parse",
+                "--show-toplevel",
+                "--git-common-dir",
+                "--show-cdup",
+            ])
             .current_dir(path)
             .output()?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(Error::git_error(format!(
-                "git rev-parse --show-toplevel --git-common-dir failed: {stderr}"
-            )));
+            return Err(Error::git_error(format!("git rev-parse failed: {stderr}")));
         }
 
         let stdout = String::from_utf8(output.stdout)?;
@@ -69,11 +77,24 @@ impl WorktreeInfo {
             .trim()
             .to_string();
 
+        let show_cdup = lines
+            .next()
+            .ok_or_else(|| Error::git_error("git rev-parse --show-cdup produced no output"))?
+            .trim();
+        let git_root = if show_cdup.is_empty() {
+            // Empty --show-cdup means we're already at the git root
+            path.to_owned()
+        } else {
+            let resolved = path.as_std_path().join(show_cdup);
+            AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?
+        };
+
         let main_worktree_root = resolve_main_worktree_root(path, &git_common_dir)?;
 
         Ok(Self {
             worktree_root,
             main_worktree_root,
+            git_root,
         })
     }
 }
@@ -158,6 +179,7 @@ mod tests {
 
         assert_eq!(info.worktree_root, repo_root);
         assert_eq!(info.main_worktree_root, repo_root);
+        assert_eq!(info.git_root, repo_root);
         assert!(!info.is_linked_worktree());
     }
 
@@ -208,6 +230,8 @@ mod tests {
 
         assert_eq!(info.worktree_root, repo_root);
         assert_eq!(info.main_worktree_root, repo_root);
+        // git_root should resolve to repo_root even when called from subdir
+        assert_eq!(info.git_root, repo_root);
         assert!(!info.is_linked_worktree());
     }
 
