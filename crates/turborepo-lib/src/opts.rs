@@ -737,6 +737,7 @@ mod test {
             runcache_opts,
             tui_opts,
             future_flags: Default::default(),
+            git_root: None,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);
