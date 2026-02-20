@@ -66,23 +66,21 @@ impl ConfigProvider for TurboConfigProvider {
         root: &AbsoluteSystemPath,
         root_turbo_json: Option<&AbsoluteSystemPathBuf>,
     ) -> ShimConfigurationOptions {
-        let config = match crate::config::resolve_configuration_for_shim(root, root_turbo_json) {
-            Ok(config) => config,
-            Err(e) => {
-                tracing::debug!("Failed to resolve configuration for shim: {e}");
-                Default::default()
-            }
-        };
-
-        // If the full config pipeline didn't yield no_update_notifier, read it
-        // directly from turbo.json as a fallback. The full config pipeline can
-        // fail (e.g. malformed global config or auth files) before it reaches
-        // the turbo.json source, silently losing this setting.
-        let no_update_notifier = if config.no_update_notifier() {
-            true
-        } else {
-            read_no_update_notifier_from_turbo_json(root, root_turbo_json)
-        };
+        // When the full config pipeline succeeds, its value is authoritative —
+        // higher-priority sources such as environment variables are already
+        // folded in.  Only fall back to reading turbo.json directly when the
+        // pipeline itself errors (e.g. malformed global config or auth files),
+        // which can cause it to abort before reaching the turbo.json source.
+        // Falling back unconditionally would allow turbo.json to override a
+        // higher-priority source like `TURBO_NO_UPDATE_NOTIFIER=0`.
+        let no_update_notifier =
+            match crate::config::resolve_configuration_for_shim(root, root_turbo_json) {
+                Ok(config) => config.no_update_notifier(),
+                Err(e) => {
+                    tracing::debug!("Failed to resolve configuration for shim: {e}");
+                    read_no_update_notifier_from_turbo_json(root, root_turbo_json)
+                }
+            };
 
         ShimConfigurationOptions::new(Some(no_update_notifier))
     }
