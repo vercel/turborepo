@@ -94,7 +94,7 @@ impl<'a> ExecContextFactory<'a> {
 
         let Some(cmd) = self
             .command_factory
-            .command(&task_id, execution_env.clone())?
+            .command(&task_id, &execution_env)?
         else {
             return Ok(None);
         };

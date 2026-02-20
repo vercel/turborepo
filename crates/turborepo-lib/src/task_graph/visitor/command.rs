@@ -39,7 +39,7 @@ mod test {
         fn command(
             &self,
             _task_id: &TaskId,
-            _environment: EnvironmentVariableMap,
+            _environment: &EnvironmentVariableMap,
         ) -> Result<Option<Command>, Error> {
             Ok(Some(Command::new("echo")))
         }
@@ -51,7 +51,7 @@ mod test {
         fn command(
             &self,
             _task_id: &TaskId,
-            _environment: EnvironmentVariableMap,
+            _environment: &EnvironmentVariableMap,
         ) -> Result<Option<Command>, Error> {
             Err(Error::InternalErrors("oops!".into()))
         }
@@ -63,7 +63,7 @@ mod test {
         fn command(
             &self,
             _task_id: &TaskId,
-            _environment: EnvironmentVariableMap,
+            _environment: &EnvironmentVariableMap,
         ) -> Result<Option<Command>, Error> {
             Ok(None)
         }
@@ -77,7 +77,7 @@ mod test {
             .add_provider(ErrProvider);
         let task_id = TaskId::new("foo", "build");
         let cmd = factory
-            .command(&task_id, EnvironmentVariableMap::default())
+            .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap()
             .unwrap();
         assert_eq!(cmd.program(), OsStr::new("echo"));
@@ -91,7 +91,7 @@ mod test {
             .add_provider(EchoCmdFactory);
         let task_id = TaskId::new("foo", "build");
         let cmd = factory
-            .command(&task_id, EnvironmentVariableMap::default())
+            .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap_err();
         assert_snapshot!(cmd.to_string(), @"Internal errors encountered: oops!");
     }
@@ -104,7 +104,7 @@ mod test {
             .add_provider(NoneProvider);
         let task_id = TaskId::new("foo", "build");
         let cmd = factory
-            .command(&task_id, EnvironmentVariableMap::default())
+            .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap()
             .unwrap();
         assert_eq!(cmd.program(), OsStr::new("echo"));
@@ -115,7 +115,7 @@ mod test {
         let factory = CommandFactory::new();
         let task_id = TaskId::new("foo", "build");
         let cmd = factory
-            .command(&task_id, EnvironmentVariableMap::default())
+            .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap();
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
     }
@@ -193,7 +193,7 @@ mod test {
         let cmd = factory
             .command(
                 &TaskId::new("web", "proxy"),
-                EnvironmentVariableMap::default(),
+                &EnvironmentVariableMap::default(),
             )
             .unwrap()
             .unwrap();
