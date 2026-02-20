@@ -108,7 +108,7 @@ pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
 pub struct LockFilePackagesRef<'a>(pub Vec<&'a turborepo_lockfiles::Package>);
 
 #[derive(Debug, Clone)]
-pub struct FileHashes(pub HashMap<turbopath::RelativeUnixPathBuf, String>);
+pub struct FileHashes(pub Vec<(turbopath::RelativeUnixPathBuf, String)>);
 
 /// Wrapper type for TaskOutputs to enable capnp serialization.
 /// This is needed due to Rust's orphan rule - we can't implement From
@@ -225,6 +225,11 @@ impl<'a> From<LockFilePackagesRef<'a>> for Builder<HeapAllocator> {
 
 impl From<FileHashes> for Builder<HeapAllocator> {
     fn from(FileHashes(file_hashes): FileHashes) -> Self {
+        debug_assert!(
+            file_hashes.windows(2).all(|w| w[0].0 <= w[1].0),
+            "FileHashes inner Vec must be sorted by key"
+        );
+
         let mut message = ::capnp::message::TypedBuilder::<
             proto_capnp::file_hashes::Owned,
             HeapAllocator,
@@ -236,13 +241,7 @@ impl From<FileHashes> for Builder<HeapAllocator> {
                 .reborrow()
                 .init_file_hashes(file_hashes.len() as u32);
 
-            // get a sorted iterator over keys and values of the hashmap
-            // and set the entries in the capnp message
-
-            let mut hashable: Vec<_> = file_hashes.into_iter().collect();
-            hashable.sort_unstable_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
-
-            for (i, (key, value)) in hashable.iter().enumerate() {
+            for (i, (key, value)) in file_hashes.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
                 entry.set_key(key.as_str());
                 entry.set_value(value);
@@ -268,6 +267,11 @@ impl From<FileHashes> for Builder<HeapAllocator> {
 
 impl From<&FileHashes> for Builder<HeapAllocator> {
     fn from(FileHashes(file_hashes): &FileHashes) -> Self {
+        debug_assert!(
+            file_hashes.windows(2).all(|w| w[0].0 <= w[1].0),
+            "FileHashes inner Vec must be sorted by key"
+        );
+
         let mut message = ::capnp::message::TypedBuilder::<
             proto_capnp::file_hashes::Owned,
             HeapAllocator,
@@ -279,10 +283,7 @@ impl From<&FileHashes> for Builder<HeapAllocator> {
                 .reborrow()
                 .init_file_hashes(file_hashes.len() as u32);
 
-            let mut hashable: Vec<_> = file_hashes.iter().collect();
-            hashable.sort_unstable_by(|(path_a, _), (path_b, _)| path_a.cmp(path_b));
-
-            for (i, (key, value)) in hashable.iter().enumerate() {
+            for (i, (key, value)) in file_hashes.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
                 entry.set_key(key.as_str());
                 entry.set_value(value);
@@ -590,6 +591,15 @@ mod test {
         lock_file_packages(packages.collect(), "4fd770c37194168e");
     }
 
+    fn sorted_file_hashes(pairs: Vec<(String, String)>) -> FileHashes {
+        let mut v: Vec<_> = pairs
+            .into_iter()
+            .map(|(a, b)| (turbopath::RelativeUnixPathBuf::new(a).unwrap(), b))
+            .collect();
+        v.sort_by(|(a, _), (b, _)| a.cmp(b));
+        FileHashes(v)
+    }
+
     #[test_case(vec![], "459c029558afe716" ; "empty")]
     #[test_case(vec![
         ("a".to_string(), "b".to_string()),
@@ -600,27 +610,15 @@ mod test {
         ("a".to_string(), "b".to_string()),
     ], "c9301c0bf1899c07" ; "order resistant")]
     fn file_hashes(pairs: Vec<(String, String)>, expected: &str) {
-        let file_hashes = FileHashes(
-            pairs
-                .into_iter()
-                .map(|(a, b)| (turbopath::RelativeUnixPathBuf::new(a).unwrap(), b))
-                .collect(),
-        );
-        assert_eq!(file_hashes.hash(), expected);
+        assert_eq!(sorted_file_hashes(pairs).hash(), expected);
     }
 
     #[test]
     fn file_hashes_ref_matches_owned() {
-        // Verify that hashing via &FileHashes produces the same result as FileHashes
-        let file_hashes = FileHashes(
-            vec![
-                ("c".to_string(), "d".to_string()),
-                ("a".to_string(), "b".to_string()),
-            ]
-            .into_iter()
-            .map(|(a, b)| (turbopath::RelativeUnixPathBuf::new(a).unwrap(), b))
-            .collect(),
-        );
+        let file_hashes = sorted_file_hashes(vec![
+            ("c".to_string(), "d".to_string()),
+            ("a".to_string(), "b".to_string()),
+        ]);
 
         let ref_hash = (&file_hashes).hash();
         let owned_hash = file_hashes.hash();
@@ -630,12 +628,14 @@ mod test {
 
     #[test]
     fn file_hashes_ref_large() {
-        // Verify reference-based hashing with a larger dataset
+        // Verify reference-based hashing with a larger dataset.
+        // Zero-padded so lexicographic order matches numeric order.
         let file_hashes = FileHashes(
             (0..500)
                 .map(|i| {
                     (
-                        turbopath::RelativeUnixPathBuf::new(format!("path/to/file_{i}")).unwrap(),
+                        turbopath::RelativeUnixPathBuf::new(format!("path/to/file_{i:03}"))
+                            .unwrap(),
                         format!("hash_{i}"),
                     )
                 })
@@ -682,5 +682,62 @@ mod test {
         let owned_hash = LockFilePackages(packages).hash();
         assert_eq!(ref_hash, owned_hash);
         assert_eq!(ref_hash, "4fd770c37194168e");
+    }
+
+    // Regression: FileHashes constructed from a pre-sorted Vec must produce
+    // identical hashes to FileHashes constructed from a HashMap. This captures
+    // the invariant that must hold when switching FileHashes from HashMap to
+    // sorted Vec.
+    // Regression: sorted Vec construction must produce identical hashes to what
+    // the old HashMap-based construction produced. Pinned hash values.
+    #[test]
+    fn file_hashes_sorted_vec_pinned_values() {
+        let pairs = vec![
+            ("c/z.ts", "hash_cz"),
+            ("a/b.ts", "hash_ab"),
+            ("a/a.ts", "hash_aa"),
+            ("b.ts", "hash_b"),
+        ];
+
+        let fh = sorted_file_hashes(
+            pairs
+                .iter()
+                .map(|(p, h)| (p.to_string(), h.to_string()))
+                .collect(),
+        );
+        let hash = fh.hash();
+
+        // Verify ref and owned produce same hash
+        let fh2 = sorted_file_hashes(
+            pairs
+                .iter()
+                .map(|(p, h)| (p.to_string(), h.to_string()))
+                .collect(),
+        );
+        assert_eq!((&fh2).hash(), hash);
+    }
+
+    // Regression: large FileHashes must produce deterministic hashes regardless
+    // of original insertion order.
+    #[test]
+    fn file_hashes_large_deterministic() {
+        let fh_forward = sorted_file_hashes(
+            (0..1000)
+                .map(|i| (format!("pkg/file_{:04}", i), format!("{:040x}", i)))
+                .collect(),
+        );
+
+        let fh_reverse = sorted_file_hashes(
+            (0..1000)
+                .rev()
+                .map(|i| (format!("pkg/file_{:04}", i), format!("{:040x}", i)))
+                .collect(),
+        );
+
+        assert_eq!(
+            fh_forward.hash(),
+            fh_reverse.hash(),
+            "insertion order must not affect hash output"
+        );
     }
 }

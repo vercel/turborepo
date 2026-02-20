@@ -34,7 +34,13 @@ impl RepoGitIndex {
             )
         });
         let ls_tree_hashes = ls_tree_hashes?;
-        let status_entries = status_entries?;
+        let mut status_entries = status_entries?;
+
+        // git2's repo.statuses() returns entries sorted by path, but we sort
+        // explicitly to guarantee the invariant for binary search in
+        // get_package_hashes. This is a no-op on already-sorted data (TimSort
+        // is O(n) on sorted input).
+        status_entries.sort_by(|a, b| a.path.cmp(&b.path));
 
         debug!(
             "built repo git index: ls_tree_count={}, status_count={}",
@@ -77,7 +83,7 @@ impl RepoGitIndex {
                 .ls_tree_hashes
                 .partition_point(|(k, _)| *k < range_start);
             let hi = self.ls_tree_hashes.partition_point(|(k, _)| *k < range_end);
-            let mut h = GitHashes::new();
+            let mut h = GitHashes::with_capacity(hi - lo);
             for (path, hash) in &self.ls_tree_hashes[lo..hi] {
                 if let Ok(stripped) = path.strip_prefix(pkg_prefix) {
                     h.insert(stripped, hash.clone());
@@ -86,20 +92,21 @@ impl RepoGitIndex {
             h
         };
 
+        // Status entries are sorted by path (guaranteed by sort in new()).
+        // Use binary search to find matching entries instead of a linear scan.
         let mut to_hash = Vec::new();
-        for entry in &self.status_entries {
-            let path_str = entry.path.as_str();
-            let belongs_to_package = if prefix_is_empty {
-                true
-            } else {
-                path_str.starts_with(prefix_str)
-                    && path_str.as_bytes().get(prefix_str.len()) == Some(&b'/')
-            };
-
-            if !belongs_to_package {
-                continue;
-            }
-
+        let status_entries = if prefix_is_empty {
+            &self.status_entries[..]
+        } else {
+            let range_start = RelativeUnixPathBuf::new(format!("{}/", prefix_str)).unwrap();
+            let range_end = RelativeUnixPathBuf::new(format!("{}0", prefix_str)).unwrap();
+            let lo = self
+                .status_entries
+                .partition_point(|e| e.path < range_start);
+            let hi = self.status_entries.partition_point(|e| e.path < range_end);
+            &self.status_entries[lo..hi]
+        };
+        for entry in status_entries {
             if entry.is_delete {
                 if let Ok(stripped) = entry.path.strip_prefix(pkg_prefix) {
                     hashes.remove(&stripped);
@@ -139,13 +146,14 @@ mod tests {
             .map(|(p, h)| (path(p), h.to_string()))
             .collect::<Vec<_>>();
         ls_tree_hashes.sort_by(|(a, _), (b, _)| a.cmp(b));
-        let status_entries = status
+        let mut status_entries: Vec<RepoStatusEntry> = status
             .into_iter()
             .map(|(p, is_delete)| RepoStatusEntry {
                 path: path(p),
                 is_delete,
             })
             .collect();
+        status_entries.sort_by(|a, b| a.path.cmp(&b.path));
         RepoGitIndex {
             ls_tree_hashes,
             status_entries,
@@ -337,5 +345,113 @@ mod tests {
         assert_eq!(hashes.get(&path("b/c.ts")).unwrap(), "222");
         assert_eq!(hashes.get(&path("d/e/f.ts")).unwrap(), "333");
         assert!(to_hash.is_empty());
+    }
+
+    // Regression: status binary search must match linear scan for many packages
+    // with interleaved dirty files. This captures the exact behavior that must
+    // be preserved when switching from O(n) linear scan to O(log n) binary
+    // search on pre-sorted status entries.
+    #[test]
+    fn test_status_binary_search_matches_linear_scan() {
+        let index = make_index(
+            vec![
+                ("apps/docs/README.md", "aaa"),
+                ("apps/web-admin/index.ts", "bbb"),
+                ("apps/web/index.ts", "ccc"),
+                ("apps/web/lib.ts", "ddd"),
+                ("packages/ui/button.tsx", "eee"),
+            ],
+            vec![
+                // Interleaved status entries across multiple packages
+                ("apps/docs/new-doc.md", false),
+                ("apps/web-admin/deleted.ts", true),
+                ("apps/web/dirty.ts", false),
+                ("apps/web/index.ts", true), // delete a committed file
+                ("packages/ui/new-component.tsx", false),
+                ("root-level-file.ts", false),
+            ],
+        );
+
+        // apps/web: should see lib.ts (committed), index.ts removed (deleted),
+        //           dirty.ts in to_hash
+        let (hashes, to_hash) = index.get_package_hashes(&path("apps/web")).unwrap();
+        assert_eq!(hashes.len(), 1, "only lib.ts should remain");
+        assert!(hashes.contains_key(&path("lib.ts")));
+        assert!(
+            !hashes.contains_key(&path("index.ts")),
+            "index.ts was deleted"
+        );
+        assert_eq!(to_hash, vec![path("apps/web/dirty.ts")]);
+
+        // apps/web-admin: index.ts is still committed, deleted.ts was not in
+        // ls-tree so the delete status is a no-op on hashes
+        let (hashes, to_hash) = index.get_package_hashes(&path("apps/web-admin")).unwrap();
+        assert_eq!(hashes.len(), 1);
+        assert!(hashes.contains_key(&path("index.ts")));
+        assert!(to_hash.is_empty());
+
+        // apps/docs: committed file present, new-doc in to_hash
+        let (hashes, to_hash) = index.get_package_hashes(&path("apps/docs")).unwrap();
+        assert_eq!(hashes.len(), 1);
+        assert!(hashes.contains_key(&path("README.md")));
+        assert_eq!(to_hash, vec![path("apps/docs/new-doc.md")]);
+
+        // packages/ui: committed file present, new-component in to_hash
+        let (hashes, to_hash) = index.get_package_hashes(&path("packages/ui")).unwrap();
+        assert_eq!(hashes.len(), 1);
+        assert!(hashes.contains_key(&path("button.tsx")));
+        assert_eq!(to_hash, vec![path("packages/ui/new-component.tsx")]);
+
+        // empty prefix (root): sees everything
+        let (hashes, to_hash) = index.get_package_hashes(&path("")).unwrap();
+        // 5 committed - 1 deleted (web/index.ts) = 4
+        // (web-admin/deleted.ts was never in ls-tree, so delete is a no-op)
+        assert_eq!(hashes.len(), 4);
+        assert_eq!(to_hash.len(), 4); // docs/new, web/dirty, ui/new, root-level
+    }
+
+    // Regression: status entries with paths that are substrings of package
+    // prefixes must not be matched by the binary search.
+    #[test]
+    fn test_status_substring_prefix_not_matched() {
+        let index = make_index(
+            vec![("pkg/file.ts", "aaa"), ("pkg-extra/file.ts", "bbb")],
+            vec![("pkg-extra/dirty.ts", false), ("pkg/dirty.ts", false)],
+        );
+
+        let (_, to_hash) = index.get_package_hashes(&path("pkg")).unwrap();
+        assert_eq!(
+            to_hash,
+            vec![path("pkg/dirty.ts")],
+            "pkg-extra/dirty.ts must not appear in pkg's to_hash"
+        );
+
+        let (_, to_hash) = index.get_package_hashes(&path("pkg-extra")).unwrap();
+        assert_eq!(
+            to_hash,
+            vec![path("pkg-extra/dirty.ts")],
+            "pkg/dirty.ts must not appear in pkg-extra's to_hash"
+        );
+    }
+
+    // Regression: when status entries are empty, binary search must not panic.
+    #[test]
+    fn test_status_binary_search_empty_status() {
+        let index = make_index(vec![("pkg/a.ts", "aaa"), ("pkg/b.ts", "bbb")], vec![]);
+        let (hashes, to_hash) = index.get_package_hashes(&path("pkg")).unwrap();
+        assert_eq!(hashes.len(), 2);
+        assert!(to_hash.is_empty());
+    }
+
+    // Regression: status entries all belonging to a single package.
+    #[test]
+    fn test_status_all_entries_same_package() {
+        let index = make_index(
+            vec![("pkg/a.ts", "aaa")],
+            vec![("pkg/b.ts", false), ("pkg/c.ts", false), ("pkg/a.ts", true)],
+        );
+        let (hashes, to_hash) = index.get_package_hashes(&path("pkg")).unwrap();
+        assert!(hashes.is_empty(), "a.ts was deleted");
+        assert_eq!(to_hash, vec![path("pkg/b.ts"), path("pkg/c.ts")]);
     }
 }

@@ -187,7 +187,11 @@ impl PackageInputsHashes {
                     None,
                     repo_index,
                 )
-                .map(|h| Arc::new(FileHashes(h)))
+                .map(|h| {
+                    let mut v: Vec<_> = h.into_iter().collect();
+                    v.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+                    Arc::new(FileHashes(v))
+                })
                 .map_err(Error::from)
             })
             .collect();
@@ -531,7 +535,7 @@ pub fn get_internal_deps_hash(
         }
     };
 
-    let file_hashes = package_dirs
+    let merged = package_dirs
         .into_par_iter()
         .map(|package_dir| {
             scm.get_package_file_hashes::<&str>(root, package_dir, &[], false, None, repo_index)
@@ -546,6 +550,8 @@ pub fn get_internal_deps_hash(
             },
         )?;
 
+    let mut file_hashes: Vec<_> = merged.into_iter().collect();
+    file_hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
     Ok(FileHashes(file_hashes).hash())
 }
 
@@ -663,17 +669,8 @@ impl HashTrackerInfo for TaskHashTracker {
         TaskHashTracker::framework(self, task_id).map(|f| f.to_string())
     }
 
-    fn expanded_inputs(
-        &self,
-        task_id: &TaskId,
-    ) -> Option<std::collections::BTreeMap<RelativeUnixPathBuf, String>> {
-        TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| {
-            file_hashes
-                .0
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect()
-        })
+    fn expanded_inputs(&self, task_id: &TaskId) -> Option<Vec<(RelativeUnixPathBuf, String)>> {
+        TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| file_hashes.0.clone())
     }
 }
 
@@ -778,20 +775,21 @@ mod test {
         use turborepo_types::HashTrackerInfo;
 
         let task_id: TaskId<'static> = TaskId::new("pkg", "build");
-        let file_hashes = FileHashes(HashMap::from([
-            (
-                RelativeUnixPathBuf::new("src/index.ts").unwrap(),
-                "abc123".to_string(),
-            ),
+        // Sorted by key (the invariant FileHashes requires)
+        let file_hashes = FileHashes(vec![
             (
                 RelativeUnixPathBuf::new("package.json").unwrap(),
                 "def456".to_string(),
             ),
             (
+                RelativeUnixPathBuf::new("src/index.ts").unwrap(),
+                "abc123".to_string(),
+            ),
+            (
                 RelativeUnixPathBuf::new("src/utils/helper.ts").unwrap(),
                 "ghi789".to_string(),
             ),
-        ]));
+        ]);
 
         let mut input_hashes = HashMap::new();
         input_hashes.insert(task_id.clone(), Arc::new(file_hashes));
@@ -802,27 +800,20 @@ mod test {
         assert!(arc_result.is_some());
         let arc_hashes = arc_result.unwrap();
         assert_eq!(arc_hashes.0.len(), 3);
-        assert_eq!(
-            arc_hashes
-                .0
-                .get(&RelativeUnixPathBuf::new("src/index.ts").unwrap()),
-            Some(&"abc123".to_string())
-        );
+        assert_eq!(arc_hashes.0[1].0.as_str(), "src/index.ts");
+        assert_eq!(arc_hashes.0[1].1, "abc123");
 
-        // Via trait method — returns BTreeMap (sorted, no intermediate HashMap clone)
-        let trait_result: Option<std::collections::BTreeMap<RelativeUnixPathBuf, String>> =
+        // Via trait method — returns sorted Vec
+        let trait_result: Option<Vec<(RelativeUnixPathBuf, String)>> =
             HashTrackerInfo::expanded_inputs(&tracker, &task_id);
         assert!(trait_result.is_some());
         let trait_hashes = trait_result.unwrap();
         assert_eq!(trait_hashes.len(), 3);
-        assert_eq!(
-            trait_hashes.get(&RelativeUnixPathBuf::new("package.json").unwrap()),
-            Some(&"def456".to_string())
-        );
-        // BTreeMap should be sorted by key
-        let keys: Vec<_> = trait_hashes.keys().collect();
+        assert_eq!(trait_hashes[0].0.as_str(), "package.json");
+        assert_eq!(trait_hashes[0].1, "def456");
+        // Must be sorted by key
         assert!(
-            keys.windows(2).all(|w| w[0] < w[1]),
+            trait_hashes.windows(2).all(|w| w[0].0 < w[1].0),
             "expanded_inputs should return sorted keys"
         );
 
@@ -830,6 +821,54 @@ mod test {
         let missing = TaskId::new("other", "test");
         assert!(tracker.get_expanded_inputs(&missing).is_none());
         assert!(HashTrackerInfo::expanded_inputs(&tracker, &missing).is_none());
+    }
+
+    // Regression: expanded_inputs data must contain all entries and be sorted
+    // by key. This captures the invariant that must hold when switching the
+    // return type from BTreeMap to sorted Vec.
+    #[test]
+    fn test_expanded_inputs_sorted_and_complete() {
+        use turborepo_types::HashTrackerInfo;
+
+        let task_id: TaskId<'static> = TaskId::new("pkg", "build");
+        // Sorted by key (FileHashes invariant)
+        let file_hashes = FileHashes(vec![
+            (
+                RelativeUnixPathBuf::new("a/first.ts").unwrap(),
+                "aaa".to_string(),
+            ),
+            (
+                RelativeUnixPathBuf::new("a/second.ts").unwrap(),
+                "bbb".to_string(),
+            ),
+            (
+                RelativeUnixPathBuf::new("m/middle.ts").unwrap(),
+                "mmm".to_string(),
+            ),
+            (
+                RelativeUnixPathBuf::new("z/last.ts").unwrap(),
+                "zzz".to_string(),
+            ),
+        ]);
+
+        let mut input_hashes = HashMap::new();
+        input_hashes.insert(task_id.clone(), Arc::new(file_hashes));
+        let tracker = TaskHashTracker::new(input_hashes);
+
+        let result = HashTrackerInfo::expanded_inputs(&tracker, &task_id).unwrap();
+        assert_eq!(result.len(), 4, "all entries must be present");
+
+        // Entries must be sorted by key
+        assert!(
+            result.windows(2).all(|w| w[0].0 < w[1].0),
+            "expanded_inputs must return keys in sorted order"
+        );
+
+        // Verify specific values
+        assert_eq!(result[0].0.as_str(), "a/first.ts");
+        assert_eq!(result[0].1, "aaa");
+        assert_eq!(result[3].0.as_str(), "z/last.ts");
+        assert_eq!(result[3].1, "zzz");
     }
 
     // Validates that sort+dedup produces the same result as the previous
