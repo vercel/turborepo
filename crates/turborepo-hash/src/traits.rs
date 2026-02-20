@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 use capnp::message::{Allocator, Builder};
 
 pub trait Sealed<A> {}
@@ -20,17 +22,17 @@ where
 {
     fn hash(self) -> String {
         let message = self.into();
+        let segments = message.get_segments_for_output();
 
-        debug_assert_eq!(
-            message.get_segments_for_output().len(),
-            1,
-            "message is not canonical"
-        );
+        debug_assert_eq!(segments.len(), 1, "message is not canonical");
 
-        let buf = message.get_segments_for_output()[0];
+        let out = xxhash_rust::xxh64::xxh64(segments[0], 0);
 
-        let out = xxhash_rust::xxh64::xxh64(buf, 0);
-
-        hex::encode(out.to_be_bytes())
+        // Format u64 directly as 16-char zero-padded lowercase hex.
+        // Avoids the intermediate to_be_bytes() + hex::encode() roundtrip
+        // which creates a temporary byte array and an extra Vec allocation.
+        let mut s = String::with_capacity(16);
+        write!(s, "{out:016x}").unwrap();
+        s
     }
 }

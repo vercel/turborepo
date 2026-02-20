@@ -59,20 +59,28 @@ impl RepoGitIndex {
         let prefix_str = pkg_prefix.as_str();
         let prefix_is_empty = prefix_str.is_empty();
 
-        let mut hashes = GitHashes::new();
-        if prefix_is_empty {
+        let mut hashes = if prefix_is_empty {
+            // Full-repo case: pre-allocate to the exact ls-tree count.
+            let mut h = GitHashes::with_capacity(self.ls_tree_hashes.len());
             for (path, hash) in &self.ls_tree_hashes {
-                hashes.insert(path.clone(), hash.clone());
+                h.insert(path.clone(), hash.clone());
             }
+            h
         } else {
             let range_start = RelativeUnixPathBuf::new(format!("{}/", prefix_str)).unwrap();
             let range_end = RelativeUnixPathBuf::new(format!("{}0", prefix_str)).unwrap();
-            for (path, hash) in self.ls_tree_hashes.range(range_start..range_end) {
+            let range = self.ls_tree_hashes.range(range_start..range_end);
+            // Use size_hint to pre-allocate; BTreeMap ranges provide a lower
+            // bound based on the tree structure.
+            let (lower, _) = range.size_hint();
+            let mut h = GitHashes::with_capacity(lower);
+            for (path, hash) in range {
                 if let Ok(stripped) = path.strip_prefix(pkg_prefix) {
-                    hashes.insert(stripped, hash.clone());
+                    h.insert(stripped, hash.clone());
                 }
             }
-        }
+            h
+        };
 
         let mut to_hash = Vec::new();
         for entry in &self.status_entries {

@@ -153,10 +153,13 @@ impl From<HashableTaskOutputs> for Builder<HeapAllocator> {
 
 impl From<LockFilePackages> for Builder<HeapAllocator> {
     fn from(LockFilePackages(packages): LockFilePackages) -> Self {
+        // Pre-size: each package has key + version strings (~12 words each).
+        let estimated_words = packages.len() * 12 + 8;
+        let allocator = HeapAllocator::default().first_segment_words(estimated_words as u32);
         let mut message = ::capnp::message::TypedBuilder::<
             proto_capnp::lock_file_packages::Owned,
             HeapAllocator,
-        >::new_default();
+        >::new(Builder::new(allocator));
         let mut builder = message.init_root();
 
         {
@@ -189,10 +192,12 @@ impl From<LockFilePackages> for Builder<HeapAllocator> {
 
 impl<'a> From<LockFilePackagesRef<'a>> for Builder<HeapAllocator> {
     fn from(LockFilePackagesRef(packages): LockFilePackagesRef<'a>) -> Self {
+        let estimated_words = packages.len() * 12 + 8;
+        let allocator = HeapAllocator::default().first_segment_words(estimated_words as u32);
         let mut message = ::capnp::message::TypedBuilder::<
             proto_capnp::lock_file_packages::Owned,
             HeapAllocator,
-        >::new_default();
+        >::new(Builder::new(allocator));
         let mut builder = message.init_root();
 
         {
@@ -225,10 +230,16 @@ impl<'a> From<LockFilePackagesRef<'a>> for Builder<HeapAllocator> {
 
 impl From<FileHashes> for Builder<HeapAllocator> {
     fn from(FileHashes(file_hashes): FileHashes) -> Self {
+        // Pre-size the first segment to avoid repeated growth allocations.
+        // Each file-hash entry needs roughly 16 capnp words (struct pointer +
+        // two text fields with their data), plus fixed overhead for the message
+        // root and list header.
+        let estimated_words = file_hashes.len() * 16 + 8;
+        let allocator = HeapAllocator::default().first_segment_words(estimated_words as u32);
         let mut message = ::capnp::message::TypedBuilder::<
             proto_capnp::file_hashes::Owned,
             HeapAllocator,
-        >::new_default();
+        >::new(Builder::new(allocator));
         let mut builder = message.init_root();
 
         {
@@ -268,10 +279,12 @@ impl From<FileHashes> for Builder<HeapAllocator> {
 
 impl From<&FileHashes> for Builder<HeapAllocator> {
     fn from(FileHashes(file_hashes): &FileHashes) -> Self {
+        let estimated_words = file_hashes.len() * 16 + 8;
+        let allocator = HeapAllocator::default().first_segment_words(estimated_words as u32);
         let mut message = ::capnp::message::TypedBuilder::<
             proto_capnp::file_hashes::Owned,
             HeapAllocator,
-        >::new_default();
+        >::new(Builder::new(allocator));
         let mut builder = message.init_root();
 
         {
@@ -313,8 +326,8 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
         let mut builder = message.init_root();
 
         builder.set_global_hash(task_hashable.global_hash);
-        if let Some(package_dir) = task_hashable.package_dir {
-            builder.set_package_dir(package_dir.to_string());
+        if let Some(ref package_dir) = task_hashable.package_dir {
+            builder.set_package_dir(package_dir.as_str());
         }
 
         builder.set_hash_of_files(task_hashable.hash_of_files);

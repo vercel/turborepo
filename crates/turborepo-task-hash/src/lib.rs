@@ -430,7 +430,11 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             .lock()
             .expect("hash tracker mutex poisoned");
 
-        let mut dependency_hash_set = HashSet::with_capacity(dependency_set.len());
+        // Collect borrowed hash strings, then sort+dedup instead of using an
+        // intermediate HashSet.  This avoids the HashSet's per-element hashing
+        // overhead and its allocation, which matters when the dependency fan-out
+        // is large.
+        let mut dependency_hashes: Vec<&str> = Vec::with_capacity(dependency_set.len());
         for dependency_task in dependency_set {
             let TaskNode::Task(dependency_task_id) = dependency_task else {
                 continue;
@@ -440,17 +444,18 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 .package_task_hashes
                 .get(dependency_task_id)
                 .ok_or_else(|| Error::MissingDependencyTaskHash(dependency_task.to_string()))?;
-            dependency_hash_set.insert(dependency_hash.as_str());
+            dependency_hashes.push(dependency_hash.as_str());
         }
 
-        let mut dependency_hash_list: Vec<String> = dependency_hash_set
-            .into_iter()
-            .map(|s| s.to_owned())
-            .collect();
-        drop(state);
-        dependency_hash_list.sort_unstable();
+        dependency_hashes.sort_unstable();
+        dependency_hashes.dedup();
 
-        Ok(dependency_hash_list)
+        // Convert to owned Strings only after deduplication to minimize
+        // allocations.
+        let result: Vec<String> = dependency_hashes.into_iter().map(str::to_owned).collect();
+        drop(state);
+
+        Ok(result)
     }
 
     pub fn into_task_hash_tracker_state(self) -> TaskHashTrackerState {
@@ -497,7 +502,7 @@ pub fn get_external_deps_hash(
     transitive_dependencies: &Option<HashSet<turborepo_lockfiles::Package>>,
 ) -> String {
     let Some(transitive_dependencies) = transitive_dependencies else {
-        return "".into();
+        return String::new();
     };
 
     // Collect references instead of cloning each Package (which has two Strings).
@@ -519,7 +524,7 @@ pub fn get_internal_deps_hash(
     pre_built_index: Option<&RepoGitIndex>,
 ) -> Result<String, Error> {
     if package_dirs.is_empty() {
-        return Ok("".into());
+        return Ok(String::new());
     }
 
     let owned_index;
