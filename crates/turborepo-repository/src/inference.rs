@@ -73,6 +73,7 @@ impl RepoState {
     /// * `reference_dir`: Turbo's invocation directory
     ///
     /// returns: Result<RepoState, Error>
+    #[tracing::instrument(skip_all)]
     pub fn infer(reference_dir: &AbsoluteSystemPath) -> Result<Self, Error> {
         reference_dir
             .ancestors()

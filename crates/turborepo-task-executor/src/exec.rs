@@ -603,6 +603,7 @@ pub struct DryRunExecutor<H> {
 }
 
 impl<H: HashTrackerProvider> DryRunExecutor<H> {
+    #[tracing::instrument(skip_all, fields(task = %self.task_id))]
     pub async fn execute_dry_run(&self, tracker: TaskTracker<()>) -> Result<(), InternalError> {
         if let Ok(Some(status)) = self.task_cache.exists().await {
             self.hash_tracker

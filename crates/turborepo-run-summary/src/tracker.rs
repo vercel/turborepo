@@ -343,6 +343,7 @@ impl<'a> RunSummary<'a> {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     fn close_dry_run(
         &mut self,
         pkg_dep_graph: &PackageGraph,
@@ -358,6 +359,7 @@ impl<'a> RunSummary<'a> {
         self.format_and_print_text(pkg_dep_graph, ui)
     }
 
+    #[tracing::instrument(skip_all)]
     fn format_and_print_text(
         &mut self,
         pkg_dep_graph: &PackageGraph,
