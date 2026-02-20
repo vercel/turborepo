@@ -81,6 +81,11 @@ pub struct ShimArgs {
     pub color: bool,
     pub no_color: bool,
     pub root_turbo_json: Option<AbsoluteSystemPathBuf>,
+    /// Raw value from `--profile` (Some("") means flag present with no value).
+    pub profile: Option<String>,
+    /// Raw value from `--anon-profile` (Some("") means flag present with no
+    /// value).
+    pub anon_profile: Option<String>,
 }
 
 impl ShimArgs {
@@ -106,6 +111,10 @@ impl ShimArgs {
         let mut no_color = false;
         let mut root_turbo_json_flag_idx = None;
         let mut root_turbo_json = None;
+        let mut profile: Option<String> = None;
+        let mut anon_profile: Option<String> = None;
+        let mut found_profile_flag = false;
+        let mut found_anon_profile_flag = false;
 
         let args = args.skip(1);
         for (idx, arg) in args.enumerate() {
@@ -170,6 +179,40 @@ impl ShimArgs {
                 // `--root-turbo-json=./path/to/turbo.json`, that entire chunk
                 // is a single arg, so we need to split it up.
                 root_turbo_json = Some(AbsoluteSystemPathBuf::from_unknown(&invocation_dir, path));
+            } else if found_profile_flag {
+                // Previous arg was `--profile`, this arg is the optional value.
+                // If it looks like a flag, it's not our value — treat `--profile`
+                // as having no value and re-process this arg next iteration.
+                found_profile_flag = false;
+                if arg.starts_with('-') {
+                    profile = Some(String::new());
+                    // Re-process this arg: push it to remaining for clap
+                    remaining_turbo_args.push(arg);
+                } else {
+                    profile = Some(arg.clone());
+                    remaining_turbo_args.push(arg);
+                }
+            } else if found_anon_profile_flag {
+                found_anon_profile_flag = false;
+                if arg.starts_with('-') {
+                    anon_profile = Some(String::new());
+                    remaining_turbo_args.push(arg);
+                } else {
+                    anon_profile = Some(arg.clone());
+                    remaining_turbo_args.push(arg);
+                }
+            } else if arg == "--profile" {
+                remaining_turbo_args.push(arg);
+                found_profile_flag = true;
+            } else if let Some(value) = arg.strip_prefix("--profile=") {
+                profile = Some(value.to_string());
+                remaining_turbo_args.push(arg);
+            } else if arg == "--anon-profile" {
+                remaining_turbo_args.push(arg);
+                found_anon_profile_flag = true;
+            } else if let Some(value) = arg.strip_prefix("--anon-profile=") {
+                anon_profile = Some(value.to_string());
+                remaining_turbo_args.push(arg);
             } else if arg == "--debug" {
                 return Err(Error::UnsupportedFlag {
                     flag: "--debug".to_string(),
@@ -187,6 +230,14 @@ impl ShimArgs {
             } else {
                 remaining_turbo_args.push(arg);
             }
+        }
+
+        // If --profile or --anon-profile was the last arg, treat as no value
+        if found_profile_flag {
+            profile = Some(String::new());
+        }
+        if found_anon_profile_flag {
+            anon_profile = Some(String::new());
         }
 
         if let Some(idx) = cwd_flag_idx {
@@ -241,7 +292,32 @@ impl ShimArgs {
             color,
             no_color,
             root_turbo_json,
+            profile,
+            anon_profile,
         })
+    }
+
+    /// Returns the resolved profile file path and whether to include args
+    /// (true for `--profile`, false for `--anon-profile`).
+    pub fn profile_file_and_include_args(&self) -> Option<(String, bool)> {
+        let resolve = |file: &str| -> String {
+            if file.is_empty() {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("system clock is before unix epoch")
+                    .as_millis();
+                format!("profile.{now}")
+            } else {
+                file.to_string()
+            }
+        };
+
+        match (self.profile.as_deref(), self.anon_profile.as_deref()) {
+            (Some(file), None) => Some((resolve(file), true)),
+            (None, Some(file)) => Some((resolve(file), false)),
+            // Both set should be caught by clap later; just ignore here.
+            _ => None,
+        }
     }
 
     /// Takes a list of indices into a Vec of arguments, i.e. ["--graph", "foo",
@@ -401,6 +477,8 @@ mod test {
                 no_color,
                 root_turbo_json: relative_root_turbo_json
                     .map(|path| AbsoluteSystemPathBuf::from_unknown(invocation_dir, path)),
+                profile: None,
+                anon_profile: None,
             }
         }
     }

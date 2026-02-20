@@ -300,6 +300,7 @@ fn format_error_message(mut err_str: String) -> String {
 }
 
 impl Args {
+    #[tracing::instrument(skip_all)]
     pub fn new(os_args: Vec<OsString>) -> Self {
         let clap_args = match Args::parse(os_args) {
             Ok(args) => args,
@@ -1137,6 +1138,7 @@ impl RunArgs {
     }
 }
 
+#[tracing::instrument(skip_all)]
 fn initialize_telemetry_client(
     color_config: ColorConfig,
     version: &str,
@@ -1262,6 +1264,7 @@ fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
     })
 }
 
+#[tracing::instrument(skip_all)]
 fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
     if let Some(command) = mem::take(&mut cli_args.command) {
         Ok(command)
@@ -1587,13 +1590,6 @@ pub async fn run(
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
             event.track_call();
 
-            // Enable chrome tracing before any real work so that config
-            // resolution and CommandBase construction are captured.
-            let profile_file = run_args.profile_file_and_include_args();
-            if let Some((ref file_path, include_args)) = profile_file {
-                let _ = logger.enable_chrome_tracing(file_path, include_args);
-            }
-
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
@@ -1609,14 +1605,14 @@ pub async fn run(
                 }
             })?;
 
-            if let Some((ref file_path, _)) = profile_file {
-                // Flush the chrome trace so the file is fully written
-                // before we read it for markdown generation.
+            // Chrome tracing is enabled early in shim::run(). Here we just
+            // flush and generate the markdown summary.
+            if let Some(file_path) = logger.chrome_tracing_file() {
                 let _ = logger.flush_chrome_tracing();
 
                 let md_path = format!("{file_path}.md");
                 if let Err(e) = turborepo_profile_md::trace_to_markdown(
-                    std::path::Path::new(file_path),
+                    std::path::Path::new(&file_path),
                     std::path::Path::new(&md_path),
                 ) {
                     warn!("Failed to generate profile markdown: {e}");

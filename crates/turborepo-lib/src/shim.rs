@@ -144,6 +144,12 @@ pub fn run() -> Result<i32, Error> {
     let color_config = args.color_config();
     let subscriber = TurboSubscriber::new_with_verbosity(args.verbosity, &color_config);
 
+    // Enable chrome tracing as early as possible so that repo inference,
+    // config resolution, and CLI parsing are all captured in profiles.
+    if let Some((ref file_path, include_args)) = args.profile_file_and_include_args() {
+        let _ = subscriber.enable_chrome_tracing(file_path, include_args);
+    }
+
     // Create the runtime with all implementations
     let runtime = ShimRuntime::new(
         TurboCliRunner::new(&subscriber),
