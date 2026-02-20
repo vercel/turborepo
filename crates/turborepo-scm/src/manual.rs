@@ -464,4 +464,104 @@ mod tests {
 
         assert_eq!(hashes, expected);
     }
+
+    #[test]
+    fn test_include_default_files_deduplicates_with_explicit_includes() {
+        // When include_default_files=true AND explicit includes are provided,
+        // the first walk collects files matching the includes, and the second
+        // walk collects gitignore-respecting defaults. Files appearing in both
+        // walks should not be hashed twice — verify that the result is correct
+        // and contains each file exactly once.
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        // Create files: one matched by the explicit include, one only in defaults
+        let shared_file = pkg_dir.join_component("shared.ts");
+        shared_file.create_with_contents("shared content").unwrap();
+
+        let default_only = pkg_dir.join_component("default-only.ts");
+        default_only
+            .create_with_contents("default only content")
+            .unwrap();
+
+        let package_json = pkg_dir.join_component("package.json");
+        package_json.create_with_contents("{}").unwrap();
+
+        let turbo_json = pkg_dir.join_component("turbo.json");
+        turbo_json.create_with_contents("{}").unwrap();
+
+        // "*.ts" matches both shared.ts and default-only.ts in the first walk
+        // (since git_ignore=false for explicit inputs). The second walk with
+        // git_ignore=true should not re-hash files already found.
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["*.ts"],
+            true,
+        )
+        .unwrap();
+
+        // All four files should appear exactly once
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("shared.ts").unwrap()),
+            "shared.ts should be present"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("default-only.ts").unwrap()),
+            "default-only.ts should be present"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()),
+            "package.json should be present (added by include pattern augmentation)"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("turbo.json").unwrap()),
+            "turbo.json should be present (added by include pattern augmentation)"
+        );
+
+        // Verify the hash values are deterministic (same content = same hash)
+        let hashes2 = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["*.ts"],
+            true,
+        )
+        .unwrap();
+        assert_eq!(hashes, hashes2, "hashes should be deterministic");
+    }
+
+    #[test]
+    fn test_include_default_files_with_exclusion() {
+        // Verify that exclusions work correctly when include_default_files=true:
+        // excluded files should not appear even if the default walk finds them.
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("lib").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        let keep = pkg_dir.join_component("keep.ts");
+        keep.create_with_contents("keep").unwrap();
+
+        let excluded = pkg_dir.join_component("excluded.ts");
+        excluded.create_with_contents("excluded").unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["*.ts", "!excluded.ts"],
+            true,
+        )
+        .unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("keep.ts").unwrap()),
+            "keep.ts should be present"
+        );
+        assert!(
+            !hashes.contains_key(&RelativeUnixPathBuf::new("excluded.ts").unwrap()),
+            "excluded.ts should NOT be present"
+        );
+    }
 }

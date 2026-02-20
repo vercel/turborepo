@@ -23,9 +23,9 @@ use turborepo_cache::CacheHitMetadata;
 // Re-export turborepo_engine::TaskNode for convenience
 pub use turborepo_engine::TaskNode;
 use turborepo_env::{
-    BUILTIN_PASS_THROUGH_ENV, BySource, CompiledWildcards, DetailedMap, EnvironmentVariableMap,
+    BySource, CompiledWildcards, DetailedMap, EnvironmentVariableMap, BUILTIN_PASS_THROUGH_ENV,
 };
-use turborepo_frameworks::{Slug as FrameworkSlug, infer_framework};
+use turborepo_frameworks::{infer_framework, Slug as FrameworkSlug};
 use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::{RepoGitIndex, SCM};
@@ -433,8 +433,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         // Collect owned strings directly to avoid borrow lifetime issues with
         // the RwLock guard. We sort + dedup instead of using a HashSet to avoid
         // the overhead of hashing the hash strings.
-        let mut dependency_hash_list: Vec<String> =
-            Vec::with_capacity(dependency_set.len());
+        let mut dependency_hash_list: Vec<String> = Vec::with_capacity(dependency_set.len());
         for dependency_task in &dependency_set {
             let TaskNode::Task(dependency_task_id) = dependency_task else {
                 continue;
@@ -700,5 +699,101 @@ mod test {
         fn assert_sync<T: Sync>() {}
         assert_send::<TaskHashTracker>();
         assert_sync::<TaskHashTracker>();
+    }
+
+    #[test]
+    fn test_hash_tracker_concurrent_reads() {
+        let tracker = TaskHashTracker::new(HashMap::new());
+        let task_id: TaskId<'static> = TaskId::new("pkg", "build");
+        tracker.insert_hash(
+            task_id.clone(),
+            DetailedMap::default(),
+            "abc123".to_string(),
+            None,
+        );
+
+        // Multiple concurrent reads should not deadlock or panic with RwLock
+        std::thread::scope(|s| {
+            for _ in 0..8 {
+                let tracker = &tracker;
+                let task_id = &task_id;
+                s.spawn(move || {
+                    for _ in 0..100 {
+                        let h = tracker.hash(task_id);
+                        assert_eq!(h.as_deref(), Some("abc123"));
+                    }
+                });
+            }
+        });
+    }
+
+    #[test]
+    fn test_hash_tracker_concurrent_read_write() {
+        let tracker = TaskHashTracker::new(HashMap::new());
+
+        // Pre-create owned task IDs to avoid lifetime issues with TaskId borrows
+        let task_ids: Vec<TaskId<'static>> = (0..50)
+            .map(|i| TaskId::new("pkg", &format!("task-{i}")).into_owned())
+            .collect();
+
+        // One writer, many readers — verifies RwLock allows concurrent reads
+        // while writes are exclusive, without deadlock.
+        std::thread::scope(|s| {
+            let tracker = &tracker;
+            let task_ids = &task_ids;
+
+            s.spawn(move || {
+                for (i, task_id) in task_ids.iter().enumerate() {
+                    tracker.insert_hash(
+                        task_id.clone(),
+                        DetailedMap::default(),
+                        format!("hash-{i}"),
+                        None,
+                    );
+                }
+            });
+
+            for _ in 0..4 {
+                s.spawn(move || {
+                    for task_id in task_ids {
+                        // May or may not find the hash depending on timing — that's fine,
+                        // we're testing for absence of panics/deadlocks.
+                        let _ = tracker.hash(task_id);
+                        let _ = tracker.env_vars(task_id);
+                        let _ = tracker.cache_status(task_id);
+                    }
+                });
+            }
+        });
+    }
+
+    // Validates that sort+dedup produces the same result as the previous
+    // HashSet→Vec→sort approach for dependency hash deduplication.
+    #[test]
+    fn test_sort_dedup_matches_hashset_behavior() {
+        let inputs: Vec<Vec<&str>> = vec![
+            vec!["abc", "def", "abc", "ghi", "def"],
+            vec!["zzz", "aaa", "mmm"],
+            vec!["same", "same", "same"],
+            vec![],
+            vec!["only-one"],
+        ];
+
+        for input in inputs {
+            // New approach: sort + dedup
+            let mut sort_dedup: Vec<String> = input.iter().map(|s| s.to_string()).collect();
+            sort_dedup.sort_unstable();
+            sort_dedup.dedup();
+
+            // Old approach: HashSet → Vec → sort
+            let hash_set: HashSet<String> = input.iter().map(|s| s.to_string()).collect();
+            let mut hashset_sorted: Vec<String> = hash_set.into_iter().collect();
+            hashset_sorted.sort();
+
+            assert_eq!(
+                sort_dedup, hashset_sorted,
+                "sort+dedup and hashset+sort should produce identical results for: {input:?}"
+            );
+        }
     }
 }
