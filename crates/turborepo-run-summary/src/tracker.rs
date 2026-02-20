@@ -222,6 +222,40 @@ impl RunTracker {
     {
         let end_time = Local::now();
 
+        // For the common case (no --dry, no --summarize), skip the expensive
+        // TaskSummary construction, SCMState::get (2 git subprocesses), and
+        // full RunSummary assembly. We only need execution stats and failed
+        // task identification for terminal output.
+        if run_opts.dry_run().is_none() && run_opts.summarize().is_none() {
+            let summary_state = self.execution_tracker.finish().await?;
+
+            if !is_watch {
+                // Extract failed tasks before moving summary_state into
+                // ExecutionSummary. SummaryState derives Clone, but we only
+                // need the task list for failure identification.
+                let failed_tasks: Vec<TaskState> = summary_state
+                    .tasks
+                    .iter()
+                    .filter(|t| t.execution.as_ref().is_some_and(|e| e.is_failure()))
+                    .cloned()
+                    .collect();
+
+                let execution = ExecutionSummary::new(
+                    self.synthesized_command.clone(),
+                    summary_state,
+                    package_inference_root,
+                    exit_code,
+                    self.started_at,
+                    end_time,
+                );
+
+                let path = repo_root.join_components(&[".turbo", "runs", "dummy.json"]);
+                execution.print(ui, path, failed_tasks.iter().collect());
+            }
+
+            return Ok(());
+        }
+
         let task_factory = TaskSummaryFactory::new(
             pkg_dep_graph,
             engine,

@@ -360,8 +360,8 @@ impl ConfigurationOptions {
         self.env_mode.unwrap_or_default()
     }
 
-    /// Returns the default cache directory path (relative to repo root).
-    const DEFAULT_CACHE_DIR: &'static str = if cfg!(windows) {
+    /// The default cache directory path (relative to repo root).
+    pub const DEFAULT_CACHE_DIR: &'static str = if cfg!(windows) {
         ".turbo\\cache"
     } else {
         ".turbo/cache"
@@ -391,7 +391,6 @@ impl ConfigurationOptions {
     /// - `path`: The resolved cache directory path
     /// - `is_shared_worktree`: True if using shared cache from main worktree
     pub fn resolve_cache_dir(&self, repo_root: &AbsoluteSystemPath) -> CacheDirResult {
-        // If explicit cacheDir is configured, always use it (no worktree sharing)
         if let Some(explicit_cache_dir) = &self.cache_dir {
             return CacheDirResult {
                 path: explicit_cache_dir.clone(),
@@ -400,9 +399,28 @@ impl ConfigurationOptions {
             };
         }
 
-        // Try to detect worktree configuration
-        match WorktreeInfo::detect(repo_root) {
-            Ok(worktree_info) => {
+        let worktree_info = WorktreeInfo::detect(repo_root).ok();
+        self.resolve_cache_dir_with_worktree_info(worktree_info.as_ref())
+    }
+
+    /// Resolve cache directory using pre-computed worktree info.
+    ///
+    /// This variant avoids spawning a git subprocess, which allows the caller
+    /// to run worktree detection on a background thread and pass the result in.
+    pub fn resolve_cache_dir_with_worktree_info(
+        &self,
+        worktree_info: Option<&WorktreeInfo>,
+    ) -> CacheDirResult {
+        if let Some(explicit_cache_dir) = &self.cache_dir {
+            return CacheDirResult {
+                path: explicit_cache_dir.clone(),
+                is_shared_worktree: false,
+                git_root: None,
+            };
+        }
+
+        match worktree_info {
+            Some(worktree_info) => {
                 debug!(
                     "Worktree detection: current={}, main={}, is_linked={}",
                     worktree_info.worktree_root,
@@ -411,8 +429,6 @@ impl ConfigurationOptions {
                 );
                 let git_root = Some(worktree_info.git_root.clone());
                 if worktree_info.is_linked_worktree() {
-                    // We're in a linked worktree - use the main worktree's cache
-                    // Use turbopath's join_component to ensure consistent path separators
                     let main_cache_path = worktree_info
                         .main_worktree_root
                         .join_component(".turbo")
@@ -425,7 +441,6 @@ impl ConfigurationOptions {
                     debug!("Using shared worktree cache at: {}", result.path);
                     result
                 } else {
-                    // We're in the main worktree - use local cache
                     debug!(
                         "Using local cache (main worktree): {}",
                         Self::DEFAULT_CACHE_DIR
@@ -437,12 +452,10 @@ impl ConfigurationOptions {
                     }
                 }
             }
-            Err(e) => {
-                // Detection failed - silently fall back to local cache
-                // This is expected for non-git directories, so we don't warn
+            None => {
                 debug!(
-                    "Could not detect Git worktree configuration, using local cache: {}",
-                    e
+                    "No worktree info available, using local cache: {}",
+                    Self::DEFAULT_CACHE_DIR
                 );
                 CacheDirResult {
                     path: Utf8PathBuf::from(Self::DEFAULT_CACHE_DIR),
@@ -875,6 +888,56 @@ mod test {
         assert!(
             !result.is_shared_worktree,
             "Main worktree should not be marked as shared"
+        );
+    }
+
+    #[test]
+    fn test_resolve_cache_dir_captures_git_root() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        std::process::Command::new("git")
+            .args(["init", "."])
+            .current_dir(&repo_root)
+            .output()
+            .expect("git init failed");
+
+        let config = ConfigurationOptions::default();
+        let result = config.resolve_cache_dir(&repo_root);
+
+        // git_root should be captured from worktree detection so SCM::new
+        // can skip its own git rev-parse subprocess
+        assert!(
+            result.git_root.is_some(),
+            "git_root should be captured when worktree detection succeeds"
+        );
+        assert_eq!(
+            result.git_root.unwrap(),
+            repo_root,
+            "git_root should match repo root in a non-worktree repo"
+        );
+    }
+
+    #[test]
+    fn test_resolve_cache_dir_explicit_skips_git_root() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp_dir.path()).unwrap();
+
+        let config = ConfigurationOptions {
+            cache_dir: Some(camino::Utf8PathBuf::from("/my/cache")),
+            ..Default::default()
+        };
+
+        let result = config.resolve_cache_dir(repo_root);
+
+        // When explicit cache_dir is set, no worktree detection runs,
+        // so git_root is not available
+        assert!(
+            result.git_root.is_none(),
+            "git_root should be None when explicit cache_dir bypasses detection"
         );
     }
 

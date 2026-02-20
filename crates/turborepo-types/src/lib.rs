@@ -15,7 +15,11 @@
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
 pub mod secret;
-use std::{collections::HashMap, fmt, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fmt,
+    str::FromStr,
+};
 
 use biome_deserialize_macros::Deserializable;
 use clap::ValueEnum;
@@ -1033,8 +1037,8 @@ pub trait HashTrackerInfo {
     fn expanded_outputs(&self, task_id: &TaskId) -> Option<Vec<AnchoredSystemPathBuf>>;
     /// Returns the detected framework for a task
     fn framework(&self, task_id: &TaskId) -> Option<String>;
-    /// Returns the expanded input file hashes for a task
-    fn expanded_inputs(&self, task_id: &TaskId) -> Option<HashMap<RelativeUnixPathBuf, String>>;
+    /// Returns the expanded input file hashes for a task, sorted by path.
+    fn expanded_inputs(&self, task_id: &TaskId) -> Option<BTreeMap<RelativeUnixPathBuf, String>>;
 }
 
 /// Detailed environment variable map for hash tracking.
