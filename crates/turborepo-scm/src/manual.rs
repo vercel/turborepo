@@ -1,7 +1,10 @@
 // This module doesn't require git2, but it is only used by modules that require
 // git2.
 #![cfg(feature = "git2")]
-use std::io::{ErrorKind, Read};
+use std::{
+    collections::HashSet,
+    io::{ErrorKind, Read},
+};
 
 use globwalk::fix_glob_pattern;
 use hex::ToHex;
@@ -72,7 +75,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     let full_package_path = turbo_root.resolve(package_path);
     let mut hashes = GitHashes::new();
     let mut default_file_hashes = GitHashes::new();
-    let mut excluded_file_hashes = GitHashes::new();
+    let mut excluded_file_paths = HashSet::new();
 
     let mut walker_builder = WalkBuilder::new(&full_package_path);
     let mut includes = Vec::new();
@@ -172,7 +175,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             let metadata = dirent.metadata()?;
             // We need to do this here, rather than as a filter, because the root
             // directory is always yielded and not subject to the supplied filter.
-            if metadata.is_dir() {
+            if metadata.is_dir() || metadata.is_symlink() {
                 continue;
             }
 
@@ -183,17 +186,17 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             if let Some(exclude_pattern) = exclude_pattern.as_ref()
                 && exclude_pattern.is_match(relative_path.as_str())
             {
-                // track excludes so we can exclude them to the hash map later
-                if !metadata.is_symlink() {
-                    let hash = git_like_hash_file(path)?;
-                    excluded_file_hashes.insert(relative_path.clone(), hash);
-                }
-            }
-
-            // FIXME: we don't hash symlinks...
-            if metadata.is_symlink() {
+                // Track excluded paths — no need to hash since we only use the
+                // path for filtering.
+                excluded_file_paths.insert(relative_path);
                 continue;
             }
+
+            // Skip files already hashed in the first walk to avoid redundant I/O.
+            if hashes.contains_key(&relative_path) {
+                continue;
+            }
+
             let hash = git_like_hash_file(path)?;
             default_file_hashes.insert(relative_path, hash);
         }
@@ -202,7 +205,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     // merge default with all hashes
     hashes.extend(default_file_hashes);
     // remove excluded files
-    hashes.retain(|key, _| !excluded_file_hashes.contains_key(key));
+    if !excluded_file_paths.is_empty() {
+        hashes.retain(|key, _| !excluded_file_paths.contains(key));
+    }
 
     Ok(hashes)
 }
