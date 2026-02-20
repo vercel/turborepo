@@ -15,7 +15,8 @@ export function validateDirectory(directory: string): {
     !directory ||
     typeof directory !== "string" ||
     directory.trim() === "" ||
-    directory.includes("\0")
+    directory.includes("\0") ||
+    directory.includes("\n")
   ) {
     const safeDirectory = typeof directory === "string" ? directory : "";
     return {
@@ -33,7 +34,12 @@ export function validateDirectory(directory: string): {
 
   // Prevent resolved paths that could be misinterpreted as command-line options
   // when passed to tools like git, and ensure the project name is well-formed.
-  const unsafeRoot = !root || root.startsWith("-") || root.includes("\0");
+  const unsafeRoot =
+    !root ||
+    !path.isAbsolute(root) ||
+    root.startsWith("-") ||
+    root.includes("\0") ||
+    root.includes("\n");
   const invalidProjectName =
     !projectName || !/^[a-zA-Z0-9._-]+$/.test(projectName);
 
