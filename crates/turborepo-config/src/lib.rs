@@ -871,7 +871,10 @@ mod test {
     #[test]
     fn test_resolve_cache_dir_default_returns_relative_path() {
         let tmp_dir = TempDir::new().unwrap();
-        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
 
         // Initialize git repo
         std::process::Command::new("git")

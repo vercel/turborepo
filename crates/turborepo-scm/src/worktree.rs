@@ -52,12 +52,7 @@ impl WorktreeInfo {
         let worktree_root = repo
             .workdir()
             .ok_or_else(|| Error::git_error("bare repository has no workdir"))?;
-        let worktree_root = AbsoluteSystemPathBuf::try_from(
-            worktree_root
-                .canonicalize()
-                .map_err(|e| Error::git_error(format!("failed to canonicalize workdir: {e}")))?
-                .as_path(),
-        )?;
+        let worktree_root = AbsoluteSystemPathBuf::try_from(worktree_root)?.to_realpath()?;
 
         let git_common_dir = repo.commondir().to_string_lossy().to_string();
 

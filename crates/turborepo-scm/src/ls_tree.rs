@@ -186,8 +186,8 @@ mod tests {
     // from git ls-tree output.
     #[test]
     fn test_ls_tree_sorted() {
-        let input = "100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\tpackage.json\0100644 \
-                     blob 5b999efa470b056e329b4c23a73904e0794bdc2f\tsrc/index.ts\0100644 blob \
+        let input = "100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\tpackage.json\x00100644 \
+                     blob 5b999efa470b056e329b4c23a73904e0794bdc2f\tsrc/index.ts\x00100644 blob \
                      f44f57fff95196c5f7139dfa0b96875f1e9650a9\tsrc/utils.ts\0";
 
         let expected = to_sorted_hashes(&[
