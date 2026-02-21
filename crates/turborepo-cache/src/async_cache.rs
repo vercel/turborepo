@@ -202,7 +202,10 @@ impl AsyncCache {
             .send(WorkerRequest::Shutdown(closing_tx, closed_tx))
             .await
             .map_err(|_| CacheError::CacheShuttingDown)?;
-        Ok((closing_rx.await.unwrap(), closed_rx)) // todo
+        closing_rx
+            .await
+            .map(|status| (status, closed_rx))
+            .map_err(|_| CacheError::CacheShuttingDown)
     }
 
     /// Shut down the cache, waiting for all workers to finish writing.
