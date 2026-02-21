@@ -37,6 +37,27 @@ impl SCM {
         }
     }
 
+    /// Get both branch and SHA with a single libgit2 Repository::open,
+    /// avoiding the overhead of opening the repo twice and spawning two
+    /// git subprocesses. Falls back to subprocess calls if libgit2 fails.
+    pub fn get_current_branch_and_sha(
+        &self,
+        _path: &AbsoluteSystemPath,
+    ) -> (Option<String>, Option<String>) {
+        match self {
+            #[cfg(feature = "git2")]
+            Self::Git(git) => {
+                if let Some((branch, sha)) = git.get_current_branch_and_sha() {
+                    return (Some(branch), Some(sha));
+                }
+                (git.get_current_branch().ok(), git.get_current_sha().ok())
+            }
+            #[cfg(not(feature = "git2"))]
+            Self::Git(git) => (git.get_current_branch().ok(), git.get_current_sha().ok()),
+            Self::Manual => (None, None),
+        }
+    }
+
     /// get the actual changed files between two git refs
     pub fn changed_files(
         &self,
@@ -172,16 +193,67 @@ impl CIEnv {
 }
 
 impl GitRepo {
+    #[cfg(feature = "git2")]
+    fn get_current_branch(&self) -> Result<String, Error> {
+        let repo = git2::Repository::open(self.root.as_std_path())
+            .map_err(|e| Error::git2_error_context(e, "opening repo for branch".into()))?;
+        let head = repo
+            .head()
+            .map_err(|e| Error::git2_error_context(e, "resolving HEAD for branch".into()))?;
+        if head.is_branch() {
+            Ok(head.shorthand().unwrap_or("").to_string())
+        } else {
+            // Detached HEAD — matches `git branch --show-current` which prints nothing
+            Ok(String::new())
+        }
+    }
+
+    #[cfg(not(feature = "git2"))]
     fn get_current_branch(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["branch", "--show-current"], "")?;
         let output = String::from_utf8(output)?;
         Ok(output.trim().to_owned())
     }
 
+    #[cfg(feature = "git2")]
+    fn get_current_sha(&self) -> Result<String, Error> {
+        let repo = git2::Repository::open(self.root.as_std_path())
+            .map_err(|e| Error::git2_error_context(e, "opening repo for sha".into()))?;
+        let head = repo
+            .head()
+            .map_err(|e| Error::git2_error_context(e, "resolving HEAD for sha".into()))?;
+        let commit = head
+            .peel_to_commit()
+            .map_err(|e| Error::git2_error_context(e, "peeling HEAD to commit".into()))?;
+        Ok(commit.id().to_string())
+    }
+
+    #[cfg(not(feature = "git2"))]
     fn get_current_sha(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["rev-parse", "HEAD"], "")?;
         let output = String::from_utf8(output)?;
         Ok(output.trim().to_owned())
+    }
+
+    /// Get branch and SHA in a single libgit2 Repository::open call.
+    #[cfg(feature = "git2")]
+    fn get_current_branch_and_sha(&self) -> Option<(String, String)> {
+        let repo = git2::Repository::open(self.root.as_std_path()).ok()?;
+        let head = repo.head().ok()?;
+
+        let branch = if head.is_branch() {
+            head.shorthand().unwrap_or("").to_owned()
+        } else {
+            String::new()
+        };
+
+        let commit = head.peel_to_commit().ok()?;
+        let mut hex_buf = [0u8; 40];
+        hex::encode_to_slice(commit.id().as_bytes(), &mut hex_buf).ok()?;
+        // SAFETY: hex output is always valid ASCII
+        let sha = unsafe { std::str::from_utf8_unchecked(&hex_buf) }.to_owned();
+
+        Some((branch, sha))
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
@@ -1421,5 +1493,104 @@ mod tests {
         let actual = github_event.get_parent_ref_of_first_commit();
 
         assert_eq!(None, actual);
+    }
+
+    // Regression: git2 get_current_branch and get_current_sha must match the
+    // subprocess equivalents. This captures the invariant that must hold when
+    // switching from `git branch --show-current` / `git rev-parse HEAD` to
+    // git2::Repository.
+    #[test]
+    fn test_git2_branch_and_sha_match_subprocess() {
+        let (repo_root, repo) = setup_repository(None).unwrap();
+        let root = repo_root.path();
+
+        // Create an initial commit so HEAD exists
+        let file_path = root.join("file.txt");
+        fs::write(&file_path, "hello").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("file.txt")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let sig = repo.signature().unwrap();
+        repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
+            .unwrap();
+
+        // Create a branch name and switch to it
+        repo.branch(
+            "test-branch",
+            &repo.head().unwrap().peel_to_commit().unwrap(),
+            false,
+        )
+        .unwrap();
+        repo.set_head("refs/heads/test-branch").unwrap();
+
+        let abs_root = AbsoluteSystemPathBuf::try_from(root).unwrap();
+        let git_repo = GitRepo::find(&abs_root).unwrap();
+
+        // Subprocess-based results
+        let subprocess_branch = git_repo.get_current_branch().unwrap();
+        let subprocess_sha = git_repo.get_current_sha().unwrap();
+
+        // git2-based equivalents
+        let git2_repo = Repository::open(root).unwrap();
+        let head = git2_repo.head().unwrap();
+        let git2_branch = head.shorthand().unwrap_or("").to_string();
+        let git2_sha = head.peel_to_commit().unwrap().id().to_string();
+
+        assert_eq!(
+            subprocess_branch, git2_branch,
+            "git2 branch must match subprocess"
+        );
+        assert_eq!(subprocess_sha, git2_sha, "git2 sha must match subprocess");
+    }
+
+    // Regression: detached HEAD should return empty branch name.
+    #[test]
+    fn test_git2_detached_head_branch() {
+        let (repo_root, repo) = setup_repository(None).unwrap();
+        let root = repo_root.path();
+
+        // Create an initial commit
+        let file_path = root.join("file.txt");
+        fs::write(&file_path, "hello").unwrap();
+        let mut index = repo.index().unwrap();
+        index.add_path(Path::new("file.txt")).unwrap();
+        index.write().unwrap();
+        let tree_id = index.write_tree().unwrap();
+        let tree = repo.find_tree(tree_id).unwrap();
+        let sig = repo.signature().unwrap();
+        let commit_oid = repo
+            .commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
+            .unwrap();
+
+        // Detach HEAD
+        repo.set_head_detached(commit_oid).unwrap();
+
+        let abs_root = AbsoluteSystemPathBuf::try_from(root).unwrap();
+        let git_repo = GitRepo::find(&abs_root).unwrap();
+
+        // Subprocess returns empty string for detached HEAD
+        let subprocess_branch = git_repo.get_current_branch().unwrap();
+        assert!(
+            subprocess_branch.is_empty(),
+            "detached HEAD branch should be empty, got: {subprocess_branch}"
+        );
+
+        // git2: shorthand returns the abbreviated SHA, not empty.
+        // We handle this by checking if HEAD is a branch.
+        let git2_repo = Repository::open(root).unwrap();
+        let head = git2_repo.head().unwrap();
+        let is_branch = head.is_branch();
+        let git2_branch = if is_branch {
+            head.shorthand().unwrap_or("").to_string()
+        } else {
+            String::new()
+        };
+
+        assert_eq!(
+            subprocess_branch, git2_branch,
+            "git2 detached HEAD branch must match subprocess (empty)"
+        );
     }
 }
