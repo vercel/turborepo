@@ -43,13 +43,15 @@ impl SCMState {
             }
         }
 
-        // Fall back to using `git`
+        // Fall back to using git. Combined call opens the repo once via
+        // libgit2 instead of spawning two git subprocesses.
         if state.branch.is_none() && state.sha.is_none() {
+            let (branch, sha) = scm.get_current_branch_and_sha(dir);
             if state.branch.is_none() {
-                state.branch = scm.get_current_branch(dir).ok();
+                state.branch = branch;
             }
             if state.sha.is_none() {
-                state.sha = scm.get_current_sha(dir).ok();
+                state.sha = sha;
             }
         }
 

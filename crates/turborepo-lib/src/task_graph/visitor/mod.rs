@@ -138,7 +138,7 @@ impl<'a> Visitor<'a> {
         is_watch: bool,
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     ) -> Self {
-        let task_hasher = TaskHasher::new(
+        let mut task_hasher = TaskHasher::new(
             package_inputs_hashes,
             run_opts,
             env_at_execution_start,
@@ -146,6 +146,8 @@ impl<'a> Visitor<'a> {
             global_env,
             global_env_patterns,
         );
+
+        task_hasher.precompute_external_deps_hashes(package_graph.packages());
 
         let sink = Self::sink(run_opts);
         let color_cache = ColorSelector::default();

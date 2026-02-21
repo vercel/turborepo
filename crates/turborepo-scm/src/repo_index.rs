@@ -9,12 +9,14 @@ use crate::{Error, GitHashes, GitRepo, ls_tree::SortedGitHashes, status::RepoSta
 /// and `git status` so they can be filtered per-package without spawning
 /// additional subprocesses.
 ///
-/// Uses a sorted `Vec` for the ls-tree data so that per-package lookups can
-/// use `partition_point` (binary search) for range queries. This gives the
-/// same O(log n) asymptotic cost as a `BTreeMap` but with better cache
-/// locality on the contiguous memory.
+/// Both collections are sorted by path so that per-package lookups can use
+/// `partition_point` (binary search) for range queries. This gives O(log n)
+/// lookup cost with good cache locality on contiguous memory.
 pub struct RepoGitIndex {
     ls_tree_hashes: SortedGitHashes,
+    /// Sorted by path so per-package filtering can use binary-search range
+    /// queries instead of linear scans. With P packages and S status entries
+    /// the cost drops from O(P*S) to O(P * log S).
     status_entries: Vec<RepoStatusEntry>,
 }
 
@@ -257,6 +259,48 @@ mod tests {
         assert!(hashes.is_empty());
         // new.ts is untracked/modified
         assert_eq!(to_hash, vec![path("new.ts")]);
+    }
+
+    #[test]
+    fn test_sorted_status_binary_search_matches_linear_scan() {
+        let status = vec![
+            ("apps/docs/new.ts", false),
+            ("apps/web/changed.ts", false),
+            ("apps/web-admin/added.ts", false),
+            ("apps/web/deleted.ts", true),
+            ("packages/ui/modified.ts", false),
+            ("root-new.ts", false),
+        ];
+
+        let index = make_index(
+            vec![
+                ("apps/docs/index.ts", "aaa"),
+                ("apps/web/index.ts", "bbb"),
+                ("apps/web/deleted.ts", "ccc"),
+                ("apps/web-admin/index.ts", "ddd"),
+                ("packages/ui/button.tsx", "eee"),
+            ],
+            status,
+        );
+
+        // "apps/web" must match apps/web/* but NOT apps/web-admin/*
+        let (hashes, to_hash) = index.get_package_hashes(&path("apps/web")).unwrap();
+        assert_eq!(
+            hashes.len(),
+            1,
+            "only index.ts should remain (deleted.ts removed)"
+        );
+        assert!(hashes.contains_key(&path("index.ts")));
+        assert!(!hashes.contains_key(&path("deleted.ts")));
+        assert_eq!(to_hash, vec![path("apps/web/changed.ts")]);
+
+        // "apps/web-admin" should get its own status entries only
+        let (_, to_hash) = index.get_package_hashes(&path("apps/web-admin")).unwrap();
+        assert_eq!(to_hash, vec![path("apps/web-admin/added.ts")]);
+
+        // empty prefix collects everything
+        let (_, to_hash) = index.get_package_hashes(&path("")).unwrap();
+        assert_eq!(to_hash.len(), 5); // all non-delete status entries
     }
 
     // Verifies that BTreeMap range queries produce correct results for
