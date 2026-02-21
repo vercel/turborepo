@@ -4,7 +4,7 @@ import { config } from '@repo/eslint-config/index.js';
 export default [
   ...config,
   {
-    includes: ['**/*.svelte', '**/*.svelte.ts', '**/*.ts'],
+    files: ['**/*.svelte', '**/*.svelte.ts', '**/*.ts'],
     ignores: ['.svelte-kit/**', 'dist/**'],
     languageOptions: {
       parserOptions: {
