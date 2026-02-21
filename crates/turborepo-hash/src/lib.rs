@@ -60,7 +60,7 @@ pub struct TaskHashable<'a> {
     pub global_hash: &'a str,
     pub task_dependency_hashes: Vec<String>,
     pub hash_of_files: &'a str,
-    pub external_deps_hash: Option<String>,
+    pub external_deps_hash: Option<&'a str>,
 
     // task
     pub package_dir: Option<turbopath::RelativeUnixPathBuf>,
@@ -320,7 +320,7 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
 
         builder.set_hash_of_files(task_hashable.hash_of_files);
         if let Some(external_deps_hash) = task_hashable.external_deps_hash {
-            builder.set_external_deps_hash(&external_deps_hash);
+            builder.set_external_deps_hash(external_deps_hash);
         }
 
         builder.set_task(task_hashable.task);
@@ -512,7 +512,7 @@ mod test {
             task_dependency_hashes: vec!["task_dependency_hash".to_string()],
             package_dir: Some(turbopath::RelativeUnixPathBuf::new("package_dir").unwrap()),
             hash_of_files: "hash_of_files",
-            external_deps_hash: Some("external_deps_hash".to_string()),
+            external_deps_hash: Some("external_deps_hash"),
             task: "task",
             outputs: TaskOutputs {
                 inclusions: vec!["inclusions".to_string()],
