@@ -4,7 +4,7 @@ import path from "node:path";
 import type { WorkspaceConfig } from "@turbo/utils";
 import { getWorkspaceConfigs } from "@turbo/utils";
 import type { PipelineV1, RootSchemaV1, RootSchemaV2 } from "@turbo/types";
-import { forEachTaskDef } from "@turbo/utils/src/getTurboConfigs";
+import { forEachTaskDef } from "@turbo/utils/src/get-turbo-configs";
 import { dotEnv } from "./dotenv-processing";
 import { wildcardTests } from "./wildcard-processing";
 

@@ -6,7 +6,7 @@ import { isFolderEmpty } from "../src/is-folder-empty";
 
 // Mock dependencies
 jest.mock("fs-extra");
-jest.mock("../src/isFolderEmpty");
+jest.mock("../src/is-folder-empty");
 
 const mockFs = fs as jest.Mocked<typeof fs>;
 const mockIsFolderEmpty = jest.mocked(isFolderEmpty);
