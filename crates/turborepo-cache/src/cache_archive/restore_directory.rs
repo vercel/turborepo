@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, ffi::OsString, io};
+use std::{backtrace::Backtrace, ffi::OsString, fs, io};
 
 use camino::Utf8Component;
 use tar::Entry;
@@ -92,6 +92,73 @@ impl CachedDirTree {
         //
         // This could _still_ error, but we don't care.
         let resolved_name = anchor.resolve(processed_name);
+
+        // Before attempting to create the directory, check if there's a symlink
+        // at this location that would cause cache restoration to the wrong location.
+        if let Ok(metadata) = resolved_name.symlink_metadata() {
+            if metadata.is_symlink() {
+                debug!(
+                    "Found symlink at directory location {:?}, checking if it should be removed",
+                    resolved_name
+                );
+
+                // Check if the symlink points to a sibling directory (like dist -> src)
+                if let Ok(link_target) = resolved_name.read_link() {
+                    debug!(
+                        "Symlink target: {:?}, is_relative: {}, components: {:?}",
+                        link_target,
+                        link_target.is_relative(),
+                        link_target.components().collect::<Vec<_>>()
+                    );
+
+                    let is_relative = link_target.is_relative();
+                    let is_sibling = is_relative
+                        && link_target.components().count() == 1
+                        && !link_target.as_str().starts_with('.');
+
+                    debug!(
+                        "Symlink analysis: is_relative={}, is_sibling={}, target='{}'",
+                        is_relative,
+                        is_sibling,
+                        link_target.as_str()
+                    );
+
+                    if is_sibling {
+                        debug!(
+                            "Found sibling symlink at directory location {:?}, removing to ensure \
+                             correct cache restoration",
+                            resolved_name
+                        );
+
+                        // On Windows, directory symlinks need to be removed with remove_dir()
+                        // On other platforms, use remove_file() for symlinks
+                        #[cfg(windows)]
+                        let removal_result = fs::remove_dir(resolved_name.as_path());
+                        #[cfg(not(windows))]
+                        let removal_result = fs::remove_file(resolved_name.as_path());
+
+                        match removal_result {
+                            Ok(()) => {
+                                debug!("Successfully removed symlink at {:?}", resolved_name);
+                            }
+                            Err(e) => {
+                                debug!("Failed to remove symlink at {:?}: {}", resolved_name, e);
+                                // Continue anyway - the directory creation
+                                // might still work
+                            }
+                        }
+                    } else {
+                        debug!(
+                            "Symlink at {:?} is not a sibling symlink, leaving it intact",
+                            resolved_name
+                        );
+                    }
+                } else {
+                    debug!("Could not read symlink target at {:?}", resolved_name);
+                }
+            }
+        }
+
         let directory_exists = resolved_name.try_exists();
         if matches!(directory_exists, Ok(false)) {
             resolved_name.create_dir_all()?;
