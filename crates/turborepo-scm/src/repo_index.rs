@@ -352,7 +352,8 @@ fn find_untracked_files(
             let in_ls_tree = ls_tree_hashes
                 .binary_search_by(|(p, _)| p.as_str().cmp(unix_str))
                 .is_ok();
-            let in_status = sorted_status.binary_search(&unix_str).is_ok();
+            let unix_ref: &str = unix_str.as_ref();
+            let in_status = sorted_status.binary_search(&unix_ref).is_ok();
 
             if !in_ls_tree
                 && !in_status
