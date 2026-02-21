@@ -1,9 +1,9 @@
-export { setupTestFixtures } from "./useFixtures";
-export { validateLogs } from "./validateLogs";
-export { mockEnv } from "./mockEnv";
+export { setupTestFixtures } from "./use-fixtures";
+export { validateLogs } from "./validate-logs";
+export { mockEnv } from "./mock-env";
 
-export { spyExit } from "./spyExit";
-export type { SpyExit } from "./spyExit";
+export { spyExit } from "./spy-exit";
+export type { SpyExit } from "./spy-exit";
 
-export { spyConsole } from "./spyConsole";
-export type { SpyConsole } from "./spyConsole";
+export { spyConsole } from "./spy-console";
+export type { SpyConsole } from "./spy-console";

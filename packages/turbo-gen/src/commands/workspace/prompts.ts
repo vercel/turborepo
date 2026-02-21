@@ -16,9 +16,9 @@ import {
   type DependencyGroups,
   type PackageJson
 } from "@turbo/utils";
-import { getWorkspaceStructure } from "../../utils/getWorkspaceStructure";
+import { getWorkspaceStructure } from "../../utils/get-workspace-structure";
 import type { WorkspaceType } from "../../generators/types";
-import { getWorkspaceList } from "../../utils/getWorkspaceList";
+import { getWorkspaceList } from "../../utils/get-workspace-list";
 
 export async function name({
   override,

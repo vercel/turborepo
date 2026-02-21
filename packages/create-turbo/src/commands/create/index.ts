@@ -14,10 +14,10 @@ import {
   logger
 } from "@turbo/utils";
 import { tryGitInit, removeGitDirectory } from "../../utils/git";
-import { isOnline } from "../../utils/isOnline";
+import { isOnline } from "../../utils/is-online";
 import { transforms } from "../../transforms";
 import { TransformError } from "../../transforms/errors";
-import { isDefaultExample } from "../../utils/isDefaultExample";
+import { isDefaultExample } from "../../utils/is-default-example";
 import * as prompts from "./prompts";
 import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 

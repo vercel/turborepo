@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import picocolors from "picocolors";
-import { isFolderEmpty } from "./isFolderEmpty";
+import { isFolderEmpty } from "./is-folder-empty";
 
 export function validateDirectory(directory: string): {
   valid: boolean;

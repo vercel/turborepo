@@ -7,9 +7,9 @@ import {
 } from "@turbo/utils";
 import type { SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { loadTurboJson } from "../utils/load-turbo-json";
 
 // transformer details
 const TRANSFORMER = "migrate-dot-env";

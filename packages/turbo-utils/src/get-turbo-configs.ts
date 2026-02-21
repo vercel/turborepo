@@ -11,7 +11,7 @@ import type {
   PipelineV2
 } from "@turbo/types";
 import * as logger from "./logger";
-import { getTurboRoot, clearTurboRootCache } from "./getTurboRoot";
+import { getTurboRoot, clearTurboRootCache } from "./get-turbo-root";
 import type { PackageJson, PNPMWorkspaceConfig } from "./types";
 
 const ROOT_GLOB = "{turbo.json,turbo.jsonc}";

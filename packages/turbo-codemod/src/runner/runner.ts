@@ -2,7 +2,7 @@ import picocolors from "picocolors";
 import { logger } from "@turbo/utils";
 import { Logger } from "../utils/logger";
 import type { UtilityArgs } from "../types";
-import { FileTransform } from "./FileTransform";
+import { FileTransform } from "./file-transform";
 import type {
   FileResult,
   ModifyFileArgs,

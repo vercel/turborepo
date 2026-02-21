@@ -2,8 +2,8 @@ import path from "node:path";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
 import JSON5 from "json5";
-import type { TurboConfigs } from "../src/getTurboConfigs";
-import { getTurboConfigs } from "../src/getTurboConfigs";
+import type { TurboConfigs } from "../src/get-turbo-configs";
+import { getTurboConfigs } from "../src/get-turbo-configs";
 
 describe("getTurboConfigs", () => {
   const { useFixture } = setupTestFixtures({

@@ -1,7 +1,7 @@
 import path from "node:path";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
-import { getTurboRoot } from "../src/getTurboRoot";
+import { getTurboRoot } from "../src/get-turbo-root";
 
 describe("getTurboConfigs", () => {
   const { useFixture } = setupTestFixtures({

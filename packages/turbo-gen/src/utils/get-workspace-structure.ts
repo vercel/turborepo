@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { Project, Workspace } from "@turbo/workspaces";
-import { getWorkspaceRoots } from "./workspaceRoots";
+import { getWorkspaceRoots } from "./workspace-roots";
 
 interface WorkspaceStructure {
   hasRootApps: boolean;

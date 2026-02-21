@@ -2,7 +2,7 @@
 import child_process from "node:child_process";
 import { mockEnv } from "@turbo/test-utils";
 import { describe, it, expect, jest } from "@jest/globals";
-import { checkCommit } from "../src/checkCommit";
+import { checkCommit } from "../src/check-commit";
 
 describe("checkCommit()", () => {
   describe("on Vercel", () => {

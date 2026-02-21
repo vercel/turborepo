@@ -2,7 +2,7 @@ import path from "node:path";
 import fs from "fs-extra";
 import picocolors from "picocolors";
 import { logger, type PackageJson, type DependencyGroups } from "@turbo/utils";
-import { gatherAddRequirements } from "../utils/gatherAddRequirements";
+import { gatherAddRequirements } from "../utils/gather-add-requirements";
 import type { TurboGeneratorArguments } from "./types";
 
 export async function generate({ project, opts }: TurboGeneratorArguments) {

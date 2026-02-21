@@ -1,6 +1,6 @@
 import { spyConsole } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
-import { getTurboVersion } from "../src/getTurboVersion";
+import { getTurboVersion } from "../src/get-turbo-version";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();

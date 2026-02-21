@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach, jest } from "@jest/globals";
 import path from "node:path";
 import fs from "fs-extra";
-import { validateDirectory } from "../src/validateDirectory";
-import { isFolderEmpty } from "../src/isFolderEmpty";
+import { validateDirectory } from "../src/validate-directory";
+import { isFolderEmpty } from "../src/is-folder-empty";
 
 // Mock dependencies
 jest.mock("fs-extra");

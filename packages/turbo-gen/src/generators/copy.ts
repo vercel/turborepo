@@ -8,7 +8,7 @@ import {
   type DependencyGroups,
   type PackageJson
 } from "@turbo/utils";
-import { gatherAddRequirements } from "../utils/gatherAddRequirements";
+import { gatherAddRequirements } from "../utils/gather-add-requirements";
 import type { TurboGeneratorArguments } from "./types";
 
 export async function generate({ project, opts }: TurboGeneratorArguments) {

@@ -4,7 +4,7 @@ import type { WorkspaceType } from "../generators/types";
 import {
   getWorkspaceStructure,
   getGroupFromWorkspace
-} from "./getWorkspaceStructure";
+} from "./get-workspace-structure";
 
 export function getWorkspaceList({
   project,

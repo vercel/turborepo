@@ -1,7 +1,7 @@
 import type { Schema } from "@turbo/types";
 import { findRootSync } from "@manypkg/find-root";
 import json5 from "json5";
-import { searchUp } from "./searchUp";
+import { searchUp } from "./search-up";
 
 interface Options {
   cache?: boolean;

@@ -3,9 +3,9 @@ import fs from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
 import type { PipelineV2, SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { loadTurboJson } from "../utils/load-turbo-json";
 
 // transformer details
 const TRANSFORMER = "rename-output-mode";

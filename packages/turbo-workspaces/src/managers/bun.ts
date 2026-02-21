@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import { ConvertError } from "../errors";
-import { updateDependencies } from "../updateDependencies";
+import { updateDependencies } from "../update-dependencies";
 import type {
   DetectArgs,
   ReadArgs,

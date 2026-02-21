@@ -3,7 +3,7 @@ import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import fs from "fs-extra";
 import type { Transformer, TransformerArgs } from "../types";
 import type { TransformerResults } from "../runner";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 
 // transformer details
 const TRANSFORMER = "add-package-names";

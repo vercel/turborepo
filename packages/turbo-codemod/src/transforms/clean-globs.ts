@@ -3,8 +3,8 @@ import type { SchemaV1 } from "@turbo/types";
 import { getTurboConfigs } from "@turbo/utils";
 import type { TransformerArgs, Transformer } from "../types";
 import type { TransformerResults } from "../runner";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
+import { loadTurboJson } from "../utils/load-turbo-json";
 
 // transformer details
 const TRANSFORMER = "clean-globs";

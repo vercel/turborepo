@@ -3,14 +3,14 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { getTurboRoot } from "@turbo/utils";
 import type { DryRun } from "@turbo/types";
-import { getComparison } from "./getComparison";
-import { getTask } from "./getTask";
-import { getWorkspace } from "./getWorkspace";
-import { getTurboVersion } from "./getTurboVersion";
+import { getComparison } from "./get-comparison";
+import { getTask } from "./get-task";
+import { getWorkspace } from "./get-workspace";
+import { getTurboVersion } from "./get-turbo-version";
 import { log, info, warn, error } from "./logger";
 import { shouldWarn } from "./errors";
 import type { TurboIgnoreArg, TurboIgnoreOptions } from "./types";
-import { checkCommit } from "./checkCommit";
+import { checkCommit } from "./check-commit";
 
 function trackOptions(opts: TurboIgnoreOptions) {
   opts.telemetry?.trackOptionTask(opts.task);

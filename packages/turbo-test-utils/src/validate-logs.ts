@@ -1,5 +1,5 @@
 import { expect } from "@jest/globals";
-import type { SpyConsole } from "./spyConsole";
+import type { SpyConsole } from "./spy-console";
 
 type Matcher = ReturnType<typeof expect.stringContaining>;
 

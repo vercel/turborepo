@@ -2,7 +2,7 @@ import path from "node:path";
 import fs from "fs-extra";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { type PackageJson, getAvailablePackageManagers } from "@turbo/utils";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
 import type { Transformer, TransformerArgs } from "../types";
 

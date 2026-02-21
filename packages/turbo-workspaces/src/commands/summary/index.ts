@@ -3,7 +3,7 @@ import { input } from "@inquirer/prompts";
 import picocolors from "picocolors";
 import { Logger } from "../../logger";
 import { directoryInfo } from "../../utils";
-import { getWorkspaceDetails } from "../../getWorkspaceDetails";
+import { getWorkspaceDetails } from "../../get-workspace-details";
 import type { Workspace } from "../../types";
 import type { SummaryCommandArgument } from "./types";
 
