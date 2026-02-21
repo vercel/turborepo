@@ -57,20 +57,22 @@ impl GitRepo {
             .map_err(|e| Error::git2_error_context(e, "peeling HEAD to tree".into()))?;
 
         let mut hashes = Vec::new();
+        let mut path_buf = String::with_capacity(128);
+        let mut hex_buf = [0u8; 40];
         tree.walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
-            // Only collect blob entries (files), skip trees (directories)
             if entry.kind() == Some(git2::ObjectType::Blob) {
                 let name = match entry.name() {
                     Some(n) => n,
                     None => return git2::TreeWalkResult::Ok,
                 };
-                let path_str = if dir.is_empty() {
-                    name.to_string()
-                } else {
-                    format!("{dir}{name}")
-                };
-                if let Ok(path) = RelativeUnixPathBuf::new(path_str) {
-                    hashes.push((path, entry.id().to_string()));
+                path_buf.clear();
+                path_buf.push_str(dir);
+                path_buf.push_str(name);
+                if let Ok(path) = RelativeUnixPathBuf::new(path_buf.clone()) {
+                    hex::encode_to_slice(entry.id().as_bytes(), &mut hex_buf).unwrap();
+                    // SAFETY: hex output is always valid ASCII
+                    let hash = unsafe { std::str::from_utf8_unchecked(&hex_buf) }.to_string();
+                    hashes.push((path, hash));
                 }
             }
             git2::TreeWalkResult::Ok

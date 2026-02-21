@@ -251,6 +251,7 @@ pub struct TaskHasher<'a, R> {
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
     compiled_builtins: CompiledWildcards,
+    external_deps_hash_cache: HashMap<PackageName, String>,
 }
 
 impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
@@ -282,6 +283,23 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             global_env_patterns,
             task_hash_tracker: TaskHashTracker::new(expanded_hashes),
             compiled_builtins,
+            external_deps_hash_cache: HashMap::new(),
+        }
+    }
+
+    /// Pre-compute and cache external dependency hashes for all packages.
+    /// Many tasks share the same package, so this avoids re-sorting
+    /// transitive dependencies for every task.
+    pub fn precompute_external_deps_hashes<'b>(
+        &mut self,
+        workspaces: impl Iterator<Item = (&'b PackageName, &'b PackageInfo)>,
+    ) {
+        if self.run_opts.single_package() {
+            return;
+        }
+        for (name, info) in workspaces {
+            let hash = get_external_deps_hash(&info.transitive_dependencies);
+            self.external_deps_hash_cache.insert(name.clone(), hash);
         }
     }
 
@@ -370,8 +388,16 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         let hashable_env_pairs = env_vars.all.to_hashable();
         let outputs = task_definition.hashable_outputs(task_id);
         let task_dependency_hashes = self.calculate_dependency_hashes(dependency_set)?;
-        let external_deps_hash =
-            is_monorepo.then(|| get_external_deps_hash(&workspace.transitive_dependencies));
+        let workspace_name = task_id.to_workspace_name();
+        let ext_hash_fallback;
+        let external_deps_hash: Option<&str> = if !is_monorepo {
+            None
+        } else if let Some(cached) = self.external_deps_hash_cache.get(&workspace_name) {
+            Some(cached.as_str())
+        } else {
+            ext_hash_fallback = get_external_deps_hash(&workspace.transitive_dependencies);
+            Some(ext_hash_fallback.as_str())
+        };
 
         if !hashable_env_pairs.is_empty() {
             debug!(
@@ -869,6 +895,108 @@ mod test {
         assert_eq!(result[0].1, "aaa");
         assert_eq!(result[3].0.as_str(), "z/last.ts");
         assert_eq!(result[3].1, "zzz");
+    }
+
+    #[test]
+    fn test_external_deps_hash_deterministic() {
+        use turborepo_lockfiles::Package;
+
+        let deps: HashSet<Package> = vec![
+            Package {
+                key: "react".to_string(),
+                version: "18.0.0".to_string(),
+            },
+            Package {
+                key: "lodash".to_string(),
+                version: "4.17.21".to_string(),
+            },
+            Package {
+                key: "typescript".to_string(),
+                version: "5.0.0".to_string(),
+            },
+        ]
+        .into_iter()
+        .collect();
+
+        let hash1 = get_external_deps_hash(&Some(deps.clone()));
+        let hash2 = get_external_deps_hash(&Some(deps));
+        assert_eq!(hash1, hash2, "same deps should produce same hash");
+        assert!(!hash1.is_empty(), "hash should be non-empty");
+    }
+
+    #[test]
+    fn test_external_deps_hash_empty() {
+        let hash_none = get_external_deps_hash(&None);
+        assert_eq!(hash_none, "", "None deps should produce empty hash");
+
+        let hash_empty = get_external_deps_hash(&Some(HashSet::new()));
+        assert!(
+            !hash_empty.is_empty(),
+            "empty set should produce non-empty hash"
+        );
+    }
+
+    #[test]
+    fn test_external_deps_hash_order_independent() {
+        use turborepo_lockfiles::Package;
+
+        let deps1: HashSet<Package> = vec![
+            Package {
+                key: "a".to_string(),
+                version: "1.0".to_string(),
+            },
+            Package {
+                key: "b".to_string(),
+                version: "2.0".to_string(),
+            },
+        ]
+        .into_iter()
+        .collect();
+
+        let deps2: HashSet<Package> = vec![
+            Package {
+                key: "b".to_string(),
+                version: "2.0".to_string(),
+            },
+            Package {
+                key: "a".to_string(),
+                version: "1.0".to_string(),
+            },
+        ]
+        .into_iter()
+        .collect();
+
+        let hash1 = get_external_deps_hash(&Some(deps1));
+        let hash2 = get_external_deps_hash(&Some(deps2));
+        assert_eq!(
+            hash1, hash2,
+            "hash should be order-independent since we sort"
+        );
+    }
+
+    #[test]
+    fn test_tracker_pre_sized_hashmaps() {
+        let mut input_hashes = HashMap::new();
+        for i in 0..100 {
+            let task_id = TaskId::new("pkg", &format!("task-{i}")).into_owned();
+            input_hashes.insert(task_id, Arc::new(FileHashes(Vec::new())));
+        }
+        let tracker = TaskHashTracker::new(input_hashes);
+
+        // Insert hashes and verify pre-sizing didn't break anything
+        for i in 0..100 {
+            let task_id = TaskId::new("pkg", &format!("task-{i}")).into_owned();
+            tracker.insert_hash(
+                task_id.clone(),
+                DetailedMap::default(),
+                format!("hash-{i}"),
+                None,
+            );
+            assert_eq!(
+                tracker.hash(&task_id).as_deref(),
+                Some(format!("hash-{i}").as_str())
+            );
+        }
     }
 
     // Validates that sort+dedup produces the same result as the previous

@@ -63,7 +63,11 @@ pub(crate) fn hash_objects(
                             AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
                                 .to_unix()
                         });
-                    Ok(Some((package_relative_path, hash.to_string())))
+                    let mut hex_buf = [0u8; 40];
+                    hex::encode_to_slice(hash.as_bytes(), &mut hex_buf).unwrap();
+                    // SAFETY: hex output is always valid ASCII
+                    let hash_str = unsafe { std::str::from_utf8_unchecked(&hex_buf) }.to_string();
+                    Ok(Some((package_relative_path, hash_str)))
                 }
                 Err(e) => {
                     if e.class() == git2::ErrorClass::Os

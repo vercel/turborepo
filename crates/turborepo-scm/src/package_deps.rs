@@ -267,10 +267,11 @@ impl GitRepo {
         // Include globs can find files not in the git index (e.g. gitignored files
         // that a user explicitly wants to track). Walk the filesystem for these
         // files but skip re-hashing any already known from the index.
+        let pkg_prefix = package_path.to_unix();
+
         if !includes.is_empty() {
             let full_pkg_path = turbo_root.resolve(package_path);
-            let package_unix_path_buf = package_path.to_unix();
-            let package_unix_path = package_unix_path_buf.as_str();
+            let package_unix_path = pkg_prefix.as_str();
 
             static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
             let mut inclusions = Vec::with_capacity(includes.len() + CONFIG_FILES.len());
@@ -304,12 +305,10 @@ impl GitRepo {
             let mut to_hash = Vec::new();
             for entry in &files {
                 let git_relative = self.root.anchor(entry)?.to_unix();
-                let pkg_relative = turbopath::RelativeUnixPath::strip_prefix(
-                    &git_relative,
-                    &package_unix_path_buf,
-                )
-                .ok()
-                .map(|s| s.to_owned());
+                let pkg_relative =
+                    turbopath::RelativeUnixPath::strip_prefix(&git_relative, &pkg_prefix)
+                        .ok()
+                        .map(|s| s.to_owned());
 
                 let already_known = pkg_relative
                     .as_ref()
