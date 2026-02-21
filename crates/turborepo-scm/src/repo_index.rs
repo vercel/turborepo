@@ -317,6 +317,11 @@ fn find_untracked_files(
         .git_ignore(true)
         .require_git(true)
         .hidden(false)
+        .filter_entry(|entry| {
+            // Never descend into .git/ — the ignore crate may walk it when
+            // hidden(false) is set because .git is a hidden directory.
+            !(entry.file_type().is_some_and(|ft| ft.is_dir()) && entry.file_name() == ".git")
+        })
         .threads(rayon::current_num_threads().min(8))
         .build_parallel();
 
@@ -350,7 +355,7 @@ fn find_untracked_files(
 
             // Binary search on sorted ls_tree_hashes (O(log n), zero extra memory)
             let in_ls_tree = ls_tree_hashes
-                .binary_search_by(|(p, _)| p.as_str().cmp(unix_str))
+                .binary_search_by(|(p, _)| p.as_str().cmp(unix_str.as_ref()))
                 .is_ok();
             let unix_ref: &str = unix_str.as_ref();
             let in_status = sorted_status.binary_search(&unix_ref).is_ok();
