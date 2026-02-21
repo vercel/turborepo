@@ -14,7 +14,7 @@ const YELLOW = "#FFFF00";
 
 const hex = (color: string): ((text: string) => string) => {
   const ansiColor = hexToAnsi256(color);
-  return (text: string) => `\x1B[38;5;${ansiColor}m${text}${reset("")}`;
+  return (text: string) => `\u001B[38;5;${ansiColor}m${text}${reset("")}`;
 };
 
 export const turboGradient = gradient(BLUE, RED);
