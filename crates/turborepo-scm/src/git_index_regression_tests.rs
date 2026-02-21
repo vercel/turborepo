@@ -694,7 +694,7 @@ fn test_many_packages_all_correct() {
 
     for name in &package_names {
         let hashes = repo.get_hashes(name);
-        let num = name.split('-').last().unwrap().parse::<u32>().unwrap();
+        let num = name.split('-').next_back().unwrap().parse::<u32>().unwrap();
         match num {
             5 | 15 => {
                 assert_eq!(hashes.len(), 3, "{} should have 3 files", name);

@@ -2,7 +2,6 @@
 //!
 //! These helpers are used across multiple test modules to avoid duplicating
 //! the boilerplate of setting up git repos for testing.
-#![cfg(test)]
 
 use std::process::Command;
 
