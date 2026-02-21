@@ -440,6 +440,24 @@ fn needs_path_cleaning(s: &str) -> bool {
     false
 }
 
+/// Returns true if the pattern contains glob metacharacters (*, ?, [, {).
+/// Literal file paths return false.
+pub fn is_glob_pattern(pattern: &str) -> bool {
+    // Check for unescaped glob metacharacters
+    let mut chars = pattern.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            // Skip escaped character
+            chars.next();
+            continue;
+        }
+        if matches!(c, '*' | '?' | '[' | '{') {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn globwalk_with_settings(
     base_path: &AbsoluteSystemPath,
     include: &[ValidatedGlob],
