@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use serde::Deserialize;
 
-use super::{PackageEntry, PackageInfo, is_git_or_github_package};
+use super::{PackageEntry, PackageInfo, is_non_npm_package};
 use crate::bun::RootInfo;
 // Comment explaining entry schemas taken from bun.lock.zig
 // first index is resolution for each type of package
@@ -76,8 +76,8 @@ impl<'de> Deserialize<'de> for PackageEntry {
         if let Some(val) = vals.pop_front() {
             match val {
                 Vals::Str(reg) => {
-                    // Only set registry for npm packages, not git/github packages
-                    if !is_git_or_github_package(&key) {
+                    // Only set registry for npm packages, not non-npm packages
+                    if !is_non_npm_package(&key) {
                         registry = Some(reg);
                     }
                 }
@@ -265,6 +265,44 @@ mod test {
         }
     );
 
+    // Tarball URL package fixture - should never have a registry field
+    fixture!(
+        tarball_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "@mariozechner/pi-ai@https://github.com/nicolo-ribaudo/tc39-proposal-awaiting/releases/download/v0.2.0/nicolo-ribaudo-tc39-proposal-awaiting-0.2.0.tgz".into(),
+            registry: None, // Tarball packages must NOT have registry
+            info: Some(PackageInfo {
+                dependencies: Some(("lodash".into(), "4.17.21".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: None,
+            root: None,
+        }
+    );
+
+    // Tarball URL package with CORRUPTED input (has empty string at position 1)
+    // This tests that the deserializer fix correctly ignores registry for tarball packages
+    fixture!(
+        tarball_pkg_corrupted_input,
+        PackageEntry,
+        PackageEntry {
+            ident: "@mariozechner/pi-ai@https://github.com/nicolo-ribaudo/tc39-proposal-awaiting/releases/download/v0.2.0/nicolo-ribaudo-tc39-proposal-awaiting-0.2.0.tgz".into(),
+            registry: None, /* Even with corrupted 4-element input, tarball packages must NOT have
+                             * registry */
+            info: Some(PackageInfo {
+                dependencies: Some(("lodash".into(), "4.17.21".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: None,
+            root: None,
+        }
+    );
+
     #[test_case(json!({"name": "bun-test", "devDependencies": {"turbo": "^2.3.3"}}), basic_workspace() ; "basic")]
     #[test_case(json!({"name": "docs", "version": "0.1.0"}), workspace_with_version() ; "with version")]
     #[test_case(json!(["is-odd@3.0.1", "", {"dependencies": {"is-number": "^6.0.0"}, "devDependencies": {"is-bigint": "1.1.0"}, "peerDependencies": {"is-even": "1.0.0"}, "optionalDependencies": {"is-regexp": "1.0.0"}, "optionalPeers": ["is-even"]}, "sha"]), registry_pkg() ; "registry package")]
@@ -273,6 +311,8 @@ mod test {
     #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg() ; "github package")]
     #[test_case(json!(["my-package@git+https://github.com/user/repo#abc123", {"dependencies": {"lodash": "4.17.21"}}, "abc123"]), git_pkg() ; "git package")]
     #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", "", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg_corrupted_input() ; "github package with corrupted 4-element input")]
+    #[test_case(json!(["@mariozechner/pi-ai@https://github.com/nicolo-ribaudo/tc39-proposal-awaiting/releases/download/v0.2.0/nicolo-ribaudo-tc39-proposal-awaiting-0.2.0.tgz", {"dependencies": {"lodash": "4.17.21"}}]), tarball_pkg() ; "tarball URL package")]
+    #[test_case(json!(["@mariozechner/pi-ai@https://github.com/nicolo-ribaudo/tc39-proposal-awaiting/releases/download/v0.2.0/nicolo-ribaudo-tc39-proposal-awaiting-0.2.0.tgz", "", {"dependencies": {"lodash": "4.17.21"}}]), tarball_pkg_corrupted_input() ; "tarball URL package with corrupted 4-element input")]
     fn test_deserialization<T: for<'a> Deserialize<'a> + PartialEq + std::fmt::Debug>(
         input: serde_json::Value,
         expected: &T,

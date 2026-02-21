@@ -117,14 +117,26 @@ type BTreeSet<T> = std::collections::BTreeSet<T>;
 /// Check if a package identifier refers to a git or GitHub package.
 ///
 /// Git and GitHub packages have different serialization formats than npm
-/// packages:
-/// - npm packages: `[ident, registry, info, checksum]` (4 elements)
-/// - git/github packages: `[ident, info, checksum]` (3 elements, no registry)
-///
-/// This function is used in deserialization, serialization, and encoding to
-/// ensure consistent handling of these package types.
-pub(crate) fn is_git_or_github_package(ident: &str) -> bool {
-    ident.contains("@git+") || ident.contains("@github:")
+/// Detects non-npm packages that use a compact lockfile format (no registry field).
+/// npm packages use 4 elements: [ident, registry, info, checksum]
+/// git/github packages use 3 elements: [ident, info, .bun-tag]
+/// All others (tarball, symlink, folder, workspace, root) use 2 elements: [ident, info]
+pub(crate) fn is_non_npm_package(ident: &str) -> bool {
+    // Find the last '@' that separates name from version/source
+    // (scoped packages like @org/pkg start with @, so we need the LAST @)
+    if let Some(at_pos) = ident.rfind('@') {
+        let after_at = &ident[at_pos + 1..];
+        after_at.starts_with("git+")
+            || after_at.starts_with("github:")
+            || after_at.starts_with("https://")
+            || after_at.starts_with("http://")
+            || after_at.starts_with("link:")
+            || after_at.starts_with("file:")
+            || after_at.starts_with("workspace:")
+            || after_at.starts_with("root:")
+    } else {
+        false
+    }
 }
 
 /// Represents a platform constraint that can be either inclusive or exclusive.
@@ -893,12 +905,18 @@ impl BunLockfile {
                 // 3-element arrays get expanded with trailing commas, others stay compact
                 let info_json_spaced = self.format_info_json(&info_json);
 
-                // GitHub and git packages have 3 elements (no registry)
+                // git/github packages have 3 elements (no registry)
+                // Other non-npm packages (tarball, link, file) have 2 elements
                 // npm packages have 4 elements (with registry)
-                if is_git_or_github_package(&entry.ident) {
-                    // GitHub/git packages: [ident, info, checksum] - 3 elements
+                if matches!(ident, PackageIdent::Git { .. }) {
+                    // git/github packages: [ident, info, checksum] - 3 elements
                     output.push_str(&format!(
                         "    \"{key}\": [{ident_json}, {info_json_spaced}, {checksum_json}],",
+                    ));
+                } else if is_non_npm_package(&entry.ident) {
+                    // tarball, link, file, root: [ident, info] - 2 elements
+                    output.push_str(&format!(
+                        "    \"{key}\": [{ident_json}, {info_json_spaced}],",
                     ));
                 } else {
                     // npm packages: [ident, registry, info, checksum] - 4 elements
