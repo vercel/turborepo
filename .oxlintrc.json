@@ -1,4 +1,16 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "extends": ["./node_modules/ultracite/config/oxlint/core/.oxlintrc.json"]
+  "extends": ["./node_modules/ultracite/config/oxlint/core/.oxlintrc.json"],
+  "rules": {
+    "jest/no-confusing-set-timeout": "off",
+    "func-style": "off",
+    "sort-keys": "off",
+    "import/no-relative-parent-imports": "off",
+    "import/no-nodejs-modules": "off",
+    "max-statements": "off",
+    "jest/no-conditional-in-test": "off",
+    "jest/require-hook": "off",
+    "no-inline-comments": "off",
+    "unicorn/filename-case": "off"
+  }
 }
