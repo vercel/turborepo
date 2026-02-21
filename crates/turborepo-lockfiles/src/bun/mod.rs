@@ -127,6 +127,12 @@ pub(crate) fn is_git_or_github_package(ident: &str) -> bool {
     ident.contains("@git+") || ident.contains("@github:")
 }
 
+/// Returns true if the ident refers to a `file:` protocol dependency.
+/// File packages have the shortest format: `[ident, info]` (2 elements).
+pub(crate) fn is_file_package(ident: &str) -> bool {
+    ident.contains("@file:")
+}
+
 /// Represents a platform constraint that can be either inclusive or exclusive.
 /// This matches Bun's Negatable type for os/cpu/libc fields.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -893,9 +899,15 @@ impl BunLockfile {
                 // 3-element arrays get expanded with trailing commas, others stay compact
                 let info_json_spaced = self.format_info_json(&info_json);
 
+                // File packages have 2 elements (no registry or checksum)
                 // GitHub and git packages have 3 elements (no registry)
                 // npm packages have 4 elements (with registry)
-                if is_git_or_github_package(&entry.ident) {
+                if is_file_package(&entry.ident) {
+                    // file packages: [ident, info] - 2 elements
+                    output.push_str(&format!(
+                        "    \"{key}\": [{ident_json}, {info_json_spaced}],",
+                    ));
+                } else if is_git_or_github_package(&entry.ident) {
                     // GitHub/git packages: [ident, info, checksum] - 3 elements
                     output.push_str(&format!(
                         "    \"{key}\": [{ident_json}, {info_json_spaced}, {checksum_json}],",
