@@ -4,6 +4,7 @@ import { getTask } from "../src/getTask";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();
+
   it("getTask defaults to build", () => {
     expect(getTask({})).toEqual("build");
     expect(mockConsole.log).toHaveBeenNthCalledWith(

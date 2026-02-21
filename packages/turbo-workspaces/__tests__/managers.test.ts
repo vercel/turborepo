@@ -14,7 +14,7 @@ import {
   generateConvertLockMatrix
 } from "./test-utils";
 
-jest.mock("execa", () => jest.fn());
+jest.mock<typeof import('execa')>("execa", () => jest.fn());
 
 describe("managers", () => {
   const { useFixture } = setupTestFixtures({
@@ -60,13 +60,9 @@ describe("managers", () => {
         });
 
         if (dry) {
-          expect(
-            await MANAGERS[project].detect({ workspaceRoot: root })
-          ).toEqual(true);
+          await expect(MANAGERS[project].detect({ workspaceRoot: root })).resolves.toEqual(true);
         } else {
-          expect(
-            await MANAGERS[manager].detect({ workspaceRoot: root })
-          ).toEqual(true);
+          await expect(MANAGERS[manager].detect({ workspaceRoot: root })).resolves.toEqual(true);
         }
       }
     );

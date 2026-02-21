@@ -115,7 +115,7 @@ const agent = new ToolLoopAgent({
       ),
       execute: async function ({ command, cwd, allowFailure }) {
         console.log("$ " + command);
-        var output = shell(command, {
+        const output = shell(command, {
           cwd: cwd ?? REPO_DIR,
           allowFailure: allowFailure ?? false
         });
@@ -131,7 +131,7 @@ const agent = new ToolLoopAgent({
         })
       ),
       execute: async function ({ path }) {
-        var fullPath = REPO_DIR + "/" + path;
+        const fullPath = REPO_DIR + "/" + path;
         if (!existsSync(fullPath)) {
           return "File not found: " + path;
         }
@@ -148,7 +148,7 @@ const agent = new ToolLoopAgent({
         })
       ),
       execute: async function ({ path, content }) {
-        var fullPath = REPO_DIR + "/" + path;
+        const fullPath = REPO_DIR + "/" + path;
         writeFileSync(fullPath, content, "utf-8");
         return "Wrote " + content.length + " bytes to " + path;
       }
@@ -164,7 +164,7 @@ const agent = new ToolLoopAgent({
         })
       ),
       execute: async function ({ pattern }) {
-        var output = shell("find . -path './" + pattern + "' | head -50", {
+        const output = shell("find . -path './" + pattern + "' | head -50", {
           allowFailure: true
         });
         return output || "(no matches)";
@@ -201,14 +201,14 @@ async function main() {
   console.log("Starting audit fix agent...");
 
   try {
-    var result = await agent.generate({
+    const result = await agent.generate({
       prompt:
         "Run security audits on this repo and fix the vulnerabilities. Follow the strategy in your instructions exactly — audit, fix manifests, reinstall, verify, report. Do not over-analyze. Act quickly."
     });
 
     console.log("\nAgent finished.");
 
-    var reportCall = result.steps
+    const reportCall = result.steps
       .flatMap(function (s) {
         return s.toolCalls ?? [];
       })

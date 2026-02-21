@@ -14,7 +14,7 @@ const YELLOW = "#FFFF00";
 
 const hex = (color: string): ((text: string) => string) => {
   const ansiColor = hexToAnsi256(color);
-  return (text: string) => `\x1b[38;5;${ansiColor}m${text}${reset("")}`;
+  return (text: string) => `\x1B[38;5;${ansiColor}m${text}${reset("")}`;
 };
 
 export const turboGradient = gradient(BLUE, RED);
@@ -70,7 +70,7 @@ export const error = (...args: Array<unknown>) => {
 };
 
 function hexToAnsi256(sHex: string): number {
-  const rgb = parseInt(sHex.slice(1), 16);
+  const rgb = Number.parseInt(sHex.slice(1), 16);
   const r = Math.floor(rgb / (256 * 256)) % 256;
   const g = Math.floor(rgb / 256) % 256;
   const b = rgb % 256;

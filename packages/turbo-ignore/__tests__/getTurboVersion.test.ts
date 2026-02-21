@@ -4,6 +4,7 @@ import { getTurboVersion } from "../src/getTurboVersion";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();
+
   it("getTurboVersion returns turboVersion from arg", () => {
     expect(
       getTurboVersion(

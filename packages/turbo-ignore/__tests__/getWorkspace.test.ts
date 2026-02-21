@@ -4,6 +4,7 @@ import { getWorkspace } from "../src/getWorkspace";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();
+
   it("getWorkspace returns workspace from arg", () => {
     expect(
       getWorkspace({

@@ -9,9 +9,7 @@ jest.mock("fs-extra");
 jest.mock("../src/isFolderEmpty");
 
 const mockFs = fs as jest.Mocked<typeof fs>;
-const mockIsFolderEmpty = isFolderEmpty as jest.MockedFunction<
-  typeof isFolderEmpty
->;
+const mockIsFolderEmpty = jest.mocked(isFolderEmpty);
 
 describe("validateDirectory", () => {
   beforeEach(() => {

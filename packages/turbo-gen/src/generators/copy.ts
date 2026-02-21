@@ -65,7 +65,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     }
   } else if (source) {
     const filterFunc: CopyFilterAsync = async (src) =>
-      Promise.resolve(!src.includes("node_modules"));
+      !src.includes("node_modules");
 
     const loader = logger.turboLoader(
       `Creating "${name}" from "${source.name}"...`

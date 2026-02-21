@@ -35,7 +35,7 @@ function wildcardToRegexPattern(pattern: string): string {
         regexString.push(escapeRegExp(pattern.slice(previousIndex, i)));
 
         // Add a dynamic segment if it isn't adjacent to another dynamic segment.
-        if (regexString[regexString.length - 1] !== regexWildcardSegment) {
+        if (regexString.at(-1) !== regexWildcardSegment) {
           regexString.push(regexWildcardSegment);
         }
       }

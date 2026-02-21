@@ -1,11 +1,15 @@
 {
   "name": "@turbo/repository-linux-arm64-gnu",
   "version": "0.0.1-canary.17",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-repository/npm/linux-arm64-gnu"
   },
+  "files": [
+    "repository.linux-arm64-gnu.node"
+  ],
   "os": [
     "linux"
   ],
@@ -16,10 +20,6 @@
     "glibc"
   ],
   "main": "repository.linux-arm64-gnu.node",
-  "files": [
-    "repository.linux-arm64-gnu.node"
-  ],
-  "license": "MIT",
   "engines": {
     "node": ">= 10"
   }

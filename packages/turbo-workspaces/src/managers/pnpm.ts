@@ -253,10 +253,11 @@ async function convertLock(args: ConvertArgs): Promise<void> {
 
   // handle moving lockfile from `packageManager` to npm
   switch (project.packageManager) {
-    case "pnpm":
+    case "pnpm": {
       // we're already using pnpm, so we don't need to convert
       break;
-    case "bun":
+    }
+    case "bun": {
       logLockConversionStep();
       // convert bun -> yarn -> pnpm
       await bunLockToYarnLock({ project, options });
@@ -264,16 +265,19 @@ async function convertLock(args: ConvertArgs): Promise<void> {
       // remove the intermediate yarn lockfile
       fs.rmSync(path.join(project.paths.root, "yarn.lock"), { force: true });
       break;
-    case "npm":
+    }
+    case "npm": {
       // convert npm -> pnpm
       logLockConversionStep();
       await importLockfile();
       break;
-    case "yarn":
+    }
+    case "yarn": {
       // convert yarn -> pnpm
       logLockConversionStep();
       await importLockfile();
       break;
+    }
   }
 }
 

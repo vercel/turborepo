@@ -1,11 +1,15 @@
 {
   "name": "@turbo/repository-win32-x64-msvc",
   "version": "0.0.1-canary.17",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-repository/npm/win32-x64-msvc"
   },
+  "files": [
+    "repository.win32-x64-msvc.node"
+  ],
   "os": [
     "win32"
   ],
@@ -13,10 +17,6 @@
     "x64"
   ],
   "main": "repository.win32-x64-msvc.node",
-  "files": [
-    "repository.win32-x64-msvc.node"
-  ],
-  "license": "MIT",
   "engines": {
     "node": ">= 10"
   }

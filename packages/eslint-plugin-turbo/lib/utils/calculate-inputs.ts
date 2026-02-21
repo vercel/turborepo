@@ -58,12 +58,15 @@ function processLegacyConfig(
 
   // After processing length is 0, 1, or more than 1.
   switch (processed.length) {
-    case 0:
+    case 0: {
       return [];
-    case 1:
+    }
+    case 1: {
       return processed;
-    default:
+    }
+    default: {
       return [...new Set(processed)].sort();
+    }
   }
 }
 
@@ -73,12 +76,15 @@ function processEnv(env: Array<string> | undefined): Array<string> {
   }
 
   switch (env.length) {
-    case 0:
+    case 0: {
       return [];
-    case 1:
+    }
+    case 1: {
       return [env[0]];
-    default:
+    }
+    default: {
       return [...new Set(env)].sort();
+    }
   }
 }
 
@@ -90,12 +96,15 @@ function processPassThroughEnv(
   }
 
   switch (passThroughEnv.length) {
-    case 0:
+    case 0: {
       return [];
-    case 1:
+    }
+    case 1: {
       return [passThroughEnv[0]];
-    default:
+    }
+    default: {
       return [...new Set(passThroughEnv)].sort();
+    }
   }
 }
 

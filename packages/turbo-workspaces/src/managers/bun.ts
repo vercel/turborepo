@@ -240,21 +240,25 @@ async function convertLock(args: ConvertArgs): Promise<void> {
 
   // handle moving lockfile from `packageManager` to npm
   switch (project.packageManager) {
-    case "pnpm":
+    case "pnpm": {
       // can't convert from pnpm to bun - just remove the lock
       removeLockFile({ project, options });
       break;
-    case "bun":
+    }
+    case "bun": {
       // we're already using bun, so we don't need to convert
       break;
-    case "npm":
+    }
+    case "npm": {
       // can't convert from npm to bun - just remove the lock
       removeLockFile({ project, options });
       break;
-    case "yarn":
+    }
+    case "yarn": {
       // can't convert from yarn to bun - just remove the lock
       removeLockFile({ project, options });
       break;
+    }
   }
 }
 

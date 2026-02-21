@@ -7,6 +7,7 @@ import { getComparison } from "../src/getComparison";
 describe("getComparison()", () => {
   mockEnv();
   const mockConsole = spyConsole();
+
   it("uses headRelative comparison when not running Vercel CI", () => {
     expect(getComparison({ workspace: "test-workspace" }))
       .toMatchInlineSnapshot(`
@@ -15,7 +16,7 @@ describe("getComparison()", () => {
         "type": "headRelative",
       }
     `);
-    expect(mockConsole.log).toHaveBeenCalledTimes(0);
+    expect(mockConsole.log).not.toHaveBeenCalled();
   });
 
   it("uses fallback comparison if provided when not running Vercel CI", () => {

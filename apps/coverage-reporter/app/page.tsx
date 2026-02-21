@@ -25,7 +25,7 @@ export default async function Dashboard() {
       functions: r.summary.functions.percent,
       branches: r.summary.branches.percent
     }))
-    .reverse();
+    .toReversed();
 
   // Calculate delta from previous
   const previousCommit = mainHistory[1];

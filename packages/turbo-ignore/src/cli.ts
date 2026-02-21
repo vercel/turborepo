@@ -64,7 +64,7 @@ turboIgnoreCli
     new Option(
       "-b, --max-buffer <number>",
       "maxBuffer for the child process in KB (default: 1024 KB)"
-    ).argParser((val) => parseInt(val, 10) * 1024)
+    ).argParser((val) => Number.parseInt(val, 10) * 1024)
   )
   .version(cliPkg.version, "-v, --version", "Output the current version")
   .helpOption("-h, --help", "Display help for command")
