@@ -191,7 +191,7 @@ const validateInternalLink =
       foundPage = documentMap.get(`${link}/index`);
     }
 
-    let errors: LinkError[] = [];
+    const errors: LinkError[] = [];
 
     if (!foundPage) {
       errors.push({
@@ -251,7 +251,7 @@ const validateHashLink = (doc: Document, href: string) => {
     return [];
   }
 
-  let linkError: LinkError = {
+  const linkError: LinkError = {
     type: "hash",
     href,
     doc
@@ -265,7 +265,7 @@ const traverseTreeAndValidateLinks = (
   tree: unknown,
   doc: Document
 ): LinkError[] => {
-  let errors: LinkError[] = [];
+  const errors: LinkError[] = [];
 
   try {
     visit(tree, (node: any) => {

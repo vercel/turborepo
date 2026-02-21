@@ -152,7 +152,7 @@ export class LocalRunner {
     await exec(`corepack enable --install-directory "${corepackBin}"`, tmpDir);
     let fullPath = `${corepackBin}:${localBin}:${process.env.PATH}`;
 
-    let installCmd = fixture.frozenInstallCommand.join(" ");
+    const installCmd = fixture.frozenInstallCommand.join(" ");
 
     if (fixture.packageManager === "bun") {
       const bunVersion = fixture.packageManagerVersion.replace("bun@", "");
