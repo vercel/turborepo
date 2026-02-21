@@ -3,7 +3,11 @@
   "compilerOptions": {
     "lib": ["dom", "ES2015"],
     "sourceMap": true,
-    "types": ["jest", "node"]
+    "types": [
+      "jest",
+      "node"
+    ],
+    "strictNullChecks": true
   },
   "include": ["."],
   "exclude": ["dist", "build", "node_modules"]
