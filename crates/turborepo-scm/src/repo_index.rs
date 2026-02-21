@@ -351,14 +351,15 @@ fn find_untracked_files(
             };
 
             #[cfg(windows)]
-            let unix_str = unix_str.replace('\\', "/");
+            let unix_str_owned = unix_str.replace('\\', "/");
+            #[cfg(windows)]
+            let unix_str: &str = &unix_str_owned;
 
             // Binary search on sorted ls_tree_hashes (O(log n), zero extra memory)
             let in_ls_tree = ls_tree_hashes
-                .binary_search_by(|(p, _)| p.as_str().cmp(unix_str.as_ref()))
+                .binary_search_by(|(p, _)| p.as_str().cmp(unix_str))
                 .is_ok();
-            let unix_ref: &str = unix_str.as_ref();
-            let in_status = sorted_status.binary_search(&unix_ref).is_ok();
+            let in_status = sorted_status.binary_search(&unix_str).is_ok();
 
             if !in_ls_tree
                 && !in_status
