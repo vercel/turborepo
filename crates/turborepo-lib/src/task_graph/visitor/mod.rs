@@ -257,12 +257,6 @@ impl<'a> Visitor<'a> {
             )?;
 
             debug!("task {} hash is {}", info, task_hash);
-            // We do this calculation earlier than we do in Go due to the `task_hasher`
-            // being !Send. In the future we can look at doing this right before
-            // task execution instead.
-            let execution_env = self
-                .task_hasher
-                .env(&info, task_env_mode, task_definition)?;
 
             let task_cache = self.run_cache.task_cache(
                 task_definition,
@@ -272,6 +266,7 @@ impl<'a> Visitor<'a> {
             );
 
             // Drop to avoid holding the span across an await
+
             drop(_enter);
 
             // here is where we do the logic split
@@ -285,6 +280,13 @@ impl<'a> Visitor<'a> {
                     }));
                 }
                 false => {
+                    // Compute execution env only when we actually need it (not
+                    // during dry runs). The task_hasher is !Send so this must
+                    // happen in the dispatch loop rather than inside the spawned task.
+                    let execution_env =
+                        self.task_hasher
+                            .env(&info, task_env_mode, task_definition)?;
+
                     let takes_input = task_definition.interactive || task_definition.persistent;
                     let Some(mut exec_context) = factory.exec_context(
                         info.clone(),

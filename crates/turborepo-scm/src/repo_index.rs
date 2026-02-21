@@ -293,6 +293,9 @@ impl RepoGitIndex {
 /// not in the git index). Uses the `ignore` crate's parallel walker to
 /// respect .gitignore rules. Uses binary search on the sorted ls_tree_hashes
 /// and status_entries instead of building a HashSet.
+///
+/// Each walker thread accumulates results in a thread-local Vec and
+/// batch-sends them through a channel, avoiding per-file mutex contention.
 #[cfg(feature = "gix")]
 #[tracing::instrument(skip(git, ls_tree_hashes, status_entries))]
 fn find_untracked_files(
@@ -300,16 +303,20 @@ fn find_untracked_files(
     ls_tree_hashes: &SortedGitHashes,
     status_entries: &[RepoStatusEntry],
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
-    use std::sync::Mutex;
+    use std::sync::{Arc, mpsc};
 
     use ignore::WalkBuilder;
 
     // Pre-sort status_entries for binary search (they may not be fully sorted
     // yet if this is called before the final sort).
-    let mut sorted_status: Vec<&str> = status_entries.iter().map(|e| e.path.as_str()).collect();
+    let mut sorted_status: Vec<String> = status_entries
+        .iter()
+        .map(|e| e.path.as_str().to_owned())
+        .collect();
     sorted_status.sort_unstable();
+    let sorted_status = Arc::new(sorted_status);
 
-    let untracked = Mutex::new(Vec::new());
+    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
     let root = git.root.as_std_path();
 
     let walker = WalkBuilder::new(root)
@@ -325,8 +332,29 @@ fn find_untracked_files(
         .threads(rayon::current_num_threads().min(8))
         .build_parallel();
 
+    // Sends the accumulated buffer when the walker thread's closure is dropped.
+    struct FlushOnDrop {
+        buf: Vec<RelativeUnixPathBuf>,
+        tx: mpsc::Sender<Vec<RelativeUnixPathBuf>>,
+    }
+
+    impl Drop for FlushOnDrop {
+        fn drop(&mut self) {
+            if !self.buf.is_empty() {
+                let batch = std::mem::take(&mut self.buf);
+                let _ = self.tx.send(batch);
+            }
+        }
+    }
+
     walker.run(|| {
-        Box::new(|entry| {
+        let sorted_status = Arc::clone(&sorted_status);
+        let mut guard = FlushOnDrop {
+            buf: Vec::new(),
+            tx: tx.clone(),
+        };
+
+        Box::new(move |entry| {
             let entry = match entry {
                 Ok(e) => e,
                 Err(_) => return ignore::WalkState::Continue,
@@ -359,21 +387,29 @@ fn find_untracked_files(
             let in_ls_tree = ls_tree_hashes
                 .binary_search_by(|(p, _)| p.as_str().cmp(unix_str))
                 .is_ok();
-            let unix_ref: &str = unix_str.as_ref();
-            let in_status = sorted_status.binary_search(&unix_ref).is_ok();
+            let in_status = sorted_status
+                .binary_search_by(|s| s.as_str().cmp(unix_str))
+                .is_ok();
 
             if !in_ls_tree
                 && !in_status
                 && let Ok(path) = RelativeUnixPathBuf::new(unix_str)
             {
-                untracked.lock().unwrap().push(path);
+                guard.buf.push(path);
             }
 
             ignore::WalkState::Continue
         })
     });
+    // Drop the original sender so rx.iter() terminates after all workers finish.
+    drop(tx);
 
-    Ok(untracked.into_inner().unwrap())
+    let mut untracked = Vec::new();
+    for batch in rx.iter() {
+        untracked.extend(batch);
+    }
+
+    Ok(untracked)
 }
 
 #[cfg(feature = "gix")]
