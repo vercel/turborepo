@@ -19,5 +19,26 @@
     "ignoreCase": true,
     "newlinesBetween": false,
     "order": "asc"
-  }
+  },
+  "ignorePatterns": [
+    "build/",
+    "crates/",
+    "cli/",
+    "examples/",
+    "packages/eslint-plugin-turbo/__fixtures__",
+    "packages/create-turbo/templates",
+    "turborepo-tests/",
+    "buildcontainer/",
+    "scripts/",
+    ".github/",
+    ".devcontainer/",
+    ".cargo/",
+    ".config/",
+    ".cursor/",
+    ".vscode/",
+    ".husky/",
+    ".conductor/",
+    "packages/turbo-utils/__tests__/convertCase.test.ts",
+    "apps/docs/**/*"
+  ]
 }
