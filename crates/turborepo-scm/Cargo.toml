@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 bstr = "1.4.0"
 git2 = { workspace = true, default-features = false, optional = true }
+gix-index = { workspace = true, default-features = false, optional = true }
 globwalk = { path = "../turborepo-globwalk" }
 hex = { workspace = true }
 ignore = "0.4.20"
@@ -31,8 +32,10 @@ which = { workspace = true }
 
 [dev-dependencies]
 git2 = { workspace = true, default-features = false }
+gix-index = { workspace = true, default-features = false }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 
 [features]
 git2 = ["dep:git2"]
+gix = ["dep:gix-index"]
