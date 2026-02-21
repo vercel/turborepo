@@ -82,12 +82,12 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
   packageJson.name = name;
 
   // update dependencies
-  Object.keys(dependencies).forEach((group) => {
+  for (const group of Object.keys(dependencies)) {
     const deps = dependencies[group as keyof DependencyGroups];
     if (deps && Object.keys(deps).length > 0) {
       packageJson[group as keyof DependencyGroups] = deps;
     }
-  });
+  }
   await fs.writeJSON(newPackageJsonPath, packageJson, { spaces: 2 });
 
   logger.log();

@@ -15,10 +15,10 @@ function contentCheck(content: string): boolean {
 const configCache: Record<string, string> = {};
 
 export function clearTurboRootCache(): void {
-  Object.keys(configCache).forEach((key) => {
+  for (const key of Object.keys(configCache)) {
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- This is safe.
     delete configCache[key];
-  });
+  }
 }
 
 export function getTurboRoot(cwd?: string, opts?: Options): string | null {

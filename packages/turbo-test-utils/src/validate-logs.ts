@@ -7,7 +7,7 @@ export function validateLogs(
   spy: SpyConsole[keyof SpyConsole],
   args: Array<Array<string | Matcher>>
 ) {
-  args.forEach((arg, idx) => {
+  for (const [idx, arg] of args.entries()) {
     expect(spy).toHaveBeenNthCalledWith(idx + 1, ...arg);
-  });
+  }
 }

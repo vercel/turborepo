@@ -287,20 +287,24 @@ export function forEachTaskDef<BaseSchema extends BaseSchemaV1 | BaseSchemaV2>(
   ) => void
 ): void {
   if ("pipeline" in config) {
-    Object.entries(config.pipeline).forEach(f);
+    for (const entry of Object.entries(config.pipeline)) {
+      f(entry);
+    }
   } else {
-    Object.entries(config.tasks).forEach(f);
+    for (const entry of Object.entries(config.tasks)) {
+      f(entry);
+    }
   }
 }
 
 export function clearConfigCaches(): void {
-  Object.keys(turboConfigsCache).forEach((key) => {
+  for (const key of Object.keys(turboConfigsCache)) {
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- This is safe.
     delete turboConfigsCache[key];
-  });
-  Object.keys(workspaceConfigCache).forEach((key) => {
+  }
+  for (const key of Object.keys(workspaceConfigCache)) {
     // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- This is safe.
     delete workspaceConfigCache[key];
-  });
+  }
   clearTurboRootCache();
 }

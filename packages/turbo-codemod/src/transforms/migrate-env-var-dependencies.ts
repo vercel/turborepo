@@ -38,13 +38,15 @@ export function migrateDependencies({
 }) {
   const envDeps = new Set<string>(env);
   const otherDeps: Array<string> = [];
-  deps?.forEach((dep) => {
-    if (dep.startsWith("$")) {
-      envDeps.add(dep.slice(1));
-    } else {
-      otherDeps.push(dep);
+  if (deps) {
+    for (const dep of deps) {
+      if (dep.startsWith("$")) {
+        envDeps.add(dep.slice(1));
+      } else {
+        otherDeps.push(dep);
+      }
     }
-  });
+  }
   if (envDeps.size) {
     return {
       deps: otherDeps,
@@ -103,7 +105,7 @@ export function migrateConfig(config: SchemaV1) {
   }
 
   const migratedConfig = migrateGlobal(config);
-  Object.keys(config.pipeline).forEach((pipelineKey) => {
+  for (const pipelineKey of Object.keys(config.pipeline)) {
     if (pipelineKey in config.pipeline) {
       const pipeline = migratedConfig.pipeline[pipelineKey];
       migratedConfig.pipeline[pipelineKey] = {
@@ -111,7 +113,7 @@ export function migrateConfig(config: SchemaV1) {
         ...migratePipeline(pipeline)
       };
     }
-  });
+  }
   return migratedConfig;
 }
 
@@ -165,7 +167,7 @@ export function transformer({
 
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
-  workspaceConfigs.forEach((workspaceConfig) => {
+  for (const workspaceConfig of workspaceConfigs) {
     const { config, turboConfigPath: filePath } = workspaceConfig;
     if ("pipeline" in config && hasLegacyEnvVarDependencies(config).hasKeys) {
       runner.modifyFile({
@@ -173,7 +175,7 @@ export function transformer({
         after: migrateConfig(config)
       });
     }
-  });
+  }
 
   return runner.finish();
 }

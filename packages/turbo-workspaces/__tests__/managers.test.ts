@@ -204,7 +204,7 @@ describe("managers", () => {
           expect(project.workspaceData.globs).toEqual([]);
         } else {
           expect(project.workspaceData.globs).toEqual(["apps/*", "packages/*"]);
-          project.workspaceData.workspaces.forEach((workspace) => {
+          for (const workspace of project.workspaceData.workspaces) {
             const type = ["web", "docs"].includes(workspace.name)
               ? "apps"
               : "packages";
@@ -216,7 +216,7 @@ describe("managers", () => {
             expect(workspace.paths.root).toMatch(
               new RegExp(`^.*${directoryName}/${type}/${workspace.name}$`)
             );
-          });
+          }
         }
       }
     );
@@ -286,7 +286,7 @@ describe("managers", () => {
           expect(project.workspaceData.globs).toEqual([]);
         } else {
           expect(project.workspaceData.globs).toEqual(["apps/*", "packages/*"]);
-          project.workspaceData.workspaces.forEach((workspace) => {
+          for (const workspace of project.workspaceData.workspaces) {
             const type = ["web", "docs"].includes(workspace.name)
               ? "apps"
               : "packages";
@@ -298,7 +298,7 @@ describe("managers", () => {
             expect(workspace.paths.root).toMatch(
               new RegExp(`^.*${directoryName}/${type}/${workspace.name}$`)
             );
-          });
+          }
         }
       }
     );

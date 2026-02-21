@@ -249,12 +249,12 @@ export async function dependencies({
     if (Object.keys(newDependencyGroup).length) {
       const existingDependencyKeys = new Set(Object.keys(newDependencyGroup));
 
-      selected.forEach((dep) => {
+      for (const dep of selected) {
         if (!existingDependencyKeys.has(dep)) {
           newDependencyGroup[dep] =
             project.packageManager === "pnpm" ? "workspace:*" : "*";
         }
-      });
+      }
 
       selectedDependencies[group] = newDependencyGroup;
     } else {

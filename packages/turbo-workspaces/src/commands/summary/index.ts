@@ -42,14 +42,14 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
   const hasWorkspaces = numWorkspaces > 0;
   // group workspaces
   const workspacesByDirectory: Record<string, Array<Workspace>> = {};
-  project.workspaceData.workspaces.forEach((workspace) => {
+  for (const workspace of project.workspaceData.workspaces) {
     const workspacePath = path.relative(root, workspace.paths.root);
     const rootDirectory = workspacePath.split(path.sep)[0];
     if (!(rootDirectory in workspacesByDirectory)) {
       workspacesByDirectory[rootDirectory] = [];
     }
     workspacesByDirectory[rootDirectory].push(workspace);
-  });
+  }
 
   const renderWorkspace = (w: Workspace) => {
     return `${w.name} (${picocolors.italic(
@@ -67,9 +67,9 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
     workspaces: Array<Workspace>;
   }) => {
     logger.indented(2, `${number}. ${picocolors.bold(dir)}`);
-    workspaces.forEach((workspace, idx) => {
+    for (const [idx, workspace] of workspaces.entries()) {
       logger.indented(3, `${idx + 1}. ${renderWorkspace(workspace)}`);
-    });
+    }
   };
 
   // repo header
@@ -88,13 +88,13 @@ export async function summaryCommand(directory: SummaryCommandArgument) {
       1,
       `Workspaces (${picocolors.bold(numWorkspaces.toString())}):`
     );
-    Object.keys(workspacesByDirectory).forEach((dir, idx) => {
+    for (const [idx, dir] of Object.keys(workspacesByDirectory).entries()) {
       renderDirectory({
         number: idx + 1,
         workspaces: workspacesByDirectory[dir],
         dir
       });
-    });
+    }
     logger.blankLine();
   }
 }

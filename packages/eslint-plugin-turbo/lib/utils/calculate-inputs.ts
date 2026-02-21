@@ -349,9 +349,9 @@ export class Project {
       );
     }
 
-    this.projectWorkspaces.forEach((projectWorkspace) => {
+    for (const projectWorkspace of this.projectWorkspaces) {
       if (!projectWorkspace.turboConfig) {
-        return;
+        continue;
       }
 
       forEachTaskDef(
@@ -376,7 +376,7 @@ export class Project {
           );
         }
       );
-    });
+    }
 
     return {
       global,

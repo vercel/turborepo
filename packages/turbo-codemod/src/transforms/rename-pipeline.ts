@@ -51,7 +51,7 @@ export function transformer({
 
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
-  workspaceConfigs.forEach((workspaceConfig) => {
+  for (const workspaceConfig of workspaceConfigs) {
     const { config, turboConfigPath: filePath } = workspaceConfig;
     if ("pipeline" in config) {
       runner.modifyFile({
@@ -59,7 +59,7 @@ export function transformer({
         after: migrateConfig(config)
       });
     }
-  });
+  }
 
   return runner.finish();
 }

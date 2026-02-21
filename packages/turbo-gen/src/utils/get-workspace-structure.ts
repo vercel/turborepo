@@ -34,7 +34,7 @@ export function getWorkspaceStructure({
 
   const workspacesByGroup: WorkspaceStructure["workspacesByGroup"] = {};
   const nonAppWorkspaces: WorkspaceStructure["nonAppWorkspaces"] = [];
-  project.workspaceData.workspaces.forEach((w) => {
+  for (const w of project.workspaceData.workspaces) {
     const group = getGroupFromWorkspace({ project, workspace: w });
     if (group !== "apps") {
       nonAppWorkspaces.push(w);
@@ -45,7 +45,7 @@ export function getWorkspaceStructure({
       workspacesByGroup[group] = [];
     }
     workspacesByGroup[group].push(w);
-  });
+  }
 
   return {
     hasRootApps,

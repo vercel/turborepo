@@ -75,11 +75,11 @@ export async function transformer({
   ];
 
   // add all workspace package.json files
-  project.workspaceData.workspaces.forEach((workspace) => {
+  for (const workspace of project.workspaceData.workspaces) {
     const pkgJsonPath = workspace.paths.packageJson;
     packagePaths.push(pkgJsonPath);
     packagePromises.push(readPkgJson(pkgJsonPath));
-  });
+  }
 
   // await, and then zip the paths and promise results together
   const packageContent = await Promise.all(packagePromises);

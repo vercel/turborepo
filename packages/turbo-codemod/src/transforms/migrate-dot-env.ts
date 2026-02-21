@@ -86,13 +86,13 @@ export function transformer({
 
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
-  workspaceConfigs.forEach((workspaceConfig) => {
+  for (const workspaceConfig of workspaceConfigs) {
     const { config, turboConfigPath: filePath } = workspaceConfig;
     runner.modifyFile({
       filePath,
       after: migrateConfig(config)
     });
-  });
+  }
 
   return runner.finish();
 }

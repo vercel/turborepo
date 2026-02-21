@@ -44,9 +44,9 @@ describe("clean-globs", () => {
     ];
 
     // Now let's test the function
-    badGlobPatterns.forEach(([input, output]) => {
+    for (const [input, output] of badGlobPatterns) {
       expect(fixGlobPattern(input)).toBe(output);
-    });
+    }
   });
 
   it("doesn't update valid globs and prints a message", () => {
@@ -66,9 +66,9 @@ describe("clean-globs", () => {
     ];
 
     // Now let's test the function
-    badGlobPatterns.forEach(([input, output]) => {
+    for (const [input, output] of badGlobPatterns) {
       expect(fixGlobPattern(input)).toBe(output);
-    });
+    }
   });
 
   it("transforms 'pre**' to pre*/**", () => {
@@ -81,9 +81,9 @@ describe("clean-globs", () => {
     ];
 
     // Now let's test the function
-    badGlobPatterns.forEach(([input, output]) => {
+    for (const [input, output] of badGlobPatterns) {
       expect(fixGlobPattern(input)).toBe(output);
-    });
+    }
   });
 
   it("should collapse back-to-back doublestars to a single doublestar", () => {

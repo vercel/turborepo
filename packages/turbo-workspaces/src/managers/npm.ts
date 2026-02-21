@@ -138,9 +138,9 @@ async function create(args: CreateArgs): Promise<void> {
 
     // workspace dependencies
     logger.workspaceHeader();
-    project.workspaceData.workspaces.forEach((workspace) => {
+    for (const workspace of project.workspaceData.workspaces) {
       updateDependencies({ workspace, project, to, logger, options });
-    });
+    }
   } else if (!options?.dry) {
     fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
   }

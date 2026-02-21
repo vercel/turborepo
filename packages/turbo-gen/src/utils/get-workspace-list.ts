@@ -29,14 +29,14 @@ export function getWorkspaceList({
 
   // build final list with separators between groups
   let lastGroup: string | undefined;
-  workspacesForDisplay.forEach((workspace) => {
+  for (const workspace of workspacesForDisplay) {
     const group = getGroupFromWorkspace({ project, workspace });
     if (group !== lastGroup) {
       workspaceChoices.push(new Separator(group));
     }
     lastGroup = group;
     workspaceChoices.push(workspace);
-  });
+  }
 
   return workspaceChoices;
 }

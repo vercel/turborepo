@@ -74,7 +74,7 @@ export function wildcardTests(
   const includePatterns: Array<string> = [];
   const excludePatterns: Array<string> = [];
 
-  wildcardPatterns.forEach((wildcardPattern) => {
+  for (const wildcardPattern of wildcardPatterns) {
     const isExclude = wildcardPattern.startsWith("!");
     const isLiteralLeadingExclamation = wildcardPattern.startsWith("\\!");
 
@@ -88,7 +88,7 @@ export function wildcardTests(
       const includePattern = wildcardToRegexPattern(wildcardPattern);
       includePatterns.push(includePattern);
     }
-  });
+  }
 
   // Set some defaults.
   let inclusions = NO_PATTERNS;
