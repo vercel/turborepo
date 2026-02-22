@@ -131,6 +131,23 @@ mod tests {
     }
 
     #[test]
+    fn test_turbo_json_no_update_notifier_propagates_through_shim_config() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+        repo_root
+            .join_component(CONFIG_FILE)
+            .create_with_contents(r#"{"noUpdateNotifier": true}"#)
+            .unwrap();
+
+        let config = super::resolve_configuration_for_shim(&repo_root, None).unwrap();
+        assert!(
+            config.no_update_notifier(),
+            "noUpdateNotifier from turbo.json should propagate through \
+             resolve_configuration_for_shim"
+        );
+    }
+
+    #[test]
     fn test_cli_overrides_are_highest_precedence() {
         let tmp_dir = TempDir::new().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();

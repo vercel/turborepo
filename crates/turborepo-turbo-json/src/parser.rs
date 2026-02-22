@@ -392,6 +392,40 @@ mod tests {
     }
 
     #[test]
+    fn test_no_update_notifier_parsed_from_root_turbo_json() {
+        let json = r#"{"noUpdateNotifier": true}"#;
+        let result = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        assert_eq!(
+            result.no_update_notifier.as_ref().map(|v| *v.as_inner()),
+            Some(true),
+            "noUpdateNotifier should be parsed from root turbo.json"
+        );
+    }
+
+    #[test]
+    fn test_no_update_notifier_parsed_from_full_turbo_json() {
+        let json = r#"{
+          "$schema": "https://turborepo.dev/schema.json",
+          "noUpdateNotifier": true,
+          "tasks": {
+            "build": {
+              "dependsOn": ["prebuild", "^build"],
+              "outputs": ["output-file.txt", "dist/**"]
+            },
+            "prebuild": {},
+            "lint": {},
+            "check-types": {}
+          }
+        }"#;
+        let result = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        assert_eq!(
+            result.no_update_notifier.as_ref().map(|v| *v.as_inner()),
+            Some(true),
+            "noUpdateNotifier should be parsed from a full turbo.json"
+        );
+    }
+
+    #[test]
     fn test_unknown_key_in_task_definition() {
         // Task definitions should reject unknown keys
         let json = r#"{"tasks": {"build": {"lol": true}}}"#;
