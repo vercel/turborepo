@@ -187,6 +187,12 @@ pub struct TaskState {
     pub execution: Option<TaskExecutionSummary>,
 }
 
+impl TaskSummaryInfo for TaskState {
+    fn task_id(&self) -> &TaskId<'static> {
+        &self.task_id
+    }
+}
+
 impl SummaryState {
     fn handle_event(&mut self, event: Event) {
         match event {
@@ -533,5 +539,88 @@ mod test {
     )]
     fn test_serialization(value: impl serde::Serialize, expected: serde_json::Value) {
         assert_eq!(serde_json::to_value(value).unwrap(), expected);
+    }
+
+    // Verifies that failed tasks can be identified directly from TaskState,
+    // without needing the full TaskSummary machinery. This is the data path
+    // the optimized (non-summary) finish will use.
+    #[tokio::test]
+    async fn test_failed_tasks_identifiable_from_task_state() {
+        let summary = ExecutionTracker::new();
+        let success_task = TaskId::new("app", "build");
+        let fail_task = TaskId::new("lib", "build");
+        let cached_task = TaskId::new("utils", "build");
+
+        let mut handles = Vec::new();
+        {
+            let tracker = summary.task_tracker(success_task.clone());
+            handles.push(tokio::spawn(async move {
+                tracker.start().await.build_succeeded(0).await;
+            }));
+        }
+        {
+            let tracker = summary.task_tracker(fail_task.clone());
+            handles.push(tokio::spawn(async move {
+                tracker.start().await.build_failed(Some(1), "uh oh").await;
+            }));
+        }
+        {
+            let tracker = summary.task_tracker(cached_task.clone());
+            handles.push(tokio::spawn(async move {
+                tracker.start().await.cached().await;
+            }));
+        }
+        for h in handles {
+            h.await.unwrap();
+        }
+
+        let state = summary.finish().await.unwrap();
+
+        // TaskState.execution carries enough info to identify failures
+        let failed: Vec<&TaskState> = state
+            .tasks
+            .iter()
+            .filter(|t| t.execution.as_ref().is_some_and(|e| e.is_failure()))
+            .collect();
+        assert_eq!(failed.len(), 1);
+        assert_eq!(failed[0].task_id, fail_task);
+
+        // Counts are correct for ExecutionSummary construction
+        assert_eq!(state.attempted, 3);
+        assert_eq!(state.failed, 1);
+        assert_eq!(state.success, 1);
+        assert_eq!(state.cached, 1);
+    }
+
+    // Verifies ExecutionSummary computes successful() correctly from SummaryState
+    #[test]
+    fn test_execution_summary_stats_from_state() {
+        use turbopath::AnchoredSystemPath;
+
+        let state = SummaryState {
+            attempted: 10,
+            failed: 2,
+            cached: 5,
+            success: 3,
+            tasks: vec![],
+        };
+
+        let start = Local::now() - Duration::seconds(5);
+        let end = Local::now();
+        let summary = ExecutionSummary::new(
+            "turbo run build".to_string(),
+            state,
+            Some(AnchoredSystemPath::empty()),
+            1,
+            start,
+            end,
+        );
+
+        // successful = success + cached
+        assert_eq!(summary.successful(), 8);
+        assert_eq!(summary.attempted, 10);
+        assert_eq!(summary.failed, 2);
+        assert_eq!(summary.cached, 5);
+        assert_eq!(summary.exit_code, 1);
     }
 }

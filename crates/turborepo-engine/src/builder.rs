@@ -256,11 +256,17 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         let mut visited = HashSet::new();
         let mut engine: Engine<Building, TaskDefinition> = Engine::default();
+        let mut turbo_json_chain_cache: HashMap<PackageName, Vec<&TurboJson>> = HashMap::new();
 
         while let Some(task_id) = traversal_queue.pop_front() {
             {
                 let (task_id, span) = task_id.clone().split();
                 engine.add_task_location(task_id.into_owned(), span);
+            }
+
+            // Skip before doing expensive work if we've already processed this task.
+            if visited.contains(task_id.as_inner()) {
+                continue;
             }
 
             // For root tasks, verify they are either explicitly enabled OR (when using
@@ -323,16 +329,12 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 )));
             }
 
-            let task_definition = self.task_definition(
+            let task_definition = self.task_definition_cached(
                 turbo_json_loader,
                 &task_id,
                 &task_id.as_non_workspace_task_name(),
+                &mut turbo_json_chain_cache,
             )?;
-
-            // Skip this iteration of the loop if we've already seen this taskID
-            if visited.contains(task_id.as_inner()) {
-                continue;
-            }
 
             visited.insert(task_id.as_inner().clone());
 
@@ -576,17 +578,49 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         Ok(TaskDefinitionResult::not_found())
     }
 
-    fn task_definition(
+    /// Resolves the merged `TaskDefinition` for a task, caching the turbo.json
+    /// chain per package. The chain only depends on the package name (not the
+    /// task), so multiple tasks in the same package share the cached chain.
+    fn task_definition_cached<'b>(
         &self,
-        turbo_json_loader: &L,
+        turbo_json_loader: &'b L,
         task_id: &Spanned<TaskId>,
         task_name: &TaskName,
+        chain_cache: &mut HashMap<PackageName, Vec<&'b TurboJson>>,
     ) -> Result<TaskDefinition, BuilderError> {
         let processed_task_definition = ProcessedTaskDefinition::from_iter(
-            self.task_definition_chain(turbo_json_loader, task_id, task_name)?,
+            self.task_definition_chain_cached(turbo_json_loader, task_id, task_name, chain_cache)?,
         );
         let path_to_root = self.path_to_root(task_id.as_inner())?;
         TaskDefinition::from_processed(processed_task_definition, &path_to_root)
+    }
+
+    /// Like `task_definition_chain` but caches the turbo.json chain per
+    /// package.
+    fn task_definition_chain_cached<'b>(
+        &self,
+        turbo_json_loader: &'b L,
+        task_id: &Spanned<TaskId>,
+        task_name: &TaskName,
+        chain_cache: &mut HashMap<PackageName, Vec<&'b TurboJson>>,
+    ) -> Result<Vec<ProcessedTaskDefinition>, BuilderError> {
+        let package_name = PackageName::from(task_id.package());
+        let turbo_json_chain = match chain_cache.get(&package_name) {
+            Some(cached) => cached.clone(),
+            None => {
+                let chain = self.turbo_json_chain(turbo_json_loader, &package_name)?;
+                chain_cache.insert(package_name, chain.clone());
+                chain
+            }
+        };
+
+        Self::resolve_task_definitions_from_chain(
+            turbo_json_chain,
+            task_id,
+            task_name,
+            self.is_single,
+            self.should_validate_engine,
+        )
     }
 
     pub fn task_definition_chain(
@@ -597,6 +631,25 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
     ) -> Result<Vec<ProcessedTaskDefinition>, BuilderError> {
         let package_name = PackageName::from(task_id.package());
         let turbo_json_chain = self.turbo_json_chain(turbo_json_loader, &package_name)?;
+        Self::resolve_task_definitions_from_chain(
+            turbo_json_chain,
+            task_id,
+            task_name,
+            self.is_single,
+            self.should_validate_engine,
+        )
+    }
+
+    /// Given a resolved turbo.json chain for a package, extract the task
+    /// definitions for a specific task by walking the chain and handling
+    /// `extends: false`.
+    fn resolve_task_definitions_from_chain(
+        turbo_json_chain: Vec<&TurboJson>,
+        task_id: &Spanned<TaskId>,
+        task_name: &TaskName,
+        is_single: bool,
+        should_validate_engine: bool,
+    ) -> Result<Vec<ProcessedTaskDefinition>, BuilderError> {
         let mut task_definitions = Vec::new();
 
         // Find the first package in the chain (iterating in reverse from leaf to root)
@@ -645,7 +698,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             task_definitions.push(root_definition)
         }
 
-        if self.is_single {
+        if is_single {
             return match task_definitions.is_empty() {
                 true => {
                     let (span, text) = task_id.span_and_text("turbo.json");
@@ -667,7 +720,7 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
         }
 
-        if task_definitions.is_empty() && self.should_validate_engine {
+        if task_definitions.is_empty() && should_validate_engine {
             let (span, text) = task_id.span_and_text("turbo.json");
             return Err(BuilderError::MissingPackageTask(Box::new(
                 MissingPackageTaskError {

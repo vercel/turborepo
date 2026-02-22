@@ -419,6 +419,27 @@ impl<U: TurboJsonUpdater> TurboJsonLoader<U> {
             .map_err(|_| LoaderError::TurboJson(Error::NoTurboJSON).into())
     }
 
+    /// Pre-warm the cache by loading all package turbo.json files in parallel.
+    /// Errors are silently ignored — the next sequential `load()` call will
+    /// report them. This is purely an optimization to overlap I/O and parsing.
+    pub fn preload_all(&self)
+    where
+        U::Error: From<LoaderError> + Send,
+        U: Sync,
+    {
+        use rayon::prelude::*;
+
+        let packages: Vec<PackageName> = match &self.strategy {
+            Strategy::Workspace { packages, .. } => packages.keys().cloned().collect(),
+            Strategy::WorkspaceNoTurboJson { packages, .. } => packages.keys().cloned().collect(),
+            _ => return,
+        };
+
+        packages.par_iter().for_each(|pkg| {
+            let _ = self.load(pkg);
+        });
+    }
+
     fn uncached_load(&self, package: &PackageName) -> Result<TurboJson, U::Error>
     where
         U::Error: From<LoaderError>,
