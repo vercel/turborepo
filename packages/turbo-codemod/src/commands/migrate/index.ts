@@ -4,17 +4,17 @@ import picocolors from "picocolors";
 import { input } from "@inquirer/prompts";
 import { getWorkspaceDetails, type Project } from "@turbo/workspaces";
 import { logger } from "@turbo/utils";
-import { checkGitStatus } from "../../utils/checkGitStatus";
-import { directoryInfo } from "../../utils/directoryInfo";
-import { Runner } from "../../runner/Runner";
-import { looksLikeRepo } from "../../utils/looksLikeRepo";
+import { checkGitStatus } from "../../utils/check-git-status";
+import { directoryInfo } from "../../utils/directory-info";
+import { Runner } from "../../runner/runner";
+import { looksLikeRepo } from "../../utils/looks-like-repo";
 import type { TransformerResults } from "../../runner";
-import { getCurrentVersion } from "./steps/getCurrentVersion";
-import { getLatestVersion } from "./steps/getLatestVersion";
-import { getTransformsForMigration } from "./steps/getTransformsForMigration";
-import { getTurboUpgradeCommand } from "./steps/getTurboUpgradeCommand";
+import { getCurrentVersion } from "./steps/get-current-version";
+import { getLatestVersion } from "./steps/get-latest-version";
+import { getTransformsForMigration } from "./steps/get-transforms-for-migration";
+import { getTurboUpgradeCommand } from "./steps/get-turbo-upgrade-command";
 import type { MigrateCommandArgument, MigrateCommandOptions } from "./types";
-import { shutdownDaemon } from "./steps/shutdownDaemon";
+import { shutdownDaemon } from "./steps/shutdown-daemon";
 
 function endMigration({
   message,

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, test, expect, beforeEach, jest } from "@jest/globals";
-import { searchUp } from "../src/searchUp";
+import { searchUp } from "../src/search-up";
 
 // Mock fs module
 jest.mock("node:fs");

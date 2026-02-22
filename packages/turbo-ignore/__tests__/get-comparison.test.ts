@@ -2,11 +2,12 @@
 import child_process from "node:child_process";
 import { spyConsole, mockEnv, validateLogs } from "@turbo/test-utils";
 import { describe, it, expect, jest } from "@jest/globals";
-import { getComparison } from "../src/getComparison";
+import { getComparison } from "../src/get-comparison";
 
 describe("getComparison()", () => {
   mockEnv();
   const mockConsole = spyConsole();
+
   it("uses headRelative comparison when not running Vercel CI", () => {
     expect(getComparison({ workspace: "test-workspace" }))
       .toMatchInlineSnapshot(`
@@ -15,7 +16,7 @@ describe("getComparison()", () => {
         "type": "headRelative",
       }
     `);
-    expect(mockConsole.log).toHaveBeenCalledTimes(0);
+    expect(mockConsole.log).not.toHaveBeenCalled();
   });
 
   it("uses fallback comparison if provided when not running Vercel CI", () => {

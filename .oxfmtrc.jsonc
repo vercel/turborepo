@@ -1,11 +1,38 @@
+// Ultracite oxfmt Configuration
+// https://oxc.rs/docs/guide/usage/formatter/config-file-reference.html
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
-  // Use Prettier v2 defaults (the repo was on v2.8.7)
   "printWidth": 80,
-  // No trailing commas - required for JSON compatibility
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": false,
+  "quoteProps": "as-needed",
+  "jsxSingleQuote": false,
   "trailingComma": "none",
-  // Disable formatting of embedded code blocks (JSON in markdown)
-  "embeddedLanguageFormatting": "off",
-  // Disable features that differ from Prettier defaults
-  "experimentalSortPackageJson": false
+  "bracketSpacing": true,
+  "bracketSameLine": false,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "ignorePatterns": [
+    "build/",
+    "crates/",
+    "cli/",
+    "examples/",
+    "packages/eslint-plugin-turbo/__fixtures__",
+    "packages/create-turbo/templates",
+    "turborepo-tests/",
+    "buildcontainer/",
+    "scripts/",
+    ".github/",
+    ".devcontainer/",
+    ".cargo/",
+    ".config/",
+    ".cursor/",
+    ".vscode/",
+    ".husky/",
+    ".conductor/",
+    "**/__tests__/**",
+    "apps/docs/**/*"
+  ]
 }

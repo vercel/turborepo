@@ -1,5 +1,12 @@
 {
   "extends": "@repo/typescript-config/react-app.json",
   "include": ["."],
-  "exclude": ["dist", "build", "node_modules"]
+  "exclude": [
+    "dist",
+    "build",
+    "node_modules"
+  ],
+  "compilerOptions": {
+    "strictNullChecks": true
+  }
 }

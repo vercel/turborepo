@@ -14,10 +14,10 @@ import {
   logger
 } from "@turbo/utils";
 import { tryGitInit, removeGitDirectory } from "../../utils/git";
-import { isOnline } from "../../utils/isOnline";
+import { isOnline } from "../../utils/is-online";
 import { transforms } from "../../transforms";
 import { TransformError } from "../../transforms/errors";
-import { isDefaultExample } from "../../utils/isDefaultExample";
+import { isDefaultExample } from "../../utils/is-default-example";
 import * as prompts from "./prompts";
 import type { CreateCommandArgument, CreateCommandOptions } from "./types";
 
@@ -196,7 +196,10 @@ export async function create(
       .sort((a, b) => a.title.localeCompare(b.title));
 
     let lastGroup: string | undefined;
-    workspacesForDisplay.forEach(({ group, title, description }, idx) => {
+    for (const [
+      idx,
+      { group, title, description }
+    ] of workspacesForDisplay.entries()) {
       if (idx === 0 || group !== lastGroup) {
         logger.log(picocolors.cyan(group));
       }
@@ -204,7 +207,7 @@ export async function create(
         ` - ${picocolors.bold(title)}${description ? `: ${description}` : ""}`
       );
       lastGroup = group;
-    });
+    }
   } else {
     logger.log(picocolors.cyan("apps"));
     logger.log(` - ${picocolors.bold(projectName)}`);
@@ -283,15 +286,16 @@ export async function create(
     logger.log("   - Learn more: https://turborepo.dev/remote-cache");
     logger.log();
     logger.log("- Run commands with Turborepo:");
-    availableScripts
-      .filter((script) => SCRIPTS_TO_DISPLAY[script])
-      .forEach((script) => {
-        logger.log(
-          `   - ${picocolors.cyan(
-            `${packageManagerMeta.command} run ${script}`
-          )}: ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`
-        );
-      });
+    const scriptsToDisplay = availableScripts.filter(
+      (script) => SCRIPTS_TO_DISPLAY[script]
+    );
+    for (const script of scriptsToDisplay) {
+      logger.log(
+        `   - ${picocolors.cyan(
+          `${packageManagerMeta.command} run ${script}`
+        )}: ${SCRIPTS_TO_DISPLAY[script]} all apps and packages`
+      );
+    }
     logger.log("- Run a command twice to hit cache");
   }
 

@@ -16,19 +16,19 @@ export function dotEnv(
   }
 
   const outputSet = new Set<string>();
-  config.filePaths.forEach((filePath) => {
+  for (const filePath of config.filePaths) {
     try {
       const dotEnvFileContents = fs.readFileSync(
         path.join(workspacePath, filePath),
         "utf8"
       );
-      Object.keys(parse(dotEnvFileContents)).forEach((envVarName) =>
-        outputSet.add(envVarName)
-      );
+      for (const envVarName of Object.keys(parse(dotEnvFileContents))) {
+        outputSet.add(envVarName);
+      }
     } catch (_) {
       // ignore
     }
-  });
+  }
 
   return outputSet;
 }

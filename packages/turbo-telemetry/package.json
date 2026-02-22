@@ -3,20 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "description": "",
-  "homepage": "https://turborepo.dev",
   "keywords": [],
-  "author": "Vercel",
+  "homepage": "https://turborepo.dev",
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
   "license": "MIT",
+  "author": "Vercel",
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-telemetry"
   },
-  "bugs": {
-    "url": "https://github.com/vercel/turborepo/issues"
-  },
-  "module": "src/index.ts",
   "main": "src/index.ts",
+  "module": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
     "test": "node --import tsx --test src/*.test.ts",

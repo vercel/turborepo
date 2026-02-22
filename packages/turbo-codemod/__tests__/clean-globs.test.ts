@@ -44,9 +44,9 @@ describe("clean-globs", () => {
     ];
 
     // Now let's test the function
-    badGlobPatterns.forEach(([input, output]) => {
+    for (const [input, output] of badGlobPatterns) {
       expect(fixGlobPattern(input)).toBe(output);
-    });
+    }
   });
 
   it("doesn't update valid globs and prints a message", () => {
@@ -66,9 +66,9 @@ describe("clean-globs", () => {
     ];
 
     // Now let's test the function
-    badGlobPatterns.forEach(([input, output]) => {
+    for (const [input, output] of badGlobPatterns) {
       expect(fixGlobPattern(input)).toBe(output);
-    });
+    }
   });
 
   it("transforms 'pre**' to pre*/**", () => {
@@ -81,9 +81,9 @@ describe("clean-globs", () => {
     ];
 
     // Now let's test the function
-    badGlobPatterns.forEach(([input, output]) => {
+    for (const [input, output] of badGlobPatterns) {
       expect(fixGlobPattern(input)).toBe(output);
-    });
+    }
   });
 
   it("should collapse back-to-back doublestars to a single doublestar", () => {
@@ -131,6 +131,7 @@ describe("clean-globs", () => {
     expect(fixGlobPattern("src/中文/**/*.json")).toBe("src/中文/**/*.json");
     expect(fixGlobPattern("src/русский/**/*.ts")).toBe("src/русский/**/*.ts");
   });
+
   it("should handle glob patterns with emojis", () => {
     expect(fixGlobPattern("src/👋**/*.js")).toBe("src/👋*/**/*.js");
     expect(fixGlobPattern("src/🌎**/*.json")).toBe("src/🌎*/**/*.json");

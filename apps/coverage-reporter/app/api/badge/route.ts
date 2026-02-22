@@ -17,18 +17,21 @@ export async function GET(request: NextRequest) {
 
   if (summary) {
     switch (metric) {
-      case "functions":
+      case "functions": {
         percent = summary.functions.percent;
         label = "functions";
         break;
-      case "branches":
+      }
+      case "branches": {
         percent = summary.branches.percent;
         label = "branches";
         break;
+      }
       case "lines":
-      default:
+      default: {
         percent = summary.lines.percent;
         label = "coverage";
+      }
     }
   }
 

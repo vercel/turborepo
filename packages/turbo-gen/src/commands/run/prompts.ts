@@ -15,7 +15,7 @@ export async function customGenerators({
 }) {
   if (generator) {
     if (
-      generators.find((g) => !(g instanceof Separator) && g.name === generator)
+      generators.some((g) => !(g instanceof Separator) && g.name === generator)
     ) {
       return {
         selectedGenerator: generator

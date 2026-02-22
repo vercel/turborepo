@@ -18,14 +18,18 @@ function getGlobalUpgradeCommand(
   to = "latest"
 ) {
   switch (packageManager) {
-    case "yarn":
+    case "yarn": {
       return `yarn global add turbo@${to}`;
-    case "npm":
+    }
+    case "npm": {
       return `npm install turbo@${to} --global`;
-    case "pnpm":
+    }
+    case "pnpm": {
       return `pnpm add turbo@${to} --global`;
-    case "bun":
+    }
+    case "bun": {
       return `bun add turbo@${to} --global`;
+    }
   }
 }
 
@@ -47,7 +51,7 @@ function getLocalUpgradeCommand({
   ): string => command.filter(Boolean).join(" ");
   switch (packageManager) {
     // yarn command differs depending on the version
-    case "yarn":
+    case "yarn": {
       // yarn 2.x and 3.x (berry)
       if (gte(packageManagerVersion, "2.0.0")) {
         return renderCommand([
@@ -65,15 +69,17 @@ function getLocalUpgradeCommand({
         installType === "devDependencies" && "--dev",
         isUsingWorkspaces && "-W"
       ]);
+    }
 
-    case "npm":
+    case "npm": {
       return renderCommand([
         "npm",
         "install",
         `turbo@${to}`,
         installType === "devDependencies" && "--save-dev"
       ]);
-    case "pnpm":
+    }
+    case "pnpm": {
       return renderCommand([
         "pnpm",
         "add",
@@ -81,13 +87,15 @@ function getLocalUpgradeCommand({
         installType === "devDependencies" && "--save-dev",
         isUsingWorkspaces && "-w"
       ]);
-    case "bun":
+    }
+    case "bun": {
       return renderCommand([
         "bun",
         "add",
         `turbo@${to}`,
         installType === "devDependencies" && "--dev"
       ]);
+    }
   }
 }
 

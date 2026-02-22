@@ -11,8 +11,8 @@ import {
   hasRepo,
   type RepoInfo
 } from "./examples";
-import { isWriteable } from "./isWriteable";
-import { isFolderEmpty } from "./isFolderEmpty";
+import { isWriteable } from "./is-writeable";
+import { isFolderEmpty } from "./is-folder-empty";
 import type { PackageJson } from "./types";
 
 function isErrorLike(err: unknown): err is { message: string } {

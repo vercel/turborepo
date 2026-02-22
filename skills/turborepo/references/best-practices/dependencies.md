@@ -161,7 +161,7 @@ catalog:
 // Any package.json
 {
   "dependencies": {
-    "react": "catalog:"  // Uses version from catalog
+    "react": "catalog:" // Uses version from catalog
   }
 }
 ```
@@ -200,7 +200,7 @@ For library packages that expect the consumer to provide dependencies:
     "react-dom": "^18.0.0"
   },
   "devDependencies": {
-    "react": "^18.0.0",      // For development/testing
+    "react": "^18.0.0", // For development/testing
     "react-dom": "^18.0.0"
   }
 }

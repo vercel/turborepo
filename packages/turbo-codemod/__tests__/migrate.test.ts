@@ -4,10 +4,10 @@ import * as turboWorkspaces from "@turbo/workspaces";
 import { setupTestFixtures, spyExit } from "@turbo/test-utils";
 import { describe, it, expect, jest } from "@jest/globals";
 import { migrate } from "../src/commands/migrate";
-import * as checkGitStatus from "../src/utils/checkGitStatus";
-import * as getCurrentVersion from "../src/commands/migrate/steps/getCurrentVersion";
-import * as getLatestVersion from "../src/commands/migrate/steps/getLatestVersion";
-import * as getTurboUpgradeCommand from "../src/commands/migrate/steps/getTurboUpgradeCommand";
+import * as checkGitStatus from "../src/utils/check-git-status";
+import * as getCurrentVersion from "../src/commands/migrate/steps/get-current-version";
+import * as getLatestVersion from "../src/commands/migrate/steps/get-latest-version";
+import * as getTurboUpgradeCommand from "../src/commands/migrate/steps/get-turbo-upgrade-command";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 
 jest.mock<typeof import("@turbo/workspaces")>("@turbo/workspaces", () => ({

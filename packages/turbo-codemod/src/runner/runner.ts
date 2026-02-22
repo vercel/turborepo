@@ -2,7 +2,7 @@ import picocolors from "picocolors";
 import { logger } from "@turbo/utils";
 import { Logger } from "../utils/logger";
 import type { UtilityArgs } from "../types";
-import { FileTransform } from "./FileTransform";
+import { FileTransform } from "./file-transform";
 import type {
   FileResult,
   ModifyFileArgs,
@@ -46,7 +46,7 @@ export class Runner {
   finish(): TransformerResults {
     const results: TransformerResults = { changes: {} };
     // perform all actions and track results
-    Object.keys(this.modifications).forEach((filePath) => {
+    for (const filePath of Object.keys(this.modifications)) {
       const mod = this.modifications[filePath];
       const result: FileResult = {
         action: "unchanged",
@@ -82,7 +82,7 @@ export class Runner {
       }
 
       results.changes[mod.fileName()] = result;
-    });
+    }
 
     const encounteredError = Object.keys(results.changes).some((fileName) => {
       return results.changes[fileName].action === "error";
@@ -113,7 +113,7 @@ export class Runner {
         }
       > = {};
 
-      changedFiles.forEach((fileName) => {
+      for (const fileName of changedFiles) {
         const fileChanges = results.changes[fileName];
         table[fileName] = {
           action: fileChanges.action,
@@ -121,7 +121,7 @@ export class Runner {
           deletions: fileChanges.deletions,
           error: fileChanges.error?.message || "None"
         };
-      });
+      }
 
       // eslint-disable-next-line no-console -- CLI utility
       console.table(table);

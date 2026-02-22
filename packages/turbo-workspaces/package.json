@@ -3,19 +3,25 @@
   "version": "2.8.11-canary.19",
   "description": "Tools for working with package managers",
   "homepage": "https://turborepo.dev",
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/vercel/turborepo",
     "directory": "packages/turbo-workspaces"
   },
-  "bugs": {
-    "url": "https://github.com/vercel/turborepo/issues"
-  },
   "bin": "dist/cli.js",
-  "module": "dist/index.mjs",
+  "files": [
+    "dist"
+  ],
   "main": "dist/index.js",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
@@ -24,12 +30,12 @@
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
   },
   "dependencies": {
+    "@inquirer/prompts": "^7.10.1",
     "commander": "10.0.0",
     "execa": "5.1.1",
     "fast-glob": "3.2.12",
     "fs-extra": "10.1.0",
     "gradient-string": "2.0.1",
-    "@inquirer/prompts": "^7.10.1",
     "js-yaml": "4.1.1",
     "ora": "4.1.1",
     "picocolors": "1.0.1",
@@ -50,11 +56,5 @@
     "ts-jest": "29.4.6",
     "tsdown": "0.9.3",
     "typescript": "5.5.4"
-  },
-  "files": [
-    "dist"
-  ],
-  "publishConfig": {
-    "access": "public"
   }
 }

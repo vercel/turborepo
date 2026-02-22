@@ -2,14 +2,10 @@
   "name": "turbo",
   "version": "2.8.11-canary.19",
   "description": "Turborepo is a high-performance build system for JavaScript and TypeScript codebases.",
-  "repository": "https://github.com/vercel/turborepo",
-  "bugs": "https://github.com/vercel/turborepo/issues",
   "homepage": "https://turborepo.dev",
+  "bugs": "https://github.com/vercel/turborepo/issues",
   "license": "MIT",
-  "main": "./bin/turbo",
-  "scripts": {
-    "postversion": "node bump-version.js"
-  },
+  "repository": "https://github.com/vercel/turborepo",
   "bin": {
     "turbo": "./bin/turbo"
   },
@@ -17,6 +13,10 @@
     "bin",
     "schema.json"
   ],
+  "main": "./bin/turbo",
+  "scripts": {
+    "postversion": "node bump-version.js"
+  },
   "optionalDependencies": {
     "turbo-darwin-64": "2.8.11-canary.19",
     "turbo-darwin-arm64": "2.8.11-canary.19",

@@ -83,7 +83,7 @@ export class FileTransform {
 
   log(args: LogFileArgs): void {
     if (args.diff) {
-      this.changes.forEach((part) => {
+      for (const part of this.changes) {
         if (part.added) {
           process.stdout.write(picocolors.green(part.value));
         } else if (part.removed) {
@@ -91,7 +91,7 @@ export class FileTransform {
         } else {
           process.stdout.write(picocolors.dim(part.value));
         }
-      });
+      }
       logger.log(os.EOL);
     } else {
       logger.log(this.after);

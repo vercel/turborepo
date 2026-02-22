@@ -3,6 +3,16 @@
   "version": "2.8.11-canary.19",
   "type": "commonjs",
   "description": "ESLint config for Turborepo",
+  "keywords": [
+    "eslint",
+    "eslint-config",
+    "eslintconfig",
+    "turbo",
+    "turborepo"
+  ],
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
   "license": "MIT",
   "author": "Vercel",
   "repository": {
@@ -10,24 +20,10 @@
     "url": "git+https://github.com/vercel/turborepo.git",
     "directory": "packages/eslint-config-turbo"
   },
-  "bugs": {
-    "url": "https://github.com/vercel/turborepo/issues"
-  },
-  "scripts": {
-    "build": "bunchee",
-    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore",
-    "package:types": "attw --profile node16 --pack"
-  },
-  "keywords": [
-    "turbo",
-    "eslint",
-    "turborepo",
-    "eslintconfig",
-    "eslint-config"
-  ],
   "files": [
     "dist"
   ],
+  "type": "commonjs",
   "main": "./dist/cjs/index.js",
   "types": "./dist/cjs/index.d.ts",
   "exports": {
@@ -52,12 +48,13 @@
       }
     }
   },
+  "scripts": {
+    "build": "bunchee",
+    "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore",
+    "package:types": "attw --profile node16 --pack"
+  },
   "dependencies": {
     "eslint-plugin-turbo": "workspace:*"
-  },
-  "peerDependencies": {
-    "eslint": ">6.6.0",
-    "turbo": ">2.0.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
@@ -66,5 +63,9 @@
     "@types/node": "20.11.30",
     "bunchee": "6.3.4",
     "eslint": "10.0.0"
+  },
+  "peerDependencies": {
+    "eslint": ">6.6.0",
+    "turbo": ">2.0.0"
   }
 }

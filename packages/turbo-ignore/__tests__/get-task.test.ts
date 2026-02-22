@@ -1,9 +1,10 @@
 import { spyConsole } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
-import { getTask } from "../src/getTask";
+import { getTask } from "../src/get-task";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();
+
   it("getTask defaults to build", () => {
     expect(getTask({})).toEqual("build");
     expect(mockConsole.log).toHaveBeenNthCalledWith(

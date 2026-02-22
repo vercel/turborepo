@@ -6,7 +6,7 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { getWorkspaceDetails, convert, install } from "../src";
 import { generateConvertMatrix } from "./test-utils";
 
-jest.mock("execa", () => jest.fn());
+jest.mock<typeof import('execa')>("execa", () => jest.fn());
 
 describe("Node entrypoint", () => {
   const { useFixture } = setupTestFixtures({
@@ -15,7 +15,7 @@ describe("Node entrypoint", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (execa as jest.MockedFunction<typeof execa>).mockResolvedValue({
+    (jest.mocked(execa)).mockResolvedValue({
       stdout: "",
       stderr: "",
       exitCode: 0,

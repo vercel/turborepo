@@ -2,12 +2,6 @@
   "name": "turbo-monorepo",
   "version": "0.0.0",
   "private": true,
-  "pnpm": {
-    "overrides": {
-      "fast-xml-parser": ">=5.3.4",
-      "lodash-es": ">=4.17.23"
-    }
-  },
   "scripts": {
     "build": "turbo run build",
     "build:turbo": "pnpm run --filter=@turbo/cli build",
@@ -25,25 +19,34 @@
     "test": "turbo run test",
     "test:integration": "pnpm --filter turborepo-tests-integration exec prysk",
     "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
-    "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open"
+    "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open",
+    "check": "ultracite check",
+    "fix": "ultracite fix"
   },
   "devDependencies": {
     "@taplo/cli": "0.5.2",
     "@types/node": "22.15.3",
     "husky": "8.0.3",
     "lint-staged": "13.1.0",
-    "oxfmt": "^0.23.0",
-    "oxlint": "^1.35.0",
+    "oxfmt": "^0.34.0",
+    "oxlint": "^1.49.0",
     "semver": "7.5.2",
-    "typescript": "5.5.4"
+    "typescript": "5.5.4",
+    "ultracite": "7.2.3"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,mdx,mjs,yml,yaml,css,json,jsonc}": "oxfmt --no-error-on-unmatched-pattern",
     "*.toml": "taplo format",
     "*.rs": "bash -c 'cargo fmt'"
   },
-  "packageManager": "pnpm@10.28.0",
   "engines": {
     "node": "22.x"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "pnpm": {
+    "overrides": {
+      "fast-xml-parser": ">=5.3.4",
+      "lodash-es": ">=4.17.23"
+    }
   }
 }

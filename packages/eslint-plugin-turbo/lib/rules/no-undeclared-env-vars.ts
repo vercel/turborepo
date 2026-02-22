@@ -295,14 +295,14 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
 
   const allowList: Array<string> = options[0]?.allowList || [];
   let regexAllowList: Array<RegExp> = [];
-  allowList.forEach((allowed) => {
+  for (const allowed of allowList) {
     try {
       regexAllowList.push(new RegExp(allowed));
     } catch (err) {
       // log the error, but just move on without this allowList entry
       logger.error(`Unable to convert "${allowed}" to regex`);
     }
-  });
+  }
 
   const filename = context.filename;
   debug(`Checking file: ${filename}`);
@@ -471,11 +471,11 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
           // destructuring from process.env
           if ("id" in node.parent && node.parent.id?.type === "ObjectPattern") {
             const values = node.parent.id.properties.values();
-            Array.from(values).forEach((item) => {
+            for (const item of Array.from(values)) {
               if ("key" in item && "name" in item.key) {
                 checkKey(node.parent, item.key.name);
               }
-            });
+            }
           }
 
           // accessing key on process.env

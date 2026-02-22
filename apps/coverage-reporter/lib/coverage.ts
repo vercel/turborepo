@@ -64,7 +64,7 @@ function convertSummary(summary: LlvmCovSummary): CoverageSummary {
  * Segments format: [line, col, count, hasCount, isRegionEntry, isGapRegion]
  */
 function extractUncoveredLines(file: LlvmCovFile): number[] {
-  const uncovered: Set<number> = new Set();
+  const uncovered = new Set<number>();
   let currentLine = 0;
   let currentCount = 0;
 
