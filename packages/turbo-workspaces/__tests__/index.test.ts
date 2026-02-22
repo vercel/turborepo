@@ -6,7 +6,7 @@ import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import { getWorkspaceDetails, convert, install } from "../src";
 import { generateConvertMatrix } from "./test-utils";
 
-jest.mock<typeof import('execa')>("execa", () => jest.fn());
+jest.mock("execa", () => jest.fn());
 
 describe("Node entrypoint", () => {
   const { useFixture } = setupTestFixtures({

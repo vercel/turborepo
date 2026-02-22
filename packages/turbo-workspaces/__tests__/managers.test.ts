@@ -14,7 +14,7 @@ import {
   generateConvertLockMatrix
 } from "./test-utils";
 
-jest.mock<typeof import('execa')>("execa", () => jest.fn());
+jest.mock("execa", () => jest.fn());
 
 describe("managers", () => {
   const { useFixture } = setupTestFixtures({
