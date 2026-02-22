@@ -6,7 +6,6 @@ use turbopath::{
 };
 
 use super::{PackageInfo, PackageName};
-use crate::package_manager::PackageManager;
 
 /// Reverse index from package path to package name, built once and shared
 /// across all `DependencySplitter` instances.
@@ -36,10 +35,9 @@ impl<'a> DependencySplitter<'a> {
         repo_root: &'a AbsoluteSystemPath,
         workspace_dir: &'a AbsoluteSystemPath,
         workspaces: &'a HashMap<PackageName, PackageInfo>,
-        package_manager: &PackageManager,
+        link_workspace_packages: bool,
         path_index: &'a WorkspacePathIndex<'a>,
     ) -> Self {
-        let link_workspace_packages = package_manager.link_workspace_packages(repo_root);
         Self {
             repo_root,
             workspace_dir,

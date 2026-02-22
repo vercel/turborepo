@@ -251,7 +251,7 @@ pub struct TaskHasher<'a, R> {
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
     compiled_builtins: CompiledWildcards,
-    external_deps_hash_cache: HashMap<PackageName, String>,
+    external_deps_hash_cache: HashMap<String, String>,
 }
 
 impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
@@ -299,7 +299,8 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         }
         for (name, info) in workspaces {
             let hash = get_external_deps_hash(&info.transitive_dependencies);
-            self.external_deps_hash_cache.insert(name.clone(), hash);
+            self.external_deps_hash_cache
+                .insert(name.as_str().to_owned(), hash);
         }
     }
 
@@ -377,22 +378,21 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 .from_wildcards(task_definition.env())?;
 
             DetailedMap {
-                all: all_env_var_map.clone(),
                 by_source: BySource {
-                    explicit: all_env_var_map,
+                    explicit: all_env_var_map.clone(),
                     matching: EnvironmentVariableMap::default(),
                 },
+                all: all_env_var_map,
             }
         };
 
         let hashable_env_pairs = env_vars.all.to_hashable();
         let outputs = task_definition.hashable_outputs(task_id);
         let task_dependency_hashes = self.calculate_dependency_hashes(dependency_set)?;
-        let workspace_name = task_id.to_workspace_name();
         let ext_hash_fallback;
         let external_deps_hash: Option<&str> = if !is_monorepo {
             None
-        } else if let Some(cached) = self.external_deps_hash_cache.get(&workspace_name) {
+        } else if let Some(cached) = self.external_deps_hash_cache.get(task_id.package()) {
             Some(cached.as_str())
         } else {
             ext_hash_fallback = get_external_deps_hash(&workspace.transitive_dependencies);
@@ -608,6 +608,7 @@ impl TaskHashTracker {
             .package_task_env_vars
             .insert(task_id.clone(), env_vars);
         if let Some(framework) = framework_slug {
+            // Only pay for one extra clone when framework inference is active.
             state
                 .package_task_framework
                 .insert(task_id.clone(), framework);

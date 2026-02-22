@@ -7,6 +7,7 @@ license = "MIT"
 [dependencies]
 chrono = { workspace = true }
 itertools = { workspace = true }
+rayon = "1"
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 svix-ksuid = { version = "0.7.0", features = ["serde"] }
