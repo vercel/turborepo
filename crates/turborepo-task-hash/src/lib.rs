@@ -661,8 +661,8 @@ impl TaskHashTracker {
 // turborepo-run-summary. The trait is defined in turborepo-types to enable
 // proper dependency direction (task-hash doesn't depend on run-summary).
 impl HashTrackerInfo for TaskHashTracker {
-    fn hash(&self, task_id: &TaskId) -> Option<String> {
-        TaskHashTracker::hash(self, task_id).map(|arc| arc.to_string())
+    fn hash(&self, task_id: &TaskId) -> Option<Arc<str>> {
+        TaskHashTracker::hash(self, task_id)
     }
 
     fn env_vars(&self, task_id: &TaskId) -> Option<HashTrackerDetailedMap> {
