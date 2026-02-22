@@ -6,7 +6,7 @@
 
 mod traits;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use capnp::message::{Builder, HeapAllocator};
 pub use traits::TurboHash;
@@ -58,7 +58,7 @@ pub type EnvironmentVariablePairs = Vec<String>;
 pub struct TaskHashable<'a> {
     // hashes
     pub global_hash: &'a str,
-    pub task_dependency_hashes: Vec<String>,
+    pub task_dependency_hashes: Vec<Arc<str>>,
     pub hash_of_files: &'a str,
     pub external_deps_hash: Option<&'a str>,
 
@@ -338,7 +338,7 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
                 .reborrow()
                 .init_task_dependency_hashes(task_hashable.task_dependency_hashes.len() as u32);
             for (i, hash) in task_hashable.task_dependency_hashes.iter().enumerate() {
-                task_dependency_hashes_builder.set(i as u32, hash);
+                task_dependency_hashes_builder.set(i as u32, &**hash);
             }
         }
 
@@ -497,6 +497,8 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
     use test_case::test_case;
     use turborepo_lockfiles::Package;
     use turborepo_types::{EnvMode, TaskOutputs};
@@ -509,7 +511,7 @@ mod test {
     fn task_hashable() {
         let task_hashable = TaskHashable {
             global_hash: "global_hash",
-            task_dependency_hashes: vec!["task_dependency_hash".to_string()],
+            task_dependency_hashes: vec![Arc::from("task_dependency_hash")],
             package_dir: Some(turbopath::RelativeUnixPathBuf::new("package_dir").unwrap()),
             hash_of_files: "hash_of_files",
             external_deps_hash: Some("external_deps_hash"),
@@ -526,6 +528,36 @@ mod test {
         };
 
         assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
+    }
+
+    #[test]
+    fn task_hashable_multiple_dependency_hashes() {
+        let task_hashable = TaskHashable {
+            global_hash: "global_hash",
+            task_dependency_hashes: vec![
+                Arc::from("dep_hash_a"),
+                Arc::from("dep_hash_b"),
+                Arc::from("dep_hash_c"),
+            ],
+            package_dir: Some(turbopath::RelativeUnixPathBuf::new("package_dir").unwrap()),
+            hash_of_files: "hash_of_files",
+            external_deps_hash: Some("external_deps_hash"),
+            task: "task",
+            outputs: TaskOutputs {
+                inclusions: vec!["inclusions".to_string()],
+                exclusions: vec!["exclusions".to_string()],
+            },
+            pass_through_args: &["pass_thru_args".to_string()],
+            env: &["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: &["pass_thru_env".to_string()],
+            env_mode: EnvMode::Strict,
+        };
+
+        let hash = task_hashable.hash();
+        assert!(!hash.is_empty());
+        // Pin the hash so any serialization change is caught
+        assert_eq!(hash, "7676d7bb7c86d257");
     }
 
     #[test]
