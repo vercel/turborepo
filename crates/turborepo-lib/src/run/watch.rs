@@ -7,7 +7,11 @@ use std::{
 use futures::{future::join_all, StreamExt};
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
-use tokio::{select, sync::Notify, task::JoinHandle};
+use tokio::{
+    select,
+    sync::{oneshot, Notify},
+    task::JoinHandle,
+};
 use tracing::{instrument, trace};
 use turborepo_daemon::{proto, DaemonConnector, DaemonConnectorError, DaemonError, Paths};
 use turborepo_repository::package_graph::PackageName;
@@ -418,23 +422,43 @@ impl WatchClient {
                         "persistent handle should be empty before creating a new one"
                     );
                     let persistent_run = self.run.create_run_for_non_interruptible_tasks();
-                    let ui_sender = self.ui_sender.clone();
+                    let non_persistent_run = self.run.create_run_for_interruptible_tasks();
+
+                    let persistent_stopper = persistent_run.stopper();
+                    let non_persistent_stopper = non_persistent_run.stopper();
+
+                    let non_persistent_ui_sender = self.ui_sender.clone();
+                    let persistent_ui_sender = self.ui_sender.clone();
+
+                    // Signal from non-persistent run to persistent run: non-persistent
+                    // tasks finished successfully, so it's safe to start persistent ones.
+                    let (ready_tx, ready_rx) = oneshot::channel::<()>();
+
                     // If we have persistent tasks, we run them on a separate thread
                     // since persistent tasks don't finish
-                    self.persistent_tasks_handle = Some(RunHandle {
-                        stopper: persistent_run.stopper(),
-                        run_task: tokio::spawn(
-                            async move { persistent_run.run(ui_sender, true).await },
-                        ),
+                    let persistent_task = tokio::spawn(async move {
+                        match ready_rx.await {
+                            Ok(()) => persistent_run.run(persistent_ui_sender, true).await,
+                            Err(_) => Ok(0),
+                        }
                     });
 
-                    let non_persistent_run = self.run.create_run_for_interruptible_tasks();
-                    let ui_sender = self.ui_sender.clone();
+                    self.persistent_tasks_handle = Some(RunHandle {
+                        stopper: persistent_stopper,
+                        run_task: persistent_task,
+                    });
+
+                    let non_persistent_task = tokio::spawn(async move {
+                        let result = non_persistent_run.run(non_persistent_ui_sender, true).await;
+                        if matches!(result, Ok(0)) {
+                            let _ = ready_tx.send(());
+                        }
+                        result
+                    });
+
                     Ok(RunHandle {
-                        stopper: non_persistent_run.stopper(),
-                        run_task: tokio::spawn(async move {
-                            non_persistent_run.run(ui_sender, true).await
-                        }),
+                        stopper: non_persistent_stopper,
+                        run_task: non_persistent_task,
                     })
                 } else {
                     let ui_sender = self.ui_sender.clone();
