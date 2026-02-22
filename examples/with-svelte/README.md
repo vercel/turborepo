@@ -1,6 +1,8 @@
 # Turborepo Svelte starter
 
-This Turborepo starter is maintained by the Turborepo core team.
+This Turborepo starter is maintained by the Turborepo core team
+on [GitHub](https://github.com/vercel/turborepo/tree/main/examples/with-svelte/packages)
+.
 
 ## Using this example
 
@@ -14,12 +16,28 @@ npx create-turbo@latest -e with-svelte
 
 This Turborepo includes the following packages/apps:
 
-### Apps and Packages
+### Apps
 
 - `docs`: a [svelte-kit](https://kit.svelte.dev/) app
 - `web`: another [svelte-kit](https://kit.svelte.dev/) app
-- `ui`: a stub Svelte component library shared by both `web` and `docs` applications
-- `eslint-config-custom`: `eslint` configurations (includes `eslint-plugin-svelte` and `eslint-config-prettier`)
+
+### Packages
+
+#### `eslint-config`
+
+`eslint` configurations (includes `eslint-plugin-svelte` and `eslint-config-prettier`)
+
+#### `typescript-config`
+
+A package containing a custom `tsconfig` file.
+
+#### `ui`
+
+A stub Svelte component library shared by both `web` and `docs` applications. The package supports Svelte components and
+runes in `.svelte.ts` files, which are not supported in the svelte-kit generated tsconfig.
+
+Please refer to the [packaging](https://svelte.dev/docs/kit/packaging) page of the svelte documentation for additional
+information about svelte component libraries.
 
 Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
 
