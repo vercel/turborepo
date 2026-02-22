@@ -11,7 +11,7 @@ globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 itertools = { workspace = true }
 rayon = "1.7.0"
 regex = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
+serde = { workspace = true, features = ["derive", "rc"] }
 thiserror = "1.0.38"
 tracing = { workspace = true }
 
