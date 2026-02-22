@@ -29,6 +29,11 @@ mod repo_index;
 mod status;
 pub mod worktree;
 
+#[cfg(test)]
+mod git_index_regression_tests;
+#[cfg(test)]
+mod test_utils;
+
 #[cfg(feature = "git2")]
 pub use repo_index::RepoGitIndex;
 pub use worktree::WorktreeInfo;
@@ -291,6 +296,29 @@ impl SCM {
                 debug!("{}, continuing with manual hashing", e);
                 SCM::Manual
             })
+    }
+
+    /// Creates an SCM instance using a pre-resolved git root, avoiding the
+    /// `git rev-parse --show-cdup` subprocess call that `new` would perform.
+    /// Falls back to `new` if the git binary cannot be found.
+    #[tracing::instrument]
+    pub fn new_with_git_root(
+        path_in_repo: &AbsoluteSystemPath,
+        git_root: AbsoluteSystemPathBuf,
+    ) -> SCM {
+        match GitRepo::find_bin() {
+            Ok(bin) => SCM::Git(GitRepo {
+                root: git_root,
+                bin,
+            }),
+            Err(e) => {
+                debug!(
+                    "git binary not found: {}, continuing with manual hashing",
+                    e
+                );
+                SCM::Manual
+            }
+        }
     }
 
     pub fn is_manual(&self) -> bool {

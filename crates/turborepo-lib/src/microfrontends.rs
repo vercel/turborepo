@@ -30,6 +30,7 @@ struct ConfigInfo {
 
 impl MicrofrontendsConfigs {
     /// Constructs a collection of configurations from disk
+    #[tracing::instrument(skip_all)]
     pub fn from_disk(
         repo_root: &AbsoluteSystemPath,
         package_graph: &PackageGraph,

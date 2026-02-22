@@ -91,7 +91,7 @@ pub async fn print_potential_tasks(
     let handler = SignalHandler::new(signal);
     let color_config = base.color_config;
 
-    let run_builder = RunBuilder::new(base)?;
+    let run_builder = RunBuilder::new(base, None)?;
     let run = run_builder.build(&handler, telemetry).await?;
     let potential_tasks = run.get_potential_tasks()?;
 

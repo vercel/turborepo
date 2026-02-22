@@ -485,7 +485,8 @@ impl ConfigCache {
                 Err(_) => return Err(CacheError::ConfigCacheError),
             };
 
-        // return the hash
-        Ok(FileHashes(hash_object).hash())
+        let mut file_hashes: Vec<_> = hash_object.into_iter().collect();
+        file_hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+        Ok(FileHashes(file_hashes).hash())
     }
 }

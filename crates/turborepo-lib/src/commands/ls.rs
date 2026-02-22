@@ -124,7 +124,7 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let run_builder = RunBuilder::new(base)?;
+    let run_builder = RunBuilder::new(base, None)?;
     let run = run_builder.build(&handler, telemetry).await?;
 
     if packages.is_empty() {

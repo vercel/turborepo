@@ -86,7 +86,6 @@ pub struct RunSummary<'a> {
 /// We use this to track the run, so it's constructed before the run.
 #[derive(Debug)]
 pub struct RunTracker {
-    scm: SCMState,
     version: &'static str,
     started_at: DateTime<Local>,
     execution_tracker: ExecutionTracker,
@@ -95,20 +94,13 @@ pub struct RunTracker {
 }
 
 impl RunTracker {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         started_at: DateTime<Local>,
         synthesized_command: String,
-        env_at_execution_start: &EnvironmentVariableMap,
-        repo_root: &AbsoluteSystemPath,
         version: &'static str,
         user: Option<String>,
-        scm: &SCM,
     ) -> Self {
-        let scm = SCMState::get(env_at_execution_start, scm, repo_root);
-
         RunTracker {
-            scm,
             version,
             started_at,
             execution_tracker: ExecutionTracker::new(),
@@ -137,11 +129,13 @@ impl RunTracker {
         global_hash_summary: GlobalHashSummary<'a>,
         global_env_mode: EnvMode,
         task_factory: TaskSummaryFactory<'a, E, H, R>,
+        env_at_execution_start: &EnvironmentVariableMap,
+        scm: &SCM,
     ) -> Result<RunSummary<'a>, Error>
     where
-        E: EngineInfo,
-        H: HashTrackerInfo,
-        R: RunOptsInfo,
+        E: EngineInfo + Sync,
+        H: HashTrackerInfo + Sync,
+        R: RunOptsInfo + Sync,
     {
         let single_package = run_opts.single_package();
         let should_save = run_opts.summarize().is_some();
@@ -152,14 +146,28 @@ impl RunTracker {
             Some(DryRunMode::Text) => RunType::DryText,
         };
 
+        // Deferred to summary time so we don't pay the cost of git subprocess
+        // calls (branch + sha) during the critical path of task execution.
+        let scm_state = SCMState::get(env_at_execution_start, scm, repo_root);
+
         let summary_state = self.execution_tracker.finish().await?;
 
-        let tasks = summary_state
-            .tasks
-            .iter()
-            .cloned()
-            .map(|TaskState { task_id, execution }| task_factory.task_summary(task_id, execution))
-            .collect::<Result<Vec<_>, crate::task_factory::Error>>()?;
+        // Build task summaries in parallel — each task_summary call is read-only
+        // on the engine, hash tracker, and package graph.
+        let tasks = {
+            use rayon::prelude::*;
+            let results: Vec<Result<TaskSummary, crate::task_factory::Error>> = summary_state
+                .tasks
+                .par_iter()
+                .map(|task_state| {
+                    task_factory
+                        .task_summary(task_state.task_id.clone(), task_state.execution.clone())
+                })
+                .collect();
+            results
+                .into_iter()
+                .collect::<Result<Vec<_>, crate::task_factory::Error>>()?
+        };
         let execution_summary = ExecutionSummary::new(
             self.synthesized_command.clone(),
             summary_state,
@@ -179,7 +187,7 @@ impl RunTracker {
             framework_inference: run_opts.framework_inference(),
             tasks,
             global_hash_summary,
-            scm: self.scm,
+            scm: scm_state,
             user: self.user.unwrap_or_default(),
             monorepo: !single_package,
             repo_root,
@@ -196,7 +204,8 @@ impl RunTracker {
         global_hash_summary,
         engine,
         hash_tracker,
-        env_at_execution_start
+        env_at_execution_start,
+        scm,
     ))]
     #[allow(clippy::too_many_arguments)]
     pub async fn finish<'a, E, H, R>(
@@ -213,14 +222,49 @@ impl RunTracker {
         engine: &'a E,
         hash_tracker: &'a H,
         env_at_execution_start: &'a EnvironmentVariableMap,
+        scm: &SCM,
         is_watch: bool,
     ) -> Result<(), Error>
     where
-        E: EngineInfo,
-        H: HashTrackerInfo,
-        R: RunOptsInfo,
+        E: EngineInfo + Sync,
+        H: HashTrackerInfo + Sync,
+        R: RunOptsInfo + Sync,
     {
         let end_time = Local::now();
+
+        // For the common case (no --dry, no --summarize), skip the expensive
+        // TaskSummary construction, SCMState::get (2 git subprocesses), and
+        // full RunSummary assembly. We only need execution stats and failed
+        // task identification for terminal output.
+        if run_opts.dry_run().is_none() && run_opts.summarize().is_none() {
+            let summary_state = self.execution_tracker.finish().await?;
+
+            if !is_watch {
+                // Extract failed tasks before moving summary_state into
+                // ExecutionSummary. SummaryState derives Clone, but we only
+                // need the task list for failure identification.
+                let failed_tasks: Vec<TaskState> = summary_state
+                    .tasks
+                    .iter()
+                    .filter(|t| t.execution.as_ref().is_some_and(|e| e.is_failure()))
+                    .cloned()
+                    .collect();
+
+                let execution = ExecutionSummary::new(
+                    self.synthesized_command.clone(),
+                    summary_state,
+                    package_inference_root,
+                    exit_code,
+                    self.started_at,
+                    end_time,
+                );
+
+                let path = repo_root.join_components(&[".turbo", "runs", "dummy.json"]);
+                execution.print(ui, path, failed_tasks.iter().collect());
+            }
+
+            return Ok(());
+        }
 
         let task_factory = TaskSummaryFactory::new(
             pkg_dep_graph,
@@ -242,6 +286,8 @@ impl RunTracker {
                 global_hash_summary,
                 global_env_mode,
                 task_factory,
+                env_at_execution_start,
+                scm,
             )
             .await?;
 
@@ -343,6 +389,7 @@ impl<'a> RunSummary<'a> {
         }
     }
 
+    #[tracing::instrument(skip_all)]
     fn close_dry_run(
         &mut self,
         pkg_dep_graph: &PackageGraph,
@@ -358,6 +405,7 @@ impl<'a> RunSummary<'a> {
         self.format_and_print_text(pkg_dep_graph, ui)
     }
 
+    #[tracing::instrument(skip_all)]
     fn format_and_print_text(
         &mut self,
         pkg_dep_graph: &PackageGraph,

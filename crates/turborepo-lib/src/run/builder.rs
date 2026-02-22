@@ -63,8 +63,12 @@ pub struct RunBuilder {
 }
 
 impl RunBuilder {
-    pub fn new(base: CommandBase) -> Result<Self, Error> {
-        let api_client = base.api_client()?;
+    #[tracing::instrument(skip_all)]
+    pub fn new(base: CommandBase, http_client: Option<&reqwest::Client>) -> Result<Self, Error> {
+        let api_client = match http_client {
+            Some(client) => base.api_client_with_http(client),
+            None => base.api_client()?,
+        };
 
         let opts = base.opts();
         let api_auth = base.api_auth()?;
@@ -199,8 +203,12 @@ impl RunBuilder {
 
         let scm_task = {
             let repo_root = self.repo_root.clone();
+            let git_root = self.opts.git_root.clone();
             tokio::task::spawn_blocking(move || {
-                let scm = SCM::new(&repo_root);
+                let scm = match git_root {
+                    Some(root) => SCM::new_with_git_root(&repo_root, root),
+                    None => SCM::new(&repo_root),
+                };
                 let repo_index = scm.build_repo_index_eager();
                 (scm, repo_index)
             })
@@ -349,6 +357,10 @@ impl RunBuilder {
         )?;
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
+        // Pre-warm the turbo.json cache: read and parse all package turbo.json
+        // files in parallel before the engine builder needs them sequentially.
+        turbo_json_loader.preload_all();
+
         let mut engine = self.build_engine(
             &pkg_dep_graph,
             &root_turbo_json,
@@ -405,6 +417,7 @@ impl RunBuilder {
         })
     }
 
+    #[tracing::instrument(skip_all)]
     fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,

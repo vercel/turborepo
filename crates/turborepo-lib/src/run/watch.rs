@@ -123,7 +123,7 @@ impl WatchClient {
 
         let new_base = base.clone();
         let run = Arc::new(
-            RunBuilder::new(new_base)?
+            RunBuilder::new(new_base, None)?
                 .build(&handler, telemetry.clone())
                 .await?,
         );
@@ -355,7 +355,7 @@ impl WatchClient {
                 let signal_handler = self.handler.clone();
                 let telemetry = self.telemetry.clone();
 
-                let run = RunBuilder::new(new_base)?
+                let run = RunBuilder::new(new_base, None)?
                     .with_entrypoint_packages(packages)
                     .hide_prelude()
                     .build(&signal_handler, telemetry)
@@ -389,7 +389,7 @@ impl WatchClient {
                 );
 
                 // rebuild run struct
-                self.run = RunBuilder::new(base.clone())?
+                self.run = RunBuilder::new(base.clone(), None)?
                     .hide_prelude()
                     .build(&self.handler, self.telemetry.clone())
                     .await?

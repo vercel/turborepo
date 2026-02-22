@@ -25,7 +25,7 @@ use turborepo_types::EnvMode;
 #[allow(dead_code)]
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
-const GLOBAL_CACHE_KEY: &str = "I can’t see ya, but I know you’re here";
+pub const GLOBAL_CACHE_KEY: &str = "I can’t see ya, but I know you’re here";
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -74,6 +74,66 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     framework_inference: bool,
     hasher: &SCM,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
+    let GlobalFileHashInputs {
+        global_file_hash_map,
+        global_hashable_env_vars,
+        engines,
+    } = collect_global_file_hash_inputs(
+        root_package,
+        root_path,
+        package_manager,
+        lockfile,
+        global_file_dependencies,
+        env_at_execution_start,
+        global_env,
+        hasher,
+    )?;
+
+    debug!(
+        "external deps hash: {}",
+        root_external_dependencies_hash.unwrap_or("no hash (single package)")
+    );
+
+    Ok(GlobalHashableInputs {
+        global_cache_key: GLOBAL_CACHE_KEY,
+        global_file_hash_map,
+        root_external_dependencies_hash,
+        root_internal_dependencies_hash,
+        engines,
+        env: global_env,
+        resolved_env_vars: Some(global_hashable_env_vars),
+        pass_through_env: global_pass_through_env,
+        env_mode,
+        framework_inference,
+        env_at_execution_start,
+    })
+}
+
+/// Intermediate result from `collect_global_file_hash_inputs`. Contains the
+/// expensive-to-compute parts of the global hash that are independent of the
+/// root external/internal dependency hashes. This allows callers to run this
+/// work concurrently with external/internal deps hash computation.
+pub struct GlobalFileHashInputs<'a> {
+    pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
+    pub global_hashable_env_vars: DetailedMap,
+    pub engines: Option<HashMap<&'a str, &'a str>>,
+}
+
+/// Collects global file hash inputs (globwalk, file hashing, env vars).
+/// This is the expensive I/O-bound portion of global hash computation and
+/// can be run concurrently with package file hashing and internal deps
+/// hashing since it has no dependencies on those results.
+#[allow(clippy::too_many_arguments, clippy::result_large_err)]
+pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
+    root_package: &'a PackageInfo,
+    root_path: &AbsoluteSystemPath,
+    package_manager: &PackageManager,
+    lockfile: Option<&L>,
+    global_file_dependencies: &'a [String],
+    env_at_execution_start: &'a EnvironmentVariableMap,
+    global_env: &'a [String],
+    hasher: &SCM,
+) -> Result<GlobalFileHashInputs<'a>, Error> {
     let engines = root_package.package_json.engines();
 
     let global_hashable_env_vars =
@@ -102,23 +162,10 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
 
     let global_file_hash_map = hasher.get_hashes_for_files(root_path, &global_deps_paths, false)?;
 
-    debug!(
-        "external deps hash: {}",
-        root_external_dependencies_hash.unwrap_or("no hash (single package)")
-    );
-
-    Ok(GlobalHashableInputs {
-        global_cache_key: GLOBAL_CACHE_KEY,
+    Ok(GlobalFileHashInputs {
         global_file_hash_map,
-        root_external_dependencies_hash,
-        root_internal_dependencies_hash,
+        global_hashable_env_vars,
         engines,
-        env: global_env,
-        resolved_env_vars: Some(global_hashable_env_vars),
-        pass_through_env: global_pass_through_env,
-        env_mode,
-        framework_inference,
-        env_at_execution_start,
     })
 }
 

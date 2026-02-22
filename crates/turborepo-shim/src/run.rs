@@ -183,6 +183,7 @@ where
 ///
 /// A `ShimResult` containing either the exit code, a shim error, or a CLI
 /// error.
+#[tracing::instrument(skip_all)]
 pub fn run_with_args<R, C, S, V>(
     runtime: &ShimRuntime<R, C, S, V>,
     args: ShimArgs,

@@ -19,7 +19,7 @@ turbopath = { workspace = true }
 turborepo-cache = { workspace = true }
 turborepo-hash = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
-turborepo-scm = { workspace = true }
+turborepo-scm = { workspace = true, features = ["git2"] }
 turborepo-task-id = { workspace = true }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 turborepo-types = { workspace = true }

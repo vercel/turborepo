@@ -7,7 +7,7 @@ pub use error::Error;
 use serde::Serialize;
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_api_client::AnonAPIClient;
+use turborepo_api_client::{APIClient, AnonAPIClient};
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
@@ -300,6 +300,7 @@ fn format_error_message(mut err_str: String) -> String {
 }
 
 impl Args {
+    #[tracing::instrument(skip_all)]
     pub fn new(os_args: Vec<OsString>) -> Self {
         let clap_args = match Args::parse(os_args) {
             Ok(args) => args,
@@ -1137,26 +1138,24 @@ impl RunArgs {
     }
 }
 
+#[tracing::instrument(skip_all)]
 fn initialize_telemetry_client(
+    http_client: &reqwest::Client,
     color_config: ColorConfig,
     version: &str,
 ) -> Option<TelemetryHandle> {
-    let mut telemetry_handle: Option<TelemetryHandle> = None;
-    match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
-        Ok(anonymous_api_client) => {
-            let handle = init_telemetry(anonymous_api_client, color_config);
-            match handle {
-                Ok(h) => telemetry_handle = Some(h),
-                Err(error) => {
-                    debug!("failed to start telemetry: {:?}", error)
-                }
-            }
-        }
+    let anonymous_api_client = AnonAPIClient::new_with_client(
+        http_client.clone(),
+        "https://telemetry.vercel.com",
+        version,
+    );
+    match init_telemetry(anonymous_api_client, color_config) {
+        Ok(h) => Some(h),
         Err(error) => {
-            debug!("Failed to create AnonAPIClient: {:?}", error);
+            debug!("failed to start telemetry: {:?}", error);
+            None
         }
     }
-    telemetry_handle
 }
 
 #[derive(PartialEq)]
@@ -1262,6 +1261,7 @@ fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
     })
 }
 
+#[tracing::instrument(skip_all)]
 fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
     if let Some(command) = mem::take(&mut cli_args.command) {
         Ok(command)
@@ -1292,6 +1292,7 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
 ///
 /// returns: Result<Payload, Error>
 #[tokio::main]
+#[tracing::instrument(skip_all)]
 pub async fn run(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
@@ -1301,8 +1302,13 @@ pub async fn run(
     let mut cli_args = Args::new(env::args_os().collect());
     let version = get_version();
 
+    // Build a single HTTP client to share across telemetry, API, and cache
+    // operations. This avoids redundant TLS initialization (~150ms savings).
+    let http_client = APIClient::build_http_client(None)
+        .expect("Failed to create HTTP client: TLS initialization failed");
+
     // track telemetry handle to close at the end of the run
-    let telemetry_handle = initialize_telemetry_client(color_config, version);
+    let telemetry_handle = initialize_telemetry_client(&http_client, color_config, version);
 
     if should_print_version() {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
@@ -1594,27 +1600,21 @@ pub async fn run(
                 return Ok(1);
             }
 
-            let profile_file = run_args.profile_file_and_include_args();
-            if let Some((ref file_path, include_args)) = profile_file {
-                // TODO: Do we want to handle the result / error?
-                let _ = logger.enable_chrome_tracing(file_path, include_args);
-            }
-
             run_args.track(&event);
-            let exit_code = run::run(base, event).await.inspect(|code| {
+            let exit_code = run::run(base, event, &http_client).await.inspect(|code| {
                 if *code != 0 {
                     error!("run failed: command  exited ({code})");
                 }
             })?;
 
-            if let Some((ref file_path, _)) = profile_file {
-                // Flush the chrome trace so the file is fully written
-                // before we read it for markdown generation.
+            // Chrome tracing is enabled early in shim::run(). Here we just
+            // flush and generate the markdown summary.
+            if let Some(file_path) = logger.chrome_tracing_file() {
                 let _ = logger.flush_chrome_tracing();
 
                 let md_path = format!("{file_path}.md");
                 if let Err(e) = turborepo_profile_md::trace_to_markdown(
-                    std::path::Path::new(file_path),
+                    std::path::Path::new(&file_path),
                     std::path::Path::new(&md_path),
                 ) {
                     warn!("Failed to generate profile markdown: {e}");

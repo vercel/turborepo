@@ -7,11 +7,16 @@ use turborepo_ui::sender::UISender;
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder};
 
-pub async fn run(base: CommandBase, telemetry: CommandEventBuilder) -> Result<i32, run::Error> {
+#[tracing::instrument(skip_all)]
+pub async fn run(
+    base: CommandBase,
+    telemetry: CommandEventBuilder,
+    http_client: &reqwest::Client,
+) -> Result<i32, run::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let run_builder = RunBuilder::new(base)?;
+    let run_builder = RunBuilder::new(base, Some(http_client))?;
 
     let run_fut = async {
         let (analytics_sender, analytics_handle) = run_builder.start_analytics();
