@@ -439,24 +439,32 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         package_manager: &PackageManager,
     ) -> Result<(), Error> {
         let path_index = WorkspacePathIndex::new(&self.workspaces);
-        let split_deps = self
-            .workspaces
-            .iter()
-            .map(|(name, entry)| {
-                // TODO avoid clone
-                (
-                    name.clone(),
-                    Dependencies::new(
-                        self.repo_root,
-                        &entry.package_json_path,
-                        &self.workspaces,
-                        package_manager,
-                        entry.package_json.all_dependencies(),
-                        &path_index,
-                    ),
-                )
-            })
-            .collect::<Vec<_>>();
+        // Compute once — for pnpm/Berry this reads a config file from disk.
+        // Without hoisting, the par_iter below would redundantly read the
+        // same file N times (once per workspace).
+        let link_workspace_packages = package_manager.link_workspace_packages(self.repo_root);
+        // Resolve internal vs external dependencies in parallel. Each
+        // Dependencies::new_with_link call is read-only on the workspaces map
+        // so this is safe. Graph mutation stays sequential below.
+        let split_deps = {
+            use rayon::prelude::*;
+            self.workspaces
+                .par_iter()
+                .map(|(name, entry)| {
+                    (
+                        name.clone(),
+                        Dependencies::new_with_link(
+                            self.repo_root,
+                            &entry.package_json_path,
+                            &self.workspaces,
+                            link_workspace_packages,
+                            entry.package_json.all_dependencies(),
+                            &path_index,
+                        ),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
         for (name, deps) in split_deps {
             let entry = self
                 .workspaces
@@ -651,17 +659,36 @@ impl Dependencies {
         dependencies: I,
         path_index: &WorkspacePathIndex<'_>,
     ) -> Self {
+        let link = package_manager.link_workspace_packages(repo_root);
+        Self::new_with_link(
+            repo_root,
+            workspace_json_path,
+            workspaces,
+            link,
+            dependencies,
+            path_index,
+        )
+    }
+
+    pub fn new_with_link<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
+        repo_root: &AbsoluteSystemPath,
+        workspace_json_path: &AnchoredSystemPathBuf,
+        workspaces: &HashMap<PackageName, PackageInfo>,
+        link_workspace_packages: bool,
+        dependencies: I,
+        path_index: &WorkspacePathIndex<'_>,
+    ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
         let workspace_dir = resolved_workspace_json_path
             .parent()
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();
         let mut external = BTreeMap::new();
-        let splitter = DependencySplitter::new(
+        let splitter = DependencySplitter::new_with_link(
             repo_root,
             workspace_dir,
             workspaces,
-            package_manager,
+            link_workspace_packages,
             path_index,
         );
         for (name, version) in dependencies.into_iter() {
@@ -710,6 +737,168 @@ mod test {
         ) -> Result<crate::discovery::DiscoveryResponse, crate::discovery::Error> {
             self.discover_packages().await
         }
+    }
+
+    // Regression test: connect_internal_dependencies must produce correct
+    // graph edges and external deps regardless of iteration order or
+    // parallelism. This captures the exact edges and
+    // unresolved_external_dependencies so any refactor of the collection phase
+    // (e.g. rayon parallelization) is safe.
+    #[tokio::test]
+    async fn test_connect_internal_dependencies_produces_correct_edges() {
+        let root =
+            AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
+
+        let mut package_jsons = HashMap::new();
+        // "web" depends on "ui" (workspace:*) and "react" (external)
+        package_jsons.insert(
+            root.join_components(&["apps", "web", "package.json"]),
+            PackageJson {
+                name: Some(Spanned::new("web".into())),
+                version: Some("1.0.0".to_string()),
+                dependencies: Some(
+                    [
+                        ("ui".to_string(), "workspace:*".to_string()),
+                        ("react".to_string(), "^18.0.0".to_string()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+                ..Default::default()
+            },
+        );
+        // "api" depends on "utils" (workspace:*) and "express" (external)
+        package_jsons.insert(
+            root.join_components(&["apps", "api", "package.json"]),
+            PackageJson {
+                name: Some(Spanned::new("api".into())),
+                version: Some("1.0.0".to_string()),
+                dependencies: Some(
+                    [
+                        ("utils".to_string(), "workspace:*".to_string()),
+                        ("express".to_string(), "^4.0.0".to_string()),
+                    ]
+                    .into_iter()
+                    .collect(),
+                ),
+                ..Default::default()
+            },
+        );
+        // "ui" has no workspace deps, only "csstype" (external)
+        package_jsons.insert(
+            root.join_components(&["packages", "ui", "package.json"]),
+            PackageJson {
+                name: Some(Spanned::new("ui".into())),
+                version: Some("1.0.0".to_string()),
+                dependencies: Some(
+                    [("csstype".to_string(), "^3.0.0".to_string())]
+                        .into_iter()
+                        .collect(),
+                ),
+                ..Default::default()
+            },
+        );
+        // "utils" has no deps at all
+        package_jsons.insert(
+            root.join_components(&["packages", "utils", "package.json"]),
+            PackageJson {
+                name: Some(Spanned::new("utils".into())),
+                version: Some("1.0.0".to_string()),
+                ..Default::default()
+            },
+        );
+
+        let graph = PackageGraphBuilder::new(
+            &root,
+            PackageJson {
+                name: Some(Spanned::new("root".into())),
+                ..Default::default()
+            },
+        )
+        .with_single_package_mode(false)
+        .with_package_discovery(MockDiscovery)
+        .with_package_jsons(Some(package_jsons))
+        .build()
+        .await
+        .unwrap();
+
+        // Verify internal dependency edges via the package graph API
+        let web_name = PackageName::from("web");
+        let api_name = PackageName::from("api");
+        let ui_name = PackageName::from("ui");
+        let utils_name = PackageName::from("utils");
+
+        // web -> ui (internal)
+        let web_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(web_name.clone()))
+            .unwrap();
+        assert!(
+            web_deps.contains(&PackageNode::Workspace(ui_name.clone())),
+            "web should depend on ui, got: {:?}",
+            web_deps
+        );
+
+        // api -> utils (internal)
+        let api_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(api_name.clone()))
+            .unwrap();
+        assert!(
+            api_deps.contains(&PackageNode::Workspace(utils_name.clone())),
+            "api should depend on utils, got: {:?}",
+            api_deps
+        );
+
+        // ui has no internal deps -> should connect to root
+        let ui_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(ui_name.clone()))
+            .unwrap();
+        assert!(
+            ui_deps.contains(&PackageNode::Root),
+            "ui should depend on root (no internal deps), got: {:?}",
+            ui_deps
+        );
+
+        // utils has no internal deps -> should connect to root
+        let utils_deps = graph
+            .immediate_dependencies(&PackageNode::Workspace(utils_name.clone()))
+            .unwrap();
+        assert!(
+            utils_deps.contains(&PackageNode::Root),
+            "utils should depend on root (no internal deps), got: {:?}",
+            utils_deps
+        );
+
+        // Verify external deps are recorded correctly
+        let web_info = graph.package_info(&web_name).unwrap();
+        let web_ext = web_info.unresolved_external_dependencies.as_ref().unwrap();
+        assert_eq!(web_ext.get("react").map(|v| v.as_str()), Some("^18.0.0"));
+        assert!(
+            !web_ext.contains_key("ui"),
+            "ui should be internal, not external"
+        );
+
+        let api_info = graph.package_info(&api_name).unwrap();
+        let api_ext = api_info.unresolved_external_dependencies.as_ref().unwrap();
+        assert_eq!(api_ext.get("express").map(|v| v.as_str()), Some("^4.0.0"));
+        assert!(
+            !api_ext.contains_key("utils"),
+            "utils should be internal, not external"
+        );
+
+        let ui_info = graph.package_info(&ui_name).unwrap();
+        let ui_ext = ui_info.unresolved_external_dependencies.as_ref().unwrap();
+        assert_eq!(ui_ext.get("csstype").map(|v| v.as_str()), Some("^3.0.0"));
+
+        let utils_info = graph.package_info(&utils_name).unwrap();
+        let utils_ext = utils_info
+            .unresolved_external_dependencies
+            .as_ref()
+            .unwrap();
+        assert!(
+            utils_ext.is_empty(),
+            "utils should have no external deps, got: {:?}",
+            utils_ext
+        );
     }
 
     #[tokio::test]

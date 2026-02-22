@@ -40,6 +40,22 @@ impl<'a> DependencySplitter<'a> {
         path_index: &'a WorkspacePathIndex<'a>,
     ) -> Self {
         let link_workspace_packages = package_manager.link_workspace_packages(repo_root);
+        Self::new_with_link(
+            repo_root,
+            workspace_dir,
+            workspaces,
+            link_workspace_packages,
+            path_index,
+        )
+    }
+
+    pub fn new_with_link(
+        repo_root: &'a AbsoluteSystemPath,
+        workspace_dir: &'a AbsoluteSystemPath,
+        workspaces: &'a HashMap<PackageName, PackageInfo>,
+        link_workspace_packages: bool,
+        path_index: &'a WorkspacePathIndex<'a>,
+    ) -> Self {
         Self {
             repo_root,
             workspace_dir,

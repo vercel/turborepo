@@ -117,8 +117,9 @@ impl RepoGitIndex {
             .count();
 
         // Classify entries in parallel: stat each file, compare with index,
-        // and carry the raw ObjectId (20 bytes, Copy) instead of a hex String.
-        // The hex conversion only happens for entries classified as Clean.
+        // and carry the raw ObjectId (20 bytes, Copy) instead of a heap-allocated
+        // hex String. Hex conversion uses a thread-local stack buffer to avoid
+        // allocator contention across rayon threads.
         let classified: Vec<Result<EntryClassification, Error>> = index
             .entries()
             .par_iter()
@@ -148,18 +149,20 @@ impl RepoGitIndex {
 
                         let is_racy = e.stat.is_racy(index_timestamp, stat_opts);
                         if is_racy {
-                            // Stat matches but mtime >= index timestamp so we
-                            // can't trust it. Defer to per-package hash_objects
-                            // instead of reading the file here — avoids
-                            // reading every file from disk on a fresh checkout.
                             return Ok(EntryClassification::Modified { path: rel_path });
                         }
 
-                        // Clean: stat matches and not racy — use index OID.
-                        // Convert the raw ObjectId to hex only for this path.
+                        // Clean: hex-encode the OID using a stack buffer to
+                        // avoid the intermediate HexDisplay allocation from
+                        // to_hex().to_string().
+                        let mut hex_buf = [0u8; 40];
+                        hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).unwrap();
+                        // SAFETY: hex output is always valid ASCII/UTF-8.
+                        let oid_str =
+                            unsafe { std::str::from_utf8_unchecked(&hex_buf) }.to_string();
                         Ok(EntryClassification::Clean {
                             path: rel_path,
-                            oid: e.id.to_hex().to_string(),
+                            oid: oid_str,
                         })
                     }
                     Err(_) => Ok(EntryClassification::Deleted { path: rel_path }),
@@ -192,11 +195,11 @@ impl RepoGitIndex {
 
         // ls_tree_hashes is already sorted (git index is sorted, rayon
         // preserves order for indexed iterators, sequential loop preserves
-        // order). status_entries needs sorting after untracked files are added.
+        // order). status_entries from Modified/Deleted are also in index order
+        // (sorted). Sort once now so find_untracked_files can binary search
+        // directly on &[RepoStatusEntry] without cloning paths into Strings.
+        status_entries.sort_by(|a, b| a.path.cmp(&b.path));
 
-        // Detect untracked files via a parallel walk of the working tree.
-        // Use binary search on the sorted ls_tree_hashes and status_entries
-        // instead of building a HashSet.
         let untracked = find_untracked_files(git, &ls_tree_hashes, &status_entries)?;
         for path in untracked {
             status_entries.push(RepoStatusEntry {
@@ -291,8 +294,11 @@ impl RepoGitIndex {
 
 /// Walk the working tree to find untracked files (files on disk that are
 /// not in the git index). Uses the `ignore` crate's parallel walker to
-/// respect .gitignore rules. Uses binary search on the sorted ls_tree_hashes
-/// and status_entries instead of building a HashSet.
+/// respect .gitignore rules. Binary searches directly on the sorted
+/// `ls_tree_hashes` and `status_entries` slices — no intermediate
+/// allocations needed.
+///
+/// IMPORTANT: `status_entries` must be sorted by path before calling.
 ///
 /// Each walker thread accumulates results in a thread-local Vec and
 /// batch-sends them through a channel, avoiding per-file mutex contention.
@@ -303,18 +309,9 @@ fn find_untracked_files(
     ls_tree_hashes: &SortedGitHashes,
     status_entries: &[RepoStatusEntry],
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
-    use std::sync::{Arc, mpsc};
+    use std::sync::mpsc;
 
     use ignore::WalkBuilder;
-
-    // Pre-sort status_entries for binary search (they may not be fully sorted
-    // yet if this is called before the final sort).
-    let mut sorted_status: Vec<String> = status_entries
-        .iter()
-        .map(|e| e.path.as_str().to_owned())
-        .collect();
-    sorted_status.sort_unstable();
-    let sorted_status = Arc::new(sorted_status);
 
     let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
     let root = git.root.as_std_path();
@@ -332,7 +329,6 @@ fn find_untracked_files(
         .threads(rayon::current_num_threads().min(8))
         .build_parallel();
 
-    // Sends the accumulated buffer when the walker thread's closure is dropped.
     struct FlushOnDrop {
         buf: Vec<RelativeUnixPathBuf>,
         tx: mpsc::Sender<Vec<RelativeUnixPathBuf>>,
@@ -348,7 +344,6 @@ fn find_untracked_files(
     }
 
     walker.run(|| {
-        let sorted_status = Arc::clone(&sorted_status);
         let mut guard = FlushOnDrop {
             buf: Vec::new(),
             tx: tx.clone(),
@@ -383,12 +378,12 @@ fn find_untracked_files(
             #[cfg(windows)]
             let unix_str: &str = &unix_str_owned;
 
-            // Binary search on sorted ls_tree_hashes (O(log n), zero extra memory)
+            // Binary search directly on the borrowed slices — no cloned Strings.
             let in_ls_tree = ls_tree_hashes
                 .binary_search_by(|(p, _)| p.as_str().cmp(unix_str))
                 .is_ok();
-            let in_status = sorted_status
-                .binary_search_by(|s| s.as_str().cmp(unix_str))
+            let in_status = status_entries
+                .binary_search_by(|e| e.path.as_str().cmp(unix_str))
                 .is_ok();
 
             if !in_ls_tree
@@ -401,7 +396,6 @@ fn find_untracked_files(
             ignore::WalkState::Continue
         })
     });
-    // Drop the original sender so rx.iter() terminates after all workers finish.
     drop(tx);
 
     let mut untracked = Vec::new();
