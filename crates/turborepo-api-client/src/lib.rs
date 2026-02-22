@@ -605,6 +605,7 @@ impl APIClient {
     /// Builds a shared HTTP client with optional connect timeout. This is
     /// the single TLS initialization point — all consumers should share the
     /// resulting client.
+    #[tracing::instrument(skip_all)]
     pub fn build_http_client(connect_timeout: Option<Duration>) -> Result<reqwest::Client> {
         let mut builder = reqwest::Client::builder();
         if let Some(dur) = connect_timeout {

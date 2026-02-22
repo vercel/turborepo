@@ -138,21 +138,25 @@ impl<'a> Visitor<'a> {
         is_watch: bool,
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     ) -> Self {
-        let mut task_hasher = TaskHasher::new(
-            package_inputs_hashes,
-            run_opts,
-            env_at_execution_start,
-            global_hash,
-            global_env,
-            global_env_patterns,
-        );
+        let (task_hasher, sink, color_cache) = {
+            let _span = tracing::info_span!("visitor_new").entered();
+            let mut task_hasher = TaskHasher::new(
+                package_inputs_hashes,
+                run_opts,
+                env_at_execution_start,
+                global_hash,
+                global_env,
+                global_env_patterns,
+            );
 
-        task_hasher.precompute_external_deps_hashes(package_graph.packages());
+            task_hasher.precompute_external_deps_hashes(package_graph.packages());
 
-        let sink = Self::sink(run_opts);
-        let color_cache = ColorSelector::default();
-        // Set up correct size for underlying pty
+            let sink = Self::sink(run_opts);
+            let color_cache = ColorSelector::default();
+            (task_hasher, sink, color_cache)
+        };
 
+        // Set up correct size for underlying pty (requires .await, so outside span)
         if let Some(app) = ui_sender.as_ref() {
             if let Some(pane_size) = app.pane_size().await {
                 manager.set_pty_size(pane_size.rows, pane_size.cols);
