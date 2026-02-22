@@ -37,6 +37,27 @@ impl SCM {
         }
     }
 
+    /// Get both branch and SHA with a single libgit2 Repository::open,
+    /// avoiding the overhead of opening the repo twice and spawning two
+    /// git subprocesses. Falls back to subprocess calls if libgit2 fails.
+    pub fn get_current_branch_and_sha(
+        &self,
+        _path: &AbsoluteSystemPath,
+    ) -> (Option<String>, Option<String>) {
+        match self {
+            #[cfg(feature = "git2")]
+            Self::Git(git) => {
+                if let Some((branch, sha)) = git.get_current_branch_and_sha() {
+                    return (Some(branch), Some(sha));
+                }
+                (git.get_current_branch().ok(), git.get_current_sha().ok())
+            }
+            #[cfg(not(feature = "git2"))]
+            Self::Git(git) => (git.get_current_branch().ok(), git.get_current_sha().ok()),
+            Self::Manual => (None, None),
+        }
+    }
+
     /// get the actual changed files between two git refs
     pub fn changed_files(
         &self,
@@ -212,6 +233,27 @@ impl GitRepo {
         let output = self.execute_git_command(&["rev-parse", "HEAD"], "")?;
         let output = String::from_utf8(output)?;
         Ok(output.trim().to_owned())
+    }
+
+    /// Get branch and SHA in a single libgit2 Repository::open call.
+    #[cfg(feature = "git2")]
+    fn get_current_branch_and_sha(&self) -> Option<(String, String)> {
+        let repo = git2::Repository::open(self.root.as_std_path()).ok()?;
+        let head = repo.head().ok()?;
+
+        let branch = if head.is_branch() {
+            head.shorthand().unwrap_or("").to_owned()
+        } else {
+            String::new()
+        };
+
+        let commit = head.peel_to_commit().ok()?;
+        let mut hex_buf = [0u8; 40];
+        hex::encode_to_slice(commit.id().as_bytes(), &mut hex_buf).ok()?;
+        // SAFETY: hex output is always valid ASCII
+        let sha = unsafe { std::str::from_utf8_unchecked(&hex_buf) }.to_owned();
+
+        Some((branch, sha))
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables

@@ -138,19 +138,25 @@ impl<'a> Visitor<'a> {
         is_watch: bool,
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     ) -> Self {
-        let task_hasher = TaskHasher::new(
-            package_inputs_hashes,
-            run_opts,
-            env_at_execution_start,
-            global_hash,
-            global_env,
-            global_env_patterns,
-        );
+        let (task_hasher, sink, color_cache) = {
+            let _span = tracing::info_span!("visitor_new").entered();
+            let mut task_hasher = TaskHasher::new(
+                package_inputs_hashes,
+                run_opts,
+                env_at_execution_start,
+                global_hash,
+                global_env,
+                global_env_patterns,
+            );
 
-        let sink = Self::sink(run_opts);
-        let color_cache = ColorSelector::default();
-        // Set up correct size for underlying pty
+            task_hasher.precompute_external_deps_hashes(package_graph.packages());
 
+            let sink = Self::sink(run_opts);
+            let color_cache = ColorSelector::default();
+            (task_hasher, sink, color_cache)
+        };
+
+        // Set up correct size for underlying pty (requires .await, so outside span)
         if let Some(app) = ui_sender.as_ref() {
             if let Some(pane_size) = app.pane_size().await {
                 manager.set_pty_size(pane_size.rows, pane_size.cols);
@@ -255,12 +261,6 @@ impl<'a> Visitor<'a> {
             )?;
 
             debug!("task {} hash is {}", info, task_hash);
-            // We do this calculation earlier than we do in Go due to the `task_hasher`
-            // being !Send. In the future we can look at doing this right before
-            // task execution instead.
-            let execution_env = self
-                .task_hasher
-                .env(&info, task_env_mode, task_definition)?;
 
             let task_cache = self.run_cache.task_cache(
                 task_definition,
@@ -270,6 +270,7 @@ impl<'a> Visitor<'a> {
             );
 
             // Drop to avoid holding the span across an await
+
             drop(_enter);
 
             // here is where we do the logic split
@@ -283,6 +284,13 @@ impl<'a> Visitor<'a> {
                     }));
                 }
                 false => {
+                    // Compute execution env only when we actually need it (not
+                    // during dry runs). The task_hasher is !Send so this must
+                    // happen in the dispatch loop rather than inside the spawned task.
+                    let execution_env =
+                        self.task_hasher
+                            .env(&info, task_env_mode, task_definition)?;
+
                     let takes_input = task_definition.interactive || task_definition.persistent;
                     let Some(mut exec_context) = factory.exec_context(
                         info.clone(),

@@ -357,6 +357,10 @@ impl RunBuilder {
         )?;
 
         let env_at_execution_start = EnvironmentVariableMap::infer();
+        // Pre-warm the turbo.json cache: read and parse all package turbo.json
+        // files in parallel before the engine builder needs them sequentially.
+        turbo_json_loader.preload_all();
+
         let mut engine = self.build_engine(
             &pkg_dep_graph,
             &root_turbo_json,

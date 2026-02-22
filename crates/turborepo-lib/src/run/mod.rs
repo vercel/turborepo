@@ -614,6 +614,7 @@ impl Run {
 
         rayon::scope(|s| {
             s.spawn(|_| {
+                let _span = tracing::info_span!("calculate_file_hashes_task").entered();
                 file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
                     &self.scm,
                     self.engine.tasks(),
@@ -625,6 +626,7 @@ impl Run {
                 ));
             });
             s.spawn(|_| {
+                let _span = tracing::info_span!("get_internal_deps_hash_task").entered();
                 internal_deps_result = Some(
                     internal_dep_paths
                         .map(|dep_paths| {
@@ -639,6 +641,7 @@ impl Run {
                 );
             });
             s.spawn(|_| {
+                let _span = tracing::info_span!("collect_global_file_hash_inputs_task").entered();
                 global_file_result = Some(collect_global_file_hash_inputs(
                     root_workspace,
                     &self.repo_root,
