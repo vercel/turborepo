@@ -15,7 +15,7 @@ describe("Node entrypoint", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (jest.mocked(execa)).mockResolvedValue({
+    jest.mocked(execa).mockResolvedValue({
       stdout: "",
       stderr: "",
       exitCode: 0,

@@ -60,9 +60,13 @@ describe("managers", () => {
         });
 
         if (dry) {
-          await expect(MANAGERS[project].detect({ workspaceRoot: root })).resolves.toEqual(true);
+          await expect(
+            MANAGERS[project].detect({ workspaceRoot: root })
+          ).resolves.toEqual(true);
         } else {
-          await expect(MANAGERS[manager].detect({ workspaceRoot: root })).resolves.toEqual(true);
+          await expect(
+            MANAGERS[manager].detect({ workspaceRoot: root })
+          ).resolves.toEqual(true);
         }
       }
     );
