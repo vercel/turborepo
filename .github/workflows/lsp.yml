@@ -8,6 +8,9 @@ name: LSP
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-rust:
     name: "Build Rust"

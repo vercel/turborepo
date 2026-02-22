@@ -10,6 +10,9 @@ on:
     types:
       - completed
 
+permissions:
+  contents: read
+
 jobs:
   notify-failure:
     name: "Notify Slack on Docs Alias Failure"

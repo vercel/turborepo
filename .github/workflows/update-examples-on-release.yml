@@ -3,6 +3,10 @@ name: Update examples to latest
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   update-examples-pr:
     name: "Update examples PR"
