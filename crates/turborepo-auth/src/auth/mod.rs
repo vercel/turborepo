@@ -119,12 +119,12 @@ mod tests {
     // Mock the turborepo_dirs functions for testing
     fn create_mock_vercel_config_dir() -> AbsoluteSystemPathBuf {
         let tmp_dir = tempdir().expect("Failed to create temp dir");
-        AbsoluteSystemPathBuf::try_from(tmp_dir.into_path()).expect("Failed to create path")
+        AbsoluteSystemPathBuf::try_from(tmp_dir.keep()).expect("Failed to create path")
     }
 
     fn create_mock_turbo_config_dir() -> AbsoluteSystemPathBuf {
         let tmp_dir = tempdir().expect("Failed to create temp dir");
-        AbsoluteSystemPathBuf::try_from(tmp_dir.into_path()).expect("Failed to create path")
+        AbsoluteSystemPathBuf::try_from(tmp_dir.keep()).expect("Failed to create path")
     }
 
     fn setup_auth_file(

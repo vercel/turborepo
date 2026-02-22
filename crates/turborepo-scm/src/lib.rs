@@ -29,6 +29,11 @@ mod repo_index;
 mod status;
 pub mod worktree;
 
+#[cfg(test)]
+mod git_index_regression_tests;
+#[cfg(test)]
+mod test_utils;
+
 #[cfg(feature = "git2")]
 pub use repo_index::RepoGitIndex;
 pub use worktree::WorktreeInfo;

@@ -133,9 +133,9 @@ impl RunTracker {
         scm: &SCM,
     ) -> Result<RunSummary<'a>, Error>
     where
-        E: EngineInfo,
-        H: HashTrackerInfo,
-        R: RunOptsInfo,
+        E: EngineInfo + Sync,
+        H: HashTrackerInfo + Sync,
+        R: RunOptsInfo + Sync,
     {
         let single_package = run_opts.single_package();
         let should_save = run_opts.summarize().is_some();
@@ -152,12 +152,22 @@ impl RunTracker {
 
         let summary_state = self.execution_tracker.finish().await?;
 
-        let tasks = summary_state
-            .tasks
-            .iter()
-            .cloned()
-            .map(|TaskState { task_id, execution }| task_factory.task_summary(task_id, execution))
-            .collect::<Result<Vec<_>, crate::task_factory::Error>>()?;
+        // Build task summaries in parallel — each task_summary call is read-only
+        // on the engine, hash tracker, and package graph.
+        let tasks = {
+            use rayon::prelude::*;
+            let results: Vec<Result<TaskSummary, crate::task_factory::Error>> = summary_state
+                .tasks
+                .par_iter()
+                .map(|task_state| {
+                    task_factory
+                        .task_summary(task_state.task_id.clone(), task_state.execution.clone())
+                })
+                .collect();
+            results
+                .into_iter()
+                .collect::<Result<Vec<_>, crate::task_factory::Error>>()?
+        };
         let execution_summary = ExecutionSummary::new(
             self.synthesized_command.clone(),
             summary_state,
@@ -216,9 +226,9 @@ impl RunTracker {
         is_watch: bool,
     ) -> Result<(), Error>
     where
-        E: EngineInfo,
-        H: HashTrackerInfo,
-        R: RunOptsInfo,
+        E: EngineInfo + Sync,
+        H: HashTrackerInfo + Sync,
+        R: RunOptsInfo + Sync,
     {
         let end_time = Local::now();
 

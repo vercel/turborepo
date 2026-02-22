@@ -267,6 +267,11 @@ impl GitRepo {
         // Include globs can find files not in the git index (e.g. gitignored files
         // that a user explicitly wants to track). Walk the filesystem for these
         // files but skip re-hashing any already known from the index.
+        //
+        // Optimization: separate literal file paths from actual glob patterns.
+        // Literal paths (e.g. "$TURBO_ROOT$/tsconfig.json") are resolved with a
+        // single stat syscall instead of compiling a glob regex and walking a
+        // directory tree.
         let pkg_prefix = package_path.to_unix();
 
         if !includes.is_empty() {
@@ -274,8 +279,10 @@ impl GitRepo {
             let package_unix_path = pkg_prefix.as_str();
 
             static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
-            let mut inclusions = Vec::with_capacity(includes.len() + CONFIG_FILES.len());
-            let mut exclusions = Vec::new();
+
+            let mut glob_inclusions = Vec::new();
+            let mut glob_exclusions = Vec::new();
+            let mut literal_to_hash = Vec::new();
             let mut glob_buf = String::with_capacity(package_unix_path.len() + 1 + 64);
 
             let all = includes.iter().copied().chain(CONFIG_FILES.iter().copied());
@@ -285,44 +292,69 @@ impl GitRepo {
                     glob_buf.push_str(package_unix_path);
                     glob_buf.push('/');
                     glob_buf.push_str(exclusion.trim_start_matches('/'));
-                    exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+                    glob_exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+                } else if !globwalk::is_glob_pattern(raw_glob) {
+                    // Literal file path — resolve directly via stat instead of
+                    // compiling a glob and walking directories.
+                    let resolved =
+                        full_pkg_path.join_unix_path(turbopath::RelativeUnixPath::new(raw_glob)?);
+                    if resolved.symlink_metadata().is_ok() {
+                        let git_relative = self.root.anchor(&resolved)?.to_unix();
+                        let pkg_relative =
+                            turbopath::RelativeUnixPath::strip_prefix(&git_relative, &pkg_prefix)
+                                .ok()
+                                .map(|s| s.to_owned());
+                        let already_known = pkg_relative
+                            .as_ref()
+                            .is_some_and(|rel| hashes.contains_key(rel));
+                        if !already_known {
+                            literal_to_hash.push(git_relative);
+                        }
+                    }
                 } else {
                     glob_buf.push_str(package_unix_path);
                     glob_buf.push('/');
                     glob_buf.push_str(raw_glob.trim_start_matches('/'));
-                    inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+                    glob_inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
                 }
             }
 
-            let files = globwalk::globwalk(
-                turbo_root,
-                &inclusions,
-                &exclusions,
-                globwalk::WalkType::Files,
-            )?;
-
-            // Only hash files not already present from the git index
-            let mut to_hash = Vec::new();
-            for entry in &files {
-                let git_relative = self.root.anchor(entry)?.to_unix();
-                let pkg_relative =
-                    turbopath::RelativeUnixPath::strip_prefix(&git_relative, &pkg_prefix)
-                        .ok()
-                        .map(|s| s.to_owned());
-
-                let already_known = pkg_relative
-                    .as_ref()
-                    .is_some_and(|rel| hashes.contains_key(rel));
-
-                if !already_known {
-                    to_hash.push(git_relative);
-                }
-            }
-
-            if !to_hash.is_empty() {
-                let mut new_hashes = GitHashes::with_capacity(to_hash.len());
-                hash_objects(&self.root, &full_pkg_path, to_hash, &mut new_hashes)?;
+            // Hash any literal files discovered via direct stat.
+            if !literal_to_hash.is_empty() {
+                let mut new_hashes = GitHashes::with_capacity(literal_to_hash.len());
+                hash_objects(&self.root, &full_pkg_path, literal_to_hash, &mut new_hashes)?;
                 hashes.extend(new_hashes);
+            }
+
+            // Only do the expensive glob walk for patterns that are actual globs.
+            if !glob_inclusions.is_empty() {
+                let files = globwalk::globwalk(
+                    turbo_root,
+                    &glob_inclusions,
+                    &glob_exclusions,
+                    globwalk::WalkType::Files,
+                )?;
+
+                let mut to_hash = Vec::new();
+                for entry in &files {
+                    let git_relative = self.root.anchor(entry)?.to_unix();
+                    let pkg_relative =
+                        turbopath::RelativeUnixPath::strip_prefix(&git_relative, &pkg_prefix)
+                            .ok()
+                            .map(|s| s.to_owned());
+                    let already_known = pkg_relative
+                        .as_ref()
+                        .is_some_and(|rel| hashes.contains_key(rel));
+                    if !already_known {
+                        to_hash.push(git_relative);
+                    }
+                }
+
+                if !to_hash.is_empty() {
+                    let mut new_hashes = GitHashes::with_capacity(to_hash.len());
+                    hash_objects(&self.root, &full_pkg_path, to_hash, &mut new_hashes)?;
+                    hashes.extend(new_hashes);
+                }
             }
         }
 

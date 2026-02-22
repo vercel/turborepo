@@ -372,11 +372,12 @@ where
         }
 
         // Try to restore from cache
-        match self
+        let cache_result = self
             .task_cache
             .restore_outputs(&mut prefixed_ui, telemetry)
-            .await
-        {
+            .instrument(tracing::info_span!("cache_restore", task = %self.task_id))
+            .await;
+        match cache_result {
             Ok(Some(status)) => {
                 self.hash_tracker.insert_expanded_outputs(
                     self.task_id.clone(),
@@ -472,7 +473,12 @@ where
                     .can_cache(&self.task_hash, &self.task_id_for_display)
                     .unwrap_or(true)
                 {
-                    if let Err(e) = self.task_cache.save_outputs(task_duration, telemetry).await {
+                    if let Err(e) = self
+                        .task_cache
+                        .save_outputs(task_duration, telemetry)
+                        .instrument(tracing::info_span!("cache_save", task = %self.task_id))
+                        .await
+                    {
                         error!("error caching output: {e}");
                         return Err(e.into());
                     } else {
