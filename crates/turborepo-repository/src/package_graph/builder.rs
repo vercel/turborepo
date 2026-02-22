@@ -444,7 +444,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         // same file N times (once per workspace).
         let link_workspace_packages = package_manager.link_workspace_packages(self.repo_root);
         // Resolve internal vs external dependencies in parallel. Each
-        // Dependencies::new_with_link call is read-only on the workspaces map
+        // Dependencies::new call is read-only on the workspaces map
         // so this is safe. Graph mutation stays sequential below.
         let split_deps = {
             use rayon::prelude::*;
@@ -453,7 +453,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                 .map(|(name, entry)| {
                     (
                         name.clone(),
-                        Dependencies::new_with_link(
+                        Dependencies::new(
                             self.repo_root,
                             &entry.package_json_path,
                             &self.workspaces,
@@ -655,25 +655,6 @@ impl Dependencies {
         repo_root: &AbsoluteSystemPath,
         workspace_json_path: &AnchoredSystemPathBuf,
         workspaces: &HashMap<PackageName, PackageInfo>,
-        package_manager: &PackageManager,
-        dependencies: I,
-        path_index: &WorkspacePathIndex<'_>,
-    ) -> Self {
-        let link = package_manager.link_workspace_packages(repo_root);
-        Self::new_with_link(
-            repo_root,
-            workspace_json_path,
-            workspaces,
-            link,
-            dependencies,
-            path_index,
-        )
-    }
-
-    pub fn new_with_link<'a, I: IntoIterator<Item = (&'a String, &'a String)>>(
-        repo_root: &AbsoluteSystemPath,
-        workspace_json_path: &AnchoredSystemPathBuf,
-        workspaces: &HashMap<PackageName, PackageInfo>,
         link_workspace_packages: bool,
         dependencies: I,
         path_index: &WorkspacePathIndex<'_>,
@@ -684,7 +665,7 @@ impl Dependencies {
             .expect("package.json path should have parent");
         let mut internal = HashSet::new();
         let mut external = BTreeMap::new();
-        let splitter = DependencySplitter::new_with_link(
+        let splitter = DependencySplitter::new(
             repo_root,
             workspace_dir,
             workspaces,
