@@ -6,9 +6,9 @@ use std::{
 };
 
 use chrono::Local;
-use tracing::{debug, Instrument};
+use tracing::Instrument;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
+use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
@@ -49,8 +49,7 @@ pub struct RunBuilder {
     repo_root: AbsoluteSystemPathBuf,
     color_config: ColorConfig,
     version: &'static str,
-    api_client: APIClient,
-    analytics_sender: Option<AnalyticsSender>,
+    http_client_cell: Arc<tokio::sync::OnceCell<reqwest::Client>>,
     // In watch mode, we can have a changed package that we want to serve as an entrypoint.
     // We will then prune away any tasks that do not depend on tasks inside
     // this package.
@@ -64,12 +63,12 @@ pub struct RunBuilder {
 
 impl RunBuilder {
     #[tracing::instrument(skip_all)]
-    pub fn new(base: CommandBase, http_client: Option<&reqwest::Client>) -> Result<Self, Error> {
-        let api_client = match http_client {
-            Some(client) => base.api_client_with_http(client),
-            None => base.api_client()?,
-        };
-
+    pub fn new(
+        base: CommandBase,
+        http_client_cell: Option<Arc<tokio::sync::OnceCell<reqwest::Client>>>,
+    ) -> Result<Self, Error> {
+        let http_client_cell =
+            http_client_cell.unwrap_or_else(|| Arc::new(tokio::sync::OnceCell::new()));
         let opts = base.opts();
         let api_auth = base.api_auth()?;
 
@@ -92,12 +91,11 @@ impl RunBuilder {
         Ok(Self {
             processes,
             opts,
-            api_client,
+            http_client_cell,
             repo_root,
             color_config: ui,
             version,
             api_auth,
-            analytics_sender: None,
             entrypoint_packages: None,
             should_print_prelude_override: None,
             should_validate_engine: true,
@@ -127,11 +125,6 @@ impl RunBuilder {
 
     fn will_execute_tasks(&self) -> bool {
         self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
-    }
-
-    pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
-        self.analytics_sender = analytics_sender;
-        self
     }
 
     pub fn calculate_filtered_packages(
@@ -172,25 +165,12 @@ impl RunBuilder {
         Ok(filtered_pkgs)
     }
 
-    // Starts analytics and returns handle. This is not included in the main `build`
-    // function because we don't want the handle stored in the `Run` struct.
-    pub fn start_analytics(&self) -> (Option<AnalyticsSender>, Option<AnalyticsHandle>) {
-        // If there's no API auth, we don't want to record analytics
-        let Some(api_auth) = self.api_auth.clone() else {
-            return (None, None);
-        };
-        api_auth
-            .is_linked()
-            .then(|| start_analytics(api_auth, self.api_client.clone()))
-            .unzip()
-    }
-
     #[tracing::instrument(skip(self, signal_handler))]
     pub async fn build(
-        mut self,
+        self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
-    ) -> Result<Run, Error> {
+    ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
@@ -229,7 +209,7 @@ impl RunBuilder {
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
         if is_linked {
-            run_telemetry.track_remote_cache(self.api_client.base_url());
+            run_telemetry.track_remote_cache(&self.opts.api_client_opts.api_url);
         }
         let _is_structured_output = self.opts.run_opts.graph.is_some()
             || matches!(self.opts.run_opts.dry_run, Some(DryRunMode::Json));
@@ -293,22 +273,60 @@ impl RunBuilder {
             .await
             .expect("detecting scm panicked");
         let repo_index = Arc::new(repo_index);
-        debug!(
-            "RunBuilder creating AsyncCache with cache_dir={}, repo_root={}",
-            self.opts.cache_opts.cache_dir, self.repo_root
-        );
+
+        // Resolve the HTTP client. TLS initialization has been running in the
+        // background since cli::run started, overlapping with arg parsing,
+        // config loading, package graph construction, and SCM indexing.
+        let api_client = {
+            let _span = tracing::info_span!("resolve_api_client").entered();
+            let http_client = self
+                .http_client_cell
+                .get_or_init(|| async {
+                    tokio::task::spawn_blocking(|| {
+                        APIClient::build_http_client(None).expect("TLS initialization failed")
+                    })
+                    .await
+                    .expect("http client task panicked")
+                })
+                .await;
+            let timeout = self.opts.api_client_opts.timeout;
+            let upload_timeout = self.opts.api_client_opts.upload_timeout;
+            APIClient::new_with_client(
+                http_client.clone(),
+                &self.opts.api_client_opts.api_url,
+                if timeout > 0 {
+                    Some(std::time::Duration::from_secs(timeout))
+                } else {
+                    None
+                },
+                if upload_timeout > 0 {
+                    Some(std::time::Duration::from_secs(upload_timeout))
+                } else {
+                    None
+                },
+                self.version,
+                self.opts.api_client_opts.preflight,
+            )
+        };
+
+        let (analytics_sender, analytics_handle) = self
+            .api_auth
+            .as_ref()
+            .filter(|auth| auth.is_linked())
+            .map(|auth| start_analytics(auth.clone(), api_client.clone()))
+            .unzip();
+
         let async_cache = {
             let _span = tracing::info_span!("async_cache_new").entered();
             AsyncCache::new(
                 &self.opts.cache_opts,
                 &self.repo_root,
-                self.api_client.clone(),
+                api_client.clone(),
                 self.api_auth.clone(),
-                self.analytics_sender.take(),
+                analytics_sender,
             )?
         };
 
-        // restore config from task access trace if it's enabled
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
         task_access.restore_config().await;
 
@@ -407,30 +425,33 @@ impl RunBuilder {
             .should_print_prelude_override
             .unwrap_or_else(|| self.will_execute_tasks());
 
-        Ok(Run {
-            version: self.version,
-            color_config: self.color_config,
-            start_at,
-            processes: self.processes,
-            run_telemetry,
-            task_access,
-            repo_root: self.repo_root,
-            opts: Arc::new(self.opts),
-            api_client: self.api_client,
-            api_auth: self.api_auth,
-            env_at_execution_start,
-            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
-            pkg_dep_graph: Arc::new(pkg_dep_graph),
-            turbo_json_loader,
-            root_turbo_json,
-            scm,
-            engine: Arc::new(engine),
-            run_cache,
-            signal_handler: signal_handler.clone(),
-            should_print_prelude,
-            micro_frontend_configs,
-            repo_index,
-        })
+        Ok((
+            Run {
+                version: self.version,
+                color_config: self.color_config,
+                start_at,
+                processes: self.processes,
+                run_telemetry,
+                task_access,
+                repo_root: self.repo_root,
+                opts: Arc::new(self.opts),
+                api_client,
+                api_auth: self.api_auth,
+                env_at_execution_start,
+                filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
+                pkg_dep_graph: Arc::new(pkg_dep_graph),
+                turbo_json_loader,
+                root_turbo_json,
+                scm,
+                engine: Arc::new(engine),
+                run_cache,
+                signal_handler: signal_handler.clone(),
+                should_print_prelude,
+                micro_frontend_configs,
+                repo_index,
+            },
+            analytics_handle,
+        ))
     }
 
     #[tracing::instrument(skip_all)]
