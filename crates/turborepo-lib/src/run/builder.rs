@@ -288,10 +288,10 @@ impl RunBuilder {
                 }
             };
 
-        let (scm, repo_index) = {
-            let _span = tracing::info_span!("scm_task_await").entered();
-            scm_task.await.expect("detecting scm panicked")
-        };
+        let (scm, repo_index) = scm_task
+            .instrument(tracing::info_span!("scm_task_await"))
+            .await
+            .expect("detecting scm panicked");
         let repo_index = Arc::new(repo_index);
         debug!(
             "RunBuilder creating AsyncCache with cache_dir={}, repo_root={}",
