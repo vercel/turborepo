@@ -230,7 +230,7 @@ pub struct TaskHashTracker {
 pub struct TaskHashTrackerState {
     #[serde(skip)]
     package_task_env_vars: HashMap<TaskId<'static>, DetailedMap>,
-    package_task_hashes: HashMap<TaskId<'static>, String>,
+    package_task_hashes: HashMap<TaskId<'static>, Arc<str>>,
     #[serde(skip)]
     package_task_framework: HashMap<TaskId<'static>, FrameworkSlug>,
     #[serde(skip)]
@@ -431,10 +431,11 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
 
         let task_hash = task_hashable.calculate_task_hash();
 
+        let task_hash_arc: Arc<str> = Arc::from(task_hash.as_str());
         self.task_hash_tracker.insert_hash(
             task_id.clone(),
             env_vars,
-            task_hash.clone(),
+            task_hash_arc,
             framework_slug,
         );
 
@@ -453,17 +454,14 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     fn calculate_dependency_hashes(
         &self,
         dependency_set: HashSet<&TaskNode>,
-    ) -> Result<Vec<String>, Error> {
+    ) -> Result<Vec<Arc<str>>, Error> {
         let state = self
             .task_hash_tracker
             .state
             .read()
             .expect("hash tracker rwlock poisoned");
 
-        // Collect owned strings directly to avoid borrow lifetime issues with
-        // the RwLock guard. We sort + dedup instead of using a HashSet to avoid
-        // the overhead of hashing the hash strings.
-        let mut dependency_hash_list: Vec<String> = Vec::with_capacity(dependency_set.len());
+        let mut dependency_hash_list: Vec<Arc<str>> = Vec::with_capacity(dependency_set.len());
         for dependency_task in &dependency_set {
             let TaskNode::Task(dependency_task_id) = dependency_task else {
                 continue;
@@ -473,7 +471,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 .package_task_hashes
                 .get(dependency_task_id)
                 .ok_or_else(|| Error::MissingDependencyTaskHash(dependency_task.to_string()))?;
-            dependency_hash_list.push(dependency_hash.clone());
+            dependency_hash_list.push(Arc::clone(dependency_hash));
         }
         drop(state);
 
@@ -591,7 +589,7 @@ impl TaskHashTracker {
         }
     }
 
-    pub fn hash(&self, task_id: &TaskId) -> Option<String> {
+    pub fn hash(&self, task_id: &TaskId) -> Option<Arc<str>> {
         let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_hashes.get(task_id).cloned()
     }
@@ -600,7 +598,7 @@ impl TaskHashTracker {
         &self,
         task_id: TaskId<'static>,
         env_vars: DetailedMap,
-        hash: String,
+        hash: Arc<str>,
         framework_slug: Option<FrameworkSlug>,
     ) {
         let mut state = self.state.write().expect("hash tracker rwlock poisoned");
@@ -663,7 +661,7 @@ impl TaskHashTracker {
 // turborepo-run-summary. The trait is defined in turborepo-types to enable
 // proper dependency direction (task-hash doesn't depend on run-summary).
 impl HashTrackerInfo for TaskHashTracker {
-    fn hash(&self, task_id: &TaskId) -> Option<String> {
+    fn hash(&self, task_id: &TaskId) -> Option<Arc<str>> {
         TaskHashTracker::hash(self, task_id)
     }
 
@@ -738,7 +736,7 @@ mod test {
         tracker.insert_hash(
             task_id.clone(),
             DetailedMap::default(),
-            "abc123".to_string(),
+            Arc::from("abc123"),
             None,
         );
 
@@ -777,7 +775,7 @@ mod test {
                     tracker.insert_hash(
                         task_id.clone(),
                         DetailedMap::default(),
-                        format!("hash-{i}"),
+                        Arc::from(format!("hash-{i}").as_str()),
                         None,
                     );
                 }
@@ -990,7 +988,7 @@ mod test {
             tracker.insert_hash(
                 task_id.clone(),
                 DetailedMap::default(),
-                format!("hash-{i}"),
+                Arc::from(format!("hash-{i}").as_str()),
                 None,
             );
             assert_eq!(
