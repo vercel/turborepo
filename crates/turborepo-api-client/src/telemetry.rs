@@ -76,16 +76,20 @@ impl TelemetryClient for DeferredTelemetryClient {
         telemetry_id: &str,
         session_id: &str,
     ) -> Result<(), Error> {
-        let client = self
-            .http_client
-            .get_or_init(|| async {
-                tokio::task::spawn_blocking(|| {
-                    APIClient::build_http_client(None).expect("TLS initialization failed")
-                })
-                .await
-                .expect("http client task panicked")
-            })
-            .await;
+        // Fast path: background TLS init already completed.
+        // Slow path: initialize inline, but if the runtime is shutting down
+        // the spawn_blocking task will be cancelled — return an error instead
+        // of panicking. Telemetry is never worth crashing over.
+        let maybe_client;
+        let client = match self.http_client.get() {
+            Some(client) => client,
+            None => {
+                maybe_client = tokio::task::spawn_blocking(|| APIClient::build_http_client(None))
+                    .await
+                    .map_err(|_| Error::HttpClientCancelled)??;
+                &maybe_client
+            }
+        };
 
         let url = format!("{}{}", self.base_url, TELEMETRY_ENDPOINT);
         let telemetry_request = client

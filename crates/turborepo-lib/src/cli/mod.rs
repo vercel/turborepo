@@ -1328,16 +1328,14 @@ pub async fn run(
     {
         let cell = http_client_cell.clone();
         tokio::task::spawn(async move {
-            cell.get_or_init(|| async {
-                tokio::task::spawn_blocking(|| {
-                    let _span = tracing::info_span!("http_client_init").entered();
-                    APIClient::build_http_client(None)
-                        .expect("Failed to create HTTP client: TLS initialization failed")
-                })
-                .await
-                .expect("http client task panicked")
+            if let Ok(Ok(client)) = tokio::task::spawn_blocking(|| {
+                let _span = tracing::info_span!("http_client_init").entered();
+                APIClient::build_http_client(None)
             })
-            .await;
+            .await
+            {
+                cell.set(client).ok();
+            }
         });
     }
 

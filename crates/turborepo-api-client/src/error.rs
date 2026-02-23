@@ -15,6 +15,8 @@ pub enum Error {
     TooManyFailures(#[from] Box<reqwest::Error>),
     #[error("Unable to set up TLS.")]
     TlsError(#[source] reqwest::Error),
+    #[error("HTTP client initialization was cancelled (runtime shutting down)")]
+    HttpClientCancelled,
     #[error("Error parsing header: {0}")]
     InvalidHeader(#[from] ToStrError),
     #[error("Error parsing '{url}' as URL: {err}")]

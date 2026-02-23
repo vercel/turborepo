@@ -279,16 +279,12 @@ impl RunBuilder {
         // config loading, package graph construction, and SCM indexing.
         let api_client = {
             let _span = tracing::info_span!("resolve_api_client").entered();
-            let http_client = self
-                .http_client_cell
-                .get_or_init(|| async {
-                    tokio::task::spawn_blocking(|| {
-                        APIClient::build_http_client(None).expect("TLS initialization failed")
-                    })
+            let http_client = match self.http_client_cell.get() {
+                Some(client) => client.clone(),
+                None => tokio::task::spawn_blocking(|| APIClient::build_http_client(None))
                     .await
-                    .expect("http client task panicked")
-                })
-                .await;
+                    .map_err(|_| turborepo_api_client::Error::HttpClientCancelled)??,
+            };
             let timeout = self.opts.api_client_opts.timeout;
             let upload_timeout = self.opts.api_client_opts.upload_timeout;
             APIClient::new_with_client(
