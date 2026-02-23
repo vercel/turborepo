@@ -260,13 +260,15 @@ impl RunBuilder {
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().name().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
-        let micro_frontend_configs =
+        let micro_frontend_configs = {
+            let _span = tracing::info_span!("micro_frontends_from_disk").entered();
             match MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph) {
                 Ok(configs) => configs,
                 Err(err) => {
                     return Err(Error::MicroFrontends(err));
                 }
-            };
+            }
+        };
 
         let (scm, repo_index) = scm_task
             .instrument(tracing::info_span!("scm_task_await"))
@@ -323,53 +325,66 @@ impl RunBuilder {
             )?
         };
 
-        let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
-        task_access.restore_config().await;
+        let task_access = {
+            let _span = tracing::info_span!("task_access_setup").entered();
+            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
+            ta.restore_config().await;
+            ta
+        };
 
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
         let future_flags = self.opts.future_flags;
 
         let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
-        let turbo_json_loader = if task_access.is_enabled() {
-            UnifiedTurboJsonLoader::task_access(
-                reader,
-                root_turbo_json_path.clone(),
-                root_package_json.clone(),
-            )
-        } else if is_single_package {
-            UnifiedTurboJsonLoader::single_package(
-                reader,
-                root_turbo_json_path.clone(),
-                root_package_json.clone(),
-            )
-        } else if !root_turbo_json_path.exists() &&
-        // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
-        (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
-        {
-            UnifiedTurboJsonLoader::workspace_no_turbo_json(
-                reader,
-                pkg_dep_graph.packages(),
-                micro_frontend_configs.clone(),
-            )
-        } else if let Some(micro_frontends) = &micro_frontend_configs {
-            UnifiedTurboJsonLoader::workspace_with_microfrontends(
-                reader,
-                root_turbo_json_path.clone(),
-                pkg_dep_graph.packages(),
-                micro_frontends.clone(),
-            )
-        } else {
-            UnifiedTurboJsonLoader::workspace(
-                reader,
-                root_turbo_json_path.clone(),
-                pkg_dep_graph.packages(),
-            )
+        let turbo_json_loader = {
+            let _span = tracing::info_span!("turbo_json_loader_setup").entered();
+            if task_access.is_enabled() {
+                UnifiedTurboJsonLoader::task_access(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    root_package_json.clone(),
+                )
+            } else if is_single_package {
+                UnifiedTurboJsonLoader::single_package(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    root_package_json.clone(),
+                )
+            } else if !root_turbo_json_path.exists() &&
+            // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
+            (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
+            {
+                UnifiedTurboJsonLoader::workspace_no_turbo_json(
+                    reader,
+                    pkg_dep_graph.packages(),
+                    micro_frontend_configs.clone(),
+                )
+            } else if let Some(micro_frontends) = &micro_frontend_configs {
+                UnifiedTurboJsonLoader::workspace_with_microfrontends(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    pkg_dep_graph.packages(),
+                    micro_frontends.clone(),
+                )
+            } else {
+                UnifiedTurboJsonLoader::workspace(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    pkg_dep_graph.packages(),
+                )
+            }
         };
 
-        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?.clone();
+        let root_turbo_json = {
+            let _span = tracing::info_span!("root_turbo_json_load").entered();
+            turbo_json_loader.load(&PackageName::Root)?.clone()
+        };
 
-        pkg_dep_graph.validate()?;
+        {
+            let _span = tracing::info_span!("pkg_dep_graph_validate").entered();
+            pkg_dep_graph.validate()?;
+        }
 
         let filtered_pkgs = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();
