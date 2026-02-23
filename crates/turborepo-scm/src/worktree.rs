@@ -57,7 +57,7 @@ impl WorktreeInfo {
         let git_common_dir = repo.commondir().to_string_lossy().to_string();
 
         let main_worktree_root = resolve_main_worktree_root(path, &git_common_dir)?;
-        let git_root = main_worktree_root.clone();
+        let git_root = worktree_root.clone();
 
         Ok(Self {
             worktree_root,
@@ -227,6 +227,7 @@ mod tests {
 
         assert_eq!(info.worktree_root, worktree_path);
         assert_eq!(info.main_worktree_root, repo_root);
+        assert_eq!(info.git_root, worktree_path);
         assert!(info.is_linked_worktree());
     }
 
@@ -255,6 +256,38 @@ mod tests {
         // git_root should resolve to repo_root even when called from subdir
         assert_eq!(info.git_root, repo_root);
         assert!(!info.is_linked_worktree());
+    }
+
+    #[test]
+    fn test_linked_worktree_outside_main_repo() {
+        // Reproduces the real-world scenario where the worktree lives at a sibling
+        // path (e.g. ~/Vercel/front-worktree/branch) rather than inside the main
+        // repo (~/Vercel/front). git_root must resolve to the worktree root so
+        // that path anchoring works correctly in the SCM layer.
+        let (_tmp_main, repo_root) = tmp_dir();
+        let (_tmp_wt, worktree_parent) = tmp_dir();
+        setup_repository(&repo_root);
+
+        let worktree_path = worktree_parent.join_component("my-branch");
+        require_git_cmd(
+            &repo_root,
+            &[
+                "worktree",
+                "add",
+                worktree_path.as_str(),
+                "-b",
+                "test-branch-outside",
+            ],
+        );
+
+        let info = WorktreeInfo::detect(&worktree_path).unwrap();
+
+        assert_eq!(info.worktree_root, worktree_path);
+        assert_eq!(info.main_worktree_root, repo_root);
+        // git_root must be the worktree root, NOT the main worktree root,
+        // otherwise path anchoring fails with "is not parent of"
+        assert_eq!(info.git_root, worktree_path);
+        assert!(info.is_linked_worktree());
     }
 
     #[test]
