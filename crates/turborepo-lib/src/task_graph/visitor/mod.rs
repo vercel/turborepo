@@ -265,10 +265,12 @@ impl<'a> Visitor<'a> {
                         .dependencies(task_id)
                         .ok_or(Error::MissingDefinition)?;
 
-                    let task_hash_telemetry =
+                    let package_task_event =
                         PackageTaskEventBuilder::new(task_id.package(), task_id.task())
                             .with_parent(telemetry);
+                    package_task_event.track_env_mode(&task_env_mode.to_string());
 
+                    let task_hash_telemetry = package_task_event.child();
                     let task_hash = self.task_hasher.calculate_task_hash(
                         task_id,
                         task_definition,
