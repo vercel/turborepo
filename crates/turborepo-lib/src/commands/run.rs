@@ -16,7 +16,10 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let run_builder = RunBuilder::new(base, Some(http_client))?;
+    let run_builder = {
+        let _span = tracing::info_span!("run_builder_new").entered();
+        RunBuilder::new(base, Some(http_client))?
+    };
 
     let run_fut = async {
         let (analytics_sender, analytics_handle) = run_builder.start_analytics();
@@ -27,7 +30,10 @@ pub async fn run(
                 .await?,
         );
 
-        let (sender, handle) = run.start_ui()?.unzip();
+        let (sender, handle) = {
+            let _span = tracing::info_span!("start_ui").entered();
+            run.start_ui()?.unzip()
+        };
 
         let result = run.run(sender.clone(), false).await;
 

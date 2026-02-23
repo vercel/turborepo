@@ -1298,17 +1298,24 @@ pub async fn run(
     #[allow(unused_variables)] logger: &TurboSubscriber,
     color_config: ColorConfig,
 ) -> Result<i32, Error> {
-    // TODO: remove mutability from this function
-    let mut cli_args = Args::new(env::args_os().collect());
+    let _cli_run_span = tracing::info_span!("cli_run").entered();
+
+    let mut cli_args = {
+        let _span = tracing::info_span!("cli_arg_parsing").entered();
+        Args::new(env::args_os().collect())
+    };
     let version = get_version();
 
-    // Build a single HTTP client to share across telemetry, API, and cache
-    // operations. This avoids redundant TLS initialization (~150ms savings).
-    let http_client = APIClient::build_http_client(None)
-        .expect("Failed to create HTTP client: TLS initialization failed");
+    let http_client = {
+        let _span = tracing::info_span!("http_client_init").entered();
+        APIClient::build_http_client(None)
+            .expect("Failed to create HTTP client: TLS initialization failed")
+    };
 
-    // track telemetry handle to close at the end of the run
-    let telemetry_handle = initialize_telemetry_client(&http_client, color_config, version);
+    let telemetry_handle = {
+        let _span = tracing::info_span!("telemetry_init").entered();
+        initialize_telemetry_client(&http_client, color_config, version)
+    };
 
     if should_print_version() {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
@@ -1592,7 +1599,10 @@ pub async fn run(
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
             event.track_call();
 
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            let base = {
+                let _span = tracing::info_span!("command_base_new").entered();
+                CommandBase::new(cli_args.clone(), repo_root, version, color_config)?
+            };
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             if execution_args.tasks.is_empty() {

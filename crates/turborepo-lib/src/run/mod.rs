@@ -612,6 +612,7 @@ impl Run {
         let mut internal_deps_result = None;
         let mut global_file_result = None;
 
+        let _hash_scope_span = tracing::info_span!("hash_scope").entered();
         rayon::scope(|s| {
             s.spawn(|_| {
                 let _span = tracing::info_span!("calculate_file_hashes_task").entered();
@@ -654,6 +655,8 @@ impl Run {
                 ));
             });
         });
+
+        drop(_hash_scope_span);
 
         let package_inputs_hashes = file_hash_result.expect("file hash task did not complete")?;
         let root_internal_dependencies_hash =

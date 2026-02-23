@@ -150,6 +150,8 @@ pub fn run() -> Result<i32, Error> {
         let _ = subscriber.enable_chrome_tracing(file_path, include_args);
     }
 
+    let _span = tracing::info_span!("shim_run").entered();
+
     // Create the runtime with all implementations
     let runtime = ShimRuntime::new(
         TurboCliRunner::new(&subscriber),

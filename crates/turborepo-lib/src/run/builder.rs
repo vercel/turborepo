@@ -6,7 +6,7 @@ use std::{
 };
 
 use chrono::Local;
-use tracing::debug;
+use tracing::{debug, Instrument};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
 use turborepo_api_client::{APIAuth, APIClient};
@@ -253,7 +253,10 @@ impl RunBuilder {
                 .with_single_package_mode(self.opts.run_opts.single_package)
                 .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
 
-            let graph = builder.build().await;
+            let graph = builder
+                .build()
+                .instrument(tracing::info_span!("pkg_dep_graph_build"))
+                .await;
 
             match graph {
                 Ok(graph) => graph,
@@ -285,19 +288,25 @@ impl RunBuilder {
                 }
             };
 
-        let (scm, repo_index) = scm_task.await.expect("detecting scm panicked");
+        let (scm, repo_index) = {
+            let _span = tracing::info_span!("scm_task_await").entered();
+            scm_task.await.expect("detecting scm panicked")
+        };
         let repo_index = Arc::new(repo_index);
         debug!(
             "RunBuilder creating AsyncCache with cache_dir={}, repo_root={}",
             self.opts.cache_opts.cache_dir, self.repo_root
         );
-        let async_cache = AsyncCache::new(
-            &self.opts.cache_opts,
-            &self.repo_root,
-            self.api_client.clone(),
-            self.api_auth.clone(),
-            self.analytics_sender.take(),
-        )?;
+        let async_cache = {
+            let _span = tracing::info_span!("async_cache_new").entered();
+            AsyncCache::new(
+                &self.opts.cache_opts,
+                &self.repo_root,
+                self.api_client.clone(),
+                self.api_auth.clone(),
+                self.analytics_sender.take(),
+            )?
+        };
 
         // restore config from task access trace if it's enabled
         let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
@@ -348,18 +357,25 @@ impl RunBuilder {
 
         pkg_dep_graph.validate()?;
 
-        let filtered_pkgs = Self::calculate_filtered_packages(
-            &self.repo_root,
-            &self.opts,
-            &pkg_dep_graph,
-            &scm,
-            &root_turbo_json,
-        )?;
+        let filtered_pkgs = {
+            let _span = tracing::info_span!("calculate_filtered_packages").entered();
+            Self::calculate_filtered_packages(
+                &self.repo_root,
+                &self.opts,
+                &pkg_dep_graph,
+                &scm,
+                &root_turbo_json,
+            )?
+        };
 
-        let env_at_execution_start = EnvironmentVariableMap::infer();
-        // Pre-warm the turbo.json cache: read and parse all package turbo.json
-        // files in parallel before the engine builder needs them sequentially.
-        turbo_json_loader.preload_all();
+        let env_at_execution_start = {
+            let _span = tracing::info_span!("env_infer").entered();
+            EnvironmentVariableMap::infer()
+        };
+        {
+            let _span = tracing::info_span!("turbo_json_preload").entered();
+            turbo_json_loader.preload_all();
+        }
 
         let mut engine = self.build_engine(
             &pkg_dep_graph,
