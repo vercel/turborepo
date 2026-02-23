@@ -297,11 +297,14 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         if self.run_opts.single_package() {
             return;
         }
-        for (name, info) in workspaces {
-            let hash = get_external_deps_hash(&info.transitive_dependencies);
-            self.external_deps_hash_cache
-                .insert(name.as_str().to_owned(), hash);
-        }
+        let ws: Vec<_> = workspaces.collect();
+        self.external_deps_hash_cache = ws
+            .par_iter()
+            .map(|(name, info)| {
+                let hash = get_external_deps_hash(&info.transitive_dependencies);
+                (name.as_str().to_owned(), hash)
+            })
+            .collect();
     }
 
     #[tracing::instrument(skip(self, task_definition, task_env_mode, workspace, dependency_set))]
