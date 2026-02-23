@@ -311,7 +311,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         task_definition: &T,
         task_env_mode: EnvMode,
         workspace: &PackageInfo,
-        dependency_set: HashSet<&TaskNode>,
+        dependency_set: &[&TaskNode],
         telemetry: PackageTaskEventBuilder,
     ) -> Result<String, Error> {
         let do_framework_inference = self.run_opts.framework_inference();
@@ -453,7 +453,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     /// returns: Result<Vec<String, Global>, Error>
     fn calculate_dependency_hashes(
         &self,
-        dependency_set: HashSet<&TaskNode>,
+        dependency_set: &[&TaskNode],
     ) -> Result<Vec<Arc<str>>, Error> {
         let state = self
             .task_hash_tracker
@@ -462,7 +462,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             .expect("hash tracker rwlock poisoned");
 
         let mut dependency_hash_list: Vec<Arc<str>> = Vec::with_capacity(dependency_set.len());
-        for dependency_task in &dependency_set {
+        for dependency_task in dependency_set {
             let TaskNode::Task(dependency_task_id) = dependency_task else {
                 continue;
             };
