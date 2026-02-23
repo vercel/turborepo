@@ -122,11 +122,10 @@ impl WatchClient {
         let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
 
         let new_base = base.clone();
-        let run = Arc::new(
-            RunBuilder::new(new_base, None)?
-                .build(&handler, telemetry.clone())
-                .await?,
-        );
+        let (run, _analytics) = RunBuilder::new(new_base, None)?
+            .build(&handler, telemetry.clone())
+            .await?;
+        let run = Arc::new(run);
 
         let watched_packages = run.get_relevant_packages();
 
@@ -355,7 +354,7 @@ impl WatchClient {
                 let signal_handler = self.handler.clone();
                 let telemetry = self.telemetry.clone();
 
-                let run = RunBuilder::new(new_base, None)?
+                let (run, _analytics) = RunBuilder::new(new_base, None)?
                     .with_entrypoint_packages(packages)
                     .hide_prelude()
                     .build(&signal_handler, telemetry)
@@ -389,11 +388,11 @@ impl WatchClient {
                 );
 
                 // rebuild run struct
-                self.run = RunBuilder::new(base.clone(), None)?
+                let (run, _analytics) = RunBuilder::new(base.clone(), None)?
                     .hide_prelude()
                     .build(&self.handler, self.telemetry.clone())
-                    .await?
-                    .into();
+                    .await?;
+                self.run = run.into();
 
                 self.watched_packages = self.run.get_relevant_packages();
 

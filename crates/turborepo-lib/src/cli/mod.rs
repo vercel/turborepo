@@ -1158,6 +1158,25 @@ fn initialize_telemetry_client(
     }
 }
 
+fn initialize_deferred_telemetry_client(
+    http_client_cell: std::sync::Arc<tokio::sync::OnceCell<reqwest::Client>>,
+    color_config: ColorConfig,
+    version: &str,
+) -> Option<TelemetryHandle> {
+    let deferred_client = turborepo_api_client::telemetry::DeferredTelemetryClient::new(
+        http_client_cell,
+        "https://telemetry.vercel.com",
+        version,
+    );
+    match init_telemetry(deferred_client, color_config) {
+        Ok(h) => Some(h),
+        Err(error) => {
+            debug!("failed to start telemetry: {:?}", error);
+            None
+        }
+    }
+}
+
 #[derive(PartialEq)]
 enum PrintVersionState {
     Enabled,
@@ -1300,21 +1319,40 @@ pub async fn run(
 ) -> Result<i32, Error> {
     let _cli_run_span = tracing::info_span!("cli_run").entered();
 
+    // Spawn TLS initialization on a background thread immediately.
+    // This takes ~100ms (loading root certificates, TLS backend init)
+    // and runs fully in the background. Neither telemetry nor the run
+    // path block on it — the HTTP client is resolved lazily when the
+    // first network request is actually needed.
+    let http_client_cell = std::sync::Arc::new(tokio::sync::OnceCell::<reqwest::Client>::new());
+    {
+        let cell = http_client_cell.clone();
+        tokio::task::spawn(async move {
+            cell.get_or_init(|| async {
+                tokio::task::spawn_blocking(|| {
+                    let _span = tracing::info_span!("http_client_init").entered();
+                    APIClient::build_http_client(None)
+                        .expect("Failed to create HTTP client: TLS initialization failed")
+                })
+                .await
+                .expect("http client task panicked")
+            })
+            .await;
+        });
+    }
+
     let mut cli_args = {
         let _span = tracing::info_span!("cli_arg_parsing").entered();
         Args::new(env::args_os().collect())
     };
     let version = get_version();
 
-    let http_client = {
-        let _span = tracing::info_span!("http_client_init").entered();
-        APIClient::build_http_client(None)
-            .expect("Failed to create HTTP client: TLS initialization failed")
-    };
-
+    // Initialize telemetry immediately with a deferred HTTP client.
+    // Events are queued to a channel from the start; the actual HTTP
+    // client is only resolved when the worker flushes its first batch.
     let telemetry_handle = {
         let _span = tracing::info_span!("telemetry_init").entered();
-        initialize_telemetry_client(&http_client, color_config, version)
+        initialize_deferred_telemetry_client(http_client_cell.clone(), color_config, version)
     };
 
     if should_print_version() {
@@ -1326,9 +1364,6 @@ pub async fn run(
     // Set some run flags if we have the data and are executing a Run
     set_run_flags(&mut command, &repo_state, &cli_args)?;
 
-    // TODO: make better use of RepoState, here and below. We've already inferred
-    // the repo root, we don't need to calculate it again, along with package
-    // manager inference.
     let cwd = repo_state
         .as_ref()
         .map(|state| state.root.as_path())
@@ -1611,11 +1646,13 @@ pub async fn run(
             }
 
             run_args.track(&event);
-            let exit_code = run::run(base, event, &http_client).await.inspect(|code| {
-                if *code != 0 {
-                    error!("run failed: command  exited ({code})");
-                }
-            })?;
+            let exit_code = run::run(base, event, http_client_cell)
+                .await
+                .inspect(|code| {
+                    if *code != 0 {
+                        error!("run failed: command  exited ({code})");
+                    }
+                })?;
 
             // Chrome tracing is enabled early in shim::run(). Here we just
             // flush and generate the markdown summary.
