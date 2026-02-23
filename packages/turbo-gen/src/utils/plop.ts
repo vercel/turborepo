@@ -131,7 +131,7 @@ export async function getCustomGenerators({
   const gensWithDetails = gens.map((g) => plop.getGenerator(g.name));
 
   const gensByWorkspace: Record<string, Array<Generator>> = {};
-  gensWithDetails.forEach((g) => {
+  for (const g of gensWithDetails) {
     const generatorDetails = g as Generator;
     const gensWorkspace = project.workspaceData.workspaces.find((w) => {
       if (generatorDetails.basePath === project.paths.root) {
@@ -155,14 +155,14 @@ export async function getCustomGenerators({
       }
       gensByWorkspace.root.push(generatorDetails);
     }
-  });
+  }
 
   const gensWithSeparators: Array<Generator | InstanceType<typeof Separator>> =
     [];
-  Object.keys(gensByWorkspace).forEach((group) => {
+  for (const group of Object.keys(gensByWorkspace)) {
     gensWithSeparators.push(new Separator(group));
     gensWithSeparators.push(...gensByWorkspace[group]);
-  });
+  }
 
   return gensWithSeparators;
 }
@@ -413,7 +413,7 @@ function getWorkspaceGeneratorConfigs({ project }: { project: Project }) {
     config: string;
     root: string;
   }> = [];
-  project.workspaceData.workspaces.forEach((w) => {
+  for (const w of project.workspaceData.workspaces) {
     for (const configPath of SUPPORTED_WORKSPACE_GENERATOR_CONFIGS) {
       if (fs.existsSync(path.join(w.paths.root, configPath))) {
         workspaceGeneratorConfigs.push({
@@ -422,7 +422,7 @@ function getWorkspaceGeneratorConfigs({ project }: { project: Project }) {
         });
       }
     }
-  });
+  }
   return workspaceGeneratorConfigs;
 }
 
@@ -462,13 +462,13 @@ export async function runCustomGenerator({
   );
 
   if (results.failures.length > 0) {
-    results.failures.forEach((f) => {
+    for (const f of results.failures) {
       if (f instanceof Error) {
         logger.error(`Error - ${f.message}`);
       } else {
         logger.error(`Error - ${f.error}. Unable to ${f.type} to "${f.path}"`);
       }
-    });
+    }
     throw new GeneratorError(`Failed to run "${generator}" generator`, {
       type: "plop_error_running_generator"
     });
@@ -476,10 +476,10 @@ export async function runCustomGenerator({
 
   if (results.changes.length > 0) {
     logger.info("Changes made:");
-    results.changes.forEach((c) => {
+    for (const c of results.changes) {
       if (c.path) {
         logger.item(`${c.path} (${c.type})`);
       }
-    });
+    }
   }
 }

@@ -21,7 +21,7 @@ function updateDependencyList({
   to: AvailablePackageManagerDetails;
 }): { dependencyList: DependencyList; updated: Array<string> } {
   const updated: Array<string> = [];
-  project.workspaceData.workspaces.forEach((workspace) => {
+  for (const workspace of project.workspaceData.workspaces) {
     const { name } = workspace;
     if (dependencyList[name]) {
       const workspaceVersion = dependencyList[name];
@@ -32,7 +32,7 @@ function updateDependencyList({
         to.name === "pnpm" ? `workspace:${version}` : version;
       updated.push(name);
     }
-  });
+  }
 
   return { dependencyList, updated };
 }
@@ -82,7 +82,7 @@ export function updateDependencies({
     "optionalDependencies"
   ];
 
-  allDependencyKeys.forEach((depKey) => {
+  for (const depKey of allDependencyKeys) {
     const depList = workspacePackageJson[depKey];
     if (depList) {
       const { updated, dependencyList } = updateDependencyList({
@@ -94,7 +94,7 @@ export function updateDependencies({
       workspacePackageJson[depKey] = dependencyList;
       stats[depKey] = updated;
     }
-  });
+  }
 
   const toLog = (key: keyof DependencyGroups) => {
     const total = stats[key].length;
@@ -113,7 +113,7 @@ export function updateDependencies({
   )}`;
   if (allChanges.length >= 1) {
     let logLine = "updating";
-    allChanges.forEach((stat, idx) => {
+    for (const [idx, stat] of allChanges.entries()) {
       if (allChanges.length === 1) {
         logLine += ` ${stat} in ${workspaceLocation}`;
       } else if (idx === allChanges.length - 1) {
@@ -121,7 +121,7 @@ export function updateDependencies({
       } else {
         logLine += ` ${stat}, `;
       }
-    });
+    }
 
     logger.workspaceStep(logLine);
   } else {

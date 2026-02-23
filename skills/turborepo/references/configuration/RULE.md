@@ -188,7 +188,7 @@ Use `extends: false` to exclude a task from a package:
   "extends": ["//"],
   "tasks": {
     "e2e": {
-      "extends": false  // UI package doesn't have e2e tests
+      "extends": false // UI package doesn't have e2e tests
     }
   }
 }

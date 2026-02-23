@@ -4,11 +4,13 @@ export interface CaseOptions {
 
 export function convertCase(str: string, opts: CaseOptions = { to: "camel" }) {
   switch (opts.to) {
-    case "camel":
+    case "camel": {
       return str.replace(/(?:[-_][a-z])/g, (group) =>
         group.toUpperCase().replace("-", "").replace("_", "")
       );
-    default:
+    }
+    default: {
       throw new Error("Not implemented");
+    }
   }
 }

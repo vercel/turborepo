@@ -43,13 +43,11 @@ impl TelemetryClient for AnonAPIClient {
     }
 }
 
-/// A telemetry client that defers HTTP client initialization until the first
-/// network request. TLS initialization (~100ms) runs on a background thread
-/// and is resolved lazily when telemetry events are flushed.
-///
-/// The caller spawns the TLS init task and passes the resulting `OnceCell`
-/// to this client. The background task fills the cell; the client awaits it
-/// on first flush.
+/// A telemetry client backed by an HTTP client that initializes on a
+/// background thread. TLS initialization (~100ms) starts as early as
+/// possible via `spawn_blocking`; this client shares the `OnceCell` that
+/// the background task writes to. By the time telemetry flushes its
+/// first batch, TLS init has almost certainly already completed.
 #[derive(Clone)]
 pub struct DeferredTelemetryClient {
     http_client: Arc<OnceCell<reqwest::Client>>,

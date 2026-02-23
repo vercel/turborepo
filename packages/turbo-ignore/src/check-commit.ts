@@ -46,7 +46,7 @@ export function checkCommit({ workspace }: { workspace: string }): {
   const onlyWorkspaceDeployMatch = onlyWorkspaceRegex.exec(commitMessage)?.[0];
   if (onlyWorkspaceDeployMatch) {
     if (
-      onlyWorkspaceCommits({ workspace }).find(
+      onlyWorkspaceCommits({ workspace }).some(
         (commit) => commit === onlyWorkspaceDeployMatch
       )
     ) {

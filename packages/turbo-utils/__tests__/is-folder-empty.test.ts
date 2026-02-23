@@ -2,7 +2,7 @@ import path from "node:path";
 import fs from "fs-extra";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
-import { isFolderEmpty } from "../src/isFolderEmpty";
+import { isFolderEmpty } from "../src/is-folder-empty";
 
 describe("isFolderEmpty", () => {
   const { useFixture } = setupTestFixtures({

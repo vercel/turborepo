@@ -18,9 +18,9 @@
  *   pnpm check-lockfiles --turbo-path ./path/to/turbo            # Custom turbo binary
  */
 
-import * as fs from "fs";
-import * as path from "path";
-import { fileURLToPath } from "url";
+import * as fs from "node:fs";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import type { PackageManagerType, TestCase } from "./types";
 import { LocalRunner } from "./runners/local";
 
@@ -80,7 +80,7 @@ function parseArgs(): CliArgs {
       args.turboPath = next;
       i++;
     } else if (arg === "--concurrency" && next) {
-      args.concurrency = parseInt(next, 10);
+      args.concurrency = Number.parseInt(next, 10);
       i++;
     }
   }

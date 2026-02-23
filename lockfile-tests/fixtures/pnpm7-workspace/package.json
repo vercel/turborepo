@@ -2,12 +2,12 @@
   "name": "root",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "pnpm@7.33.0",
   "devDependencies": {
     "eslint-config-custom": "workspace:*",
     "prettier": "latest",
     "turbo": "latest"
   },
+  "packageManager": "pnpm@7.33.0",
   "pnpm": {
     "patchedDependencies": {
       "lodash@4.17.21": "patches/lodash@4.17.21.patch",

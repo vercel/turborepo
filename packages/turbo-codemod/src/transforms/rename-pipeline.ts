@@ -3,9 +3,9 @@ import fs from "fs-extra";
 import { getTurboConfigs } from "@turbo/utils";
 import type { SchemaV2, SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { loadTurboJson } from "../utils/load-turbo-json";
 
 // transformer details
 const TRANSFORMER = "rename-pipeline";
@@ -51,7 +51,7 @@ export function transformer({
 
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
-  workspaceConfigs.forEach((workspaceConfig) => {
+  for (const workspaceConfig of workspaceConfigs) {
     const { config, turboConfigPath: filePath } = workspaceConfig;
     if ("pipeline" in config) {
       runner.modifyFile({
@@ -59,7 +59,7 @@ export function transformer({
         after: migrateConfig(config)
       });
     }
-  });
+  }
 
   return runner.finish();
 }

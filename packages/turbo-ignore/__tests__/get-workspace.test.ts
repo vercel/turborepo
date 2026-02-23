@@ -1,9 +1,10 @@
 import { spyConsole } from "@turbo/test-utils";
 import { describe, it, expect } from "@jest/globals";
-import { getWorkspace } from "../src/getWorkspace";
+import { getWorkspace } from "../src/get-workspace";
 
 describe("getWorkspace()", () => {
   const mockConsole = spyConsole();
+
   it("getWorkspace returns workspace from arg", () => {
     expect(
       getWorkspace({

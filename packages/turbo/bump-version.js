@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const fs = require("fs");
+const fs = require("node:fs");
 const pkg = require("./package.json");
 
 const file = require.resolve("./package.json");

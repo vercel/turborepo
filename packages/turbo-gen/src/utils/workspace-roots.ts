@@ -16,7 +16,7 @@ export function getWorkspaceRoots({
 
   // find valid workspace locations
   const workspaceRoots = new Set<string>();
-  project.workspaceData.globs.forEach((glob) => {
+  for (const glob of project.workspaceData.globs) {
     if (allWorkspacePaths.includes(glob)) {
       // do nothing
     } else if (glob.startsWith("!")) {
@@ -26,7 +26,7 @@ export function getWorkspaceRoots({
       const globRoot = globParts[0];
       workspaceRoots.add(globRoot);
     }
-  });
+  }
 
   return Array.from(workspaceRoots);
 }

@@ -2,17 +2,18 @@
   "name": "turborepo-repository",
   "version": "0.0.1",
   "description": "",
-  "bugs": "https://github.com/vercel/turborepo/issues",
+  "keywords": [],
   "homepage": "https://turborepo.dev",
+  "bugs": "https://github.com/vercel/turborepo/issues",
+  "license": "MIT",
+  "author": "",
+  "main": "dist/index.js",
   "scripts": {
     "build": "bash scripts/build.sh --dts ../js/index.d.ts",
     "build:release": "bash scripts/build.sh --release",
     "package": "node scripts/publish.mjs",
     "test": "node --import tsx --test __tests__/*.test.ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "MIT",
   "devDependencies": {
     "@napi-rs/cli": "2.16.3",
     "execa": "8.0.1",
@@ -20,7 +21,6 @@
     "prettier": "3.3.3",
     "tsx": "4.21.0"
   },
-  "main": "dist/index.js",
   "napi": {
     "name": "@turbo/repository",
     "triples": {

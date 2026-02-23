@@ -1,5 +1,5 @@
 import { gt, lte, eq } from "semver";
-import { loadTransformers } from "../../../utils/loadTransformers";
+import { loadTransformers } from "../../../utils/load-transformers";
 import type { Transformer } from "../../../types";
 
 /**

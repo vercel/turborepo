@@ -2,7 +2,7 @@ import path from "node:path";
 import fs from "fs-extra";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect, jest } from "@jest/globals";
-import { isWriteable } from "../src/isWriteable";
+import { isWriteable } from "../src/is-writeable";
 
 describe("isWriteable", () => {
   const { useFixture } = setupTestFixtures({

@@ -1,7 +1,7 @@
 import type { Workspace } from "@turbo/workspaces";
 import type { TurboGeneratorArguments } from "../generators/types";
 import * as prompts from "../commands/workspace/prompts";
-import { getWorkspaceList } from "./getWorkspaceList";
+import { getWorkspaceList } from "./get-workspace-list";
 
 export async function gatherAddRequirements({
   project,

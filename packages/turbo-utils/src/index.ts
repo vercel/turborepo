@@ -1,18 +1,18 @@
 // utils
-export { getTurboRoot, clearTurboRootCache } from "./getTurboRoot";
+export { getTurboRoot, clearTurboRootCache } from "./get-turbo-root";
 export {
   getTurboConfigs,
   getWorkspaceConfigs,
   forEachTaskDef,
   clearConfigCaches
-} from "./getTurboConfigs";
-export { searchUp } from "./searchUp";
+} from "./get-turbo-configs";
+export { searchUp } from "./search-up";
 export {
   getAvailablePackageManagers,
   getPackageManagersBinPaths
 } from "./managers";
-export { isFolderEmpty } from "./isFolderEmpty";
-export { validateDirectory } from "./validateDirectory";
+export { isFolderEmpty } from "./is-folder-empty";
+export { validateDirectory } from "./validate-directory";
 export {
   isUrlOk,
   getRepoInfo,
@@ -21,10 +21,10 @@ export {
   downloadAndExtractRepo,
   downloadAndExtractExample
 } from "./examples";
-export { isWriteable } from "./isWriteable";
-export { createProject, DownloadError } from "./createProject";
-export { convertCase } from "./convertCase";
-export { createNotifyUpdate } from "./notifyUpdate";
+export { isWriteable } from "./is-writeable";
+export { createProject, DownloadError } from "./create-project";
+export { convertCase } from "./convert-case";
+export { createNotifyUpdate } from "./notify-update";
 
 export * as logger from "./logger";
 
@@ -34,5 +34,5 @@ export type {
   TurboConfig,
   TurboConfigs,
   WorkspaceConfig
-} from "./getTurboConfigs";
+} from "./get-turbo-configs";
 export * from "./types";
