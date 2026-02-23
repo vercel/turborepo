@@ -15,7 +15,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use tokio::sync::mpsc;
-use tracing::{debug, warn, Span};
+use tracing::{debug, warn, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_engine::{TaskError, TaskWarning};
@@ -336,7 +336,14 @@ impl<'a> Visitor<'a> {
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine)?;
         let cached_vendor_behavior = Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
 
-        while let Some(message) = node_stream.recv().await {
+        loop {
+            let message = node_stream
+                .recv()
+                .instrument(tracing::info_span!("visit_recv_wait"))
+                .await;
+            let Some(message) = message else {
+                break;
+            };
             let span = tracing::debug_span!(parent: &span, "queue_task", task = %message.info);
             let _enter = span.enter();
             let crate::engine::Message { info, callback } = message;
@@ -382,12 +389,11 @@ impl<'a> Visitor<'a> {
 
             debug!("task {} hash is {}", info, task_hash);
 
-            let task_cache = self.run_cache.task_cache(
-                task_definition,
-                workspace_info,
-                info.clone(),
-                &task_hash,
-            );
+            let task_cache = {
+                let _span = tracing::info_span!("task_cache_new").entered();
+                self.run_cache
+                    .task_cache(task_definition, workspace_info, info.clone(), &task_hash)
+            };
 
             // Drop to avoid holding the span across an await
 
@@ -405,15 +411,18 @@ impl<'a> Visitor<'a> {
                 }
                 false => {
                     let takes_input = task_definition.interactive || task_definition.persistent;
-                    let Some(mut exec_context) = factory.exec_context(
-                        info.clone(),
-                        task_hash,
-                        task_cache,
-                        execution_env,
-                        takes_input,
-                        self.task_access.clone(),
-                    )?
-                    else {
+                    let exec_context = {
+                        let _span = tracing::info_span!("exec_context_new").entered();
+                        factory.exec_context(
+                            info.clone(),
+                            task_hash,
+                            task_cache,
+                            execution_env,
+                            takes_input,
+                            self.task_access.clone(),
+                        )?
+                    };
+                    let Some(mut exec_context) = exec_context else {
                         continue;
                     };
 
