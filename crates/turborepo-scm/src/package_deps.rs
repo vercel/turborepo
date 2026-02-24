@@ -387,7 +387,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
-    use crate::manual::get_package_file_hashes_without_git;
+    use crate::{OidHash, manual::get_package_file_hashes_without_git};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -476,7 +476,7 @@ mod tests {
         let mut expected = GitHashes::new();
         expected.insert(
             RelativeUnixPathBuf::new("committed-file").unwrap(),
-            "3a29e62ea9ba15c4a4009d1f605d391cdd262033".to_string(),
+            OidHash::from_hex_str("3a29e62ea9ba15c4a4009d1f605d391cdd262033"),
         );
         assert_eq!(hashes, expected);
     }
@@ -589,15 +589,15 @@ mod tests {
         let mut all_expected = all_expected.clone();
         all_expected.insert(
             RelativeUnixPathBuf::new("../new-root-file").unwrap(),
-            "8906ddcdd634706188bd8ef1c98ac07b9be3425e".to_string(),
+            OidHash::from_hex_str("8906ddcdd634706188bd8ef1c98ac07b9be3425e"),
         );
         all_expected.insert(
             RelativeUnixPathBuf::new("dir/ignored-file").unwrap(),
-            "5537770d04ec8aaf7bae2d9ff78866de86df415c".to_string(),
+            OidHash::from_hex_str("5537770d04ec8aaf7bae2d9ff78866de86df415c"),
         );
         all_expected.insert(
             RelativeUnixPathBuf::new("$TURBO_DEFAULT$").unwrap(),
-            "2f26c7b914476b3c519e4f0fbc0d16c52a60d178".to_string(),
+            OidHash::from_hex_str("2f26c7b914476b3c519e4f0fbc0d16c52a60d178"),
         );
 
         let input_tests: &[(&[&str], bool, &[&str])] = &[
@@ -797,10 +797,11 @@ mod tests {
     }
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(
-            pairs
-                .iter()
-                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
-        )
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
+            (
+                RelativeUnixPathBuf::new(*path).unwrap(),
+                OidHash::from_hex_str(hash),
+            )
+        }))
     }
 }

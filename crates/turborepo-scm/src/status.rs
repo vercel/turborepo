@@ -175,7 +175,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::read_status;
-    use crate::GitHashes;
+    use crate::{GitHashes, OidHash};
 
     #[test]
     fn test_status() {
@@ -211,10 +211,11 @@ mod tests {
     }
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(
-            pairs
-                .iter()
-                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
-        )
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
+            (
+                RelativeUnixPathBuf::new(*path).unwrap(),
+                OidHash::from_hex_str(hash),
+            )
+        }))
     }
 }

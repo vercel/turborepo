@@ -99,7 +99,7 @@ mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::hash_objects;
-    use crate::{GitHashes, find_git_root};
+    use crate::{GitHashes, OidHash, find_git_root};
 
     #[test]
     fn test_read_object_hashes() {
@@ -135,9 +135,14 @@ mod test {
         ];
 
         for (to_hash, pkg_path) in tests {
-            let file_hashes: Vec<(RelativeUnixPathBuf, String)> = to_hash
+            let file_hashes: Vec<(RelativeUnixPathBuf, OidHash)> = to_hash
                 .into_iter()
-                .map(|(raw, hash)| (RelativeUnixPathBuf::new(raw).unwrap(), String::from(hash)))
+                .map(|(raw, hash)| {
+                    (
+                        RelativeUnixPathBuf::new(raw).unwrap(),
+                        OidHash::from_hex_str(hash),
+                    )
+                })
                 .collect();
 
             let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();
