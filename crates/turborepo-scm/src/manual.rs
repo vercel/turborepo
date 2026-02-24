@@ -35,7 +35,7 @@ fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<OidHash, Error> {
     hasher.update(buffer.as_slice());
     let result = hasher.finalize();
     let mut hex_buf = [0u8; 40];
-    hex::encode_to_slice(&result, &mut hex_buf).unwrap();
+    hex::encode_to_slice(result, &mut hex_buf).unwrap();
     Ok(OidHash::from_hex_buf(hex_buf))
 }
 

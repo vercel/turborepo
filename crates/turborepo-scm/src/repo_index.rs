@@ -3,7 +3,9 @@
 use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
-use crate::{Error, GitHashes, GitRepo, OidHash, ls_tree::SortedGitHashes, status::RepoStatusEntry};
+use crate::{
+    Error, GitHashes, GitRepo, OidHash, ls_tree::SortedGitHashes, status::RepoStatusEntry,
+};
 
 /// Pre-computed repo-wide git index that caches file hashes and working-tree
 /// status so they can be filtered per-package without spawning additional
@@ -233,7 +235,7 @@ impl RepoGitIndex {
         let mut hashes = if prefix_is_empty {
             let mut h = GitHashes::with_capacity(self.ls_tree_hashes.len());
             for (path, hash) in &self.ls_tree_hashes {
-                h.insert(path.clone(), hash.clone());
+                h.insert(path.clone(), *hash);
             }
             h
         } else {
@@ -246,7 +248,7 @@ impl RepoGitIndex {
             let mut h = GitHashes::with_capacity(hi - lo);
             for (path, hash) in &self.ls_tree_hashes[lo..hi] {
                 if let Ok(stripped) = path.strip_prefix(pkg_prefix) {
-                    h.insert(stripped, hash.clone());
+                    h.insert(stripped, *hash);
                 }
             }
             h

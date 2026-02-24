@@ -138,19 +138,20 @@ impl std::fmt::Display for OidHash {
 
 impl PartialEq<str> for OidHash {
     fn eq(&self, other: &str) -> bool {
-        &*self == other
+        self.0 == other.as_bytes()
     }
 }
 
 impl PartialEq<&str> for OidHash {
     fn eq(&self, other: &&str) -> bool {
-        &*self == *other
+        self.0 == other.as_bytes()
     }
 }
 
 impl From<OidHash> for String {
     fn from(oid: OidHash) -> Self {
-        oid.to_string()
+        // SAFETY: OidHash is always valid ASCII hex.
+        unsafe { String::from_utf8_unchecked(oid.0.to_vec()) }
     }
 }
 
