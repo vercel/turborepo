@@ -317,7 +317,7 @@ impl<'a> Visitor<'a> {
         // task's dependency hashes are available before it is hashed.
         // This replaces the per-task serial hashing that was inside the
         // dispatch loop.
-        let precomputed = {
+        let mut precomputed = {
             let _span = tracing::info_span!("precompute_task_hashes").entered();
             self.precompute_task_hashes(&engine, telemetry)?
         };
@@ -381,11 +381,10 @@ impl<'a> Visitor<'a> {
                 .task_definition(&info)
                 .ok_or(Error::MissingDefinition)?;
 
-            // Look up pre-computed hash and env instead of computing them here.
-            let (task_hash, execution_env) = precomputed
-                .get(&info)
-                .ok_or(Error::MissingDefinition)?
-                .clone();
+            // Move pre-computed hash and env out of the map — each task is
+            // dispatched exactly once, so remove avoids cloning the env map.
+            let (task_hash, execution_env) =
+                precomputed.remove(&info).ok_or(Error::MissingDefinition)?;
 
             debug!("task {} hash is {}", info, task_hash);
 
@@ -411,6 +410,19 @@ impl<'a> Visitor<'a> {
                 }
                 false => {
                     let takes_input = task_definition.interactive || task_definition.persistent;
+
+                    // Build values that only need &info before consuming it.
+                    let vendor_behavior = cached_vendor_behavior;
+                    let output_client = if let Some(handle) = &self.ui_sender {
+                        TaskOutput::UI(handle.task(info.to_string()))
+                    } else {
+                        TaskOutput::Direct(self.output_client(&info, vendor_behavior))
+                    };
+                    let package_task_event =
+                        PackageTaskEventBuilder::new(info.package(), info.task())
+                            .with_parent(telemetry);
+                    let execution_telemetry = package_task_event.child();
+
                     let exec_context = {
                         let _span = tracing::info_span!("exec_context_new").entered();
                         factory.exec_context(
@@ -426,20 +438,8 @@ impl<'a> Visitor<'a> {
                         continue;
                     };
 
-                    let vendor_behavior = cached_vendor_behavior;
-
-                    let output_client = if let Some(handle) = &self.ui_sender {
-                        TaskOutput::UI(handle.task(info.to_string()))
-                    } else {
-                        TaskOutput::Direct(self.output_client(&info, vendor_behavior))
-                    };
-
-                    let tracker = self.run_tracker.track_task(info.clone().into_owned());
+                    let tracker = self.run_tracker.track_task(info.into_owned());
                     let parent_span = Span::current();
-                    let package_task_event =
-                        PackageTaskEventBuilder::new(info.package(), info.task())
-                            .with_parent(telemetry);
-                    let execution_telemetry = package_task_event.child();
 
                     tasks.push(tokio::spawn(async move {
                         exec_context
