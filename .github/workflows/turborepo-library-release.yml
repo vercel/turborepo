@@ -43,7 +43,7 @@ jobs:
             install: |
               microdnf install -y gcc gcc-c++ git tar xz
               curl https://sh.rustup.rs -sSf | bash -s -- -y
-              npm i -g pnpm@11.5.1
+              npm i -g pnpm@10.28.0
               mkdir ../zig
               curl --show-error --location https://ziglang.org/download/0.14.0/zig-linux-x86_64-0.14.0.tar.xz | tar -J -xf - -C ../zig --strip-components 1
               export PATH=$PATH:$(pwd)/../zig
