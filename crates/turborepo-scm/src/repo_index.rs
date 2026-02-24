@@ -428,10 +428,14 @@ mod tests {
         RelativeUnixPathBuf::new(s).unwrap()
     }
 
+    fn pad_hex(s: &str) -> String {
+        format!("{:0<40}", s)
+    }
+
     fn make_index(ls_tree: Vec<(&str, &str)>, status: Vec<(&str, bool)>) -> RepoGitIndex {
         let mut ls_tree_hashes: SortedGitHashes = ls_tree
             .into_iter()
-            .map(|(p, h)| (path(p), OidHash::from_hex_str(h)))
+            .map(|(p, h)| (path(p), OidHash::from_hex_str(&pad_hex(h))))
             .collect::<Vec<_>>();
         ls_tree_hashes.sort_by(|(a, _), (b, _)| a.cmp(b));
         let mut status_entries: Vec<RepoStatusEntry> = status
@@ -476,8 +480,8 @@ mod tests {
         );
         let (hashes, to_hash) = index.get_package_hashes(&path("apps/web")).unwrap();
         assert_eq!(hashes.len(), 2);
-        assert_eq!(hashes.get(&path("src/index.ts")).unwrap(), "aaa");
-        assert_eq!(hashes.get(&path("package.json")).unwrap(), "bbb");
+        assert_eq!(*hashes.get(&path("src/index.ts")).unwrap(), *pad_hex("aaa"));
+        assert_eq!(*hashes.get(&path("package.json")).unwrap(), *pad_hex("bbb"));
         assert!(to_hash.is_empty());
     }
 
@@ -633,7 +637,7 @@ mod tests {
         let index = make_index(ls_tree_data, vec![]);
         let (hashes, to_hash) = index.get_package_hashes(&path("")).unwrap();
         assert_eq!(hashes.len(), 3);
-        assert_eq!(hashes.get(&path("a.ts")).unwrap(), "111");
+        assert_eq!(*hashes.get(&path("a.ts")).unwrap(), *pad_hex("111"));
         assert!(to_hash.is_empty());
     }
 
