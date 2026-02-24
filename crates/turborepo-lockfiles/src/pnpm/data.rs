@@ -108,6 +108,18 @@ pub struct ProjectSnapshot {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase", untagged)]
 pub enum DependencyInfo {
+    // V6 is listed first so serde tries it before PreV6. Since all modern
+    // lockfiles (v6, v7, v9) use the V6 format, this avoids a failed
+    // PreV6 parse attempt + backtrack for every importer entry.
+    #[serde(rename_all = "camelCase")]
+    V6 {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        dependencies: Option<Map<String, Dependency>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        optional_dependencies: Option<Map<String, Dependency>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        dev_dependencies: Option<Map<String, Dependency>>,
+    },
     #[serde(rename_all = "camelCase")]
     PreV6 {
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -118,15 +130,6 @@ pub enum DependencyInfo {
         optional_dependencies: Option<Map<String, String>>,
         #[serde(skip_serializing_if = "Option::is_none")]
         dev_dependencies: Option<Map<String, String>>,
-    },
-    #[serde(rename_all = "camelCase")]
-    V6 {
-        #[serde(skip_serializing_if = "Option::is_none")]
-        dependencies: Option<Map<String, Dependency>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        optional_dependencies: Option<Map<String, Dependency>>,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        dev_dependencies: Option<Map<String, Dependency>>,
     },
 }
 
@@ -148,16 +151,42 @@ pub struct PackageSnapshot {
     #[serde(skip_serializing_if = "Option::is_none")]
     version: Option<String>,
 
-    // In lockfile v7, this portion of package is stored in the top level
-    // `snapshots` map as opposed to being stored inline.
-    #[serde(flatten)]
-    snapshot: PackageSnapshotV7,
+    // In lockfile v7+, these fields move to the top-level `snapshots` map.
+    // In pre-v7, they're inline here. All fields from PackageSnapshotV7
+    // are inlined to avoid #[serde(flatten)] which forces serde into a
+    // slow buffered deserialization path for every package entry.
+    #[serde(skip_serializing_if = "is_false", default)]
+    optional: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    optional_dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    transitive_peer_dependencies: Option<Vec<String>>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     patched: Option<bool>,
 
-    #[serde(flatten)]
-    other: Map<String, serde_yaml_ng::Value>,
+    // Fields that pnpm writes but turborepo doesn't use at runtime.
+    // Enumerated explicitly to avoid a #[serde(flatten)] catch-all map.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    engines: Option<serde_yaml_ng::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cpu: Option<serde_yaml_ng::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    os: Option<serde_yaml_ng::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    libc: Option<serde_yaml_ng::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    deprecated: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    has_bin: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    bundled_dependencies: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    peer_dependencies: Option<Map<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    peer_dependencies_meta: Option<serde_yaml_ng::Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
@@ -238,7 +267,7 @@ impl PnpmLockfile {
             for (key, entry) in packages {
                 index
                     .entry(key.clone())
-                    .or_insert_with(|| entry.snapshot.dependencies());
+                    .or_insert_with(|| entry.dependencies());
             }
         }
         self.dependency_index = index;
@@ -693,6 +722,17 @@ impl Dependency {
     fn as_tuple(&self) -> (&str, &str) {
         let Dependency { specifier, version } = self;
         (specifier, version)
+    }
+}
+
+impl PackageSnapshot {
+    fn dependencies(&self) -> HashMap<String, String> {
+        self.dependencies
+            .iter()
+            .flatten()
+            .chain(self.optional_dependencies.iter().flatten())
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 }
 
