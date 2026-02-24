@@ -227,7 +227,7 @@ Under the hood, Turborepo creates two hashes: a global hash and a task hash. If 
 | [Package Configuration](/docs/reference/package-configurations) changes | Changing a package's `turbo.json`                       |
 | Lockfile changes that affect the package                                | Updating dependencies in a package's `package.json`     |
 | Package's `package.json` changes                                        | Updating the `name` field in a package's `package.json` |
-| File changes in source control                                          | Writing new code in `src/index.ts`                      |
+| File changes | Defaults to all files in the package, configurable with [`inputs`](/docs/reference/configuration#inputs) |
 
 ## Troubleshooting
 
