@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+pnpm exec lint-staged
+pnpm run lint
+pnpm run format
+pnpm run check:toml
+cargo fmt --check
+cargo lint
+cargo check --workspace

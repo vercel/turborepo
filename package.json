@@ -36,8 +36,7 @@
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,mdx,mjs,yml,yaml,css,json,jsonc}": "oxfmt --no-error-on-unmatched-pattern",
-    "*.toml": "taplo format",
-    "*.rs": "bash -c 'cargo fmt'"
+    "*.toml": "taplo format"
   },
   "engines": {
     "node": "22.x"
