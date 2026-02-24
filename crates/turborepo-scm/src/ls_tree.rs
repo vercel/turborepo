@@ -6,13 +6,13 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{Error, GitHashes, GitRepo, wait_for_success};
+use crate::{wait_for_success, Error, GitHashes, GitRepo, OidHash};
 
 /// Sorted list of (path, hash) pairs from `git ls-tree`. Uses a `Vec` instead
 /// of `BTreeMap` because git output is already sorted by pathname, giving us
 /// free insertion order with better cache locality for the `partition_point`
 /// range lookups performed in `RepoGitIndex::get_package_hashes`.
-pub(crate) type SortedGitHashes = Vec<(RelativeUnixPathBuf, String)>;
+pub(crate) type SortedGitHashes = Vec<(RelativeUnixPathBuf, OidHash)>;
 
 impl GitRepo {
     #[tracing::instrument(skip(self))]
@@ -70,9 +70,7 @@ impl GitRepo {
                 path_buf.push_str(name);
                 if let Ok(path) = RelativeUnixPathBuf::new(path_buf.clone()) {
                     hex::encode_to_slice(entry.id().as_bytes(), &mut hex_buf).unwrap();
-                    // SAFETY: hex output is always valid ASCII
-                    let hash = unsafe { std::str::from_utf8_unchecked(&hex_buf) }.to_string();
-                    hashes.push((path, hash));
+                    hashes.push((path, OidHash::from_hex_buf(hex_buf)));
                 }
             }
             git2::TreeWalkResult::Ok
@@ -105,7 +103,7 @@ fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error>
         let filename = std::str::from_utf8(entry.filename)
             .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree filename: {e}")))?;
         let path = RelativeUnixPathBuf::new(filename)?;
-        hashes.insert(path, hash.to_owned());
+        hashes.insert(path, OidHash::from_hex_str(hash));
         buffer.clear();
     }
     Ok(())
@@ -122,7 +120,7 @@ fn read_ls_tree_sorted<R: Read>(reader: R, hashes: &mut SortedGitHashes) -> Resu
         let filename = std::str::from_utf8(entry.filename)
             .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree filename: {e}")))?;
         let path = RelativeUnixPathBuf::new(filename)?;
-        hashes.push((path, hash.to_owned()));
+        hashes.push((path, OidHash::from_hex_str(hash)));
         buffer.clear();
     }
     debug_assert!(
@@ -167,20 +165,26 @@ mod tests {
 
     use turbopath::RelativeUnixPathBuf;
 
-    use crate::{GitHashes, ls_tree::read_ls_tree};
+    use crate::{ls_tree::read_ls_tree, GitHashes, OidHash};
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(
-            pairs
-                .iter()
-                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
-        )
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
+            (
+                RelativeUnixPathBuf::new(*path).unwrap(),
+                OidHash::from_hex_str(hash),
+            )
+        }))
     }
 
     fn to_sorted_hashes(pairs: &[(&str, &str)]) -> super::SortedGitHashes {
         pairs
             .iter()
-            .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string()))
+            .map(|(path, hash)| {
+                (
+                    RelativeUnixPathBuf::new(*path).unwrap(),
+                    OidHash::from_hex_str(hash),
+                )
+            })
             .collect()
     }
 

@@ -3,7 +3,7 @@
 use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
-use crate::{Error, GitHashes, GitRepo, ls_tree::SortedGitHashes, status::RepoStatusEntry};
+use crate::{Error, GitHashes, GitRepo, OidHash, ls_tree::SortedGitHashes, status::RepoStatusEntry};
 
 /// Pre-computed repo-wide git index that caches file hashes and working-tree
 /// status so they can be filtered per-package without spawning additional
@@ -152,17 +152,11 @@ impl RepoGitIndex {
                             return Ok(EntryClassification::Modified { path: rel_path });
                         }
 
-                        // Clean: hex-encode the OID using a stack buffer to
-                        // avoid the intermediate HexDisplay allocation from
-                        // to_hex().to_string().
                         let mut hex_buf = [0u8; 40];
                         hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).unwrap();
-                        // SAFETY: hex output is always valid ASCII/UTF-8.
-                        let oid_str =
-                            unsafe { std::str::from_utf8_unchecked(&hex_buf) }.to_string();
                         Ok(EntryClassification::Clean {
                             path: rel_path,
-                            oid: oid_str,
+                            oid: OidHash::from_hex_buf(hex_buf),
                         })
                     }
                     Err(_) => Ok(EntryClassification::Deleted { path: rel_path }),
@@ -410,7 +404,7 @@ fn find_untracked_files(
 enum EntryClassification {
     Clean {
         path: RelativeUnixPathBuf,
-        oid: String,
+        oid: OidHash,
     },
     Modified {
         path: RelativeUnixPathBuf,
@@ -435,7 +429,7 @@ mod tests {
     fn make_index(ls_tree: Vec<(&str, &str)>, status: Vec<(&str, bool)>) -> RepoGitIndex {
         let mut ls_tree_hashes: SortedGitHashes = ls_tree
             .into_iter()
-            .map(|(p, h)| (path(p), h.to_string()))
+            .map(|(p, h)| (path(p), OidHash::from_hex_str(h)))
             .collect::<Vec<_>>();
         ls_tree_hashes.sort_by(|(a, _), (b, _)| a.cmp(b));
         let mut status_entries: Vec<RepoStatusEntry> = status

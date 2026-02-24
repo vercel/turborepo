@@ -23,9 +23,9 @@ use turborepo_cache::CacheHitMetadata;
 // Re-export turborepo_engine::TaskNode for convenience
 pub use turborepo_engine::TaskNode;
 use turborepo_env::{
-    BUILTIN_PASS_THROUGH_ENV, BySource, CompiledWildcards, DetailedMap, EnvironmentVariableMap,
+    BySource, CompiledWildcards, DetailedMap, EnvironmentVariableMap, BUILTIN_PASS_THROUGH_ENV,
 };
-use turborepo_frameworks::{Slug as FrameworkSlug, infer_framework};
+use turborepo_frameworks::{infer_framework, Slug as FrameworkSlug};
 use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::{RepoGitIndex, SCM};
@@ -188,7 +188,7 @@ impl PackageInputsHashes {
                     repo_index,
                 )
                 .map(|h| {
-                    let mut v: Vec<_> = h.into_iter().collect();
+                    let mut v: Vec<_> = h.into_iter().map(|(k, v)| (k, String::from(v))).collect();
                     v.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
                     Arc::new(FileHashes(v))
                 })
@@ -577,7 +577,10 @@ pub fn get_internal_deps_hash(
             },
         )?;
 
-    let mut file_hashes: Vec<_> = merged.into_iter().collect();
+    let mut file_hashes: Vec<_> = merged
+        .into_iter()
+        .map(|(k, v)| (k, String::from(v)))
+        .collect();
     file_hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
     Ok(FileHashes(file_hashes).hash())
 }

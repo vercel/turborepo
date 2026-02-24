@@ -7,15 +7,14 @@ use std::{
 };
 
 use globwalk::fix_glob_pattern;
-use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
 use wax::{Glob, Program, any};
 
-use crate::{Error, GitHashes};
+use crate::{Error, GitHashes, OidHash};
 
-fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
+fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<OidHash, Error> {
     let mut hasher = Sha1::new();
     let mut f = path.open()?;
     // Pre-allocate the buffer based on file metadata to avoid repeated
@@ -35,7 +34,9 @@ fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     hasher.update([b'\0']);
     hasher.update(buffer.as_slice());
     let result = hasher.finalize();
-    Ok(result.encode_hex::<String>())
+    let mut hex_buf = [0u8; 40];
+    hex::encode_to_slice(&result, &mut hex_buf).unwrap();
+    Ok(OidHash::from_hex_buf(hex_buf))
 }
 
 fn to_glob(input: &str) -> Result<Glob<'_>, Error> {
@@ -248,7 +249,7 @@ mod tests {
             if files.contains(&"existing-file.txt") {
                 expected.insert(
                     RelativeUnixPathBuf::new("existing-file.txt").unwrap(),
-                    "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391".to_string(),
+                    OidHash::from_hex_str("e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"),
                 );
             }
             expected
@@ -415,12 +416,12 @@ mod tests {
                 println!("unix_pkg_path: {unix_pkg_path}");
                 let unix_pkg_file_path = unix_path.strip_prefix(&unix_pkg_path).unwrap();
                 println!("unix_pkg_file_path: {unix_pkg_file_path}");
-                expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
+                expected.insert(unix_pkg_file_path.to_owned(), OidHash::from_hex_str(hash));
             }
         }
         expected.insert(
             RelativeUnixPathBuf::new(".gitignore").unwrap(),
-            "3237694bc3312ded18386964a855074af7b066af".to_owned(),
+            OidHash::from_hex_str("3237694bc3312ded18386964a855074af7b066af"),
         );
 
         let hashes =
@@ -449,7 +450,7 @@ mod tests {
                     || unix_pkg_file_path.ends_with("turbo.json"))
                     && !unix_pkg_file_path.ends_with("excluded-file")
                 {
-                    expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
+                    expected.insert(unix_pkg_file_path.to_owned(), OidHash::from_hex_str(hash));
                 }
             }
         }

@@ -9,7 +9,7 @@ use itertools::Itertools;
 use thiserror::Error;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
-use turborepo_env::{DetailedMap, EnvironmentVariableMap, get_global_hashable_env_vars};
+use turborepo_env::{get_global_hashable_env_vars, DetailedMap, EnvironmentVariableMap};
 use turborepo_hash::{GlobalHashable, TurboHash};
 use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
@@ -160,7 +160,11 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
         .map(|p| root_path.anchor(p).expect("path should be from root"))
         .collect::<Vec<_>>();
 
-    let global_file_hash_map = hasher.get_hashes_for_files(root_path, &global_deps_paths, false)?;
+    let global_file_hash_map = hasher
+        .get_hashes_for_files(root_path, &global_deps_paths, false)?
+        .into_iter()
+        .map(|(k, v)| (k, String::from(v)))
+        .collect();
 
     Ok(GlobalFileHashInputs {
         global_file_hash_map,
