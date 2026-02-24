@@ -24,7 +24,7 @@ On this page, you'll learn:
 
 - [How to hit your first Turborepo cache](#hit-your-first-turborepo-cache)
 - [How to enable Remote Caching](/docs/core-concepts/remote-caching)
-- [What Turborepo uses for the inputs and outputs to a hash](/docs/crafting-your-repository/caching#task-inputs)
+- [What Turborepo uses for the inputs and outputs to a hash](#task-inputs)
 - [How to troubleshoot caching issues](#troubleshooting)
 
 <Callout type="info">
@@ -88,7 +88,7 @@ bun run build
 </Tab>
 </PackageManagerTabs>
 
-This will result in a cache miss, since you've never ran `turbo` before with this [set of inputs](/docs/crafting-your-repository/caching#task-inputs) in this repository. The inputs are turned into a hash to check for in your local filesystem cache or in [the Remote Cache](/docs/core-concepts/remote-caching).
+This will result in a cache miss, since you've never ran `turbo` before with this [set of inputs](#task-inputs) in this repository. The inputs are turned into a hash to check for in your local filesystem cache or in [the Remote Cache](/docs/core-concepts/remote-caching).
 
 </Step>
 
