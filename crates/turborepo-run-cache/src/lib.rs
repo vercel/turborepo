@@ -267,8 +267,7 @@ impl TaskCache {
         // We need the log file when caching is enabled (normal case), but also
         // when the output mode is errors-only so that on_error can replay the
         // log file to show the output of a failed task.
-        let needs_log_file =
-            cache_enabled || self.task_output_logs == OutputLogsMode::ErrorsOnly;
+        let needs_log_file = cache_enabled || self.task_output_logs == OutputLogsMode::ErrorsOnly;
 
         if needs_log_file {
             log_writer.with_log_file(&self.log_file_path)?;
