@@ -10,6 +10,7 @@ on:
 permissions:
   id-token: write # Required for npm Trusted Publishing using OIDC
   contents: write
+  pull-requests: write
 
 jobs:
   build:
@@ -136,16 +137,45 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [build]
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      branch: ${{ steps.version.outputs.branch }}
     steps:
       - name: Checkout
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.14.0"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Ensure npm version
+        run: npm install -g npm@11.5.1
+
       - name: Configure git
         run: |
           git config --global user.name 'Turbobot'
           git config --global user.email 'turbobot@vercel.com'
+
+      - name: Bump version
+        id: version
+        run: |
+          CURRENT_VERSION=$(jq -r .version packages/turbo-repository/js/package.json)
+          NEXT_VERSION=$(cd packages/turbo-repository/js && npm version prerelease --preid canary --no-git-tag-version)
+          NEXT_VERSION="${NEXT_VERSION#v}"
+          echo "Bumping all packages from ${CURRENT_VERSION} to ${NEXT_VERSION}"
+          cd packages/turbo-repository && bash scripts/bump-version.sh "${NEXT_VERSION}"
+          cd "$GITHUB_WORKSPACE"
+          BRANCH="library-release/${NEXT_VERSION}"
+          git checkout -b "${BRANCH}"
+          git add -A
+          git commit -m "library release: ${NEXT_VERSION}"
+          git push origin "${BRANCH}"
+          echo "version=${NEXT_VERSION}" >> $GITHUB_OUTPUT
+          echo "branch=${BRANCH}" >> $GITHUB_OUTPUT
 
       - name: Download Artifacts
         uses: actions/download-artifact@v4
@@ -204,3 +234,42 @@ jobs:
           npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-arm64-msvc-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-win32-x64-msvc-${VERSION}.tgz
           npm publish -ddd --tag ${TAG} --access public turbo-repository-${VERSION}.tgz
+
+  create-release-pr:
+    name: Create Release PR
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [package]
+    if: ${{ !inputs.dry_run }}
+    steps:
+      - name: Create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ needs.package.outputs.version }}"
+          BRANCH="${{ needs.package.outputs.branch }}"
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --title "release(library): ${VERSION}" \
+            --body "Bumps \`@turbo/repository\` packages to \`${VERSION}\`." \
+            --head "${BRANCH}" \
+            --base main
+          PR_NUM=$(gh pr view "${BRANCH}" --repo "${{ github.repository }}" --json number --jq '.number')
+          gh pr merge "$PR_NUM" --repo "${{ github.repository }}" --auto --squash
+
+  cleanup-on-failure:
+    name: Cleanup Failed Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [package]
+    if: ${{ always() && needs.package.result == 'failure' }}
+    steps:
+      - name: Delete staging branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ needs.package.outputs.branch }}"
+          if [ -n "${BRANCH}" ]; then
+            echo "Cleaning up branch ${BRANCH}..."
+            gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/${BRANCH}" || echo "Branch may already be deleted"
+          fi
