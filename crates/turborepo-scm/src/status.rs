@@ -212,9 +212,10 @@ mod tests {
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
         HashMap::from_iter(pairs.iter().map(|(path, hash)| {
+            let padded = format!("{:0<40}", hash);
             (
                 RelativeUnixPathBuf::new(*path).unwrap(),
-                OidHash::from_hex_str(hash),
+                OidHash::from_hex_str(&padded),
             )
         }))
     }
