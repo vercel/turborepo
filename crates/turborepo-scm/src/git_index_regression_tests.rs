@@ -168,7 +168,7 @@ fn test_modified_tracked_files_detected() {
 
     // Get committed hash
     let committed_hashes = repo.get_hashes("my-pkg");
-    let committed_oid = committed_hashes.get(&path("src/index.ts")).unwrap().clone();
+    let committed_oid = *committed_hashes.get(&path("src/index.ts")).unwrap();
 
     // Modify without staging
     repo.create_file("my-pkg/src/index.ts", "modified content");

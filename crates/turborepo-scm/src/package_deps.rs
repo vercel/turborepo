@@ -703,7 +703,7 @@ mod tests {
         for (inputs, include_default_files, expected_files) in input_tests {
             let expected: GitHashes = HashMap::from_iter(expected_files.iter().map(|key| {
                 let key = RelativeUnixPathBuf::new(*key).unwrap();
-                let value = all_expected.get(&key).unwrap().clone();
+                let value = *all_expected.get(&key).unwrap();
                 (key, value)
             }));
 
