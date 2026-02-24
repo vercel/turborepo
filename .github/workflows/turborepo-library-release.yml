@@ -147,13 +147,15 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: ./.github/actions/setup-node
         with:
-          node-version: "22.14.0"
-          registry-url: "https://registry.npmjs.org"
+          enable-corepack: false
+          package-install: false
 
-      - name: Ensure npm version
-        run: npm install -g npm@11.5.1
+      - name: Configure npm
+        run: |
+          npm install -g npm@11.5.1
+          npm config set registry https://registry.npmjs.org
 
       - name: Configure git
         run: |
