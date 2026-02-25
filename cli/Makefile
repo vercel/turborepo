@@ -61,7 +61,7 @@ stage-release:
 
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
-	git push origin staging-$(TURBO_VERSION) --force
+	HUSKY=0 git push origin staging-$(TURBO_VERSION) --force
 
 .PHONY: create-release-tag
 create-release-tag:
