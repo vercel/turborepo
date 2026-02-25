@@ -151,10 +151,27 @@ impl std::str::FromStr for Protocol {
 }
 
 /// Metric toggle configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaskAttributesConfig {
+    pub id: bool,
+    pub hashes: bool,
+}
+
+impl Default for TaskAttributesConfig {
+    fn default() -> Self {
+        Self {
+            id: false,
+            hashes: false,
+        }
+    }
+}
+
+/// Metric toggle configuration.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct MetricsConfig {
     pub run_summary: bool,
     pub task_details: bool,
+    pub task_attributes: TaskAttributesConfig,
 }
 
 /// Resolved configuration for the exporter.
@@ -297,7 +314,9 @@ impl Handle {
             self.inner.instruments.record_run_summary(payload);
         }
         if self.inner.metrics.task_details {
-            self.inner.instruments.record_task_details(payload);
+            self.inner
+                .instruments
+                .record_task_details(payload, self.inner.metrics);
         }
     }
 
@@ -338,7 +357,7 @@ impl Instruments {
         self.run_cached.add(payload.cached_tasks, &attrs);
     }
 
-    fn record_task_details(&self, payload: &RunMetricsPayload) {
+    fn record_task_details(&self, payload: &RunMetricsPayload, metrics: MetricsConfig) {
         tracing::debug!(
             target: "turborepo_otel",
             "record_task_details run_id={} task_count={}",
@@ -348,15 +367,19 @@ impl Instruments {
         let base_attrs = build_run_attributes(payload);
         for task in payload.tasks.iter() {
             let mut attrs = base_attrs.clone();
-            attrs.push(KeyValue::new("turbo.task.id", task.task_id.clone()));
             attrs.push(KeyValue::new("turbo.task.name", task.task.clone()));
             attrs.push(KeyValue::new("turbo.task.package", task.package.clone()));
-            attrs.push(KeyValue::new("turbo.task.hash", task.hash.clone()));
-            attrs.push(KeyValue::new(
-                "turbo.task.external_inputs_hash",
-                task.external_inputs_hash.clone(),
-            ));
             attrs.push(KeyValue::new("turbo.task.command", task.command.clone()));
+            if metrics.task_attributes.id {
+                attrs.push(KeyValue::new("turbo.task.id", task.task_id.clone()));
+            }
+            if metrics.task_attributes.hashes {
+                attrs.push(KeyValue::new("turbo.task.hash", task.hash.clone()));
+                attrs.push(KeyValue::new(
+                    "turbo.task.external_inputs_hash",
+                    task.external_inputs_hash.clone(),
+                ));
+            }
             attrs.push(KeyValue::new(
                 "turbo.task.cache_status",
                 task.cache_status.as_str(),

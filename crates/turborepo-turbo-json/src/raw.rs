@@ -238,6 +238,15 @@ pub struct RawKeyValue {
 pub struct RawObservabilityOtelMetrics {
     pub run_summary: Option<Spanned<bool>>,
     pub task_details: Option<Spanned<bool>>,
+    pub task_attributes: Option<RawObservabilityOtelTaskAttributes>,
+}
+
+/// OTel task attribute configuration for task detail metrics.
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawObservabilityOtelTaskAttributes {
+    pub id: Option<Spanned<bool>>,
+    pub hashes: Option<Spanned<bool>>,
 }
 
 impl Default for RawKeyValue {

@@ -10,9 +10,18 @@ use crate::Error;
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
+pub struct ExperimentalOtelTaskAttributesOptions {
+    pub id: Option<bool>,
+    pub hashes: Option<bool>,
+}
+
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
+#[merge(strategy = merge::option::overwrite_none)]
+#[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelMetricsOptions {
     pub run_summary: Option<bool>,
     pub task_details: Option<bool>,
+    pub task_attributes: Option<ExperimentalOtelTaskAttributesOptions>,
 }
 
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
@@ -42,7 +51,15 @@ impl ExperimentalOtelOptions {
             && self
                 .metrics
                 .as_ref()
-                .map(|m| m.run_summary.is_none() && m.task_details.is_none())
+                .map(|m| {
+                    m.run_summary.is_none()
+                        && m.task_details.is_none()
+                        && m
+                            .task_attributes
+                            .as_ref()
+                            .map(|a| a.id.is_none() && a.hashes.is_none())
+                            .unwrap_or(true)
+                })
                 .unwrap_or(true)
     }
 
@@ -124,6 +141,32 @@ impl ExperimentalOtelOptions {
             "experimental_otel_metrics_task_details",
             "TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS",
             |metrics, value| metrics.task_details = Some(value),
+            &mut options,
+        )?;
+
+        touched |= set_metric_flag(
+            map,
+            "experimental_otel_metrics_task_attributes_id",
+            "TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_ATTRIBUTES_ID",
+            |metrics, value| {
+                metrics
+                    .task_attributes
+                    .get_or_insert_with(ExperimentalOtelTaskAttributesOptions::default)
+                    .id = Some(value)
+            },
+            &mut options,
+        )?;
+
+        touched |= set_metric_flag(
+            map,
+            "experimental_otel_metrics_task_attributes_hashes",
+            "TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_ATTRIBUTES_HASHES",
+            |metrics, value| {
+                metrics
+                    .task_attributes
+                    .get_or_insert_with(ExperimentalOtelTaskAttributesOptions::default)
+                    .hashes = Some(value)
+            },
             &mut options,
         )?;
 

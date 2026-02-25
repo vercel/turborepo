@@ -83,6 +83,14 @@ const TURBO_MAPPING: &[(&str, &str)] = [
         "experimental_otel_metrics_task_details",
     ),
     (
+        "turbo_experimental_otel_metrics_task_attributes_id",
+        "experimental_otel_metrics_task_attributes_id",
+    ),
+    (
+        "turbo_experimental_otel_metrics_task_attributes_hashes",
+        "experimental_otel_metrics_task_attributes_hashes",
+    ),
+    (
         "turbo_experimental_otel_use_remote_cache_token",
         "experimental_otel_use_remote_cache_token",
     ),

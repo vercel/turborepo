@@ -105,9 +105,17 @@ fn metrics_config(
 ) -> turborepo_otel::MetricsConfig {
     let run_summary = options.and_then(|opts| opts.run_summary).unwrap_or(true);
     let task_details = options.and_then(|opts| opts.task_details).unwrap_or(false);
+    let task_attributes = options
+        .and_then(|opts| opts.task_attributes.as_ref())
+        .map(|attrs| turborepo_otel::TaskAttributesConfig {
+            id: attrs.id.unwrap_or(false),
+            hashes: attrs.hashes.unwrap_or(false),
+        })
+        .unwrap_or_default();
     turborepo_otel::MetricsConfig {
         run_summary,
         task_details,
+        task_attributes,
     }
 }
 
@@ -172,8 +180,10 @@ fn build_task_payload(task: &TaskSummary) -> TaskMetricsPayload {
         task_id: task.task_id.to_string(),
         task: task.task.clone(),
         package: task.package.clone(),
-        hash: task.shared.hash.clone(),
+        hash: task.shared.hash.to_string(),
         external_inputs_hash: task.shared.hash_of_external_dependencies.clone(),
+        // TODO: Keep passthrough CLI args out of OTEL payloads until we define
+        // a sensitive-data redaction policy for `cli_arguments`.
         command: task.shared.command.clone(),
         duration_ms,
         cache_status,
@@ -202,6 +212,7 @@ mod tests {
             metrics: turborepo_otel::MetricsConfig {
                 run_summary: true,
                 task_details: false,
+                task_attributes: turborepo_otel::TaskAttributesConfig::default(),
             },
         }
     }
@@ -260,6 +271,8 @@ mod tests {
         assert!(config.resource_attributes.is_empty());
         assert!(config.metrics.run_summary);
         assert!(!config.metrics.task_details);
+        assert!(!config.metrics.task_attributes.id);
+        assert!(!config.metrics.task_attributes.hashes);
     }
 
     #[test]
@@ -279,6 +292,7 @@ mod tests {
             metrics: Some(ExperimentalOtelMetricsOptions {
                 run_summary: Some(false),
                 task_details: Some(true),
+                task_attributes: None,
             }),
             ..Default::default()
         };
@@ -300,23 +314,29 @@ mod tests {
 
     #[test]
     fn metrics_config_applies_defaults_and_overrides() {
-        let cases: &[(&str, Option<ExperimentalOtelMetricsOptions>, bool, bool)] = &[
-            ("defaults", None, true, false),
+        let cases: &[(&str, Option<ExperimentalOtelMetricsOptions>, bool, bool, bool, bool)] = &[
+            ("defaults", None, true, false, false, false),
             (
                 "both overridden",
                 Some(ExperimentalOtelMetricsOptions {
                     run_summary: Some(false),
                     task_details: Some(true),
+                    task_attributes: None,
                 }),
                 false,
                 true,
+                false,
+                false,
             ),
             (
                 "only run_summary overridden",
                 Some(ExperimentalOtelMetricsOptions {
                     run_summary: Some(false),
                     task_details: None,
+                    task_attributes: None,
                 }),
+                false,
+                false,
                 false,
                 false,
             ),
@@ -325,13 +345,41 @@ mod tests {
                 Some(ExperimentalOtelMetricsOptions {
                     run_summary: None,
                     task_details: Some(true),
+                    task_attributes: None,
                 }),
+                true,
+                true,
+                false,
+                false,
+            ),
+            (
+                "task_attributes overridden",
+                Some(ExperimentalOtelMetricsOptions {
+                    run_summary: None,
+                    task_details: None,
+                    task_attributes: Some(
+                        turborepo_config::ExperimentalOtelTaskAttributesOptions {
+                            id: Some(true),
+                            hashes: Some(true),
+                        },
+                    ),
+                }),
+                true,
+                false,
                 true,
                 true,
             ),
         ];
 
-        for (name, options, expected_run_summary, expected_task_details) in cases {
+        for (
+            name,
+            options,
+            expected_run_summary,
+            expected_task_details,
+            expected_task_id,
+            expected_task_hashes,
+        ) in cases
+        {
             let result = metrics_config(options.as_ref());
             assert_eq!(
                 result.run_summary, *expected_run_summary,
@@ -341,6 +389,16 @@ mod tests {
             assert_eq!(
                 result.task_details, *expected_task_details,
                 "case '{}': task_details mismatch",
+                name
+            );
+            assert_eq!(
+                result.task_attributes.id, *expected_task_id,
+                "case '{}': task_attributes.id mismatch",
+                name
+            );
+            assert_eq!(
+                result.task_attributes.hashes, *expected_task_hashes,
+                "case '{}': task_attributes.hashes mismatch",
                 name
             );
         }

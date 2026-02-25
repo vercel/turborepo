@@ -50,6 +50,7 @@ pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 
 pub use experimental_otel::{
     ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
+    ExperimentalOtelTaskAttributesOptions,
 };
 
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
