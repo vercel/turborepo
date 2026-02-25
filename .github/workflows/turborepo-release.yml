@@ -22,6 +22,7 @@ name: Release
 
 env:
   CARGO_PROFILE_RELEASE_LTO: true
+  HUSKY: "0"
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
   RELEASE_TURBO_CLI: true # TODO: do we need this?
 
