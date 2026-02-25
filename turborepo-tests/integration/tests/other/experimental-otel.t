@@ -21,7 +21,6 @@ Smoke test: OTEL enabled via environment variables does not break turbo run
   my-app:build: > echo building
   my-app:build: 
   my-app:build: building
-   WARNING  failed to shutdown otel exporter:.* (re)
   
    Tasks:    1 successful, 1 total
   Cached:    0 cached, 1 total
@@ -44,7 +43,6 @@ Smoke test: OTEL enabled via CLI flags does not break turbo run
   my-app:build: > echo building
   my-app:build: 
   my-app:build: building
-   WARNING  failed to shutdown otel exporter:.* (re)
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
@@ -64,7 +62,6 @@ Smoke test: http/protobuf protocol flag is accepted without error
   my-app:build: > echo building
   my-app:build: 
   my-app:build: building
-   WARNING  failed to shutdown otel exporter:.* (re)
   
    Tasks:    1 successful, 1 total
   Cached:    1 cached, 1 total
