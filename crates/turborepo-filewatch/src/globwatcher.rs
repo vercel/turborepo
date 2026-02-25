@@ -1,6 +1,5 @@
 use std::{
     collections::{BTreeSet, HashMap, HashSet},
-    fmt::Display,
     future::IntoFuture,
     str::FromStr,
     time::Duration,
@@ -66,16 +65,11 @@ impl std::hash::Hash for GlobSet {
 }
 
 #[derive(Debug, Error)]
+#[error("{underlying}: {raw_glob}")]
 pub struct GlobError {
     // Boxed to minimize error size
     underlying: Box<wax::BuildError>,
     raw_glob: String,
-}
-
-impl Display for GlobError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}: {}", self.underlying, self.raw_glob)
-    }
 }
 
 fn compile_glob(raw: &str) -> Result<Glob<'static>, GlobError> {

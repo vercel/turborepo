@@ -12,7 +12,7 @@ workspace = true
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 itertools = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-thiserror = "1.0.38"
+thiserror = { workspace = true }
 tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 turbopath = { workspace = true }

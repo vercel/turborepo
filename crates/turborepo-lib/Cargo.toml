@@ -83,7 +83,7 @@ swc_common = { workspace = true }
 swc_ecma_ast = { workspace = true, features = ["serde-impl"] }
 swc_ecma_parser = { workspace = true }
 sysinfo = "0.27.7"
-thiserror = "1.0.38"
+thiserror = { workspace = true }
 time = "0.3.20"
 tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }

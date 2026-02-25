@@ -1,5 +1,3 @@
-use std::backtrace;
-
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
@@ -29,19 +27,19 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Expected `run` command.")]
-    ExpectedRun(#[backtrace] backtrace::Backtrace),
+    ExpectedRun,
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error(
         "Invalid percentage value for `--concurrency` flag. This should be a percentage of CPU \
-         cores, between 1% and 100%: {1}"
+         cores, between 1% and 100%: {0}"
     )]
-    InvalidConcurrencyPercentage(#[backtrace] backtrace::Backtrace, f64),
+    InvalidConcurrencyPercentage(f64),
     #[error(
         "Invalid value for `--concurrency` flag. This should be a positive integer greater than \
-         or equal to 1: {1}"
+         or equal to 1: {0}"
     )]
-    ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
+    ConcurrencyOutOfBounds(String),
     #[error(
         "Cannot set `cache` config and other cache options (`force`, `remoteOnly`, \
          `remoteCacheReadOnly`) at the same time."
@@ -345,18 +343,12 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
                 .unwrap_or(1);
             Ok((num_cpus as f64 * percent / 100.0).max(1.0) as u32)
         } else {
-            Err(Error::InvalidConcurrencyPercentage(
-                backtrace::Backtrace::capture(),
-                percent,
-            ))
+            Err(Error::InvalidConcurrencyPercentage(percent))
         };
     }
     match concurrency_raw.parse::<u32>() {
         Ok(concurrency) if concurrency >= 1 => Ok(concurrency),
-        Ok(_) | Err(_) => Err(Error::ConcurrencyOutOfBounds(
-            backtrace::Backtrace::capture(),
-            concurrency_raw.to_string(),
-        )),
+        Ok(_) | Err(_) => Err(Error::ConcurrencyOutOfBounds(concurrency_raw.to_string())),
     }
 }
 

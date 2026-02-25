@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, env, ffi::OsString, fmt, io, mem, process};
+use std::{env, ffi::OsString, fmt, io, mem, process};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -1266,7 +1266,7 @@ fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
         // We clone instead of take as take would leave the command base a copy of cli_args
         // missing any execution args.
         .clone()
-        .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
+        .ok_or_else(|| Error::NoCommand)?;
 
     if execution_args.tasks.is_empty() {
         let mut cmd = <Args as CommandFactory>::command();

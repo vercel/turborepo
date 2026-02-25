@@ -25,13 +25,7 @@
 #![allow(clippy::result_large_err)]
 #![feature(assert_matches)]
 
-use std::{
-    fmt::{Debug, Display},
-    future::IntoFuture,
-    path::Path,
-    sync::Arc,
-    time::Duration,
-};
+use std::{fmt::Debug, future::IntoFuture, path::Path, sync::Arc, time::Duration};
 
 // windows -> no recursive watch, watch ancestors
 // linux -> recursive watch, watch ancestors
@@ -93,17 +87,12 @@ pub enum WatchError {
 // Clone. We provide a wrapper that uses an Arc to implement Clone so that we
 // can send errors on a broadcast channel.
 #[derive(Clone, Debug, Error)]
+#[error("{0}")]
 pub struct NotifyError(Arc<notify::Error>);
 
 impl From<notify::Error> for NotifyError {
     fn from(value: notify::Error) -> Self {
         Self(Arc::new(value))
-    }
-}
-
-impl Display for NotifyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
     }
 }
 

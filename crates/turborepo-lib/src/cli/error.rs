@@ -1,5 +1,3 @@
-use std::backtrace;
-
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
@@ -19,9 +17,9 @@ use crate::{
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("No command specified.")]
-    NoCommand(#[backtrace] backtrace::Backtrace),
+    NoCommand,
     #[error("{0}")]
-    Bin(#[from] bin::Error, #[backtrace] backtrace::Backtrace),
+    Bin(#[from] bin::Error),
     #[error(transparent)]
     Boundaries(#[from] crate::boundaries::Error),
     #[error(transparent)]

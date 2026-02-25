@@ -7,7 +7,6 @@ pub mod yarn;
 pub mod yarnrc;
 
 use std::{
-    backtrace,
     fmt::{self, Display},
     fs,
 };
@@ -73,13 +72,17 @@ pub enum PackageManager {
     Bun,
 }
 
-#[derive(Debug, Error)]
+#[derive(Debug)]
 pub struct MissingWorkspaceError {
     package_manager: PackageManager,
 }
 
-#[derive(Debug, Error)]
+impl std::error::Error for MissingWorkspaceError {}
+
+#[derive(Debug)]
 pub struct NoPackageManager;
+
+impl std::error::Error for NoPackageManager {}
 
 impl Display for NoPackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -123,25 +126,22 @@ impl From<PackageManager> for MissingWorkspaceError {
 
 impl From<wax::BuildError> for Error {
     fn from(value: wax::BuildError) -> Self {
-        Self::Wax(Box::new(value), backtrace::Backtrace::capture())
+        Self::Wax(Box::new(value))
     }
 }
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
+    Io(#[from] std::io::Error),
     #[error(transparent)]
     Workspace(#[from] MissingWorkspaceError),
     #[error("YAML parsing error: {0}")]
-    ParsingYaml(
-        #[from] serde_yaml_ng::Error,
-        #[backtrace] backtrace::Backtrace,
-    ),
+    ParsingYaml(#[from] serde_yaml_ng::Error),
     #[error("JSON parsing error: {0}")]
-    ParsingJson(#[from] serde_json::Error, #[backtrace] backtrace::Backtrace),
+    ParsingJson(#[from] serde_json::Error),
     #[error("Globbing error: {0}")]
-    Wax(Box<wax::BuildError>, #[backtrace] backtrace::Backtrace),
+    Wax(Box<wax::BuildError>),
     #[error(transparent)]
     PackageJson(#[from] package_json::Error),
     #[error(transparent)]
