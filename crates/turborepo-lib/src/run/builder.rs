@@ -11,6 +11,7 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
+use turborepo_daemon::{DaemonClient, DaemonConnector};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -59,6 +60,11 @@ pub struct RunBuilder {
     should_validate_engine: bool,
     // If true, we will add all tasks to the graph, even if they are not specified
     add_all_tasks: bool,
+    // When running under `turbo watch`, a daemon client is needed so that
+    // the run cache can register output globs and skip restoring outputs
+    // that are already on disk. Without this, cache restores write files
+    // that trigger the file watcher, causing an infinite rebuild loop.
+    daemon_client: Option<DaemonClient<DaemonConnector>>,
 }
 
 impl RunBuilder {
@@ -100,11 +106,17 @@ impl RunBuilder {
             should_print_prelude_override: None,
             should_validate_engine: true,
             add_all_tasks: false,
+            daemon_client: None,
         })
     }
 
     pub fn with_entrypoint_packages(mut self, entrypoint_packages: HashSet<PackageName>) -> Self {
         self.entrypoint_packages = Some(entrypoint_packages);
+        self
+    }
+
+    pub fn with_daemon_client(mut self, client: DaemonClient<DaemonConnector>) -> Self {
+        self.daemon_client = Some(client);
         self
     }
 
@@ -423,18 +435,19 @@ impl RunBuilder {
             )?;
         }
 
+        let should_print_prelude = self
+            .should_print_prelude_override
+            .unwrap_or_else(|| self.will_execute_tasks());
+
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
             self.opts.runcache_opts,
             &self.opts.cache_opts,
+            self.daemon_client,
             self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));
-
-        let should_print_prelude = self
-            .should_print_prelude_override
-            .unwrap_or_else(|| self.will_execute_tasks());
 
         Ok((
             Run {

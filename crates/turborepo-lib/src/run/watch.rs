@@ -9,7 +9,9 @@ use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{select, sync::Notify, task::JoinHandle};
 use tracing::{instrument, trace};
-use turborepo_daemon::{proto, DaemonConnector, DaemonConnectorError, DaemonError, Paths};
+use turborepo_daemon::{
+    proto, DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths,
+};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
@@ -50,6 +52,10 @@ pub struct WatchClient {
     persistent_tasks_handle: Option<RunHandle>,
     active_runs: Vec<RunHandle>,
     connector: DaemonConnector,
+    // A daemon client used by the run cache to register output globs and check
+    // whether outputs have changed. This prevents cache restores from writing
+    // files that trigger the file watcher and cause infinite rebuild loops.
+    daemon_client: DaemonClient<DaemonConnector>,
     base: CommandBase,
     telemetry: CommandEventBuilder,
     handler: SignalHandler,
@@ -121,16 +127,6 @@ impl WatchClient {
 
         let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
 
-        let new_base = base.clone();
-        let (run, _analytics) = RunBuilder::new(new_base, None)?
-            .build(&handler, telemetry.clone())
-            .await?;
-        let run = Arc::new(run);
-
-        let watched_packages = run.get_relevant_packages();
-
-        let (ui_sender, ui_handle) = run.start_ui()?.unzip();
-
         // Determine if we're using a custom turbo.json path
         let custom_turbo_json_path =
             if base.opts.repo_opts.root_turbo_json_path != standard_config_path {
@@ -151,11 +147,29 @@ impl WatchClient {
             custom_turbo_json_path,
         };
 
+        // Connect a daemon client for the run cache. This allows the cache to
+        // register output globs with the daemon's GlobWatcher and skip restoring
+        // outputs that are already on disk, preventing the file watcher from
+        // seeing restored files as changes and causing an infinite rebuild loop.
+        let daemon_client = connector.clone().connect().await?;
+
+        let new_base = base.clone();
+        let (run, _analytics) = RunBuilder::new(new_base, None)?
+            .with_daemon_client(daemon_client.clone())
+            .build(&handler, telemetry.clone())
+            .await?;
+        let run = Arc::new(run);
+
+        let watched_packages = run.get_relevant_packages();
+
+        let (ui_sender, ui_handle) = run.start_ui()?.unzip();
+
         Ok(Self {
             base,
             run,
             watched_packages,
             connector,
+            daemon_client,
             handler,
             telemetry,
             experimental_write_cache,
@@ -355,6 +369,7 @@ impl WatchClient {
                 let telemetry = self.telemetry.clone();
 
                 let (run, _analytics) = RunBuilder::new(new_base, None)?
+                    .with_daemon_client(self.daemon_client.clone())
                     .with_entrypoint_packages(packages)
                     .hide_prelude()
                     .build(&signal_handler, telemetry)
@@ -389,6 +404,7 @@ impl WatchClient {
 
                 // rebuild run struct
                 let (run, _analytics) = RunBuilder::new(base.clone(), None)?
+                    .with_daemon_client(self.daemon_client.clone())
                     .hide_prelude()
                     .build(&self.handler, self.telemetry.clone())
                     .await?;
