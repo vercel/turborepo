@@ -314,7 +314,14 @@ mod tests {
 
     #[test]
     fn metrics_config_applies_defaults_and_overrides() {
-        let cases: &[(&str, Option<ExperimentalOtelMetricsOptions>, bool, bool, bool, bool)] = &[
+        let cases: &[(
+            &str,
+            Option<ExperimentalOtelMetricsOptions>,
+            bool,
+            bool,
+            bool,
+            bool,
+        )] = &[
             ("defaults", None, true, false, false, false),
             (
                 "both overridden",

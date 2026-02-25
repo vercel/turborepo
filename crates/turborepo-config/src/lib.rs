@@ -871,7 +871,10 @@ mod test {
             .expect("expected experimental observability otel config");
 
         // Builder override wins over env/turbo.json.
-        assert_eq!(otel.endpoint.as_deref(), Some("https://override.example/otel"));
+        assert_eq!(
+            otel.endpoint.as_deref(),
+            Some("https://override.example/otel")
+        );
         assert_eq!(otel.protocol, Some(ExperimentalOtelProtocol::HttpProtobuf));
         assert_eq!(otel.timeout_ms, Some(3333));
         assert_eq!(

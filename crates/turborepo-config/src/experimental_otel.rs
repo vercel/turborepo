@@ -55,8 +55,7 @@ impl ExperimentalOtelOptions {
                 .map(|m| {
                     m.run_summary.is_none()
                         && m.task_details.is_none()
-                        && m
-                            .task_attributes
+                        && m.task_attributes
                             .as_ref()
                             .map(|a| a.id.is_none() && a.hashes.is_none())
                             .unwrap_or(true)

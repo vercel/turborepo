@@ -152,12 +152,12 @@ fn convert_raw_observability_otel(
     let metrics = raw.metrics.map(|metrics| ExperimentalOtelMetricsOptions {
         run_summary: metrics.run_summary.map(|flag| *flag.as_inner()),
         task_details: metrics.task_details.map(|flag| *flag.as_inner()),
-        task_attributes: metrics
-            .task_attributes
-            .map(|attrs| ExperimentalOtelTaskAttributesOptions {
+        task_attributes: metrics.task_attributes.map(|attrs| {
+            ExperimentalOtelTaskAttributesOptions {
                 id: attrs.id.map(|flag| *flag.as_inner()),
                 hashes: attrs.hashes.map(|flag| *flag.as_inner()),
-            }),
+            }
+        }),
     });
 
     let headers = raw.headers.map(convert_key_values);
