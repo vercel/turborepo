@@ -82,12 +82,16 @@ impl<'a> DependencyLocations<'a> {
 }
 
 /// Checks if the given import can be resolved as a tsconfig path alias via the
-/// resolver, e.g. `@/types/foo` -> `./src/foo`, and if so, checks the resolved
-/// path against package boundaries.
+/// resolver, e.g. `@/types/foo` -> `./src/foo` or `features/foo` -> `./src/features/foo`,
+/// and if so, checks the resolved path against package boundaries.
 ///
-/// Only attempts resolution for imports that are not relative paths and not
-/// bare package names, so that bare specifiers like `react` still go through
-/// `check_package_import` for dependency declaration validation.
+/// Attempts resolution for all non-relative imports, including those that look
+/// like bare package names (e.g. `features/feature-a`). This allows tsconfig
+/// `paths` entries that shadow package-name-shaped specifiers to be recognised as
+/// local imports instead of being incorrectly flagged as undeclared dependencies.
+/// If the resolver cannot resolve the import (no matching tsconfig alias and no
+/// file on disk), `Ok(false)` is returned and the caller falls through to
+/// `check_package_import`.
 ///
 /// Returns true if the import was resolved as a tsconfig path alias.
 #[allow(clippy::too_many_arguments)]
@@ -101,9 +105,11 @@ fn check_import_as_tsconfig_path_alias(
     import: &str,
     result: &mut BoundariesResult,
 ) -> Result<bool, Error> {
-    // Skip relative imports and bare package names — those are handled elsewhere.
-    // We only want to resolve tsconfig path aliases here.
-    if import.starts_with('.') || BoundariesChecker::is_potential_package_name(import) {
+    // Skip relative imports — those are always resolved as file imports elsewhere.
+    // Package-name-shaped imports are intentionally tried here so that tsconfig
+    // `paths` aliases (e.g. `features/*` → `./src/features/*`) are resolved before
+    // we check them against declared package dependencies.
+    if import.starts_with('.') {
         return Ok(false);
     }
 
@@ -372,6 +378,9 @@ mod test {
         (resolver, package_name, span, file_content, result)
     }
 
+    // Package-name-shaped imports that have no matching tsconfig alias and no
+    // corresponding file on disk should still return `false` so that the caller
+    // can fall through to `check_package_import`.
     #[test_case("react" ; "bare package name")]
     #[test_case("lodash" ; "bare package name lodash")]
     #[test_case("@scope/package" ; "scoped package name")]
@@ -379,7 +388,7 @@ mod test {
     #[test_case("lodash/fp" ; "subpath import")]
     #[test_case("@scope/package/sub" ; "scoped subpath import")]
     #[test_case("@scope/package/deeply/nested" ; "scoped deeply nested subpath import")]
-    fn tsconfig_alias_check_skips_bare_package_names(import: &str) {
+    fn tsconfig_alias_check_returns_false_for_unresolvable_package_imports(import: &str) {
         let (resolver, package_name, span, file_content, mut result) =
             make_tsconfig_alias_test_args(import);
         let tmp = tempfile::tempdir().unwrap();
@@ -401,7 +410,7 @@ mod test {
 
         assert!(
             !resolved,
-            "bare package name {import:?} should not be resolved as tsconfig alias"
+            "package import {import:?} with no tsconfig alias should not be resolved"
         );
         assert!(result.diagnostics.is_empty());
     }
@@ -481,6 +490,71 @@ mod test {
         assert!(
             resolved,
             "@/utils/helper should be resolved as a tsconfig path alias"
+        );
+    }
+
+    /// Regression test: an import whose specifier looks like a bare package
+    /// name (e.g. `features/feature-a`) but is actually a tsconfig `paths`
+    /// alias pointing to a local source file must be resolved as a tsconfig
+    /// alias (returning `true`) rather than being incorrectly forwarded to
+    /// `check_package_import` and flagged as an undeclared dependency.
+    ///
+    /// See: <https://github.com/vercel/turborepo/issues/11906>
+    #[test]
+    fn tsconfig_alias_resolves_package_name_shaped_path_alias() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Mimic a tsconfig that maps `*` to `./src/*`, turning bare specifiers
+        // like `features/feature-a` into local imports.
+        let tsconfig = root.join("tsconfig.json");
+        std::fs::write(
+            &tsconfig,
+            r#"{ "compilerOptions": { "paths": { "*": ["./src/*"] } } }"#,
+        )
+        .unwrap();
+
+        // Create the target file the alias should resolve to
+        std::fs::create_dir_all(root.join("src").join("features")).unwrap();
+        std::fs::write(
+            root.join("src").join("features").join("feature-a.ts"),
+            "export const featureA = true;",
+        )
+        .unwrap();
+
+        // Create the source file that imports via the alias
+        let file_content = "import { featureA } from \"features/feature-a\";";
+        std::fs::write(root.join("index.ts"), file_content).unwrap();
+
+        let package_root = AbsoluteSystemPath::new(root.to_str().unwrap()).unwrap();
+        let tsconfig_path = AbsoluteSystemPath::new(tsconfig.to_str().unwrap()).unwrap();
+        let file_path = package_root.join_component("index.ts");
+        let package_name = PackageName::from("test-pkg");
+        let span = SourceSpan::new(0.into(), 0);
+        let mut result = BoundariesResult::default();
+
+        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+
+        let resolved = check_import_as_tsconfig_path_alias(
+            &resolver,
+            &package_name,
+            package_root,
+            span,
+            &file_path,
+            file_content,
+            "features/feature-a",
+            &mut result,
+        )
+        .unwrap();
+
+        assert!(
+            resolved,
+            "features/feature-a with a tsconfig `*` alias should be resolved as a local import"
+        );
+        // The resolved path is inside the package root, so no boundary violation
+        assert!(
+            result.diagnostics.is_empty(),
+            "expected no boundary violations for a locally-aliased import"
         );
     }
 }
