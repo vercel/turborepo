@@ -221,23 +221,12 @@ jobs:
         with:
           tool: nextest
 
-      - name: Build tests
-        timeout-minutes: 15
-        # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
+      - name: Run tests
+        timeout-minutes: 45
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo nextest run --workspace --exclude turborepo-napi --no-run
-          else
-              cargo nextest run --workspace --no-run
-          fi
-        shell: bash
-
-      - name: Run tests
-        timeout-minutes: 30
-        run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
               cargo nextest run --workspace --exclude turborepo-napi --partition hash:${{ matrix.partition }}/2
           else
@@ -303,19 +292,8 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Build tests
-        timeout-minutes: 15
-        # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
-        run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
-          cargo nextest run --workspace --no-run
-        shell: bash
-
       - name: Run tests with coverage
-        timeout-minutes: 30
-        # We explicitly unset RUSTC_WRAPPER if it is an empty string as causes build issues
+        timeout-minutes: 45
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
