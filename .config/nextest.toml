@@ -14,6 +14,11 @@ turborepo-integration-serial = { max-threads = 1 }
 # with environment variable manipulation
 turborepo-dirs-serial = { max-threads = 1 }
 
+# Prysk integration tests shell out to the prysk CLI per .t file.
+# Serial for now since tests share fixture/git/package-manager state.
+# Bump max-threads once we confirm full isolation.
+turborepo-prysk = { max-threads = 1 }
+
 [[profile.default.overrides]]
 # Run all tests in the turborepo-process crate serially
 filter = 'package(turborepo-process)'
@@ -30,3 +35,8 @@ test-group = 'turborepo-integration-serial'
 # These tests manipulate environment variables
 filter = 'package(turborepo-dirs)'
 test-group = 'turborepo-dirs-serial'
+
+[[profile.default.overrides]]
+# Prysk integration tests — each .t file is its own test case
+filter = 'binary(prysk)'
+test-group = 'turborepo-prysk'

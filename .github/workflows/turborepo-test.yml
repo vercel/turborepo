@@ -121,119 +121,6 @@ jobs:
             echo "No Rust/core changes detected (JS-only change)"
           fi
 
-  generate-integration-test-matrix:
-    name: Generate integration test matrix
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    outputs:
-      test-paths: ${{ steps.generate-matrix.outputs.test-paths }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Generate test path matrix
-        id: generate-matrix
-        run: |
-          TEST_PATHS=$(command ls -1A turborepo-tests/integration/tests | jq -R -s -c 'split("\n") | map(select(length > 0))')
-          echo "test-paths=$TEST_PATHS" >> $GITHUB_OUTPUT
-          echo "Generated test paths: $TEST_PATHS"
-
-          # Check for .t files directly in turborepo-tests/integration/tests (not in subdirectories)
-          if find turborepo-tests/integration/tests -maxdepth 1 -name "*.t" -type f | grep -q .; then
-            echo "::error::Found .t files directly in turborepo-tests/integration/tests/ which would be excluded from the test matrix"
-            echo "::error::Test files must be placed in subdirectories under turborepo-tests/integration/tests/"
-            find turborepo-tests/integration/tests -maxdepth 1 -name "*.t" -type f
-            exit 1
-          fi
-
-  integration:
-    name: Integration (${{ matrix.os.runner }}, ${{ matrix.test-path }})
-    needs:
-      - find-changes
-      - generate-integration-test-matrix
-    runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 30
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' && needs.generate-integration-test-matrix.result == 'success' }}
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
-      SCCACHE_BUCKET: turborepo-sccache
-      SCCACHE_REGION: us-east-2
-      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-      CARGO_INCREMENTAL: 0
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      SCCACHE_IDLE_TIMEOUT: 0
-      SCCACHE_REQUEST_TIMEOUT: 30
-      SCCACHE_ERROR_LOG: error
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - runner: ubuntu-latest
-          - runner: macos-latest
-          - runner: windows-latest
-        test-path: ${{ fromJson(needs.generate-integration-test-matrix.outputs.test-paths) }}
-    steps:
-      # On Windows, set autocrlf to input so that when the repo is cloned down
-      # the fixtures retain their line endings and don't get updated to CRLF.
-      # We want this because this repo also contains the fixtures for our test cases
-      # and these fixtures have files that need stable file hashes. If we let git update
-      # the line endings on checkout, the file hashes will change.
-      # https://www.git-scm.com/book/en/v2/Customizing-Git-Git-Configuration#_core_autocrlf
-      - name: set crlf
-        if: matrix.os.runner == 'windows-latest'
-        shell: bash
-        run: git config --global core.autocrlf input
-      - uses: actions/checkout@v4
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2" # TODO: Update integration tests with changed log output in Node.js 22
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@v2
-        with:
-          macos-skip-brew-update: "true"
-        env:
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
-
-      - name: Cache Prysk
-        id: cache-prysk
-        uses: actions/cache@v4
-        with:
-          path: cli/.cram_env
-          key: prysk-venv-${{ matrix.os.runner }}
-
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.6
-
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
-        with:
-          tool: nextest
-
-      - name: Integration Tests
-        timeout-minutes: 45
-        run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
-          turbo run test --filter=turborepo-tests-integration --color --env-mode=strict -- "tests/${{ matrix.test-path }}"
-        shell: bash
-
   turbo_types_check:
     name: "@turbo/types codegen check"
     needs:
@@ -279,7 +166,7 @@ jobs:
             runner: windows-latest
         partition: [1, 2]
     runs-on: ${{ matrix.os.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
@@ -308,7 +195,23 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node: "false"
+          node-version: "18.20.2"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v2
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+
+      - name: Cache Prysk venv
+        uses: actions/cache@v4
+        with:
+          path: turborepo-tests/integration/.cram_env
+          key: prysk-venv-${{ matrix.os.runner }}
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -371,7 +274,21 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node: "false"
+          node-version: "18.20.2"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v2
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+
+      - name: Cache Prysk venv
+        uses: actions/cache@v4
+        with:
+          path: turborepo-tests/integration/.cram_env
+          key: prysk-venv-ubuntu-latest
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -649,7 +566,6 @@ jobs:
     if: always()
     needs:
       - find-changes
-      - integration
       - turbo_types_check
       - rust_test
       - rust_test_ubuntu
@@ -679,7 +595,6 @@ jobs:
             fi
           }
 
-          subjob ${{needs.integration.result}}
           subjob ${{needs.turbo_types_check.result}}
           subjob ${{needs.rust_test.result}}
           subjob ${{needs.rust_test_ubuntu.result}}
