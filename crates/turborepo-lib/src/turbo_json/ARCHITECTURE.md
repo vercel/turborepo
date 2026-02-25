@@ -43,7 +43,7 @@ Turborepo uses two different schemas for `turbo.json` files depending on their l
 - **Root `turbo.json`** (`RawRootTurboJson`): Located at the repository root
 
   - Can define global configuration options (`globalEnv`, `globalDependencies`, `globalPassThroughEnv`)
-  - Can set repository-wide settings (`remoteCache`, `ui`, `daemon`, `envMode`, etc.)
+  - Can set repository-wide settings (`remoteCache`, `ui`, `daemon` (deprecated), `envMode`, etc.)
   - Cannot use `extends` field
 
 - **Package `turbo.json`** (`RawPackageTurboJson`): Located in workspace packages

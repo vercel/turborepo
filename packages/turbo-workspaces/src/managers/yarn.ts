@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import { ConvertError } from "../errors";
-import { updateDependencies } from "../updateDependencies";
+import { updateDependencies } from "../update-dependencies";
 import type {
   DetectArgs,
   ReadArgs,
@@ -138,9 +138,9 @@ async function create(args: CreateArgs): Promise<void> {
 
     // workspace dependencies
     logger.workspaceHeader();
-    project.workspaceData.workspaces.forEach((workspace) => {
+    for (const workspace of project.workspaceData.workspaces) {
       updateDependencies({ workspace, project, to, logger, options });
-    });
+    }
   } else if (!options?.dry) {
     fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
   }
@@ -237,22 +237,26 @@ async function convertLock(args: ConvertArgs): Promise<void> {
 
   // handle moving lockfile from `packageManager` to yarn
   switch (project.packageManager) {
-    case "pnpm":
+    case "pnpm": {
       // can't convert from pnpm to yarn - just remove the lock
       removeLockFile({ project, options });
       break;
-    case "bun":
+    }
+    case "bun": {
       // convert from bun lockfile to yarn
       logLockConversionStep();
       await bunLockToYarnLock({ project, options });
       break;
-    case "npm":
+    }
+    case "npm": {
       // can't convert from npm to yarn - just remove the lock
       removeLockFile({ project, options });
       break;
-    case "yarn":
+    }
+    case "yarn": {
       // we're already using yarn, so we don't need to convert
       break;
+    }
   }
 }
 

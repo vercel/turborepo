@@ -59,4 +59,6 @@ pub enum Error {
     MicroFrontends(#[from] turborepo_microfrontends::Error),
     #[error("Microfrontends proxy error: {0}")]
     Proxy(String),
+    #[error(transparent)]
+    ApiClient(#[from] turborepo_api_client::Error),
 }

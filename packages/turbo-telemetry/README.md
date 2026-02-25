@@ -23,7 +23,7 @@ import pkgJson from "../package.json";
 
 const { telemetry } = await initTelemetry({
   name: pkgJson.name,
-  version: pkgJson.version,
+  version: pkgJson.version
 });
 ```
 

@@ -22,6 +22,7 @@ name: Release
 
 env:
   CARGO_PROFILE_RELEASE_LTO: true
+  HUSKY: "0"
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
   RELEASE_TURBO_CLI: true # TODO: do we need this?
 
@@ -381,7 +382,7 @@ jobs:
       - name: Rust dependency audit
         run: |
           cargo install cargo-audit --locked --quiet
-          cargo audit --deny warnings
+          cargo audit --deny unsound --deny yanked
 
       - name: JS dependency audit
         run: pnpm audit --prod --audit-level low

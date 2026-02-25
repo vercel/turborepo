@@ -8,58 +8,33 @@ pub mod global_hash;
 
 use std::{
     collections::{HashMap, HashSet},
-    sync::{Arc, Mutex},
+    sync::{Arc, RwLock},
 };
 
 pub use global_hash::*;
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
-use tracing::{Span, debug};
+use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
 };
 use turborepo_cache::CacheHitMetadata;
 // Re-export turborepo_engine::TaskNode for convenience
 pub use turborepo_engine::TaskNode;
-use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap};
+use turborepo_env::{
+    BUILTIN_PASS_THROUGH_ENV, BySource, CompiledWildcards, DetailedMap, EnvironmentVariableMap,
+};
 use turborepo_frameworks::{Slug as FrameworkSlug, infer_framework};
 use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
 use turborepo_repository::package_graph::{PackageInfo, PackageName};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
-use turborepo_telemetry::events::{
-    EventBuilder, generic::GenericEventBuilder, task::PackageTaskEventBuilder,
-};
+use turborepo_telemetry::events::{generic::GenericEventBuilder, task::PackageTaskEventBuilder};
 use turborepo_types::{
     EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
     TaskDefinitionHashInfo, TaskInputs,
 };
-
-/// Trait for daemon client operations needed for file hashing.
-pub trait DaemonFileHasher: Clone + Send {
-    /// Get file hashes for a package path with the given inputs
-    fn get_file_hashes(
-        &mut self,
-        package_path: &AnchoredSystemPath,
-        inputs: &TaskInputs,
-    ) -> impl std::future::Future<
-        Output = Result<HashMap<String, String>, turborepo_daemon::DaemonError>,
-    > + Send;
-}
-
-// Implement DaemonFileHasher for the actual daemon client
-impl DaemonFileHasher for turborepo_daemon::DaemonClient<turborepo_daemon::DaemonConnector> {
-    async fn get_file_hashes(
-        &mut self,
-        package_path: &AnchoredSystemPath,
-        inputs: &TaskInputs,
-    ) -> Result<HashMap<String, String>, turborepo_daemon::DaemonError> {
-        let response =
-            turborepo_daemon::DaemonClient::get_file_hashes(self, package_path, inputs).await?;
-        Ok(response.file_hashes)
-    }
-}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -97,7 +72,7 @@ pub enum Error {
 #[derive(Debug, Default)]
 pub struct PackageInputsHashes {
     hashes: HashMap<TaskId<'static>, String>,
-    expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
+    expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,
 }
 
 impl PackageInputsHashes {
@@ -107,23 +82,20 @@ impl PackageInputsHashes {
         task_definitions,
         repo_root,
         scm,
-        telemetry,
-        daemon,
+        _telemetry,
         pre_built_index
     ))]
-    pub fn calculate_file_hashes<'a, T, D>(
+    pub fn calculate_file_hashes<'a, T>(
         scm: &SCM,
-        all_tasks: impl ParallelIterator<Item = &'a TaskNode>,
+        all_tasks: impl Iterator<Item = &'a TaskNode>,
         workspaces: HashMap<&PackageName, &PackageInfo>,
         task_definitions: &HashMap<TaskId<'static>, T>,
         repo_root: &AbsoluteSystemPath,
-        telemetry: &GenericEventBuilder,
-        daemon: &Option<D>,
+        _telemetry: &GenericEventBuilder,
         pre_built_index: Option<&RepoGitIndex>,
     ) -> Result<PackageInputsHashes, Error>
     where
         T: TaskDefinitionHashInfo + Sync,
-        D: DaemonFileHasher + Send + Sync,
     {
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
@@ -137,136 +109,110 @@ impl PackageInputsHashes {
             }
         };
 
-        let span = Span::current();
-        let (hashes, expanded_hashes): (HashMap<_, _>, HashMap<_, _>) = all_tasks
-            .filter_map(|task| {
-                let span = tracing::info_span!(parent: &span, "calculate_file_hash", ?task);
-                let _enter = span.enter();
-                let TaskNode::Task(task_id) = task else {
-                    return None;
-                };
+        // Phase 1: Collect task metadata and group by (package_path, inputs) for dedup.
+        // Multiple tasks in the same package with identical inputs produce the same
+        // file hashes — no need to globwalk and hash the same files repeatedly.
+        struct TaskInfo<'b> {
+            task_id: TaskId<'static>,
+            package_path: &'b AnchoredSystemPath,
+            inputs: &'b TaskInputs,
+        }
 
-                let task_definition = match task_definitions
-                    .get(task_id)
-                    .ok_or_else(|| Error::MissingPipelineEntry(task_id.clone()))
-                {
-                    Ok(def) => def,
-                    Err(err) => return Some(Err(err)),
-                };
-                let package_task_event =
-                    PackageTaskEventBuilder::new(task_id.package(), task_id.task())
-                        .with_parent(telemetry);
+        let mut task_infos = Vec::new();
+        for task in all_tasks {
+            let TaskNode::Task(task_id) = task else {
+                continue;
+            };
+            let task_definition = task_definitions
+                .get(task_id)
+                .ok_or_else(|| Error::MissingPipelineEntry(task_id.clone()))?;
+            let workspace_name = task_id.to_workspace_name();
+            let pkg = workspaces
+                .get(&workspace_name)
+                .ok_or_else(|| Error::MissingPackageJson(workspace_name.to_string()))?;
+            let package_path = pkg
+                .package_json_path
+                .parent()
+                .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
+            let inputs = task_definition.inputs();
+            task_infos.push(TaskInfo {
+                task_id: task_id.clone(),
+                package_path,
+                inputs,
+            });
+        }
 
-                package_task_event.track_scm_mode(if scm.is_manual() { "manual" } else { "git" });
-                let workspace_name = task_id.to_workspace_name();
+        // Build dedup key: (package_path_str, globs, default)
+        type HashKey = (AnchoredSystemPathBuf, Vec<String>, bool);
+        let mut unique_keys: Vec<HashKey> = Vec::new();
+        let mut key_indices: HashMap<HashKey, usize> = HashMap::new();
+        let mut task_key_map: Vec<usize> = Vec::with_capacity(task_infos.len());
 
-                let pkg = match workspaces
-                    .get(&workspace_name)
-                    .ok_or_else(|| Error::MissingPackageJson(workspace_name.to_string()))
-                {
-                    Ok(pkg) => pkg,
-                    Err(err) => return Some(Err(err)),
-                };
+        for info in &task_infos {
+            let key: HashKey = (
+                info.package_path.to_owned(),
+                info.inputs.globs.clone(),
+                info.inputs.default,
+            );
+            let idx = match key_indices.get(&key) {
+                Some(&idx) => idx,
+                None => {
+                    let idx = unique_keys.len();
+                    key_indices.insert(key.clone(), idx);
+                    unique_keys.push(key);
+                    idx
+                }
+            };
+            task_key_map.push(idx);
+        }
 
-                let package_path = pkg
-                    .package_json_path
-                    .parent()
-                    .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
+        debug!(
+            total_tasks = task_infos.len(),
+            unique_hash_keys = unique_keys.len(),
+            "file hash deduplication"
+        );
 
-                let scm_telemetry = package_task_event.child();
-                let inputs = task_definition.inputs();
-
-                // Try hashing with the daemon, if we have a connection. If we don't, or if we
-                // timeout or get an error, fallback to local hashing
-                let hash_object = if cfg!(feature = "daemon-file-hashing") {
-                    let handle = tokio::runtime::Handle::current();
-                    let mut daemon = daemon.clone();
-
-                    daemon
-                        .as_mut()
-                        .and_then(|daemon| {
-                            let handle = handle.clone();
-                            // We need an async block here because the timeout must be created with
-                            // an active tokio context. Constructing it
-                            // directly in the rayon thread doesn't
-                            // provide one and will crash at runtime.
-                            handle
-                                .block_on(async {
-                                    tokio::time::timeout(
-                                        std::time::Duration::from_millis(100),
-                                        daemon.get_file_hashes(package_path, inputs),
-                                    )
-                                    .await
-                                })
-                                .inspect_err(|_| {
-                                    tracing::debug!(
-                                        "daemon file hashing timed out for {}",
-                                        package_path
-                                    );
-                                })
-                                .ok() // If we timed out, we don't need to
-                            // error,
-                            // just return None so we can move on to
-                            // local
-                        })
-                        .and_then(|result| {
-                            match result {
-                                Ok(file_hashes) => Some(
-                                    file_hashes
-                                        .into_iter()
-                                        .map(|(path, hash)| {
-                                            (
-                                                turbopath::RelativeUnixPathBuf::new(path)
-                                                    .expect("daemon returns relative unix paths"),
-                                                hash,
-                                            )
-                                        })
-                                        .collect::<HashMap<_, _>>(),
-                                ),
-                                Err(e) => {
-                                    // Daemon could've failed for various reasons. We can still try
-                                    // local hashing.
-                                    tracing::debug!(
-                                        "daemon file hashing failed for {}: {}",
-                                        package_path,
-                                        e
-                                    );
-                                    None
-                                }
-                            }
-                        })
-                } else {
-                    None
-                };
-
-                let hash_object = match hash_object {
-                    Some(hash_object) => hash_object,
-                    None => {
-                        let local_hash_result = scm.get_package_file_hashes(
-                            repo_root,
-                            package_path,
-                            &inputs.globs,
-                            inputs.default,
-                            Some(scm_telemetry),
-                            repo_index,
-                        );
-                        match local_hash_result {
-                            Ok(hash_object) => hash_object,
-                            Err(err) => return Some(Err(err.into())),
-                        }
-                    }
-                };
-
-                let file_hashes = FileHashes(hash_object);
-                // Use reference-based hashing to avoid cloning the entire HashMap.
-                let hash = (&file_hashes).hash();
-
-                Some(Ok((
-                    (task_id.clone(), hash),
-                    (task_id.clone(), file_hashes),
-                )))
+        // Phase 2: Compute file hashes in parallel across unique keys.
+        // EMFILE (too many open files) errors are handled via retry-with-backoff
+        // in the globwalk and hash_objects layers, so we can safely parallelize
+        // all keys on rayon without worrying about fd exhaustion.
+        let file_hash_results: Vec<Result<Arc<FileHashes>, Error>> = unique_keys
+            .into_par_iter()
+            .map(|(package_path, globs, default)| {
+                scm.get_package_file_hashes(
+                    repo_root,
+                    &package_path,
+                    &globs,
+                    default,
+                    None,
+                    repo_index,
+                )
+                .map(|h| {
+                    let mut v: Vec<_> = h.into_iter().map(|(k, v)| (k, String::from(v))).collect();
+                    v.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+                    Arc::new(FileHashes(v))
+                })
+                .map_err(Error::from)
             })
-            .collect::<Result<_, _>>()?;
+            .collect();
+
+        let file_hash_results: Vec<Arc<FileHashes>> = file_hash_results
+            .into_iter()
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Phase 3: Distribute shared results to individual tasks.
+        let mut hashes = HashMap::with_capacity(task_infos.len());
+        let mut expanded_hashes = HashMap::with_capacity(task_infos.len());
+
+        for (i, info) in task_infos.into_iter().enumerate() {
+            let key_idx = task_key_map[i];
+            let file_hashes = &file_hash_results[key_idx];
+
+            let hash = file_hashes.as_ref().hash();
+
+            hashes.insert(info.task_id.clone(), hash);
+            expanded_hashes.insert(info.task_id, Arc::clone(file_hashes));
+        }
 
         Ok(PackageInputsHashes {
             hashes,
@@ -277,14 +223,14 @@ impl PackageInputsHashes {
 
 #[derive(Default, Debug, Clone)]
 pub struct TaskHashTracker {
-    state: Arc<Mutex<TaskHashTrackerState>>,
+    state: Arc<RwLock<TaskHashTrackerState>>,
 }
 
 #[derive(Default, Debug, Serialize)]
 pub struct TaskHashTrackerState {
     #[serde(skip)]
     package_task_env_vars: HashMap<TaskId<'static>, DetailedMap>,
-    package_task_hashes: HashMap<TaskId<'static>, String>,
+    package_task_hashes: HashMap<TaskId<'static>, Arc<str>>,
     #[serde(skip)]
     package_task_framework: HashMap<TaskId<'static>, FrameworkSlug>,
     #[serde(skip)]
@@ -292,7 +238,7 @@ pub struct TaskHashTrackerState {
     #[serde(skip)]
     package_task_cache: HashMap<TaskId<'static>, CacheHitMetadata>,
     #[serde(skip)]
-    package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, FileHashes>,
+    package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,
 }
 
 /// Caches package-inputs hashes, and package-task hashes.
@@ -304,6 +250,8 @@ pub struct TaskHasher<'a, R> {
     global_env_patterns: &'a [String],
     global_hash: &'a str,
     task_hash_tracker: TaskHashTracker,
+    compiled_builtins: CompiledWildcards,
+    external_deps_hash_cache: HashMap<String, String>,
 }
 
 impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
@@ -319,6 +267,13 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             hashes,
             expanded_hashes,
         } = package_inputs_hashes;
+
+        let compiled_builtins = CompiledWildcards::compile(BUILTIN_PASS_THROUGH_ENV)
+            .unwrap_or_else(|_| {
+                let empty: &[&str] = &[];
+                CompiledWildcards::compile(empty).unwrap()
+            });
+
         Self {
             hashes,
             run_opts,
@@ -327,7 +282,29 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             global_env,
             global_env_patterns,
             task_hash_tracker: TaskHashTracker::new(expanded_hashes),
+            compiled_builtins,
+            external_deps_hash_cache: HashMap::new(),
         }
+    }
+
+    /// Pre-compute and cache external dependency hashes for all packages.
+    /// Many tasks share the same package, so this avoids re-sorting
+    /// transitive dependencies for every task.
+    pub fn precompute_external_deps_hashes<'b>(
+        &mut self,
+        workspaces: impl Iterator<Item = (&'b PackageName, &'b PackageInfo)>,
+    ) {
+        if self.run_opts.single_package() {
+            return;
+        }
+        let ws: Vec<_> = workspaces.collect();
+        self.external_deps_hash_cache = ws
+            .par_iter()
+            .map(|(name, info)| {
+                let hash = get_external_deps_hash(&info.transitive_dependencies);
+                (name.as_str().to_owned(), hash)
+            })
+            .collect();
     }
 
     #[tracing::instrument(skip(self, task_definition, task_env_mode, workspace, dependency_set))]
@@ -337,7 +314,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         task_definition: &T,
         task_env_mode: EnvMode,
         workspace: &PackageInfo,
-        dependency_set: HashSet<&TaskNode>,
+        dependency_set: &[&TaskNode],
         telemetry: PackageTaskEventBuilder,
     ) -> Result<String, Error> {
         let do_framework_inference = self.run_opts.framework_inference();
@@ -404,19 +381,26 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 .from_wildcards(task_definition.env())?;
 
             DetailedMap {
-                all: all_env_var_map.clone(),
                 by_source: BySource {
-                    explicit: all_env_var_map,
+                    explicit: all_env_var_map.clone(),
                     matching: EnvironmentVariableMap::default(),
                 },
+                all: all_env_var_map,
             }
         };
 
         let hashable_env_pairs = env_vars.all.to_hashable();
         let outputs = task_definition.hashable_outputs(task_id);
         let task_dependency_hashes = self.calculate_dependency_hashes(dependency_set)?;
-        let external_deps_hash =
-            is_monorepo.then(|| get_external_deps_hash(&workspace.transitive_dependencies));
+        let ext_hash_fallback;
+        let external_deps_hash: Option<&str> = if !is_monorepo {
+            None
+        } else if let Some(cached) = self.external_deps_hash_cache.get(task_id.package()) {
+            Some(cached.as_str())
+        } else {
+            ext_hash_fallback = get_external_deps_hash(&workspace.transitive_dependencies);
+            Some(ext_hash_fallback.as_str())
+        };
 
         if !hashable_env_pairs.is_empty() {
             debug!(
@@ -450,10 +434,11 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
 
         let task_hash = task_hashable.calculate_task_hash();
 
+        let task_hash_arc: Arc<str> = Arc::from(task_hash.as_str());
         self.task_hash_tracker.insert_hash(
             task_id.clone(),
             env_vars,
-            task_hash.clone(),
+            task_hash_arc,
             framework_slug,
         );
 
@@ -471,32 +456,38 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     /// returns: Result<Vec<String, Global>, Error>
     fn calculate_dependency_hashes(
         &self,
-        dependency_set: HashSet<&TaskNode>,
-    ) -> Result<Vec<String>, Error> {
-        let mut dependency_hash_set = HashSet::new();
+        dependency_set: &[&TaskNode],
+    ) -> Result<Vec<Arc<str>>, Error> {
+        let state = self
+            .task_hash_tracker
+            .state
+            .read()
+            .expect("hash tracker rwlock poisoned");
 
+        let mut dependency_hash_list: Vec<Arc<str>> = Vec::with_capacity(dependency_set.len());
         for dependency_task in dependency_set {
             let TaskNode::Task(dependency_task_id) = dependency_task else {
                 continue;
             };
 
-            let dependency_hash = self
-                .task_hash_tracker
-                .hash(dependency_task_id)
+            let dependency_hash = state
+                .package_task_hashes
+                .get(dependency_task_id)
                 .ok_or_else(|| Error::MissingDependencyTaskHash(dependency_task.to_string()))?;
-            dependency_hash_set.insert(dependency_hash.clone());
+            dependency_hash_list.push(Arc::clone(dependency_hash));
         }
+        drop(state);
 
-        let mut dependency_hash_list = dependency_hash_set.into_iter().collect::<Vec<_>>();
         dependency_hash_list.sort_unstable();
+        dependency_hash_list.dedup();
 
         Ok(dependency_hash_list)
     }
 
     pub fn into_task_hash_tracker_state(self) -> TaskHashTrackerState {
-        let mutex = Arc::into_inner(self.task_hash_tracker.state)
+        let rwlock = Arc::into_inner(self.task_hash_tracker.state)
             .expect("multiple references to tracker state still exist");
-        mutex.into_inner().unwrap()
+        rwlock.into_inner().unwrap()
     }
 
     pub fn task_hash_tracker(&self) -> TaskHashTracker {
@@ -511,71 +502,8 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     ) -> Result<EnvironmentVariableMap, Error> {
         match task_env_mode {
             EnvMode::Strict => {
-                let mut full_task_env = EnvironmentVariableMap::default();
-                let builtin_pass_through = &[
-                    "HOME",
-                    "USER",
-                    "TZ",
-                    "LANG",
-                    "SHELL",
-                    "PWD",
-                    "XDG_RUNTIME_DIR",
-                    "XAUTHORITY",
-                    "DBUS_SESSION_BUS_ADDRESS",
-                    "CI",
-                    "NODE_OPTIONS",
-                    "COREPACK_HOME",
-                    "LD_LIBRARY_PATH",
-                    "DYLD_FALLBACK_LIBRARY_PATH",
-                    "LIBPATH",
-                    "LD_PRELOAD",
-                    "DYLD_INSERT_LIBRARIES",
-                    "COLORTERM",
-                    "TERM",
-                    "TERM_PROGRAM",
-                    "DISPLAY",
-                    "TMP",
-                    "TEMP",
-                    // Windows
-                    "WINDIR",
-                    "ProgramFiles",
-                    "ProgramFiles(x86)",
-                    // VSCode IDE - https://github.com/microsoft/vscode-js-debug/blob/5b0f41dbe845d693a541c1fae30cec04c878216f/src/targets/node/nodeLauncherBase.ts#L320
-                    "VSCODE_*",
-                    "ELECTRON_RUN_AS_NODE",
-                    // Docker - https://docs.docker.com/engine/reference/commandline/cli/#environment-variables
-                    "DOCKER_*",
-                    "BUILDKIT_*",
-                    // Docker compose - https://docs.docker.com/compose/environment-variables/envvars/
-                    "COMPOSE_*",
-                    // Jetbrains IDE
-                    "JB_IDE_*",
-                    "JB_INTERPRETER",
-                    "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
-                    // Vercel specific
-                    "VERCEL",
-                    "VERCEL_*",
-                    "NEXT_*",
-                    "USE_OUTPUT_FOR_EDGE_FUNCTIONS",
-                    "NOW_BUILDER",
-                    "VC_MICROFRONTENDS_CONFIG_FILE_NAME",
-                    // GitHub Actions - https://docs.github.com/en/actions/reference/workflows-and-actions/variables
-                    "GITHUB_*",
-                    "RUNNER_*",
-                    // Command Prompt casing of env variables
-                    "APPDATA",
-                    "PATH",
-                    "PROGRAMDATA",
-                    "SYSTEMROOT",
-                    "SYSTEMDRIVE",
-                    "USERPROFILE",
-                    "HOMEDRIVE",
-                    "HOMEPATH",
-                    "PNPM_HOME",
-                    "NPM_CONFIG_STORE_DIR",
-                ];
-                let pass_through_env_vars = self.env_at_execution_start.pass_through_env(
-                    builtin_pass_through,
+                let pass_through_env_vars = self.env_at_execution_start.pass_through_env_compiled(
+                    &self.compiled_builtins,
                     &self.global_env,
                     task_definition.pass_through_env().unwrap_or_default(),
                 )?;
@@ -585,6 +513,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                     .env_vars(task_id)
                     .ok_or_else(|| Error::MissingEnvVars(task_id.clone().into_owned()))?;
 
+                let mut full_task_env = EnvironmentVariableMap::default();
                 full_task_env.union(&pass_through_env_vars);
                 full_task_env.union(&tracker_env.all);
 
@@ -633,7 +562,7 @@ pub fn get_internal_deps_hash(
         }
     };
 
-    let file_hashes = package_dirs
+    let merged = package_dirs
         .into_par_iter()
         .map(|package_dir| {
             scm.get_package_file_hashes::<&str>(root, package_dir, &[], false, None, repo_index)
@@ -648,21 +577,26 @@ pub fn get_internal_deps_hash(
             },
         )?;
 
+    let mut file_hashes: Vec<_> = merged
+        .into_iter()
+        .map(|(k, v)| (k, String::from(v)))
+        .collect();
+    file_hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
     Ok(FileHashes(file_hashes).hash())
 }
 
 impl TaskHashTracker {
-    pub fn new(input_expanded_hashes: HashMap<TaskId<'static>, FileHashes>) -> Self {
+    pub fn new(input_expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>) -> Self {
         Self {
-            state: Arc::new(Mutex::new(TaskHashTrackerState {
+            state: Arc::new(RwLock::new(TaskHashTrackerState {
                 package_task_inputs_expanded_hashes: input_expanded_hashes,
                 ..Default::default()
             })),
         }
     }
 
-    pub fn hash(&self, task_id: &TaskId) -> Option<String> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+    pub fn hash(&self, task_id: &TaskId) -> Option<Arc<str>> {
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_hashes.get(task_id).cloned()
     }
 
@@ -670,14 +604,15 @@ impl TaskHashTracker {
         &self,
         task_id: TaskId<'static>,
         env_vars: DetailedMap,
-        hash: String,
+        hash: Arc<str>,
         framework_slug: Option<FrameworkSlug>,
     ) {
-        let mut state = self.state.lock().expect("hash tracker mutex poisoned");
+        let mut state = self.state.write().expect("hash tracker rwlock poisoned");
         state
             .package_task_env_vars
             .insert(task_id.clone(), env_vars);
         if let Some(framework) = framework_slug {
+            // Only pay for one extra clone when framework inference is active.
             state
                 .package_task_framework
                 .insert(task_id.clone(), framework);
@@ -686,17 +621,17 @@ impl TaskHashTracker {
     }
 
     pub fn env_vars(&self, task_id: &TaskId) -> Option<DetailedMap> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_env_vars.get(task_id).cloned()
     }
 
     pub fn framework(&self, task_id: &TaskId) -> Option<FrameworkSlug> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_framework.get(task_id).cloned()
     }
 
     pub fn expanded_outputs(&self, task_id: &TaskId) -> Option<Vec<AnchoredSystemPathBuf>> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_outputs.get(task_id).cloned()
     }
 
@@ -705,22 +640,22 @@ impl TaskHashTracker {
         task_id: TaskId<'static>,
         outputs: Vec<AnchoredSystemPathBuf>,
     ) {
-        let mut state = self.state.lock().expect("hash tracker mutex poisoned");
+        let mut state = self.state.write().expect("hash tracker rwlock poisoned");
         state.package_task_outputs.insert(task_id, outputs);
     }
 
     pub fn cache_status(&self, task_id: &TaskId) -> Option<CacheHitMetadata> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state.package_task_cache.get(task_id).copied()
     }
 
     pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheHitMetadata) {
-        let mut state = self.state.lock().expect("hash tracker mutex poisoned");
+        let mut state = self.state.write().expect("hash tracker rwlock poisoned");
         state.package_task_cache.insert(task_id, cache_status);
     }
 
-    pub fn get_expanded_inputs(&self, task_id: &TaskId) -> Option<FileHashes> {
-        let state = self.state.lock().expect("hash tracker mutex poisoned");
+    pub fn get_expanded_inputs(&self, task_id: &TaskId) -> Option<Arc<FileHashes>> {
+        let state = self.state.read().expect("hash tracker rwlock poisoned");
         state
             .package_task_inputs_expanded_hashes
             .get(task_id)
@@ -732,7 +667,7 @@ impl TaskHashTracker {
 // turborepo-run-summary. The trait is defined in turborepo-types to enable
 // proper dependency direction (task-hash doesn't depend on run-summary).
 impl HashTrackerInfo for TaskHashTracker {
-    fn hash(&self, task_id: &TaskId) -> Option<String> {
+    fn hash(&self, task_id: &TaskId) -> Option<Arc<str>> {
         TaskHashTracker::hash(self, task_id)
     }
 
@@ -765,11 +700,8 @@ impl HashTrackerInfo for TaskHashTracker {
         TaskHashTracker::framework(self, task_id).map(|f| f.to_string())
     }
 
-    fn expanded_inputs(
-        &self,
-        task_id: &TaskId,
-    ) -> Option<std::collections::HashMap<RelativeUnixPathBuf, String>> {
-        TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| file_hashes.0)
+    fn expanded_inputs(&self, task_id: &TaskId) -> Option<Vec<(RelativeUnixPathBuf, String)>> {
+        TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| file_hashes.0.clone())
     }
 }
 
@@ -801,5 +733,304 @@ mod test {
         fn assert_sync<T: Sync>() {}
         assert_send::<TaskHashTracker>();
         assert_sync::<TaskHashTracker>();
+    }
+
+    #[test]
+    fn test_hash_tracker_concurrent_reads() {
+        let tracker = TaskHashTracker::new(HashMap::new());
+        let task_id: TaskId<'static> = TaskId::new("pkg", "build");
+        tracker.insert_hash(
+            task_id.clone(),
+            DetailedMap::default(),
+            Arc::from("abc123"),
+            None,
+        );
+
+        // Multiple concurrent reads should not deadlock or panic with RwLock
+        std::thread::scope(|s| {
+            for _ in 0..8 {
+                let tracker = &tracker;
+                let task_id = &task_id;
+                s.spawn(move || {
+                    for _ in 0..100 {
+                        let h = tracker.hash(task_id);
+                        assert_eq!(h.as_deref(), Some("abc123"));
+                    }
+                });
+            }
+        });
+    }
+
+    #[test]
+    fn test_hash_tracker_concurrent_read_write() {
+        let tracker = TaskHashTracker::new(HashMap::new());
+
+        // Pre-create owned task IDs to avoid lifetime issues with TaskId borrows
+        let task_ids: Vec<TaskId<'static>> = (0..50)
+            .map(|i| TaskId::new("pkg", &format!("task-{i}")).into_owned())
+            .collect();
+
+        // One writer, many readers — verifies RwLock allows concurrent reads
+        // while writes are exclusive, without deadlock.
+        std::thread::scope(|s| {
+            let tracker = &tracker;
+            let task_ids = &task_ids;
+
+            s.spawn(move || {
+                for (i, task_id) in task_ids.iter().enumerate() {
+                    tracker.insert_hash(
+                        task_id.clone(),
+                        DetailedMap::default(),
+                        Arc::from(format!("hash-{i}").as_str()),
+                        None,
+                    );
+                }
+            });
+
+            for _ in 0..4 {
+                s.spawn(move || {
+                    for task_id in task_ids {
+                        // May or may not find the hash depending on timing — that's fine,
+                        // we're testing for absence of panics/deadlocks.
+                        let _ = tracker.hash(task_id);
+                        let _ = tracker.env_vars(task_id);
+                        let _ = tracker.cache_status(task_id);
+                    }
+                });
+            }
+        });
+    }
+
+    #[test]
+    fn test_expanded_inputs_returns_cloned_data() {
+        use turborepo_types::HashTrackerInfo;
+
+        let task_id: TaskId<'static> = TaskId::new("pkg", "build");
+        // Sorted by key (the invariant FileHashes requires)
+        let file_hashes = FileHashes(vec![
+            (
+                RelativeUnixPathBuf::new("package.json").unwrap(),
+                "def456".to_string(),
+            ),
+            (
+                RelativeUnixPathBuf::new("src/index.ts").unwrap(),
+                "abc123".to_string(),
+            ),
+            (
+                RelativeUnixPathBuf::new("src/utils/helper.ts").unwrap(),
+                "ghi789".to_string(),
+            ),
+        ]);
+
+        let mut input_hashes = HashMap::new();
+        input_hashes.insert(task_id.clone(), Arc::new(file_hashes));
+        let tracker = TaskHashTracker::new(input_hashes);
+
+        // Via concrete method
+        let arc_result = tracker.get_expanded_inputs(&task_id);
+        assert!(arc_result.is_some());
+        let arc_hashes = arc_result.unwrap();
+        assert_eq!(arc_hashes.0.len(), 3);
+        assert_eq!(arc_hashes.0[1].0.as_str(), "src/index.ts");
+        assert_eq!(arc_hashes.0[1].1, "abc123");
+
+        // Via trait method — returns sorted Vec
+        let trait_result: Option<Vec<(RelativeUnixPathBuf, String)>> =
+            HashTrackerInfo::expanded_inputs(&tracker, &task_id);
+        assert!(trait_result.is_some());
+        let trait_hashes = trait_result.unwrap();
+        assert_eq!(trait_hashes.len(), 3);
+        assert_eq!(trait_hashes[0].0.as_str(), "package.json");
+        assert_eq!(trait_hashes[0].1, "def456");
+        // Must be sorted by key
+        assert!(
+            trait_hashes.windows(2).all(|w| w[0].0 < w[1].0),
+            "expanded_inputs should return sorted keys"
+        );
+
+        // Missing task returns None
+        let missing = TaskId::new("other", "test");
+        assert!(tracker.get_expanded_inputs(&missing).is_none());
+        assert!(HashTrackerInfo::expanded_inputs(&tracker, &missing).is_none());
+    }
+
+    // Regression: expanded_inputs data must contain all entries and be sorted
+    // by key. This captures the invariant that must hold when switching the
+    // return type from BTreeMap to sorted Vec.
+    #[test]
+    fn test_expanded_inputs_sorted_and_complete() {
+        use turborepo_types::HashTrackerInfo;
+
+        let task_id: TaskId<'static> = TaskId::new("pkg", "build");
+        // Sorted by key (FileHashes invariant)
+        let file_hashes = FileHashes(vec![
+            (
+                RelativeUnixPathBuf::new("a/first.ts").unwrap(),
+                "aaa".to_string(),
+            ),
+            (
+                RelativeUnixPathBuf::new("a/second.ts").unwrap(),
+                "bbb".to_string(),
+            ),
+            (
+                RelativeUnixPathBuf::new("m/middle.ts").unwrap(),
+                "mmm".to_string(),
+            ),
+            (
+                RelativeUnixPathBuf::new("z/last.ts").unwrap(),
+                "zzz".to_string(),
+            ),
+        ]);
+
+        let mut input_hashes = HashMap::new();
+        input_hashes.insert(task_id.clone(), Arc::new(file_hashes));
+        let tracker = TaskHashTracker::new(input_hashes);
+
+        let result = HashTrackerInfo::expanded_inputs(&tracker, &task_id).unwrap();
+        assert_eq!(result.len(), 4, "all entries must be present");
+
+        // Entries must be sorted by key
+        assert!(
+            result.windows(2).all(|w| w[0].0 < w[1].0),
+            "expanded_inputs must return keys in sorted order"
+        );
+
+        // Verify specific values
+        assert_eq!(result[0].0.as_str(), "a/first.ts");
+        assert_eq!(result[0].1, "aaa");
+        assert_eq!(result[3].0.as_str(), "z/last.ts");
+        assert_eq!(result[3].1, "zzz");
+    }
+
+    #[test]
+    fn test_external_deps_hash_deterministic() {
+        use turborepo_lockfiles::Package;
+
+        let deps: HashSet<Package> = vec![
+            Package {
+                key: "react".to_string(),
+                version: "18.0.0".to_string(),
+            },
+            Package {
+                key: "lodash".to_string(),
+                version: "4.17.21".to_string(),
+            },
+            Package {
+                key: "typescript".to_string(),
+                version: "5.0.0".to_string(),
+            },
+        ]
+        .into_iter()
+        .collect();
+
+        let hash1 = get_external_deps_hash(&Some(deps.clone()));
+        let hash2 = get_external_deps_hash(&Some(deps));
+        assert_eq!(hash1, hash2, "same deps should produce same hash");
+        assert!(!hash1.is_empty(), "hash should be non-empty");
+    }
+
+    #[test]
+    fn test_external_deps_hash_empty() {
+        let hash_none = get_external_deps_hash(&None);
+        assert_eq!(hash_none, "", "None deps should produce empty hash");
+
+        let hash_empty = get_external_deps_hash(&Some(HashSet::new()));
+        assert!(
+            !hash_empty.is_empty(),
+            "empty set should produce non-empty hash"
+        );
+    }
+
+    #[test]
+    fn test_external_deps_hash_order_independent() {
+        use turborepo_lockfiles::Package;
+
+        let deps1: HashSet<Package> = vec![
+            Package {
+                key: "a".to_string(),
+                version: "1.0".to_string(),
+            },
+            Package {
+                key: "b".to_string(),
+                version: "2.0".to_string(),
+            },
+        ]
+        .into_iter()
+        .collect();
+
+        let deps2: HashSet<Package> = vec![
+            Package {
+                key: "b".to_string(),
+                version: "2.0".to_string(),
+            },
+            Package {
+                key: "a".to_string(),
+                version: "1.0".to_string(),
+            },
+        ]
+        .into_iter()
+        .collect();
+
+        let hash1 = get_external_deps_hash(&Some(deps1));
+        let hash2 = get_external_deps_hash(&Some(deps2));
+        assert_eq!(
+            hash1, hash2,
+            "hash should be order-independent since we sort"
+        );
+    }
+
+    #[test]
+    fn test_tracker_pre_sized_hashmaps() {
+        let mut input_hashes = HashMap::new();
+        for i in 0..100 {
+            let task_id = TaskId::new("pkg", &format!("task-{i}")).into_owned();
+            input_hashes.insert(task_id, Arc::new(FileHashes(Vec::new())));
+        }
+        let tracker = TaskHashTracker::new(input_hashes);
+
+        // Insert hashes and verify pre-sizing didn't break anything
+        for i in 0..100 {
+            let task_id = TaskId::new("pkg", &format!("task-{i}")).into_owned();
+            tracker.insert_hash(
+                task_id.clone(),
+                DetailedMap::default(),
+                Arc::from(format!("hash-{i}").as_str()),
+                None,
+            );
+            assert_eq!(
+                tracker.hash(&task_id).as_deref(),
+                Some(format!("hash-{i}").as_str())
+            );
+        }
+    }
+
+    // Validates that sort+dedup produces the same result as the previous
+    // HashSet→Vec→sort approach for dependency hash deduplication.
+    #[test]
+    fn test_sort_dedup_matches_hashset_behavior() {
+        let inputs: Vec<Vec<&str>> = vec![
+            vec!["abc", "def", "abc", "ghi", "def"],
+            vec!["zzz", "aaa", "mmm"],
+            vec!["same", "same", "same"],
+            vec![],
+            vec!["only-one"],
+        ];
+
+        for input in inputs {
+            // New approach: sort + dedup
+            let mut sort_dedup: Vec<String> = input.iter().map(|s| s.to_string()).collect();
+            sort_dedup.sort_unstable();
+            sort_dedup.dedup();
+
+            // Old approach: HashSet → Vec → sort
+            let hash_set: HashSet<String> = input.iter().map(|s| s.to_string()).collect();
+            let mut hashset_sorted: Vec<String> = hash_set.into_iter().collect();
+            hashset_sorted.sort();
+
+            assert_eq!(
+                sort_dedup, hashset_sorted,
+                "sort+dedup and hashset+sort should produce identical results for: {input:?}"
+            );
+        }
     }
 }

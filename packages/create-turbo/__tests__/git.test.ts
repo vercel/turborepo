@@ -56,12 +56,12 @@ describe("git", () => {
         ["git", ["commit", "-m", "Initial commit from create-turbo"]]
       ];
       expect(mockSpawnSync).toHaveBeenCalledTimes(expectedCalls.length);
-      expectedCalls.forEach(([cmd, args]) => {
+      for (const [cmd, args] of expectedCalls) {
         expect(mockSpawnSync).toHaveBeenCalledWith(cmd, args, {
           stdio: "ignore",
           cwd: root
         });
-      });
+      }
       mockSpawnSync.mockRestore();
     });
 
@@ -160,12 +160,12 @@ describe("git", () => {
       ];
 
       expect(mockSpawnSync).toHaveBeenCalledTimes(expectedCalls.length);
-      expectedCalls.forEach(([cmd, args]) => {
+      for (const [cmd, args] of expectedCalls) {
         expect(mockSpawnSync).toHaveBeenCalledWith(cmd, args, {
           stdio: "ignore",
           cwd: root
         });
-      });
+      }
       mockSpawnSync.mockRestore();
     });
 

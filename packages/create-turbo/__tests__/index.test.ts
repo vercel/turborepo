@@ -118,13 +118,13 @@ describe("create-turbo", () => {
         "- Run commands with Turborepo:"
       );
 
-      availableScripts.forEach((script) => {
+      for (const script of availableScripts) {
         expect(mockConsole.log).toHaveBeenCalledWith(
           expect.stringContaining(
             picocolors.cyan(`${packageManager} run ${script}`)
           )
         );
-      });
+      }
 
       expect(mockConsole.log).toHaveBeenCalledWith(
         "- Run a command twice to hit cache"
@@ -212,13 +212,13 @@ describe("create-turbo", () => {
         "- Run commands with Turborepo:"
       );
 
-      availableScripts.forEach((script) => {
+      for (const script of availableScripts) {
         expect(mockConsole.log).toHaveBeenCalledWith(
           expect.stringContaining(
             picocolors.cyan(`${packageManager} run ${script}`)
           )
         );
-      });
+      }
 
       expect(mockConsole.log).toHaveBeenCalledWith(
         "- Run a command twice to hit cache"

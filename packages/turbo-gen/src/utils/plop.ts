@@ -1,5 +1,5 @@
 import path from "node:path";
-import { createRequire } from "node:module";
+import { builtinModules } from "node:module";
 import fs from "fs-extra";
 import type { Project } from "@turbo/workspaces";
 import type { NodePlopAPI, PlopGenerator } from "node-plop";
@@ -131,7 +131,7 @@ export async function getCustomGenerators({
   const gensWithDetails = gens.map((g) => plop.getGenerator(g.name));
 
   const gensByWorkspace: Record<string, Array<Generator>> = {};
-  gensWithDetails.forEach((g) => {
+  for (const g of gensWithDetails) {
     const generatorDetails = g as Generator;
     const gensWorkspace = project.workspaceData.workspaces.find((w) => {
       if (generatorDetails.basePath === project.paths.root) {
@@ -155,14 +155,14 @@ export async function getCustomGenerators({
       }
       gensByWorkspace.root.push(generatorDetails);
     }
-  });
+  }
 
   const gensWithSeparators: Array<Generator | InstanceType<typeof Separator>> =
     [];
-  Object.keys(gensByWorkspace).forEach((group) => {
+  for (const group of Object.keys(gensByWorkspace)) {
     gensWithSeparators.push(new Separator(group));
     gensWithSeparators.push(...gensByWorkspace[group]);
-  });
+  }
 
   return gensWithSeparators;
 }
@@ -281,6 +281,67 @@ async function bundleConfigForLoading(configPath: string): Promise<string> {
   }
 }
 
+// Node builtins (with and without the "node:" prefix).
+const NODE_BUILTINS = new Set<string>(builtinModules);
+for (const m of builtinModules) {
+  NODE_BUILTINS.add(`node:${m}`);
+}
+
+// Resolve a bare package specifier by walking up the directory tree.
+// Inside a Bun compiled binary, createRequire().resolve() doesn't
+// walk node_modules ancestors reliably, so we manually locate the
+// package directory and read its package.json to find the entry point.
+function resolvePackage(
+  specifier: string,
+  fromDir: string
+): string | undefined {
+  if (NODE_BUILTINS.has(specifier)) {
+    return specifier;
+  }
+
+  // Extract the package name from the specifier (handles scoped packages
+  // like @foo/bar and deep imports like foo/lib/thing).
+  let packageName: string;
+  let subpath: string | undefined;
+  if (specifier.startsWith("@")) {
+    const parts = specifier.split("/");
+    packageName = parts.slice(0, 2).join("/");
+    if (parts.length > 2) subpath = parts.slice(2).join("/");
+  } else {
+    const parts = specifier.split("/");
+    packageName = parts[0];
+    if (parts.length > 1) subpath = parts.slice(1).join("/");
+  }
+
+  // Walk up directories looking for node_modules/<packageName>
+  let dir = fromDir;
+  while (true) {
+    const candidate = path.join(dir, "node_modules", packageName);
+    if (fs.existsSync(candidate)) {
+      if (subpath) {
+        return path.join(candidate, subpath);
+      }
+      // Read the package's package.json to find the correct entry point.
+      const pkgJsonPath = path.join(candidate, "package.json");
+      if (fs.existsSync(pkgJsonPath)) {
+        try {
+          const pkg = fs.readJsonSync(pkgJsonPath) as Record<string, unknown>;
+          const main = (pkg.main as string) || "index.js";
+          return path.join(candidate, main);
+        } catch {
+          return path.join(candidate, "index.js");
+        }
+      }
+      return path.join(candidate, "index.js");
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+
+  return undefined;
+}
+
 // Bun.build() plugin: when the user's config imports a bare specifier that
 // can't be resolved from disk (the project's node_modules), check if it's a
 // module the binary ships. If so, redirect to a virtual module that reads
@@ -294,7 +355,9 @@ function binaryResolvePlugin(configPath: string) {
         cb: (args: {
           path: string;
           resolveDir?: string;
-        }) => { path: string; namespace: string } | undefined
+        }) =>
+          | { path: string; namespace?: string; external?: boolean }
+          | undefined
       ) => void;
       onLoad: (
         opts: { filter: RegExp; namespace: string },
@@ -303,18 +366,24 @@ function binaryResolvePlugin(configPath: string) {
     }) {
       build.onResolve({ filter: /^[^./]/ }, (args) => {
         const resolveDir = args.resolveDir || path.dirname(configPath);
-        try {
-          const localRequire = createRequire(path.join(resolveDir, "noop.js"));
-          localRequire.resolve(args.path);
-          // Found on disk — let Bun bundle it normally
-          return undefined;
-        } catch {
-          // Not on disk — redirect to virtual namespace if the binary has it
-          if (args.path in BINARY_MODULES) {
-            return { path: args.path, namespace: "turbo-gen-builtin" };
+        const resolved = resolvePackage(args.path, resolveDir);
+        if (resolved) {
+          if (path.isAbsolute(resolved)) {
+            // Found on disk — give Bun the absolute path directly so it
+            // doesn't need to resolve the bare specifier itself (which
+            // fails inside the compiled binary).
+            return { path: resolved };
           }
-          return undefined;
+          // Node builtin (e.g. "fs", "node:path") — mark external so
+          // the require() is preserved in the bundled output.
+          return { path: resolved, external: true };
         }
+
+        // Not on disk — redirect to virtual namespace if the binary has it
+        if (args.path in BINARY_MODULES) {
+          return { path: args.path, namespace: "turbo-gen-builtin" };
+        }
+        return undefined;
       });
 
       build.onLoad(
@@ -344,7 +413,7 @@ function getWorkspaceGeneratorConfigs({ project }: { project: Project }) {
     config: string;
     root: string;
   }> = [];
-  project.workspaceData.workspaces.forEach((w) => {
+  for (const w of project.workspaceData.workspaces) {
     for (const configPath of SUPPORTED_WORKSPACE_GENERATOR_CONFIGS) {
       if (fs.existsSync(path.join(w.paths.root, configPath))) {
         workspaceGeneratorConfigs.push({
@@ -353,7 +422,7 @@ function getWorkspaceGeneratorConfigs({ project }: { project: Project }) {
         });
       }
     }
-  });
+  }
   return workspaceGeneratorConfigs;
 }
 
@@ -393,13 +462,13 @@ export async function runCustomGenerator({
   );
 
   if (results.failures.length > 0) {
-    results.failures.forEach((f) => {
+    for (const f of results.failures) {
       if (f instanceof Error) {
         logger.error(`Error - ${f.message}`);
       } else {
         logger.error(`Error - ${f.error}. Unable to ${f.type} to "${f.path}"`);
       }
-    });
+    }
     throw new GeneratorError(`Failed to run "${generator}" generator`, {
       type: "plop_error_running_generator"
     });
@@ -407,10 +476,10 @@ export async function runCustomGenerator({
 
   if (results.changes.length > 0) {
     logger.info("Changes made:");
-    results.changes.forEach((c) => {
+    for (const c of results.changes) {
       if (c.path) {
         logger.item(`${c.path} (${c.type})`);
       }
-    });
+    }
   }
 }

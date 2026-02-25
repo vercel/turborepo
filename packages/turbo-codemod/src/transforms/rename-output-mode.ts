@@ -3,9 +3,9 @@ import fs from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
 import type { PipelineV2, SchemaV1 } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { loadTurboJson } from "../utils/load-turbo-json";
 
 // transformer details
 const TRANSFORMER = "rename-output-mode";
@@ -15,7 +15,7 @@ const INTRODUCED_IN = "2.0.0-canary.0";
 
 function migrateConfig(config: SchemaV1) {
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
-    if (Object.prototype.hasOwnProperty.call(taskDef, "outputMode")) {
+    if (Object.hasOwn(taskDef, "outputMode")) {
       (taskDef as PipelineV2).outputLogs = taskDef.outputMode;
       delete taskDef.outputMode;
     }
@@ -68,7 +68,7 @@ export function transformer({
 
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
-  workspaceConfigs.forEach((workspaceConfig) => {
+  for (const workspaceConfig of workspaceConfigs) {
     const { config, turboConfigPath: filePath } = workspaceConfig;
     if ("pipeline" in config) {
       runner.modifyFile({
@@ -76,7 +76,7 @@ export function transformer({
         after: migrateConfig(config)
       });
     }
-  });
+  }
 
   return runner.finish();
 }

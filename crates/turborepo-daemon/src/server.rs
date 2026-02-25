@@ -457,7 +457,7 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
             .map(|hashes| {
                 hashes
                     .into_iter()
-                    .map(|(path, hash)| (path.to_string(), hash))
+                    .map(|(path, hash)| (path.to_string(), String::from(hash)))
                     .collect()
             })
     }

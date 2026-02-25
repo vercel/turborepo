@@ -188,6 +188,13 @@ impl TaskAccess {
         self.enabled
     }
 
+    /// Check if task access tracing is enabled without constructing the
+    /// full TaskAccess (which requires a cache). Used early in the build
+    /// pipeline before the HTTP client is available.
+    pub fn check_enabled(repo_root: &AbsoluteSystemPathBuf) -> bool {
+        task_access_trace_enabled(repo_root).unwrap_or(false)
+    }
+
     pub async fn restore_config(&self) {
         match (self.enabled, &self.config_cache) {
             (true, Some(config_cache)) => match config_cache.restore().await {

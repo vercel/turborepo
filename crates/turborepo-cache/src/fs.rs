@@ -79,30 +79,18 @@ impl FSCache {
         anchor: &AbsoluteSystemPath,
         hash: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
-        let uncompressed_cache_path = self.cache_directory.join_component(&format!("{hash}.tar"));
-        let compressed_cache_path = self
+        let cache_path = self
             .cache_directory
             .join_component(&format!("{hash}.tar.zst"));
 
-        debug!(
-            "FSCache::fetch looking for cache artifacts at {} or {}",
-            uncompressed_cache_path, compressed_cache_path
-        );
-
-        let cache_path = if uncompressed_cache_path.exists() {
-            uncompressed_cache_path
-        } else if compressed_cache_path.exists() {
-            compressed_cache_path
-        } else {
-            debug!(
-                "FSCache::fetch cache miss for hash {} in {}",
-                hash, self.cache_directory
-            );
-            self.log_fetch(analytics::CacheEvent::Miss, hash, 0);
-            return Ok(None);
+        let mut cache_reader = match CacheReader::open(&cache_path) {
+            Ok(reader) => reader,
+            Err(CacheError::IO(ref e, _)) if e.kind() == std::io::ErrorKind::NotFound => {
+                self.log_fetch(analytics::CacheEvent::Miss, hash, 0);
+                return Ok(None);
+            }
+            Err(e) => return Err(e),
         };
-
-        let mut cache_reader = CacheReader::open(&cache_path)?;
 
         let restored_files = cache_reader.restore(anchor)?;
 
@@ -125,19 +113,24 @@ impl FSCache {
 
     #[tracing::instrument(skip_all)]
     pub(crate) fn exists(&self, hash: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
-        let uncompressed_cache_path = self.cache_directory.join_component(&format!("{hash}.tar"));
-        let compressed_cache_path = self
-            .cache_directory
-            .join_component(&format!("{hash}.tar.zst"));
+        let cache_dir = self.cache_directory.as_str();
+        let mut buf = String::with_capacity(cache_dir.len() + 1 + hash.len() + "-meta.json".len());
+        buf.push_str(cache_dir);
+        buf.push(std::path::MAIN_SEPARATOR);
+        buf.push_str(hash);
+        let prefix_len = buf.len();
 
-        if !uncompressed_cache_path.exists() && !compressed_cache_path.exists() {
+        buf.push_str(".tar.zst");
+        if !std::path::Path::new(&buf).exists() {
             return Ok(None);
         }
 
+        buf.truncate(prefix_len);
+        buf.push_str("-meta.json");
+
         let duration = CacheMetadata::read(
-            &self
-                .cache_directory
-                .join_component(&format!("{hash}-meta.json")),
+            &AbsoluteSystemPathBuf::try_from(buf.as_str())
+                .map_err(|_| CacheError::ConfigCacheInvalidBase)?,
         )
         .map(|meta| meta.duration)
         .unwrap_or(0);

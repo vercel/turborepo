@@ -42,7 +42,7 @@ pub trait CommandProvider<E> {
     fn command(
         &self,
         task_id: &TaskId,
-        environment: EnvironmentVariableMap,
+        environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E>;
 }
 
@@ -82,10 +82,10 @@ impl<'a, E> CommandFactory<'a, E> {
     pub fn command(
         &self,
         task_id: &TaskId,
-        environment: EnvironmentVariableMap,
+        environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E> {
         for provider in self.providers.iter() {
-            let cmd = provider.command(task_id, environment.clone())?;
+            let cmd = provider.command(task_id, environment)?;
             if cmd.is_some() {
                 return Ok(cmd);
             }
@@ -175,7 +175,7 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
     fn command(
         &self,
         task_id: &TaskId,
-        environment: EnvironmentVariableMap,
+        environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E> {
         let workspace_info = self.package_info(task_id)?;
 
@@ -305,7 +305,7 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
     fn command(
         &self,
         task_id: &TaskId,
-        _environment: EnvironmentVariableMap,
+        _environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E> {
         debug!(
             "MicroFrontendProxyProvider::command - called for task: {}",
@@ -421,7 +421,7 @@ mod tests {
         fn command(
             &self,
             _task_id: &TaskId,
-            _environment: EnvironmentVariableMap,
+            _environment: &EnvironmentVariableMap,
         ) -> Result<Option<Command>, String> {
             Ok(Some(Command::new("echo")))
         }
@@ -433,7 +433,7 @@ mod tests {
         fn command(
             &self,
             _task_id: &TaskId,
-            _environment: EnvironmentVariableMap,
+            _environment: &EnvironmentVariableMap,
         ) -> Result<Option<Command>, String> {
             Ok(None)
         }
@@ -445,7 +445,7 @@ mod tests {
         fn command(
             &self,
             _task_id: &TaskId,
-            _environment: EnvironmentVariableMap,
+            _environment: &EnvironmentVariableMap,
         ) -> Result<Option<Command>, String> {
             Err("error".to_string())
         }
@@ -457,7 +457,7 @@ mod tests {
         factory.add_provider(EchoProvider).add_provider(ErrProvider);
         let task_id = TaskId::new("foo", "build");
         let cmd = factory
-            .command(&task_id, EnvironmentVariableMap::default())
+            .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap()
             .unwrap();
         assert_eq!(cmd.program(), OsStr::new("echo"));
@@ -469,7 +469,7 @@ mod tests {
         factory.add_provider(ErrProvider).add_provider(EchoProvider);
         let task_id = TaskId::new("foo", "build");
         let err = factory
-            .command(&task_id, EnvironmentVariableMap::default())
+            .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap_err();
         assert_eq!(err, "error");
     }
@@ -482,7 +482,7 @@ mod tests {
             .add_provider(EchoProvider);
         let task_id = TaskId::new("foo", "build");
         let cmd = factory
-            .command(&task_id, EnvironmentVariableMap::default())
+            .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap()
             .unwrap();
         assert_eq!(cmd.program(), OsStr::new("echo"));
@@ -493,7 +493,7 @@ mod tests {
         let factory: CommandFactory<String> = CommandFactory::new();
         let task_id = TaskId::new("foo", "build");
         let cmd = factory
-            .command(&task_id, EnvironmentVariableMap::default())
+            .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap();
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
     }

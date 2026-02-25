@@ -2,30 +2,33 @@
   "name": "@turbo/utils",
   "version": "0.0.0",
   "private": true,
-  "type": "commonjs",
   "description": "",
-  "homepage": "https://turborepo.dev",
   "keywords": [],
-  "author": "Vercel",
+  "homepage": "https://turborepo.dev",
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
   "license": "MIT",
-  "files": [
-    "src"
-  ],
+  "author": "Vercel",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vercel/turborepo.git",
     "directory": "packages/turbo-utils"
   },
-  "bugs": {
-    "url": "https://github.com/vercel/turborepo/issues"
-  },
-  "module": "src/index.ts",
+  "files": [
+    "src"
+  ],
+  "type": "commonjs",
   "main": "src/index.ts",
+  "module": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
     "test": "jest",
     "check-types": "tsc --noEmit",
     "lint:prettier": "prettier -c . --cache --ignore-path=../../.prettierignore"
+  },
+  "dependencies": {
+    "undici": "^6.21.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
@@ -53,8 +56,5 @@
     "ts-jest": "29.4.6",
     "typescript": "5.5.4",
     "update-check": "1.5.4"
-  },
-  "dependencies": {
-    "undici": "^6.21.0"
   }
 }

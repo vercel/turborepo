@@ -11,7 +11,8 @@ otel = ["dep:turborepo-otel"]
 [dependencies]
 chrono = { workspace = true }
 itertools = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
+rayon = "1"
+serde = { workspace = true, features = ["derive", "rc"] }
 serde_json = { workspace = true }
 svix-ksuid = { version = "0.7.0", features = ["serde"] }
 tabwriter = "1.3.0"

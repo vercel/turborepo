@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
@@ -87,7 +87,7 @@ pub struct SinglePackageTaskSummary {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedTaskSummary<T> {
-    pub hash: String,
+    pub hash: Arc<str>,
     pub inputs: BTreeMap<RelativeUnixPathBuf, String>,
     pub hash_of_external_dependencies: String,
     pub cache: TaskCacheSummary,

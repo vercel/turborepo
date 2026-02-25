@@ -164,10 +164,10 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let run_builder = RunBuilder::new(base)?
+    let run_builder = RunBuilder::new(base, None)?
         .add_all_tasks()
         .do_not_validate_engine();
-    let run = run_builder.build(&handler, telemetry).await?;
+    let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
     let query = query.as_deref().or(include_schema.then_some(SCHEMA_QUERY));
     if let Some(query) = query {
         let trimmed_query = query.trim();

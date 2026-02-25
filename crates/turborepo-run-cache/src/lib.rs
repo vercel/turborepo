@@ -48,8 +48,6 @@ pub enum Error {
     Glob(#[from] globwalk::GlobError),
     #[error("Error with daemon: {0}")]
     Daemon(Box<turborepo_daemon::DaemonError>),
-    #[error("No connection to daemon")]
-    NoDaemon,
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
@@ -285,6 +283,11 @@ impl TaskCache {
 
         let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
 
+        // If the daemon is connected, check whether outputs have changed since
+        // they were last written. When outputs are already on disk and unchanged,
+        // we can skip the cache restore entirely — avoiding file writes that would
+        // otherwise trigger the file watcher and cause an infinite rebuild loop
+        // in `turbo watch`.
         let changed_output_count = if let Some(daemon_client) = &mut self.daemon_client {
             match daemon_client
                 .get_changed_outputs(self.hash.to_string(), &validated_inclusions)
@@ -347,8 +350,6 @@ impl TaskCache {
             self.expanded_outputs = restored_files;
 
             if let Some(daemon_client) = &mut self.daemon_client {
-                // Do we want to error the process if we can't parse the globs? We probably
-                // won't have even gotten this far if this fails...
                 let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
                 if let Err(err) = daemon_client
                     .notify_outputs_written(
@@ -359,8 +360,6 @@ impl TaskCache {
                     )
                     .await
                 {
-                    // Don't fail the whole operation just because we failed to
-                    // watch the outputs
                     telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
                     let task_id = &self.task_id;
                     debug!("Failed to mark outputs as cached for {task_id}: {err}");
@@ -472,8 +471,8 @@ impl TaskCache {
             )
             .await?;
 
-        if let Some(daemon_client) = self.daemon_client.as_mut() {
-            let notify_result = daemon_client
+        if let Some(daemon_client) = self.daemon_client.as_mut()
+            && let Err(err) = daemon_client
                 .notify_outputs_written(
                     self.hash.to_string(),
                     &validated_inclusions,
@@ -481,13 +480,11 @@ impl TaskCache {
                     duration.as_millis() as u64,
                 )
                 .await
-                .map_err(Error::from);
-
-            if let Err(err) = notify_result {
-                telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
-                let task_id = &self.task_id;
-                debug!("failed to mark outputs as cached for {task_id}: {err}");
-            }
+                .map_err(Error::from)
+        {
+            telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
+            let task_id = &self.task_id;
+            debug!("failed to mark outputs as cached for {task_id}: {err}");
         }
 
         self.expanded_outputs = relative_paths;
@@ -582,7 +579,11 @@ impl ConfigCache {
                 Err(_) => return Err(CacheError::ConfigCacheError),
             };
 
-        // return the hash
-        Ok(FileHashes(hash_object).hash())
+        let mut file_hashes: Vec<_> = hash_object
+            .into_iter()
+            .map(|(k, v)| (k, String::from(v)))
+            .collect();
+        file_hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+        Ok(FileHashes(file_hashes).hash())
     }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -108,6 +108,28 @@ export default function generator(plop: any): void {
     actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
   });
 }
+`;
+
+// Config that delegates to a sub-generator file which imports an external
+// npm package. The package is installed at the project root's node_modules/
+// (NOT next to the sub-generator). This is the exact scenario from #11882:
+// turbo/generators/config.ts -> turbo/generators/sub-gen/generator.ts -> slugify
+const TS_CONFIG_WITH_SUB_GENERATOR = (name: string) => `
+import { subGenerator } from "./sub-gen/generator";
+
+export default function generator(plop: any): void {
+  plop.setGenerator("${name}", subGenerator);
+}
+`;
+
+const TS_SUB_GENERATOR = (name: string) => `
+import { helper } from "test-external-pkg";
+
+export const subGenerator = {
+  description: helper("${name}"),
+  prompts: [],
+  actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
+};
 `;
 
 /**
@@ -361,6 +383,101 @@ describeIfBinary("compiled binary", () => {
       const outFile = path.join(projectDir, "out", `${genName}.md`);
       expect(fs.existsSync(outFile)).toBe(true);
       expect(fs.readFileSync(outFile, "utf-8")).toContain(`# ${genName}`);
+    });
+  });
+
+  // Regression test for https://github.com/vercel/turborepo/issues/11882
+  // The package is in ROOT/node_modules/ but the importing file is in
+  // turbo/generators/sub-gen/ — resolution must walk up the directory tree.
+  describe("sub-generator importing from ancestor node_modules", () => {
+    let projectDir: string;
+    const genName = "sub-gen-import-test";
+
+    beforeAll(() => {
+      projectDir = path.join(tmpDir, "sub-gen-import");
+      fs.mkdirSync(projectDir, { recursive: true });
+      createProject(projectDir, {
+        type: "commonjs",
+        configFile: "config.ts",
+        configContent: TS_CONFIG_WITH_SUB_GENERATOR(genName),
+        generatorPkgType: "commonjs"
+      });
+      // Create the sub-generator file in a subdirectory
+      const subGenDir = path.join(projectDir, "turbo", "generators", "sub-gen");
+      fs.mkdirSync(subGenDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(subGenDir, "generator.ts"),
+        TS_SUB_GENERATOR(genName)
+      );
+      // Install the package at the PROJECT ROOT, not next to the sub-generator
+      createFakePackage(
+        projectDir,
+        "test-external-pkg",
+        'module.exports.helper = function(name) { return name + " via external"; };'
+      );
+    });
+
+    it("resolves packages from ancestor node_modules", () => {
+      fs.rmSync(path.join(projectDir, "out"), {
+        recursive: true,
+        force: true
+      });
+
+      bin(
+        [
+          "raw",
+          "run",
+          "--json",
+          JSON.stringify({
+            root: projectDir,
+            generator_name: genName
+          })
+        ],
+        projectDir
+      );
+
+      const outFile = path.join(projectDir, "out", `${genName}.md`);
+      expect(fs.existsSync(outFile)).toBe(true);
+      expect(fs.readFileSync(outFile, "utf-8")).toContain(`# ${genName}`);
+    });
+  });
+
+  describe("SIGINT handling", () => {
+    let projectDir: string;
+
+    beforeAll(() => {
+      projectDir = path.join(tmpDir, "sigint-test");
+      fs.mkdirSync(projectDir, { recursive: true });
+      createProject(projectDir, {
+        type: "commonjs",
+        configFile: "config.ts",
+        configContent: TS_CONFIG("sigint-gen"),
+        generatorPkgType: "commonjs"
+      });
+    });
+
+    it("exits cleanly on SIGINT without ExitPromptError stack trace", (done) => {
+      // Use `run` (not `raw run`) so the binary enters the interactive
+      // prompt, then send SIGINT to simulate Ctrl+C.
+      const child = spawn(BINARY, ["run"], {
+        cwd: projectDir,
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env }
+      });
+
+      let stderr = "";
+      child.stderr.on("data", (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      // Wait briefly for the prompt to appear, then send SIGINT
+      setTimeout(() => child.kill("SIGINT"), 500);
+
+      child.on("close", () => {
+        expect(stderr).not.toContain("ExitPromptError");
+        expect(stderr).not.toContain("Unexpected error");
+        done();
+      });
     });
   });
 

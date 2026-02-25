@@ -3,9 +3,9 @@ import fs from "fs-extra";
 import { type PackageJson, getTurboConfigs } from "@turbo/utils";
 import type { SchemaV1, RootSchemaV1, Pipeline } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { loadTurboJson } from "../utils/load-turbo-json";
 import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
@@ -149,7 +149,7 @@ export function transformer({
 
   // find and migrate any workspace configs
   const allTurboJsons = getTurboConfigs(root);
-  allTurboJsons.forEach((workspaceConfig) => {
+  for (const workspaceConfig of allTurboJsons) {
     const { config, turboConfigPath: filePath, isRootConfig } = workspaceConfig;
     if (!isRootConfig && "pipeline" in config) {
       runner.modifyFile({
@@ -157,7 +157,7 @@ export function transformer({
         after: migrateTaskConfigs(config)
       });
     }
-  });
+  }
 
   return runner.finish();
 }

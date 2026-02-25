@@ -417,11 +417,11 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         }
     }
 
-    pub fn dependencies(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
+    pub fn dependencies(&self, task_id: &TaskId) -> Option<Vec<&TaskNode>> {
         self.neighbors(task_id, petgraph::Direction::Outgoing)
     }
 
-    pub fn dependents(&self, task_id: &TaskId) -> Option<HashSet<&TaskNode>> {
+    pub fn dependents(&self, task_id: &TaskId) -> Option<Vec<&TaskNode>> {
         self.neighbors(task_id, petgraph::Direction::Incoming)
     }
 
@@ -468,7 +468,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         &self,
         task_id: &TaskId,
         direction: petgraph::Direction,
-    ) -> Option<HashSet<&TaskNode>> {
+    ) -> Option<Vec<&TaskNode>> {
         let index = self.task_lookup.get(task_id)?;
         Some(
             self.task_graph
@@ -521,7 +521,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
 // definitions and dependency information needed for run summaries.
 impl EngineInfo for Engine<Built, TaskDefinition> {
     type TaskIter<'a> = std::iter::FilterMap<
-        std::collections::hash_set::IntoIter<&'a TaskNode>,
+        std::vec::IntoIter<&'a TaskNode>,
         fn(&'a TaskNode) -> Option<&'a TaskId<'static>>,
     >;
 

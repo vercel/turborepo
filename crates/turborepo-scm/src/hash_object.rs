@@ -1,8 +1,40 @@
 #![cfg(feature = "git2")]
-use tracing::Span;
+use rayon::prelude::*;
+use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
 
-use crate::{Error, GitHashes};
+use crate::{Error, GitHashes, OidHash};
+
+const MAX_RETRIES: u32 = 10;
+const BASE_DELAY_MS: u64 = 10;
+const MAX_DELAY_MS: u64 = 1000;
+
+fn hash_file_with_retry(path: &AbsoluteSystemPath) -> Result<git2::Oid, git2::Error> {
+    for attempt in 0..MAX_RETRIES {
+        match git2::Oid::hash_file(git2::ObjectType::Blob, path) {
+            Ok(oid) => return Ok(oid),
+            Err(e) if is_too_many_open_files(&e) => {
+                let delay = std::cmp::min(BASE_DELAY_MS * 2u64.pow(attempt), MAX_DELAY_MS);
+                debug!(
+                    attempt = attempt + 1,
+                    delay_ms = delay,
+                    "too many open files, retrying hash_file"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    git2::Oid::hash_file(git2::ObjectType::Blob, path)
+}
+
+fn is_too_many_open_files(e: &git2::Error) -> bool {
+    if e.class() != git2::ErrorClass::Os {
+        return false;
+    }
+    let msg = e.message();
+    msg.contains("Too many open files") || msg.contains("EMFILE")
+}
 
 #[tracing::instrument(skip(git_root, hashes, to_hash))]
 pub(crate) fn hash_objects(
@@ -11,45 +43,52 @@ pub(crate) fn hash_objects(
     to_hash: Vec<RelativeUnixPathBuf>,
     hashes: &mut GitHashes,
 ) -> Result<(), Error> {
-    let parent = Span::current();
     let pkg_prefix = git_root.anchor(pkg_path).ok().map(|a| a.to_unix());
 
-    for filename in to_hash {
-        let span = tracing::info_span!(parent: &parent, "hash_object", ?filename);
-        let _enter = span.enter();
-
-        let full_file_path = git_root.join_unix_path(&filename);
-        match git2::Oid::hash_file(git2::ObjectType::Blob, &full_file_path) {
-            Ok(hash) => {
-                let package_relative_path = pkg_prefix
-                    .as_ref()
-                    .and_then(|prefix| {
-                        RelativeUnixPath::strip_prefix(&filename, prefix)
-                            .ok()
-                            .map(|stripped| stripped.to_owned())
-                    })
-                    .unwrap_or_else(|| {
-                        AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
-                            .to_unix()
-                    });
-                hashes.insert(package_relative_path, hash.to_string());
-            }
-            Err(e) => {
-                // FIXME: we currently do not hash symlinks. "git hash-object" cannot handle
-                // them, and the Go implementation errors on them, switches to
-                // manual, and then skips them. For now, we'll skip them too.
-                if e.class() == git2::ErrorClass::Os
-                    && full_file_path
-                        .symlink_metadata()
-                        .map(|md| md.is_symlink())
-                        .unwrap_or(false)
-                {
-                    continue;
-                } else {
-                    // For any other error, ensure we attach some context to it
-                    return Err(Error::git2_error_context(e, full_file_path.to_string()));
+    hashes.reserve(to_hash.len());
+    let results: Vec<Result<Option<(RelativeUnixPathBuf, OidHash)>, Error>> = to_hash
+        .into_par_iter()
+        .map(|filename| {
+            let full_file_path = git_root.join_unix_path(&filename);
+            match hash_file_with_retry(&full_file_path) {
+                Ok(hash) => {
+                    let package_relative_path = pkg_prefix
+                        .as_ref()
+                        .and_then(|prefix| {
+                            RelativeUnixPath::strip_prefix(&filename, prefix)
+                                .ok()
+                                .map(|stripped| stripped.to_owned())
+                        })
+                        .unwrap_or_else(|| {
+                            AnchoredSystemPathBuf::relative_path_between(pkg_path, &full_file_path)
+                                .to_unix()
+                        });
+                    let mut hex_buf = [0u8; 40];
+                    hex::encode_to_slice(hash.as_bytes(), &mut hex_buf).unwrap();
+                    Ok(Some((
+                        package_relative_path,
+                        OidHash::from_hex_buf(hex_buf),
+                    )))
+                }
+                Err(e) => {
+                    if e.class() == git2::ErrorClass::Os
+                        && full_file_path
+                            .symlink_metadata()
+                            .map(|md| md.is_symlink())
+                            .unwrap_or(false)
+                    {
+                        Ok(None)
+                    } else {
+                        Err(Error::git2_error_context(e, full_file_path.to_string()))
+                    }
                 }
             }
+        })
+        .collect();
+
+    for result in results {
+        if let Some((path, hash)) = result? {
+            hashes.insert(path, hash);
         }
     }
     Ok(())
@@ -60,7 +99,7 @@ mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::hash_objects;
-    use crate::{GitHashes, find_git_root};
+    use crate::{GitHashes, OidHash, find_git_root};
 
     #[test]
     fn test_read_object_hashes() {
@@ -96,9 +135,14 @@ mod test {
         ];
 
         for (to_hash, pkg_path) in tests {
-            let file_hashes: Vec<(RelativeUnixPathBuf, String)> = to_hash
+            let file_hashes: Vec<(RelativeUnixPathBuf, OidHash)> = to_hash
                 .into_iter()
-                .map(|(raw, hash)| (RelativeUnixPathBuf::new(raw).unwrap(), String::from(hash)))
+                .map(|(raw, hash)| {
+                    (
+                        RelativeUnixPathBuf::new(raw).unwrap(),
+                        OidHash::from_hex_str(hash),
+                    )
+                })
                 .collect();
 
             let git_to_pkg_path = git_root.anchor(pkg_path).unwrap();

@@ -694,7 +694,7 @@ mod tests {
     use turbopath::{
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
     };
-    use turborepo_scm::{GitHashes, SCM};
+    use turborepo_scm::{GitHashes, OidHash, SCM};
 
     use super::{FileHashes, HashState};
     use crate::{
@@ -1045,7 +1045,10 @@ mod tests {
     fn make_expected(expected: Vec<(&str, &str)>) -> GitHashes {
         let mut map = GitHashes::new();
         for (path, hash) in expected {
-            map.insert(RelativeUnixPathBuf::new(path).unwrap(), hash.to_string());
+            map.insert(
+                RelativeUnixPathBuf::new(path).unwrap(),
+                OidHash::from_hex_str(hash),
+            );
         }
         map
     }

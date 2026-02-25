@@ -22,7 +22,7 @@ use regex::Regex;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPath};
 use wax::{
-    BuildError, Glob,
+    BuildError, Glob, Program,
     walk::{FileIterator, FilterAny},
 };
 
@@ -74,35 +74,28 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
     include: &[S],
     exclude: &[S],
 ) -> Result<(PathBuf, Vec<String>, Vec<String>), WalkError> {
-    let base_path_slash = base_path
+    let raw_slash = base_path
         .as_std_path()
         .to_slash()
-        .map(|s| {
-            // Paths can contain various tokens that have special meaning when parsing as a
-            // glob We escape them to avoid any unintended consequences.
-            escape_glob_literals(&s).into_owned()
-        })
         .ok_or(WalkError::InvalidPath)?;
+    let base_path_slash = escape_glob_literals(&raw_slash);
 
-    let (include_paths, lowest_segment) = include
-        .iter()
-        .map(|s| fix_glob_pattern(s.as_ref()).into_owned())
-        .map(|mut s| {
+    let (include_paths, lowest_segment) = {
+        let mut paths = Vec::with_capacity(include.len());
+        let mut lowest = usize::MAX;
+        for s in include {
+            let mut fixed = fix_glob_pattern(s.as_ref()).into_owned();
             // We need to check inclusion globs before the join
             // as to_slash doesn't preserve Windows drive names.
-            add_doublestar_to_dir(base_path, &mut s);
-            s
-        })
-        .map(|s| join_unix_like_paths(&base_path_slash, &s))
-        .filter_map(|s| collapse_path(&s).map(|(s, v)| (s.to_string(), v)))
-        .fold(
-            (vec![], usize::MAX),
-            |(mut vec, lowest_segment), (path, lowest_segment_next)| {
-                let lowest_segment = std::cmp::min(lowest_segment, lowest_segment_next);
-                vec.push(path); // we stringify here due to lifetime issues
-                (vec, lowest_segment)
-            },
-        );
+            add_doublestar_to_dir(base_path, &mut fixed);
+            let joined = join_unix_like_paths(&base_path_slash, &fixed);
+            if let Some((collapsed, segment)) = collapse_path(&joined) {
+                lowest = std::cmp::min(lowest, segment);
+                paths.push(collapsed.into_owned());
+            }
+        }
+        (paths, lowest)
+    };
 
     let base_path = base_path
         .components()
@@ -112,16 +105,13 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
         )
         .collect::<PathBuf>();
 
-    let mut exclude_paths = vec![];
-    for split in exclude
-        .iter()
-        .map(|s| fix_glob_pattern(s.as_ref()))
-        .map(|s| join_unix_like_paths(&base_path_slash, s.as_ref()))
-        .filter_map(|g| collapse_path(&g).map(|(s, _)| s.to_string()))
-    {
-        // if the glob ends with a slash, then we need to add a double star,
-        // unless it already ends with a double star
-        add_trailing_double_star(&mut exclude_paths, &split);
+    let mut exclude_paths = Vec::with_capacity(exclude.len() * 2);
+    for s in exclude {
+        let fixed = fix_glob_pattern(s.as_ref());
+        let joined = join_unix_like_paths(&base_path_slash, fixed.as_ref());
+        if let Some((collapsed, _)) = collapse_path(&joined) {
+            add_trailing_double_star(&mut exclude_paths, &collapsed);
+        }
     }
 
     Ok((base_path, include_paths, exclude_paths))
@@ -292,10 +282,7 @@ fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
     glob.push_str("**");
 }
 
-#[tracing::instrument]
-fn glob_with_contextual_error<S: AsRef<str> + std::fmt::Debug>(
-    raw: S,
-) -> Result<Glob<'static>, WalkError> {
+fn glob_with_contextual_error<S: AsRef<str>>(raw: S) -> Result<Glob<'static>, WalkError> {
     let raw = raw.as_ref();
     Glob::new(raw)
         .map(|g| g.into_owned())
@@ -453,6 +440,24 @@ fn needs_path_cleaning(s: &str) -> bool {
     false
 }
 
+/// Returns true if the pattern contains glob metacharacters (*, ?, [, {).
+/// Literal file paths return false.
+pub fn is_glob_pattern(pattern: &str) -> bool {
+    // Check for unescaped glob metacharacters
+    let mut chars = pattern.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            // Skip escaped character
+            chars.next();
+            continue;
+        }
+        if matches!(c, '*' | '?' | '[' | '{') {
+            return true;
+        }
+    }
+    false
+}
+
 pub fn globwalk_with_settings(
     base_path: &AbsoluteSystemPath,
     include: &[ValidatedGlob],
@@ -460,7 +465,8 @@ pub fn globwalk_with_settings(
     walk_type: WalkType,
     settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    globwalk_internal(base_path, include, exclude, walk_type, settings)
+    let compiled = compile_globs(base_path, include, exclude)?;
+    retry_on_emfile(|| walk_compiled_globs(&compiled, walk_type, settings))
 }
 
 pub fn globwalk(
@@ -469,26 +475,81 @@ pub fn globwalk(
     exclude: &[ValidatedGlob],
     walk_type: WalkType,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    globwalk_internal(base_path, include, exclude, walk_type, Default::default())
+    let compiled = compile_globs(base_path, include, exclude)?;
+    retry_on_emfile(|| walk_compiled_globs(&compiled, walk_type, Default::default()))
+}
+
+fn is_too_many_open_files(err: &WalkError) -> bool {
+    // visit_file converts all walkdir/wax errors into WalkError::IO,
+    // so this is the only variant we need to check.
+    let WalkError::IO(e) = err else {
+        return false;
+    };
+
+    #[cfg(unix)]
+    {
+        e.raw_os_error() == Some(24)
+    } // EMFILE
+    #[cfg(windows)]
+    {
+        e.raw_os_error() == Some(4)
+    } // ERROR_TOO_MANY_OPEN_FILES
+    #[cfg(not(any(unix, windows)))]
+    {
+        false
+    }
+}
+
+fn retry_on_emfile<F>(mut f: F) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError>
+where
+    F: FnMut() -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError>,
+{
+    const MAX_RETRIES: u32 = 10;
+    const BASE_DELAY_MS: u64 = 10;
+    const MAX_DELAY_MS: u64 = 1000;
+
+    for attempt in 0..MAX_RETRIES {
+        match f() {
+            Ok(result) => return Ok(result),
+            Err(err) if is_too_many_open_files(&err) => {
+                let delay = std::cmp::min(BASE_DELAY_MS * 2u64.pow(attempt), MAX_DELAY_MS);
+                debug!(
+                    attempt = attempt + 1,
+                    delay_ms = delay,
+                    "too many open files, retrying globwalk"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(delay));
+            }
+            Err(err) => return Err(err),
+        }
+    }
+
+    // Final attempt — propagate whatever happens.
+    f()
+}
+
+struct CompiledGlobs {
+    base_path: PathBuf,
+    include_patterns: Vec<Glob<'static>>,
+    ex_patterns: Vec<Glob<'static>>,
+    ex_filter: FilterAny,
 }
 
 #[tracing::instrument(skip(include, exclude))]
-pub fn globwalk_internal<S: AsRef<str>>(
+fn compile_globs<S: AsRef<str>>(
     base_path: &AbsoluteSystemPath,
     include: &[S],
     exclude: &[S],
-    walk_type: WalkType,
-    settings: Settings,
-) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+) -> Result<CompiledGlobs, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
 
-    let ex_patterns: Vec<_> = exclude_paths
+    let ex_patterns: Vec<Glob<'static>> = exclude_paths
         .into_iter()
         .map(glob_with_contextual_error)
         .collect::<Result<_, _>>()?;
 
-    let ex_filter = FilterAny::any(ex_patterns)
+    let ex_filter = FilterAny::any(ex_patterns.clone())
         .map_err(|e| WalkError::BadPattern("exclusion".into(), Box::new(e)))?;
 
     let include_patterns = include_paths
@@ -496,23 +557,192 @@ pub fn globwalk_internal<S: AsRef<str>>(
         .map(glob_with_contextual_error)
         .collect::<Result<Vec<_>, _>>()?;
 
-    include_patterns
-        .into_par_iter()
-        // Use flat_map_iter as we only want parallelism for walking the globs and not iterating
-        // over the results.
-        // See https://docs.rs/rayon/latest/rayon/iter/trait.ParallelIterator.html#method.flat_map_iter
-        .flat_map_iter(|glob| {
-            walk_glob(walk_type, &base_path_new, ex_filter.clone(), glob, settings)
-        })
-        .collect()
+    Ok(CompiledGlobs {
+        base_path: base_path_new,
+        include_patterns,
+        ex_patterns,
+        ex_filter,
+    })
 }
 
-#[tracing::instrument(skip(ex_filter), fields(glob=glob.to_string().as_str()))]
+/// Try to decompose a glob pattern relative to `base_path` into
+/// `(literal_prefix, literal_suffix)` separated by a single `*` segment.
+///
+/// For example, with base `/repo` and glob pattern matching
+/// `/repo/packages/*/package.json`, this returns
+/// `Some(("/repo/packages", "package.json"))`.
+///
+/// Returns `None` if the pattern doesn't have exactly one `*` wildcard segment
+/// or contains `**`, `?`, `[`, or `{` metacharacters.
+fn try_decompose_shallow_wildcard(
+    _base_path: &Path,
+    glob: &Glob<'_>,
+) -> Option<(PathBuf, PathBuf)> {
+    // Wax glob patterns are relative to the base path that `walk` is called
+    // with, but `preprocess_paths_and_globs` joins them with the absolute base
+    // path before compilation. So `glob.to_string()` returns an absolute path
+    // like `/repo/packages/*/package.json`. We need to work with the full
+    // absolute path and extract the prefix/suffix around the `*`.
+    let pattern = glob.to_string();
+
+    // Quick reject: skip patterns with complex metacharacters.
+    if pattern.contains("**")
+        || pattern.contains('?')
+        || pattern.contains('[')
+        || pattern.contains('{')
+    {
+        return None;
+    }
+
+    // Split on '/' and find segments containing `*`. Filter out empty segments
+    // (leading '/' on absolute paths creates one).
+    let segments: Vec<&str> = pattern.split('/').collect();
+    let star_positions: Vec<usize> = segments
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| !s.is_empty() && s.contains('*'))
+        .map(|(i, _)| i)
+        .collect();
+
+    // Must have exactly one segment containing `*`, and it must be exactly `*`.
+    if star_positions.len() != 1 {
+        return None;
+    }
+    let star_idx = star_positions[0];
+    if segments[star_idx] != "*" {
+        return None;
+    }
+
+    // Require at least one suffix segment after the star — patterns like `dir/*`
+    // match files directly and need the full walker.
+    if star_idx + 1 >= segments.len() {
+        return None;
+    }
+
+    // Build the literal prefix from the segments before the star.
+    // For absolute paths like "/repo/packages", rejoin with '/' separator.
+    let prefix: PathBuf = segments[..star_idx].join("/").into();
+
+    // Build the literal suffix from segments after the star.
+    let suffix: PathBuf = segments[star_idx + 1..].iter().collect();
+
+    // The prefix must be an existing directory.
+    if !prefix.is_dir() {
+        return None;
+    }
+
+    Some((prefix, suffix))
+}
+
+fn walk_compiled_globs(
+    compiled: &CompiledGlobs,
+    walk_type: WalkType,
+    settings: Settings,
+) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
+    // Partition globs into three categories for optimal dispatch:
+    //
+    // 1. Invariant (no wildcards) — resolved via a single stat syscall.
+    // 2. Shallow wildcard (`<prefix>/*/<suffix>`) — expanded via readdir on the
+    //    prefix dir, then each child is checked in parallel. This avoids the
+    //    walkdir overhead for patterns like `packages/*/package.json` where a
+    //    single glob walker would sequentially traverse hundreds of entries.
+    // 3. General variant — full wax directory walk (one rayon task per pattern).
+    let mut literal_results: Vec<AbsoluteSystemPathBuf> = Vec::new();
+    let mut shallow_wildcards: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let mut variant_globs: Vec<&Glob<'static>> = Vec::new();
+
+    for glob in &compiled.include_patterns {
+        if let Some(path) = glob.variance().path() {
+            // Invariant: no wildcards at all — single stat.
+            let full_path = compiled.base_path.join(path);
+            let dominated = full_path
+                .symlink_metadata()
+                .ok()
+                .is_some_and(|m| match walk_type {
+                    WalkType::Files => !m.is_dir(),
+                    WalkType::Folders => m.is_dir(),
+                    WalkType::All => true,
+                });
+            if dominated && let Ok(abs) = AbsoluteSystemPathBuf::try_from(full_path.as_path()) {
+                literal_results.push(abs);
+            }
+        } else if let Some(decomposed) = try_decompose_shallow_wildcard(&compiled.base_path, glob) {
+            shallow_wildcards.push(decomposed);
+        } else {
+            variant_globs.push(glob);
+        }
+    }
+
+    // Expand shallow wildcards: readdir each prefix, then stat candidates in
+    // parallel. This turns one slow sequential walk (e.g. 54ms for 603 dirs)
+    // into a batch of parallel stat calls spread across all rayon workers.
+    let shallow_candidates: Vec<PathBuf> = shallow_wildcards
+        .iter()
+        .flat_map(|(prefix, suffix)| {
+            let Ok(entries) = std::fs::read_dir(prefix) else {
+                return Vec::new();
+            };
+            entries
+                .filter_map(|e| e.ok())
+                .map(|e| e.path().join(suffix))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    let ex_patterns = &compiled.ex_patterns;
+    let shallow_results: Vec<AbsoluteSystemPathBuf> = shallow_candidates
+        .par_iter()
+        .filter_map(|candidate| {
+            let meta = candidate.symlink_metadata().ok()?;
+            let dominated = match walk_type {
+                WalkType::Files => !meta.is_dir(),
+                WalkType::Folders => meta.is_dir(),
+                WalkType::All => true,
+            };
+            if !dominated {
+                return None;
+            }
+            // Check exclusion patterns. Exclusion globs are compiled from
+            // absolute paths (e.g. `/repo/**/node_modules/**`), so match
+            // against the full candidate path using slash-normalized form for
+            // cross-platform correctness.
+            if !ex_patterns.is_empty() {
+                let candidate_str = candidate.to_slash_lossy();
+                if ex_patterns
+                    .iter()
+                    .any(|ex| ex.is_match(candidate_str.as_ref()))
+                {
+                    return None;
+                }
+            }
+            AbsoluteSystemPathBuf::try_from(candidate.as_path()).ok()
+        })
+        .collect();
+
+    let mut results: HashSet<AbsoluteSystemPathBuf> = variant_globs
+        .par_iter()
+        .flat_map_iter(|glob| {
+            walk_glob(
+                walk_type,
+                &compiled.base_path,
+                compiled.ex_filter.clone(),
+                glob,
+                settings,
+            )
+        })
+        .collect::<Result<HashSet<_>, _>>()?;
+
+    results.extend(literal_results);
+    results.extend(shallow_results);
+    Ok(results)
+}
+
+#[tracing::instrument(skip_all)]
 fn walk_glob(
     walk_type: WalkType,
     base_path_new: &Path,
     ex_filter: FilterAny,
-    glob: Glob,
+    glob: &Glob<'static>,
     settings: Settings,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
     let iter = glob.walk(base_path_new).not_any(ex_filter);
@@ -534,7 +764,6 @@ fn walk_glob(
     }
 }
 
-#[tracing::instrument]
 fn visit_file(
     walk_type: WalkType,
     entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,
@@ -1623,6 +1852,35 @@ mod test {
                 .replace('/', std::path::MAIN_SEPARATOR_STR)
                 .to_string(),
             "apps/some-app/package.json"
+                .replace('/', std::path::MAIN_SEPARATOR_STR)
+                .to_string(),
+        ]);
+        assert_eq!(paths, expected);
+    }
+
+    #[test]
+    fn workspace_globbing_includes_dotfiles() {
+        // Wax's `*` matches dot-prefixed directories. The shallow wildcard
+        // fast path must preserve this behavior.
+        let files = &["apps/visible/package.json", "apps/.hidden/package.json"];
+        let tmp = setup_files(files);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let include = ["apps/*/package.json"]
+            .into_iter()
+            .map(ValidatedGlob::from_str)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let exclude: &[ValidatedGlob] = &[];
+        let iter = globwalk(&root, &include, exclude, WalkType::Files).unwrap();
+        let paths: HashSet<String> = iter
+            .into_iter()
+            .map(|path| root.anchor(path).unwrap().to_string())
+            .collect();
+        let expected: HashSet<String> = HashSet::from_iter([
+            "apps/visible/package.json"
+                .replace('/', std::path::MAIN_SEPARATOR_STR)
+                .to_string(),
+            "apps/.hidden/package.json"
                 .replace('/', std::path::MAIN_SEPARATOR_STR)
                 .to_string(),
         ]);

@@ -1,18 +1,20 @@
 // This module doesn't require git2, but it is only used by modules that require
 // git2.
 #![cfg(feature = "git2")]
-use std::io::{ErrorKind, Read};
+use std::{
+    collections::HashSet,
+    io::{ErrorKind, Read},
+};
 
 use globwalk::fix_glob_pattern;
-use hex::ToHex;
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
 use wax::{Glob, Program, any};
 
-use crate::{Error, GitHashes};
+use crate::{Error, GitHashes, OidHash};
 
-fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
+fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<OidHash, Error> {
     let mut hasher = Sha1::new();
     let mut f = path.open()?;
     // Pre-allocate the buffer based on file metadata to avoid repeated
@@ -32,7 +34,9 @@ fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<String, Error> {
     hasher.update([b'\0']);
     hasher.update(buffer.as_slice());
     let result = hasher.finalize();
-    Ok(result.encode_hex::<String>())
+    let mut hex_buf = [0u8; 40];
+    hex::encode_to_slice(result, &mut hex_buf).unwrap();
+    Ok(OidHash::from_hex_buf(hex_buf))
 }
 
 fn to_glob(input: &str) -> Result<Glob<'_>, Error> {
@@ -72,7 +76,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     let full_package_path = turbo_root.resolve(package_path);
     let mut hashes = GitHashes::new();
     let mut default_file_hashes = GitHashes::new();
-    let mut excluded_file_hashes = GitHashes::new();
+    let mut excluded_file_paths = HashSet::new();
 
     let mut walker_builder = WalkBuilder::new(&full_package_path);
     let mut includes = Vec::new();
@@ -172,7 +176,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             let metadata = dirent.metadata()?;
             // We need to do this here, rather than as a filter, because the root
             // directory is always yielded and not subject to the supplied filter.
-            if metadata.is_dir() {
+            if metadata.is_dir() || metadata.is_symlink() {
                 continue;
             }
 
@@ -183,17 +187,17 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             if let Some(exclude_pattern) = exclude_pattern.as_ref()
                 && exclude_pattern.is_match(relative_path.as_str())
             {
-                // track excludes so we can exclude them to the hash map later
-                if !metadata.is_symlink() {
-                    let hash = git_like_hash_file(path)?;
-                    excluded_file_hashes.insert(relative_path.clone(), hash);
-                }
-            }
-
-            // FIXME: we don't hash symlinks...
-            if metadata.is_symlink() {
+                // Track excluded paths — no need to hash since we only use the
+                // path for filtering.
+                excluded_file_paths.insert(relative_path);
                 continue;
             }
+
+            // Skip files already hashed in the first walk to avoid redundant I/O.
+            if hashes.contains_key(&relative_path) {
+                continue;
+            }
+
             let hash = git_like_hash_file(path)?;
             default_file_hashes.insert(relative_path, hash);
         }
@@ -202,7 +206,9 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     // merge default with all hashes
     hashes.extend(default_file_hashes);
     // remove excluded files
-    hashes.retain(|key, _| !excluded_file_hashes.contains_key(key));
+    if !excluded_file_paths.is_empty() {
+        hashes.retain(|key, _| !excluded_file_paths.contains(key));
+    }
 
     Ok(hashes)
 }
@@ -243,7 +249,7 @@ mod tests {
             if files.contains(&"existing-file.txt") {
                 expected.insert(
                     RelativeUnixPathBuf::new("existing-file.txt").unwrap(),
-                    "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391".to_string(),
+                    OidHash::from_hex_str("e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"),
                 );
             }
             expected
@@ -410,12 +416,12 @@ mod tests {
                 println!("unix_pkg_path: {unix_pkg_path}");
                 let unix_pkg_file_path = unix_path.strip_prefix(&unix_pkg_path).unwrap();
                 println!("unix_pkg_file_path: {unix_pkg_file_path}");
-                expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
+                expected.insert(unix_pkg_file_path.to_owned(), OidHash::from_hex_str(hash));
             }
         }
         expected.insert(
             RelativeUnixPathBuf::new(".gitignore").unwrap(),
-            "3237694bc3312ded18386964a855074af7b066af".to_owned(),
+            OidHash::from_hex_str("3237694bc3312ded18386964a855074af7b066af"),
         );
 
         let hashes =
@@ -444,7 +450,7 @@ mod tests {
                     || unix_pkg_file_path.ends_with("turbo.json"))
                     && !unix_pkg_file_path.ends_with("excluded-file")
                 {
-                    expected.insert(unix_pkg_file_path.to_owned(), (*hash).to_owned());
+                    expected.insert(unix_pkg_file_path.to_owned(), OidHash::from_hex_str(hash));
                 }
             }
         }
@@ -458,5 +464,95 @@ mod tests {
         .unwrap();
 
         assert_eq!(hashes, expected);
+    }
+
+    #[test]
+    fn test_include_default_files_deduplicates_with_explicit_includes() {
+        // When include_default_files=true AND explicit includes are provided,
+        // the first walk collects files matching the includes, and the second
+        // walk collects gitignore-respecting defaults. Files appearing in both
+        // walks should not be hashed twice — verify that the result is correct
+        // and contains each file exactly once.
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        // Create files: one matched by the explicit include, one only in defaults
+        let shared_file = pkg_dir.join_component("shared.ts");
+        shared_file.create_with_contents("shared content").unwrap();
+
+        let default_only = pkg_dir.join_component("default-only.ts");
+        default_only
+            .create_with_contents("default only content")
+            .unwrap();
+
+        let package_json = pkg_dir.join_component("package.json");
+        package_json.create_with_contents("{}").unwrap();
+
+        let turbo_json = pkg_dir.join_component("turbo.json");
+        turbo_json.create_with_contents("{}").unwrap();
+
+        // "*.ts" matches both shared.ts and default-only.ts in the first walk
+        // (since git_ignore=false for explicit inputs). The second walk with
+        // git_ignore=true should not re-hash files already found.
+        let hashes =
+            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["*.ts"], true).unwrap();
+
+        // All four files should appear exactly once
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("shared.ts").unwrap()),
+            "shared.ts should be present"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("default-only.ts").unwrap()),
+            "default-only.ts should be present"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()),
+            "package.json should be present (added by include pattern augmentation)"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("turbo.json").unwrap()),
+            "turbo.json should be present (added by include pattern augmentation)"
+        );
+
+        // Verify the hash values are deterministic (same content = same hash)
+        let hashes2 =
+            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["*.ts"], true).unwrap();
+        assert_eq!(hashes, hashes2, "hashes should be deterministic");
+    }
+
+    #[test]
+    fn test_include_default_files_with_exclusion() {
+        // Verify that exclusions work correctly when include_default_files=true:
+        // excluded files should not appear even if the default walk finds them.
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("lib").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        let keep = pkg_dir.join_component("keep.ts");
+        keep.create_with_contents("keep").unwrap();
+
+        let excluded = pkg_dir.join_component("excluded.ts");
+        excluded.create_with_contents("excluded").unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["*.ts", "!excluded.ts"],
+            true,
+        )
+        .unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("keep.ts").unwrap()),
+            "keep.ts should be present"
+        );
+        assert!(
+            !hashes.contains_key(&RelativeUnixPathBuf::new("excluded.ts").unwrap()),
+            "excluded.ts should NOT be present"
+        );
     }
 }

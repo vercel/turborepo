@@ -156,7 +156,7 @@ export interface RootSchema extends BaseSchema {
   cacheDir?: RelativeUnixPath;
 
   /**
-   * Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.
+   * Deprecated: The daemon is no longer used for `turbo run` and this option will be removed in version 3.0.
    *
    * Documentation: https://turborepo.dev/docs/reference/configuration#daemon
    *

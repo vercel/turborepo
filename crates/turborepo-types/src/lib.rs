@@ -15,7 +15,7 @@
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
 pub mod secret;
-use std::{collections::HashMap, fmt, str::FromStr};
+use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
 
 use biome_deserialize_macros::Deserializable;
 use clap::ValueEnum;
@@ -1024,7 +1024,7 @@ pub trait RunOptsInfo {
 /// re-export or use a compatible type.
 pub trait HashTrackerInfo {
     /// Returns the computed hash for a task
-    fn hash(&self, task_id: &TaskId) -> Option<String>;
+    fn hash(&self, task_id: &TaskId) -> Option<Arc<str>>;
     /// Returns the detailed environment variable map for a task
     fn env_vars(&self, task_id: &TaskId) -> Option<HashTrackerDetailedMap>;
     /// Returns the cache hit metadata for a task
@@ -1033,8 +1033,8 @@ pub trait HashTrackerInfo {
     fn expanded_outputs(&self, task_id: &TaskId) -> Option<Vec<AnchoredSystemPathBuf>>;
     /// Returns the detected framework for a task
     fn framework(&self, task_id: &TaskId) -> Option<String>;
-    /// Returns the expanded input file hashes for a task
-    fn expanded_inputs(&self, task_id: &TaskId) -> Option<HashMap<RelativeUnixPathBuf, String>>;
+    /// Returns the expanded input file hashes for a task, sorted by path.
+    fn expanded_inputs(&self, task_id: &TaskId) -> Option<Vec<(RelativeUnixPathBuf, String)>>;
 }
 
 /// Detailed environment variable map for hash tracking.

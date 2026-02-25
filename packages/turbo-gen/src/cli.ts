@@ -119,6 +119,11 @@ turboGenCli
   .parseAsync()
   .then(() => notifyUpdate())
   .catch(async (error) => {
+    // User pressed Ctrl+C — exit silently.
+    if (error?.name === "ExitPromptError") {
+      process.exit(0);
+    }
+
     logger.log();
     if (error instanceof GeneratorError) {
       logger.error(error.message);

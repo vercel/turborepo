@@ -7,7 +7,7 @@ pub use error::Error;
 use serde::Serialize;
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_api_client::AnonAPIClient;
+use turborepo_api_client::{APIClient, AnonAPIClient};
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
@@ -304,6 +304,7 @@ fn format_error_message(mut err_str: String) -> String {
 }
 
 impl Args {
+    #[tracing::instrument(skip_all)]
     pub fn new(os_args: Vec<OsString>) -> Self {
         let clap_args = match Args::parse(os_args) {
             Ok(args) => args,
@@ -358,6 +359,18 @@ impl Args {
                 warn!(
                     "--remote-cache-read-only is deprecated and will be removed in a future major \
                      version. Use --cache=local:rw,remote:r"
+                );
+            }
+            if run_args.daemon {
+                warn!(
+                    "--daemon is deprecated and will be removed in version 3.0. The daemon is no \
+                     longer used for `turbo run`."
+                );
+            }
+            if run_args.no_daemon {
+                warn!(
+                    "--no-daemon is deprecated and will be removed in version 3.0. The daemon is \
+                     no longer used for `turbo run`."
                 );
             }
         }
@@ -995,13 +1008,13 @@ pub struct RunArgs {
     // clap does not have negation flags such as --daemon and --no-daemon
     // so we need to use a group to enforce that only one of them is set.
     // -----------------------
-    /// Force turbo to use the local daemon. If unset
-    /// turbo will use the default detection logic.
+    /// [DEPRECATED] The daemon is no longer used for `turbo run`.
+    /// This flag will be removed in version 3.0.
     #[clap(long, group = "daemon-group")]
     pub daemon: bool,
 
-    /// Force turbo to not use the local daemon. If unset
-    /// turbo will use the default detection logic.
+    /// [DEPRECATED] The daemon is no longer used for `turbo run`.
+    /// This flag will be removed in version 3.0.
     #[clap(long, group = "daemon-group")]
     pub no_daemon: bool,
 
@@ -1129,26 +1142,43 @@ impl RunArgs {
     }
 }
 
+#[tracing::instrument(skip_all)]
 fn initialize_telemetry_client(
+    http_client: &reqwest::Client,
     color_config: ColorConfig,
     version: &str,
 ) -> Option<TelemetryHandle> {
-    let mut telemetry_handle: Option<TelemetryHandle> = None;
-    match AnonAPIClient::new("https://telemetry.vercel.com", 250, version) {
-        Ok(anonymous_api_client) => {
-            let handle = init_telemetry(anonymous_api_client, color_config);
-            match handle {
-                Ok(h) => telemetry_handle = Some(h),
-                Err(error) => {
-                    debug!("failed to start telemetry: {:?}", error)
-                }
-            }
-        }
+    let anonymous_api_client = AnonAPIClient::new_with_client(
+        http_client.clone(),
+        "https://telemetry.vercel.com",
+        version,
+    );
+    match init_telemetry(anonymous_api_client, color_config) {
+        Ok(h) => Some(h),
         Err(error) => {
-            debug!("Failed to create AnonAPIClient: {:?}", error);
+            debug!("failed to start telemetry: {:?}", error);
+            None
         }
     }
-    telemetry_handle
+}
+
+fn initialize_deferred_telemetry_client(
+    http_client_cell: std::sync::Arc<tokio::sync::OnceCell<reqwest::Client>>,
+    color_config: ColorConfig,
+    version: &str,
+) -> Option<TelemetryHandle> {
+    let deferred_client = turborepo_api_client::telemetry::DeferredTelemetryClient::new(
+        http_client_cell,
+        "https://telemetry.vercel.com",
+        version,
+    );
+    match init_telemetry(deferred_client, color_config) {
+        Ok(h) => Some(h),
+        Err(error) => {
+            debug!("failed to start telemetry: {:?}", error);
+            None
+        }
+    }
 }
 
 #[derive(PartialEq)]
@@ -1254,6 +1284,7 @@ fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
     })
 }
 
+#[tracing::instrument(skip_all)]
 fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
     if let Some(command) = mem::take(&mut cli_args.command) {
         Ok(command)
@@ -1284,17 +1315,47 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
 ///
 /// returns: Result<Payload, Error>
 #[tokio::main]
+#[tracing::instrument(skip_all)]
 pub async fn run(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
     color_config: ColorConfig,
 ) -> Result<i32, Error> {
-    // TODO: remove mutability from this function
-    let mut cli_args = Args::new(env::args_os().collect());
+    let _cli_run_span = tracing::info_span!("cli_run").entered();
+
+    // Spawn TLS initialization on a background thread immediately.
+    // This takes ~100ms (loading root certificates, TLS backend init)
+    // and runs fully in the background. Neither telemetry nor the run
+    // path block on it — the HTTP client is resolved lazily when the
+    // first network request is actually needed.
+    let http_client_cell = std::sync::Arc::new(tokio::sync::OnceCell::<reqwest::Client>::new());
+    {
+        let cell = http_client_cell.clone();
+        tokio::task::spawn(async move {
+            if let Ok(Ok(client)) = tokio::task::spawn_blocking(|| {
+                let _span = tracing::info_span!("http_client_init").entered();
+                APIClient::build_http_client(None)
+            })
+            .await
+            {
+                cell.set(client).ok();
+            }
+        });
+    }
+
+    let mut cli_args = {
+        let _span = tracing::info_span!("cli_arg_parsing").entered();
+        Args::new(env::args_os().collect())
+    };
     let version = get_version();
 
-    // track telemetry handle to close at the end of the run
-    let telemetry_handle = initialize_telemetry_client(color_config, version);
+    // Initialize telemetry immediately with a deferred HTTP client.
+    // Events are queued to a channel from the start; the actual HTTP
+    // client is only resolved when the worker flushes its first batch.
+    let telemetry_handle = {
+        let _span = tracing::info_span!("telemetry_init").entered();
+        initialize_deferred_telemetry_client(http_client_cell.clone(), color_config, version)
+    };
 
     if should_print_version() {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
@@ -1305,9 +1366,6 @@ pub async fn run(
     // Set some run flags if we have the data and are executing a Run
     set_run_flags(&mut command, &repo_state, &cli_args)?;
 
-    // TODO: make better use of RepoState, here and below. We've already inferred
-    // the repo root, we don't need to calculate it again, along with package
-    // manager inference.
     let cwd = repo_state
         .as_ref()
         .map(|state| state.root.as_path())
@@ -1578,7 +1636,10 @@ pub async fn run(
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
             event.track_call();
 
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            let base = {
+                let _span = tracing::info_span!("command_base_new").entered();
+                CommandBase::new(cli_args.clone(), repo_root, version, color_config)?
+            };
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             if execution_args.tasks.is_empty() {
@@ -1586,27 +1647,23 @@ pub async fn run(
                 return Ok(1);
             }
 
-            let profile_file = run_args.profile_file_and_include_args();
-            if let Some((ref file_path, include_args)) = profile_file {
-                // TODO: Do we want to handle the result / error?
-                let _ = logger.enable_chrome_tracing(file_path, include_args);
-            }
-
             run_args.track(&event);
-            let exit_code = run::run(base, event).await.inspect(|code| {
-                if *code != 0 {
-                    error!("run failed: command  exited ({code})");
-                }
-            })?;
+            let exit_code = run::run(base, event, http_client_cell)
+                .await
+                .inspect(|code| {
+                    if *code != 0 {
+                        error!("run failed: command  exited ({code})");
+                    }
+                })?;
 
-            if let Some((ref file_path, _)) = profile_file {
-                // Flush the chrome trace so the file is fully written
-                // before we read it for markdown generation.
+            // Chrome tracing is enabled early in shim::run(). Here we just
+            // flush and generate the markdown summary.
+            if let Some(file_path) = logger.chrome_tracing_file() {
                 let _ = logger.flush_chrome_tracing();
 
                 let md_path = format!("{file_path}.md");
                 if let Err(e) = turborepo_profile_md::trace_to_markdown(
-                    std::path::Path::new(file_path),
+                    std::path::Path::new(&file_path),
                     std::path::Path::new(&md_path),
                 ) {
                     warn!("Failed to generate profile markdown: {e}");
@@ -1710,12 +1767,67 @@ mod test {
     use std::{assert_matches::assert_matches, ffi::OsString};
 
     use camino::Utf8PathBuf;
-    use clap::Parser;
+    use clap::{CommandFactory, Parser};
     use insta::assert_snapshot;
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
     use crate::cli::{ContinueMode, ExecutionArgs, LinkTarget, RunArgs};
+
+    fn get_subcommand(name: &str) -> clap::Command {
+        Args::command()
+            .find_subcommand(name)
+            .unwrap_or_else(|| panic!("subcommand '{name}' not found"))
+            .clone()
+    }
+
+    #[test]
+    fn turbo_short_help() {
+        let mut cmd = Args::command();
+        let mut buf = Vec::new();
+        cmd.write_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
+
+    #[test]
+    fn turbo_long_help() {
+        let mut cmd = Args::command();
+        let mut buf = Vec::new();
+        cmd.write_long_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
+
+    #[test]
+    fn link_short_help() {
+        let mut cmd = get_subcommand("link");
+        let mut buf = Vec::new();
+        cmd.write_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
+
+    #[test]
+    fn unlink_short_help() {
+        let mut cmd = get_subcommand("unlink");
+        let mut buf = Vec::new();
+        cmd.write_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
+
+    #[test]
+    fn login_short_help() {
+        let mut cmd = get_subcommand("login");
+        let mut buf = Vec::new();
+        cmd.write_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
+
+    #[test]
+    fn logout_short_help() {
+        let mut cmd = get_subcommand("logout");
+        let mut buf = Vec::new();
+        cmd.write_help(&mut buf).unwrap();
+        assert_snapshot!(String::from_utf8(buf).unwrap());
+    }
 
     struct CommandTestCase {
         command: &'static str,
