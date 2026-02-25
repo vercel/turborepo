@@ -67,13 +67,15 @@ out of the box. If you wish to select `native-tls`, you may do so by running `ca
 
 ### OpenTelemetry Observability
 
-Turborepo includes optional OpenTelemetry (OTel) support for exporting metrics. OTel is an experimental feature and is **not** included in default builds. If you wish to build `turbo` with OTel support, you can enable it by running:
+Turborepo includes OpenTelemetry (OTel) support for exporting metrics in default builds.
+
+If you need to build without OTel support, use:
 
 ```bash
-cargo build -p turbo --features otel
+cargo build -p turbo --no-default-features --features rustls-tls
 ```
 
-Note that when OTel is disabled at compile time (the default), the `experimentalObservability` configuration in `turbo.json` and related CLI flags will be ignored (they will not error, but no metrics will be exported). IDEs using the devcontainer configuration will have OTel enabled automatically for development purposes.
+`experimentalObservability` is still gated by `futureFlags.experimentalObservability` in `turbo.json`.
 
 ## Running tests
 

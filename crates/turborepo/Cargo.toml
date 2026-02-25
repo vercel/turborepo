@@ -5,11 +5,12 @@ edition = { workspace = true }
 license = "MIT"
 
 [features]
-# By default, we enable rustls-tls for reqwest via downstream transitive features.
+# By default, we enable rustls-tls for reqwest via downstream transitive features
+# and include OTel observability support.
 # This is for the convenience of running daily dev workflows, i.e running
 # `cargo xxx` without explicitly specifying features, not that we want to
 # promote this as default backend.
-default = ["rustls-tls"]
+default = ["rustls-tls", "otel"]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
 pprof = ["turborepo-lib/pprof"]
