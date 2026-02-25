@@ -13,9 +13,9 @@ use crate::config::{
 /// (`TURBO_EXPERIMENTAL_OTEL_*`) or in `turbo.json` under
 /// `experimentalObservability.otel`.
 ///
-/// Note: CLI flags and environment variables work independently of the
-/// `futureFlags.experimentalObservability` setting. The future flag only
-/// gates the `experimentalObservability` configuration in `turbo.json`.
+/// Note: `futureFlags.experimentalObservability` is a hard gate. If it is not
+/// enabled in `turbo.json`, configuring observability from any source is
+/// rejected.
 #[derive(Parser, Clone, Debug, Default, PartialEq)]
 pub struct ExperimentalOtelCliArgs {
     /// Enable or disable OpenTelemetry metrics export.

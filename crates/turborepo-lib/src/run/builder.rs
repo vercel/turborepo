@@ -450,14 +450,15 @@ impl RunBuilder {
             self.opts.run_opts.dry_run.is_some(),
         ));
 
-        // Warn if observability config is present but the feature flag is not enabled
+        // futureFlags are hard gates: reject observability config when disabled.
         if let Some(obs_opts) = &self.opts.experimental_observability {
             if obs_opts.otel.is_some() && !self.opts.future_flags.experimental_observability {
-                tracing::warn!(
-                    "experimentalObservability.otel is configured but \
-                     futureFlags.experimentalObservability is not enabled in turbo.json. The \
-                     observability config will be ignored."
-                );
+                return Err(turborepo_config::Error::InvalidExperimentalOtelConfig {
+                    message: "experimentalObservability.otel is configured but \
+                              futureFlags.experimentalObservability is not enabled in turbo.json."
+                        .to_string(),
+                }
+                .into());
             }
         }
 
