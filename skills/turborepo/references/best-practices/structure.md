@@ -95,7 +95,7 @@ Package tasks enable Turborepo to:
 
 ```json
 {
-  "$schema": "https://turborepo.dev/schema.v2.json",
+  "$schema": "https://v2-8-11-canary-28.turborepo.dev/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],

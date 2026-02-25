@@ -59,6 +59,16 @@ stage-release:
 	# Update turborepo skill version (in YAML frontmatter metadata block only)
 	node -e "const fs=require('fs'),p='$(CLI_DIR)/../skills/turborepo/SKILL.md',c=fs.readFileSync(p,'utf-8');fs.writeFileSync(p,c.replace(/^(---\n[\s\S]*?metadata:\n\s*version:\s*).+?(\n[\s\S]*?---)/,'\$$1$(TURBO_VERSION)\$$2'))"
 
+	# Update $schema URLs in turborepo skill files to use versioned subdomain
+	node -e "\
+	  const fs=require('fs'),path=require('path');\
+	  const sub='v'+'$(TURBO_VERSION)'.replace(/[\.\+]/g,'-');\
+	  const url='https://'+sub+'.turborepo.dev/schema.json';\
+	  const re=/https:\/\/(?:v[\w-]+\.)?turborepo\.(?:dev|com)\/schema(?:\.v2)?\.json|https:\/\/turbo\.build\/schema(?:\.v2)?\.json/g;\
+	  function walk(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isDirectory())walk(p);else if(e.name.endsWith('.md')){const c=fs.readFileSync(p,'utf-8');if(re.test(c)){re.lastIndex=0;fs.writeFileSync(p,c.replace(re,url))}}}}\
+	  walk('$(CLI_DIR)/../skills/turborepo');\
+	"
+
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
 	HUSKY=0 git push origin staging-$(TURBO_VERSION) --force

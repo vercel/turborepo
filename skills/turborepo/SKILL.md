@@ -722,7 +722,7 @@ import { Button } from "@repo/ui/button";
 
 ```json
 {
-  "$schema": "https://turborepo.dev/schema.v2.json",
+  "$schema": "https://v2-8-11-canary-28.turborepo.dev/schema.json",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
