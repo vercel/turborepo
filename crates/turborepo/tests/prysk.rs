@@ -23,10 +23,9 @@ fn prysk_venv_dir() -> &'static Path {
 }
 
 fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..")
-        .canonicalize()
+    // Use dunce to avoid \\?\ extended-length path prefix on Windows,
+    // which breaks Python's venv module.
+    dunce::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .expect("failed to resolve workspace root")
 }
 
@@ -111,6 +110,12 @@ fn run_prysk_test(path: &Path) -> datatest_stable::Result<()> {
     }
 
     cmd.arg(path);
+
+    // Strip CI env vars so turbo inside .t files uses its default log format
+    // instead of GitHub Actions `::group::` markers. The old CI setup ran prysk
+    // through `turbo run --env-mode=strict` which stripped these automatically.
+    cmd.env_remove("CI");
+    cmd.env_remove("GITHUB_ACTIONS");
 
     // macOS tmp dirs set by prysk can fail — use /tmp directly.
     if cfg!(target_os = "macos") {
