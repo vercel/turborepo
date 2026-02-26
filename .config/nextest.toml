@@ -1,6 +1,9 @@
 # Nextest configuration for Turborepo
 # See https://nexte.st/book/configuration.html
 
+[profile.default]
+failure-output = "immediate-final"
+
 [test-groups]
 # turborepo-process tests should run serially to avoid resource contention
 # and timing issues, especially on macOS where PTY devices are limited
