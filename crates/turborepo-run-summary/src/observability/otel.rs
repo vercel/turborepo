@@ -387,7 +387,11 @@ mod tests {
 
         for case in cases {
             let result = metrics_config(case.options.as_ref());
-            assert_eq!(result, case.expected, "case '{}': metrics mismatch", case.name);
+            assert_eq!(
+                result, case.expected,
+                "case '{}': metrics mismatch",
+                case.name
+            );
         }
     }
 
