@@ -2284,19 +2284,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "07e28edb80900c19c28f1072f2e8aeca7fa06b23cd4169cefe1af5aa3260783f"
 
 [[package]]
-name = "git2"
-version = "0.20.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b88256088d75a56f8ecfa070513a775dd9107f6530ef14919dac831af9cfe2b"
-dependencies = [
- "bitflags 2.10.0",
- "libc",
- "libgit2-sys",
- "log",
- "url",
-]
-
-[[package]]
 name = "gix-actor"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3454,18 +3441,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bcc35a38544a891a5f7c865aca548a982ccb3b8650a5b06d0fd33a10283c56fc"
 
 [[package]]
-name = "libgit2-sys"
-version = "0.18.3+1.9.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9b3acc4b91781bb0b3386669d325163746af5f6e4f73e6d2d630e09a35f3487"
-dependencies = [
- "cc",
- "libc",
- "libz-sys",
- "pkg-config",
-]
-
-[[package]]
 name = "libloading"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3502,18 +3477,6 @@ dependencies = [
  "anstyle",
  "clap",
  "escape8259",
-]
-
-[[package]]
-name = "libz-sys"
-version = "1.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9702761c3935f8cc2f101793272e202c72b99da8f4224a19ddcf1279a6450bbf"
-dependencies = [
- "cc",
- "libc",
- "pkg-config",
- "vcpkg",
 ]
 
 [[package]]
@@ -7276,7 +7239,6 @@ dependencies = [
  "biome_deserialize_macros 0.6.0",
  "biome_diagnostics",
  "camino",
- "git2",
  "globwalk",
  "indicatif",
  "itertools 0.14.0",
@@ -7540,7 +7502,6 @@ dependencies = [
  "bitflags 1.3.2",
  "fsevent-sys",
  "futures",
- "git2",
  "libc",
  "notify",
  "radix_trie",
@@ -7651,7 +7612,6 @@ dependencies = [
  "dirs-next",
  "either",
  "futures",
- "git2",
  "globwalk",
  "go-parse-duration",
  "human-panic",
@@ -8027,8 +7987,8 @@ name = "turborepo-scm"
 version = "0.1.0"
 dependencies = [
  "bstr 1.12.1",
- "git2",
  "gix-index",
+ "gix-object",
  "globwalk",
  "hex",
  "ignore",

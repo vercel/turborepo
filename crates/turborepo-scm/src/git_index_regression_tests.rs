@@ -9,7 +9,6 @@
 //! - Equivalence: full pipeline produces correct hashes for various repo states
 //! - Edge cases: submodules, symlinks, gitignore, empty repos
 //! - Contract: sorted invariants, OID compatibility, clean-tree guarantees
-#![cfg(all(test, feature = "git2"))]
 
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
@@ -557,13 +556,18 @@ fn test_oid_from_index_matches_hash_object() {
     let committed_oid = committed_hashes.get(&path("verify.txt")).unwrap();
 
     let full_path = repo.root.join_unix_path(path("my-pkg/verify.txt"));
-    let oid = git2::Oid::hash_file(git2::ObjectType::Blob, &full_path).unwrap();
-    let mut hex_buf = [0u8; 40];
-    hex::encode_to_slice(oid.as_bytes(), &mut hex_buf).unwrap();
-    let hash_object_oid = std::str::from_utf8(&hex_buf).unwrap();
+    let file_contents = std::fs::read(&full_path).unwrap();
+    let oid = gix_object::compute_hash(
+        gix_index::hash::Kind::Sha1,
+        gix_object::Kind::Blob,
+        &file_contents,
+    )
+    .unwrap();
+    let hash_object_oid = oid.to_string();
 
     assert_eq!(
-        committed_oid, hash_object_oid,
+        committed_oid,
+        hash_object_oid.as_str(),
         "ls-tree OID must match hash_object OID for the same content"
     );
 }
