@@ -1,37 +1,13 @@
-use std::{path::Path, process::Command};
+pub mod setup;
 
-use turbopath::AbsoluteSystemPath;
-use which::which;
+use std::path::Path;
 
 pub fn setup_fixture(
     fixture: &str,
     package_manager: &str,
     test_dir: &Path,
 ) -> Result<(), anyhow::Error> {
-    let script_path = AbsoluteSystemPath::new(env!("CARGO_MANIFEST_DIR"))?.join_components(&[
-        "..",
-        "..",
-        "turborepo-tests",
-        "helpers",
-        "setup_integration_test.sh",
-    ]);
-
-    let unix_script_path = if cfg!(windows) {
-        script_path.as_str().replace("\\", "/")
-    } else {
-        script_path.to_string()
-    };
-
-    let bash = which("bash")?;
-
-    Command::new(bash)
-        .arg("-c")
-        .arg(format!("{unix_script_path} {fixture} {package_manager}"))
-        .current_dir(test_dir)
-        .spawn()?
-        .wait()?;
-
-    Ok(())
+    setup::setup_integration_test(test_dir, fixture, package_manager, true)
 }
 
 /// Executes a command and snapshots the output as JSON.
