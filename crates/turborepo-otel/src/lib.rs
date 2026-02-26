@@ -231,9 +231,7 @@ pub enum Error {
     MissingEndpoint,
     #[error("insecure OTLP endpoint `{0}`: endpoint must start with https://")]
     InsecureTransport(String),
-    #[error(
-        "unsupported OTLP transport scheme `{0}`: endpoint must start with https://"
-    )]
+    #[error("unsupported OTLP transport scheme `{0}`: endpoint must start with https://")]
     UnsupportedTransport(String),
     #[error("failed to build OTLP exporter: {0}")]
     Exporter(opentelemetry_otlp::ExporterBuildError),

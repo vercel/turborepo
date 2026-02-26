@@ -60,7 +60,8 @@ fn config_from_options(
     }
     if !is_https_endpoint(endpoint) {
         tracing::warn!(
-            "Ignoring experimentalObservability.otel endpoint `{}` because only HTTPS endpoints are supported.",
+            "Ignoring experimentalObservability.otel endpoint `{}` because only HTTPS endpoints \
+             are supported.",
             endpoint
         );
         return None;
