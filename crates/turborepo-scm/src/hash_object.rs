@@ -1,4 +1,3 @@
-#![cfg(feature = "git2")]
 use rayon::prelude::*;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
@@ -9,9 +8,11 @@ const MAX_RETRIES: u32 = 10;
 const BASE_DELAY_MS: u64 = 10;
 const MAX_DELAY_MS: u64 = 1000;
 
-fn hash_file_with_retry(path: &AbsoluteSystemPath) -> Result<git2::Oid, git2::Error> {
+fn hash_file_with_retry(
+    path: &AbsoluteSystemPath,
+) -> Result<gix_index::hash::ObjectId, std::io::Error> {
     for attempt in 0..MAX_RETRIES {
-        match git2::Oid::hash_file(git2::ObjectType::Blob, path) {
+        match hash_file(path) {
             Ok(oid) => return Ok(oid),
             Err(e) if is_too_many_open_files(&e) => {
                 let delay = std::cmp::min(BASE_DELAY_MS * 2u64.pow(attempt), MAX_DELAY_MS);
@@ -25,15 +26,18 @@ fn hash_file_with_retry(path: &AbsoluteSystemPath) -> Result<git2::Oid, git2::Er
             Err(e) => return Err(e),
         }
     }
-    git2::Oid::hash_file(git2::ObjectType::Blob, path)
+    hash_file(path)
 }
 
-fn is_too_many_open_files(e: &git2::Error) -> bool {
-    if e.class() != git2::ErrorClass::Os {
-        return false;
-    }
-    let msg = e.message();
-    msg.contains("Too many open files") || msg.contains("EMFILE")
+fn hash_file(path: &AbsoluteSystemPath) -> Result<gix_index::hash::ObjectId, std::io::Error> {
+    let data = std::fs::read(path)?;
+    gix_object::compute_hash(gix_index::hash::Kind::Sha1, gix_object::Kind::Blob, &data)
+        .map_err(std::io::Error::other)
+}
+
+fn is_too_many_open_files(e: &std::io::Error) -> bool {
+    matches!(e.raw_os_error(), Some(24)) // EMFILE
+        || e.to_string().contains("Too many open files")
 }
 
 #[tracing::instrument(skip(git_root, hashes, to_hash))]
@@ -71,15 +75,14 @@ pub(crate) fn hash_objects(
                     )))
                 }
                 Err(e) => {
-                    if e.class() == git2::ErrorClass::Os
-                        && full_file_path
-                            .symlink_metadata()
-                            .map(|md| md.is_symlink())
-                            .unwrap_or(false)
+                    if full_file_path
+                        .symlink_metadata()
+                        .map(|md| md.is_symlink())
+                        .unwrap_or(false)
                     {
                         Ok(None)
                     } else {
-                        Err(Error::git2_error_context(e, full_file_path.to_string()))
+                        Err(Error::git_error(format!("{}: {}", full_file_path, e)))
                     }
                 }
             }
@@ -174,5 +177,59 @@ mod test {
             let result = hash_objects(&git_root, pkg_path, to_hash, &mut hashes);
             assert!(result.is_err());
         }
+    }
+
+    /// Verify that our blob hashing produces OIDs identical to `git
+    /// hash-object`. This is critical because changing the hash algorithm
+    /// would silently invalidate every turbo cache entry.
+    #[test]
+    fn test_blob_hash_matches_git_hash_object() {
+        let tmp = tempfile::tempdir().unwrap();
+        let tmp_path = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+        // Initialize a git repo so hash_objects can run
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(tmp.path())
+            .output()
+            .unwrap();
+
+        let cases: &[(&str, &[u8])] = &[
+            ("empty.txt", b""),
+            ("hello.txt", b"hello world\n"),
+            ("binary.bin", &[0u8, 1, 2, 255, 254, 253]),
+            ("large.txt", &[b'x'; 10_000]),
+        ];
+
+        for (name, content) in cases {
+            std::fs::write(tmp.path().join(name), content).unwrap();
+        }
+
+        // Get expected hashes from git itself
+        let mut expected = GitHashes::new();
+        for (name, _) in cases {
+            let output = std::process::Command::new("git")
+                .args(["hash-object", name])
+                .current_dir(tmp.path())
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git hash-object failed for {name}");
+            let hash = String::from_utf8(output.stdout).unwrap();
+            let hash = hash.trim();
+            expected.insert(
+                RelativeUnixPathBuf::new(*name).unwrap(),
+                OidHash::from_hex_str(hash),
+            );
+        }
+
+        // Hash with our implementation
+        let to_hash: Vec<_> = cases
+            .iter()
+            .map(|(name, _)| RelativeUnixPathBuf::new(*name).unwrap())
+            .collect();
+        let mut actual = GitHashes::new();
+        hash_objects(&tmp_path, &tmp_path, to_hash, &mut actual).unwrap();
+
+        assert_eq!(actual, expected, "blob hashes must match git hash-object");
     }
 }

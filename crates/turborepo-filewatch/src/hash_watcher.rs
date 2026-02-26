@@ -686,10 +686,10 @@ impl Subscriber {
 mod tests {
     use std::{
         assert_matches::assert_matches,
+        process::Command,
         time::{Duration, Instant},
     };
 
-    use git2::Repository;
     use tempfile::{TempDir, tempdir};
     use turbopath::{
         AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf,
@@ -705,36 +705,48 @@ mod tests {
         package_watcher::PackageWatcher,
     };
 
-    fn commit_all(repo: &Repository) {
-        let mut index = repo.index().unwrap();
-        index
-            .add_all(["."].iter(), git2::IndexAddOption::DEFAULT, None)
+    fn commit_all(repo_root: &AbsoluteSystemPath) {
+        let status = Command::new("git")
+            .args(["add", "."])
+            .current_dir(repo_root.as_std_path())
+            .status()
             .unwrap();
-        let tree_oid = index.write_tree().unwrap();
-        index.write().unwrap();
-        let tree = repo.find_tree(tree_oid).unwrap();
-        let previous_commit = repo.head().ok().map(|r| r.peel_to_commit().unwrap());
-        repo.commit(
-            Some("HEAD"),
-            &repo.signature().unwrap(),
-            &repo.signature().unwrap(),
-            "Commit",
-            &tree,
-            previous_commit.as_ref().as_slice(),
-        )
-        .unwrap();
+        assert!(status.success(), "git add failed");
+
+        let status = Command::new("git")
+            .args(["commit", "-m", "Commit", "--allow-empty"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        assert!(status.success(), "git commit failed");
     }
 
-    fn setup_fixture() -> (TempDir, Repository, AbsoluteSystemPathBuf) {
+    fn setup_fixture() -> (TempDir, AbsoluteSystemPathBuf) {
         let tmp = tempdir().unwrap();
         let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
             .unwrap()
             .to_realpath()
             .unwrap();
-        let repo = Repository::init(&repo_root).unwrap();
-        let mut config = repo.config().unwrap();
-        config.set_str("user.name", "test").unwrap();
-        config.set_str("user.email", "test@example.com").unwrap();
+        let status = Command::new("git")
+            .args(["init"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        assert!(status.success(), "git init failed");
+
+        let status = Command::new("git")
+            .args(["config", "user.name", "test"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        assert!(status.success(), "git config user.name failed");
+
+        let status = Command::new("git")
+            .args(["config", "user.email", "test@example.com"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        assert!(status.success(), "git config user.email failed");
         // Setup npm workspaces, .gitignore for dist/ and two packages, one with a
         // nested .gitignore
         //
@@ -795,12 +807,12 @@ mod tests {
             .join_component("bar-file")
             .create_with_contents("bar file contents")
             .unwrap();
-        commit_all(&repo);
+        commit_all(&repo_root);
 
-        (tmp, repo, repo_root)
+        (tmp, repo_root)
     }
 
-    fn create_fixture_branch(repo: &Repository, repo_root: &AbsoluteSystemPath) {
+    fn create_fixture_branch(repo_root: &AbsoluteSystemPath) {
         // create a branch that deletes bar-file and adds baz-file to the bar package
         let bar_dir = repo_root.join_components(&["packages", "bar"]);
         bar_dir.join_component("bar-file").remove().unwrap();
@@ -808,20 +820,28 @@ mod tests {
             .join_component("baz-file")
             .create_with_contents("baz file contents")
             .unwrap();
-        let current_commit = repo
-            .head()
-            .ok()
-            .map(|r| r.peel_to_commit().unwrap())
+
+        let status = Command::new("git")
+            .args(["branch", "test-branch"])
+            .current_dir(repo_root.as_std_path())
+            .status()
             .unwrap();
-        repo.branch("test-branch", &current_commit, false).unwrap();
-        repo.set_head("refs/heads/test-branch").unwrap();
-        commit_all(repo);
+        assert!(status.success(), "git branch failed");
+
+        let status = Command::new("git")
+            .args(["checkout", "test-branch"])
+            .current_dir(repo_root.as_std_path())
+            .status()
+            .unwrap();
+        assert!(status.success(), "git checkout failed");
+
+        commit_all(repo_root);
     }
 
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_basic_file_changes() {
-        let (_tmp, _repo, repo_root) = setup_fixture();
+        let (_tmp, repo_root) = setup_fixture();
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
 
@@ -909,7 +929,7 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_switch_branch() {
-        let (_tmp, repo, repo_root) = setup_fixture();
+        let (_tmp, repo_root) = setup_fixture();
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
 
@@ -946,7 +966,7 @@ mod tests {
         )
         .await;
 
-        create_fixture_branch(&repo, &repo_root);
+        create_fixture_branch(&repo_root);
 
         retry_get_hash(
             &hash_watcher,
@@ -963,7 +983,7 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_non_existent_package() {
-        let (_tmp, _repo, repo_root) = setup_fixture();
+        let (_tmp, repo_root) = setup_fixture();
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
 
@@ -1098,7 +1118,7 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_basic_file_changes_with_inputs() {
-        let (_tmp, _repo, repo_root) = setup_fixture();
+        let (_tmp, repo_root) = setup_fixture();
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
 
@@ -1155,7 +1175,7 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_switch_branch_with_inputs() {
-        let (_tmp, repo, repo_root) = setup_fixture();
+        let (_tmp, repo_root) = setup_fixture();
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
 
@@ -1193,7 +1213,7 @@ mod tests {
         )
         .await;
 
-        create_fixture_branch(&repo, &repo_root);
+        create_fixture_branch(&repo_root);
 
         retry_get_hash(
             &hash_watcher,
@@ -1210,7 +1230,7 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_inputs_with_turbo_defaults() {
-        let (_tmp, _repo, repo_root) = setup_fixture();
+        let (_tmp, repo_root) = setup_fixture();
         // Add an ignored file
         let foo_path = repo_root.join_components(&["packages", "foo"]);
         let ignored_file_path = foo_path.join_components(&["out", "ignored-file"]);
@@ -1303,7 +1323,7 @@ mod tests {
     #[tokio::test]
     #[tracing_test::traced_test]
     async fn test_negative_inputs() {
-        let (_tmp, _repo, repo_root) = setup_fixture();
+        let (_tmp, repo_root) = setup_fixture();
 
         let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
 

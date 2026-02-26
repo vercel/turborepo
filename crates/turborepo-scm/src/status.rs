@@ -1,6 +1,3 @@
-// This module does not require git2, but is only used by modules that require
-// git2
-#![cfg(feature = "git2")]
 use std::{
     io::{BufRead, BufReader, Read},
     process::{Command, Stdio},
@@ -49,42 +46,6 @@ impl GitRepo {
             .ok_or_else(|| Error::git_error("failed to get stderr for git status"))?;
         let parse_result = read_status(stdout, root_path, pkg_prefix, hashes);
         wait_for_success(git, &mut stderr, "git status", root_path, parse_result)
-    }
-
-    /// Run `git status` once at the git repo root, returning all status entries
-    /// with git-root-relative paths.
-    ///
-    /// Uses libgit2 to compute status in-process, avoiding the overhead of
-    /// spawning a git subprocess.
-    #[tracing::instrument(skip(self))]
-    pub(crate) fn git_status_repo_root(&self) -> Result<Vec<RepoStatusEntry>, Error> {
-        let repo = git2::Repository::open(self.root.as_std_path())
-            .map_err(|e| Error::git2_error_context(e, "opening repo for status".into()))?;
-
-        let mut opts = git2::StatusOptions::new();
-        opts.include_untracked(true)
-            .recurse_untracked_dirs(true)
-            .renames_head_to_index(false)
-            .renames_index_to_workdir(false);
-
-        let statuses = repo
-            .statuses(Some(&mut opts))
-            .map_err(|e| Error::git2_error_context(e, "computing status".into()))?;
-
-        let mut entries = Vec::with_capacity(statuses.len());
-        for entry in statuses.iter() {
-            let path_str = match entry.path() {
-                Some(p) => p,
-                None => continue,
-            };
-            let path = RelativeUnixPathBuf::new(path_str)?;
-            let status = entry.status();
-            let is_delete =
-                status.intersects(git2::Status::INDEX_DELETED | git2::Status::WT_DELETED);
-            entries.push(RepoStatusEntry { path, is_delete });
-        }
-
-        Ok(entries)
     }
 }
 

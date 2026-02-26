@@ -45,7 +45,6 @@ dialoguer = { workspace = true, features = ["fuzzy-select", "password"] }
 dirs-next = "2.0.0"
 either = { workspace = true }
 futures = { workspace = true }
-git2 = { workspace = true, default-features = false }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 go-parse-duration = "0.1.1"
 human-panic = "1.2.1"
@@ -124,7 +123,7 @@ turborepo-query = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-run-cache = { path = "../turborepo-run-cache" }
 turborepo-run-summary = { workspace = true }
-turborepo-scm = { workspace = true, features = ["git2", "gix"] }
+turborepo-scm = { workspace = true }
 turborepo-scope = { path = "../turborepo-scope" }
 turborepo-shim = { workspace = true }
 turborepo-signals = { workspace = true }

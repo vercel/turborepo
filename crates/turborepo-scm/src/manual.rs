@@ -1,6 +1,3 @@
-// This module doesn't require git2, but it is only used by modules that require
-// git2.
-#![cfg(feature = "git2")]
 use std::{
     collections::HashSet,
     io::{ErrorKind, Read},

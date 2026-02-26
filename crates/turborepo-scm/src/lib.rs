@@ -34,19 +34,11 @@ mod git_index_regression_tests;
 #[cfg(test)]
 mod test_utils;
 
-#[cfg(feature = "git2")]
 pub use repo_index::RepoGitIndex;
 pub use worktree::WorktreeInfo;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[cfg(feature = "git2")]
-    #[error("Git error on {1}: {0}")]
-    Git2(
-        #[source] git2::Error,
-        String,
-        #[backtrace] backtrace::Backtrace,
-    ),
     #[error("Git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
     #[error(
@@ -193,17 +185,10 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
-    #[cfg(feature = "git2")]
-    pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
-        Error::Git2(error, error_context, Backtrace::capture())
-    }
-
     /// Returns true if this error indicates OS resource exhaustion (e.g. too
     /// many open files) where a fallback to manual hashing would also fail.
     pub fn is_resource_exhaustion(&self) -> bool {
         match self {
-            #[cfg(feature = "git2")]
-            Error::Git2(e, _, _) => e.class() == git2::ErrorClass::Os,
             Error::Io(e, _) => is_os_resource_error(e),
             Error::Walk(e) => walk_error_is_resource_exhaustion(e),
             _ => false,
@@ -405,7 +390,6 @@ impl SCM {
     /// results. Returns `None` for manual SCM mode or when the package count
     /// is too small to benefit. Callers should build this once before parallel
     /// file hashing and pass it through to `get_package_file_hashes`.
-    #[cfg(feature = "git2")]
     pub fn build_repo_index(&self, package_count: usize) -> Option<RepoGitIndex> {
         // The repo index trades 2N subprocess spawns for 2 repo-wide git
         // commands + a BTreeMap build. For small repos, the overhead of
@@ -442,7 +426,6 @@ impl SCM {
     /// background thread before the package graph is built so the git I/O
     /// overlaps with package discovery. If the repo turns out to be small the
     /// caller can simply ignore the result.
-    #[cfg(feature = "git2")]
     pub fn build_repo_index_eager(&self) -> Option<RepoGitIndex> {
         match self {
             SCM::Git(git) => match RepoGitIndex::new(git) {
