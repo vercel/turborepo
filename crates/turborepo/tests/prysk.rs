@@ -196,6 +196,12 @@ fn run_prysk_test(path: &Path) -> datatest_stable::Result<()> {
     }
     cmd.env_remove("CI");
 
+    // Suppress package manager update notifications. The old CI's Node.js
+    // prysk wrapper set this, and CI=true also suppressed them — but we
+    // strip CI above.
+    cmd.env("NO_UPDATE_NOTIFIER", "1");
+    cmd.env("NPM_CONFIG_UPDATE_NOTIFIER", "false");
+
     // macOS tmp dirs set by prysk can fail — use /tmp directly.
     if cfg!(target_os = "macos") {
         cmd.env("TMPDIR", "/tmp");
