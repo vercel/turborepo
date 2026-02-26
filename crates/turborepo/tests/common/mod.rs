@@ -2,6 +2,7 @@ pub mod setup;
 
 use std::path::Path;
 
+#[allow(dead_code)]
 pub fn setup_fixture(
     fixture: &str,
     package_manager: &str,

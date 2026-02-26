@@ -102,10 +102,14 @@ pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
 
 /// Write the `packageManager` field into `package.json` and configure corepack.
 ///
+/// Returns the path to the corepack install directory (outside `target_dir` so
+/// corepack shims don't appear as task inputs).
+///
 /// Equivalent to setup_package_manager.sh.
 pub fn setup_package_manager(
     target_dir: &Path,
     package_manager: &str,
+    corepack_dir: &Path,
 ) -> Result<(), anyhow::Error> {
     // Read, modify, and write package.json
     let pkg_json_path = target_dir.join("package.json");
@@ -126,8 +130,7 @@ pub fn setup_package_manager(
 
     // Enable corepack for this package manager
     let pm_name = package_manager.split('@').next().unwrap_or(package_manager);
-    let corepack_dir = target_dir.join("corepack");
-    fs::create_dir_all(&corepack_dir)?;
+    fs::create_dir_all(corepack_dir)?;
 
     let status = cmd("corepack")
         .arg("enable")
@@ -149,12 +152,15 @@ pub fn setup_package_manager(
 /// Install dependencies using the specified package manager.
 ///
 /// Equivalent to install_deps.sh.
-pub fn install_deps(target_dir: &Path, package_manager: &str) -> Result<(), anyhow::Error> {
+pub fn install_deps(
+    target_dir: &Path,
+    package_manager: &str,
+    corepack_dir: &Path,
+) -> Result<(), anyhow::Error> {
     let pm_name = package_manager.split('@').next().unwrap_or(package_manager);
 
     // Build the PATH with the corepack directory so the correct PM version is used
-    let corepack_dir = target_dir.join("corepack");
-    let path_env = prepend_to_path(&corepack_dir);
+    let path_env = prepend_to_path(corepack_dir);
 
     match pm_name {
         "npm" => {
@@ -204,17 +210,24 @@ pub fn install_deps(target_dir: &Path, package_manager: &str) -> Result<(), anyh
 }
 
 /// The full integration test setup, equivalent to `setup_integration_test.sh`.
+///
+/// The corepack install directory is placed outside `target_dir` (in a sibling
+/// temp directory) so that corepack shims don't appear as turbo task inputs,
+/// matching the prysk shell setup behavior.
 pub fn setup_integration_test(
     target_dir: &Path,
     fixture: &str,
     package_manager: &str,
     install: bool,
 ) -> Result<(), anyhow::Error> {
+    let corepack_dir = target_dir.with_file_name("corepack");
+    fs::create_dir_all(&corepack_dir)?;
+
     copy_fixture(fixture, target_dir)?;
     setup_git(target_dir)?;
-    setup_package_manager(target_dir, package_manager)?;
+    setup_package_manager(target_dir, package_manager, &corepack_dir)?;
     if install {
-        install_deps(target_dir, package_manager)?;
+        install_deps(target_dir, package_manager, &corepack_dir)?;
     }
     Ok(())
 }
