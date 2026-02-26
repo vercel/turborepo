@@ -323,7 +323,7 @@ Observability is configured via `experimentalObservability.otel` in `turbo.json`
     "otel": {
       "enabled": true,
       "protocol": "http/protobuf",
-      "endpoint": "http://localhost:4318/v1/metrics",
+      "endpoint": "https://otel-collector.example.com:4318/v1/metrics",
       "resource": {
         "service.name": "turborepo"
       },

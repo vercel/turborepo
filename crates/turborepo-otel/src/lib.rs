@@ -27,7 +27,7 @@
 //! use std::time::Duration;
 //!
 //! let config = Config {
-//!     endpoint: "http://localhost:4317".to_string(),
+//!     endpoint: "https://otel-collector.example.com:4317".to_string(),
 //!     protocol: Protocol::Grpc,
 //!     headers: BTreeMap::new(),
 //!     timeout: Duration::from_secs(10),
@@ -88,8 +88,8 @@ use tracing::warn;
 
 /// Protocol supported by the OTLP exporter.
 ///
-/// Both gRPC and HTTP transports use standard `http://` or `https://` URL
-/// schemes - see [`validate_endpoint`] for details.
+/// Both gRPC and HTTP transports use `https://` endpoints - see
+/// [`validate_endpoint`] for details.
 #[derive(
     Debug,
     Clone,
@@ -229,8 +229,10 @@ impl TaskCacheStatus {
 pub enum Error {
     #[error("experimentalOtel requires an endpoint")]
     MissingEndpoint,
+    #[error("insecure OTLP endpoint `{0}`: endpoint must start with https://")]
+    InsecureTransport(String),
     #[error(
-        "unsupported OTLP transport scheme `{0}`: endpoint must start with http:// or https://"
+        "unsupported OTLP transport scheme `{0}`: endpoint must start with https://"
     )]
     UnsupportedTransport(String),
     #[error("failed to build OTLP exporter: {0}")]
@@ -395,11 +397,10 @@ impl Instruments {
     }
 }
 
-/// Validates that the endpoint is non-empty and uses a supported OTLP transport
-/// scheme.
+/// Validates that the endpoint is non-empty and uses a secure OTLP transport
+/// URL scheme.
 ///
-/// The OTEL spec only supports gRPC and HTTP transports, both of which require
-/// `http://` or `https://` URL schemes.
+/// Turborepo requires OTLP endpoints to use TLS (`https://`).
 fn validate_endpoint(endpoint: &str) -> Result<(), Error> {
     let endpoint = endpoint.trim();
     if endpoint.is_empty() {
@@ -407,16 +408,20 @@ fn validate_endpoint(endpoint: &str) -> Result<(), Error> {
     }
 
     let lower = endpoint.to_lowercase();
-    if !lower.starts_with("http://") && !lower.starts_with("https://") {
-        // Extract the scheme portion for a helpful error message
-        let scheme = endpoint
-            .split_once("://")
-            .map(|(s, _)| s)
-            .unwrap_or(endpoint);
-        return Err(Error::UnsupportedTransport(scheme.to_string()));
+    if lower.starts_with("https://") {
+        return Ok(());
     }
 
-    Ok(())
+    if lower.starts_with("http://") {
+        return Err(Error::InsecureTransport(endpoint.to_string()));
+    }
+
+    // Extract the scheme portion for a helpful error message.
+    let scheme = endpoint
+        .split_once("://")
+        .map(|(s, _)| s)
+        .unwrap_or(endpoint);
+    Err(Error::UnsupportedTransport(scheme.to_string()))
 }
 
 fn build_provider(config: &Config) -> Result<SdkMeterProvider, Error> {
@@ -602,7 +607,7 @@ mod tests {
 
     #[test]
     fn test_validate_endpoint_unsupported_grpc_scheme() {
-        // grpc:// is not a valid URL scheme for OTLP - use http:// or https://
+        // grpc:// is not a valid URL scheme for OTLP - use https://
         let result = validate_endpoint("grpc://localhost:4317");
         assert!(result.is_err());
         match result.unwrap_err() {
@@ -639,9 +644,15 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_endpoint_valid_http() {
+    fn test_validate_endpoint_rejects_http() {
         let result = validate_endpoint("http://localhost:4318");
-        assert!(result.is_ok());
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            Error::InsecureTransport(endpoint) => {
+                assert_eq!(endpoint, "http://localhost:4318");
+            }
+            _ => panic!("Expected InsecureTransport error"),
+        }
     }
 
     #[test]
@@ -653,9 +664,15 @@ mod tests {
     #[test]
     fn test_validate_endpoint_case_insensitive() {
         // Scheme validation should be case-insensitive
-        assert!(validate_endpoint("HTTP://localhost:4318").is_ok());
+        assert!(matches!(
+            validate_endpoint("HTTP://localhost:4318"),
+            Err(Error::InsecureTransport(_))
+        ));
         assert!(validate_endpoint("HTTPS://localhost:4317").is_ok());
-        assert!(validate_endpoint("Http://localhost:4318").is_ok());
+        assert!(matches!(
+            validate_endpoint("Http://localhost:4318"),
+            Err(Error::InsecureTransport(_))
+        ));
     }
 
     #[test]

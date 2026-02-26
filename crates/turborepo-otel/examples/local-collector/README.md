@@ -65,12 +65,16 @@ cd /path/to/turborepo
 
 export TURBO_EXPERIMENTAL_OTEL_ENABLED=1
 export TURBO_EXPERIMENTAL_OTEL_PROTOCOL=grpc
-export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=http://127.0.0.1:4317
+export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=https://127.0.0.1:4317
 export TURBO_EXPERIMENTAL_OTEL_RESOURCE="service.name=turborepo,env=local"
 # Optional (defaults shown)
 export TURBO_EXPERIMENTAL_OTEL_METRICS_RUN_SUMMARY=1
 export TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS=0
 ```
+
+Turborepo requires OTEL endpoints to use HTTPS. If your local collector is
+plain HTTP, place it behind a local TLS terminator and point
+`TURBO_EXPERIMENTAL_OTEL_ENDPOINT` at that HTTPS listener.
 
 These environment variables bypass `turbo.json` and directly configure the OTEL exporter.
 

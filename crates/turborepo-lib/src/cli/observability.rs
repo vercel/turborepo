@@ -38,7 +38,7 @@ pub struct ExperimentalOtelCliArgs {
     )]
     pub protocol: Option<ExperimentalOtelProtocol>,
 
-    /// OTLP endpoint URL (e.g., http://localhost:4317 for gRPC).
+    /// OTLP endpoint URL (must use HTTPS, e.g. https://collector.example.com:4317).
     #[clap(
         long = "experimental-otel-endpoint",
         global = true,

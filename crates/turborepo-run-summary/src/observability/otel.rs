@@ -58,6 +58,13 @@ fn config_from_options(
     if endpoint.is_empty() {
         return None;
     }
+    if !is_https_endpoint(endpoint) {
+        tracing::warn!(
+            "Ignoring experimentalObservability.otel endpoint `{}` because only HTTPS endpoints are supported.",
+            endpoint
+        );
+        return None;
+    }
     let endpoint = endpoint.to_string();
 
     // ExperimentalOtelProtocol is a re-export of turborepo_otel::Protocol,
@@ -98,6 +105,10 @@ fn apply_auth_token(config: &mut turborepo_otel::Config, token: Option<&str>) {
             .headers
             .insert("Authorization".to_string(), format!("Bearer {}", token));
     }
+}
+
+fn is_https_endpoint(endpoint: &str) -> bool {
+    endpoint.to_ascii_lowercase().starts_with("https://")
 }
 
 fn metrics_config(
@@ -240,6 +251,13 @@ mod tests {
                 "whitespace endpoint",
                 ExperimentalOtelOptions {
                     endpoint: Some("   ".to_string()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "insecure http endpoint",
+                ExperimentalOtelOptions {
+                    endpoint: Some("http://collector.example.com:4317".to_string()),
                     ..Default::default()
                 },
             ),

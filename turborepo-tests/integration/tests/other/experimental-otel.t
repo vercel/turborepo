@@ -9,7 +9,7 @@ Setup
 
 Smoke test: OTEL enabled via environment variables does not break turbo run
   $ export TURBO_EXPERIMENTAL_OTEL_ENABLED=1
-  $ export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=http://localhost:4318
+  $ export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=https://localhost:4318
   $ ${TURBO} run build --filter=my-app
    WARNING  experimentalObservability.otel is configured but futureFlags.experimentalObservability is not enabled in turbo.json. The observability config will be ignored.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
@@ -32,7 +32,7 @@ Smoke test: OTEL enabled via environment variables does not break turbo run
 Smoke test: OTEL enabled via CLI flags does not break turbo run
   $ unset TURBO_EXPERIMENTAL_OTEL_ENABLED
   $ unset TURBO_EXPERIMENTAL_OTEL_ENDPOINT
-  $ ${TURBO} run build --filter=my-app --experimental-otel-enabled --experimental-otel-endpoint=http://localhost:4318
+  $ ${TURBO} run build --filter=my-app --experimental-otel-enabled --experimental-otel-endpoint=https://localhost:4318
    WARNING  experimentalObservability.otel is configured but futureFlags.experimentalObservability is not enabled in turbo.json. The observability config will be ignored.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -51,7 +51,7 @@ Smoke test: OTEL enabled via CLI flags does not break turbo run
 
 
 Smoke test: http/protobuf protocol flag is accepted without error
-  $ ${TURBO} run build --filter=my-app --experimental-otel-enabled --experimental-otel-endpoint=http://localhost:4318 --experimental-otel-protocol=http-protobuf
+  $ ${TURBO} run build --filter=my-app --experimental-otel-enabled --experimental-otel-endpoint=https://localhost:4318 --experimental-otel-protocol=http-protobuf
    WARNING  experimentalObservability.otel is configured but futureFlags.experimentalObservability is not enabled in turbo.json. The observability config will be ignored.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
   \xe2\x80\xa2 Running build in 1 packages (esc)
@@ -71,7 +71,7 @@ Smoke test: http/protobuf protocol flag is accepted without error
 
 Smoke test: OTEL disabled via environment variable does not break turbo run
   $ export TURBO_EXPERIMENTAL_OTEL_ENABLED=0
-  $ export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=http://localhost:4318
+  $ export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=https://localhost:4318
   $ ${TURBO} run build --filter=my-app
    WARNING  experimentalObservability.otel is configured but futureFlags.experimentalObservability is not enabled in turbo.json. The observability config will be ignored.
   \xe2\x80\xa2 Packages in scope: my-app (esc)
