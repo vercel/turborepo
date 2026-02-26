@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 mod boundaries;
 mod external_package;
 mod file;
@@ -7,8 +9,10 @@ mod server;
 mod task;
 
 use std::{
+    collections::HashMap,
     io,
     ops::{Deref, DerefMut},
+    pin::Pin,
     sync::Arc,
 };
 
@@ -23,19 +27,66 @@ use thiserror::Error;
 use tokio::select;
 use turbo_trace::TraceError;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_repository::{change_mapper::AllPackageChangeReason, package_graph::PackageName};
-use turborepo_signals::SignalHandler;
-
-use crate::{
-    get_version,
-    query::{file::File, task::RepositoryTask},
-    run::{builder::RunBuilder, Run},
+use turborepo_boundaries::BoundariesResult;
+use turborepo_engine::Built;
+use turborepo_repository::{
+    change_mapper::{AllPackageChangeReason, PackageInclusionReason},
+    package_graph::PackageName,
 };
+use turborepo_signals::SignalHandler;
+use turborepo_types::TaskDefinition;
+
+type BoundariesFuture<'a> = Pin<
+    Box<
+        dyn std::future::Future<Output = Result<BoundariesResult, turborepo_boundaries::Error>>
+            + Send
+            + 'a,
+    >,
+>;
+
+/// The interface that the query layer requires from a "run" context.
+///
+/// This trait decouples the GraphQL query layer from the concrete `Run` type
+/// in turborepo-lib, allowing the heavy async-graphql/axum/swc dependencies
+/// to compile in a separate crate.
+///
+/// Object-safe so it can be used via `Arc<dyn QueryRun>`.
+pub trait QueryRun: Send + Sync + 'static {
+    fn version(&self) -> &'static str;
+    fn repo_root(&self) -> &turbopath::AbsoluteSystemPath;
+    fn pkg_dep_graph(&self) -> &turborepo_repository::package_graph::PackageGraph;
+    fn engine(&self) -> &turborepo_engine::Engine<Built, TaskDefinition>;
+    fn scm(&self) -> &turborepo_scm::SCM;
+    fn root_turbo_json(&self) -> &turborepo_turbo_json::TurboJson;
+
+    /// Calculate the set of affected packages given optional base/head git
+    /// refs.
+    ///
+    /// This encapsulates the scope resolution and filtering logic that lives
+    /// in the run builder, keeping `Opts` and `RunBuilder` out of the query
+    /// crate's dependency graph.
+    fn calculate_affected_packages(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> Result<HashMap<PackageName, PackageInclusionReason>, AffectedPackagesError>;
+
+    /// Check package boundary rules across all filtered packages.
+    fn check_boundaries(&self, show_progress: bool) -> BoundariesFuture<'_>;
+}
+
+#[derive(Debug, Error)]
+pub enum AffectedPackagesError {
+    #[error(transparent)]
+    Resolution(#[from] turborepo_scope::filter::ResolutionError),
+    #[error("{0}")]
+    Other(Box<dyn std::error::Error + Send + Sync>),
+}
 
 #[derive(Error, Debug, miette::Diagnostic)]
 pub enum Error {
     #[error(transparent)]
-    Boundaries(#[from] crate::boundaries::Error),
+    Boundaries(#[from] turborepo_boundaries::Error),
     #[error("Failed to get file dependencies")]
     Trace(#[related] Vec<TraceError>),
     #[error("No signal handler.")]
@@ -48,9 +99,8 @@ pub enum Error {
     PackageNotFound(PackageName),
     #[error("Failed to serialize result: {0}")]
     Serde(#[from] serde_json::Error),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Run(#[from] crate::run::Error),
+    #[error("Failed to calculate affected packages: {0}")]
+    AffectedPackages(#[from] AffectedPackagesError),
     #[error(transparent)]
     #[diagnostic(transparent)]
     Path(#[from] turbopath::PathError),
@@ -58,7 +108,7 @@ pub enum Error {
     UI(#[from] turborepo_ui::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Resolution(#[from] crate::run::scope::filter::ResolutionError),
+    Resolution(#[from] turborepo_scope::filter::ResolutionError),
     #[error("Failed to parse file: {0:?}")]
     Parse(swc_ecma_parser::error::Error),
     #[error(transparent)]
@@ -66,96 +116,100 @@ pub enum Error {
 }
 
 pub struct RepositoryQuery {
-    run: Arc<Run>,
+    run: Arc<dyn QueryRun>,
 }
 
 impl RepositoryQuery {
-    pub fn new(run: Arc<Run>) -> Self {
+    pub fn new(run: Arc<dyn QueryRun>) -> Self {
         Self { run }
     }
 
-    fn convert_change_reason(
-        &self,
-        reason: turborepo_repository::change_mapper::PackageInclusionReason,
-    ) -> PackageChangeReason {
+    fn convert_change_reason(&self, reason: PackageInclusionReason) -> PackageChangeReason {
         match reason {
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::GlobalDepsChanged { file },
-            ) => PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
+            PackageInclusionReason::All(AllPackageChangeReason::GlobalDepsChanged { file }) => {
+                PackageChangeReason::GlobalDepsChanged(GlobalDepsChanged {
+                    file_path: file.to_string(),
+                })
+            }
+            PackageInclusionReason::All(AllPackageChangeReason::DefaultGlobalFileChanged {
+                file,
+            }) => PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
                 file_path: file.to_string(),
             }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::DefaultGlobalFileChanged { file },
-            ) => PackageChangeReason::DefaultGlobalFileChanged(DefaultGlobalFileChanged {
-                file_path: file.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::LockfileChangeDetectionFailed,
-            ) => {
+            PackageInclusionReason::All(AllPackageChangeReason::LockfileChangeDetectionFailed) => {
                 PackageChangeReason::LockfileChangeDetectionFailed(LockfileChangeDetectionFailed {
                     empty: false,
                 })
             }
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::GitRefNotFound { from_ref, to_ref },
-            ) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::LockfileChangedWithoutDetails,
-            ) => {
+            PackageInclusionReason::All(AllPackageChangeReason::LockfileChangedWithoutDetails) => {
                 PackageChangeReason::LockfileChangedWithoutDetails(LockfileChangedWithoutDetails {
                     empty: false,
                 })
             }
-            turborepo_repository::change_mapper::PackageInclusionReason::All(
-                AllPackageChangeReason::RootInternalDepChanged { root_internal_dep },
-            ) => PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
+            PackageInclusionReason::All(AllPackageChangeReason::RootInternalDepChanged {
+                root_internal_dep,
+            }) => PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
                 root_internal_dep: root_internal_dep.to_string(),
             }),
-            turborepo_repository::change_mapper::PackageInclusionReason::RootTask { task } => {
-                PackageChangeReason::RootTask(RootTask {
-                    task_name: task.to_string(),
+            PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
+                from_ref,
+                to_ref,
+            }) => PackageChangeReason::GitRefNotFound(GitRefNotFound { from_ref, to_ref }),
+            PackageInclusionReason::RootTask { task } => PackageChangeReason::RootTask(RootTask {
+                task_name: task.to_string(),
+            }),
+            PackageInclusionReason::ConservativeRootLockfileChanged => {
+                PackageChangeReason::ConservativeRootLockfileChanged(
+                    ConservativeRootLockfileChanged { empty: false },
+                )
+            }
+            PackageInclusionReason::LockfileChanged { removed, added } => {
+                let removed = removed
+                    .into_iter()
+                    .map(|package| ExternalPackage::new(self.run.clone(), package))
+                    .collect::<Array<_>>();
+                let added = added
+                    .into_iter()
+                    .map(|package| ExternalPackage::new(self.run.clone(), package))
+                    .collect::<Array<_>>();
+                PackageChangeReason::LockfileChanged(LockfileChanged {
+                    empty: false,
+                    removed,
+                    added,
                 })
             }
-            turborepo_repository::change_mapper::PackageInclusionReason::ConservativeRootLockfileChanged => {
-                PackageChangeReason::ConservativeRootLockfileChanged(ConservativeRootLockfileChanged { empty: false })
+            PackageInclusionReason::DependencyChanged { dependency } => {
+                PackageChangeReason::DependencyChanged(DependencyChanged {
+                    dependency_name: dependency.to_string(),
+                })
             }
-            turborepo_repository::change_mapper::PackageInclusionReason::LockfileChanged { removed, added } => {
-                let removed = removed.into_iter().map(|package| ExternalPackage::new(self.run.clone(), package)).collect::<Array<_>>();
-                let added = added.into_iter().map(|package| ExternalPackage::new(self.run.clone(), package)).collect::<Array<_>>();
-                PackageChangeReason::LockfileChanged(LockfileChanged { empty: false, removed, added })
+            PackageInclusionReason::DependentChanged { dependent } => {
+                PackageChangeReason::DependentChanged(DependentChanged {
+                    dependent_name: dependent.to_string(),
+                })
             }
-            turborepo_repository::change_mapper::PackageInclusionReason::DependencyChanged {
-                dependency,
-            } => PackageChangeReason::DependencyChanged(DependencyChanged {
-                dependency_name: dependency.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::DependentChanged {
-                dependent,
-            } => PackageChangeReason::DependentChanged(DependentChanged {
-                dependent_name: dependent.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::FileChanged { file } => {
+            PackageInclusionReason::FileChanged { file } => {
                 PackageChangeReason::FileChanged(FileChanged {
                     file_path: file.to_string(),
                 })
             }
-            turborepo_repository::change_mapper::PackageInclusionReason::InFilteredDirectory {
-                directory,
-            } => PackageChangeReason::InFilteredDirectory(InFilteredDirectory {
-                directory_path: directory.to_string(),
-            }),
-            turborepo_repository::change_mapper::PackageInclusionReason::IncludedByFilter {
-                filters,
-            } => PackageChangeReason::IncludedByFilter(IncludedByFilter { filters }),
+            PackageInclusionReason::InFilteredDirectory { directory } => {
+                PackageChangeReason::InFilteredDirectory(InFilteredDirectory {
+                    directory_path: directory.to_string(),
+                })
+            }
+            PackageInclusionReason::IncludedByFilter { filters } => {
+                PackageChangeReason::IncludedByFilter(IncludedByFilter { filters })
+            }
         }
     }
 }
 
 #[derive(Debug, SimpleObject)]
-#[graphql(concrete(name = "RepositoryTasks", params(RepositoryTask)))]
+#[graphql(concrete(name = "RepositoryTasks", params(task::RepositoryTask)))]
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
-#[graphql(concrete(name = "Files", params(File)))]
+#[graphql(concrete(name = "Files", params(file::File)))]
 #[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
 #[graphql(concrete(name = "Diagnostics", params(Diagnostic)))]
 #[graphql(concrete(name = "Edges", params(Edge)))]
@@ -193,6 +247,7 @@ impl<T: OutputType> FromIterator<T> for Array<T> {
         Self { items, length }
     }
 }
+
 #[derive(Enum, Copy, Clone, Eq, PartialEq, Debug)]
 enum PackageFields {
     Name,
@@ -276,39 +331,27 @@ impl PackagePredicate {
     fn check_greater_than(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
             (PackageFields::DirectDependencyCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.direct_dependencies_count() > n as usize
             }
             (PackageFields::DirectDependentCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.direct_dependents_count() > n as usize
             }
             (PackageFields::IndirectDependentCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.indirect_dependents_count() > n as usize
             }
             (PackageFields::IndirectDependencyCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.indirect_dependencies_count() > n as usize
             }
             (PackageFields::AllDependentCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.all_dependents_count() > n as usize
             }
             (PackageFields::AllDependencyCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.all_dependencies_count() > n as usize
             }
             _ => false,
@@ -318,39 +361,27 @@ impl PackagePredicate {
     fn check_less_than(pkg: &Package, field: &PackageFields, value: &Any) -> bool {
         match (field, &value.0) {
             (PackageFields::DirectDependencyCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.direct_dependencies_count() < n as usize
             }
             (PackageFields::DirectDependentCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.direct_dependents_count() < n as usize
             }
             (PackageFields::IndirectDependentCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.indirect_dependents_count() < n as usize
             }
             (PackageFields::IndirectDependencyCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.indirect_dependencies_count() < n as usize
             }
             (PackageFields::AllDependentCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.all_dependents_count() < n as usize
             }
             (PackageFields::AllDependencyCount, Value::Number(n)) => {
-                let Some(n) = n.as_u64() else {
-                    return false;
-                };
+                let Some(n) = n.as_u64() else { return false };
                 pkg.all_dependencies_count() < n as usize
             }
             _ => false,
@@ -382,17 +413,14 @@ impl PackagePredicate {
             .not_equal
             .as_ref()
             .map(|pair| !Self::check_equals(pkg, &pair.field, &pair.value));
-
         let greater_than = self
             .greater_than
             .as_ref()
             .map(|pair| Self::check_greater_than(pkg, &pair.field, &pair.value));
-
         let less_than = self
             .less_than
             .as_ref()
             .map(|pair| Self::check_less_than(pkg, &pair.field, &pair.value));
-
         let not = self.not.as_ref().map(|predicate| !predicate.check(pkg));
         let has = self
             .has
@@ -411,11 +439,8 @@ impl PackagePredicate {
     }
 }
 
-// why write few types when many work?
 #[derive(SimpleObject)]
 struct GlobalDepsChanged {
-    // we're using slightly awkward names so we can reserve the nicer name for the "correct"
-    // GraphQL type, e.g. a `file` field for the `File` type
     file_path: String,
 }
 
@@ -530,30 +555,23 @@ impl RepositoryQuery {
         head: Option<String>,
         filter: Option<PackagePredicate>,
     ) -> Result<Array<ChangedPackage>, Error> {
-        let mut opts = self.run.opts().clone();
-        opts.scope_opts.affected_range = Some((base, head));
-
-        let mut packages = RunBuilder::calculate_filtered_packages(
-            self.run.repo_root(),
-            &opts,
-            self.run.pkg_dep_graph(),
-            self.run.scm(),
-            self.run.root_turbo_json(),
-        )?
-        .into_iter()
-        .map(|(package, reason)| {
-            Ok(ChangedPackage {
-                package: Package::new(self.run.clone(), package)?,
-                reason: self.convert_change_reason(reason),
+        let mut packages = self
+            .run
+            .calculate_affected_packages(base, head)?
+            .into_iter()
+            .map(|(package, reason)| {
+                Ok(ChangedPackage {
+                    package: Package::new(self.run.clone(), package)?,
+                    reason: self.convert_change_reason(reason),
+                })
             })
-        })
-        .filter(|package: &Result<ChangedPackage, Error>| {
-            let Ok(package) = package.as_ref() else {
-                return true;
-            };
-            filter.as_ref().is_none_or(|f| f.check(&package.package))
-        })
-        .collect::<Result<Array<_>, _>>()?;
+            .filter(|package: &Result<ChangedPackage, Error>| {
+                let Ok(package) = package.as_ref() else {
+                    return true;
+                };
+                filter.as_ref().is_none_or(|f| f.check(&package.package))
+            })
+            .collect::<Result<Array<_>, _>>()?;
 
         packages.sort_by(|a, b| a.package.get_name().cmp(b.package.get_name()));
         Ok(packages)
@@ -566,7 +584,7 @@ impl RepositoryQuery {
     }
 
     async fn version(&self) -> &'static str {
-        get_version()
+        self.run.version()
     }
 
     /// Check boundaries for all packages.
@@ -590,14 +608,14 @@ impl RepositoryQuery {
         PackageGraph::new(self.run.clone(), center, filter)
     }
 
-    async fn file(&self, path: String) -> Result<File, Error> {
+    async fn file(&self, path: String) -> Result<file::File, Error> {
         let abs_path = AbsoluteSystemPathBuf::from_unknown(self.run.repo_root(), path);
 
         if !abs_path.exists() {
             return Err(Error::FileNotFound(abs_path.to_string()));
         }
 
-        File::new(self.run.clone(), abs_path)
+        file::File::new(self.run.clone(), abs_path)
     }
 
     /// Gets a list of packages that match the given filter
@@ -647,7 +665,7 @@ pub async fn graphiql() -> impl IntoResponse {
     )
 }
 
-pub async fn run_query_server(run: Run, signal: SignalHandler) -> Result<(), Error> {
+pub async fn run_query_server(run: Arc<dyn QueryRun>, signal: SignalHandler) -> Result<(), Error> {
     let subscriber = signal.subscribe().ok_or(Error::NoSignalHandler)?;
     println!("GraphiQL IDE: http://localhost:8000");
     webbrowser::open("http://localhost:8000")?;
@@ -657,7 +675,7 @@ pub async fn run_query_server(run: Run, signal: SignalHandler) -> Result<(), Err
             println!("Shutting down GraphQL server");
             return Ok(());
         }
-        result = server::run_server(None, Arc::new(run)) => {
+        result = server::run_server(None, run) => {
             result?;
         }
     }

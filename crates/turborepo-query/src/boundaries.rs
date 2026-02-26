@@ -1,5 +1,6 @@
-use super::Diagnostic;
-use crate::boundaries::BoundariesDiagnostic;
+use turborepo_boundaries::BoundariesDiagnostic;
+
+use crate::Diagnostic;
 
 impl From<BoundariesDiagnostic> for Diagnostic {
     fn from(diagnostic: BoundariesDiagnostic) -> Self {
@@ -53,7 +54,6 @@ impl From<BoundariesDiagnostic> for Diagnostic {
                 path: None,
                 reason: None,
             },
-
             BoundariesDiagnostic::NoTagInAllowlist {
                 source_package_name: _,
                 help: _,

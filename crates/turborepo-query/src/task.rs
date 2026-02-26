@@ -1,14 +1,11 @@
 use std::sync::Arc;
 
 use async_graphql::Object;
+use turborepo_engine::TaskNode;
 use turborepo_errors::Spanned;
 use turborepo_task_id::TaskId;
 
-use crate::{
-    engine::TaskNode,
-    query::{package::Package, Array, Error},
-    run::Run,
-};
+use crate::{package::Package, Array, Error, QueryRun};
 
 pub struct RepositoryTask {
     pub name: String,
@@ -17,7 +14,7 @@ pub struct RepositoryTask {
 }
 
 impl RepositoryTask {
-    pub fn new(task_id: &TaskId, run: &Arc<Run>) -> Result<Self, Error> {
+    pub fn new(task_id: &TaskId, run: &Arc<dyn QueryRun>) -> Result<Self, Error> {
         let package = Package::new(run.clone(), task_id.package().into())?;
         let script = package.get_tasks().get(task_id.task()).cloned();
 

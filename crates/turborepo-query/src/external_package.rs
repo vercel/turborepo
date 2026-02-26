@@ -2,21 +2,19 @@ use std::sync::Arc;
 
 use async_graphql::Object;
 
-use super::{package::Package, Array, Error};
-use crate::run::Run;
+use crate::{package::Package, Array, Error, QueryRun};
 
 #[derive(Clone)]
 pub struct ExternalPackage {
-    run: Arc<Run>,
+    run: Arc<dyn QueryRun>,
     package: turborepo_lockfiles::Package,
 }
 
 impl ExternalPackage {
-    pub fn new(run: Arc<Run>, package: turborepo_lockfiles::Package) -> Self {
+    pub fn new(run: Arc<dyn QueryRun>, package: turborepo_lockfiles::Package) -> Self {
         Self { run, package }
     }
 
-    /// Converts the lockfile key to a human friendly name
     pub fn human_name(&self) -> String {
         self.run
             .pkg_dep_graph()

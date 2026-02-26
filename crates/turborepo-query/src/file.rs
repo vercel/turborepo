@@ -8,19 +8,16 @@ use swc_ecma_parser::{EsSyntax, Syntax, TsSyntax};
 use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
-use crate::{
-    query::{Array, Diagnostic, Error},
-    run::Run,
-};
+use crate::{Array, Diagnostic, Error, QueryRun};
 
 pub struct File {
-    run: Arc<Run>,
+    run: Arc<dyn QueryRun>,
     path: AbsoluteSystemPathBuf,
     ast: Option<swc_ecma_ast::Module>,
 }
 
 impl File {
-    pub fn new(run: Arc<Run>, path: AbsoluteSystemPathBuf) -> Result<Self, Error> {
+    pub fn new(run: Arc<dyn QueryRun>, path: AbsoluteSystemPathBuf) -> Result<Self, Error> {
         #[cfg(windows)]
         let path = path.to_realpath()?;
 
@@ -33,7 +30,6 @@ impl File {
 
     pub fn with_ast(mut self, ast: Option<swc_ecma_ast::Module>) -> Self {
         self.ast = ast;
-
         self
     }
 
@@ -131,7 +127,7 @@ struct TraceResult {
 }
 
 impl TraceResult {
-    fn new(result: turbo_trace::TraceResult, run: Arc<Run>) -> Result<Self, Error> {
+    fn new(result: turbo_trace::TraceResult, run: Arc<dyn QueryRun>) -> Result<Self, Error> {
         let mut files = result
             .files
             .into_iter()
@@ -206,7 +202,6 @@ impl File {
         if emit_errors.unwrap_or(true) {
             result.emit_errors();
         }
-        // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())
     }
@@ -228,7 +223,6 @@ impl File {
 
         let mut result = tracer.reverse_trace().await;
         result.emit_errors();
-        // Remove the file itself from the result
         result.files.remove(&self.path);
         TraceResult::new(result, self.run.clone())
     }

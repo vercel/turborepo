@@ -5,14 +5,11 @@ use itertools::Itertools;
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
 
-use crate::{
-    query::{task::RepositoryTask, Array, Error},
-    run::Run,
-};
+use crate::{task::RepositoryTask, Array, Error, QueryRun};
 
 #[derive(Clone)]
 pub struct Package {
-    run: Arc<Run>,
+    run: Arc<dyn QueryRun>,
     name: PackageName,
 }
 
@@ -23,7 +20,7 @@ impl fmt::Debug for Package {
 }
 
 impl Package {
-    pub fn new(run: Arc<Run>, name: PackageName) -> Result<Self, Error> {
+    pub fn new(run: Arc<dyn QueryRun>, name: PackageName) -> Result<Self, Error> {
         run.pkg_dep_graph()
             .package_info(&name)
             .ok_or_else(|| Error::PackageNotFound(name.clone()))?;
@@ -31,12 +28,10 @@ impl Package {
         Ok(Self { run, name })
     }
 
-    pub fn run(&self) -> &Arc<Run> {
+    pub fn run(&self) -> &Arc<dyn QueryRun> {
         &self.run
     }
 
-    /// This uses a different naming convention because we already have a
-    /// `name` resolver defined for GraphQL
     pub fn get_name(&self) -> &PackageName {
         &self.name
     }
@@ -70,13 +65,11 @@ impl Package {
 
     pub fn indirect_dependents_count(&self) -> usize {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-
         self.run.pkg_dep_graph().ancestors(&node).len() - self.direct_dependents_count()
     }
 
     pub fn indirect_dependencies_count(&self) -> usize {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-
         self.run.pkg_dep_graph().dependencies(&node).len() - self.direct_dependencies_count()
     }
 

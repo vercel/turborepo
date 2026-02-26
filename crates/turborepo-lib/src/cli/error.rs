@@ -10,7 +10,7 @@ use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
     commands::{bin, docs, generate, get_mfe_port, link, login, ls, prune, CommandBase},
-    query, run,
+    run,
     run::{builder::RunBuilder, watch},
 };
 
@@ -63,7 +63,7 @@ pub enum Error {
     Run(#[from] run::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Query(#[from] query::Error),
+    Query(#[from] turborepo_query::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]

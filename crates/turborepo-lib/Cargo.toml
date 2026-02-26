@@ -34,8 +34,6 @@ workspace = true
 
 [dependencies]
 async-graphql = { workspace = true }
-async-graphql-axum = { workspace = true }
-axum = { workspace = true }
 camino = "1.1.4"
 chrono = { workspace = true, features = ["serde"] }
 clap = { workspace = true, features = ["derive", "env"] }
@@ -79,9 +77,7 @@ serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }
 sha2 = { workspace = true }
 shared_child = "1.0.0"
-swc_common = { workspace = true }
-swc_ecma_ast = { workspace = true, features = ["serde-impl"] }
-swc_ecma_parser = { workspace = true }
+
 sysinfo = "0.27.7"
 thiserror = { workspace = true }
 time = "0.3.20"
@@ -89,12 +85,12 @@ tiny-gradient = { workspace = true }
 tokio = { workspace = true, features = ["full", "time"] }
 tokio-stream = { version = "0.1.12", features = ["net"] }
 tonic = { version = "0.14", features = ["transport"] }
-tower-http = { version = "0.6", features = ["cors"] }
+
 tracing-appender = "0.2.2"
 tracing-chrome = "0.7.1"
 tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
 tracing.workspace = true
-turbo-trace = { workspace = true }
+
 turbo-updater = { workspace = true }
 turbopath = { workspace = true }
 turborepo-analytics = { path = "../turborepo-analytics" }
@@ -124,6 +120,7 @@ turborepo-microfrontends = { workspace = true }
 turborepo-microfrontends-proxy = { workspace = true }
 turborepo-process = { workspace = true }
 turborepo-profile-md = { workspace = true }
+turborepo-query = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
 turborepo-run-cache = { path = "../turborepo-run-cache" }
 turborepo-run-summary = { workspace = true }

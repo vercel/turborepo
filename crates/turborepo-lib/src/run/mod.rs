@@ -859,6 +859,74 @@ impl turborepo_engine::ChildProcess for SharedChildWrapper {
     }
 }
 
+impl turborepo_query::QueryRun for Run {
+    fn version(&self) -> &'static str {
+        self.version
+    }
+
+    fn repo_root(&self) -> &turbopath::AbsoluteSystemPath {
+        &self.repo_root
+    }
+
+    fn pkg_dep_graph(&self) -> &turborepo_repository::package_graph::PackageGraph {
+        &self.pkg_dep_graph
+    }
+
+    fn engine(
+        &self,
+    ) -> &turborepo_engine::Engine<turborepo_engine::Built, turborepo_types::TaskDefinition> {
+        &self.engine
+    }
+
+    fn scm(&self) -> &turborepo_scm::SCM {
+        &self.scm
+    }
+
+    fn root_turbo_json(&self) -> &turborepo_turbo_json::TurboJson {
+        &self.root_turbo_json
+    }
+
+    fn calculate_affected_packages(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> Result<
+        std::collections::HashMap<
+            turborepo_repository::package_graph::PackageName,
+            turborepo_repository::change_mapper::PackageInclusionReason,
+        >,
+        turborepo_query::AffectedPackagesError,
+    > {
+        let mut opts = self.opts.as_ref().clone();
+        opts.scope_opts.affected_range = Some((base, head));
+        builder::RunBuilder::calculate_filtered_packages(
+            &self.repo_root,
+            &opts,
+            &self.pkg_dep_graph,
+            &self.scm,
+            &self.root_turbo_json,
+        )
+        .map_err(|e| turborepo_query::AffectedPackagesError::Other(Box::new(e)))
+    }
+
+    fn check_boundaries(
+        &self,
+        show_progress: bool,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        turborepo_boundaries::BoundariesResult,
+                        turborepo_boundaries::Error,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(self.check_boundaries(show_progress))
+    }
+}
+
 fn write_graphviz_warning(color_config: ColorConfig) -> Result<(), io::Error> {
     let stderr = io::stderr();
     cwrite!(&stderr, color_config, BOLD_YELLOW_REVERSE, " WARNING ")?;

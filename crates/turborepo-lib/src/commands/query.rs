@@ -5,15 +5,11 @@ use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
+use turborepo_query::{QueryRun, RepositoryQuery};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
-use crate::{
-    commands::CommandBase,
-    query,
-    query::{Error, RepositoryQuery},
-    run::builder::RunBuilder,
-};
+use crate::{cli, commands::CommandBase, run::builder::RunBuilder};
 
 const SCHEMA_QUERY: &str = "query IntrospectionQuery {
   __schema {
@@ -160,7 +156,7 @@ pub async fn run(
     query: Option<String>,
     variables_path: Option<&Utf8Path>,
     include_schema: bool,
-) -> Result<i32, Error> {
+) -> Result<i32, cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
@@ -168,12 +164,11 @@ pub async fn run(
         .add_all_tasks()
         .do_not_validate_engine();
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
+    let run: Arc<dyn QueryRun> = Arc::new(run);
+
     let query = query.as_deref().or(include_schema.then_some(SCHEMA_QUERY));
     if let Some(query) = query {
         let trimmed_query = query.trim();
-        // If the arg starts with "query" or "mutation", and ends in a bracket, it's
-        // likely a direct query If it doesn't, it's a file path, so we need to
-        // read it
         let query = if (trimmed_query.starts_with("query")
             || trimmed_query.starts_with("mutation")
             || trimmed_query.starts_with('{'))
@@ -181,28 +176,31 @@ pub async fn run(
         {
             query
         } else {
-            &fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(run.repo_root(), query))?
+            &fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(run.repo_root(), query))
+                .map_err(turborepo_query::Error::Server)?
         };
 
-        let schema = Schema::new(
-            RepositoryQuery::new(Arc::new(run)),
-            EmptyMutation,
-            EmptySubscription,
-        );
+        let schema = Schema::new(RepositoryQuery::new(run), EmptyMutation, EmptySubscription);
 
         let variables: Variables = variables_path
             .map(AbsoluteSystemPathBuf::from_cwd)
-            .transpose()?
+            .transpose()
+            .map_err(turborepo_query::Error::Path)?
             .map(|path| path.read_to_string())
-            .transpose()?
+            .transpose()
+            .map_err(turborepo_query::Error::Server)?
             .map(|content| serde_json::from_str(&content))
-            .transpose()?
+            .transpose()
+            .map_err(turborepo_query::Error::Serde)?
             .unwrap_or_default();
 
         let request = Request::new(query).variables(variables);
 
         let result = schema.execute(request).await;
-        println!("{}", serde_json::to_string_pretty(&result)?);
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&result).map_err(turborepo_query::Error::Serde)?
+        );
         if !result.errors.is_empty() {
             for error in result.errors {
                 let error = QueryError::new(error, query.to_string());
@@ -210,7 +208,7 @@ pub async fn run(
             }
         }
     } else {
-        query::run_query_server(run, handler).await?;
+        turborepo_query::run_query_server(run, handler).await?;
     }
 
     Ok(0)

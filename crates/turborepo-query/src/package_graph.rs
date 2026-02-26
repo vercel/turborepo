@@ -2,22 +2,22 @@ use std::sync::Arc;
 
 use async_graphql::{Object, SimpleObject};
 use itertools::Itertools;
-use petgraph::graph::NodeIndex;
 use turborepo_repository::package_graph::{PackageName, PackageNode};
 
-use crate::{
-    query::{package::Package, Array, Error, PackagePredicate},
-    run::Run,
-};
+use crate::{package::Package, Array, Error, PackagePredicate, QueryRun};
 
 pub struct PackageGraph {
-    run: Arc<Run>,
+    run: Arc<dyn QueryRun>,
     center: Option<PackageNode>,
     filter: Option<PackagePredicate>,
 }
 
 impl PackageGraph {
-    pub fn new(run: Arc<Run>, center: Option<String>, filter: Option<PackagePredicate>) -> Self {
+    pub fn new(
+        run: Arc<dyn QueryRun>,
+        center: Option<String>,
+        filter: Option<PackagePredicate>,
+    ) -> Self {
         let center = center.map(|center| PackageNode::Workspace(PackageName::from(center)));
 
         Self {
@@ -26,12 +26,6 @@ impl PackageGraph {
             filter,
         }
     }
-}
-
-#[derive(Clone)]
-pub(crate) struct Node {
-    idx: NodeIndex,
-    run: Arc<Run>,
 }
 
 #[derive(Debug, Clone, SimpleObject, Hash, PartialEq, Eq)]

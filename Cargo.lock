@@ -5212,7 +5212,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "tower 0.5.2",
- "tower-http",
+ "tower-http 0.6.8",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -6848,6 +6848,22 @@ dependencies = [
 
 [[package]]
 name = "tower-http"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e9cd434a998747dd2c4276bc96ee2e0c7a2eadf3cae88e52be55a05fa9053f5"
+dependencies = [
+ "bitflags 2.10.0",
+ "bytes",
+ "http",
+ "http-body",
+ "http-body-util",
+ "pin-project-lite",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "tower-http"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
@@ -7423,7 +7439,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "tower-http",
+ "tower-http 0.6.8",
  "tracing",
  "turbopath",
  "turborepo-filewatch",
@@ -7618,10 +7634,8 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "async-graphql",
- "async-graphql-axum",
  "async-io",
  "async-stream",
- "axum",
  "biome_deserialize 0.6.0",
  "biome_json_parser",
  "camino",
@@ -7668,9 +7682,6 @@ dependencies = [
  "serial_test",
  "sha2",
  "shared_child",
- "swc_common",
- "swc_ecma_ast",
- "swc_ecma_parser",
  "sysinfo",
  "tempfile",
  "test-case",
@@ -7680,13 +7691,11 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tonic",
- "tower-http",
  "tracing",
  "tracing-appender",
  "tracing-chrome",
  "tracing-subscriber",
  "tracing-test",
- "turbo-trace",
  "turbo-updater",
  "turbopath",
  "turborepo-analytics",
@@ -7716,6 +7725,7 @@ dependencies = [
  "turborepo-microfrontends-proxy",
  "turborepo-process",
  "turborepo-profile-md",
+ "turborepo-query",
  "turborepo-repository",
  "turborepo-run-cache",
  "turborepo-run-summary",
@@ -7866,6 +7876,43 @@ dependencies = [
  "serde_json",
  "tempfile",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "turborepo-query"
+version = "0.1.0"
+dependencies = [
+ "async-graphql",
+ "async-graphql-axum",
+ "axum",
+ "camino",
+ "itertools 0.14.0",
+ "miette",
+ "petgraph 0.6.5",
+ "serde",
+ "serde_json",
+ "swc_common",
+ "swc_ecma_ast",
+ "swc_ecma_parser",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower-http 0.5.2",
+ "tracing",
+ "turbo-trace",
+ "turbopath",
+ "turborepo-boundaries",
+ "turborepo-engine",
+ "turborepo-errors",
+ "turborepo-lockfiles",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-scope",
+ "turborepo-signals",
+ "turborepo-task-id",
+ "turborepo-turbo-json",
+ "turborepo-types",
+ "turborepo-ui",
+ "webbrowser",
 ]
 
 [[package]]
