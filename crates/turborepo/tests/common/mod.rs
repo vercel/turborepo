@@ -1,6 +1,31 @@
 pub mod setup;
 
-use std::path::Path;
+use std::{path::Path, process::Output};
+
+/// Insta filters that normalize non-deterministic parts of turbo's stdout:
+/// - Path separators (backslash → forward slash for Windows)
+/// - Timing lines (e.g. "Time:    1.234s" → "Time:    [TIME]")
+#[allow(dead_code)]
+pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
+    vec![(r"\\", "/"), (r"Time:\s*[\.0-9]+m?s", "Time:    [TIME]")]
+}
+
+/// Run turbo with standard env var suppression. Returns the raw Output.
+#[allow(dead_code)]
+pub fn run_turbo(test_dir: &Path, args: &[&str]) -> Output {
+    let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
+    let mut cmd = assert_cmd::Command::cargo_bin("turbo").expect("turbo binary not found");
+    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+        .env("TURBO_PRINT_VERSION_DISABLED", "1")
+        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
+        .env("DO_NOT_TRACK", "1")
+        .current_dir(test_dir);
+    for arg in args {
+        cmd.arg(arg);
+    }
+    cmd.output().expect("failed to execute turbo")
+}
 
 #[allow(dead_code)]
 pub fn setup_fixture(
