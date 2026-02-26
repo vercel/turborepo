@@ -8,6 +8,8 @@ use std::{
 use fs4::fs_std::FileExt;
 
 static PRYSK_VENV: OnceLock<PathBuf> = OnceLock::new();
+#[cfg(windows)]
+static FIXTURE_SETUP: OnceLock<()> = OnceLock::new();
 
 /// Location of the prysk venv, shared across all test invocations within a
 /// single nextest process. Cross-process synchronization (for parallel nextest
@@ -99,21 +101,77 @@ fn venv_bin(venv_dir: &Path, tool: &str) -> PathBuf {
     venv_dir.join(bin_dir).join(format!("{tool}{suffix}"))
 }
 
-/// Tests that are known to fail on Windows due to fixture/symlink issues
-/// that predate this harness. Skip them here; they'll be fixed when migrated
-/// to pure Rust integration tests.
-const WINDOWS_SKIP_PREFIXES: &[&str] = &["find-turbo/"];
+/// On Windows, the find-turbo test fixtures need a real `turbo.exe` in the
+/// platform-specific bin directories. The fixture source only has `.keep`
+/// placeholders (the fixtures were originally designed for Linux/macOS where
+/// shell scripts suffice). We build a tiny `echo_args` binary (a `[[bin]]`
+/// target that just prints its arguments) and copy it into the fixture dirs
+/// so prysk's setup scripts include it when copying fixtures to the temp dir.
+#[cfg(windows)]
+fn setup_windows_find_turbo_fixtures() {
+    FIXTURE_SETUP.get_or_init(|| {
+        let echo_args_exe = workspace_root()
+            .join("target")
+            .join("debug")
+            .join("echo_args.exe");
 
-fn run_prysk_test(path: &Path) -> datatest_stable::Result<()> {
-    if cfg!(windows) {
-        let rel = path.to_string_lossy().replace('\\', "/");
-        if WINDOWS_SKIP_PREFIXES
-            .iter()
-            .any(|prefix| rel.contains(prefix))
-        {
-            return Ok(());
+        // Build echo_args if it doesn't already exist. nextest only builds
+        // test targets, not [[bin]] targets.
+        if !echo_args_exe.exists() {
+            let status = Command::new("cargo")
+                .args(["build", "--bin", "echo_args", "-p", "turbo"])
+                .current_dir(workspace_root())
+                .status();
+            if !status.map_or(false, |s| s.success()) {
+                return;
+            }
+        }
+
+        let fixtures_dir = workspace_root()
+            .join("turborepo-tests")
+            .join("integration")
+            .join("fixtures")
+            .join("find_turbo");
+
+        // Walk the fixture tree and place turbo.exe next to every .keep in
+        // turbo-windows-*/bin/ directories.
+        place_echo_args_in_fixtures(&fixtures_dir, &echo_args_exe);
+    });
+}
+
+#[cfg(windows)]
+fn place_echo_args_in_fixtures(dir: &Path, echo_args_exe: &Path) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            place_echo_args_in_fixtures(&path, echo_args_exe);
+        } else if path.file_name().map_or(false, |n| n == ".keep") {
+            // Check if this .keep is inside a turbo-windows-*/bin/ directory
+            if let (Some(bin_dir), Some(platform_dir)) =
+                (path.parent(), path.parent().and_then(|p| p.parent()))
+            {
+                let platform_name = platform_dir
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy();
+                let dir_name = bin_dir.file_name().unwrap_or_default().to_string_lossy();
+                if platform_name.starts_with("turbo-windows-") && dir_name == "bin" {
+                    let turbo_exe = bin_dir.join("turbo.exe");
+                    if !turbo_exe.exists() {
+                        let _ = fs::copy(echo_args_exe, &turbo_exe);
+                    }
+                }
+            }
         }
     }
+}
+
+fn run_prysk_test(path: &Path) -> datatest_stable::Result<()> {
+    #[cfg(windows)]
+    setup_windows_find_turbo_fixtures();
 
     let prysk_bin = venv_bin(prysk_venv_dir(), "prysk");
 
@@ -126,11 +184,17 @@ fn run_prysk_test(path: &Path) -> datatest_stable::Result<()> {
 
     cmd.arg(path);
 
-    // Strip CI env vars so turbo inside .t files uses its default log format
-    // instead of GitHub Actions `::group::` markers. The old CI setup ran prysk
-    // through `turbo run --env-mode=strict` which stripped these automatically.
+    // Strip CI env vars to match the old CI setup which ran prysk through
+    // `turbo run --env-mode=strict` with
+    // `passThroughEnv: ["CI", "!GITHUB_*", "!RUNNER_*"]`.
+    // This stripped GITHUB_ACTIONS (preventing ::group:: log format),
+    // plus all GITHUB_* and RUNNER_* vars that can affect turbo's behavior.
+    for (key, _) in env::vars() {
+        if key.starts_with("GITHUB_") || key.starts_with("RUNNER_") {
+            cmd.env_remove(&key);
+        }
+    }
     cmd.env_remove("CI");
-    cmd.env_remove("GITHUB_ACTIONS");
 
     // macOS tmp dirs set by prysk can fail — use /tmp directly.
     if cfg!(target_os = "macos") {

@@ -37,6 +37,10 @@ which = { workspace = true }
 name = "prysk"
 harness = false
 
+[[bin]]
+name = "echo_args"
+path = "../../turborepo-tests/helpers/echo_args.rs"
+
 [lints]
 workspace = true
 
