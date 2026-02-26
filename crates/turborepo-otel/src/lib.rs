@@ -151,19 +151,10 @@ impl std::str::FromStr for Protocol {
 }
 
 /// Metric toggle configuration.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct TaskAttributesConfig {
     pub id: bool,
     pub hashes: bool,
-}
-
-impl Default for TaskAttributesConfig {
-    fn default() -> Self {
-        Self {
-            id: false,
-            hashes: false,
-        }
-    }
 }
 
 /// Metric toggle configuration.
