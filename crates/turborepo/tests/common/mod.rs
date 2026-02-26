@@ -20,6 +20,8 @@ pub fn run_turbo(test_dir: &Path, args: &[&str]) -> Output {
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
         .env("DO_NOT_TRACK", "1")
+        .env_remove("CI")
+        .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir);
     for arg in args {
         cmd.arg(arg);
@@ -59,7 +61,10 @@ macro_rules! check_json_output {
                     // Disable telemetry and various warnings to ensure clean JSON output
                     .env("DO_NOT_TRACK", "1")
                     .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-                    .env("TURBO_GLOBAL_WARNING_DISABLED", "1");
+                    .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+                    // Prevent CI-specific output formatting (::group:: markers)
+                    .env_remove("CI")
+                    .env_remove("GITHUB_ACTIONS");
 
                 $(
                     command.arg($query);
