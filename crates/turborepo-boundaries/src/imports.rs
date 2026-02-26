@@ -118,6 +118,12 @@ fn check_import_as_tsconfig_path_alias(
     match resolver.resolve(dir, import) {
         Ok(resolution) => {
             let path = resolution.path();
+            // If the import resolved to a path inside node_modules, it is a
+            // real package import — not a tsconfig alias.  Return false so the
+            // caller falls through to `check_package_import`.
+            if path.components().any(|c| c.as_os_str() == "node_modules") {
+                return Ok(false);
+            }
             let Some(utf8_path) = Utf8Path::from_path(path) else {
                 result.diagnostics.push(BoundariesDiagnostic::InvalidPath {
                     path: path.to_string_lossy().to_string(),
