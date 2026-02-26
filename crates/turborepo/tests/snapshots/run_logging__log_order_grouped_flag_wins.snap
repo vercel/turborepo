@@ -1,0 +1,25 @@
+---
+source: crates/turborepo/tests/run_logging.rs
+expression: stdout.to_string()
+---
+• Packages in scope: my-app, util
+• Running build in 2 packages
+• Remote caching disabled
+my-app:build: cache bypass, force executing 0af90ec6a57471be
+my-app:build: 
+my-app:build: > build
+my-app:build: > echo building && sleep 1 && echo done
+my-app:build: 
+my-app:build: building
+my-app:build: done
+util:build: cache bypass, force executing 2da422600daca8be
+util:build: 
+util:build: > build
+util:build: > sleep 0.5 && echo building && sleep 1 && echo completed
+util:build: 
+util:build: building
+util:build: completed
+
+ Tasks:    2 successful, 2 total
+Cached:    0 cached, 2 total
+  Time:    [TIME]
