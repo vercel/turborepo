@@ -1,0 +1,23 @@
+---
+source: crates/turborepo/tests/task_dependencies.rs
+expression: stdout.to_string()
+---
+• Packages in scope: //, my-app, util
+• Running build in 3 packages
+• Remote caching disabled
+util:build: cache miss, executing 3d1f83b683510099
+util:build: 
+util:build: > build
+util:build: > echo building
+util:build: 
+util:build: building
+my-app:build: cache miss, executing a24fb33a97cce572
+my-app:build: 
+my-app:build: > build
+my-app:build: > echo building
+my-app:build: 
+my-app:build: building
+
+ Tasks:    2 successful, 2 total
+Cached:    0 cached, 2 total
+  Time:    [TIME]

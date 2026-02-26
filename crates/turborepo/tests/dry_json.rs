@@ -16,6 +16,8 @@ fn turbo_dry_json(test_dir: &Path, args: &[&str]) -> Result<Value, anyhow::Error
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
         .env("DO_NOT_TRACK", "1")
+        .env_remove("CI")
+        .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir);
 
     for arg in args {
@@ -36,6 +38,8 @@ fn turbo_dry_json_expect_failure(test_dir: &Path, args: &[&str]) -> String {
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
         .env("DO_NOT_TRACK", "1")
+        .env_remove("CI")
+        .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir);
 
     for arg in args {
@@ -148,6 +152,8 @@ fn test_monorepo_env_var_in_summary() -> Result<(), anyhow::Error> {
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
         .env("DO_NOT_TRACK", "1")
         .env("NODE_ENV", "banana")
+        .env_remove("CI")
+        .env_remove("GITHUB_ACTIONS")
         .args(["run", "build", "--dry=json", "--filter=util"])
         .current_dir(tempdir.path());
 
