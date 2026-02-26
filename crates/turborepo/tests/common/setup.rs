@@ -74,12 +74,13 @@ fn copy_symlink(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
 ///   git init, configure user, write .npmrc, git add ., git commit
 pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
     let git = |args: &[&str]| -> Result<(), anyhow::Error> {
-        let status = Command::new("git")
+        let status = cmd("git")
             .args(args)
             .current_dir(target_dir)
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
-            .status()?;
+            .status()
+            .map_err(|e| anyhow::anyhow!("failed to run git: {e}"))?;
         if !status.success() {
             anyhow::bail!("git {:?} failed with {}", args, status);
         }
@@ -128,14 +129,15 @@ pub fn setup_package_manager(
     let corepack_dir = target_dir.join("corepack");
     fs::create_dir_all(&corepack_dir)?;
 
-    let status = Command::new("corepack")
+    let status = cmd("corepack")
         .arg("enable")
         .arg(pm_name)
         .arg(format!("--install-directory={}", corepack_dir.display()))
         .current_dir(target_dir)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .status()?;
+        .status()
+        .map_err(|e| anyhow::anyhow!("failed to run corepack: {e}"))?;
 
     if !status.success() {
         anyhow::bail!("corepack enable {} failed with {}", pm_name, status);
@@ -189,7 +191,7 @@ pub fn install_deps(target_dir: &Path, package_manager: &str) -> Result<(), anyh
     }
 
     // Stage and commit installed deps
-    let _ = Command::new("git")
+    let _ = cmd("git")
         .args(["add", "."])
         .current_dir(target_dir)
         .stdout(std::process::Stdio::null())
@@ -218,13 +220,13 @@ pub fn setup_integration_test(
 }
 
 fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(), anyhow::Error> {
-    let status = Command::new(program)
+    let status = cmd_with_path(program, path_env)
         .args(args)
         .current_dir(dir)
-        .env("PATH", path_env)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
-        .status()?;
+        .status()
+        .map_err(|e| anyhow::anyhow!("failed to run `{program}`: {e}"))?;
 
     if !status.success() {
         anyhow::bail!("{} {:?} failed with {}", program, args, status);
@@ -233,13 +235,13 @@ fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(
 }
 
 fn git_commit_if_changed(dir: &Path, message: &str) -> Result<(), anyhow::Error> {
-    let output = Command::new("git")
+    let output = cmd("git")
         .args(["status", "--porcelain"])
         .current_dir(dir)
         .output()?;
 
     if !output.stdout.is_empty() {
-        let _ = Command::new("git")
+        let _ = cmd("git")
             .args(["commit", "-am", message, "--quiet"])
             .current_dir(dir)
             .stdout(std::process::Stdio::null())
@@ -253,6 +255,32 @@ fn prepend_to_path(dir: &Path) -> String {
     let current = std::env::var("PATH").unwrap_or_default();
     let sep = if cfg!(windows) { ";" } else { ":" };
     format!("{}{sep}{current}", dir.display())
+}
+
+/// Create a Command for a program, resolving it via PATH (including PATHEXT on
+/// Windows). This is necessary because Rust's Command::new on Windows doesn't
+/// check PATHEXT, so `npm.cmd` / `corepack.cmd` won't be found by name alone.
+fn cmd(program: &str) -> Command {
+    match which::which(program) {
+        Ok(path) => Command::new(path),
+        Err(_) => Command::new(program),
+    }
+}
+
+/// Like `cmd()` but searches a custom PATH.
+fn cmd_with_path(program: &str, path_env: &str) -> Command {
+    match which::which_in(program, Some(path_env), ".") {
+        Ok(path) => {
+            let mut c = Command::new(path);
+            c.env("PATH", path_env);
+            c
+        }
+        Err(_) => {
+            let mut c = Command::new(program);
+            c.env("PATH", path_env);
+            c
+        }
+    }
 }
 
 fn normalize_lockfile_on_windows(_dir: &Path, _filename: &str) {
