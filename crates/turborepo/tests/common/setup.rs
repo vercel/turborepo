@@ -220,7 +220,13 @@ pub fn setup_integration_test(
     package_manager: &str,
     install: bool,
 ) -> Result<(), anyhow::Error> {
-    let corepack_dir = target_dir.with_file_name("corepack");
+    let corepack_dir = target_dir.with_file_name(format!(
+        "{}-corepack",
+        target_dir
+            .file_name()
+            .expect("target_dir should have a file name")
+            .to_string_lossy()
+    ));
     fs::create_dir_all(&corepack_dir)?;
 
     copy_fixture(fixture, target_dir)?;
