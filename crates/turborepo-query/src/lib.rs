@@ -692,3 +692,160 @@ pub struct Diagnostic {
     pub start: Option<usize>,
     pub end: Option<usize>,
 }
+
+/// An error with source location information from a GraphQL query.
+pub struct QueryErrorLocation {
+    pub message: String,
+    pub line: usize,
+    pub column: usize,
+}
+
+/// The result of executing a GraphQL query.
+pub struct QueryResult {
+    pub result_json: String,
+    pub errors: Vec<QueryErrorLocation>,
+}
+
+/// The standard GraphQL introspection query used by `turbo query --schema`.
+pub const SCHEMA_QUERY: &str = "query IntrospectionQuery {
+  __schema {
+    queryType {
+      name
+    }
+    mutationType {
+      name
+    }
+    subscriptionType {
+      name
+    }
+    types {
+      ...FullType
+    }
+    directives {
+      name
+      description
+      locations
+      args {
+        ...InputValue
+      }
+    }
+  }
+}
+
+fragment FullType on __Type {
+  kind
+  name
+  description
+  fields(includeDeprecated: true) {
+    name
+    description
+    args {
+      ...InputValue
+    }
+    type {
+      ...TypeRef
+    }
+    isDeprecated
+    deprecationReason
+  }
+  inputFields {
+    ...InputValue
+  }
+  interfaces {
+    ...TypeRef
+  }
+  enumValues(includeDeprecated: true) {
+    name
+    description
+    isDeprecated
+    deprecationReason
+  }
+  possibleTypes {
+    ...TypeRef
+  }
+}
+
+fragment InputValue on __InputValue {
+  name
+  description
+  type {
+    ...TypeRef
+  }
+  defaultValue
+}
+
+fragment TypeRef on __Type {
+  kind
+  name
+  ofType {
+    kind
+    name
+    ofType {
+      kind
+      name
+      ofType {
+        kind
+        name
+        ofType {
+          kind
+          name
+          ofType {
+            kind
+            name
+            ofType {
+              kind
+              name
+              ofType {
+                kind
+                name
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}";
+
+/// Execute a GraphQL query against the repository and return the result as
+/// JSON.
+///
+/// This is the high-level entry point that hides the `async-graphql` schema
+/// machinery from callers. `variables_json` is an optional raw JSON string
+/// for query variables.
+pub async fn execute_query(
+    run: Arc<dyn QueryRun>,
+    query: &str,
+    variables_json: Option<&str>,
+) -> Result<QueryResult, Error> {
+    let schema = Schema::new(RepositoryQuery::new(run), EmptyMutation, EmptySubscription);
+
+    let variables: Variables = variables_json
+        .map(serde_json::from_str)
+        .transpose()
+        .map_err(Error::Serde)?
+        .unwrap_or_default();
+
+    let request = Request::new(query).variables(variables);
+    let result = schema.execute(request).await;
+
+    let result_json = serde_json::to_string_pretty(&result).map_err(Error::Serde)?;
+
+    let errors = result
+        .errors
+        .into_iter()
+        .filter_map(|e| {
+            let loc = e.locations.first()?;
+            Some(QueryErrorLocation {
+                message: e.message,
+                line: loc.line,
+                column: loc.column,
+            })
+        })
+        .collect();
+
+    Ok(QueryResult {
+        result_json,
+        errors,
+    })
+}

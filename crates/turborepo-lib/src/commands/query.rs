@@ -1,115 +1,14 @@
 use std::{fs, sync::Arc};
 
-use async_graphql::{EmptyMutation, EmptySubscription, Request, Schema, ServerError, Variables};
 use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_query::{QueryRun, RepositoryQuery};
+use turborepo_query::QueryRun;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
 use crate::{cli, commands::CommandBase, run::builder::RunBuilder};
-
-const SCHEMA_QUERY: &str = "query IntrospectionQuery {
-  __schema {
-    queryType {
-      name
-    }
-    mutationType {
-      name
-    }
-    subscriptionType {
-      name
-    }
-    types {
-      ...FullType
-    }
-    directives {
-      name
-      description
-      locations
-      args {
-        ...InputValue
-      }
-    }
-  }
-}
-
-fragment FullType on __Type {
-  kind
-  name
-  description
-  fields(includeDeprecated: true) {
-    name
-    description
-    args {
-      ...InputValue
-    }
-    type {
-      ...TypeRef
-    }
-    isDeprecated
-    deprecationReason
-  }
-  inputFields {
-    ...InputValue
-  }
-  interfaces {
-    ...TypeRef
-  }
-  enumValues(includeDeprecated: true) {
-    name
-    description
-    isDeprecated
-    deprecationReason
-  }
-  possibleTypes {
-    ...TypeRef
-  }
-}
-
-fragment InputValue on __InputValue {
-  name
-  description
-  type {
-    ...TypeRef
-  }
-  defaultValue
-}
-
-fragment TypeRef on __Type {
-  kind
-  name
-  ofType {
-    kind
-    name
-    ofType {
-      kind
-      name
-      ofType {
-        kind
-        name
-        ofType {
-          kind
-          name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-              ofType {
-                kind
-                name
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}";
 
 #[derive(Debug, Diagnostic, Error)]
 #[error("{message}")]
@@ -133,17 +32,13 @@ impl QueryError {
         }
         index + column - 1
     }
-    fn new(server_error: ServerError, query: String) -> Self {
-        let span: Option<SourceSpan> = server_error.locations.first().map(|location| {
-            let idx =
-                Self::get_index_from_row_column(query.as_ref(), location.line, location.column);
-            (idx, idx + 1).into()
-        });
 
+    fn from_query_error(error: turborepo_query::QueryErrorLocation, query: String) -> Self {
+        let idx = Self::get_index_from_row_column(&query, error.line, error.column);
         QueryError {
-            message: server_error.message,
+            message: error.message,
             query,
-            span,
+            span: Some((idx, idx + 1).into()),
             span2: None,
             span3: None,
         }
@@ -166,7 +61,9 @@ pub async fn run(
     let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
     let run: Arc<dyn QueryRun> = Arc::new(run);
 
-    let query = query.as_deref().or(include_schema.then_some(SCHEMA_QUERY));
+    let query = query
+        .as_deref()
+        .or(include_schema.then_some(turborepo_query::SCHEMA_QUERY));
     if let Some(query) = query {
         let trimmed_query = query.trim();
         let query = if (trimmed_query.starts_with("query")
@@ -180,30 +77,20 @@ pub async fn run(
                 .map_err(turborepo_query::Error::Server)?
         };
 
-        let schema = Schema::new(RepositoryQuery::new(run), EmptyMutation, EmptySubscription);
-
-        let variables: Variables = variables_path
+        let variables_json = variables_path
             .map(AbsoluteSystemPathBuf::from_cwd)
             .transpose()
             .map_err(turborepo_query::Error::Path)?
             .map(|path| path.read_to_string())
             .transpose()
-            .map_err(turborepo_query::Error::Server)?
-            .map(|content| serde_json::from_str(&content))
-            .transpose()
-            .map_err(turborepo_query::Error::Serde)?
-            .unwrap_or_default();
+            .map_err(turborepo_query::Error::Server)?;
 
-        let request = Request::new(query).variables(variables);
+        let result = turborepo_query::execute_query(run, query, variables_json.as_deref()).await?;
 
-        let result = schema.execute(request).await;
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&result).map_err(turborepo_query::Error::Serde)?
-        );
+        println!("{}", result.result_json);
         if !result.errors.is_empty() {
             for error in result.errors {
-                let error = QueryError::new(error, query.to_string());
+                let error = QueryError::from_query_error(error, query.to_string());
                 eprintln!("{:?}", Report::new(error));
             }
         }
