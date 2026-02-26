@@ -314,54 +314,64 @@ mod tests {
 
     #[test]
     fn metrics_config_applies_defaults_and_overrides() {
-        let cases: &[(
-            &str,
-            Option<ExperimentalOtelMetricsOptions>,
-            bool,
-            bool,
-            bool,
-            bool,
-        )] = &[
-            ("defaults", None, true, false, false, false),
-            (
-                "both overridden",
-                Some(ExperimentalOtelMetricsOptions {
+        struct MetricsCase {
+            name: &'static str,
+            options: Option<ExperimentalOtelMetricsOptions>,
+            expected: turborepo_otel::MetricsConfig,
+        }
+
+        fn expected_metrics(
+            run_summary: bool,
+            task_details: bool,
+            task_id: bool,
+            task_hashes: bool,
+        ) -> turborepo_otel::MetricsConfig {
+            turborepo_otel::MetricsConfig {
+                run_summary,
+                task_details,
+                task_attributes: turborepo_otel::TaskAttributesConfig {
+                    id: task_id,
+                    hashes: task_hashes,
+                },
+            }
+        }
+
+        let cases = [
+            MetricsCase {
+                name: "defaults",
+                options: None,
+                expected: expected_metrics(true, false, false, false),
+            },
+            MetricsCase {
+                name: "both overridden",
+                options: Some(ExperimentalOtelMetricsOptions {
                     run_summary: Some(false),
                     task_details: Some(true),
                     task_attributes: None,
                 }),
-                false,
-                true,
-                false,
-                false,
-            ),
-            (
-                "only run_summary overridden",
-                Some(ExperimentalOtelMetricsOptions {
+                expected: expected_metrics(false, true, false, false),
+            },
+            MetricsCase {
+                name: "only run_summary overridden",
+                options: Some(ExperimentalOtelMetricsOptions {
                     run_summary: Some(false),
                     task_details: None,
                     task_attributes: None,
                 }),
-                false,
-                false,
-                false,
-                false,
-            ),
-            (
-                "only task_details overridden",
-                Some(ExperimentalOtelMetricsOptions {
+                expected: expected_metrics(false, false, false, false),
+            },
+            MetricsCase {
+                name: "only task_details overridden",
+                options: Some(ExperimentalOtelMetricsOptions {
                     run_summary: None,
                     task_details: Some(true),
                     task_attributes: None,
                 }),
-                true,
-                true,
-                false,
-                false,
-            ),
-            (
-                "task_attributes overridden",
-                Some(ExperimentalOtelMetricsOptions {
+                expected: expected_metrics(true, true, false, false),
+            },
+            MetricsCase {
+                name: "task_attributes overridden",
+                options: Some(ExperimentalOtelMetricsOptions {
                     run_summary: None,
                     task_details: None,
                     task_attributes: Some(
@@ -371,43 +381,13 @@ mod tests {
                         },
                     ),
                 }),
-                true,
-                false,
-                true,
-                true,
-            ),
+                expected: expected_metrics(true, false, true, true),
+            },
         ];
 
-        for (
-            name,
-            options,
-            expected_run_summary,
-            expected_task_details,
-            expected_task_id,
-            expected_task_hashes,
-        ) in cases
-        {
-            let result = metrics_config(options.as_ref());
-            assert_eq!(
-                result.run_summary, *expected_run_summary,
-                "case '{}': run_summary mismatch",
-                name
-            );
-            assert_eq!(
-                result.task_details, *expected_task_details,
-                "case '{}': task_details mismatch",
-                name
-            );
-            assert_eq!(
-                result.task_attributes.id, *expected_task_id,
-                "case '{}': task_attributes.id mismatch",
-                name
-            );
-            assert_eq!(
-                result.task_attributes.hashes, *expected_task_hashes,
-                "case '{}': task_attributes.hashes mismatch",
-                name
-            );
+        for case in cases {
+            let result = metrics_config(case.options.as_ref());
+            assert_eq!(result, case.expected, "case '{}': metrics mismatch", case.name);
         }
     }
 
