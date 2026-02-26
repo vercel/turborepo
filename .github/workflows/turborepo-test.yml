@@ -228,9 +228,9 @@ jobs:
             unset RUSTC_WRAPPER
           fi
           if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo nextest run --workspace --exclude turborepo-napi --partition hash:${{ matrix.partition }}/2
+              cargo nextest run --workspace --exclude turborepo-napi --no-fail-fast --partition hash:${{ matrix.partition }}/2
           else
-              cargo nextest run --workspace --partition hash:${{ matrix.partition }}/2
+              cargo nextest run --workspace --no-fail-fast --partition hash:${{ matrix.partition }}/2
           fi
         shell: bash
 
@@ -292,6 +292,15 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
+      - name: Build turbo binary
+        timeout-minutes: 15
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          cargo build -p turbo
+        shell: bash
+
       - name: Run tests with coverage
         timeout-minutes: 45
         run: |
@@ -302,6 +311,7 @@ jobs:
             --workspace \
             --exclude turborepo-napi \
             --partition hash:${{ matrix.partition }}/2 \
+            --no-fail-fast \
             --lcov \
             --output-path coverage-${{ matrix.partition }}.lcov
         shell: bash
