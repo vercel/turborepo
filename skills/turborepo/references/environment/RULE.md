@@ -80,7 +80,7 @@ Exclude variables (useful with framework inference):
 
 ```json
 {
-  "$schema": "https://v2-8-13-canary-1.turborepo.dev/schema.json",
+  "$schema": "https://v2-8-13-canary-2.turborepo.dev/schema.json",
   "globalEnv": ["CI", "NODE_ENV"],
   "globalPassThroughEnv": ["GITHUB_TOKEN", "NPM_TOKEN"],
   "tasks": {

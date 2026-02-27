@@ -112,7 +112,7 @@ If you use `.env.development` and `.env.production`, both should be in inputs.
 
 ```json
 {
-  "$schema": "https://v2-8-13-canary-1.turborepo.dev/schema.json",
+  "$schema": "https://v2-8-13-canary-2.turborepo.dev/schema.json",
   "globalEnv": ["CI", "NODE_ENV", "VERCEL"],
   "globalPassThroughEnv": ["GITHUB_TOKEN", "VERCEL_URL"],
   "tasks": {
