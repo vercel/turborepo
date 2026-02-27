@@ -2,7 +2,7 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{run_turbo, setup};
+use common::{run_turbo, run_turbo_with_env, setup};
 
 fn turbo_configs_dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -58,26 +58,6 @@ fn all_task_hashes(dir: &Path, extra_args: &[&str]) -> String {
         .collect();
     hashes.sort();
     hashes.join(",")
-}
-
-fn run_turbo_with_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> std::process::Output {
-    let config_dir = tempfile::tempdir().unwrap();
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").unwrap();
-    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .current_dir(dir);
-    for (k, v) in env {
-        cmd.env(k, v);
-    }
-    for arg in args {
-        cmd.arg(arg);
-    }
-    cmd.output().unwrap()
 }
 
 fn setup_strict_env() -> tempfile::TempDir {

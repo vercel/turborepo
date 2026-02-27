@@ -163,7 +163,7 @@ jobs:
           - name: macos
             runner: macos-latest-xlarge
           - name: windows
-            runner: windows-latest
+            runner: windows-latest-8-core-oss
         partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
@@ -182,6 +182,16 @@ jobs:
       SCCACHE_REQUEST_TIMEOUT: 30
       SCCACHE_ERROR_LOG: error
     steps:
+      - name: Install git (Windows larger runners)
+        if: matrix.os.name == 'windows'
+        shell: cmd
+        run: |
+          curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
+          mkdir "%ProgramFiles%\Git"
+          tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
+          del "%ProgramFiles%\Git\etc\gitconfig"
+          echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+
       - name: Set git to use LF line endings
         run: |
           git config --global core.autocrlf false
@@ -217,9 +227,17 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Install cargo-nextest
+        if: matrix.os.name != 'windows'
         uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
         with:
           tool: nextest
+
+      - name: Install cargo-nextest (Windows)
+        if: matrix.os.name == 'windows'
+        shell: cmd
+        run: |
+          curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
+          tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
 
       - name: Run tests
         timeout-minutes: 45

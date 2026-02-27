@@ -1,29 +1,6 @@
 mod common;
 
-use std::path::Path;
-
-use common::{run_turbo, setup, turbo_output_filters};
-
-fn run_turbo_with_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> std::process::Output {
-    let config_dir = tempfile::tempdir().unwrap();
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").unwrap();
-    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .current_dir(dir);
-    for (k, v) in env {
-        cmd.env(k, v);
-    }
-    for arg in args {
-        cmd.arg(arg);
-    }
-    cmd.output().unwrap()
-}
+use common::{run_turbo, run_turbo_with_env, setup, turbo_output_filters};
 
 // --- log-order-stream.t ---
 // Stream output is non-deterministic in ordering, so we check key lines.
@@ -128,22 +105,11 @@ fn test_log_order_github_actions() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
 
-    // Need to SET GITHUB_ACTIONS=1 for this test
-    let config_dir = tempfile::tempdir().unwrap();
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").unwrap();
-    let output = cmd
-        .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
-        .env("GITHUB_ACTIONS", "1")
-        .env_remove("CI")
-        .args(["run", "build", "--force"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &["run", "build", "--force"],
+        &[("GITHUB_ACTIONS", "1")],
+    );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("::group::my-app:build"));
@@ -157,27 +123,17 @@ fn test_log_order_github_actions_with_task_prefix() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
 
-    let config_dir = tempfile::tempdir().unwrap();
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").unwrap();
-    let output = cmd
-        .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
-        .env("GITHUB_ACTIONS", "1")
-        .env_remove("CI")
-        .args([
+    let output = run_turbo_with_env(
+        tempdir.path(),
+        &[
             "run",
             "build",
             "--force",
             "--log-prefix=task",
             "--filter=util",
-        ])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+        ],
+        &[("GITHUB_ACTIONS", "1")],
+    );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("::group::util:build"));
@@ -190,21 +146,7 @@ fn test_log_order_github_actions_error() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
 
-    let config_dir = tempfile::tempdir().unwrap();
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").unwrap();
-    let output = cmd
-        .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
-        .env("GITHUB_ACTIONS", "1")
-        .env_remove("CI")
-        .args(["run", "fail"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+    let output = run_turbo_with_env(tempdir.path(), &["run", "fail"], &[("GITHUB_ACTIONS", "1")]);
 
     assert!(!output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);

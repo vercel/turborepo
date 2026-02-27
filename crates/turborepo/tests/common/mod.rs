@@ -13,6 +13,12 @@ pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
 /// Run turbo with standard env var suppression. Returns the raw Output.
 #[allow(dead_code)]
 pub fn run_turbo(test_dir: &Path, args: &[&str]) -> Output {
+    run_turbo_with_env(test_dir, args, &[])
+}
+
+/// Run turbo with standard env var suppression plus additional env overrides.
+#[allow(dead_code)]
+pub fn run_turbo_with_env(test_dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
     let mut cmd = assert_cmd::Command::cargo_bin("turbo").expect("turbo binary not found");
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
@@ -24,6 +30,9 @@ pub fn run_turbo(test_dir: &Path, args: &[&str]) -> Output {
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir);
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
     for arg in args {
         cmd.arg(arg);
     }
