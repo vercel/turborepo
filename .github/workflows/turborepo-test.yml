@@ -109,7 +109,7 @@ jobs:
 
           # Detect if Rust/core code changed (requires Rust tests + integration tests)
           # This excludes JS-only changes like packages/*, lockfile, etc.
-          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|turborepo-tests/)"
+          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|\.github/|turborepo-tests/)"
           RUST_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$RUST_PATTERNS" || true)
 
           if [ -n "$RUST_CHANGES" ]; then
@@ -161,7 +161,7 @@ jobs:
       matrix:
         os:
           - name: macos
-            runner: macos-latest
+            runner: macos-latest-xlarge
           - name: windows
             runner: windows-latest
         partition: [1, 2, 3, 4]
