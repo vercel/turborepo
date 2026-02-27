@@ -202,6 +202,11 @@ fn run_prysk_test(path: &Path) -> datatest_stable::Result<()> {
     cmd.env("NO_UPDATE_NOTIFIER", "1");
     cmd.env("NPM_CONFIG_UPDATE_NOTIFIER", "false");
 
+    // Prevent corepack from prompting to download package managers. Without
+    // this, corepack blocks on stdin in non-TTY environments (causing hangs
+    // on Windows CI).
+    cmd.env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0");
+
     // macOS tmp dirs set by prysk can fail — use /tmp directly.
     if cfg!(target_os = "macos") {
         cmd.env("TMPDIR", "/tmp");
