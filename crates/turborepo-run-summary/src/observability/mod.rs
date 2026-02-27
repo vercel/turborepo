@@ -24,14 +24,7 @@ use turborepo_config::ExperimentalObservabilityOptions;
 
 use crate::RunSummary;
 
-#[cfg(feature = "otel")]
 mod otel;
-
-#[cfg(not(feature = "otel"))]
-mod otel_disabled;
-
-#[cfg(not(feature = "otel"))]
-use otel_disabled as otel;
 
 /// Trait for observing completed Turborepo runs, allowing different
 /// observability backends like OpenTelemetry to be plugged in.

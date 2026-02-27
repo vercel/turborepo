@@ -10,7 +10,6 @@ license = "MIT"
 default = ["rustls-tls"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
-otel = ["turborepo-run-summary/otel"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
