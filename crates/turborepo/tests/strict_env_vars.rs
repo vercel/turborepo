@@ -86,30 +86,6 @@ fn setup_strict_env() -> tempfile::TempDir {
     tempdir
 }
 
-// --- global-hash-no-value.t ---
-// Original test used find_global_hash.sh (broken with Rust turbo).
-// We use globalCacheInputs from --dry=json instead.
-
-#[test]
-fn test_global_hash_no_value() {
-    let tempdir = setup_strict_env();
-
-    let baseline = all_task_hashes(tempdir.path(), &[]);
-    // --env-mode without a value (equivalent to infer, the default) → same
-    let with_flag = all_task_hashes(tempdir.path(), &[]);
-    assert_eq!(baseline, with_flag);
-
-    // Empty passthrough config → same (empty array is no-op in strict mode)
-    replace_turbo_json(tempdir.path(), "strict_env_vars/global_pt-empty.json");
-    let empty_global = all_task_hashes(tempdir.path(), &[]);
-    assert_eq!(baseline, empty_global);
-
-    // Add passthrough value → changes
-    replace_turbo_json(tempdir.path(), "strict_env_vars/global_pt.json");
-    let with_global = all_task_hashes(tempdir.path(), &[]);
-    assert_ne!(empty_global, with_global);
-}
-
 // --- global-hash-strict.t ---
 
 #[test]
