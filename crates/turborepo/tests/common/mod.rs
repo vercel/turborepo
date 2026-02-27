@@ -7,14 +7,7 @@ use std::{path::Path, process::Output};
 /// - Timing lines (e.g. "Time:    1.234s" → "Time:    [TIME]")
 #[allow(dead_code)]
 pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
-    vec![
-        (r"\\", "/"),
-        (r"Time:\s*[\.0-9]+m?s", "Time:    [TIME]"),
-        // npm prints upgrade nag notices to stderr, but they can leak into
-        // stdout when piped through a package-manager script. Strip them so
-        // they never pollute snapshots.
-        (r"(?m)^.*npm notice.*\n?", ""),
-    ]
+    vec![(r"\\", "/"), (r"Time:\s*[\.0-9]+m?s", "Time:    [TIME]")]
 }
 
 /// Run turbo with standard env var suppression. Returns the raw Output.
