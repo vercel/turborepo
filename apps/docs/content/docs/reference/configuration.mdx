@@ -869,7 +869,7 @@ Configure Turborepo to export metrics to observability backends like Datadog, Pr
 
 ### `experimentalObservability`
 
-The `experimentalObservability` block is only read when `futureFlags.experimentalObservability` is set to `true` in your root `turbo.json`. Environment variables and CLI flags can still enable observability even if the future flag is disabled.
+The `experimentalObservability` configuration requires `futureFlags.experimentalObservability` to be set to `true` in your root `turbo.json`. This applies to all configuration sources, including the `turbo.json` block, environment variables, and CLI flags. Turborepo will error if observability is configured without the future flag enabled.
 
 ```jsonc title="./turbo.json"
 {
