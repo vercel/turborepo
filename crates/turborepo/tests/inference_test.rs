@@ -34,7 +34,8 @@ fn setup_git_in(dir: &Path) {
 }
 
 fn install_deps_in(dir: &Path) {
-    Command::new("npm")
+    let npm = which::which("npm").unwrap_or_else(|_| "npm".into());
+    Command::new(npm)
         .args(["install", "--silent"])
         .current_dir(dir)
         .stdout(std::process::Stdio::null())
