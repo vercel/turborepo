@@ -886,13 +886,18 @@ The `experimentalObservability` configuration requires `futureFlags.experimental
       },
       "timeoutMs": 10000,
       "intervalMs": 15000,
-      "resource": {
-        "service.name": "turborepo"
-      },
+      "resource": [
+        { "key": "service.name", "value": "turborepo" }
+      ],
       "metrics": {
         "runSummary": true,
-        "taskDetails": false
-      }
+        "taskDetails": false,
+        "taskAttributes": {
+          "id": true,
+          "hashes": false
+        }
+      },
+      "useRemoteCacheToken": true
     }
   }
 }
@@ -965,17 +970,17 @@ Interval in milliseconds between periodic exports to the collector. This control
 
 #### `experimentalObservability.otel.resource`
 
-Optional resource attributes to attach to all exported metrics. These help identify the source of metrics in your observability platform.
+Optional resource attributes to attach to all exported metrics. Each entry is an object with `key` and `value` fields. These help identify the source of metrics in your observability platform.
 
 ```jsonc title="./turbo.json"
 {
   "experimentalObservability": {
     "otel": {
-      "resource": {
-        "service.name": "turborepo",
-        "service.namespace": "ci",
-        "deployment.environment": "production"
-      }
+      "resource": [
+        { "key": "service.name", "value": "turborepo" },
+        { "key": "service.namespace", "value": "ci" },
+        { "key": "deployment.environment", "value": "production" }
+      ]
     }
   }
 }
@@ -1007,6 +1012,30 @@ Export per-task metrics:
 - Cache time saved
 - Task identifiers (task ID, package, hash)
 
+##### `metrics.taskAttributes`
+
+Control which task attributes are included in per-task metrics. These options only take effect when `taskDetails` is enabled.
+
+###### `taskAttributes.id`
+
+Default: `false`
+
+Include the task ID attribute on per-task metrics.
+
+###### `taskAttributes.hashes`
+
+Default: `false`
+
+Include task hash attributes on per-task metrics.
+
+#### `experimentalObservability.otel.useRemoteCacheToken`
+
+Default: `false`
+
+When enabled, automatically adds an `Authorization: Bearer <token>` header to OTLP export requests using your existing remote cache credentials (from `turbo login` or the `TURBO_TOKEN` environment variable). Existing `Authorization` headers in the `headers` configuration are preserved and take precedence.
+
+This is useful when your OTLP collector uses the same authentication as your remote cache.
+
 <Callout type="info">
   Exporter failures are logged but do not cause the run to fail. If the
   collector is unavailable or misconfigured, Turborepo will continue executing
@@ -1028,6 +1057,9 @@ You can also configure observability via environment variables, which take prece
 - `TURBO_EXPERIMENTAL_OTEL_RESOURCE` - Comma-separated key=value pairs for resource attributes
 - `TURBO_EXPERIMENTAL_OTEL_METRICS_RUN_SUMMARY` - Enable run summary metrics (`1` or `0`)
 - `TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS` - Enable task details metrics (`1` or `0`)
+- `TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_ATTRIBUTES_ID` - Include task ID attribute (`1` or `0`)
+- `TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_ATTRIBUTES_HASHES` - Include task hash attributes (`1` or `0`)
+- `TURBO_EXPERIMENTAL_OTEL_USE_REMOTE_CACHE_TOKEN` - Use remote cache token for OTLP authentication (`1` or `0`)
 
 ### CLI flags
 
@@ -1042,3 +1074,4 @@ You can override observability settings via CLI flags:
 - `--experimental-otel-resource KEY=VALUE` - Add resource attribute (can be repeated)
 - `--experimental-otel-metrics-run-summary` - Enable run summary metrics
 - `--experimental-otel-metrics-task-details` - Enable task details metrics
+- `--experimental-otel-use-remote-cache-token` - Use remote cache token for OTLP authentication
