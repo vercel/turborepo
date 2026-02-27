@@ -76,6 +76,32 @@ pub fn replace_turbo_json(dir: &Path, config_name: &str) {
         .ok();
 }
 
+/// Create a mock turbo config directory with a fake auth token.
+/// Returns the config dir path (pass as TURBO_CONFIG_DIR_PATH).
+#[allow(dead_code)]
+pub fn mock_turbo_config(config_dir: &Path) {
+    let turbo_dir = config_dir.join("turborepo");
+    fs::create_dir_all(&turbo_dir).unwrap();
+    fs::write(
+        turbo_dir.join("config.json"),
+        r#"{"token":"normal-user-token"}"#,
+    )
+    .unwrap();
+}
+
+/// Create a mock telemetry config directory with telemetry enabled.
+/// Returns the config dir path (pass as TURBO_CONFIG_DIR_PATH).
+#[allow(dead_code)]
+pub fn mock_telemetry_config(config_dir: &Path) {
+    let turbo_dir = config_dir.join("turborepo");
+    fs::create_dir_all(&turbo_dir).unwrap();
+    fs::write(
+        turbo_dir.join("telemetry_config.json"),
+        r#"{"telemetry_enabled":true}"#,
+    )
+    .unwrap();
+}
+
 #[allow(dead_code)]
 pub fn setup_fixture(
     fixture: &str,
