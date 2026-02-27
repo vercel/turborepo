@@ -131,6 +131,20 @@ impl Lockfile for NpmLockfile {
                 }
             }
         }
+
+        // After pruning, a package nested under a workspace's node_modules
+        // (e.g. `apps/web/node_modules/next@15`) may exist without a
+        // corresponding hoisted version (`node_modules/next`) if the hoisted
+        // version was only needed by a now-pruned workspace and the transitive
+        // closure didn't include it. Promote the nested version to the hoisted
+        // position so npm ci sees a consistent tree.
+        // See https://github.com/vercel/turborepo/issues/10985
+        let ws_set: std::collections::HashSet<&str> =
+            workspace_packages.iter().map(|s| s.as_str()).collect();
+        let requested: std::collections::HashSet<&str> =
+            packages.iter().map(|s| s.as_str()).collect();
+        Self::rehoist_packages(&mut pruned_packages, &ws_set, &requested);
+
         Ok(Box::new(Self {
             lockfile_version: self.lockfile_version,
             packages: pruned_packages,
@@ -190,6 +204,78 @@ impl NpmLockfile {
         self.packages
             .get(pkg_str)
             .ok_or_else(|| Error::MissingPackage(pkg_str.to_string()))
+    }
+
+    /// Promotes workspace-nested packages to the hoisted position when the
+    /// hoisted slot is either empty or occupied by a version that no
+    /// workspace's transitive closure actually requested.
+    fn rehoist_packages(
+        pruned: &mut Map<String, NpmPackage>,
+        workspace_packages: &std::collections::HashSet<&str>,
+        requested: &std::collections::HashSet<&str>,
+    ) {
+        let mut to_rehoist: Vec<(String, String)> = Vec::new();
+
+        for key in pruned.keys() {
+            let Some(idx) = key.find("/node_modules/") else {
+                continue;
+            };
+            let prefix = &key[..idx];
+            if prefix.contains("node_modules/") || !workspace_packages.contains(prefix) {
+                continue;
+            }
+            let pkg_name = &key[idx + "/node_modules/".len()..];
+            if pkg_name.is_empty() {
+                continue;
+            }
+            let hoisted_key = format!("node_modules/{pkg_name}");
+
+            // If the hoisted key was explicitly requested by a workspace's
+            // transitive closure, another workspace genuinely needs that
+            // version — don't replace it.
+            if requested.contains(hoisted_key.as_str()) {
+                continue;
+            }
+
+            // Either the hoisted slot is empty or it holds a version that
+            // wasn't requested (it was pulled in only via subgraph's
+            // workspace entry insertion). Safe to replace.
+            to_rehoist.push((key.clone(), hoisted_key));
+        }
+
+        for (nested_key, hoisted_key) in to_rehoist {
+            // Remove old hoisted entry and its sub-deps.
+            let old_prefix = format!("{hoisted_key}/");
+            let old_sub: Vec<String> = pruned
+                .keys()
+                .filter(|k| k.starts_with(&old_prefix))
+                .cloned()
+                .collect();
+            for k in old_sub {
+                pruned.remove(&k);
+            }
+            pruned.remove(&hoisted_key);
+
+            // Promote nested entry.
+            if let Some(pkg) = pruned.remove(&nested_key) {
+                pruned.insert(hoisted_key.clone(), pkg);
+            }
+
+            // Relocate sub-deps from nested path to hoisted path.
+            let nested_prefix = format!("{nested_key}/");
+            let new_prefix = format!("{hoisted_key}/");
+            let sub_keys: Vec<String> = pruned
+                .keys()
+                .filter(|k| k.starts_with(&nested_prefix))
+                .cloned()
+                .collect();
+            for sub_key in sub_keys {
+                if let Some(pkg) = pruned.remove(&sub_key) {
+                    let new_key = format!("{new_prefix}{}", &sub_key[nested_prefix.len()..]);
+                    pruned.insert(new_key, pkg);
+                }
+            }
+        }
     }
 
     fn possible_npm_deps(key: &str, dep: &str) -> Vec<String> {
