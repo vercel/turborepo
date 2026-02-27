@@ -1,7 +1,7 @@
 Setup
   $ . ${TESTDIR}/../../../helpers/setup_integration_test.sh monorepo_dependency_error
 Run without --continue
-  $ ${TURBO} build --filter my-app...
+  $ ${TURBO} build --filter my-app... --log-order grouped
   \xe2\x80\xa2 Packages in scope: base-lib, my-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -33,7 +33,7 @@ Run without --continue
 
 
 Run without --continue, and with only errors.
-  $ ${TURBO} build --output-logs=errors-only --filter my-app...
+  $ ${TURBO} build --output-logs=errors-only --filter my-app... --log-order grouped
   \xe2\x80\xa2 Packages in scope: base-lib, my-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -58,7 +58,7 @@ Run without --continue, and with only errors.
   [1]
 
 Run with --continue
-  $ ${TURBO} build --output-logs=errors-only --filter my-app... --continue
+  $ ${TURBO} build --output-logs=errors-only --filter my-app... --continue --log-order grouped
   \xe2\x80\xa2 Packages in scope: base-lib, my-app, some-lib (esc)
   \xe2\x80\xa2 Running build in 3 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
@@ -83,7 +83,7 @@ Run with --continue
   [1]
 
 Run with --continue=dependencies-successful
-  $ ${TURBO} build --output-logs=errors-only --continue=dependencies-successful
+  $ ${TURBO} build --output-logs=errors-only --continue=dependencies-successful --log-order grouped
   \xe2\x80\xa2 Packages in scope: base-lib, my-app, other-app, some-lib, yet-another-lib (esc)
   \xe2\x80\xa2 Running build in 5 packages (esc)
   \xe2\x80\xa2 Remote caching disabled (esc)
