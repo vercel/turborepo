@@ -46,5 +46,4 @@ runs:
       with:
         shared-key: ${{ inputs.shared-cache-key }}
         key: ${{ inputs.cache-key }}
-        # the cache is huge and we only get 10gb max, so we only save on master
-        save-if: ${{ github.ref == 'refs/heads/main' && inputs.save-cache || 'false' }}
+        save-if: ${{ inputs.save-cache }}
