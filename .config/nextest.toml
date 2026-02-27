@@ -20,9 +20,28 @@ turborepo-dirs-serial = { max-threads = 1 }
 
 
 [[profile.default.overrides]]
-# Mark flaky prysk test for retries
+filter = 'package(turborepo-api-client) and test(retry::test::handles_too_many_failures)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(run/unnamed-packages)'
+retries = 5
+
+[[profile.default.overrides]]
 filter = 'package(turbo) and test(lockfile-aware-caching/bun)'
-retries = 3
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(lockfile-aware-caching/npm)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(lockfile-aware-caching/berry)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(lockfile-aware-caching/new-package)'
+retries = 5
 
 [[profile.default.overrides]]
 # Run all tests in the turborepo-process crate serially
