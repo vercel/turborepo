@@ -84,7 +84,7 @@ use opentelemetry_sdk::{
 use opentelemetry_semantic_conventions::resource::SERVICE_NAME;
 use thiserror::Error;
 use tonic::metadata::{MetadataKey, MetadataMap, MetadataValue};
-use tracing::warn;
+use tracing::debug;
 
 /// Protocol supported by the OTLP exporter.
 ///
@@ -327,7 +327,10 @@ impl Handle {
         // exporter. The configured timeout applies to the final export operation,
         // ensuring we don't hang indefinitely on network issues.
         if let Err(err) = self.inner.provider.shutdown() {
-            warn!("failed to shutdown otel exporter: {err}");
+            debug!(
+                "otel exporter shutdown could not flush metrics (collector may be unreachable): \
+                 {err}"
+            );
         }
     }
 }
