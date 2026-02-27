@@ -1,6 +1,9 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
   "ui": "tui",
+  "futureFlags": {
+    "experimentalObservability": true
+  },
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
