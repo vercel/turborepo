@@ -65,11 +65,22 @@ docker compose logs otel-collector
 
 ### 2. Configure Turborepo OTEL environment variables
 
+**macOS / Linux:**
+
 ```sh
 export TURBO_EXPERIMENTAL_OTEL_ENABLED=1
 export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=https://127.0.0.1:4317
 export TURBO_EXPERIMENTAL_OTEL_RESOURCE="service.name=turborepo,env=local"
 export TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS=1
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$env:TURBO_EXPERIMENTAL_OTEL_ENABLED=1
+$env:TURBO_EXPERIMENTAL_OTEL_ENDPOINT="https://127.0.0.1:4317"
+$env:TURBO_EXPERIMENTAL_OTEL_RESOURCE="service.name=turborepo,env=local"
+$env:TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS=1
 ```
 
 ### 3. Run a task
