@@ -46,7 +46,7 @@ The included `docker-compose.yml` starts:
 | Collector metrics    | 8888  |
 | Prometheus exporter  | 8889  |
 | Prometheus UI        | 9090  |
-| Grafana UI           | 3000  |
+| Grafana UI           | 3001  |
 
 ## How to use
 
@@ -108,7 +108,7 @@ Metric #3
 
 **Prometheus UI**: Open `http://localhost:9090` and query for `turbo_run_duration_ms`, `turbo_run_tasks_attempted`, etc.
 
-**Grafana dashboard**: Open `http://localhost:3000` -- the **Turborepo Runs** dashboard is pre-configured and loads automatically. No login required. The dashboard includes panels for:
+**Grafana dashboard**: Open `http://localhost:3001` -- the **Turborepo Runs** dashboard is pre-configured and loads automatically. No login required. The dashboard includes panels for:
 
 - Run duration (avg and p95)
 - Runs over time

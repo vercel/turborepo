@@ -29,5 +29,5 @@ services:
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_UID=turborepo-runs
     ports:
-      - "3000:3000"
+      - "3001:3000"
     depends_on: [prometheus]
