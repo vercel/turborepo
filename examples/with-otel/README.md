@@ -106,7 +106,14 @@ Metric #3
      -> Name: turbo.run.tasks.cached
 ```
 
-**Prometheus UI**: Open `http://localhost:9090` and query for `turbo_run_duration_ms`, `turbo_run_tasks_attempted`, etc.
+**Prometheus UI**: Click any of these links to open pre-filled queries:
+
+- [All run metrics](http://localhost:9090/graph?g0.expr=%7B__name__%3D~%22turbo_run_.%2B%22%7D&g0.tab=0) -- `{__name__=~"turbo_run_.+"}`
+- [Run duration (histogram)](http://localhost:9090/graph?g0.expr=turbo_run_duration_ms_sum+%2F+turbo_run_duration_ms_count&g0.tab=0) -- avg duration per run
+- [Tasks attempted](http://localhost:9090/graph?g0.expr=turbo_run_tasks_attempted_total&g0.tab=0)
+- [Tasks cached](http://localhost:9090/graph?g0.expr=turbo_run_tasks_cached_total&g0.tab=0)
+- [Tasks failed](http://localhost:9090/graph?g0.expr=turbo_run_tasks_failed_total&g0.tab=0)
+- [Cache hit rate](http://localhost:9090/graph?g0.expr=turbo_run_tasks_cached_total+%2F+clamp_min(turbo_run_tasks_attempted_total%2C+1)&g0.tab=0)
 
 **Grafana dashboard**: Open `http://localhost:3001` -- the **Turborepo Runs** dashboard is pre-configured and loads automatically. No login required. The dashboard includes panels for:
 
