@@ -52,6 +52,10 @@ filter = 'package(turbo) and test(run/continue)'
 retries = 5
 
 [[profile.default.overrides]]
+filter = 'package(turbo) and test(prune_test::test_prune_composable_config)'
+retries = 5
+
+[[profile.default.overrides]]
 # Run all tests in the turborepo-process crate serially
 filter = 'package(turborepo-process)'
 test-group = 'turborepo-process-serial'
