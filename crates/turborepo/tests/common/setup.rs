@@ -92,7 +92,12 @@ pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
     git(&["config", "user.name", "Turbo Test"])?;
 
     // npm script-shell=bash for cross-platform consistency
-    fs::write(target_dir.join(".npmrc"), "script-shell=bash\n")?;
+    // update-notifier=false suppresses "npm notice" upgrade messages that cause
+    // test flakes
+    fs::write(
+        target_dir.join(".npmrc"),
+        "script-shell=bash\nupdate-notifier=false\n",
+    )?;
 
     git(&["add", "."])?;
     git(&["commit", "-m", "Initial", "--quiet"])?;
