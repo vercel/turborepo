@@ -163,7 +163,7 @@ jobs:
           - name: macos
             runner: macos-latest
           - name: windows
-            runner: windows-latest
+            runner: windows-latest-8-cores
         partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
