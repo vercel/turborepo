@@ -184,11 +184,12 @@ jobs:
     steps:
       - name: Install git (Windows larger runners)
         if: matrix.os.name == 'windows'
-        shell: pwsh
+        shell: cmd
         run: |
-          Invoke-WebRequest -Uri "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip" -OutFile "$env:TEMP\mingit.zip"
-          Expand-Archive "$env:TEMP\mingit.zip" -DestinationPath "$env:ProgramFiles\Git" -Force
-          echo "$env:ProgramFiles\Git\cmd" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
+          mkdir "%ProgramFiles%\Git"
+          tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
+          echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
 
       - name: Set git to use LF line endings
         run: |
