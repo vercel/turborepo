@@ -1,0 +1,43 @@
+---
+source: crates/turborepo/tests/command_test.rs
+expression: stderr.to_string()
+---
+ ERROR  unexpected argument '--bad-flag' found
+
+  tip: to pass '--bad-flag' as a value, use '-- --bad-flag'
+
+Usage: turbo [OPTIONS] [TASKS]... [-- <PASS_THROUGH_ARGS>...]
+
+Options:
+    --cache-dir <CACHE_DIR>
+    --concurrency <CONCURRENCY>
+    --continue[=<CONTINUE>]
+    --single-package
+    --framework-inference [<BOOL>]
+    --global-deps <GLOBAL_DEPS>
+    --env-mode [<ENV_MODE>]
+    --filter <FILTER>
+    --affected
+    --output-logs <OUTPUT_LOGS>
+    --log-order <LOG_ORDER>
+    --only
+    --pkg-inference-root <PKG_INFERENCE_ROOT>
+    --log-prefix <LOG_PREFIX>
+    TASKS
+    PASS_THROUGH_ARGS
+    --cache <CACHE>
+    --force [<FORCE>]
+    --remote-only [<REMOTE_ONLY>]
+    --remote-cache-read-only [<REMOTE_CACHE_READ_ONLY>]
+    --no-cache <NO_CACHE>
+    --cache-workers <CACHE_WORKERS>
+    --dry-run [<DRY_RUN>]
+    --graph [<GRAPH>]
+    --daemon <DAEMON>
+    --no-daemon <NO_DAEMON>
+    --profile [<PROFILE>]
+    --anon-profile [<ANON_PROFILE>]
+    --summarize [<SUMMARIZE>]
+    --parallel <PARALLEL>
+
+For more information, try '--help'.

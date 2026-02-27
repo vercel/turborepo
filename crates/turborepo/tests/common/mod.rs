@@ -5,9 +5,14 @@ use std::{path::Path, process::Output};
 /// Insta filters that normalize non-deterministic parts of turbo's stdout:
 /// - Path separators (backslash → forward slash for Windows)
 /// - Timing lines (e.g. "Time:    1.234s" → "Time:    [TIME]")
+/// - Binary name (turbo.exe → turbo on Windows)
 #[allow(dead_code)]
 pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
-    vec![(r"\\", "/"), (r"Time:\s*[\.0-9]+m?s", "Time:    [TIME]")]
+    vec![
+        (r"\\", "/"),
+        (r"Time:\s*[\.0-9]+m?s", "Time:    [TIME]"),
+        (r"turbo\.exe", "turbo"),
+    ]
 }
 
 /// Run turbo with standard env var suppression. Returns the raw Output.
