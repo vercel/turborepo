@@ -1,6 +1,6 @@
 pub mod setup;
 
-use std::{path::Path, process::Output};
+use std::{fs, path::Path, process::Output};
 
 /// Insta filters that normalize non-deterministic parts of turbo's stdout:
 /// - Path separators (backslash → forward slash for Windows)
@@ -42,6 +42,38 @@ pub fn run_turbo_with_env(test_dir: &Path, args: &[&str], env: &[(&str, &str)]) 
         cmd.arg(arg);
     }
     cmd.output().expect("failed to execute turbo")
+}
+
+#[allow(dead_code)]
+pub fn turbo_configs_dir() -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../turborepo-tests/integration/fixtures/turbo-configs")
+}
+
+/// Copy a turbo-config JSON into the test directory as `turbo.json` and commit.
+/// Equivalent to `replace_turbo_json.sh`.
+#[allow(dead_code)]
+pub fn replace_turbo_json(dir: &Path, config_name: &str) {
+    let src = turbo_configs_dir().join(config_name);
+    fs::copy(&src, dir.join("turbo.json"))
+        .unwrap_or_else(|e| panic!("copy {} failed: {e}", src.display()));
+    let normalized = fs::read_to_string(dir.join("turbo.json"))
+        .unwrap()
+        .replace("\r\n", "\n");
+    fs::write(dir.join("turbo.json"), normalized).unwrap();
+    std::process::Command::new("git")
+        .args([
+            "commit",
+            "-am",
+            "replace turbo.json",
+            "--quiet",
+            "--allow-empty",
+        ])
+        .current_dir(dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .ok();
 }
 
 #[allow(dead_code)]
