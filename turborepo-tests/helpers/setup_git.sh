@@ -11,11 +11,7 @@ git ${GIT_ARGS} config user.name "Turbo Test"
 # https://docs.npmjs.com/cli/v9/using-npm/config#script-shell
 # Setting script-shell=bash for consistency. We can provide the name of the
 # shell rather than the full path and npm will find it on its own on each platform.
-echo "script-shell=bash" > ${TARGET_DIR}/.npmrc
+printf 'script-shell=bash\nupdate-notifier=false\n' > ${TARGET_DIR}/.npmrc
 
 git ${GIT_ARGS} add .
 git ${GIT_ARGS} commit -m "Initial" --quiet
-
-# Suppress "npm notice" upgrade messages that cause test flakes.
-# Written after the commit so it doesn't affect turbo's task hashes.
-printf 'script-shell=bash\nupdate-notifier=false\n' > ${TARGET_DIR}/.npmrc
