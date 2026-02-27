@@ -12,6 +12,7 @@ fn run_turbo_with_env(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> std::p
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
         .env("DO_NOT_TRACK", "1")
+        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
         .current_dir(dir);
@@ -136,6 +137,7 @@ fn test_log_order_github_actions() {
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
         .env("DO_NOT_TRACK", "1")
+        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
         .env("GITHUB_ACTIONS", "1")
         .env_remove("CI")
         .args(["run", "build", "--force"])
@@ -163,6 +165,7 @@ fn test_log_order_github_actions_with_task_prefix() {
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
         .env("DO_NOT_TRACK", "1")
+        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
         .env("GITHUB_ACTIONS", "1")
         .env_remove("CI")
         .args([
@@ -195,6 +198,7 @@ fn test_log_order_github_actions_error() {
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
         .env("DO_NOT_TRACK", "1")
+        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
         .env("GITHUB_ACTIONS", "1")
         .env_remove("CI")
         .args(["run", "fail"])

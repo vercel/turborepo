@@ -20,6 +20,7 @@ pub fn run_turbo(test_dir: &Path, args: &[&str]) -> Output {
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
         .env("DO_NOT_TRACK", "1")
+        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir);
@@ -62,6 +63,7 @@ macro_rules! check_json_output {
                     .env("DO_NOT_TRACK", "1")
                     .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
                     .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+                    .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
                     // Prevent CI-specific output formatting (::group:: markers)
                     .env_remove("CI")
                     .env_remove("GITHUB_ACTIONS");
