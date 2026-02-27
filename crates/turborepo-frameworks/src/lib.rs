@@ -86,23 +86,32 @@ fn get_frameworks() -> &'static Vec<Framework> {
 impl Matcher {
     pub fn test(&self, workspace: &PackageInfo, is_monorepo: bool) -> bool {
         // In the case where we're not in a monorepo, i.e. single package mode
-        // `unresolved_external_dependencies` is not populated. In which
-        // case we should check `dependencies` instead.
-        let deps = if is_monorepo {
-            workspace.unresolved_external_dependencies.as_ref()
-        } else {
-            workspace.package_json.dependencies.as_ref()
+        // `unresolved_external_dependencies` is not populated. In which case we
+        // should check `dependencies` and `dev_dependencies` instead, as frameworks
+        // (e.g. Vite, Astro, SvelteKit) are typically installed as devDependencies.
+        let contains = |dep: &str| -> bool {
+            if is_monorepo {
+                workspace
+                    .unresolved_external_dependencies
+                    .as_ref()
+                    .is_some_and(|deps| deps.contains_key(dep))
+            } else {
+                workspace
+                    .package_json
+                    .dependencies
+                    .as_ref()
+                    .is_some_and(|deps| deps.contains_key(dep))
+                    || workspace
+                        .package_json
+                        .dev_dependencies
+                        .as_ref()
+                        .is_some_and(|deps| deps.contains_key(dep))
+            }
         };
 
         match self.strategy {
-            Strategy::All => self
-                .dependencies
-                .iter()
-                .all(|dep| deps.is_some_and(|deps| deps.contains_key(dep))),
-            Strategy::Some => self
-                .dependencies
-                .iter()
-                .any(|dep| deps.is_some_and(|deps| deps.contains_key(dep))),
+            Strategy::All => self.dependencies.iter().all(|dep| contains(dep)),
+            Strategy::Some => self.dependencies.iter().any(|dep| contains(dep)),
         }
     }
 }
@@ -249,6 +258,23 @@ mod tests {
         Some(get_framework_by_slug("nextjs")),
         false;
         "Finds next in non-monorepo"
+    )]
+    #[test_case(
+        PackageInfo {
+            package_json: PackageJson {
+              dev_dependencies: Some(
+                vec![("vite", "*")]
+                    .into_iter()
+                    .map(|(s1, s2)| (s1.to_string(), s2.to_string()))
+                    .collect()
+              ),
+              ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(get_framework_by_slug("vite")),
+        false;
+        "Finds vite in devDependencies in non-monorepo"
     )]
     fn test_infer_framework(
         workspace_info: PackageInfo,
