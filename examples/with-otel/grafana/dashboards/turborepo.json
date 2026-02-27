@@ -6,29 +6,30 @@
   "links": [],
   "panels": [
     {
-      "title": "Last Run Duration",
-      "description": "Duration of the most recent turbo run",
-      "type": "stat",
+      "title": "Cache Hit Rate",
+      "description": "Percentage of tasks served from cache",
+      "type": "gauge",
       "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
-          "unit": "ms",
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
           "color": { "mode": "thresholds" },
           "thresholds": {
             "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10000 },
-              { "color": "red", "value": 60000 }
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 0.5 },
+              { "color": "green", "value": 0.8 }
             ]
           }
         },
         "overrides": []
       },
-      "options": { "colorMode": "value", "graphMode": "none", "textMode": "auto", "reduceOptions": { "calcs": ["lastNotNull"] } },
       "targets": [
         {
-          "expr": "sum(turbo_run_duration_ms_sum) / sum(turbo_run_duration_ms_count)",
+          "expr": "sum(turbo_run_tasks_cached_total) / clamp_min(sum(turbo_run_tasks_attempted_total), 1)",
           "legendFormat": "",
           "refId": "A",
           "instant": true
@@ -145,41 +146,10 @@
       ]
     },
     {
-      "title": "Cache Hit Rate",
-      "description": "Percentage of tasks served from cache",
-      "type": "gauge",
-      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 4 },
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percentunit",
-          "min": 0,
-          "max": 1,
-          "color": { "mode": "thresholds" },
-          "thresholds": {
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 0.5 },
-              { "color": "green", "value": 0.8 }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "targets": [
-        {
-          "expr": "sum(turbo_run_tasks_cached_total) / clamp_min(sum(turbo_run_tasks_attempted_total), 1)",
-          "legendFormat": "",
-          "refId": "A",
-          "instant": true
-        }
-      ]
-    },
-    {
       "title": "Run Duration Over Time",
       "description": "Average run duration across runs",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 18, "x": 6, "y": 4 },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
