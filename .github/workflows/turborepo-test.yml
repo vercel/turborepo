@@ -164,13 +164,13 @@ jobs:
             runner: macos-latest
           - name: windows
             runner: windows-latest
-        partition: [1, 2, 3, 4]
+        partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/4)
+    name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/10)
     env:
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
@@ -228,9 +228,9 @@ jobs:
             unset RUSTC_WRAPPER
           fi
           if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo nextest run --workspace --exclude turborepo-napi --no-fail-fast --partition hash:${{ matrix.partition }}/4
+              cargo nextest run --workspace --exclude turborepo-napi --no-fail-fast --partition hash:${{ matrix.partition }}/10
           else
-              cargo nextest run --workspace --no-fail-fast --partition hash:${{ matrix.partition }}/4
+              cargo nextest run --workspace --no-fail-fast --partition hash:${{ matrix.partition }}/10
           fi
         shell: bash
 
@@ -238,13 +238,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [1, 2, 3, 4]
+        partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on ubuntu (partition ${{ matrix.partition }}/4)
+    name: Rust testing on ubuntu (partition ${{ matrix.partition }}/10)
     env:
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
@@ -310,7 +310,7 @@ jobs:
           cargo llvm-cov nextest \
             --workspace \
             --exclude turborepo-napi \
-            --partition hash:${{ matrix.partition }}/4 \
+            --partition hash:${{ matrix.partition }}/10 \
             --no-fail-fast \
             --lcov \
             --output-path coverage-${{ matrix.partition }}.lcov
@@ -356,7 +356,7 @@ jobs:
         run: |
           SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
 
-          lcov --add-tracefile coverage-1.lcov --add-tracefile coverage-2.lcov --add-tracefile coverage-3.lcov --add-tracefile coverage-4.lcov --output-file coverage-merged.lcov
+          lcov --add-tracefile coverage-1.lcov --add-tracefile coverage-2.lcov --add-tracefile coverage-3.lcov --add-tracefile coverage-4.lcov --add-tracefile coverage-5.lcov --add-tracefile coverage-6.lcov --add-tracefile coverage-7.lcov --add-tracefile coverage-8.lcov --add-tracefile coverage-9.lcov --add-tracefile coverage-10.lcov --output-file coverage-merged.lcov
 
           node scripts/transform-coverage.js coverage-merged.lcov coverage-transformed.json >> "$GITHUB_ENV"
 
