@@ -189,6 +189,7 @@ jobs:
           curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
           mkdir "%ProgramFiles%\Git"
           tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
+          del "%ProgramFiles%\Git\etc\gitconfig"
           echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
 
       - name: Set git to use LF line endings
