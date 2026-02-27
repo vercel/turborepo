@@ -132,7 +132,7 @@ impl Lockfile for NpmLockfile {
             }
         }
         Ok(Box::new(Self {
-            lockfile_version: 3,
+            lockfile_version: self.lockfile_version,
             packages: pruned_packages,
             dependencies: Map::default(),
             other: self.other.clone(),

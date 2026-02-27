@@ -1,5 +1,3 @@
-#![cfg(feature = "git2")]
-
 use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
@@ -22,48 +20,9 @@ pub struct RepoGitIndex {
 }
 
 impl RepoGitIndex {
-    /// Build the index using the gix-index path when available, falling back to
-    /// the libgit2 ls-tree + status path otherwise.
     #[tracing::instrument(skip(git))]
     pub fn new(git: &GitRepo) -> Result<Self, Error> {
-        #[cfg(feature = "gix")]
-        {
-            match Self::new_from_gix_index(git) {
-                Ok(index) => return Ok(index),
-                Err(e) => {
-                    debug!("gix-index path failed: {}. Falling back to libgit2.", e);
-                }
-            }
-        }
-
-        Self::new_from_libgit2(git)
-    }
-
-    /// Build the index by running `git ls-tree` and `git status` via libgit2
-    /// on separate threads.
-    fn new_from_libgit2(git: &GitRepo) -> Result<Self, Error> {
-        let (ls_tree_hashes, status_entries) = std::thread::scope(|s| {
-            let ls_tree = s.spawn(|| git.git_ls_tree_repo_root_sorted());
-            let status = s.spawn(|| git.git_status_repo_root());
-            (
-                ls_tree.join().expect("ls-tree thread panicked"),
-                status.join().expect("status thread panicked"),
-            )
-        });
-        let ls_tree_hashes = ls_tree_hashes?;
-        let mut status_entries = status_entries?;
-
-        status_entries.sort_by(|a, b| a.path.cmp(&b.path));
-
-        debug!(
-            "built repo git index (libgit2): ls_tree_count={}, status_count={}",
-            ls_tree_hashes.len(),
-            status_entries.len(),
-        );
-        Ok(Self {
-            ls_tree_hashes,
-            status_entries,
-        })
+        Self::new_from_gix_index(git)
     }
 
     /// Build the index by reading `.git/index` directly via gix-index.
@@ -78,7 +37,6 @@ impl RepoGitIndex {
     /// the stat comparison) are deferred to per-package hashing rather than
     /// content-hashed inline. This avoids reading every file from disk on
     /// freshly cloned/checked-out repos.
-    #[cfg(feature = "gix")]
     #[tracing::instrument(skip(git))]
     fn new_from_gix_index(git: &GitRepo) -> Result<Self, Error> {
         use rayon::prelude::*;
@@ -298,7 +256,6 @@ impl RepoGitIndex {
 ///
 /// Each walker thread accumulates results in a thread-local Vec and
 /// batch-sends them through a channel, avoiding per-file mutex contention.
-#[cfg(feature = "gix")]
 #[tracing::instrument(skip(git, ls_tree_hashes, status_entries))]
 fn find_untracked_files(
     git: &GitRepo,
@@ -402,7 +359,6 @@ fn find_untracked_files(
     Ok(untracked)
 }
 
-#[cfg(feature = "gix")]
 enum EntryClassification {
     Clean {
         path: RelativeUnixPathBuf,

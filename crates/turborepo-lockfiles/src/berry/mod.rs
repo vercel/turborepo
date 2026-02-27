@@ -252,21 +252,14 @@ impl BerryLockfile {
             packages.insert(key, package.clone());
         }
 
-        // If there aren't any checksums in the lockfile, then cache key is omitted
-        let mut no_checksum = true;
-        for pkg in self.resolutions.values().map(|locator| {
-            self.locator_package
-                .get(locator)
-                .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))
-        }) {
-            let pkg = pkg?;
-            no_checksum = pkg.checksum.is_none();
-            if !no_checksum {
-                break;
+        // Yarn v6 (Berry 3.x) strips cacheKey when a pruned subgraph contains
+        // only workspace packages (no checksums). Yarn v8 (Berry 4.x) always
+        // keeps it. Match each version's behavior so frozen installs pass.
+        if metadata.version == "6" {
+            let has_checksum = packages.values().any(|pkg| pkg.checksum.is_some());
+            if !has_checksum {
+                metadata.cache_key = None;
             }
-        }
-        if no_checksum {
-            metadata.cache_key = None;
         }
 
         Ok(LockfileData { metadata, packages })

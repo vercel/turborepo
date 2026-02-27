@@ -1,4 +1,3 @@
-#![cfg(feature = "git2")]
 use std::str::FromStr;
 
 use globwalk::ValidatedGlob;
@@ -6,9 +5,7 @@ use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
-#[cfg(feature = "git2")]
-use crate::hash_object::hash_objects;
-use crate::{Error, GitHashes, GitRepo, RepoGitIndex, SCM};
+use crate::{Error, GitHashes, GitRepo, RepoGitIndex, SCM, hash_object::hash_objects};
 
 impl SCM {
     pub fn get_hashes_for_files(

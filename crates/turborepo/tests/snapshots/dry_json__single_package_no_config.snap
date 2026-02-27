@@ -1,0 +1,88 @@
+---
+source: crates/turborepo/tests/dry_json.rs
+expression: json
+---
+{
+  "id": "[id]",
+  "version": "1",
+  "turboVersion": "[turboVersion]",
+  "monorepo": false,
+  "globalCacheInputs": {
+    "rootKey": "I can’t see ya, but I know you’re here",
+    "files": {
+      "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
+      "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32"
+    },
+    "hashOfExternalDependencies": "",
+    "hashOfInternalDependencies": "",
+    "environmentVariables": {
+      "specified": {
+        "env": [],
+        "passThroughEnv": null
+      },
+      "configured": [],
+      "inferred": [],
+      "passthrough": null
+    },
+    "engines": null
+  },
+  "envMode": "strict",
+  "frameworkInference": true,
+  "tasks": [
+    {
+      "taskId": "build",
+      "task": "build",
+      "hash": "e2b99dad85a4ff66",
+      "inputs": {
+        ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
+        "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
+        "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
+        "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
+      },
+      "hashOfExternalDependencies": "",
+      "cache": {
+        "local": false,
+        "remote": false,
+        "status": "MISS",
+        "timeSaved": 0
+      },
+      "command": "echo building > foo.txt",
+      "cliArguments": [],
+      "outputs": null,
+      "excludedOutputs": null,
+      "dependencies": [],
+      "dependents": [],
+      "with": [],
+      "resolvedTaskDefinition": {
+        "outputs": [],
+        "cache": false,
+        "dependsOn": [],
+        "inputs": [],
+        "outputLogs": "full",
+        "persistent": false,
+        "interruptible": false,
+        "env": [],
+        "passThroughEnv": null,
+        "interactive": false
+      },
+      "expandedOutputs": [],
+      "framework": "",
+      "envMode": "strict",
+      "environmentVariables": {
+        "specified": {
+          "env": [],
+          "passThroughEnv": null
+        },
+        "configured": [],
+        "inferred": [],
+        "passthrough": null
+      }
+    }
+  ],
+  "user": "[user]",
+  "scm": {
+    "type": "git",
+    "sha": "[sha]",
+    "branch": "[branch]"
+  }
+}

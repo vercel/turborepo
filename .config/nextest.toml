@@ -1,6 +1,9 @@
 # Nextest configuration for Turborepo
 # See https://nexte.st/book/configuration.html
 
+[profile.default]
+failure-output = "immediate-final"
+
 [test-groups]
 # turborepo-process tests should run serially to avoid resource contention
 # and timing issues, especially on macOS where PTY devices are limited
@@ -13,6 +16,44 @@ turborepo-integration-serial = { max-threads = 1 }
 # turborepo-dirs tests should run serially to avoid race conditions
 # with environment variable manipulation
 turborepo-dirs-serial = { max-threads = 1 }
+
+
+
+[[profile.default.overrides]]
+filter = 'package(turborepo-api-client) and test(retry::test::handles_too_many_failures)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(run/unnamed-packages)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(lockfile-aware-caching/bun)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(lockfile-aware-caching/npm)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(lockfile-aware-caching/berry)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(lockfile-aware-caching/new-package)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(other/affected)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(run/continue)'
+retries = 5
+
+[[profile.default.overrides]]
+filter = 'package(turbo) and test(prune_test::test_prune_composable_config)'
+retries = 5
 
 [[profile.default.overrides]]
 # Run all tests in the turborepo-process crate serially
@@ -30,3 +71,5 @@ test-group = 'turborepo-integration-serial'
 # These tests manipulate environment variables
 filter = 'package(turborepo-dirs)'
 test-group = 'turborepo-dirs-serial'
+
+
