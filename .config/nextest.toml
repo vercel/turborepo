@@ -20,6 +20,11 @@ turborepo-dirs-serial = { max-threads = 1 }
 
 
 [[profile.default.overrides]]
+# Mark flaky prysk test for retries
+filter = 'package(turbo) and test(lockfile-aware-caching/bun)'
+retries = 3
+
+[[profile.default.overrides]]
 # Run all tests in the turborepo-process crate serially
 filter = 'package(turborepo-process)'
 test-group = 'turborepo-process-serial'
