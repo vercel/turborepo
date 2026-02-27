@@ -227,9 +227,17 @@ jobs:
         uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Install cargo-nextest
+        if: matrix.os.name != 'windows'
         uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
         with:
           tool: nextest
+
+      - name: Install cargo-nextest (Windows)
+        if: matrix.os.name == 'windows'
+        shell: cmd
+        run: |
+          curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
+          tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
 
       - name: Run tests
         timeout-minutes: 45
