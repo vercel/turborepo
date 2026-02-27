@@ -175,10 +175,169 @@
       ]
     },
     {
-      "title": "Task Duration (ms)",
-      "description": "Per-task duration histogram (requires TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS=1)",
+      "title": "Task Breakdown",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 12 },
+      "collapsed": false,
+      "panels": []
+    },
+    {
+      "title": "Duration by Task",
+      "description": "Total execution time per task type (build, lint, check-types, etc.)",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "xTickLabelRotation": 0,
+        "groupWidth": 0.7,
+        "barWidth": 0.8
+      },
+      "targets": [
+        {
+          "expr": "turbo_task_duration_ms_sum",
+          "legendFormat": "{{turbo_task_name}}",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "turbo_task_name": { "aggregations": [], "operation": "groupby" },
+              "Value": { "aggregations": ["sum"], "operation": "aggregate" }
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": { "fields": {}, "sort": [{ "field": "Value (sum)", "desc": true }] }
+        }
+      ]
+    },
+    {
+      "title": "Cache Status by Task",
+      "description": "Cache hit vs miss breakdown per task type",
+      "type": "barchart",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 13 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "palette-classic" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "normal",
+        "xTickLabelRotation": 0,
+        "groupWidth": 0.7,
+        "barWidth": 0.8
+      },
+      "targets": [
+        {
+          "expr": "turbo_task_cache_events_total",
+          "legendFormat": "{{turbo_task_name}} ({{turbo_task_cache_status}})",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "groupBy",
+          "options": {
+            "fields": {
+              "turbo_task_name": { "aggregations": [], "operation": "groupby" },
+              "turbo_task_cache_status": { "aggregations": [], "operation": "groupby" },
+              "Value": { "aggregations": ["sum"], "operation": "aggregate" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "Task Details",
+      "description": "Per-task breakdown with duration, cache status, and package",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 21 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Value" },
+            "properties": [{ "id": "unit", "value": "ms" }, { "id": "displayName", "value": "Duration (ms)" }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "turbo_task_duration_ms_sum",
+          "legendFormat": "",
+          "refId": "A",
+          "instant": true,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "env": true,
+              "instance": true,
+              "job": true,
+              "turbo_run_exit_code": true,
+              "turbo_run_id": true,
+              "turbo_scm_branch": true,
+              "turbo_scm_revision": true,
+              "turbo_task_cache_source": true,
+              "turbo_task_cache_time_saved_ms": true,
+              "turbo_task_command": true,
+              "turbo_task_exit_code": true,
+              "turbo_task_external_inputs_hash": true,
+              "turbo_task_hash": true,
+              "turbo_task_id": true,
+              "turbo_version": true,
+              "service_name": true
+            },
+            "renameByName": {
+              "turbo_task_name": "Task",
+              "turbo_task_package": "Package",
+              "turbo_task_cache_status": "Cache Status",
+              "Value": "Duration (ms)"
+            },
+            "indexByName": {
+              "turbo_task_name": 0,
+              "turbo_task_package": 1,
+              "turbo_task_cache_status": 2,
+              "Value": 3
+            }
+          }
+        }
+      ]
+    },
+    {
+      "title": "Task Duration Over Time",
+      "description": "How task durations change across runs",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 29 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -196,17 +355,17 @@
       },
       "targets": [
         {
-          "expr": "rate(turbo_task_duration_ms_sum[5m]) / rate(turbo_task_duration_ms_count[5m])",
-          "legendFormat": "{{turbo_task_name}}",
+          "expr": "turbo_task_duration_ms_sum",
+          "legendFormat": "{{turbo_task_name}} ({{turbo_task_package}})",
           "refId": "A"
         }
       ]
     },
     {
-      "title": "Cache Events by Status",
-      "description": "Cache hit/miss events per task (requires TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS=1)",
+      "title": "Cache Events Over Time",
+      "description": "Cache hit/miss events per task over time",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 29 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
@@ -223,7 +382,7 @@
       },
       "targets": [
         {
-          "expr": "increase(turbo_task_cache_events_total[5m])",
+          "expr": "turbo_task_cache_events_total",
           "legendFormat": "{{turbo_task_name}} ({{turbo_task_cache_status}})",
           "refId": "A"
         }

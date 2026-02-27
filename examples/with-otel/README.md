@@ -69,10 +69,7 @@ docker compose logs otel-collector
 export TURBO_EXPERIMENTAL_OTEL_ENABLED=1
 export TURBO_EXPERIMENTAL_OTEL_ENDPOINT=https://127.0.0.1:4317
 export TURBO_EXPERIMENTAL_OTEL_RESOURCE="service.name=turborepo,env=local"
-
-# Optional (defaults shown)
-export TURBO_EXPERIMENTAL_OTEL_METRICS_RUN_SUMMARY=1
-export TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS=0
+export TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS=1
 ```
 
 ### 3. Run a task
@@ -115,13 +112,11 @@ Metric #3
 - [Tasks failed](http://localhost:9090/graph?g0.expr=turbo_run_tasks_failed_total&g0.tab=0)
 - [Cache hit rate](http://localhost:9090/graph?g0.expr=turbo_run_tasks_cached_total+%2F+clamp_min(turbo_run_tasks_attempted_total%2C+1)&g0.tab=0)
 
-**Grafana dashboard**: Open `http://localhost:3001` -- the **Turborepo Runs** dashboard is pre-configured and loads automatically. No login required. The dashboard includes panels for:
+**Grafana dashboard**: Open `http://localhost:3001` -- the **Turborepo Runs** dashboard is pre-configured and loads automatically. No login required. The dashboard includes:
 
-- Run duration (avg and p95)
-- Runs over time
-- Tasks attempted, cached, and failed
-- Cache hit rate gauge
-- Per-task duration and cache events (when `TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS=1`)
+- Run duration (avg and p95) and runs over time
+- Tasks attempted, cached, failed, and cache hit rate
+- **Task breakdown** -- duration by task (build, lint, check-types, etc.), cache status by task, a detail table with package names, and time-series charts for tracking changes across runs
 
 ### 5. Cleanup
 
