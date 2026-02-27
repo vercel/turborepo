@@ -63,6 +63,7 @@ impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
     // finish even once a task sends back the stop signal. This is suboptimal
     // since it would mean the visitor would need to also track if
     // it is cancelled :)
+    #[tracing::instrument(skip_all)]
     pub async fn execute(
         self: Arc<Self>,
         options: ExecutionOptions,

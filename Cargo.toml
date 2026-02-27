@@ -69,6 +69,8 @@ turborepo-lockfiles = { path = "crates/turborepo-lockfiles" }
 turborepo-microfrontends = { path = "crates/turborepo-microfrontends" }
 turborepo-microfrontends-proxy = { path = "crates/turborepo-microfrontends-proxy" }
 turborepo-process = { path = "crates/turborepo-process" }
+turborepo-query = { path = "crates/turborepo-query" }
+turborepo-profile-md = { path = "crates/turborepo-profile-md" }
 turborepo-repository = { path = "crates/turborepo-repository" }
 turborepo-task-id = { path = "crates/turborepo-task-id" }
 turborepo-types = { path = "crates/turborepo-types" }
@@ -100,8 +102,8 @@ async-compression = { version = "0.3.13", default-features = false, features = [
 async-graphql = "7.0.17"
 async-graphql-axum = "7.0.16"
 async-trait = "0.1.64"
-axum = "0.7.5"
-axum-server = "0.7.1"
+axum = "0.8.4"
+axum-server = "0.8.0"
 biome_deserialize = { version = "0.6.0", features = ["serde"] }
 biome_deserialize_macros = { version = "0.6.0" }
 biome_diagnostics = { version = "0.5.7" }
@@ -116,25 +118,26 @@ clap = "4.5.16"
 clap_complete = "4.5.24"
 console = "0.16.0"
 crossbeam-channel = "0.5.15"
-dashmap = "5.4.0"
+dashmap = "6.1.0"
 derive_setters = "0.1.6"
 dialoguer = "0.12.0"
 dunce = "1.0.3"
 either = "1.9.0"
 futures = "0.3.31"
-git2 = { version = "0.20.4", default-features = false }
+gix-index = { version = "0.47.0", default-features = false }
+gix-object = { version = "0.56.0", default-features = false }
 hex = "0.4.3"
 httpmock = { version = "0.8.0", default-features = false }
 indicatif = "0.18.3"
 indoc = "2.0.0"
 insta = { version = "1.34.0", features = ["json"] }
-itertools = "0.10.5"
+itertools = "0.14.0"
 merge = "0.2.0"
 notify = "6.1.1"
 owo-colors = "3.5.0"
 unrs_resolver = "1.11.1"
 path-clean = "1.0.1"
-petgraph = "0.6.5"
+petgraph = "0.8.3"
 port_scanner = "0.1.5"
 pretty_assertions = "1.3.0"
 radix_trie = "0.2.1"
@@ -164,10 +167,9 @@ tui-term = { version = "0.3.1", default-features = false }
 url = "2.2.2"
 webbrowser = "0.8.7"
 which = "4.4.0"
+datatest-stable = "0.3.3"
+fs4 = "0.13.1"
 
 # Schema generation
 schemars = "0.8.16"
 ts-rs = { version = "11.1.0", features = ["serde-compat"] }
-
-# Benchmarking
-codspeed-criterion-compat = "2.7"

@@ -6,20 +6,20 @@
 use std::sync::Arc;
 
 use axum::{
+    Router,
     extract::{
-        ws::{Message, WebSocket},
         State, WebSocketUpgrade,
+        ws::{Message, WebSocket},
     },
     http::Method,
     response::IntoResponse,
     routing::get,
-    Router,
 };
 use futures::{SinkExt, StreamExt};
 use thiserror::Error;
 use tokio::{
     net::TcpListener,
-    sync::{broadcast, RwLock},
+    sync::{RwLock, broadcast},
 };
 use tower_http::cors::{Any, CorsLayer};
 use tracing::{debug, error, info, warn};
@@ -183,7 +183,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let init_msg = ServerMessage::Init { data: init_state };
 
     if let Err(e) = sender
-        .send(Message::Text(serde_json::to_string(&init_msg).unwrap()))
+        .send(Message::Text(
+            serde_json::to_string(&init_msg).unwrap().into(),
+        ))
         .await
     {
         error!("Failed to send initial state: {}", e);
@@ -238,7 +240,9 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 let update_msg = ServerMessage::Update { data: new_state };
 
                 if let Err(e) = sender
-                    .send(Message::Text(serde_json::to_string(&update_msg).unwrap()))
+                    .send(Message::Text(
+                        serde_json::to_string(&update_msg).unwrap().into(),
+                    ))
                     .await
                 {
                     warn!("Failed to send update: {}", e);

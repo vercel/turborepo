@@ -59,22 +59,35 @@ stage-release:
 	# Update turborepo skill version (in YAML frontmatter metadata block only)
 	node -e "const fs=require('fs'),p='$(CLI_DIR)/../skills/turborepo/SKILL.md',c=fs.readFileSync(p,'utf-8');fs.writeFileSync(p,c.replace(/^(---\n[\s\S]*?metadata:\n\s*version:\s*).+?(\n[\s\S]*?---)/,'\$$1$(TURBO_VERSION)\$$2'))"
 
+	# Update $schema URLs in turborepo skill files to use versioned subdomain
+	node -e "\
+	  const fs=require('fs'),path=require('path');\
+	  const sub='v'+'$(TURBO_VERSION)'.replace(/[\.\+]/g,'-');\
+	  const url='https://'+sub+'.turborepo.dev/schema.json';\
+	  const re=/https:\/\/(?:v[\w-]+\.)?turborepo\.(?:dev|com)\/schema(?:\.v2)?\.json|https:\/\/turbo\.build\/schema(?:\.v2)?\.json/g;\
+	  function walk(dir){for(const e of fs.readdirSync(dir,{withFileTypes:true})){const p=path.join(dir,e.name);if(e.isDirectory())walk(p);else if(e.name.endsWith('.md')){const c=fs.readFileSync(p,'utf-8');if(re.test(c)){re.lastIndex=0;fs.writeFileSync(p,c.replace(re,url))}}}}\
+	  walk('$(CLI_DIR)/../skills/turborepo');\
+	"
+
 	git checkout -b staging-$(TURBO_VERSION)
 	git commit -anm "publish $(TURBO_VERSION) to registry"
-	git push origin staging-$(TURBO_VERSION) --force
+	HUSKY=0 git push origin staging-$(TURBO_VERSION) --force
 
 .PHONY: create-release-tag
 create-release-tag:
 	@echo "Creating release tag v$(TURBO_VERSION)..."
 	@REMOTE_TAG_SHA=$$(git ls-remote --tags origin "refs/tags/v$(TURBO_VERSION)" | awk '{print $$1}'); \
+	LOCAL_SHA=$$(git rev-parse HEAD); \
 	if [ -n "$$REMOTE_TAG_SHA" ]; then \
-		LOCAL_SHA=$$(git rev-parse HEAD); \
 		if [ "$$REMOTE_TAG_SHA" = "$$LOCAL_SHA" ]; then \
 			echo "Tag v$(TURBO_VERSION) already exists on remote at the correct commit. Skipping."; \
 		else \
-			echo "Error: Tag v$(TURBO_VERSION) exists on remote but points to $$REMOTE_TAG_SHA, expected $$LOCAL_SHA." && \
-			echo "This tag may have been pushed prematurely by a previous step." && \
-			exit 1; \
+			echo "Warning: Tag v$(TURBO_VERSION) exists on remote but points to $$REMOTE_TAG_SHA, expected $$LOCAL_SHA." && \
+			echo "Replacing incorrect tag..." && \
+			git push origin ":refs/tags/v$(TURBO_VERSION)" && \
+			git tag -f "v$(TURBO_VERSION)" && \
+			git push origin "v$(TURBO_VERSION)" && \
+			echo "Release tag v$(TURBO_VERSION) replaced and pushed."; \
 		fi; \
 	else \
 		git tag "v$(TURBO_VERSION)" && \

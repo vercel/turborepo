@@ -31,7 +31,6 @@ A run consists of the following steps:
 - Task filtering based on arguments (task names and `--filter`)
 - Task graph construction and validation
 - Cache setup (local and remote)
-- Connecting to the daemon
 - Producing a final `Run` struct ready for execution
 
 ### 2. Package Graph (`crates/turborepo-repository/src/package_graph/`)

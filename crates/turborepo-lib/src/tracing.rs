@@ -80,6 +80,9 @@ pub struct TurboSubscriber {
     chrome_update: Handle<Option<ChromeLog>, DaemonLogLayered>,
     chrome_guard: Mutex<Option<tracing_chrome::FlushGuard>>,
 
+    /// The resolved file path for chrome tracing output, if enabled.
+    chrome_tracing_file: Mutex<Option<String>>,
+
     #[cfg(feature = "pprof")]
     pprof_guard: pprof::ProfilerGuard<'static>,
 }
@@ -158,6 +161,7 @@ impl TurboSubscriber {
             daemon_guard: Mutex::new(None),
             chrome_update,
             chrome_guard: Mutex::new(None),
+            chrome_tracing_file: Mutex::new(None),
             #[cfg(feature = "pprof")]
             pprof_guard,
         }
@@ -191,6 +195,8 @@ impl TurboSubscriber {
         to_file: P,
         include_args: bool,
     ) -> Result<(), Error> {
+        let file_path = to_file.as_ref().to_string_lossy().to_string();
+
         let (layer, guard) = tracing_chrome::ChromeLayerBuilder::new()
             .file(to_file)
             .include_args(include_args)
@@ -203,7 +209,31 @@ impl TurboSubscriber {
             .lock()
             .expect("not poisoned")
             .replace(guard);
+        self.chrome_tracing_file
+            .lock()
+            .expect("not poisoned")
+            .replace(file_path);
 
+        Ok(())
+    }
+
+    /// Returns the chrome tracing output file path, if chrome tracing is
+    /// enabled.
+    pub fn chrome_tracing_file(&self) -> Option<String> {
+        self.chrome_tracing_file
+            .lock()
+            .expect("not poisoned")
+            .clone()
+    }
+
+    /// Flushes and closes the chrome tracing layer so the trace file is
+    /// fully written. This must be called before reading the trace file
+    /// for post-processing (e.g., markdown generation).
+    pub fn flush_chrome_tracing(&self) -> Result<(), Error> {
+        // Disable the layer by replacing it with None
+        self.chrome_update.reload(None)?;
+        // Drop the flush guard to finalize the file
+        self.chrome_guard.lock().expect("not poisoned").take();
         Ok(())
     }
 }

@@ -9,7 +9,7 @@ license = "MIT"
 # This is for the convenience of running daily dev workflows, i.e running
 # `cargo xxx` without explicitly specifying features, not that we want to
 # promote this as default backend.
-default = ["rustls-tls", "turborepo-lib/daemon-package-discovery"]
+default = ["rustls-tls"]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
 pprof = ["turborepo-lib/pprof"]
@@ -21,14 +21,24 @@ build-target = "0.4.0"
 [dev-dependencies]
 assert_cmd = { workspace = true }
 camino = { workspace = true }
-insta = { version = "1.40.0", features = ["json", "filters"] }
+datatest-stable = { workspace = true }
+dunce = { workspace = true }
+fs4 = { workspace = true }
+insta = { version = "1.40.0", features = ["json", "filters", "redactions"] }
 itertools = { workspace = true }
 pretty_assertions = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
-turbopath = { workspace = true }
 which = { workspace = true }
 
+
+[[test]]
+name = "prysk"
+harness = false
+
+[[bin]]
+name = "echo_args"
+path = "../../turborepo-tests/helpers/echo_args.rs"
 
 [lints]
 workspace = true

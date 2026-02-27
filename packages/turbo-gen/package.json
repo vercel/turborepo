@@ -1,19 +1,27 @@
 {
   "name": "@turbo/gen",
-  "version": "2.8.9-canary.0",
+  "version": "2.8.12-canary.2",
   "description": "Extend a Turborepo",
   "homepage": "https://turborepo.dev",
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/vercel/turborepo.git",
     "directory": "packages/turbo-gen"
   },
-  "bugs": {
-    "url": "https://github.com/vercel/turborepo/issues"
-  },
   "bin": "bin/turbo-gen",
+  "files": [
+    "bin",
+    "dist/types.d.ts",
+    "dist/types.js"
+  ],
   "types": "dist/types.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "postversion": "node bump-version.js",
     "build": "bun run scripts/build.ts",
@@ -22,10 +30,12 @@
     "test": "jest",
     "check-types": "tsc --noEmit"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@inquirer/prompts": "^7.10.1",
+    "node-plop": "0.26.3"
+  },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
-    "@inquirer/prompts": "^7.10.1",
     "@jest/globals": "30.2.0",
     "@turbo/test-utils": "workspace:*",
     "@turbo/tsconfig": "workspace:*",
@@ -38,7 +48,6 @@
     "fs-extra": "10.1.0",
     "jest": "30.2.0",
     "minimatch": "9.0.0",
-    "node-plop": "0.26.3",
     "picocolors": "1.0.1",
     "proxy-agent": "6.5.0",
     "ts-jest": "29.4.6",
@@ -48,19 +57,11 @@
     "update-check": "1.5.4",
     "validate-npm-package-name": "5.0.0"
   },
-  "files": [
-    "bin",
-    "dist/types.d.ts",
-    "dist/types.js"
-  ],
-  "publishConfig": {
-    "access": "public"
-  },
   "optionalDependencies": {
-    "@turbo/gen-darwin-64": "2.8.8-canary.8",
-    "@turbo/gen-darwin-arm64": "2.8.8-canary.8",
-    "@turbo/gen-linux-64": "2.8.8-canary.8",
-    "@turbo/gen-linux-arm64": "2.8.8-canary.8",
-    "@turbo/gen-windows-64": "2.8.8-canary.8"
+    "@turbo/gen-darwin-64": "2.8.12-canary.2",
+    "@turbo/gen-darwin-arm64": "2.8.12-canary.2",
+    "@turbo/gen-linux-64": "2.8.12-canary.2",
+    "@turbo/gen-linux-arm64": "2.8.12-canary.2",
+    "@turbo/gen-windows-64": "2.8.12-canary.2"
   }
 }

@@ -1,0 +1,84 @@
+---
+source: crates/turborepo/tests/query_test.rs
+expression: "json[\"data\"]"
+---
+{
+  "packages": {
+    "items": [
+      {
+        "tasks": {
+          "items": []
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "app-a#build"
+            },
+            {
+              "fullName": "app-a#test"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "app-b#build"
+            },
+            {
+              "fullName": "app-b#test"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "lib-a#build"
+            },
+            {
+              "fullName": "lib-a#test"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "lib-b#build"
+            },
+            {
+              "fullName": "lib-b#test"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "lib-c#build"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "lib-d#build"
+            },
+            {
+              "fullName": "lib-d#test"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

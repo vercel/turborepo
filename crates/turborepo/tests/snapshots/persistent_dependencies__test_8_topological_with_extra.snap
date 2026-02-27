@@ -1,0 +1,13 @@
+---
+source: crates/turborepo/tests/persistent_dependencies.rs
+expression: stderr.to_string()
+---
+  x Invalid task configuration
+  `->   x "pkg-z#dev" is a persistent task, "pkg-b#build" cannot depend on it
+         ,-[turbo.json:8:21]
+       7 |     "pkg-b#build": {
+       8 |       "dependsOn": ["pkg-z#dev"]
+         :                     ^^^^^|^^^^^
+         :                          `-- persistent task
+       9 |     },
+         `----

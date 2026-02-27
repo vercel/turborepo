@@ -21,7 +21,7 @@ pub use task::{
     SharedTaskSummary, SinglePackageTaskSummary, TaskCacheSummary, TaskEnvConfiguration,
     TaskEnvVarSummary, TaskExecutionSummary, TaskSummary, TaskSummaryTaskDefinition,
 };
-pub use task_factory::{get_external_deps_hash, Error as TaskFactoryError, TaskSummaryFactory};
+pub use task_factory::{Error as TaskFactoryError, TaskSummaryFactory, get_external_deps_hash};
 pub use tracker::{Error, RunSummary, RunTracker, SinglePackageRunSummary};
 // Re-export traits from turborepo-types for convenience
 // These traits are defined in turborepo-types to enable proper dependency direction:

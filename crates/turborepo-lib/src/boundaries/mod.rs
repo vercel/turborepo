@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use turborepo_boundaries::{BoundariesChecker, BoundariesContext, TurboJsonProvider};
-pub use turborepo_boundaries::{BoundariesConfig, BoundariesDiagnostic, BoundariesResult, Error};
+pub use turborepo_boundaries::{BoundariesConfig, BoundariesResult, Error};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::PackageName;
 

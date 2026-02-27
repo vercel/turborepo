@@ -1,7 +1,7 @@
 [package]
 name = "turborepo-task-hash"
 version = "0.1.0"
-edition = "2021"
+edition = { workspace = true }
 license = "MIT"
 description = "Task hashing utilities for Turborepo cache invalidation"
 
@@ -11,13 +11,12 @@ globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 itertools = { workspace = true }
 rayon = "1.7.0"
 regex = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-thiserror = "1.0.38"
+serde = { workspace = true, features = ["derive", "rc"] }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 
 turbopath = { workspace = true }
 turborepo-cache = { workspace = true }
-turborepo-daemon = { workspace = true }
 turborepo-engine = { path = "../turborepo-engine" }
 turborepo-env = { workspace = true }
 turborepo-frameworks = { workspace = true }
@@ -38,7 +37,6 @@ tempfile = { workspace = true }
 
 [features]
 default = []
-daemon-file-hashing = []
 
 [lints]
 workspace = true

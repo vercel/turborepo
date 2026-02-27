@@ -1,5 +1,3 @@
-use std::hash::Hasher;
-
 use capnp::message::{Allocator, Builder};
 
 pub trait Sealed<A> {}
@@ -31,9 +29,7 @@ where
 
         let buf = message.get_segments_for_output()[0];
 
-        let mut hasher = twox_hash::XxHash64::with_seed(0);
-        hasher.write(buf);
-        let out = hasher.finish();
+        let out = xxhash_rust::xxh64::xxh64(buf, 0);
 
         hex::encode(out.to_be_bytes())
     }

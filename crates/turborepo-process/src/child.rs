@@ -90,17 +90,10 @@ impl ChildHandle {
     pub fn spawn_normal(command: Command) -> io::Result<SpawnResult> {
         let mut command = TokioCommand::from(command);
 
-        // Create a process group for the child on unix like systems
+        // Create a new process group so we can send signals (e.g. SIGINT) to
+        // the child and all of its descendants via kill(-pgid, sig).
         #[cfg(unix)]
-        {
-            use nix::unistd::setsid;
-            unsafe {
-                command.pre_exec(|| {
-                    setsid()?;
-                    Ok(())
-                });
-            }
-        }
+        command.process_group(0);
 
         let mut child = command.spawn()?;
         let pid = child.id();
@@ -1437,7 +1430,7 @@ mod test {
 
     /// Verifies that stopping a parent process also kills its child processes.
     ///
-    /// On Unix this works via process groups (setsid + kill(-pgid)).
+    /// On Unix this works via process groups (setpgid + kill(-pgid)).
     /// On Windows this works via Job Objects
     /// (JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE).
     ///
@@ -1511,6 +1504,225 @@ mod test {
             !is_process_alive(grandchild_pid),
             "grandchild process {grandchild_pid} should have been killed"
         );
+    }
+
+    // Regression tests for the pre_exec/setsid -> process_group(0) migration.
+    //
+    // We replaced an unsafe pre_exec callback that called setsid() with tokio's
+    // safe process_group(0) API. These tests verify the critical invariants:
+    //
+    // 1. The child gets its own process group (PGID == child PID, not parent's)
+    // 2. Grandchildren inherit the child's process group
+    // 3. kill(-pgid, SIGINT) reaches both child and grandchild
+    // 4. The child is NOT a session leader (regression guard against setsid)
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_child_has_own_process_group() {
+        let script = find_script_dir().join_component("sleep_5_interruptable.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            None,
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid") as libc::pid_t;
+        let child_pgid = unsafe { libc::getpgid(child_pid) };
+        let parent_pgid = unsafe { libc::getpgid(0) };
+
+        // process_group(0) should make the child's PGID equal its own PID
+        assert_eq!(
+            child_pgid, child_pid,
+            "child PGID ({child_pgid}) should equal child PID ({child_pid})"
+        );
+
+        // The child's process group must differ from the parent's
+        assert_ne!(
+            child_pgid, parent_pgid,
+            "child PGID ({child_pgid}) must differ from parent PGID ({parent_pgid})"
+        );
+
+        child.stop().await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_grandchild_inherits_child_process_group() {
+        let script = find_script_dir().join_component("spawn_child_sleep.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            None,
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid") as libc::pid_t;
+
+        // Read the grandchild PID from stdout
+        let grandchild_pid = {
+            let mut out = Vec::new();
+            match child.outputs().unwrap() {
+                ChildOutput::Std { mut stdout, .. } => {
+                    let mut buf = vec![0u8; 256];
+                    let n = tokio::time::timeout(Duration::from_secs(5), stdout.read(&mut buf))
+                        .await
+                        .expect("timed out reading grandchild PID")
+                        .expect("failed to read stdout");
+                    out.extend_from_slice(&buf[..n]);
+                }
+                ChildOutput::Pty(_) => unreachable!("test uses non-PTY mode"),
+            };
+            let output = String::from_utf8(out).unwrap();
+            let pid_line = output
+                .lines()
+                .find(|line| line.contains("CHILD_PID="))
+                .unwrap_or_else(|| panic!("CHILD_PID not found in output: {output}"));
+            pid_line
+                .split('=')
+                .nth(1)
+                .unwrap()
+                .trim()
+                .parse::<libc::pid_t>()
+                .unwrap()
+        };
+
+        let child_pgid = unsafe { libc::getpgid(child_pid) };
+        let grandchild_pgid = unsafe { libc::getpgid(grandchild_pid) };
+
+        // Grandchild should be in the same process group as the child
+        assert_eq!(
+            grandchild_pgid, child_pgid,
+            "grandchild PGID ({grandchild_pgid}) should match child PGID ({child_pgid})"
+        );
+
+        // Both should use child_pid as the group ID
+        assert_eq!(
+            child_pgid, child_pid,
+            "process group ID ({child_pgid}) should equal child PID ({child_pid})"
+        );
+
+        child.stop().await;
+        // Give OS time to clean up
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_sigint_to_process_group_reaches_grandchild() {
+        let script = find_script_dir().join_component("spawn_child_sleep.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(2000)),
+            None,
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid");
+
+        // Read the grandchild PID
+        let grandchild_pid = {
+            let mut out = Vec::new();
+            match child.outputs().unwrap() {
+                ChildOutput::Std { mut stdout, .. } => {
+                    let mut buf = vec![0u8; 256];
+                    let n = tokio::time::timeout(Duration::from_secs(5), stdout.read(&mut buf))
+                        .await
+                        .expect("timed out reading grandchild PID")
+                        .expect("failed to read stdout");
+                    out.extend_from_slice(&buf[..n]);
+                }
+                ChildOutput::Pty(_) => unreachable!("test uses non-PTY mode"),
+            };
+            let output = String::from_utf8(out).unwrap();
+            let pid_line = output
+                .lines()
+                .find(|line| line.contains("CHILD_PID="))
+                .unwrap_or_else(|| panic!("CHILD_PID not found in output: {output}"));
+            pid_line
+                .split('=')
+                .nth(1)
+                .unwrap()
+                .trim()
+                .parse::<u32>()
+                .unwrap()
+        };
+
+        assert!(
+            is_process_alive(grandchild_pid),
+            "grandchild should be alive before signal"
+        );
+
+        // Send SIGINT to the process group (negative PID), exactly as
+        // ShutdownStyle::Graceful does in production code
+        let pgid = -(child_pid as i32);
+        unsafe {
+            libc::kill(pgid, libc::SIGINT);
+        }
+
+        // Wait for processes to die
+        tokio::time::sleep(Duration::from_millis(500)).await;
+
+        assert!(
+            !is_process_alive(grandchild_pid),
+            "grandchild should be dead after SIGINT to process group"
+        );
+
+        // Consume the exit
+        child.wait().await;
+    }
+
+    // Guard against accidentally reverting to setsid(). With process_group(0),
+    // the child calls setpgid(0, 0) which creates a new process group but does
+    // NOT create a new session. If someone reintroduces setsid(), the child's
+    // SID would equal its PID. With setpgid, the SID is inherited from the
+    // parent.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_child_is_not_session_leader() {
+        let script = find_script_dir().join_component("sleep_5_interruptable.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        let mut child = Child::spawn(
+            cmd,
+            ShutdownStyle::Graceful(Duration::from_millis(500)),
+            None,
+        )
+        .unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        let child_pid = child.pid().expect("child should have a pid") as libc::pid_t;
+        let child_sid = unsafe { libc::getsid(child_pid) };
+        let parent_sid = unsafe { libc::getsid(0) };
+
+        // With process_group(0), the child inherits the parent's session.
+        // If setsid() were used instead, child_sid would equal child_pid.
+        assert_ne!(
+            child_sid, child_pid,
+            "child SID ({child_sid}) should NOT equal child PID ({child_pid}) — that would mean \
+             setsid() was called"
+        );
+        assert_eq!(
+            child_sid, parent_sid,
+            "child SID ({child_sid}) should equal parent SID ({parent_sid})"
+        );
+
+        child.stop().await;
     }
 
     fn is_process_alive(pid: u32) -> bool {

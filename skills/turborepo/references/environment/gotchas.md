@@ -112,17 +112,13 @@ If you use `.env.development` and `.env.production`, both should be in inputs.
 
 ```json
 {
-  "$schema": "https://turborepo.dev/schema.v2.json",
+  "$schema": "https://v2-8-12-canary-2.turborepo.dev/schema.json",
   "globalEnv": ["CI", "NODE_ENV", "VERCEL"],
   "globalPassThroughEnv": ["GITHUB_TOKEN", "VERCEL_URL"],
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "env": [
-        "DATABASE_URL",
-        "NEXT_PUBLIC_*",
-        "!NEXT_PUBLIC_ANALYTICS_ID"
-      ],
+      "env": ["DATABASE_URL", "NEXT_PUBLIC_*", "!NEXT_PUBLIC_ANALYTICS_ID"],
       "passThroughEnv": ["SENTRY_AUTH_TOKEN"],
       "inputs": [
         "$TURBO_DEFAULT$",

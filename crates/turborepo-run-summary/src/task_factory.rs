@@ -5,14 +5,14 @@ use turborepo_env::EnvironmentVariableMap;
 use turborepo_lockfiles::Package;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
 use turborepo_task_id::TaskId;
-use turborepo_types::{task_log_filename, EnvMode, TaskDefinition, LOG_DIR};
+use turborepo_types::{EnvMode, LOG_DIR, TaskDefinition, task_log_filename};
 
 use crate::{
+    EngineInfo, HashTrackerInfo, RunOptsInfo, TaskExecutionSummary,
     task::{
         SharedTaskSummary, SinglePackageTaskSummary, TaskCacheSummary, TaskEnvVarSummary,
         TaskSummary,
     },
-    EngineInfo, HashTrackerInfo, RunOptsInfo, TaskExecutionSummary,
 };
 
 pub struct TaskSummaryFactory<'a, E, H, R> {
@@ -123,10 +123,12 @@ where
             .hash(task_id)
             .unwrap_or_else(|| panic!("hash not found for {task_id}"));
 
-        let expanded_inputs = self
+        let expanded_inputs: std::collections::BTreeMap<_, _> = self
             .hash_tracker
             .expanded_inputs(task_id)
-            .expect("inputs not found");
+            .expect("inputs not found")
+            .into_iter()
+            .collect();
 
         let env_vars = self
             .hash_tracker
@@ -159,7 +161,7 @@ where
 
         Ok(SharedTaskSummary {
             hash,
-            inputs: expanded_inputs.into_iter().collect(),
+            inputs: expanded_inputs,
             hash_of_external_dependencies,
             cache: cache_summary,
             command,
@@ -229,22 +231,18 @@ fn workspace_relative_log_file(task_name: &str) -> turbopath::AnchoredSystemPath
 /// Computes a hash of external dependencies from transitive dependencies.
 /// This is a pure function that doesn't require any trait access.
 pub fn get_external_deps_hash(transitive_dependencies: &Option<HashSet<Package>>) -> String {
-    use turborepo_hash::{LockFilePackages, TurboHash};
+    use turborepo_hash::{LockFilePackagesRef, TurboHash};
 
     let Some(transitive_dependencies) = transitive_dependencies else {
         return "".into();
     };
 
-    let mut transitive_deps = Vec::with_capacity(transitive_dependencies.len());
+    let mut transitive_deps: Vec<&Package> = transitive_dependencies.iter().collect();
 
-    for dependency in transitive_dependencies.iter() {
-        transitive_deps.push(dependency.clone());
-    }
-
-    transitive_deps.sort_by(|a, b| match a.key.cmp(&b.key) {
+    transitive_deps.sort_unstable_by(|a, b| match a.key.cmp(&b.key) {
         std::cmp::Ordering::Equal => a.version.cmp(&b.version),
         other => other,
     });
 
-    LockFilePackages(transitive_deps).hash()
+    LockFilePackagesRef(transitive_deps).hash()
 }

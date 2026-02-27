@@ -19,6 +19,11 @@ pub struct SCMState {
 }
 
 impl SCMState {
+    /// Resolve SCM state from CI environment variables, falling back to git
+    /// subprocess calls if not in CI. The git fallback spawns two subprocesses
+    /// (`git branch --show-current` and `git rev-parse HEAD`), so callers
+    /// should defer this until the data is actually needed (e.g., summary
+    /// generation) rather than calling it eagerly at run start.
     pub fn get(env_vars: &EnvironmentVariableMap, scm: &SCM, dir: &AbsoluteSystemPath) -> Self {
         let mut state = SCMState {
             ty: SCMType::Git,
@@ -26,25 +31,27 @@ impl SCMState {
             branch: None,
         };
 
-        if turborepo_ci::is_ci() {
-            if let Some(vendor) = Vendor::infer() {
-                if let Some(sha_env_var) = vendor.sha_env_var {
-                    state.sha = env_vars.get(sha_env_var).cloned()
-                }
+        if turborepo_ci::is_ci()
+            && let Some(vendor) = Vendor::infer()
+        {
+            if let Some(sha_env_var) = vendor.sha_env_var {
+                state.sha = env_vars.get(sha_env_var).cloned()
+            }
 
-                if let Some(branch_env_var) = vendor.branch_env_var {
-                    state.branch = env_vars.get(branch_env_var).cloned()
-                }
+            if let Some(branch_env_var) = vendor.branch_env_var {
+                state.branch = env_vars.get(branch_env_var).cloned()
             }
         }
 
-        // Fall back to using `git`
+        // Fall back to using git. Combined call opens the repo once via
+        // libgit2 instead of spawning two git subprocesses.
         if state.branch.is_none() && state.sha.is_none() {
+            let (branch, sha) = scm.get_current_branch_and_sha(dir);
             if state.branch.is_none() {
-                state.branch = scm.get_current_branch(dir).ok();
+                state.branch = branch;
             }
             if state.sha.is_none() {
-                state.sha = scm.get_current_sha(dir).ok();
+                state.sha = sha;
             }
         }
 

@@ -1,0 +1,41 @@
+[package]
+name = "turborepo-query"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+async-graphql = { workspace = true }
+async-graphql-axum = { workspace = true }
+axum = { workspace = true }
+camino = "1.1.4"
+itertools = { workspace = true }
+miette = { workspace = true }
+petgraph = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+swc_common = { workspace = true }
+swc_ecma_ast = { workspace = true, features = ["serde-impl"] }
+swc_ecma_parser = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tower-http = { version = "0.5.2", features = ["cors"] }
+tracing = { workspace = true }
+turbo-trace = { workspace = true }
+turbopath = { workspace = true }
+turborepo-boundaries = { workspace = true }
+turborepo-engine = { path = "../turborepo-engine" }
+turborepo-errors = { workspace = true }
+turborepo-lockfiles = { workspace = true }
+turborepo-repository = { path = "../turborepo-repository" }
+turborepo-scm = { workspace = true }
+turborepo-scope = { path = "../turborepo-scope" }
+turborepo-signals = { workspace = true }
+turborepo-task-id = { workspace = true }
+turborepo-turbo-json = { path = "../turborepo-turbo-json" }
+turborepo-types = { workspace = true }
+turborepo-ui = { workspace = true }
+webbrowser = { workspace = true }
+
+[lints]
+workspace = true

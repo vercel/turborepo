@@ -1,5 +1,3 @@
-use std::backtrace;
-
 use itertools::Itertools;
 use miette::Diagnostic;
 use thiserror::Error;
@@ -12,16 +10,16 @@ use turborepo_ui::{color, BOLD, GREY};
 
 use crate::{
     commands::{bin, docs, generate, get_mfe_port, link, login, ls, prune, CommandBase},
-    query, run,
+    run,
     run::{builder::RunBuilder, watch},
 };
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
     #[error("No command specified.")]
-    NoCommand(#[backtrace] backtrace::Backtrace),
+    NoCommand,
     #[error("{0}")]
-    Bin(#[from] bin::Error, #[backtrace] backtrace::Backtrace),
+    Bin(#[from] bin::Error),
     #[error(transparent)]
     Boundaries(#[from] crate::boundaries::Error),
     #[error(transparent)]
@@ -65,7 +63,7 @@ pub enum Error {
     Run(#[from] run::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Query(#[from] query::Error),
+    Query(#[from] turborepo_query::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
@@ -91,8 +89,8 @@ pub async fn print_potential_tasks(
     let handler = SignalHandler::new(signal);
     let color_config = base.color_config;
 
-    let run_builder = RunBuilder::new(base)?;
-    let run = run_builder.build(&handler, telemetry).await?;
+    let run_builder = RunBuilder::new(base, None)?;
+    let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
     let potential_tasks = run.get_potential_tasks()?;
 
     println!("No tasks provided, here are some potential ones\n",);

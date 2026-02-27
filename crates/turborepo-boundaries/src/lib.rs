@@ -10,12 +10,10 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::OpenOptions,
     io::Write,
-    sync::{Arc, LazyLock, Mutex},
+    sync::{Arc, LazyLock},
 };
 
 pub use config::{BoundariesConfig, Permissions, Rule, RulesMap};
-#[cfg(feature = "git2")]
-use git2::Repository;
 use globwalk::Settings;
 use indicatif::{ProgressBar, ProgressIterator};
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
@@ -384,9 +382,6 @@ impl BoundariesChecker {
     {
         let rules_map = Self::get_processed_rules_map(ctx.root_boundaries_config);
         let packages: Vec<_> = ctx.pkg_dep_graph.packages().collect();
-        #[cfg(feature = "git2")]
-        let repo = Repository::discover(ctx.repo_root).ok().map(Mutex::new);
-        #[cfg(not(feature = "git2"))]
         let repo: Option<()> = None;
         let mut result = BoundariesResult::default();
         let global_implicit_dependencies = ctx
@@ -435,50 +430,6 @@ impl BoundariesChecker {
             })
     }
 
-    #[cfg(feature = "git2")]
-    async fn check_package<G, T>(
-        ctx: &BoundariesContext<'_, G, T>,
-        repo: &Option<Mutex<Repository>>,
-        package_name: &PackageName,
-        package_info: &PackageInfo,
-        tag_rules: &Option<ProcessedRulesMap>,
-        global_implicit_dependencies: &HashMap<String, Spanned<()>>,
-        result: &mut BoundariesResult,
-    ) -> Result<(), Error>
-    where
-        G: PackageGraphProvider,
-        T: TurboJsonProvider,
-    {
-        let implicit_dependencies = ctx.turbo_json_provider.implicit_dependencies(package_name);
-        Self::check_package_files(
-            ctx,
-            repo,
-            package_name,
-            package_info,
-            implicit_dependencies,
-            global_implicit_dependencies,
-            result,
-        )
-        .await?;
-
-        // Only check package tags if turbo.json exists for this package
-        if ctx.turbo_json_provider.has_turbo_json(package_name) {
-            let package_tags = ctx.turbo_json_provider.package_tags(package_name);
-            result.diagnostics.extend(tags::check_package_tags(
-                ctx,
-                PackageNode::Workspace(package_name.clone()),
-                &package_info.package_json,
-                package_tags,
-                tag_rules.as_ref(),
-            )?);
-        }
-
-        result.packages_checked += 1;
-
-        Ok(())
-    }
-
-    #[cfg(not(feature = "git2"))]
     async fn check_package<G, T>(
         ctx: &BoundariesContext<'_, G, T>,
         _repo: &Option<()>,
@@ -493,7 +444,7 @@ impl BoundariesChecker {
         T: TurboJsonProvider,
     {
         let implicit_dependencies = ctx.turbo_json_provider.implicit_dependencies(package_name);
-        Self::check_package_files_no_git(
+        Self::check_package_files(
             ctx,
             package_name,
             package_info,
@@ -520,93 +471,7 @@ impl BoundariesChecker {
         Ok(())
     }
 
-    #[cfg(feature = "git2")]
     async fn check_package_files<G, T>(
-        ctx: &BoundariesContext<'_, G, T>,
-        repo: &Option<Mutex<Repository>>,
-        package_name: &PackageName,
-        package_info: &PackageInfo,
-        implicit_dependencies: HashMap<String, Spanned<()>>,
-        global_implicit_dependencies: &HashMap<String, Spanned<()>>,
-        result: &mut BoundariesResult,
-    ) -> Result<(), Error>
-    where
-        G: PackageGraphProvider,
-        T: TurboJsonProvider,
-    {
-        let package_root = ctx.repo_root.resolve(package_info.package_path());
-        let internal_dependencies = ctx
-            .pkg_dep_graph
-            .immediate_dependencies(&PackageNode::Workspace(package_name.to_owned()))
-            .unwrap_or_default();
-        let _unresolved_external_dependencies =
-            package_info.unresolved_external_dependencies.as_ref();
-
-        let files = globwalk::globwalk_with_settings(
-            &package_root,
-            &[
-                "**/*.js".parse().unwrap(),
-                "**/*.jsx".parse().unwrap(),
-                "**/*.ts".parse().unwrap(),
-                "**/*.tsx".parse().unwrap(),
-                "**/*.cjs".parse().unwrap(),
-                "**/*.mjs".parse().unwrap(),
-                "**/*.svelte".parse().unwrap(),
-                "**/*.vue".parse().unwrap(),
-            ],
-            &["**/node_modules/**".parse().unwrap()],
-            globwalk::WalkType::Files,
-            Settings::default().ignore_nested_packages(),
-        )?;
-
-        // We assume the tsconfig.json is at the root of the package
-        let tsconfig_path = package_root.join_component("tsconfig.json");
-
-        let resolver =
-            Tracer::create_resolver(tsconfig_path.exists().then(|| tsconfig_path.as_ref()));
-
-        let mut not_supported_extensions = HashSet::new();
-
-        for file_path in &files {
-            if let Some(ext @ ("svelte" | "vue")) = file_path.extension() {
-                not_supported_extensions.insert(ext.to_string());
-                continue;
-            }
-
-            if let Some(repo) = repo {
-                let repo = repo.lock().expect("lock poisoned");
-                if matches!(repo.status_should_ignore(file_path.as_std_path()), Ok(true)) {
-                    continue;
-                }
-            };
-            Self::process_file(
-                ctx,
-                result,
-                package_name,
-                &package_root,
-                file_path,
-                &implicit_dependencies,
-                global_implicit_dependencies,
-                package_info,
-                &internal_dependencies,
-                &resolver,
-            )
-            .await?;
-        }
-
-        for ext in &not_supported_extensions {
-            result.warnings.push(format!(
-                "{ext} files are currently not supported, boundaries checks will not apply to them"
-            ));
-        }
-
-        result.files_checked += files.len();
-
-        Ok(())
-    }
-
-    #[cfg(not(feature = "git2"))]
-    async fn check_package_files_no_git<G, T>(
         ctx: &BoundariesContext<'_, G, T>,
         package_name: &PackageName,
         package_info: &PackageInfo,

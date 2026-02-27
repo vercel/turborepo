@@ -1,5 +1,5 @@
 import { getAvailablePackageManagers, type PackageManager } from "@turbo/utils";
-import { getWorkspaceDetails } from "./getWorkspaceDetails";
+import { getWorkspaceDetails } from "./get-workspace-details";
 import { convertProject } from "./convert";
 import { Logger } from "./logger";
 import { install, getPackageManagerMeta } from "./install";

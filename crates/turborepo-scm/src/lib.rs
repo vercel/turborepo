@@ -25,20 +25,20 @@ mod hash_object;
 mod ls_tree;
 pub mod manual;
 pub mod package_deps;
+mod repo_index;
 mod status;
 pub mod worktree;
 
+#[cfg(test)]
+mod git_index_regression_tests;
+#[cfg(test)]
+mod test_utils;
+
+pub use repo_index::RepoGitIndex;
 pub use worktree::WorktreeInfo;
 
 #[derive(Debug, Error)]
 pub enum Error {
-    #[cfg(feature = "git2")]
-    #[error("Git error on {1}: {0}")]
-    Git2(
-        #[source] git2::Error,
-        String,
-        #[backtrace] backtrace::Backtrace,
-    ),
     #[error("Git error: {0}")]
     Git(String, #[backtrace] backtrace::Backtrace),
     #[error(
@@ -71,7 +71,108 @@ pub enum Error {
     UnableToResolveRef,
 }
 
-pub type GitHashes = HashMap<RelativeUnixPathBuf, String>;
+/// A fixed-size, stack-allocated git OID hex string (40 bytes, SHA-1).
+///
+/// Avoids heap allocation for the ~10K+ file hashes created during index
+/// building and per-package hash computation. Implements `Deref<Target=str>`
+/// so all existing `&str` consumers work unchanged.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OidHash([u8; 40]);
+
+impl OidHash {
+    /// Create from a pre-filled 40-byte hex buffer.
+    /// Caller must ensure `buf` contains valid lowercase ASCII hex.
+    pub fn from_hex_buf(buf: [u8; 40]) -> Self {
+        Self(buf)
+    }
+
+    /// Create from a hex-encoded string slice.
+    pub fn from_hex_str(s: &str) -> Self {
+        debug_assert_eq!(s.len(), 40, "OID hex must be exactly 40 chars");
+        let mut buf = [0u8; 40];
+        buf.copy_from_slice(s.as_bytes());
+        Self(buf)
+    }
+}
+
+impl std::ops::Deref for OidHash {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        // SAFETY: OidHash is always constructed from valid ASCII hex bytes.
+        unsafe { std::str::from_utf8_unchecked(&self.0) }
+    }
+}
+
+impl AsRef<str> for OidHash {
+    fn as_ref(&self) -> &str {
+        self
+    }
+}
+
+impl std::borrow::Borrow<str> for OidHash {
+    fn borrow(&self) -> &str {
+        self
+    }
+}
+
+impl std::fmt::Debug for OidHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self)
+    }
+}
+
+impl std::fmt::Display for OidHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self)
+    }
+}
+
+impl PartialEq<str> for OidHash {
+    fn eq(&self, other: &str) -> bool {
+        self.0 == other.as_bytes()
+    }
+}
+
+impl PartialEq<&str> for OidHash {
+    fn eq(&self, other: &&str) -> bool {
+        self.0 == other.as_bytes()
+    }
+}
+
+impl From<OidHash> for String {
+    fn from(oid: OidHash) -> Self {
+        // SAFETY: OidHash is always valid ASCII hex.
+        unsafe { String::from_utf8_unchecked(oid.0.to_vec()) }
+    }
+}
+
+pub type GitHashes = HashMap<RelativeUnixPathBuf, OidHash>;
+
+fn is_os_resource_error(e: &std::io::Error) -> bool {
+    matches!(
+        e.raw_os_error(),
+        Some(24) // EMFILE: too many open files
+        | Some(12) // ENOMEM: out of memory
+    )
+}
+
+fn walk_error_is_resource_exhaustion(e: &globwalk::WalkError) -> bool {
+    // Walk the error source chain looking for an underlying io::Error.
+    let mut source: Option<&dyn std::error::Error> = Some(e);
+    while let Some(err) = source {
+        if let Some(io_err) = err.downcast_ref::<std::io::Error>()
+            && is_os_resource_error(io_err)
+        {
+            return true;
+        }
+        source = err.source();
+    }
+    // wax wraps errors in ways that can break the downcast chain.
+    // Fall back to checking the Display string.
+    let msg = e.to_string();
+    msg.contains("Too many open files") || msg.contains("os error 24")
+}
 
 impl From<wax::BuildError> for Error {
     fn from(value: wax::BuildError) -> Self {
@@ -84,9 +185,14 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
-    #[cfg(feature = "git2")]
-    pub(crate) fn git2_error_context(error: git2::Error, error_context: String) -> Self {
-        Error::Git2(error, error_context, Backtrace::capture())
+    /// Returns true if this error indicates OS resource exhaustion (e.g. too
+    /// many open files) where a fallback to manual hashing would also fail.
+    pub fn is_resource_exhaustion(&self) -> bool {
+        match self {
+            Error::Io(e, _) => is_os_resource_error(e),
+            Error::Walk(e) => walk_error_is_resource_exhaustion(e),
+            _ => false,
+        }
     }
 }
 
@@ -253,8 +359,90 @@ impl SCM {
             })
     }
 
+    /// Creates an SCM instance using a pre-resolved git root, avoiding the
+    /// `git rev-parse --show-cdup` subprocess call that `new` would perform.
+    /// Falls back to `new` if the git binary cannot be found.
+    #[tracing::instrument]
+    pub fn new_with_git_root(
+        path_in_repo: &AbsoluteSystemPath,
+        git_root: AbsoluteSystemPathBuf,
+    ) -> SCM {
+        match GitRepo::find_bin() {
+            Ok(bin) => SCM::Git(GitRepo {
+                root: git_root,
+                bin,
+            }),
+            Err(e) => {
+                debug!(
+                    "git binary not found: {}, continuing with manual hashing",
+                    e
+                );
+                SCM::Manual
+            }
+        }
+    }
+
     pub fn is_manual(&self) -> bool {
         matches!(self, SCM::Manual)
+    }
+
+    /// Build a repo-wide git index that caches `git ls-tree` and `git status`
+    /// results. Returns `None` for manual SCM mode or when the package count
+    /// is too small to benefit. Callers should build this once before parallel
+    /// file hashing and pass it through to `get_package_file_hashes`.
+    pub fn build_repo_index(&self, package_count: usize) -> Option<RepoGitIndex> {
+        // The repo index trades 2N subprocess spawns for 2 repo-wide git
+        // commands + a BTreeMap build. For small repos, the overhead of
+        // scanning the entire repo outweighs the subprocess savings.
+        if package_count < 16 {
+            debug!(
+                "skipping repo index for small repo (package_count={})",
+                package_count,
+            );
+            return None;
+        }
+
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new(git) {
+                Ok(index) => {
+                    debug!("repo git index built successfully");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index: {}. Will hash per-package.",
+                        e
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build the repo index without a package-count threshold.
+    ///
+    /// This is intended for early, speculative construction: we spawn it on a
+    /// background thread before the package graph is built so the git I/O
+    /// overlaps with package discovery. If the repo turns out to be small the
+    /// caller can simply ignore the result.
+    pub fn build_repo_index_eager(&self) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new(git) {
+                Ok(index) => {
+                    debug!("repo git index built eagerly");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index eagerly: {}. Will hash per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
     }
 }
 

@@ -162,9 +162,7 @@ pub async fn link(
                     .token
                     .clone()
                     .ok_or_else(|| Error::TokenNotFound {
-                        command: base
-                            .color_config
-                            .apply(BOLD.apply_to("`npx turbo login`")),
+                        command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
                     })?
             }
         };

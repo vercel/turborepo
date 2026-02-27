@@ -2,7 +2,7 @@ import * as turboWorkspaces from "@turbo/workspaces";
 import * as turboUtils from "@turbo/utils";
 import { setupTestFixtures } from "@turbo/test-utils";
 import { describe, it, expect, jest, afterEach } from "@jest/globals";
-import { getTurboUpgradeCommand } from "../src/commands/migrate/steps/getTurboUpgradeCommand";
+import { getTurboUpgradeCommand } from "../src/commands/migrate/steps/get-turbo-upgrade-command";
 import * as utils from "../src/commands/migrate/utils";
 import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 

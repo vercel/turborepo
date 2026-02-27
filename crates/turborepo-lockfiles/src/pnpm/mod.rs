@@ -29,9 +29,10 @@ enum VersionFormat {
     Float,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 enum SupportedLockfileVersion {
     V5,
+    #[default]
     V6,
     // As of pnpm@9.0.0-rc.0 the lockfile version will now match the pnpm version
     // Lockfile version 7.0 and 9.0 are both the same version

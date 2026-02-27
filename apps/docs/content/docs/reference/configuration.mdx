@@ -168,20 +168,9 @@ Specify the filesystem cache directory.
 
 ### `daemon`
 
-Default: `true`
+**Deprecated**: The daemon is no longer used for `turbo run` and this option will be removed in version 3.0. The `--daemon` and `--no-daemon` flags are also deprecated.
 
-Turborepo runs a background process to pre-calculate some expensive operations. This standalone process (daemon) is a performance optimization, and not required for proper functioning of `turbo`.
-
-```jsonc title="./turbo.json"
-{
-  "daemon": true,
-}
-```
-
-<Callout type="info">
-  When running in a CI environment the daemon is always disabled regardless of
-  this setting.
-</Callout>
+The daemon is still used by `turbo watch` and the Turborepo LSP.
 
 ### `envMode`
 

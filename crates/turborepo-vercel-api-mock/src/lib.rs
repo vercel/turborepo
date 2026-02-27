@@ -13,8 +13,8 @@ use axum::{
     routing::{get, head, options, post, put},
 };
 use futures_util::StreamExt;
-use tokio::{net::TcpListener, sync::Mutex};
 use serde::Serialize;
+use tokio::{net::TcpListener, sync::Mutex};
 use turborepo_vercel_api::{
     AnalyticsEvent, CachingStatus, CachingStatusResponse, Membership, Role, Team, TeamsResponse,
     User, UserResponse, telemetry::TelemetryEvent,
@@ -103,7 +103,7 @@ pub async fn start_test_server(
             }),
         )
         .route(
-            "/v8/artifacts/:hash",
+            "/v8/artifacts/{hash}",
             put(
                 |Path(hash): Path<String>, headers: HeaderMap, body: Body| async move {
                     let root_path = put_tempdir_ref.path();
@@ -139,7 +139,7 @@ pub async fn start_test_server(
             ),
         )
         .route(
-            "/v8/artifacts/:hash",
+            "/v8/artifacts/{hash}",
             get(|Path(hash): Path<String>| async move {
                 let root_path = get_tempdir_ref.path();
                 let file_path = root_path.join(&hash);
@@ -163,7 +163,7 @@ pub async fn start_test_server(
             }),
         )
         .route(
-            "/v8/artifacts/:hash",
+            "/v8/artifacts/{hash}",
             head(|Path(hash): Path<String>| async move {
                 let mut headers = HeaderMap::new();
 

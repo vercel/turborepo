@@ -2,15 +2,16 @@ use std::{
     collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 use chrono::Local;
-use tracing::debug;
+use tracing::Instrument;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
+use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
+use turborepo_daemon::{DaemonClient, DaemonConnector};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -31,25 +32,15 @@ use turborepo_telemetry::events::{
 };
 use turborepo_types::{DryRunMode, UIMode};
 use turborepo_ui::ColorConfig;
-#[cfg(feature = "daemon-package-discovery")]
-use {
-    crate::run::package_discovery::DaemonPackageDiscovery,
-    turborepo_repository::discovery::{
-        Error as DiscoveryError, FallbackPackageDiscovery, LocalPackageDiscoveryBuilder,
-        PackageDiscoveryBuilder,
-    },
-};
 
 use crate::{
     commands::CommandBase,
-    config::resolve_turbo_config_path,
     engine::{Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
     run::{scope, task_access::TaskAccess, Error, Run, RunCache},
     shim::TurboState,
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
-    DaemonConnector,
 };
 
 pub struct RunBuilder {
@@ -59,8 +50,7 @@ pub struct RunBuilder {
     repo_root: AbsoluteSystemPathBuf,
     color_config: ColorConfig,
     version: &'static str,
-    api_client: APIClient,
-    analytics_sender: Option<AnalyticsSender>,
+    http_client_cell: Arc<tokio::sync::OnceCell<reqwest::Client>>,
     // In watch mode, we can have a changed package that we want to serve as an entrypoint.
     // We will then prune away any tasks that do not depend on tasks inside
     // this package.
@@ -70,12 +60,21 @@ pub struct RunBuilder {
     should_validate_engine: bool,
     // If true, we will add all tasks to the graph, even if they are not specified
     add_all_tasks: bool,
+    // When running under `turbo watch`, a daemon client is needed so that
+    // the run cache can register output globs and skip restoring outputs
+    // that are already on disk. Without this, cache restores write files
+    // that trigger the file watcher, causing an infinite rebuild loop.
+    daemon_client: Option<DaemonClient<DaemonConnector>>,
 }
 
 impl RunBuilder {
-    pub fn new(base: CommandBase) -> Result<Self, Error> {
-        let api_client = base.api_client()?;
-
+    #[tracing::instrument(skip_all)]
+    pub fn new(
+        base: CommandBase,
+        http_client_cell: Option<Arc<tokio::sync::OnceCell<reqwest::Client>>>,
+    ) -> Result<Self, Error> {
+        let http_client_cell =
+            http_client_cell.unwrap_or_else(|| Arc::new(tokio::sync::OnceCell::new()));
         let opts = base.opts();
         let api_auth = base.api_auth()?;
 
@@ -98,21 +97,26 @@ impl RunBuilder {
         Ok(Self {
             processes,
             opts,
-            api_client,
+            http_client_cell,
             repo_root,
             color_config: ui,
             version,
             api_auth,
-            analytics_sender: None,
             entrypoint_packages: None,
             should_print_prelude_override: None,
             should_validate_engine: true,
             add_all_tasks: false,
+            daemon_client: None,
         })
     }
 
     pub fn with_entrypoint_packages(mut self, entrypoint_packages: HashSet<PackageName>) -> Self {
         self.entrypoint_packages = Some(entrypoint_packages);
+        self
+    }
+
+    pub fn with_daemon_client(mut self, client: DaemonClient<DaemonConnector>) -> Self {
+        self.daemon_client = Some(client);
         self
     }
 
@@ -133,11 +137,6 @@ impl RunBuilder {
 
     fn will_execute_tasks(&self) -> bool {
         self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
-    }
-
-    pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
-        self.analytics_sender = analytics_sender;
-        self
     }
 
     pub fn calculate_filtered_packages(
@@ -178,25 +177,12 @@ impl RunBuilder {
         Ok(filtered_pkgs)
     }
 
-    // Starts analytics and returns handle. This is not included in the main `build`
-    // function because we don't want the handle stored in the `Run` struct.
-    pub fn start_analytics(&self) -> (Option<AnalyticsSender>, Option<AnalyticsHandle>) {
-        // If there's no API auth, we don't want to record analytics
-        let Some(api_auth) = self.api_auth.clone() else {
-            return (None, None);
-        };
-        api_auth
-            .is_linked()
-            .then(|| start_analytics(api_auth, self.api_client.clone()))
-            .unzip()
-    }
-
     #[tracing::instrument(skip(self, signal_handler))]
     pub async fn build(
-        mut self,
+        self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
-    ) -> Result<Run, Error> {
+    ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
@@ -207,9 +193,17 @@ impl RunBuilder {
         );
         let start_at = Local::now();
 
-        let scm = {
+        let scm_task = {
             let repo_root = self.repo_root.clone();
-            tokio::task::spawn_blocking(move || SCM::new(&repo_root))
+            let git_root = self.opts.git_root.clone();
+            tokio::task::spawn_blocking(move || {
+                let scm = match git_root {
+                    Some(root) => SCM::new_with_git_root(&repo_root, root),
+                    None => SCM::new(&repo_root),
+                };
+                let repo_index = scm.build_repo_index_eager();
+                (scm, repo_index)
+            })
         };
         let package_json_path = self.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&package_json_path)?;
@@ -227,7 +221,7 @@ impl RunBuilder {
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
         if is_linked {
-            run_telemetry.track_remote_cache(self.api_client.base_url());
+            run_telemetry.track_remote_cache(&self.opts.api_client_opts.api_url);
         }
         let _is_structured_output = self.opts.run_opts.graph.is_some()
             || matches!(self.opts.run_opts.dry_run, Some(DryRunMode::Json));
@@ -239,118 +233,22 @@ impl RunBuilder {
             RepoType::Monorepo
         });
 
-        let is_ci_or_not_tty = turborepo_ci::is_ci() || !std::io::stdout().is_terminal();
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
 
-        // Remove allow when daemon is flagged back on
-        let daemon = match (is_ci_or_not_tty, self.opts.run_opts.daemon) {
-            (true, None) => {
-                run_telemetry.track_daemon_init(DaemonInitStatus::Skipped);
-                debug!("skipping turbod since we appear to be in a non-interactive context");
-                None
-            }
-            (_, Some(true)) | (false, None) => {
-                let can_start_server = true;
-                let can_kill_server = true;
-
-                // Determine custom turbo.json path if different from standard path
-                let custom_turbo_json_path =
-                    if let Ok(standard_path) = resolve_turbo_config_path(&self.repo_root) {
-                        if self.opts.repo_opts.root_turbo_json_path != standard_path {
-                            Some(self.opts.repo_opts.root_turbo_json_path.clone())
-                        } else {
-                            None
-                        }
-                    } else {
-                        None
-                    };
-
-                let connector = DaemonConnector::new(
-                    can_start_server,
-                    can_kill_server,
-                    &self.repo_root,
-                    custom_turbo_json_path,
-                );
-
-                match (connector.connect().await, self.opts.run_opts.daemon) {
-                    (Ok(client), _) => {
-                        run_telemetry.track_daemon_init(DaemonInitStatus::Started);
-                        debug!("running in daemon mode");
-                        Some(client)
-                    }
-                    (Err(e), Some(true)) => {
-                        run_telemetry.track_daemon_init(DaemonInitStatus::Failed);
-                        debug!("failed to connect to daemon when forced {e}, exiting");
-                        return Err(e.into());
-                    }
-                    (Err(e), None) => {
-                        run_telemetry.track_daemon_init(DaemonInitStatus::Failed);
-                        debug!("failed to connect to daemon {e}");
-                        None
-                    }
-                    (_, Some(false)) => unreachable!(),
-                }
-            }
-            (_, Some(false)) => {
-                run_telemetry.track_daemon_init(DaemonInitStatus::Disabled);
-                debug!("skipping turbod since --no-daemon was passed");
-                None
-            }
-        };
+        // The daemon is no longer used for `turbo run`. It provided no measurable
+        // performance benefit and added IPC overhead. The daemon is still used by
+        // `turbo watch` which connects independently.
+        run_telemetry.track_daemon_init(DaemonInitStatus::Disabled);
 
         let mut pkg_dep_graph = {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
                 .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
 
-            // Daemon package discovery depends on packageManager existing in package.json
-            let graph = if cfg!(feature = "daemon-package-discovery")
-                && !self.opts.repo_opts.allow_no_package_manager
-            {
-                match (&daemon, self.opts.run_opts.daemon) {
-                    (None, Some(true)) => {
-                        // We've asked for the daemon, but it's not available. This is an error
-                        return Err(turborepo_repository::package_graph::Error::Discovery(
-                            DiscoveryError::Unavailable,
-                        )
-                        .into());
-                    }
-                    (Some(daemon), Some(true)) => {
-                        // We have the daemon, and have explicitly asked to only use that
-                        let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
-                        builder
-                            .with_package_discovery(daemon_discovery)
-                            .build()
-                            .await
-                    }
-                    (_, Some(false)) | (None, _) => {
-                        // We have explicitly requested to not use the daemon, or we don't have it
-                        // No change to default.
-                        builder.build().await
-                    }
-                    (Some(daemon), None) => {
-                        // We have the daemon, and it's not flagged off. Use the fallback strategy
-                        let daemon_discovery = DaemonPackageDiscovery::new(daemon.clone());
-                        let local_discovery = LocalPackageDiscoveryBuilder::new(
-                            self.repo_root.clone(),
-                            None,
-                            Some(root_package_json.clone()),
-                        )
-                        .build()?;
-                        let fallback_discover = FallbackPackageDiscovery::new(
-                            daemon_discovery,
-                            local_discovery,
-                            Duration::from_millis(10),
-                        );
-                        builder
-                            .with_package_discovery(fallback_discover)
-                            .build()
-                            .await
-                    }
-                }
-            } else {
-                builder.build().await
-            };
+            let graph = builder
+                .build()
+                .instrument(tracing::info_span!("pkg_dep_graph_build"))
+                .await;
 
             match graph {
                 Ok(graph) => graph,
@@ -374,85 +272,152 @@ impl RunBuilder {
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().name().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
-        let micro_frontend_configs =
+        let micro_frontend_configs = {
+            let _span = tracing::info_span!("micro_frontends_from_disk").entered();
             match MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph) {
                 Ok(configs) => configs,
                 Err(err) => {
                     return Err(Error::MicroFrontends(err));
                 }
+            }
+        };
+
+        let (scm, repo_index) = scm_task
+            .instrument(tracing::info_span!("scm_task_await"))
+            .await
+            .expect("detecting scm panicked");
+        let repo_index = Arc::new(repo_index);
+
+        // Resolve the HTTP client. TLS initialization has been running in the
+        // background since cli::run started, overlapping with arg parsing,
+        // config loading, package graph construction, and SCM indexing.
+        let api_client = {
+            let _span = tracing::info_span!("resolve_api_client").entered();
+            let http_client = match self.http_client_cell.get() {
+                Some(client) => client.clone(),
+                None => tokio::task::spawn_blocking(|| APIClient::build_http_client(None))
+                    .await
+                    .map_err(|_| turborepo_api_client::Error::HttpClientCancelled)??,
             };
+            let timeout = self.opts.api_client_opts.timeout;
+            let upload_timeout = self.opts.api_client_opts.upload_timeout;
+            APIClient::new_with_client(
+                http_client.clone(),
+                &self.opts.api_client_opts.api_url,
+                if timeout > 0 {
+                    Some(std::time::Duration::from_secs(timeout))
+                } else {
+                    None
+                },
+                if upload_timeout > 0 {
+                    Some(std::time::Duration::from_secs(upload_timeout))
+                } else {
+                    None
+                },
+                self.version,
+                self.opts.api_client_opts.preflight,
+            )
+        };
 
-        let scm = scm.await.expect("detecting scm panicked");
-        debug!(
-            "RunBuilder creating AsyncCache with cache_dir={}, repo_root={}",
-            self.opts.cache_opts.cache_dir, self.repo_root
-        );
-        let async_cache = AsyncCache::new(
-            &self.opts.cache_opts,
-            &self.repo_root,
-            self.api_client.clone(),
-            self.api_auth.clone(),
-            self.analytics_sender.take(),
-        )?;
+        let (analytics_sender, analytics_handle) = self
+            .api_auth
+            .as_ref()
+            .filter(|auth| auth.is_linked())
+            .map(|auth| start_analytics(auth.clone(), api_client.clone()))
+            .unzip();
 
-        // restore config from task access trace if it's enabled
-        let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
-        task_access.restore_config().await;
+        let async_cache = {
+            let _span = tracing::info_span!("async_cache_new").entered();
+            AsyncCache::new(
+                &self.opts.cache_opts,
+                &self.repo_root,
+                api_client.clone(),
+                self.api_auth.clone(),
+                analytics_sender,
+            )?
+        };
+
+        let task_access = {
+            let _span = tracing::info_span!("task_access_setup").entered();
+            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
+            ta.restore_config().await;
+            ta
+        };
 
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
         let future_flags = self.opts.future_flags;
 
         let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
-        let turbo_json_loader = if task_access.is_enabled() {
-            UnifiedTurboJsonLoader::task_access(
-                reader,
-                root_turbo_json_path.clone(),
-                root_package_json.clone(),
-            )
-        } else if is_single_package {
-            UnifiedTurboJsonLoader::single_package(
-                reader,
-                root_turbo_json_path.clone(),
-                root_package_json.clone(),
-            )
-        } else if !root_turbo_json_path.exists() &&
-        // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
-        (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
-        {
-            UnifiedTurboJsonLoader::workspace_no_turbo_json(
-                reader,
-                pkg_dep_graph.packages(),
-                micro_frontend_configs.clone(),
-            )
-        } else if let Some(micro_frontends) = &micro_frontend_configs {
-            UnifiedTurboJsonLoader::workspace_with_microfrontends(
-                reader,
-                root_turbo_json_path.clone(),
-                pkg_dep_graph.packages(),
-                micro_frontends.clone(),
-            )
-        } else {
-            UnifiedTurboJsonLoader::workspace(
-                reader,
-                root_turbo_json_path.clone(),
-                pkg_dep_graph.packages(),
-            )
+        let turbo_json_loader = {
+            let _span = tracing::info_span!("turbo_json_loader_setup").entered();
+            if task_access.is_enabled() {
+                UnifiedTurboJsonLoader::task_access(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    root_package_json.clone(),
+                )
+            } else if is_single_package {
+                UnifiedTurboJsonLoader::single_package(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    root_package_json.clone(),
+                )
+            } else if !root_turbo_json_path.exists() &&
+            // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
+            (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
+            {
+                UnifiedTurboJsonLoader::workspace_no_turbo_json(
+                    reader,
+                    pkg_dep_graph.packages(),
+                    micro_frontend_configs.clone(),
+                )
+            } else if let Some(micro_frontends) = &micro_frontend_configs {
+                UnifiedTurboJsonLoader::workspace_with_microfrontends(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    pkg_dep_graph.packages(),
+                    micro_frontends.clone(),
+                )
+            } else {
+                UnifiedTurboJsonLoader::workspace(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    pkg_dep_graph.packages(),
+                )
+            }
         };
 
-        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?.clone();
+        let root_turbo_json = {
+            let _span = tracing::info_span!("root_turbo_json_load").entered();
+            turbo_json_loader.load(&PackageName::Root)?.clone()
+        };
 
-        pkg_dep_graph.validate()?;
+        {
+            let _span = tracing::info_span!("pkg_dep_graph_validate").entered();
+            pkg_dep_graph.validate()?;
+        }
 
-        let filtered_pkgs = Self::calculate_filtered_packages(
-            &self.repo_root,
-            &self.opts,
-            &pkg_dep_graph,
-            &scm,
-            &root_turbo_json,
-        )?;
+        let filtered_pkgs = {
+            let _span = tracing::info_span!("calculate_filtered_packages").entered();
+            Self::calculate_filtered_packages(
+                &self.repo_root,
+                &self.opts,
+                &pkg_dep_graph,
+                &scm,
+                &root_turbo_json,
+            )?
+        };
 
-        let env_at_execution_start = EnvironmentVariableMap::infer();
+        let env_at_execution_start = {
+            let _span = tracing::info_span!("env_infer").entered();
+            EnvironmentVariableMap::infer()
+        };
+        {
+            let _span = tracing::info_span!("turbo_json_preload").entered();
+            turbo_json_loader.preload_all();
+        }
+
         let mut engine = self.build_engine(
             &pkg_dep_graph,
             &root_turbo_json,
@@ -470,46 +435,50 @@ impl RunBuilder {
             )?;
         }
 
+        let should_print_prelude = self
+            .should_print_prelude_override
+            .unwrap_or_else(|| self.will_execute_tasks());
+
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
             self.opts.runcache_opts,
             &self.opts.cache_opts,
-            daemon.clone(),
+            self.daemon_client,
             self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));
 
-        let should_print_prelude = self
-            .should_print_prelude_override
-            .unwrap_or_else(|| self.will_execute_tasks());
-
-        Ok(Run {
-            version: self.version,
-            color_config: self.color_config,
-            start_at,
-            processes: self.processes,
-            run_telemetry,
-            task_access,
-            repo_root: self.repo_root,
-            opts: Arc::new(self.opts),
-            api_client: self.api_client,
-            api_auth: self.api_auth,
-            env_at_execution_start,
-            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
-            pkg_dep_graph: Arc::new(pkg_dep_graph),
-            turbo_json_loader,
-            root_turbo_json,
-            scm,
-            engine: Arc::new(engine),
-            run_cache,
-            signal_handler: signal_handler.clone(),
-            daemon,
-            should_print_prelude,
-            micro_frontend_configs,
-        })
+        Ok((
+            Run {
+                version: self.version,
+                color_config: self.color_config,
+                start_at,
+                processes: self.processes,
+                run_telemetry,
+                task_access,
+                repo_root: self.repo_root,
+                opts: Arc::new(self.opts),
+                api_client,
+                api_auth: self.api_auth,
+                env_at_execution_start,
+                filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
+                pkg_dep_graph: Arc::new(pkg_dep_graph),
+                turbo_json_loader,
+                root_turbo_json,
+                scm,
+                engine: Arc::new(engine),
+                run_cache,
+                signal_handler: signal_handler.clone(),
+                should_print_prelude,
+                micro_frontend_configs,
+                repo_index,
+            },
+            analytics_handle,
+        ))
     }
 
+    #[tracing::instrument(skip_all)]
     fn build_engine<'a>(
         &self,
         pkg_dep_graph: &PackageGraph,

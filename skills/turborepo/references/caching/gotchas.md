@@ -109,7 +109,7 @@ Task uses an env var not listed in `env`:
 
 ```javascript
 // build.js
-const apiUrl = process.env.API_URL;  // not tracked!
+const apiUrl = process.env.API_URL; // not tracked!
 ```
 
 Fix: add to task config:
@@ -134,7 +134,7 @@ Task reads a file outside default inputs:
     "build": {
       "inputs": [
         "$TURBO_DEFAULT$",
-        "../../shared-config.json"  // file outside package
+        "../../shared-config.json" // file outside package
       ]
     }
   }

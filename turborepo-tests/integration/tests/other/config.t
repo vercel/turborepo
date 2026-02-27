@@ -73,12 +73,14 @@ Add env var: `TURBO_DAEMON=false`
   $ TURBO_DAEMON=false ${TURBO} config | jq .daemon
   false
 
-Add flag: `--daemon`
+Add flag: `--daemon` (deprecated)
   $ ${TURBO} --daemon config | jq .daemon
+   WARNING  --daemon is deprecated and will be removed in version 3.0. The daemon is no longer used for `turbo run`.
   true
 
-Add flag: `--no-daemon`
+Add flag: `--no-daemon` (deprecated)
   $ ${TURBO} --no-daemon config | jq .daemon
+   WARNING  --no-daemon is deprecated and will be removed in version 3.0. The daemon is no longer used for `turbo run`.
   false
 
 Confirm that the envMode is `strict` by default

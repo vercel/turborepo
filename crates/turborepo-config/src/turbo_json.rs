@@ -135,8 +135,10 @@ mod test {
 
         let reader = TurboJsonReader::new(repo_root);
         let config = reader.get_configuration_options(&existing_config).unwrap();
-        // Make sure we read the default turbo.json
-        assert_eq!(config.daemon(), Some(false));
+        // The raw field is populated from turbo.json
+        assert_eq!(config.daemon, Some(false));
+        // But the getter always returns None since daemon is deprecated for turbo run
+        assert_eq!(config.daemon(), None);
     }
 
     #[test]
@@ -165,8 +167,10 @@ mod test {
 
         let reader = TurboJsonReader::new(repo_root);
         let config = reader.get_configuration_options(&existing_config).unwrap();
-        // Make sure we read the correct turbo.json
-        assert_eq!(config.daemon(), Some(false));
+        // The raw field is populated from the custom turbo.json path
+        assert_eq!(config.daemon, Some(false));
+        // But the getter always returns None since daemon is deprecated for turbo run
+        assert_eq!(config.daemon(), None);
     }
 
     #[test]

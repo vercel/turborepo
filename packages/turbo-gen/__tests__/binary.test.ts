@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -79,6 +79,76 @@ module.exports = function generator(plop) {
   });
 };
 `;
+
+// Config that imports an external npm package from the project's node_modules.
+const TS_CONFIG_WITH_EXTERNAL_IMPORT = (name: string) => `
+import { helper } from "test-external-pkg";
+
+export default function generator(plop: any): void {
+  plop.setGenerator("${name}", {
+    description: helper("${name}"),
+    prompts: [],
+    actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
+  });
+}
+`;
+
+// Config that imports @inquirer/prompts, which is bundled in the compiled
+// binary but NOT installed in the user's node_modules.
+// Regression test for https://github.com/vercel/turborepo/issues/11855
+const TS_CONFIG_WITH_BINARY_MODULE_IMPORT = (name: string) => `
+import { Separator } from "@inquirer/prompts";
+
+const sep = new Separator();
+
+export default function generator(plop: any): void {
+  plop.setGenerator("${name}", {
+    description: "${name}",
+    prompts: [],
+    actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
+  });
+}
+`;
+
+// Config that delegates to a sub-generator file which imports an external
+// npm package. The package is installed at the project root's node_modules/
+// (NOT next to the sub-generator). This is the exact scenario from #11882:
+// turbo/generators/config.ts -> turbo/generators/sub-gen/generator.ts -> slugify
+const TS_CONFIG_WITH_SUB_GENERATOR = (name: string) => `
+import { subGenerator } from "./sub-gen/generator";
+
+export default function generator(plop: any): void {
+  plop.setGenerator("${name}", subGenerator);
+}
+`;
+
+const TS_SUB_GENERATOR = (name: string) => `
+import { helper } from "test-external-pkg";
+
+export const subGenerator = {
+  description: helper("${name}"),
+  prompts: [],
+  actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
+};
+`;
+
+/**
+ * Creates a fake npm package in the project's node_modules so that
+ * config files can import it without running a real package manager.
+ */
+function createFakePackage(
+  projectRoot: string,
+  packageName: string,
+  code: string
+) {
+  const pkgDir = path.join(projectRoot, "node_modules", packageName);
+  fs.mkdirSync(pkgDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(pkgDir, "package.json"),
+    JSON.stringify({ name: packageName, version: "1.0.0", main: "index.js" })
+  );
+  fs.writeFileSync(path.join(pkgDir, "index.js"), code);
+}
 
 // Skip the entire suite if the binary hasn't been built.
 // Unit tests (raw.test.ts) always run; these are integration tests
@@ -224,6 +294,192 @@ describeIfBinary("compiled binary", () => {
       });
     }
   );
+
+  // Regression test for https://github.com/vercel/turborepo/issues/11855
+  describe("config importing external npm packages", () => {
+    let projectDir: string;
+    const genName = "ext-import-test";
+
+    beforeAll(() => {
+      projectDir = path.join(tmpDir, "external-import");
+      fs.mkdirSync(projectDir, { recursive: true });
+      createProject(projectDir, {
+        type: "commonjs",
+        configFile: "config.ts",
+        configContent: TS_CONFIG_WITH_EXTERNAL_IMPORT(genName),
+        generatorPkgType: "commonjs"
+      });
+      // Install a fake package in node_modules
+      createFakePackage(
+        projectDir,
+        "test-external-pkg",
+        'module.exports.helper = function(name) { return name + " via external"; };'
+      );
+    });
+
+    it("resolves npm packages from the project node_modules", () => {
+      fs.rmSync(path.join(projectDir, "out"), {
+        recursive: true,
+        force: true
+      });
+
+      bin(
+        [
+          "raw",
+          "run",
+          "--json",
+          JSON.stringify({
+            root: projectDir,
+            generator_name: genName
+          })
+        ],
+        projectDir
+      );
+
+      const outFile = path.join(projectDir, "out", `${genName}.md`);
+      expect(fs.existsSync(outFile)).toBe(true);
+      expect(fs.readFileSync(outFile, "utf-8")).toContain(`# ${genName}`);
+    });
+  });
+
+  // Regression test for https://github.com/vercel/turborepo/issues/11855
+  // @inquirer/prompts is bundled in the binary but NOT in the test project's
+  // node_modules, which is the exact scenario from the bug report.
+  describe("config importing binary-bundled modules (@inquirer/prompts)", () => {
+    let projectDir: string;
+    const genName = "binary-module-test";
+
+    beforeAll(() => {
+      projectDir = path.join(tmpDir, "binary-module-import");
+      fs.mkdirSync(projectDir, { recursive: true });
+      createProject(projectDir, {
+        type: "commonjs",
+        configFile: "config.ts",
+        configContent: TS_CONFIG_WITH_BINARY_MODULE_IMPORT(genName),
+        generatorPkgType: "commonjs"
+      });
+      // Intentionally NO node_modules/@inquirer/prompts on disk
+    });
+
+    it("resolves @inquirer/prompts from the compiled binary", () => {
+      fs.rmSync(path.join(projectDir, "out"), {
+        recursive: true,
+        force: true
+      });
+
+      bin(
+        [
+          "raw",
+          "run",
+          "--json",
+          JSON.stringify({
+            root: projectDir,
+            generator_name: genName
+          })
+        ],
+        projectDir
+      );
+
+      const outFile = path.join(projectDir, "out", `${genName}.md`);
+      expect(fs.existsSync(outFile)).toBe(true);
+      expect(fs.readFileSync(outFile, "utf-8")).toContain(`# ${genName}`);
+    });
+  });
+
+  // Regression test for https://github.com/vercel/turborepo/issues/11882
+  // The package is in ROOT/node_modules/ but the importing file is in
+  // turbo/generators/sub-gen/ — resolution must walk up the directory tree.
+  describe("sub-generator importing from ancestor node_modules", () => {
+    let projectDir: string;
+    const genName = "sub-gen-import-test";
+
+    beforeAll(() => {
+      projectDir = path.join(tmpDir, "sub-gen-import");
+      fs.mkdirSync(projectDir, { recursive: true });
+      createProject(projectDir, {
+        type: "commonjs",
+        configFile: "config.ts",
+        configContent: TS_CONFIG_WITH_SUB_GENERATOR(genName),
+        generatorPkgType: "commonjs"
+      });
+      // Create the sub-generator file in a subdirectory
+      const subGenDir = path.join(projectDir, "turbo", "generators", "sub-gen");
+      fs.mkdirSync(subGenDir, { recursive: true });
+      fs.writeFileSync(
+        path.join(subGenDir, "generator.ts"),
+        TS_SUB_GENERATOR(genName)
+      );
+      // Install the package at the PROJECT ROOT, not next to the sub-generator
+      createFakePackage(
+        projectDir,
+        "test-external-pkg",
+        'module.exports.helper = function(name) { return name + " via external"; };'
+      );
+    });
+
+    it("resolves packages from ancestor node_modules", () => {
+      fs.rmSync(path.join(projectDir, "out"), {
+        recursive: true,
+        force: true
+      });
+
+      bin(
+        [
+          "raw",
+          "run",
+          "--json",
+          JSON.stringify({
+            root: projectDir,
+            generator_name: genName
+          })
+        ],
+        projectDir
+      );
+
+      const outFile = path.join(projectDir, "out", `${genName}.md`);
+      expect(fs.existsSync(outFile)).toBe(true);
+      expect(fs.readFileSync(outFile, "utf-8")).toContain(`# ${genName}`);
+    });
+  });
+
+  describe("SIGINT handling", () => {
+    let projectDir: string;
+
+    beforeAll(() => {
+      projectDir = path.join(tmpDir, "sigint-test");
+      fs.mkdirSync(projectDir, { recursive: true });
+      createProject(projectDir, {
+        type: "commonjs",
+        configFile: "config.ts",
+        configContent: TS_CONFIG("sigint-gen"),
+        generatorPkgType: "commonjs"
+      });
+    });
+
+    it("exits cleanly on SIGINT without ExitPromptError stack trace", (done) => {
+      // Use `run` (not `raw run`) so the binary enters the interactive
+      // prompt, then send SIGINT to simulate Ctrl+C.
+      const child = spawn(BINARY, ["run"], {
+        cwd: projectDir,
+        stdio: ["pipe", "pipe", "pipe"],
+        env: { ...process.env }
+      });
+
+      let stderr = "";
+      child.stderr.on("data", (data: Buffer) => {
+        stderr += data.toString();
+      });
+
+      // Wait briefly for the prompt to appear, then send SIGINT
+      setTimeout(() => child.kill("SIGINT"), 500);
+
+      child.on("close", () => {
+        expect(stderr).not.toContain("ExitPromptError");
+        expect(stderr).not.toContain("Unexpected error");
+        done();
+      });
+    });
+  });
 
   describe("raw command (Rust CLI handoff)", () => {
     let projectDir: string;
