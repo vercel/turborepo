@@ -697,6 +697,87 @@ mod test {
     }
 
     #[test]
+    fn test_npm_alias_does_not_resolve_to_workspace() {
+        // Regression test for https://github.com/vercel/turborepo/issues/8989
+        // When a dependency uses `npm:buffer@6.0.3`, it should resolve to the
+        // npm package, not the workspace with the same name.
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  dependencies:
+    buffer: "npm:buffer@6.0.3"
+  languageName: unknown
+  linkType: soft
+
+"base64-js@npm:^1.3.1":
+  version: 1.5.1
+  resolution: "base64-js@npm:1.5.1"
+  checksum: 10c0-abc123
+  languageName: node
+  linkType: hard
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"buffer@npm:buffer@6.0.3":
+  version: 6.0.3
+  resolution: "buffer@npm:6.0.3"
+  dependencies:
+    base64-js: "npm:^1.3.1"
+    ieee754: "npm:^1.2.1"
+  checksum: 10c0-def456
+  languageName: node
+  linkType: hard
+
+"buffer@workspace:packages/buffer":
+  version: 0.0.0-use.local
+  resolution: "buffer@workspace:packages/buffer"
+  languageName: unknown
+  linkType: soft
+
+"ieee754@npm:^1.2.1":
+  version: 1.2.1
+  resolution: "ieee754@npm:1.2.1"
+  checksum: 10c0-ghi789
+  languageName: node
+  linkType: hard
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        // Resolving "buffer" with version "npm:buffer@6.0.3" from workspace "a"
+        // should return the npm package, not the workspace.
+        let resolved = lockfile
+            .resolve_package("packages/a", "buffer", "npm:buffer@6.0.3")
+            .unwrap();
+        assert!(resolved.is_some(), "should resolve the npm alias package");
+        let pkg = resolved.unwrap();
+        assert_eq!(pkg.key, "buffer@npm:6.0.3");
+        assert_eq!(pkg.version, "6.0.3");
+
+        // Pruning for workspace "a" should include the npm buffer package
+        let subgraph = lockfile
+            .subgraph(
+                &["packages/a".to_string()],
+                &["buffer@npm:6.0.3".to_string()],
+            )
+            .unwrap();
+        let encoded = String::from_utf8(subgraph.encode().unwrap()).unwrap();
+        assert!(
+            encoded.contains("buffer@npm:buffer@6.0.3"),
+            "pruned lockfile should contain the npm alias entry"
+        );
+    }
+
+    #[test]
     fn test_berry_manifest_into_parts_merges_correctly() {
         let mut default_catalog = Map::new();
         default_catalog.insert("lodash".to_string(), "^4.17.21".to_string());
