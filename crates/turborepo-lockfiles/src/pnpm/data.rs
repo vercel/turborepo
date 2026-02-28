@@ -227,6 +227,57 @@ impl PnpmLockfile {
         Ok(this)
     }
 
+    /// Merge per-workspace lockfiles into this lockfile.
+    ///
+    /// When pnpm is configured with `shared-workspace-lockfile=false`, each
+    /// workspace gets its own `pnpm-lock.yaml` with only `"."` as an importer.
+    /// This method takes those per-workspace lockfiles and merges their
+    /// importers, packages, and snapshots into a single lockfile that
+    /// turborepo can work with.
+    ///
+    /// `workspace_lockfiles` is a list of `(workspace_path, lockfile_bytes)`
+    /// where `workspace_path` is the workspace's relative path from the
+    /// repo root (e.g. "apps/web").
+    pub fn merge_per_workspace_lockfiles(
+        &mut self,
+        workspace_lockfiles: &[(&str, &[u8])],
+    ) -> Result<(), crate::Error> {
+        for &(workspace_path, bytes) in workspace_lockfiles {
+            let ws_lockfile: PnpmLockfile = serde_yaml_ng::from_slice(bytes)?;
+
+            // Re-key the "." importer to the workspace's relative path
+            for (key, snapshot) in ws_lockfile.importers {
+                let new_key = if key == "." {
+                    workspace_path.to_string()
+                } else {
+                    key
+                };
+                self.importers.insert(new_key, snapshot);
+            }
+
+            // Merge packages
+            if let Some(ws_packages) = ws_lockfile.packages {
+                let packages = self.packages.get_or_insert_with(HashMap::new);
+                for (key, pkg) in ws_packages {
+                    packages.entry(key).or_insert(pkg);
+                }
+            }
+
+            // Merge snapshots
+            if let Some(ws_snapshots) = ws_lockfile.snapshots {
+                let snapshots = self.snapshots.get_or_insert_with(HashMap::new);
+                for (key, snap) in ws_snapshots {
+                    snapshots.entry(key).or_insert(snap);
+                }
+            }
+        }
+
+        // Rebuild the dependency index after merging
+        self.build_dependency_index();
+
+        Ok(())
+    }
+
     fn build_dependency_index(&mut self) {
         let mut index = HashMap::new();
         if let Some(snapshots) = &self.snapshots {
@@ -792,5 +843,115 @@ importers:
                 malicious_version
             );
         }
+    }
+
+    #[test]
+    fn test_merge_per_workspace_lockfiles() {
+        let root_yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .: {}
+"#;
+
+        let web_yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      is-odd:
+        specifier: ^3.0.1
+        version: 3.0.1
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+    engines: {node: '>=0.10.0'}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+    engines: {node: '>=4'}
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+"#;
+
+        let ui_yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.23
+
+packages:
+
+  lodash@4.17.23:
+    resolution: {integrity: sha512-ghi}
+
+snapshots:
+
+  lodash@4.17.23: {}
+"#;
+
+        let mut lockfile = PnpmLockfile::from_bytes(root_yaml.as_bytes()).unwrap();
+        lockfile
+            .merge_per_workspace_lockfiles(&[
+                ("apps/web", web_yaml.as_bytes()),
+                ("packages/ui", ui_yaml.as_bytes()),
+            ])
+            .unwrap();
+
+        // Root importer should still be present
+        assert!(lockfile.importers.contains_key("."));
+        // Workspace importers should be re-keyed
+        assert!(lockfile.importers.contains_key("apps/web"));
+        assert!(lockfile.importers.contains_key("packages/ui"));
+        // Total importers should be 3
+        assert_eq!(lockfile.importers.len(), 3);
+
+        // Packages from both workspaces should be merged
+        let packages = lockfile.packages.as_ref().expect("should have packages");
+        assert!(packages.contains_key("is-number@6.0.0"));
+        assert!(packages.contains_key("is-odd@3.0.1"));
+        assert!(packages.contains_key("lodash@4.17.23"));
+
+        // Snapshots should also be merged
+        let snapshots = lockfile.snapshots.as_ref().expect("should have snapshots");
+        assert!(snapshots.contains_key("is-number@6.0.0"));
+        assert!(snapshots.contains_key("is-odd@3.0.1"));
+        assert!(snapshots.contains_key("lodash@4.17.23"));
+
+        // Resolve should work for workspaces
+        let web_pkg = lockfile
+            .resolve_package("apps/web", "is-odd", "^3.0.1")
+            .unwrap();
+        assert!(web_pkg.is_some());
+
+        let ui_pkg = lockfile
+            .resolve_package("packages/ui", "lodash", "^4.17.21")
+            .unwrap();
+        assert!(ui_pkg.is_some());
     }
 }
