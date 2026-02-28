@@ -240,9 +240,9 @@ jobs:
             unset RUSTC_WRAPPER
           fi
           if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo nextest run --workspace --exclude turborepo-napi --no-fail-fast --partition hash:${{ matrix.partition }}/10
+              cargo nextest run --workspace --exclude turborepo-napi --exclude turborepo-lsp --exclude turborepo-schema-gen --no-fail-fast --partition hash:${{ matrix.partition }}/10
           else
-              cargo nextest run --workspace --no-fail-fast --partition hash:${{ matrix.partition }}/10
+              cargo nextest run --workspace --exclude turborepo-lsp --exclude turborepo-schema-gen --no-fail-fast --partition hash:${{ matrix.partition }}/10
           fi
         shell: bash
 
@@ -316,6 +316,8 @@ jobs:
           cargo llvm-cov nextest \
             --workspace \
             --exclude turborepo-napi \
+            --exclude turborepo-lsp \
+            --exclude turborepo-schema-gen \
             --partition hash:${{ matrix.partition }}/10 \
             --no-fail-fast \
             --lcov \
