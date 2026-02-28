@@ -1,6 +1,6 @@
 mod common;
 
-use common::{run_turbo, setup_lockfile_test};
+use common::{git, run_turbo, setup_lockfile_test};
 
 fn apply_patch(dir: &std::path::Path, target: &str, patch_file: &str) {
     let status = std::process::Command::new("patch")
@@ -13,21 +13,10 @@ fn apply_patch(dir: &std::path::Path, target: &str, patch_file: &str) {
     assert!(status.success(), "patch {target} {patch_file} failed");
 }
 
-fn git(dir: &std::path::Path, args: &[&str]) {
-    std::process::Command::new("git")
-        .args(args)
-        .current_dir(dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .unwrap();
-}
-
 fn run_lockfile_test(pm_name: &str, lockfile: &str, dep_patch: &str, root_patch: &str) {
     let tempdir = tempfile::tempdir().unwrap();
     setup_lockfile_test(tempdir.path(), pm_name);
 
-    // Populate cache for a and b
     let output_a = run_turbo(tempdir.path(), &["build", "--filter=a"]);
     assert!(output_a.status.success());
     let stdout_a = String::from_utf8_lossy(&output_a.stdout);
@@ -38,10 +27,8 @@ fn run_lockfile_test(pm_name: &str, lockfile: &str, dep_patch: &str, root_patch:
     let stdout_b = String::from_utf8_lossy(&output_b.stdout);
     assert!(stdout_b.contains("cache miss"));
 
-    // Bump dependency for b via patch
     apply_patch(tempdir.path(), lockfile, dep_patch);
 
-    // a should be a cache hit
     let output_a2 = run_turbo(tempdir.path(), &["build", "--filter=a"]);
     let stdout_a2 = String::from_utf8_lossy(&output_a2.stdout);
     assert!(
@@ -49,7 +36,6 @@ fn run_lockfile_test(pm_name: &str, lockfile: &str, dep_patch: &str, root_patch:
         "{pm_name}: a should be cache hit after b's dep bump: {stdout_a2}"
     );
 
-    // b should be a cache miss
     let output_b2 = run_turbo(tempdir.path(), &["build", "--filter=b"]);
     let stdout_b2 = String::from_utf8_lossy(&output_b2.stdout);
     assert!(
@@ -57,7 +43,6 @@ fn run_lockfile_test(pm_name: &str, lockfile: &str, dep_patch: &str, root_patch:
         "{pm_name}: b should be cache miss after dep bump: {stdout_b2}"
     );
 
-    // Commit and check filter
     git(tempdir.path(), &["add", "."]);
     git(
         tempdir.path(),
@@ -85,7 +70,6 @@ fn run_lockfile_test(pm_name: &str, lockfile: &str, dep_patch: &str, root_patch:
         "{pm_name}: a should NOT be in filter after b's dep bump: {packages:?}"
     );
 
-    // Bump root workspace dependency (invalidates all packages)
     apply_patch(tempdir.path(), lockfile, root_patch);
 
     let output_a3 = run_turbo(tempdir.path(), &["build", "--filter=a"]);
@@ -102,7 +86,6 @@ fn run_lockfile_test(pm_name: &str, lockfile: &str, dep_patch: &str, root_patch:
         "{pm_name}: b should miss after root bump: {stdout_b3}"
     );
 
-    // Commit and verify all packages in filter
     git(tempdir.path(), &["add", "."]);
     git(
         tempdir.path(),

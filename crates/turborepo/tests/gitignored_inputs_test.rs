@@ -2,7 +2,7 @@ mod common;
 
 use std::fs;
 
-use common::{replace_turbo_json, run_turbo, setup};
+use common::{git, replace_turbo_json, run_turbo, setup};
 
 #[test]
 fn test_gitignored_file_in_explicit_inputs() {
@@ -10,31 +10,22 @@ fn test_gitignored_file_in_explicit_inputs() {
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
     replace_turbo_json(tempdir.path(), "gitignored-inputs.json");
 
-    // Create internal.txt for util and add it to gitignore
     fs::write(
         tempdir.path().join("packages/util/internal.txt"),
         "hello world\n",
     )
     .unwrap();
 
-    // Append to .gitignore
     let mut gitignore = fs::read_to_string(tempdir.path().join(".gitignore")).unwrap_or_default();
     gitignore.push_str("\npackages/util/internal.txt\n");
     fs::write(tempdir.path().join(".gitignore"), gitignore).unwrap();
 
-    // Commit the change
-    std::process::Command::new("git")
-        .args(["add", "."])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
-    std::process::Command::new("git")
-        .args(["commit", "-m", "add internal.txt", "--quiet"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "add internal.txt", "--quiet"],
+    );
 
-    // First run with --summarize
     let output1 = run_turbo(
         tempdir.path(),
         &[
@@ -49,7 +40,6 @@ fn test_gitignored_file_in_explicit_inputs() {
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(stdout1.contains("cache miss"));
 
-    // Read the run summary and verify internal.txt has a hash
     let runs_dir = tempdir.path().join(".turbo/runs");
     let summary_file = fs::read_dir(&runs_dir)
         .unwrap()
@@ -79,17 +69,14 @@ fn test_gitignored_file_in_explicit_inputs() {
     );
     let first_hash = internal_hash.unwrap().to_string();
 
-    // Clean up runs dir
     fs::remove_dir_all(&runs_dir).unwrap();
 
-    // Change internal.txt content
     fs::write(
         tempdir.path().join("packages/util/internal.txt"),
         "hello world\nchanged!\n",
     )
     .unwrap();
 
-    // Second run
     let output2 = run_turbo(
         tempdir.path(),
         &[
@@ -107,7 +94,6 @@ fn test_gitignored_file_in_explicit_inputs() {
         "expected cache miss after changing gitignored input, got: {stdout2}"
     );
 
-    // Read second summary and verify hash changed
     let summary_file2 = fs::read_dir(&runs_dir)
         .unwrap()
         .filter_map(|e| e.ok())

@@ -1,21 +1,14 @@
 mod common;
 
-use common::mock_turbo_config;
+use common::{combined_output, mock_turbo_config, turbo_command};
 
 fn run_turbo_with_config(args: &[&str]) -> std::process::Output {
     let tempdir = tempfile::tempdir().unwrap();
     let config_dir = tempfile::tempdir().unwrap();
     mock_turbo_config(config_dir.path());
 
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").expect("turbo binary not found");
-    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .current_dir(tempdir.path());
+    let mut cmd = turbo_command(tempdir.path());
+    cmd.env("TURBO_CONFIG_DIR_PATH", config_dir.path());
     for arg in args {
         cmd.arg(arg);
     }
@@ -45,11 +38,7 @@ fn test_link_test_run_with_yes() {
 #[test]
 fn test_link_test_run_with_team_flag_warns() {
     let output = run_turbo_with_config(&["link", "--__test-run", "--team=my-team"]);
-    let combined = format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    let combined = combined_output(&output);
     assert!(
         combined.contains("team flag does not set the scope for linking"),
         "expected team flag warning, got: {combined}"

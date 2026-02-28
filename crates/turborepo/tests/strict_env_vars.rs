@@ -2,35 +2,7 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{run_turbo, run_turbo_with_env, setup};
-
-fn turbo_configs_dir() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../turborepo-tests/integration/fixtures/turbo-configs")
-}
-
-fn replace_turbo_json(dir: &Path, config_name: &str) {
-    let src = turbo_configs_dir().join(config_name);
-    fs::copy(&src, dir.join("turbo.json"))
-        .unwrap_or_else(|e| panic!("copy {} failed: {e}", src.display()));
-    let normalized = fs::read_to_string(dir.join("turbo.json"))
-        .unwrap()
-        .replace("\r\n", "\n");
-    fs::write(dir.join("turbo.json"), normalized).unwrap();
-    std::process::Command::new("git")
-        .args([
-            "commit",
-            "-am",
-            "replace turbo.json",
-            "--quiet",
-            "--allow-empty",
-        ])
-        .current_dir(dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .unwrap();
-}
+use common::{replace_turbo_json, run_turbo, run_turbo_with_env, setup};
 
 /// Get all task hashes as a sorted string. When the global hash (including
 /// env mode) changes, all task hashes change.

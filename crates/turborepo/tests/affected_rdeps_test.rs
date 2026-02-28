@@ -2,39 +2,23 @@ mod common;
 
 use std::fs;
 
-use common::{run_turbo, setup};
+use common::{git, run_turbo, setup};
 
 #[test]
 fn test_affected_includes_reverse_deps() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
 
-    // Create a new branch
-    std::process::Command::new("git")
-        .args(["checkout", "-b", "my-branch"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+    git(tempdir.path(), &["checkout", "-b", "my-branch"]);
 
-    // Edit a file in util package
     let index_path = tempdir.path().join("packages/util/index.js");
     let mut contents = fs::read_to_string(&index_path).unwrap_or_default();
     contents.push_str("\nfoo");
     fs::write(&index_path, contents).unwrap();
 
-    // Commit the change
-    std::process::Command::new("git")
-        .args(["add", "."])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
-    std::process::Command::new("git")
-        .args(["commit", "-m", "add foo", "--quiet"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "add foo", "--quiet"]);
 
-    // --affected should include util AND my-app (which depends on util)
     let output = run_turbo(
         tempdir.path(),
         &["run", "build", "--affected", "--dry=json"],

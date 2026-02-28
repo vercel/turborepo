@@ -24,7 +24,8 @@ fn replace_turbo_json(dir: &Path, config_name: &str) {
         .unwrap();
 }
 
-fn get_task_hashes(dir: &Path) -> Vec<(String, String)> {
+/// Returns a sorted "taskId=hash" string for snapshotting.
+fn task_hash_snapshot(dir: &Path) -> String {
     let output = run_turbo(dir, &["build", "--dry=json"]);
     assert!(
         output.status.success(),
@@ -32,28 +33,22 @@ fn get_task_hashes(dir: &Path) -> Vec<(String, String)> {
         String::from_utf8_lossy(&output.stderr)
     );
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
-    let mut tasks: Vec<(String, String)> = json["tasks"]
+    let mut lines: Vec<String> = json["tasks"]
         .as_array()
         .unwrap()
         .iter()
         .map(|t| {
-            (
-                t["taskId"].as_str().unwrap().to_string(),
-                t["hash"].as_str().unwrap().to_string(),
+            format!(
+                "{}={}",
+                t["taskId"].as_str().unwrap(),
+                t["hash"].as_str().unwrap()
             )
         })
         .collect();
-    tasks.sort();
-    tasks
+    lines.sort();
+    lines.join("\n")
 }
 
-fn hash_for<'a>(tasks: &'a [(String, String)], task_id: &str) -> &'a str {
-    &tasks.iter().find(|(id, _)| id == task_id).unwrap().1
-}
-
-/// Extract globalCacheInputs from --dry=json as a stable string for comparison.
-/// This is the input to the global hash, so if it changes, the global hash
-/// changes.
 fn global_cache_inputs(dir: &Path) -> String {
     let output = run_turbo(dir, &["build", "--dry=json"]);
     assert!(
@@ -115,45 +110,35 @@ fn test_global_hash_changes() {
     );
 }
 
-// --- task.t ---
-
 #[test]
 fn test_task_hash_changes() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
 
-    // Baseline
     replace_turbo_json(tempdir.path(), "a-baseline.json");
-    let step1 = get_task_hashes(tempdir.path());
-    assert_eq!(hash_for(&step1, "another#build"), "e9a99dd97d223d88");
-    assert_eq!(hash_for(&step1, "my-app#build"), "0555ce94ca234049");
-    assert_eq!(hash_for(&step1, "util#build"), "bf1798d3e46e1b48");
+    insta::assert_snapshot!("task_hashes_baseline", task_hash_snapshot(tempdir.path()));
 
-    // Change only my-app
     replace_turbo_json(tempdir.path(), "b-change-only-my-app.json");
-    let step2 = get_task_hashes(tempdir.path());
-    assert_eq!(hash_for(&step2, "another#build"), "e9a99dd97d223d88");
-    assert_eq!(hash_for(&step2, "my-app#build"), "6eea03fab6f9a8c8");
-    assert_eq!(hash_for(&step2, "util#build"), "bf1798d3e46e1b48");
+    insta::assert_snapshot!(
+        "task_hashes_change_my_app",
+        task_hash_snapshot(tempdir.path())
+    );
 
-    // Change my-app dependsOn
     replace_turbo_json(tempdir.path(), "c-my-app-depends-on.json");
-    let step3 = get_task_hashes(tempdir.path());
-    assert_eq!(hash_for(&step3, "another#build"), "e9a99dd97d223d88");
-    assert_eq!(hash_for(&step3, "my-app#build"), "8637a0f5db686164");
-    assert_eq!(hash_for(&step3, "util#build"), "bf1798d3e46e1b48");
+    insta::assert_snapshot!(
+        "task_hashes_my_app_depends_on",
+        task_hash_snapshot(tempdir.path())
+    );
 
-    // Non-material dep graph change — same as step 3
     replace_turbo_json(tempdir.path(), "d-depends-on-util.json");
-    let step4 = get_task_hashes(tempdir.path());
-    assert_eq!(hash_for(&step4, "another#build"), "e9a99dd97d223d88");
-    assert_eq!(hash_for(&step4, "my-app#build"), "8637a0f5db686164");
-    assert_eq!(hash_for(&step4, "util#build"), "bf1798d3e46e1b48");
+    insta::assert_snapshot!(
+        "task_hashes_depends_on_util",
+        task_hash_snapshot(tempdir.path())
+    );
 
-    // Change util#build — impacts itself and my-app
     replace_turbo_json(tempdir.path(), "e-depends-on-util-but-modified.json");
-    let step5 = get_task_hashes(tempdir.path());
-    assert_eq!(hash_for(&step5, "another#build"), "e9a99dd97d223d88");
-    assert_eq!(hash_for(&step5, "my-app#build"), "2721f01b53b758d0");
-    assert_eq!(hash_for(&step5, "util#build"), "74c8eb9bab702b4b");
+    insta::assert_snapshot!(
+        "task_hashes_util_modified",
+        task_hash_snapshot(tempdir.path())
+    );
 }

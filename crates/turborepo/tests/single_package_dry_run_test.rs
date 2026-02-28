@@ -2,7 +2,7 @@ mod common;
 
 use std::fs;
 
-use common::{run_turbo, setup, turbo_output_filters};
+use common::{git, run_turbo, setup, turbo_output_filters};
 
 #[test]
 fn test_single_package_dry_run() {
@@ -23,12 +23,17 @@ fn test_single_package_dry_run_pnpm() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "single_package", "pnpm@8.0.0", true).unwrap();
 
-    // We only care about this running successfully
     let output = run_turbo(tempdir.path(), &["run", "build", "--dry=json"]);
     assert!(
         output.status.success(),
         "dry-run with pnpm should succeed, stderr: {}",
         String::from_utf8_lossy(&output.stderr)
+    );
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        !json["tasks"].as_array().unwrap().is_empty(),
+        "expected at least one task in dry-run output"
     );
 }
 
@@ -37,13 +42,11 @@ fn test_single_package_no_config_dry_run() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
 
-    // Remove turbo.json and commit
     fs::remove_file(tempdir.path().join("turbo.json")).unwrap();
-    std::process::Command::new("git")
-        .args(["commit", "-am", "Delete turbo config", "--quiet"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+    git(
+        tempdir.path(),
+        &["commit", "-am", "Delete turbo config", "--quiet"],
+    );
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--dry"]);
     assert!(output.status.success());
@@ -60,11 +63,10 @@ fn test_single_package_no_config_graph() {
     setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
 
     fs::remove_file(tempdir.path().join("turbo.json")).unwrap();
-    std::process::Command::new("git")
-        .args(["commit", "-am", "Delete turbo config", "--quiet"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+    git(
+        tempdir.path(),
+        &["commit", "-am", "Delete turbo config", "--quiet"],
+    );
 
     let output = run_turbo(tempdir.path(), &["run", "build", "--graph"]);
     assert!(output.status.success());
@@ -80,13 +82,11 @@ fn test_single_package_no_config_run_bypasses_cache() {
     setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
 
     fs::remove_file(tempdir.path().join("turbo.json")).unwrap();
-    std::process::Command::new("git")
-        .args(["commit", "-am", "Delete turbo config", "--quiet"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+    git(
+        tempdir.path(),
+        &["commit", "-am", "Delete turbo config", "--quiet"],
+    );
 
-    // First run: cache bypass
     let output1 = run_turbo(tempdir.path(), &["run", "build"]);
     assert!(output1.status.success());
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
@@ -95,7 +95,6 @@ fn test_single_package_no_config_run_bypasses_cache() {
         "expected cache bypass without config, got: {stdout1}"
     );
 
-    // Second run: still cache bypass (no config = no caching)
     let output2 = run_turbo(tempdir.path(), &["run", "build"]);
     assert!(output2.status.success());
     let stdout2 = String::from_utf8_lossy(&output2.stdout);

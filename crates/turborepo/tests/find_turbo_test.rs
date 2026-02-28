@@ -2,34 +2,21 @@ mod common;
 
 use std::path::Path;
 
-use common::{set_find_turbo_link, set_find_turbo_version, setup_find_turbo};
+use common::{
+    combined_output, set_find_turbo_link, set_find_turbo_version, setup_find_turbo, turbo_command,
+};
 
 fn turbo_bin() -> std::path::PathBuf {
     assert_cmd::cargo::cargo_bin("turbo")
 }
 
 fn run_turbo_vv(cwd: &Path, args: &[&str]) -> std::process::Output {
-    let mut cmd = std::process::Command::new(turbo_bin());
-    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_DOWNLOAD_LOCAL_ENABLED", "0")
-        .env("DO_NOT_TRACK", "1")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .current_dir(cwd);
+    let mut cmd = turbo_command(cwd);
+    cmd.env("TURBO_DOWNLOAD_LOCAL_ENABLED", "0");
     for arg in args {
         cmd.arg(arg);
     }
     cmd.output().expect("failed to execute turbo")
-}
-
-fn combined_output(output: &std::process::Output) -> String {
-    format!(
-        "{}{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    )
 }
 
 fn stdout_last_line(output: &std::process::Output) -> String {
@@ -37,7 +24,6 @@ fn stdout_last_line(output: &std::process::Output) -> String {
     stdout.lines().last().unwrap_or("").trim().to_string()
 }
 
-// self.t: When the local turbo IS the running binary, don't reinvoke.
 #[test]
 fn test_self_invocation_detected() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -52,8 +38,6 @@ fn test_self_invocation_detected() {
     );
 }
 
-// hoisted.t: Hoisted node_modules layout. Old version (< 1.8) gets bare args,
-// new version (>= 1.8) gets --skip-infer.
 #[test]
 fn test_hoisted_old_version() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -66,8 +50,6 @@ fn test_hoisted_old_version() {
         combined.contains("Local turbo version: 1.0.0"),
         "expected local turbo 1.0.0, got: {combined}"
     );
-    // The fake turbo echoes its args; last line should be the args without
-    // --skip-infer
     let last_line = stdout_last_line(&output);
     assert_eq!(
         last_line.trim(),
@@ -96,7 +78,6 @@ fn test_hoisted_new_version() {
     );
 }
 
-// linked.t: pnpm symlinked layout
 #[test]
 fn test_linked_old_version() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -132,7 +113,6 @@ fn test_linked_new_version() {
     );
 }
 
-// nested.t: Nested node_modules/turbo/node_modules/ layout
 #[test]
 fn test_nested_old_version() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -168,7 +148,6 @@ fn test_nested_new_version() {
     );
 }
 
-// unplugged.t: Yarn PnP default unplugged folder
 #[test]
 fn test_unplugged_old_version() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -204,7 +183,6 @@ fn test_unplugged_new_version() {
     );
 }
 
-// unplugged-moved.t: Yarn PnP with custom unplugged folder via .yarnrc.yml
 #[test]
 fn test_unplugged_moved_old_version() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -240,26 +218,19 @@ fn test_unplugged_moved_new_version() {
     );
 }
 
-// unplugged-env-moved.t: Yarn PnP with custom yarnrc filename via
-// YARN_RC_FILENAME env var
 #[test]
 fn test_unplugged_env_moved_old_version() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_find_turbo(tempdir.path(), "unplugged_env_moved");
     set_find_turbo_version(tempdir.path(), "1.0.0");
 
-    let mut cmd = std::process::Command::new(turbo_bin());
-    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_DOWNLOAD_LOCAL_ENABLED", "0")
-        .env("DO_NOT_TRACK", "1")
-        .env("YARN_RC_FILENAME", ".notyarnrc.yml")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .current_dir(tempdir.path())
-        .args(["build", "--filter", "foo", "-vv"]);
-    let output = cmd.output().unwrap();
+    let output = {
+        let mut cmd = turbo_command(tempdir.path());
+        cmd.env("TURBO_DOWNLOAD_LOCAL_ENABLED", "0")
+            .env("YARN_RC_FILENAME", ".notyarnrc.yml")
+            .args(["build", "--filter", "foo", "-vv"]);
+        cmd.output().unwrap()
+    };
 
     let combined = combined_output(&output);
     assert!(
@@ -276,18 +247,13 @@ fn test_unplugged_env_moved_new_version() {
     setup_find_turbo(tempdir.path(), "unplugged_env_moved");
     set_find_turbo_version(tempdir.path(), "1.8.0");
 
-    let mut cmd = std::process::Command::new(turbo_bin());
-    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_DOWNLOAD_LOCAL_ENABLED", "0")
-        .env("DO_NOT_TRACK", "1")
-        .env("YARN_RC_FILENAME", ".notyarnrc.yml")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .current_dir(tempdir.path())
-        .args(["build", "--filter", "foo", "-vv"]);
-    let output = cmd.output().unwrap();
+    let output = {
+        let mut cmd = turbo_command(tempdir.path());
+        cmd.env("TURBO_DOWNLOAD_LOCAL_ENABLED", "0")
+            .env("YARN_RC_FILENAME", ".notyarnrc.yml")
+            .args(["build", "--filter", "foo", "-vv"]);
+        cmd.output().unwrap()
+    };
 
     let combined = combined_output(&output);
     assert!(
@@ -301,19 +267,15 @@ fn test_unplugged_env_moved_new_version() {
     );
 }
 
-// hard-mode.t: --skip-infer, cwd navigation, and finding repo root from nested
-// dirs
 #[test]
 fn test_hard_mode_skip_infer() {
     let tempdir = tempfile::tempdir().unwrap();
-    // hard-mode uses the hoisted fixture in a subdirectory
     let subdir = tempdir.path().join("subdir");
     std::fs::create_dir_all(&subdir).unwrap();
     setup_find_turbo(&subdir, "hoisted");
 
     let output = run_turbo_vv(&subdir, &["--help", "--skip-infer", "-vv"]);
     let combined = combined_output(&output);
-    // With --skip-infer, the shim uses the current binary directly
     assert!(
         combined.contains("Global turbo version:"),
         "expected global turbo log, got: {combined}"
@@ -332,7 +294,6 @@ fn test_hard_mode_finds_repo_root() {
     setup_find_turbo(&subdir, "hoisted");
     set_find_turbo_version(tempdir.path(), "1.8.0");
 
-    // Run from node_modules — shim should find the repo root and local turbo
     let nm_dir = subdir.join("node_modules");
     let output = run_turbo_vv(&nm_dir, &["build", "--filter", "foo", "-vv"]);
     let combined = combined_output(&output);
@@ -350,7 +311,6 @@ fn test_hard_mode_cwd_flag() {
     setup_find_turbo(&subdir, "hoisted");
     set_find_turbo_version(tempdir.path(), "1.8.0");
 
-    // Run from the parent with --cwd pointing to subdir
     let output = run_turbo_vv(
         tempdir.path(),
         &[
@@ -377,7 +337,6 @@ fn test_hard_mode_cwd_to_node_modules() {
     setup_find_turbo(&subdir, "hoisted");
     set_find_turbo_version(tempdir.path(), "1.8.0");
 
-    // Run from parent with --cwd pointing to node_modules inside subdir
     let nm_dir = subdir.join("node_modules");
     let output = run_turbo_vv(
         tempdir.path(),
