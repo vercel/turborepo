@@ -69,9 +69,7 @@ fn copy_symlink(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
 }
 
 /// Initialize a git repository in `target_dir` with a single commit.
-///
-/// Initialize a git repo in the test directory.
-///   git init, configure user, write .npmrc, git add ., git commit
+/// Configures user, writes .npmrc, adds all files, and commits.
 pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
     let git = |args: &[&str]| -> Result<(), anyhow::Error> {
         let status = cmd("git")
@@ -106,11 +104,8 @@ pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
 }
 
 /// Write the `packageManager` field into `package.json` and configure corepack.
-///
-/// Returns the path to the corepack install directory (outside `target_dir` so
-/// corepack shims don't appear as task inputs).
-///
-/// Set up the package manager (corepack enable + use).
+/// The corepack install directory is placed outside `target_dir` so corepack
+/// shims don't appear as task inputs.
 pub fn setup_package_manager(
     target_dir: &Path,
     package_manager: &str,
@@ -155,8 +150,6 @@ pub fn setup_package_manager(
 }
 
 /// Install dependencies using the specified package manager.
-///
-/// Install dependencies via the package manager.
 pub fn install_deps(
     target_dir: &Path,
     package_manager: &str,

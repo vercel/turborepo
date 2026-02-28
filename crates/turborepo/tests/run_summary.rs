@@ -2,33 +2,7 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{run_turbo, run_turbo_with_env, setup};
-
-fn replace_turbo_json(dir: &Path, config_name: &str) {
-    let workspace_root =
-        dunce::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
-    let src = workspace_root
-        .join("turborepo-tests/integration/fixtures/turbo-configs")
-        .join(config_name);
-    fs::copy(&src, dir.join("turbo.json")).unwrap();
-    let normalized = fs::read_to_string(dir.join("turbo.json"))
-        .unwrap()
-        .replace("\r\n", "\n");
-    fs::write(dir.join("turbo.json"), normalized).unwrap();
-    std::process::Command::new("git")
-        .args([
-            "commit",
-            "-am",
-            "replace turbo.json",
-            "--quiet",
-            "--allow-empty",
-        ])
-        .current_dir(dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .unwrap();
-}
+use common::{replace_turbo_json, run_turbo, run_turbo_with_env, setup};
 
 fn read_run_summaries(dir: &Path) -> Vec<serde_json::Value> {
     let runs_dir = dir.join(".turbo/runs");

@@ -2,7 +2,7 @@ mod common;
 
 use std::fs;
 
-use common::{run_turbo, setup};
+use common::{git, run_turbo, setup};
 
 #[test]
 fn test_filter_git_range_no_changes() {
@@ -25,7 +25,6 @@ fn test_filter_git_range_with_unstaged() {
     let output = run_turbo(tempdir.path(), &["run", "build", "--filter=[main]"]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // Root package is affected by the new file
     assert!(stdout.contains("Packages in scope: //"));
 }
 
@@ -34,16 +33,14 @@ fn test_filter_git_range_committed_change() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
 
-    // Change a global dependency and commit
     let foo_path = tempdir.path().join("foo.txt");
     let mut contents = fs::read_to_string(&foo_path).unwrap_or_default();
     contents.push_str("\nglobal dependency");
     fs::write(&foo_path, contents).unwrap();
-    std::process::Command::new("git")
-        .args(["commit", "-am", "global dependency change", "--quiet"])
-        .current_dir(tempdir.path())
-        .output()
-        .unwrap();
+    git(
+        tempdir.path(),
+        &["commit", "-am", "global dependency change", "--quiet"],
+    );
 
     let output = run_turbo(
         tempdir.path(),

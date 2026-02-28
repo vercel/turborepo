@@ -16,6 +16,22 @@ pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+/// Return a pre-configured `Command` for the turbo binary with all standard
+/// env var suppression applied. Callers can chain `.arg()`, `.env()`, etc.
+/// before calling `.output()`.
+pub fn turbo_command(test_dir: &Path) -> assert_cmd::Command {
+    let mut cmd = assert_cmd::Command::cargo_bin("turbo").expect("turbo binary not found");
+    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+        .env("TURBO_PRINT_VERSION_DISABLED", "1")
+        .env("DO_NOT_TRACK", "1")
+        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
+        .env_remove("CI")
+        .env_remove("GITHUB_ACTIONS")
+        .current_dir(test_dir);
+    cmd
+}
+
 /// Run turbo with standard env var suppression. Returns the raw Output.
 pub fn run_turbo(test_dir: &Path, args: &[&str]) -> Output {
     run_turbo_with_env(test_dir, args, &[])
@@ -24,16 +40,8 @@ pub fn run_turbo(test_dir: &Path, args: &[&str]) -> Output {
 /// Run turbo with standard env var suppression plus additional env overrides.
 pub fn run_turbo_with_env(test_dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").expect("turbo binary not found");
-    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .current_dir(test_dir);
+    let mut cmd = turbo_command(test_dir);
+    cmd.env("TURBO_CONFIG_DIR_PATH", config_dir.path());
     for (k, v) in env {
         cmd.env(k, v);
     }
@@ -43,6 +51,26 @@ pub fn run_turbo_with_env(test_dir: &Path, args: &[&str], env: &[(&str, &str)]) 
     cmd.output().expect("failed to execute turbo")
 }
 
+/// Run a git command silently in the given directory.
+pub fn git(dir: &Path, args: &[&str]) {
+    std::process::Command::new("git")
+        .args(args)
+        .current_dir(dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .expect("git command failed");
+}
+
+/// Combine stdout and stderr into a single string.
+pub fn combined_output(output: &Output) -> String {
+    format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    )
+}
+
 pub fn turbo_configs_dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../turborepo-tests/integration/fixtures/turbo-configs")
@@ -50,30 +78,31 @@ pub fn turbo_configs_dir() -> std::path::PathBuf {
 
 /// Copy a turbo-config JSON into the test directory as `turbo.json` and commit.
 pub fn replace_turbo_json(dir: &Path, config_name: &str) {
-    let src = turbo_configs_dir().join(config_name);
+    replace_turbo_json_from(dir, &turbo_configs_dir(), config_name);
+}
+
+/// Copy a config JSON from `configs_dir` into `dir` as `turbo.json` and commit.
+pub fn replace_turbo_json_from(dir: &Path, configs_dir: &Path, config_name: &str) {
+    let src = configs_dir.join(config_name);
     fs::copy(&src, dir.join("turbo.json"))
         .unwrap_or_else(|e| panic!("copy {} failed: {e}", src.display()));
     let normalized = fs::read_to_string(dir.join("turbo.json"))
         .unwrap()
         .replace("\r\n", "\n");
     fs::write(dir.join("turbo.json"), normalized).unwrap();
-    std::process::Command::new("git")
-        .args([
+    git(
+        dir,
+        &[
             "commit",
             "-am",
             "replace turbo.json",
             "--quiet",
             "--allow-empty",
-        ])
-        .current_dir(dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .ok();
+        ],
+    );
 }
 
 /// Create a mock turbo config directory with a fake auth token.
-/// Returns the config dir path (pass as TURBO_CONFIG_DIR_PATH).
 pub fn mock_turbo_config(config_dir: &Path) {
     let turbo_dir = config_dir.join("turborepo");
     fs::create_dir_all(&turbo_dir).unwrap();
@@ -85,7 +114,6 @@ pub fn mock_turbo_config(config_dir: &Path) {
 }
 
 /// Create a mock telemetry config directory with telemetry enabled.
-/// Returns the config dir path (pass as TURBO_CONFIG_DIR_PATH).
 pub fn mock_telemetry_config(config_dir: &Path) {
     let turbo_dir = config_dir.join("turborepo");
     fs::create_dir_all(&turbo_dir).unwrap();
@@ -107,32 +135,23 @@ pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
         "turborepo-tests/integration/tests/lockfile-aware-caching/{pm_name}"
     ));
 
-    // Copy base fixture
     setup::copy_dir_all(&base_fixture, dir).unwrap();
-    // Overlay package-manager-specific files
     setup::copy_dir_all(&pm_overlay, dir).unwrap();
 
-    // Init git
-    let git = |args: &[&str]| {
-        std::process::Command::new("git")
-            .args(args)
-            .current_dir(dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
-            .unwrap();
-    };
-    git(&["init", "--quiet"]);
-    git(&["config", "user.email", "turbo-test@example.com"]);
-    git(&["config", "user.name", "Turbo Test"]);
+    // Lockfile tests need a minimal git init without .npmrc or extra .gitignore
+    // entries that setup::setup_git() creates, since those would appear in git
+    // diffs and affect the filter results.
+    git(dir, &["init", "--quiet"]);
+    git(dir, &["config", "user.email", "turbo-test@example.com"]);
+    git(dir, &["config", "user.name", "Turbo Test"]);
 
     let gitignore = dir.join(".gitignore");
     let mut gi = fs::read_to_string(&gitignore).unwrap_or_default();
     gi.push_str("\n.turbo\nnode_modules\n");
     fs::write(&gitignore, gi).unwrap();
 
-    git(&["add", "."]);
-    git(&["commit", "-m", "Initial", "--quiet"]);
+    git(dir, &["add", "."]);
+    git(dir, &["commit", "-m", "Initial", "--quiet"]);
 }
 
 /// Set up a find-turbo test fixture. Copies the fixture directory, makes
@@ -147,20 +166,17 @@ pub fn setup_find_turbo(dir: &Path, fixture_name: &str) {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        for entry in walkdir(dir, "turbo") {
+        for entry in find_files_by_name(dir, "turbo") {
             if entry.ends_with("bin/turbo") {
                 fs::set_permissions(&entry, fs::Permissions::from_mode(0o755)).ok();
             }
         }
     }
 
-    // On Windows, place the echo_args binary as turbo.exe next to every .keep
-    // in turbo-windows-*/bin/ directories.
     #[cfg(windows)]
     {
         let echo_args_exe = assert_cmd::cargo::cargo_bin("echo_args");
         if !echo_args_exe.exists() {
-            // Build echo_args if nextest didn't build it
             std::process::Command::new("cargo")
                 .args(["build", "--bin", "echo_args", "-p", "turbo"])
                 .current_dir(&repo_root)
@@ -171,20 +187,19 @@ pub fn setup_find_turbo(dir: &Path, fixture_name: &str) {
         }
         place_echo_args(dir, &echo_args_exe);
 
-        // For the linked fixture, recreate symlinks as NTFS junctions
         if fixture_name == "linked" {
             setup_linked_junctions(dir);
         }
     }
 }
 
-fn walkdir(dir: &Path, name: &str) -> Vec<std::path::PathBuf> {
+fn find_files_by_name(dir: &Path, name: &str) -> Vec<std::path::PathBuf> {
     let mut results = Vec::new();
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                results.extend(walkdir(&path, name));
+                results.extend(find_files_by_name(&path, name));
             } else if path.file_name().map(|f| f == name).unwrap_or(false) {
                 results.push(path);
             }
@@ -193,7 +208,6 @@ fn walkdir(dir: &Path, name: &str) -> Vec<std::path::PathBuf> {
     results
 }
 
-/// Place echo_args.exe as turbo.exe next to .keep files in turbo-windows-*/bin/
 #[cfg(windows)]
 fn place_echo_args(dir: &Path, echo_args_exe: &Path) {
     if let Ok(entries) = fs::read_dir(dir) {
@@ -222,9 +236,6 @@ fn place_echo_args(dir: &Path, echo_args_exe: &Path) {
     }
 }
 
-/// Recreate symlinks as NTFS junctions for the linked fixture on Windows.
-/// Git on Windows may check out symlinks as plain text files containing the
-/// target path, so we remove whatever was copied and create real junctions.
 #[cfg(windows)]
 fn setup_linked_junctions(dir: &Path) {
     let nm = dir.join("node_modules");
@@ -232,7 +243,6 @@ fn setup_linked_junctions(dir: &Path) {
     let pnpm_turbo_nm = pnpm_store.join("turbo@1.0.0").join("node_modules");
 
     let mkjunction = |link: &Path, target: &Path| {
-        // Remove whatever copy_dir_all created (file or dir)
         if link.is_dir() {
             fs::remove_dir_all(link).ok();
         } else {
@@ -253,10 +263,8 @@ fn setup_linked_junctions(dir: &Path) {
         );
     };
 
-    // Level 1: node_modules/turbo -> .pnpm/turbo@1.0.0/node_modules/turbo
     mkjunction(&nm.join("turbo"), &pnpm_turbo_nm.join("turbo"));
 
-    // Level 2: platform package symlinks inside the pnpm virtual store
     for platform in &[
         "darwin-64",
         "darwin-arm64",
@@ -276,17 +284,12 @@ fn setup_linked_junctions(dir: &Path) {
 }
 
 /// Set all turbo package.json versions in a find-turbo fixture.
-/// Set all turbo package versions in a find-turbo fixture.
 pub fn set_find_turbo_version(dir: &Path, version: &str) {
-    set_find_turbo_version_inner(dir, version);
-}
-
-fn set_find_turbo_version_inner(dir: &Path, version: &str) {
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                set_find_turbo_version_inner(&path, version);
+                set_find_turbo_version(&path, version);
             } else if path
                 .file_name()
                 .map(|f| f == "package.json")
@@ -298,19 +301,14 @@ fn set_find_turbo_version_inner(dir: &Path, version: &str) {
     }
 }
 
-/// Replace all fake turbo binaries with symlinks to the real turbo binary.
 /// Replace all fake turbo binaries with symlinks to the given binary.
 pub fn set_find_turbo_link(dir: &Path, turbo_path: &Path) {
-    set_find_turbo_link_inner(dir, turbo_path);
-}
-
-fn set_find_turbo_link_inner(dir: &Path, turbo_path: &Path) {
     let target_name = if cfg!(windows) { "turbo.exe" } else { "turbo" };
     if let Ok(entries) = fs::read_dir(dir) {
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_dir() {
-                set_find_turbo_link_inner(&path, turbo_path);
+                set_find_turbo_link(&path, turbo_path);
             } else if path.file_name().map(|f| f == target_name).unwrap_or(false) && path.is_file()
             {
                 fs::remove_file(&path).unwrap();
@@ -343,28 +341,16 @@ macro_rules! check_json_output {
             let tempdir = tempfile::tempdir()?;
             $crate::common::setup_fixture($fixture, $package_manager, tempdir.path())?;
             $(
-                let mut command = assert_cmd::Command::cargo_bin("turbo")?;
-
+                let mut command = $crate::common::turbo_command(tempdir.path());
                 command
                     .arg($command)
-                    // Ensure telemetry can initialize by providing a writable config directory.
-                    // This prevents debug builds from printing errors to stdout when telemetry
-                    // init fails due to missing config directories.
-                    .env("TURBO_CONFIG_DIR_PATH", tempdir.path())
-                    // Disable telemetry and various warnings to ensure clean JSON output
-                    .env("DO_NOT_TRACK", "1")
-                    .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-                    .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-                    .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
-                    // Prevent CI-specific output formatting (::group:: markers)
-                    .env_remove("CI")
-                    .env_remove("GITHUB_ACTIONS");
+                    .env("TURBO_CONFIG_DIR_PATH", tempdir.path());
 
                 $(
                     command.arg($query);
                 )*
 
-                let output = command.current_dir(tempdir.path()).output()?;
+                let output = command.output()?;
 
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);

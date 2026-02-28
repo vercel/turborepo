@@ -1,18 +1,12 @@
 mod common;
 
-use common::mock_telemetry_config;
+use common::{mock_telemetry_config, turbo_command};
 
 fn run_telemetry(config_dir: &std::path::Path, args: &[&str]) -> std::process::Output {
     let tempdir = tempfile::tempdir().unwrap();
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").expect("turbo binary not found");
-    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir)
-        .env("DO_NOT_TRACK", "0") // allow telemetry commands to function
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .current_dir(tempdir.path());
+    let mut cmd = turbo_command(tempdir.path());
+    cmd.env("TURBO_CONFIG_DIR_PATH", config_dir)
+        .env("DO_NOT_TRACK", "0"); // override: allow telemetry commands to function
     for arg in args {
         cmd.arg(arg);
     }
@@ -63,10 +57,8 @@ fn test_telemetry_enable() {
     let config_dir = tempfile::tempdir().unwrap();
     mock_telemetry_config(config_dir.path());
 
-    // Disable first
     run_telemetry(config_dir.path(), &["telemetry", "disable"]);
 
-    // Re-enable
     let output = run_telemetry(config_dir.path(), &["telemetry", "enable"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
