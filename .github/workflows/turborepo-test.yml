@@ -298,15 +298,6 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Build turbo binary
-        timeout-minutes: 15
-        run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
-          cargo build -p turbo
-        shell: bash
-
       - name: Run tests with coverage
         timeout-minutes: 45
         run: |
