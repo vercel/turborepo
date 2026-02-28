@@ -64,7 +64,7 @@ function parseArgs(): CliArgs {
       args.fixture = next;
       i++;
     } else if (arg === "--pm" && next) {
-      const valid: PackageManagerType[] = ["npm", "pnpm", "yarn-berry", "bun"];
+      const valid: PackageManagerType[] = ["npm", "pnpm", "yarn", "yarn-berry", "bun"];
       if (!valid.includes(next as PackageManagerType)) {
         console.error(
           `Invalid --pm: ${next}. Must be one of: ${valid.join(", ")}`
