@@ -778,6 +778,133 @@ mod test {
     }
 
     #[test]
+    fn test_prune_with_patch_resolution() {
+        // Regression test for https://github.com/vercel/turborepo/issues/3273
+        // Berry lockfiles with patched dependencies via resolutions should
+        // prune correctly without panicking.
+        //
+        // When a resolution override points to a patch, the lockfile entry
+        // for the unpatched package uses the resolved version (not the range)
+        // because yarn resolves the override before writing the lockfile.
+        let yaml = r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  dependencies:
+    lodash: ^4.17.21
+  languageName: unknown
+  linkType: soft
+
+"lodash@npm:4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+
+"lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch::locator=root%40workspace%3A.":
+  version: 4.17.21
+  resolution: "lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch::version=4.17.21&hash=2c6e9e&locator=root%40workspace%3A."
+  checksum: def456
+  languageName: node
+  linkType: hard
+"#;
+
+        let resolutions: HashMap<String, String> = HashMap::from([(
+            "lodash@^4.17.21".to_string(),
+            "patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch"
+                .to_string(),
+        )]);
+        let manifest = BerryManifest::with_resolutions(resolutions);
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        let result = lockfile.subgraph(
+            &["packages/a".to_string()],
+            &["lodash@npm:4.17.21".to_string()],
+        );
+        assert!(
+            result.is_ok(),
+            "subgraph should not panic or error: {:?}",
+            result.err()
+        );
+        let pruned = result.unwrap();
+        let encoded = String::from_utf8(pruned.encode().unwrap()).unwrap();
+        assert!(
+            encoded.contains("lodash@npm:4.17.21"),
+            "pruned lockfile should contain lodash"
+        );
+    }
+
+    #[test]
+    fn test_prune_with_scoped_patch_resolution() {
+        // Regression test for https://github.com/vercel/turborepo/issues/3273
+        // Scoped packages with patches (e.g. @google-cloud/datastore) should
+        // work correctly during prune.
+        let yaml = r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  dependencies:
+    "@google-cloud/datastore": ^7.0.0
+  languageName: unknown
+  linkType: soft
+
+"@google-cloud/datastore@npm:7.0.0":
+  version: 7.0.0
+  resolution: "@google-cloud/datastore@npm:7.0.0"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+
+"@google-cloud/datastore@patch:@google-cloud/datastore@npm%3A7.0.0#./.yarn/patches/@google-cloud-datastore-npm-7.0.0-994584c630.patch::locator=root%40workspace%3A.":
+  version: 7.0.0
+  resolution: "@google-cloud/datastore@patch:@google-cloud/datastore@npm%3A7.0.0#./.yarn/patches/@google-cloud-datastore-npm-7.0.0-994584c630.patch::version=7.0.0&hash=abc123&locator=root%40workspace%3A."
+  checksum: def456
+  languageName: node
+  linkType: hard
+"#;
+
+        let resolutions: HashMap<String, String> = HashMap::from([(
+            "@google-cloud/datastore@^7.0.0".to_string(),
+            "patch:@google-cloud/datastore@npm%3A7.0.0#./.yarn/patches/@\
+             google-cloud-datastore-npm-7.0.0-994584c630.patch"
+                .to_string(),
+        )]);
+        let manifest = BerryManifest::with_resolutions(resolutions);
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        let result = lockfile.subgraph(
+            &["packages/a".to_string()],
+            &["@google-cloud/datastore@npm:7.0.0".to_string()],
+        );
+        assert!(
+            result.is_ok(),
+            "subgraph should not panic or error: {:?}",
+            result.err()
+        );
+    }
+
+    #[test]
     fn test_berry_manifest_into_parts_merges_correctly() {
         let mut default_catalog = Map::new();
         default_catalog.insert("lodash".to_string(), "^4.17.21".to_string());
