@@ -8,7 +8,7 @@
       "name": "api",
       "version": "1.0.0",
       "dependencies": {
-        "@api/sdk": "file:.api/apis/sdk",
+        "@api/sdk": "file:../../lib/sdk",
         "@repo/ui": "*",
       },
     },
@@ -35,7 +35,7 @@
 
     "kind-of": ["kind-of@3.2.2", "", { "dependencies": { "is-buffer": "^1.1.5" } }, "sha512-NOW9QQXMoZGg/oqnVNoNTTIFEIid1627WCffUBJEdMxYApq7mNE7CpzucIPc+ZQg25Phej7IJSmX3hO+oblOtQ=="],
 
-    "api/@api/sdk": ["@api/sdk@file:apps/api/.api/apis/sdk", { "dependencies": { "is-odd": "^3.0.1" } }],
+    "api/@api/sdk": ["@api/sdk@file:lib/sdk", { "dependencies": { "is-odd": "^3.0.1" } }],
 
     "api/@api/sdk/is-odd": ["is-odd@3.0.1", "", { "dependencies": { "is-number": "^6.0.0" } }, "sha512-CQpnWPrDwmP1+SMHXZhtLtJv90yiyVfluGsX5iNCVkrhQtU3TQHsUWPG9wkdk9Lgd5yNpAg9jQEo90CBaXgWMA=="],
 
