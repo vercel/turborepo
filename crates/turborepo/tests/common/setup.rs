@@ -30,7 +30,7 @@ pub fn copy_fixture(fixture: &str, target_dir: &Path) -> Result<(), anyhow::Erro
     Ok(())
 }
 
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
+pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;

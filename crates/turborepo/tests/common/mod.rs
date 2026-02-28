@@ -102,6 +102,46 @@ pub fn mock_telemetry_config(config_dir: &Path) {
     .unwrap();
 }
 
+/// Set up a lockfile-aware-caching test. Copies the shared base fixture then
+/// overlays the package-manager-specific files (lockfile, patches,
+/// package.json).
+#[allow(dead_code)]
+pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
+    let base_fixture =
+        repo_root.join("turborepo-tests/integration/fixtures/lockfile_aware_caching");
+    let pm_overlay = repo_root.join(format!(
+        "turborepo-tests/integration/tests/lockfile-aware-caching/{pm_name}"
+    ));
+
+    // Copy base fixture
+    setup::copy_dir_all(&base_fixture, dir).unwrap();
+    // Overlay package-manager-specific files
+    setup::copy_dir_all(&pm_overlay, dir).unwrap();
+
+    // Init git
+    let git = |args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status()
+            .unwrap();
+    };
+    git(&["init", "--quiet"]);
+    git(&["config", "user.email", "turbo-test@example.com"]);
+    git(&["config", "user.name", "Turbo Test"]);
+
+    let gitignore = dir.join(".gitignore");
+    let mut gi = fs::read_to_string(&gitignore).unwrap_or_default();
+    gi.push_str("\n.turbo\nnode_modules\n");
+    fs::write(&gitignore, gi).unwrap();
+
+    git(&["add", "."]);
+    git(&["commit", "-m", "Initial", "--quiet"]);
+}
+
 #[allow(dead_code)]
 pub fn setup_fixture(
     fixture: &str,
