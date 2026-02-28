@@ -142,6 +142,94 @@ pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
     git(&["commit", "-m", "Initial", "--quiet"]);
 }
 
+/// Set up a find-turbo test fixture. Copies the fixture directory and
+/// optionally sets all turbo platform package versions via package.json.
+#[allow(dead_code)]
+pub fn setup_find_turbo(dir: &Path, fixture_name: &str) {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
+    let fixture_src = repo_root.join(format!(
+        "turborepo-tests/integration/fixtures/find_turbo/{fixture_name}"
+    ));
+    setup::copy_dir_all(&fixture_src, dir).unwrap();
+
+    // Make all bin/turbo scripts executable on Unix
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        for entry in walkdir(dir, "turbo") {
+            if entry.ends_with("bin/turbo") {
+                fs::set_permissions(&entry, fs::Permissions::from_mode(0o755)).ok();
+            }
+        }
+    }
+}
+
+#[cfg(unix)]
+fn walkdir(dir: &Path, name: &str) -> Vec<std::path::PathBuf> {
+    let mut results = Vec::new();
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                results.extend(walkdir(&path, name));
+            } else if path.file_name().map(|f| f == name).unwrap_or(false) {
+                results.push(path);
+            }
+        }
+    }
+    results
+}
+
+/// Set all turbo package.json versions in a find-turbo fixture.
+/// Equivalent to set_version.sh.
+#[allow(dead_code)]
+pub fn set_find_turbo_version(dir: &Path, version: &str) {
+    set_find_turbo_version_inner(dir, version);
+}
+
+fn set_find_turbo_version_inner(dir: &Path, version: &str) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                set_find_turbo_version_inner(&path, version);
+            } else if path
+                .file_name()
+                .map(|f| f == "package.json")
+                .unwrap_or(false)
+            {
+                fs::write(&path, format!("{{ \"version\": \"{version}\" }}\n")).unwrap();
+            }
+        }
+    }
+}
+
+/// Replace all fake turbo binaries with symlinks to the real turbo binary.
+/// Equivalent to set_link.sh.
+#[allow(dead_code)]
+pub fn set_find_turbo_link(dir: &Path, turbo_path: &Path) {
+    set_find_turbo_link_inner(dir, turbo_path);
+}
+
+fn set_find_turbo_link_inner(dir: &Path, turbo_path: &Path) {
+    let target_name = if cfg!(windows) { "turbo.exe" } else { "turbo" };
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                set_find_turbo_link_inner(&path, turbo_path);
+            } else if path.file_name().map(|f| f == target_name).unwrap_or(false) && path.is_file()
+            {
+                fs::remove_file(&path).unwrap();
+                #[cfg(unix)]
+                std::os::unix::fs::symlink(turbo_path, &path).unwrap();
+                #[cfg(windows)]
+                std::os::windows::fs::symlink_file(turbo_path, &path).unwrap();
+            }
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub fn setup_fixture(
     fixture: &str,
