@@ -617,6 +617,9 @@ impl Run {
         rayon::scope(|s| {
             s.spawn(|_| {
                 let _span = tracing::info_span!("calculate_file_hashes_task").entered();
+                let needs_expanded = self.opts.run_opts.dry_run.is_some()
+                    || self.opts.run_opts.summarize
+                    || self.observability_handle.is_some();
                 file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
                     &self.scm,
                     self.engine.tasks(),
@@ -625,6 +628,7 @@ impl Run {
                     &self.repo_root,
                     &self.run_telemetry,
                     repo_index,
+                    needs_expanded,
                 ));
             });
             s.spawn(|_| {
