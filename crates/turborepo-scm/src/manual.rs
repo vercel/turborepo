@@ -23,7 +23,7 @@ use crate::{Error, GitHashes, OidHash};
 fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<OidHash, Error> {
     let mut hasher = Sha1::new();
     let f = path.open()?;
-    let file_len = f.metadata().map(|m| m.len()).unwrap_or(0);
+    let file_len = f.metadata()?.len();
 
     hasher.update(b"blob ");
     hasher.update(file_len.to_string().as_bytes());
@@ -586,11 +586,7 @@ mod tests {
         ];
 
         for (name, content) in &cases {
-            let path = turbo_root.join_component(name);
-            path.create_with_contents(std::str::from_utf8(content).unwrap_or(""))
-                .unwrap_or_else(|_| {
-                    std::fs::write(turbo_root.as_path().join(name), content).unwrap();
-                });
+            std::fs::write(turbo_root.as_path().join(name), content).unwrap();
         }
 
         // Use a temp git repo so we can call `git hash-object`
