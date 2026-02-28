@@ -1,3 +1,5 @@
+use std::io::{BufReader, Read};
+
 use rayon::prelude::*;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
@@ -29,10 +31,36 @@ fn hash_file_with_retry(
     hash_file(path)
 }
 
+/// Hash a file as a git blob object using streaming I/O.
+///
+/// Instead of reading the entire file into memory, we stat the file for its
+/// size, write the git blob header ("blob {size}\0") into the hasher, then
+/// stream the file contents through in fixed-size chunks. Peak memory per
+/// call is bounded by `BUF_SIZE` (~64KB) regardless of file size.
 fn hash_file(path: &AbsoluteSystemPath) -> Result<gix_index::hash::ObjectId, std::io::Error> {
-    let data = std::fs::read(path)?;
-    gix_object::compute_hash(gix_index::hash::Kind::Sha1, gix_object::Kind::Blob, &data)
-        .map_err(std::io::Error::other)
+    let file = std::fs::File::open(path)?;
+    let file_len = file.metadata()?.len();
+
+    // Build the hasher with the blob loose header pre-written, exactly as
+    // gix_object::compute_hash does internally.
+    let mut hasher = gix_index::hash::hasher(gix_index::hash::Kind::Sha1);
+    hasher.update(&gix_object::encode::loose_header(
+        gix_object::Kind::Blob,
+        file_len,
+    ));
+
+    const BUF_SIZE: usize = 64 * 1024;
+    let mut reader = BufReader::with_capacity(BUF_SIZE, file);
+    let mut buf = [0u8; BUF_SIZE];
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+
+    hasher.try_finalize().map_err(std::io::Error::other)
 }
 
 fn is_too_many_open_files(e: &std::io::Error) -> bool {
@@ -194,20 +222,29 @@ mod test {
             .output()
             .unwrap();
 
-        let cases: &[(&str, &[u8])] = &[
-            ("empty.txt", b""),
-            ("hello.txt", b"hello world\n"),
-            ("binary.bin", &[0u8, 1, 2, 255, 254, 253]),
-            ("large.txt", &[b'x'; 10_000]),
+        // 128KB: spans multiple 64KB read buffers, exercising the streaming loop
+        const MULTI_BUF: usize = 128 * 1024;
+        let multi_buf_content = vec![b'A'; MULTI_BUF];
+        // Exactly 64KB: boundary where one read fills the buffer and the next returns 0
+        const EXACT_BUF: usize = 64 * 1024;
+        let exact_buf_content = vec![b'B'; EXACT_BUF];
+
+        let cases: Vec<(&str, Vec<u8>)> = vec![
+            ("empty.txt", b"".to_vec()),
+            ("hello.txt", b"hello world\n".to_vec()),
+            ("binary.bin", vec![0u8, 1, 2, 255, 254, 253]),
+            ("large.txt", vec![b'x'; 10_000]),
+            ("multi_buf.bin", multi_buf_content),
+            ("exact_buf.bin", exact_buf_content),
         ];
 
-        for (name, content) in cases {
+        for (name, content) in &cases {
             std::fs::write(tmp.path().join(name), content).unwrap();
         }
 
         // Get expected hashes from git itself
         let mut expected = GitHashes::new();
-        for (name, _) in cases {
+        for (name, _) in &cases {
             let output = std::process::Command::new("git")
                 .args(["hash-object", name])
                 .current_dir(tmp.path())
