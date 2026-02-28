@@ -142,8 +142,8 @@ pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
     git(&["commit", "-m", "Initial", "--quiet"]);
 }
 
-/// Set up a find-turbo test fixture. Copies the fixture directory and
-/// optionally sets all turbo platform package versions via package.json.
+/// Set up a find-turbo test fixture. Copies the fixture directory, makes
+/// scripts executable on Unix, and places echo_args as turbo.exe on Windows.
 #[allow(dead_code)]
 pub fn setup_find_turbo(dir: &Path, fixture_name: &str) {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
@@ -152,7 +152,6 @@ pub fn setup_find_turbo(dir: &Path, fixture_name: &str) {
     ));
     setup::copy_dir_all(&fixture_src, dir).unwrap();
 
-    // Make all bin/turbo scripts executable on Unix
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -162,9 +161,32 @@ pub fn setup_find_turbo(dir: &Path, fixture_name: &str) {
             }
         }
     }
+
+    // On Windows, place the echo_args binary as turbo.exe next to every .keep
+    // in turbo-windows-*/bin/ directories. This mirrors the prysk harness's
+    // setup_windows_find_turbo_fixtures().
+    #[cfg(windows)]
+    {
+        let echo_args_exe = assert_cmd::cargo::cargo_bin("echo_args");
+        if !echo_args_exe.exists() {
+            // Build echo_args if nextest didn't build it
+            std::process::Command::new("cargo")
+                .args(["build", "--bin", "echo_args", "-p", "turbo"])
+                .current_dir(&repo_root)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .ok();
+        }
+        place_echo_args(dir, &echo_args_exe);
+
+        // For the linked fixture, recreate symlinks as NTFS junctions
+        if fixture_name == "linked" {
+            setup_linked_junctions(dir);
+        }
+    }
 }
 
-#[cfg(unix)]
 fn walkdir(dir: &Path, name: &str) -> Vec<std::path::PathBuf> {
     let mut results = Vec::new();
     if let Ok(entries) = fs::read_dir(dir) {
@@ -178,6 +200,88 @@ fn walkdir(dir: &Path, name: &str) -> Vec<std::path::PathBuf> {
         }
     }
     results
+}
+
+/// Place echo_args.exe as turbo.exe next to .keep files in turbo-windows-*/bin/
+#[cfg(windows)]
+fn place_echo_args(dir: &Path, echo_args_exe: &Path) {
+    if let Ok(entries) = fs::read_dir(dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                place_echo_args(&path, echo_args_exe);
+            } else if path.file_name().map_or(false, |n| n == ".keep") {
+                if let (Some(bin_dir), Some(platform_dir)) =
+                    (path.parent(), path.parent().and_then(|p| p.parent()))
+                {
+                    let platform_name = platform_dir
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy();
+                    let dir_name = bin_dir.file_name().unwrap_or_default().to_string_lossy();
+                    if platform_name.starts_with("turbo-windows-") && dir_name == "bin" {
+                        let turbo_exe = bin_dir.join("turbo.exe");
+                        if !turbo_exe.exists() {
+                            fs::copy(echo_args_exe, &turbo_exe).ok();
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Recreate symlinks as NTFS junctions for the linked fixture on Windows.
+/// Git on Windows may check out symlinks as plain text files containing the
+/// target path, so we remove whatever was copied and create real junctions.
+#[cfg(windows)]
+fn setup_linked_junctions(dir: &Path) {
+    let nm = dir.join("node_modules");
+    let pnpm_store = nm.join(".pnpm");
+    let pnpm_turbo_nm = pnpm_store.join("turbo@1.0.0").join("node_modules");
+
+    let mkjunction = |link: &Path, target: &Path| {
+        // Remove whatever copy_dir_all created (file or dir)
+        if link.is_dir() {
+            fs::remove_dir_all(link).ok();
+        } else {
+            fs::remove_file(link).ok();
+        }
+        let status = std::process::Command::new("cmd")
+            .args(["/c", "mklink", "/J"])
+            .arg(link)
+            .arg(target)
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+        assert!(
+            status.map_or(false, |s| s.success()),
+            "mklink /J failed for {} -> {}",
+            link.display(),
+            target.display()
+        );
+    };
+
+    // Level 1: node_modules/turbo -> .pnpm/turbo@1.0.0/node_modules/turbo
+    mkjunction(&nm.join("turbo"), &pnpm_turbo_nm.join("turbo"));
+
+    // Level 2: platform package symlinks inside the pnpm virtual store
+    for platform in &[
+        "darwin-64",
+        "darwin-arm64",
+        "linux-64",
+        "linux-arm64",
+        "windows-64",
+        "windows-arm64",
+    ] {
+        mkjunction(
+            &pnpm_turbo_nm.join(format!("turbo-{platform}")),
+            &pnpm_store
+                .join(format!("turbo-{platform}@1.0.0"))
+                .join("node_modules")
+                .join(format!("turbo-{platform}")),
+        );
+    }
 }
 
 /// Set all turbo package.json versions in a find-turbo fixture.
