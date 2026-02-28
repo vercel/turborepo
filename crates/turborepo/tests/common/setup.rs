@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -19,8 +21,6 @@ fn fixtures_dir() -> PathBuf {
 }
 
 /// Copy a fixture directory into `target_dir`.
-///
-/// Equivalent to: `cp -a fixtures/$fixture/. $target_dir/`
 pub fn copy_fixture(fixture: &str, target_dir: &Path) -> Result<(), anyhow::Error> {
     let src = fixtures_dir().join(fixture);
     if !src.exists() {
@@ -70,7 +70,7 @@ fn copy_symlink(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
 
 /// Initialize a git repository in `target_dir` with a single commit.
 ///
-/// Equivalent to setup_git.sh:
+/// Initialize a git repo in the test directory.
 ///   git init, configure user, write .npmrc, git add ., git commit
 pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
     let git = |args: &[&str]| -> Result<(), anyhow::Error> {
@@ -110,7 +110,7 @@ pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
 /// Returns the path to the corepack install directory (outside `target_dir` so
 /// corepack shims don't appear as task inputs).
 ///
-/// Equivalent to setup_package_manager.sh.
+/// Set up the package manager (corepack enable + use).
 pub fn setup_package_manager(
     target_dir: &Path,
     package_manager: &str,
@@ -156,7 +156,7 @@ pub fn setup_package_manager(
 
 /// Install dependencies using the specified package manager.
 ///
-/// Equivalent to install_deps.sh.
+/// Install dependencies via the package manager.
 pub fn install_deps(
     target_dir: &Path,
     package_manager: &str,
@@ -214,11 +214,10 @@ pub fn install_deps(
     Ok(())
 }
 
-/// The full integration test setup, equivalent to `setup_integration_test.sh`.
+/// The full integration test setup.
 ///
 /// The corepack install directory is placed outside `target_dir` (in a sibling
-/// temp directory) so that corepack shims don't appear as turbo task inputs,
-/// matching the prysk shell setup behavior.
+/// temp directory) so that corepack shims don't appear as turbo task inputs.
 pub fn setup_integration_test(
     target_dir: &Path,
     fixture: &str,

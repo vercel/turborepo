@@ -65,13 +65,6 @@ fn global_cache_inputs(dir: &Path) -> String {
     serde_json::to_string_pretty(&json["globalCacheInputs"]).unwrap()
 }
 
-// --- global.t ---
-// The original prysk test extracted a "global hash" from debug output via
-// find_global_hash.sh. That script was designed for Go turbo which printed
-// "global hash: value=<hex>". Rust turbo doesn't print this, so the original
-// test was a no-op. This version tests the same invariants using
-// globalCacheInputs from --dry=json.
-
 #[test]
 fn test_global_hash_changes() {
     let tempdir = tempfile::tempdir().unwrap();

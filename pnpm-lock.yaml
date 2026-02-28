@@ -530,8 +530,6 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
-  packages/prysk: {}
-
   packages/top-issues:
     dependencies:
       '@actions/core':
@@ -633,8 +631,6 @@ importers:
       typescript:
         specifier: 5.5.4
         version: 5.5.4
-
-  packages/turbo-exe-stub: {}
 
   packages/turbo-gen:
     dependencies:
@@ -1097,22 +1093,6 @@ importers:
       '@turbo/workspaces':
         specifier: workspace:*
         version: link:../../packages/turbo-workspaces
-
-  turborepo-tests/integration:
-    dependencies:
-      '@turbo/exe-stub':
-        specifier: workspace:*
-        version: link:../../packages/turbo-exe-stub
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../helpers
-    devDependencies:
-      cross-env:
-        specifier: 7.0.3
-        version: 7.0.3
 
 packages:
 
@@ -5267,11 +5247,6 @@ packages:
 
   create-require@1.1.1:
     resolution: {integrity: sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==}
-
-  cross-env@7.0.3:
-    resolution: {integrity: sha512-+/HKd6EgcQCJGh2PSjZuUitQBQynKor4wrFbRg4DtAgS1aWO+gU52xpH7M9ScGgXSYmAVS9bIJ8EzuaGw0oNAw==}
-    engines: {node: '>=10.14', npm: '>=6', yarn: '>=1'}
-    hasBin: true
 
   cross-spawn-async@2.2.5:
     resolution: {integrity: sha512-snteb3aVrxYYOX9e8BabYFK9WhCDhTlw1YQktfTthBogxri4/2r9U2nQc0ffY73ZAxezDc+U8gvHAeU1wy1ubQ==}
@@ -13100,10 +13075,6 @@ snapshots:
       layout-base: 2.0.1
 
   create-require@1.1.1: {}
-
-  cross-env@7.0.3:
-    dependencies:
-      cross-spawn: 7.0.6
 
   cross-spawn-async@2.2.5:
     dependencies:

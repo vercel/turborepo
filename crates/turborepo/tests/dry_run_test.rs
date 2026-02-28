@@ -61,7 +61,7 @@ fn test_dry_run_env_var_not_in_output() {
         &[("NODE_ENV", "banana")],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // The grep in prysk exits 1, meaning "Environment Variables" is NOT in the
+    // "Environment Variables" header should NOT appear in dry-run output for
     // output
     assert!(
         !stdout.contains("Environment Variables"),

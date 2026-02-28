@@ -217,12 +217,6 @@ jobs:
         env:
           HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
 
-      - name: Cache Prysk venv
-        uses: actions/cache@v4
-        with:
-          path: turborepo-tests/integration/.cram_env
-          key: prysk-venv-${{ matrix.os.runner }}
-
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
@@ -290,12 +284,6 @@ jobs:
         uses: ts-graphviz/setup-graphviz@v2
         env:
           HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
-
-      - name: Cache Prysk venv
-        uses: actions/cache@v4
-        with:
-          path: turborepo-tests/integration/.cram_env
-          key: prysk-venv-ubuntu-latest
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6

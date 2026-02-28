@@ -17,7 +17,7 @@ fn test_new_package_in_lockfile_filter() {
     )
     .unwrap();
 
-    // Update lockfile — tolerate failure like the prysk test does
+    // Update lockfile — tolerate failure
     std::process::Command::new("pnpm")
         .args(["i", "--frozen-lockfile=false"])
         .current_dir(tempdir.path())

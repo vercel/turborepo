@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod setup;
 
 use std::{fs, path::Path, process::Output};
@@ -6,7 +8,6 @@ use std::{fs, path::Path, process::Output};
 /// - Path separators (backslash → forward slash for Windows)
 /// - Timing lines (e.g. "Time:    1.234s" → "Time:    [TIME]")
 /// - Binary name (turbo.exe → turbo on Windows)
-#[allow(dead_code)]
 pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
     vec![
         (r"\\", "/"),
@@ -16,13 +17,11 @@ pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
 }
 
 /// Run turbo with standard env var suppression. Returns the raw Output.
-#[allow(dead_code)]
 pub fn run_turbo(test_dir: &Path, args: &[&str]) -> Output {
     run_turbo_with_env(test_dir, args, &[])
 }
 
 /// Run turbo with standard env var suppression plus additional env overrides.
-#[allow(dead_code)]
 pub fn run_turbo_with_env(test_dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     let config_dir = tempfile::tempdir().expect("failed to create config tempdir");
     let mut cmd = assert_cmd::Command::cargo_bin("turbo").expect("turbo binary not found");
@@ -44,15 +43,12 @@ pub fn run_turbo_with_env(test_dir: &Path, args: &[&str], env: &[(&str, &str)]) 
     cmd.output().expect("failed to execute turbo")
 }
 
-#[allow(dead_code)]
 pub fn turbo_configs_dir() -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../turborepo-tests/integration/fixtures/turbo-configs")
 }
 
 /// Copy a turbo-config JSON into the test directory as `turbo.json` and commit.
-/// Equivalent to `replace_turbo_json.sh`.
-#[allow(dead_code)]
 pub fn replace_turbo_json(dir: &Path, config_name: &str) {
     let src = turbo_configs_dir().join(config_name);
     fs::copy(&src, dir.join("turbo.json"))
@@ -78,7 +74,6 @@ pub fn replace_turbo_json(dir: &Path, config_name: &str) {
 
 /// Create a mock turbo config directory with a fake auth token.
 /// Returns the config dir path (pass as TURBO_CONFIG_DIR_PATH).
-#[allow(dead_code)]
 pub fn mock_turbo_config(config_dir: &Path) {
     let turbo_dir = config_dir.join("turborepo");
     fs::create_dir_all(&turbo_dir).unwrap();
@@ -91,7 +86,6 @@ pub fn mock_turbo_config(config_dir: &Path) {
 
 /// Create a mock telemetry config directory with telemetry enabled.
 /// Returns the config dir path (pass as TURBO_CONFIG_DIR_PATH).
-#[allow(dead_code)]
 pub fn mock_telemetry_config(config_dir: &Path) {
     let turbo_dir = config_dir.join("turborepo");
     fs::create_dir_all(&turbo_dir).unwrap();
@@ -105,7 +99,6 @@ pub fn mock_telemetry_config(config_dir: &Path) {
 /// Set up a lockfile-aware-caching test. Copies the shared base fixture then
 /// overlays the package-manager-specific files (lockfile, patches,
 /// package.json).
-#[allow(dead_code)]
 pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
     let base_fixture =
@@ -144,7 +137,6 @@ pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
 
 /// Set up a find-turbo test fixture. Copies the fixture directory, makes
 /// scripts executable on Unix, and places echo_args as turbo.exe on Windows.
-#[allow(dead_code)]
 pub fn setup_find_turbo(dir: &Path, fixture_name: &str) {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
     let fixture_src = repo_root.join(format!(
@@ -163,8 +155,7 @@ pub fn setup_find_turbo(dir: &Path, fixture_name: &str) {
     }
 
     // On Windows, place the echo_args binary as turbo.exe next to every .keep
-    // in turbo-windows-*/bin/ directories. This mirrors the prysk harness's
-    // setup_windows_find_turbo_fixtures().
+    // in turbo-windows-*/bin/ directories.
     #[cfg(windows)]
     {
         let echo_args_exe = assert_cmd::cargo::cargo_bin("echo_args");
@@ -285,8 +276,7 @@ fn setup_linked_junctions(dir: &Path) {
 }
 
 /// Set all turbo package.json versions in a find-turbo fixture.
-/// Equivalent to set_version.sh.
-#[allow(dead_code)]
+/// Set all turbo package versions in a find-turbo fixture.
 pub fn set_find_turbo_version(dir: &Path, version: &str) {
     set_find_turbo_version_inner(dir, version);
 }
@@ -309,8 +299,7 @@ fn set_find_turbo_version_inner(dir: &Path, version: &str) {
 }
 
 /// Replace all fake turbo binaries with symlinks to the real turbo binary.
-/// Equivalent to set_link.sh.
-#[allow(dead_code)]
+/// Replace all fake turbo binaries with symlinks to the given binary.
 pub fn set_find_turbo_link(dir: &Path, turbo_path: &Path) {
     set_find_turbo_link_inner(dir, turbo_path);
 }
@@ -334,7 +323,6 @@ fn set_find_turbo_link_inner(dir: &Path, turbo_path: &Path) {
     }
 }
 
-#[allow(dead_code)]
 pub fn setup_fixture(
     fixture: &str,
     package_manager: &str,

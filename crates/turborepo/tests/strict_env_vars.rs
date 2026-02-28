@@ -115,10 +115,8 @@ fn test_global_hash_loose() {
 
 #[test]
 fn test_global_hash_default_mode() {
-    // Replaces global-hash-infer.t. The original test used --env-mode=infer
-    // which doesn't exist in Rust turbo (only loose/strict). The default mode
-    // is strict, so this test verifies config changes affect hashes under
-    // the default mode.
+    // The default env mode is strict, so this test verifies config changes
+    // affect hashes under the default mode.
     let tempdir = setup_strict_env();
 
     let baseline = all_task_hashes(tempdir.path(), &[]);
