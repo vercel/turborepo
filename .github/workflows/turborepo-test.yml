@@ -155,7 +155,7 @@ jobs:
             exit 1
           fi
 
-  rust_test:
+  build_rust_test:
     strategy:
       fail-fast: false
       matrix:
@@ -164,14 +164,16 @@ jobs:
             runner: macos-latest-xlarge
           - name: windows
             runner: windows-latest-8-core-oss
-        partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     runs-on: ${{ matrix.os.runner }}
     timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/10)
+    name: Build test artifacts (${{ matrix.os.name }})
     env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
       RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
@@ -233,17 +235,98 @@ jobs:
           curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
           tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
 
-      - name: Run tests
-        timeout-minutes: 45
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Build and archive test binaries
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo nextest run --workspace --exclude turborepo-napi --exclude turborepo-lsp --exclude turborepo-schema-gen --no-fail-fast --partition hash:${{ matrix.partition }}/10
-          else
-              cargo nextest run --workspace --exclude turborepo-lsp --exclude turborepo-schema-gen --no-fail-fast --partition hash:${{ matrix.partition }}/10
-          fi
+          turbo run build:test-archive --filter=@turbo/cli
+        shell: bash
+
+  rust_test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - name: macos
+            runner: macos-latest-xlarge
+          - name: windows
+            runner: windows-latest-8-core-oss
+        partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    runs-on: ${{ matrix.os.runner }}
+    timeout-minutes: 45
+    needs:
+      - find-changes
+      - build_rust_test
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/10)
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
+    steps:
+      - name: Install git (Windows larger runners)
+        if: matrix.os.name == 'windows'
+        shell: cmd
+        run: |
+          curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
+          mkdir "%ProgramFiles%\Git"
+          tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
+          del "%ProgramFiles%\Git\etc\gitconfig"
+          echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+
+      - name: Set git to use LF line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+        if: matrix.os.name == 'windows'
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Setup Graphviz
+        uses: ts-graphviz/setup-graphviz@v2
+        with:
+          macos-skip-brew-update: "true"
+        env:
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
+
+      - name: Install cargo-nextest
+        if: matrix.os.name != 'windows'
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Install cargo-nextest (Windows)
+        if: matrix.os.name == 'windows'
+        shell: cmd
+        run: |
+          curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
+          tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Restore test archive from cache
+        run: turbo run build:test-archive --filter=@turbo/cli
+        shell: bash
+
+      - name: Run tests
+        timeout-minutes: 45
+        run: |
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10
         shell: bash
 
   rust_test_ubuntu:
@@ -554,6 +637,7 @@ jobs:
     needs:
       - find-changes
       - turbo_types_check
+      - build_rust_test
       - rust_test
       - rust_test_ubuntu
       - coverage_report
@@ -583,6 +667,7 @@ jobs:
           }
 
           subjob ${{needs.turbo_types_check.result}}
+          subjob ${{needs.build_rust_test.result}}
           subjob ${{needs.rust_test.result}}
           subjob ${{needs.rust_test_ubuntu.result}}
           subjob ${{needs.coverage_report.result}}
