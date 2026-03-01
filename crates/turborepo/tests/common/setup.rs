@@ -236,16 +236,23 @@ pub fn setup_integration_test(
 }
 
 fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(), anyhow::Error> {
-    let status = cmd_with_path(program, path_env)
+    let output = cmd_with_path(program, path_env)
         .args(args)
         .current_dir(dir)
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
+        .stderr(std::process::Stdio::piped())
+        .output()
         .map_err(|e| anyhow::anyhow!("failed to run `{program}`: {e}"))?;
 
-    if !status.success() {
-        anyhow::bail!("{} {:?} failed with {}", program, args, status);
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!(
+            "{} {:?} failed with {}:\n{}",
+            program,
+            args,
+            output.status,
+            stderr
+        );
     }
     Ok(())
 }
