@@ -399,16 +399,12 @@ jobs:
         shell: bash
 
   rust_test_ubuntu:
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on ubuntu (partition ${{ matrix.partition }}/10)
+    name: Rust testing on ubuntu
     env:
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
@@ -431,11 +427,6 @@ jobs:
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@v2
-        env:
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -461,17 +452,16 @@ jobs:
             --exclude turborepo-napi \
             --exclude turborepo-lsp \
             --exclude turborepo-schema-gen \
-            --partition hash:${{ matrix.partition }}/10 \
             --no-fail-fast \
             --lcov \
-            --output-path coverage-${{ matrix.partition }}.lcov
+            --output-path coverage.lcov
         shell: bash
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-partition-${{ matrix.partition }}
-          path: coverage-${{ matrix.partition }}.lcov
+          name: coverage
+          path: coverage.lcov
           retention-days: 1
 
   coverage_report:
@@ -493,23 +483,17 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Download coverage artifacts
+      - name: Download coverage artifact
         uses: actions/download-artifact@v4
         with:
-          pattern: coverage-partition-*
-          merge-multiple: true
+          name: coverage
 
-      - name: Install lcov
-        run: sudo apt-get install -y lcov
-
-      - name: Merge and transform coverage
+      - name: Transform coverage
         if: ${{ !github.event.pull_request.head.repo.fork }}
         run: |
           SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
 
-          lcov --add-tracefile coverage-1.lcov --add-tracefile coverage-2.lcov --add-tracefile coverage-3.lcov --add-tracefile coverage-4.lcov --add-tracefile coverage-5.lcov --add-tracefile coverage-6.lcov --add-tracefile coverage-7.lcov --add-tracefile coverage-8.lcov --add-tracefile coverage-9.lcov --add-tracefile coverage-10.lcov --output-file coverage-merged.lcov
-
-          node scripts/transform-coverage.js coverage-merged.lcov coverage-transformed.json >> "$GITHUB_ENV"
+          node scripts/transform-coverage.js coverage.lcov coverage-transformed.json >> "$GITHUB_ENV"
 
           npx vercel blob put coverage-transformed.json --pathname="coverage/commits/${SHA}.json" \
             --token "${BLOB_READ_WRITE_TOKEN}"
