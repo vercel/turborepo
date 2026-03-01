@@ -9,11 +9,6 @@ failure-output = "immediate-final"
 # and timing issues, especially on macOS where PTY devices are limited
 turborepo-process-serial = { max-threads = 1 }
 
-# Integration tests that spawn turbo binaries and parse JSON from stdout.
-# Each test is fully isolated (own tempdir, own turbo process, own config dir)
-# but we limit concurrency as a conservative measure against resource contention.
-turborepo-integration-serial = { max-threads = 2 }
-
 # turborepo-dirs tests should run serially to avoid race conditions
 # with environment variable manipulation
 turborepo-dirs-serial = { max-threads = 1 }
@@ -28,13 +23,6 @@ slow-timeout = { period = "120s", terminate-after = 2 }
 # Run all tests in the turborepo-process crate serially
 filter = 'package(turborepo-process)'
 test-group = 'turborepo-process-serial'
-
-[[profile.default.overrides]]
-# Run integration tests that spawn turbo and parse JSON from stdout.
-# The previous filter used test(ls) which substring-matched "false", "fails",
-# "details", etc., accidentally serializing ~20 unrelated tests.
-filter = 'package(turbo) and (binary(boundaries) or binary(query) or binary(query_test) or binary(ls) or binary(command_ls_test) or binary(command_query_test))'
-test-group = 'turborepo-integration-serial'
 
 [[profile.default.overrides]]
 # Run all tests in the turborepo-dirs crate serially
