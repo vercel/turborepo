@@ -263,10 +263,6 @@ jobs:
       - build_rust_test
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/10)
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
     steps:
       - name: Install git (Windows larger runners)
         if: matrix.os.name == 'windows'
@@ -322,6 +318,10 @@ jobs:
       - name: Restore test archive from cache
         run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_CACHE: remote:rw
 
       - name: Run tests
         timeout-minutes: 45
