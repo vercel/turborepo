@@ -6,6 +6,7 @@ use miette::Diagnostic;
 use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
+    RelativeUnixPathBuf,
 };
 use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageNode},
@@ -161,6 +162,8 @@ pub async fn prune(
             workspace_names.push(workspace);
         }
     }
+    prune.copy_file_dependencies(&workspace_names)?;
+
     trace!("new workspaces: {}", workspace_paths.join(", "));
     trace!("lockfile keys: {}", lockfile_keys.join(", "));
 
@@ -451,6 +454,62 @@ impl<'a> Prune<'a> {
                 package_json_path,
                 docker_workspace_dir.resolve(package_json()),
             )?;
+        }
+
+        Ok(())
+    }
+
+    /// Copy directories for `file:` protocol dependencies into the pruned
+    /// output. These are local packages referenced by path that aren't
+    /// workspaces, so they wouldn't otherwise be included.
+    fn copy_file_dependencies(&self, workspace_names: &[String]) -> Result<(), Error> {
+        let all_workspaces = std::iter::once(PackageName::Root).chain(
+            workspace_names
+                .iter()
+                .map(|name| PackageName::Other(name.clone())),
+        );
+
+        for workspace in all_workspaces {
+            let Some(info) = self.package_graph.package_info(&workspace) else {
+                continue;
+            };
+
+            let workspace_abs_dir = self.root.resolve(info.package_path());
+
+            for (_dep_name, dep_version) in info.package_json.all_dependencies() {
+                let Some(path_str) = dep_version.strip_prefix("file:") else {
+                    continue;
+                };
+
+                let Ok(relative_path) = RelativeUnixPathBuf::new(path_str) else {
+                    continue;
+                };
+
+                // Resolve the file: path relative to the workspace directory.
+                // join_unix_path normalizes the result (resolves ..)
+                let abs_dep_path = workspace_abs_dir.join_unix_path(relative_path);
+
+                // Skip if the path is outside the repo root
+                let Ok(anchored) = AnchoredSystemPathBuf::new(&self.root, &abs_dep_path) else {
+                    trace!(
+                        "file: dependency {path_str} from {workspace} is outside repo root, \
+                         skipping"
+                    );
+                    continue;
+                };
+
+                if !abs_dep_path.try_exists()? {
+                    trace!("file: dependency {path_str} from {workspace} doesn't exist, skipping");
+                    continue;
+                }
+
+                trace!(
+                    "Copying file: dependency {path_str} from {workspace} -> {}",
+                    anchored
+                );
+
+                self.copy_directory(&anchored, Some(CopyDestination::Docker))?;
+            }
         }
 
         Ok(())
