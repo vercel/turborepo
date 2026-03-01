@@ -4,6 +4,8 @@ mod protocol_resolver;
 mod resolution;
 mod ser;
 
+const BERRY_LOCKFILE_VERSION_6: &str = "6";
+
 use std::{
     any::Any,
     collections::{HashMap, HashSet},
@@ -255,7 +257,7 @@ impl BerryLockfile {
         // Yarn v6 (Berry 3.x) strips cacheKey when a pruned subgraph contains
         // only workspace packages (no checksums). Yarn v8 (Berry 4.x) always
         // keeps it. Match each version's behavior so frozen installs pass.
-        if metadata.version == "6" {
+        if metadata.version == BERRY_LOCKFILE_VERSION_6 {
             let has_checksum = packages.values().any(|pkg| pkg.checksum.is_some());
             if !has_checksum {
                 metadata.cache_key = None;
@@ -348,7 +350,12 @@ impl BerryLockfile {
         for patch in patches.values() {
             let patch_descriptors = reverse_lookup
                 .get(patch)
-                .unwrap_or_else(|| panic!("Unable to find {patch} in reverse lookup"));
+                .unwrap_or_else(|| {
+                    panic!(
+                        "Internal error: patch locator {patch} not found in reverse lookup \
+                         while constructing the pruned lockfile subgraph"
+                    )
+                });
 
             // For each patch descriptor we extract the primary descriptor that each patch
             // descriptor targets and check if that descriptor is present in the
@@ -381,7 +388,7 @@ impl BerryLockfile {
         // logically need Y.
         {
             // Collect all dependency names from packages in the pruned closure
-            let mut dep_names_in_closure: HashSet<String> = HashSet::new();
+            let mut dep_names_in_closure = HashSet::new();
             for key in packages {
                 if let Ok(pkg_locator) = Locator::try_from(key.as_str())
                     && let Some(pkg) = self.locator_package.get(&pkg_locator)
@@ -508,16 +515,40 @@ impl BerryLockfile {
     }
 
     fn locator_for_workspace_path(&self, workspace_path: &str) -> Option<&Locator<'_>> {
-        self.workspace_path_to_locator
-            .get(workspace_path)
-            .or_else(|| {
-                // This is an inefficient fallback we use in case our old logic was catching
-                // edge cases that the eager approach misses.
-                self.locator_package.keys().find(|locator| {
-                    locator.reference.starts_with("workspace:")
-                        && locator.reference.ends_with(workspace_path)
-                })
-            })
+        if let Some(locator) = self.workspace_path_to_locator.get(workspace_path) {
+            return Some(locator);
+        }
+
+        // This is an inefficient fallback we use in case our old logic was catching
+        // edge cases that the eager approach misses. To avoid repeatedly scanning all
+        // locators for the same workspace path, we cache successful lookups.
+        //
+        // Note: We only cache positive results; if no locator is found we fall back to
+        // returning None without caching, preserving existing behavior.
+        if let Some(locator) = self.workspace_path_fallback_cache.get(workspace_path) {
+            return Some(locator);
+        }
+
+        let found = self
+            .locator_package
+            .keys()
+            .find(|locator| {
+                locator.reference.starts_with("workspace:")
+                    && locator.reference.ends_with(workspace_path)
+            });
+
+        if let Some(locator) = found {
+            // Safety: we store an owned clone of the locator in the cache so we can
+            // return a stable reference on subsequent lookups.
+            let owned = locator.clone().into_owned();
+            // We ignore errors on insert; if insertion fails, behavior remains as before.
+            self.workspace_path_fallback_cache
+                .insert(workspace_path.to_string(), owned);
+            // Return the original locator reference for this call.
+            Some(locator)
+        } else {
+            None
+        }
     }
 }
 
@@ -568,7 +599,8 @@ impl Lockfile for BerryLockfile {
 
         let mut map = HashMap::new();
         for (name, version) in package.dependencies.iter().flatten() {
-            let mut dependency = Descriptor::new(name, version.as_ref()).unwrap();
+            let mut dependency =
+                Descriptor::new(name, version.as_ref()).map_err(Error::from)?;
             for (resolution, reference) in &self.overrides {
                 if let Some(override_dependency) =
                     resolution.reduce_dependency(reference, &dependency, &locator)
