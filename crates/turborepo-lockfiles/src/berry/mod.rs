@@ -415,9 +415,7 @@ impl BerryLockfile {
 
                 // For @types/X extensions, check if X is a dep in the closure.
                 // For other extensions, check if the ident itself is a dep.
-                let search_name = ident
-                    .strip_prefix("@types/")
-                    .unwrap_or(&ident);
+                let search_name = ident.strip_prefix("@types/").unwrap_or(&ident);
 
                 let needed = dep_names_in_closure.contains(search_name)
                     || dep_names_in_closure.contains(&ident);
