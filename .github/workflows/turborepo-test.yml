@@ -155,65 +155,6 @@ jobs:
             exit 1
           fi
 
-  build_rust_test_macos:
-    runs-on: macos-latest-xlarge
-    timeout-minutes: 45
-    needs:
-      - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Build test artifacts (macos)
-    env:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-      TURBO_CACHE: remote:rw
-      SCCACHE_BUCKET: turborepo-sccache
-      SCCACHE_REGION: us-east-2
-      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
-      CARGO_INCREMENTAL: 0
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-      SCCACHE_IDLE_TIMEOUT: 0
-      SCCACHE_REQUEST_TIMEOUT: 30
-      SCCACHE_ERROR_LOG: error
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-          node-version: "18.20.2"
-
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@v2
-        with:
-          macos-skip-brew-update: "true"
-        env:
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
-
-      - name: Run sccache-cache
-        uses: mozilla-actions/sccache-action@v0.0.6
-
-      - name: Install cargo-nextest
-        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
-        with:
-          tool: nextest
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Build and archive test binaries
-        run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
-          turbo run build:test-archive --filter=@turbo/cli
-        shell: bash
-
   build_rust_test_windows:
     runs-on: windows-latest-8-core-oss
     timeout-minutes: 45
@@ -287,17 +228,22 @@ jobs:
         shell: bash
 
   rust_test_macos:
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     runs-on: macos-latest-xlarge
     timeout-minutes: 45
     needs:
       - find-changes
-      - build_rust_test_macos
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on macos (partition ${{ matrix.partition }}/10)
+    name: Rust testing on macos
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -307,32 +253,30 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
-          rust: "false"
-          capnproto: "false"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
 
       - name: Install cargo-nextest
         uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
         with:
           tool: nextest
 
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-
-      - name: Restore test archive from cache
-        run: turbo run build:test-archive --filter=@turbo/cli
-        shell: bash
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
-          TURBO_CACHE: remote:rw
-
       - name: Run tests
         timeout-minutes: 45
         run: |
-          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          cargo nextest run \
+            --workspace \
+            --exclude turborepo-napi \
+            --exclude turborepo-lsp \
+            --exclude turborepo-schema-gen \
+            --no-fail-fast
         shell: bash
 
   rust_test_windows:
@@ -690,7 +634,6 @@ jobs:
     needs:
       - find-changes
       - turbo_types_check
-      - build_rust_test_macos
       - build_rust_test_windows
       - rust_test_macos
       - rust_test_windows
@@ -722,7 +665,6 @@ jobs:
           }
 
           subjob ${{needs.turbo_types_check.result}}
-          subjob ${{needs.build_rust_test_macos.result}}
           subjob ${{needs.build_rust_test_windows.result}}
           subjob ${{needs.rust_test_macos.result}}
           subjob ${{needs.rust_test_windows.result}}
