@@ -383,11 +383,11 @@ impl BerryLockfile {
             // Collect all dependency names from packages in the pruned closure
             let mut dep_names_in_closure: HashSet<String> = HashSet::new();
             for key in packages {
-                if let Ok(pkg_locator) = Locator::try_from(key.as_str()) {
-                    if let Some(pkg) = self.locator_package.get(&pkg_locator) {
-                        for (name, _) in pkg.dependencies.iter().flatten() {
-                            dep_names_in_closure.insert(name.to_string());
-                        }
+                if let Ok(pkg_locator) = Locator::try_from(key.as_str())
+                    && let Some(pkg) = self.locator_package.get(&pkg_locator)
+                {
+                    for (name, _) in pkg.dependencies.iter().flatten() {
+                        dep_names_in_closure.insert(name.to_string());
                     }
                 }
             }
@@ -429,13 +429,11 @@ impl BerryLockfile {
                             for (name, range) in pkg.dependencies.iter().flatten() {
                                 if let Ok(dep_desc) =
                                     self.resolve_dependency(&loc, name, range.as_ref())
+                                    && let Some(dep_loc) = self.resolutions.get(&dep_desc)
+                                    && !resolutions.contains_key(&dep_desc)
                                 {
-                                    if !resolutions.contains_key(&dep_desc) {
-                                        if let Some(dep_loc) = self.resolutions.get(&dep_desc) {
-                                            resolutions.insert(dep_desc, dep_loc.clone());
-                                            queue.push(dep_loc.clone());
-                                        }
-                                    }
+                                    resolutions.insert(dep_desc, dep_loc.clone());
+                                    queue.push(dep_loc.clone());
                                 }
                             }
                         }
