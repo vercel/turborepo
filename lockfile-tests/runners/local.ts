@@ -65,7 +65,9 @@ function lightweightValidationCommand(
     case "npm": {
       return "npm install --package-lock-only --ignore-scripts";
     }
-    case "yarn":
+    case "yarn": {
+      return "yarn install --frozen-lockfile --ignore-scripts";
+    }
     case "yarn-berry": {
       return "yarn install --immutable --mode=skip-build";
     }
