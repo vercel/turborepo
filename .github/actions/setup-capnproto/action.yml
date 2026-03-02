@@ -35,7 +35,7 @@ runs:
           apk add capnproto
         else
           curl -sSL https://capnproto.org/capnproto-c++-1.1.0.tar.gz | tar -zxf -
-          cd capnproto-c++-1.1.0 && ./configure --prefix=/usr && make -j$(nproc) && make install && cd .. && rm -rf capnproto-c++-1.1.0
+          cd capnproto-c++-1.1.0 && ./configure --prefix=/usr --disable-shared && make -j$(nproc) && make install && cd .. && rm -rf capnproto-c++-1.1.0
         fi
 
     - name: "Setup capnproto for macos"
