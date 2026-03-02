@@ -48,7 +48,10 @@
       ]
     },
     "build:test-archive-cov": {
-      "outputs": ["nextest-archive-cov.tar.zst"],
+      "outputs": [
+        "nextest-archive-cov.tar.zst",
+        "$TURBO_ROOT$/target/debug/deps/*"
+      ],
       "dependsOn": ["rust-src"],
       "passThroughEnv": [
         "SCCACHE_BUCKET",
