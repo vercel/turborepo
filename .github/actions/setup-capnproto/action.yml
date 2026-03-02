@@ -17,7 +17,16 @@ runs:
     - name: "Setup capnproto for Linux"
       if: runner.os == 'Linux' && (steps.cache-capnp-linux.outcome == 'skipped' || steps.cache-capnp-linux.outputs.cache-hit != 'true')
       shell: bash
-      run: sudo apt-get -y update && sudo apt-get install -y capnproto
+      run: |
+        if command -v apt-get &> /dev/null; then
+          sudo apt-get -y update && sudo apt-get install -y capnproto
+        elif command -v apk &> /dev/null; then
+          apk add capnproto
+        elif command -v microdnf &> /dev/null; then
+          microdnf install -y make automake autoconf libtool gcc-c++
+          curl -sSL https://capnproto.org/capnproto-c++-1.1.0.tar.gz | tar -zxf -
+          cd capnproto-c++-1.1.0 && ./configure --prefix=/usr && make -j$(nproc) && make install && cd .. && rm -rf capnproto-c++-1.1.0
+        fi
 
     - name: "Setup capnproto for macos"
       if: runner.os == 'macOS'
