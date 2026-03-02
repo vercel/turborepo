@@ -128,8 +128,13 @@ pub fn setup_package_manager(
         &format!("Updated package manager to {package_manager}"),
     )?;
 
-    // Enable corepack for this package manager
+    // Corepack only manages yarn and pnpm. npm ships with node and bun is
+    // its own runtime — neither needs corepack setup.
     let pm_name = package_manager.split('@').next().unwrap_or(package_manager);
+    if !corepack_supports(pm_name) {
+        return Ok(());
+    }
+
     fs::create_dir_all(corepack_dir)?;
 
     let status = cmd("corepack")
@@ -185,8 +190,13 @@ pub fn prepare_corepack_from_package_json(dir: &Path) {
 
     let pm = match pkg.get("packageManager").and_then(|v| v.as_str()) {
         Some(pm) => pm.to_string(),
-        None => return, // No packageManager field, nothing to prepare
+        None => return,
     };
+
+    let pm_name = pm.split('@').next().unwrap_or(&pm);
+    if !corepack_supports(pm_name) {
+        return;
+    }
 
     let status = cmd("corepack")
         .arg("prepare")
@@ -336,6 +346,10 @@ fn git_commit_if_changed(dir: &Path, message: &str) -> Result<(), anyhow::Error>
             .status();
     }
     Ok(())
+}
+
+fn corepack_supports(pm_name: &str) -> bool {
+    matches!(pm_name, "yarn" | "pnpm" | "berry")
 }
 
 fn prepend_to_path(dir: &Path) -> String {
