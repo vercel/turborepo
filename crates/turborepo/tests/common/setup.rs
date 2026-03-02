@@ -174,7 +174,12 @@ pub fn install_deps(
             run_cmd(
                 target_dir,
                 "yarn",
-                &["install", &format!("--cache-folder={}", cache.display())],
+                &[
+                    "install",
+                    "--prefer-offline",
+                    "--frozen-lockfile",
+                    &format!("--cache-folder={}", cache.display()),
+                ],
                 &path_env,
             )?;
 
@@ -239,6 +244,8 @@ fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(
     let output = cmd_with_path(program, path_env)
         .args(args)
         .current_dir(dir)
+        // Allow corepack to download package managers without prompting
+        .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .output()

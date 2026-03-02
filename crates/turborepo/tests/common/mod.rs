@@ -26,6 +26,10 @@ pub fn turbo_command(test_dir: &Path) -> assert_cmd::Command {
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("DO_NOT_TRACK", "1")
         .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
+        // Allow corepack to download package managers without prompting.
+        // Without this, corepack can block waiting for stdin confirmation,
+        // causing tests to hang until they hit the >120s slow threshold.
+        .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir);
