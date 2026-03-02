@@ -266,18 +266,97 @@ fn find_untracked_files(
 
     use ignore::WalkBuilder;
 
-    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
     let root = git.root.as_std_path();
 
+    // Pre-build gitignore matchers from all tracked .gitignore files.
+    // Each .gitignore is built with a builder rooted at its containing
+    // directory so patterns are scoped correctly (e.g., `dist/` in
+    // `packages/ui/.gitignore` only matches under `packages/ui/`).
+    let gitignore_matchers = {
+        let mut matchers: Vec<ignore::gitignore::Gitignore> = Vec::new();
+
+        // Global gitignore + .git/info/exclude are rooted at the repo root
+        let mut root_builder = ignore::gitignore::GitignoreBuilder::new(root);
+        let mut has_root_rules = false;
+        if let Some(global_path) = ignore::gitignore::gitconfig_excludes_path()
+            && global_path.exists()
+        {
+            let _ = root_builder.add(&global_path);
+            has_root_rules = true;
+        }
+        let info_exclude = root.join(".git").join("info").join("exclude");
+        if info_exclude.exists() {
+            let _ = root_builder.add(&info_exclude);
+            has_root_rules = true;
+        }
+
+        for (path, _) in ls_tree_hashes.iter() {
+            let s = path.as_str();
+            if s.ends_with(".gitignore") {
+                let abs_path = root.join(s);
+                if !abs_path.exists() {
+                    continue;
+                }
+                let gi_dir = abs_path.parent().unwrap_or(root);
+                if gi_dir == root {
+                    // Root .gitignore goes into the root builder alongside
+                    // global and info/exclude rules
+                    let _ = root_builder.add(&abs_path);
+                    has_root_rules = true;
+                } else {
+                    // Nested .gitignore gets its own matcher scoped to its dir
+                    let mut builder = ignore::gitignore::GitignoreBuilder::new(gi_dir);
+                    let _ = builder.add(&abs_path);
+                    if let Ok(gi) = builder.build()
+                        && !gi.is_empty()
+                    {
+                        matchers.push(gi);
+                    }
+                }
+            }
+        }
+
+        if has_root_rules
+            && let Ok(gi) = root_builder.build()
+            && !gi.is_empty()
+        {
+            matchers.insert(0, gi);
+        }
+
+        matchers
+    };
+    let gitignore_matchers = std::sync::Arc::new(gitignore_matchers);
+
+    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
+
+    // Disable ALL per-directory probing. Gitignore rules are applied via
+    // filter_entry using the pre-built matcher above.
     let walker = WalkBuilder::new(root)
         .follow_links(false)
-        .git_ignore(true)
-        .require_git(true)
+        .git_ignore(false)
+        .git_exclude(false)
+        .require_git(false)
+        .ignore(false)
+        .parents(false)
         .hidden(false)
-        .filter_entry(|entry| {
-            // Never descend into .git/ — the ignore crate may walk it when
-            // hidden(false) is set because .git is a hidden directory.
-            !(entry.file_type().is_some_and(|ft| ft.is_dir()) && entry.file_name() == ".git")
+        .filter_entry({
+            let matchers = gitignore_matchers.clone();
+            move |entry| {
+                if entry.file_name() == ".git" {
+                    return false;
+                }
+                let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
+                let path = entry.path();
+                // Check against all pre-built gitignore matchers. For
+                // directories, returning false prunes the entire subtree.
+                // Only check matchers whose root is a prefix of the entry
+                // path — a matcher scoped to packages/ui/ can't affect
+                // files under apps/web/.
+                !matchers.iter().any(|gi| {
+                    path.starts_with(gi.path())
+                        && gi.matched_path_or_any_parents(path, is_dir).is_ignore()
+                })
+            }
         })
         .threads(rayon::current_num_threads().min(8))
         .build_parallel();
@@ -331,7 +410,6 @@ fn find_untracked_files(
             #[cfg(windows)]
             let unix_str: &str = &unix_str_owned;
 
-            // Binary search directly on the borrowed slices — no cloned Strings.
             let in_ls_tree = ls_tree_hashes
                 .binary_search_by(|(p, _)| p.as_str().cmp(unix_str))
                 .is_ok();
@@ -351,9 +429,44 @@ fn find_untracked_files(
     });
     drop(tx);
 
-    let mut untracked = Vec::new();
+    let mut untracked: Vec<RelativeUnixPathBuf> = Vec::new();
     for batch in rx.iter() {
         untracked.extend(batch);
+    }
+
+    // Post-filter: check for untracked .gitignore files that we couldn't
+    // know about during the walk. If any exist, build per-directory matchers
+    // from them and remove files that should be ignored.
+    let untracked_gitignores: Vec<&RelativeUnixPathBuf> = untracked
+        .iter()
+        .filter(|p| p.as_str().ends_with(".gitignore"))
+        .collect();
+
+    if !untracked_gitignores.is_empty() {
+        let mut extra_matchers: Vec<ignore::gitignore::Gitignore> = Vec::new();
+        for gi_path in &untracked_gitignores {
+            let abs = root.join(gi_path.as_str());
+            let gi_dir = abs.parent().unwrap_or(root);
+            let mut builder = ignore::gitignore::GitignoreBuilder::new(gi_dir);
+            let _ = builder.add(&abs);
+            if let Ok(gi) = builder.build()
+                && !gi.is_empty()
+            {
+                extra_matchers.push(gi);
+            }
+        }
+        if !extra_matchers.is_empty() {
+            untracked.retain(|p| {
+                if p.as_str().ends_with(".gitignore") {
+                    return true;
+                }
+                let abs = root.join(p.as_str());
+                !extra_matchers.iter().any(|gi| {
+                    abs.starts_with(gi.path())
+                        && gi.matched_path_or_any_parents(&abs, false).is_ignore()
+                })
+            });
+        }
     }
 
     Ok(untracked)

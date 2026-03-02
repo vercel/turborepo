@@ -820,3 +820,330 @@ fn test_gix_index_sorted_order_preserved_through_pipeline() {
     let zzz = repo.get_hashes("zzz-pkg");
     assert_eq!(zzz.len(), 1);
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Category 4: Untracked File Detection Regression Tests
+//
+// These tests ensure that untracked file detection produces correct results
+// regardless of the underlying walk algorithm. They cover edge cases around
+// directory discovery, gitignore handling, and the interaction between the
+// git index and the filesystem.
+// ═══════════════════════════════════════════════════════════════════════════
+
+#[test]
+fn test_untracked_in_new_nested_directories() {
+    let repo = TestRepo::new();
+
+    repo.create_file("my-pkg/src/index.ts", "code");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // Create untracked files in entirely new directories that don't exist
+    // in the git index at all.
+    repo.create_file("my-pkg/new-dir/untracked.ts", "new");
+    repo.create_file("my-pkg/new-dir/sub/deep-untracked.ts", "deep new");
+    repo.create_file("my-pkg/another-new/file.ts", "another");
+
+    let hashes = repo.get_hashes("my-pkg");
+    assert!(hashes.contains_key(&path("src/index.ts")));
+    assert!(hashes.contains_key(&path("new-dir/untracked.ts")));
+    assert!(hashes.contains_key(&path("new-dir/sub/deep-untracked.ts")));
+    assert!(hashes.contains_key(&path("another-new/file.ts")));
+    assert_eq!(hashes.len(), 5);
+
+    // Equivalence: same result without the index
+    let hashes_no_index = repo.get_hashes_no_index("my-pkg");
+    assert_eq!(hashes, hashes_no_index);
+}
+
+#[test]
+fn test_untracked_at_repo_root() {
+    let repo = TestRepo::new();
+
+    repo.create_file("my-pkg/file.ts", "pkg");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("root-untracked.txt", "at root");
+    repo.create_file("another-root-file.js", "also root");
+
+    // Root query should see untracked files at the repo root
+    let root_hashes = repo.get_hashes("");
+    assert!(root_hashes.contains_key(&path("root-untracked.txt")));
+    assert!(root_hashes.contains_key(&path("another-root-file.js")));
+    assert!(root_hashes.contains_key(&path("my-pkg/file.ts")));
+
+    // Package query should NOT see root-level untracked files
+    let pkg_hashes = repo.get_hashes("my-pkg");
+    assert!(!pkg_hashes.contains_key(&path("root-untracked.txt")));
+    assert_eq!(pkg_hashes.len(), 1);
+}
+
+#[test]
+fn test_gitignore_negation_patterns() {
+    let repo = TestRepo::new();
+
+    repo.create_gitignore(".gitignore", "*.log\n!important.log\n");
+    repo.create_file("my-pkg/src/index.ts", "code");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("my-pkg/debug.log", "debug output");
+    repo.create_file("my-pkg/important.log", "keep me");
+    repo.create_file("my-pkg/error.log", "error output");
+
+    let hashes = repo.get_hashes("my-pkg");
+    assert!(
+        !hashes.contains_key(&path("debug.log")),
+        "debug.log should be gitignored"
+    );
+    assert!(
+        !hashes.contains_key(&path("error.log")),
+        "error.log should be gitignored"
+    );
+    assert!(
+        hashes.contains_key(&path("important.log")),
+        "important.log should NOT be gitignored (negation pattern)"
+    );
+
+    let hashes_no_index = repo.get_hashes_no_index("my-pkg");
+    assert_eq!(hashes, hashes_no_index);
+}
+
+#[test]
+fn test_gitignore_in_untracked_directory() {
+    let repo = TestRepo::new();
+
+    repo.create_file("my-pkg/src/index.ts", "code");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.commit_all();
+
+    // Create a new directory that doesn't exist in the index, with its own
+    // .gitignore inside it
+    repo.create_file("my-pkg/new-dir/.gitignore", "*.tmp\n");
+    repo.create_file("my-pkg/new-dir/keep.ts", "keep");
+    repo.create_file("my-pkg/new-dir/skip.tmp", "should be ignored");
+    repo.create_file("my-pkg/new-dir/sub/also-keep.ts", "also keep");
+    repo.create_file("my-pkg/new-dir/sub/also-skip.tmp", "also ignored");
+
+    let hashes = repo.get_hashes("my-pkg");
+    assert!(hashes.contains_key(&path("new-dir/keep.ts")));
+    assert!(hashes.contains_key(&path("new-dir/sub/also-keep.ts")));
+    assert!(hashes.contains_key(&path("new-dir/.gitignore")));
+    assert!(
+        !hashes.contains_key(&path("new-dir/skip.tmp")),
+        ".gitignore in untracked dir should be respected"
+    );
+    assert!(
+        !hashes.contains_key(&path("new-dir/sub/also-skip.tmp")),
+        ".gitignore in untracked dir should apply to subdirs"
+    );
+
+    let hashes_no_index = repo.get_hashes_no_index("my-pkg");
+    assert_eq!(hashes, hashes_no_index);
+}
+
+#[test]
+fn test_empty_directories_on_disk() {
+    let repo = TestRepo::new();
+
+    repo.create_file("my-pkg/file.ts", "content");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.commit_all();
+
+    // Create empty directories — these should not cause errors or
+    // produce spurious results
+    let empty1 = repo.root.join_unix_path(path("my-pkg/empty-dir"));
+    empty1.create_dir_all().unwrap();
+    let empty2 = repo
+        .root
+        .join_unix_path(path("my-pkg/empty-dir/nested-empty"));
+    empty2.create_dir_all().unwrap();
+    let empty3 = repo.root.join_unix_path(path("other-empty"));
+    empty3.create_dir_all().unwrap();
+
+    let hashes = repo.get_hashes("my-pkg");
+    assert_eq!(hashes.len(), 2, "empty dirs should not add files");
+    assert!(hashes.contains_key(&path("file.ts")));
+    assert!(hashes.contains_key(&path("package.json")));
+
+    // Root should also handle empty dirs gracefully
+    let root_hashes = repo.get_hashes("");
+    assert!(root_hashes.contains_key(&path("my-pkg/file.ts")));
+}
+
+#[test]
+fn test_many_untracked_files_across_many_new_directories() {
+    let repo = TestRepo::new();
+
+    repo.create_file("base-pkg/committed.ts", "committed");
+    repo.create_file("base-pkg/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // Create 50 untracked files across 10 new directories
+    for dir_idx in 0..10 {
+        for file_idx in 0..5 {
+            repo.create_file(
+                &format!("base-pkg/new-dir-{}/file-{}.ts", dir_idx, file_idx),
+                &format!("content {} {}", dir_idx, file_idx),
+            );
+        }
+    }
+
+    let hashes = repo.get_hashes("base-pkg");
+    // 2 committed + 50 untracked = 52
+    assert_eq!(hashes.len(), 52);
+    assert!(hashes.contains_key(&path("committed.ts")));
+    assert!(hashes.contains_key(&path("new-dir-0/file-0.ts")));
+    assert!(hashes.contains_key(&path("new-dir-9/file-4.ts")));
+
+    let hashes_no_index = repo.get_hashes_no_index("base-pkg");
+    assert_eq!(hashes, hashes_no_index);
+}
+
+#[test]
+fn test_untracked_detection_equivalence_comprehensive() {
+    // Comprehensive equivalence test: set up a complex repo state and verify
+    // the index-based path produces identical results to the subprocess path.
+    let repo = TestRepo::new();
+
+    // Root-level gitignore
+    repo.create_gitignore(".gitignore", "*.log\ndist/\n.cache/\n");
+
+    // Multiple packages at different depths
+    repo.create_file("apps/web/src/index.ts", "web code");
+    repo.create_file("apps/web/src/utils.ts", "utils");
+    repo.create_file("apps/web/package.json", "{}");
+    repo.create_file("apps/docs/README.md", "docs");
+    repo.create_file("apps/docs/package.json", "{}");
+    repo.create_file("packages/ui/src/button.tsx", "button");
+    repo.create_file("packages/ui/package.json", "{}");
+    repo.create_file("packages/shared/lib/helpers.ts", "helpers");
+    repo.create_file("packages/shared/package.json", "{}");
+
+    // Nested gitignore
+    repo.create_gitignore("packages/ui/.gitignore", "storybook-static/\n");
+
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // Now create a complex dirty state:
+    // - Modified tracked file
+    repo.create_file("apps/web/src/index.ts", "modified web code");
+    // - Deleted tracked file
+    repo.delete_file("apps/web/src/utils.ts");
+    // - Untracked files in existing directories
+    repo.create_file("apps/web/src/new-component.tsx", "new component");
+    repo.create_file("packages/ui/src/dialog.tsx", "dialog");
+    // - Untracked files in new directories
+    repo.create_file("apps/web/tests/app.test.ts", "test");
+    repo.create_file("packages/shared/lib/internal/deep.ts", "deep file");
+    // - Files that should be gitignored
+    repo.create_file("apps/web/debug.log", "log output");
+    repo.create_file("apps/web/dist/bundle.js", "compiled");
+    repo.create_file("packages/ui/storybook-static/index.html", "storybook");
+    repo.create_file("apps/web/.cache/data.json", "cache");
+    // - Untracked file at root
+    repo.create_file("turbo.json", "{}");
+
+    // Verify every package produces identical results with and without index
+    let packages = [
+        "apps/web",
+        "apps/docs",
+        "packages/ui",
+        "packages/shared",
+        "",
+    ];
+    for pkg in packages {
+        let with_index = repo.get_hashes(pkg);
+        let without_index = repo.get_hashes_no_index(pkg);
+        assert_eq!(
+            with_index, without_index,
+            "index vs no-index mismatch for package {:?}",
+            pkg,
+        );
+    }
+
+    // Spot-check specific expectations
+    let web = repo.get_hashes("apps/web");
+    assert!(
+        web.contains_key(&path("src/index.ts")),
+        "modified file should be present"
+    );
+    assert!(
+        !web.contains_key(&path("src/utils.ts")),
+        "deleted file should be absent"
+    );
+    assert!(
+        web.contains_key(&path("src/new-component.tsx")),
+        "untracked in existing dir"
+    );
+    assert!(
+        web.contains_key(&path("tests/app.test.ts")),
+        "untracked in new dir"
+    );
+    assert!(
+        !web.contains_key(&path("debug.log")),
+        "gitignored by root .gitignore"
+    );
+    assert!(
+        !web.contains_key(&path("dist/bundle.js")),
+        "gitignored directory"
+    );
+    assert!(
+        !web.contains_key(&path(".cache/data.json")),
+        "gitignored directory"
+    );
+
+    let ui = repo.get_hashes("packages/ui");
+    assert!(
+        ui.contains_key(&path("src/dialog.tsx")),
+        "untracked in existing dir"
+    );
+    assert!(
+        !ui.contains_key(&path("storybook-static/index.html")),
+        "gitignored by nested .gitignore"
+    );
+}
+
+#[test]
+fn test_nested_gitignore_scoping() {
+    // Gitignore rules in a nested .gitignore should only apply to that
+    // directory, not globally. A pattern like `output/` in
+    // `packages/ui/.gitignore` should ignore `packages/ui/output/` but
+    // NOT `apps/web/output/`.
+    let repo = TestRepo::new();
+
+    repo.create_gitignore(".gitignore", "*.log\n");
+    repo.create_gitignore("packages/ui/.gitignore", "output/\n");
+    repo.create_file("packages/ui/src/button.tsx", "button");
+    repo.create_file("packages/ui/package.json", "{}");
+    repo.create_file("apps/web/src/index.ts", "web");
+    repo.create_file("apps/web/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // Create `output/` directories in both packages
+    repo.create_file("packages/ui/output/bundle.js", "ui bundle");
+    repo.create_file("apps/web/output/bundle.js", "web bundle");
+
+    let ui = repo.get_hashes("packages/ui");
+    assert!(
+        !ui.contains_key(&path("output/bundle.js")),
+        "packages/ui/output/ should be ignored by packages/ui/.gitignore"
+    );
+
+    let web = repo.get_hashes("apps/web");
+    assert!(
+        web.contains_key(&path("output/bundle.js")),
+        "apps/web/output/ should NOT be ignored — the output/ rule is scoped to packages/ui"
+    );
+
+    // Equivalence check
+    let ui_no_index = repo.get_hashes_no_index("packages/ui");
+    let web_no_index = repo.get_hashes_no_index("apps/web");
+    assert_eq!(ui, ui_no_index, "packages/ui mismatch");
+    assert_eq!(web, web_no_index, "apps/web mismatch");
+}
