@@ -37,6 +37,7 @@ use turbopath::RelativeUnixPathBuf;
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
 type ResolveCache = DashMap<String, Option<Package>>;
+type DepsCache = DashMap<String, Option<HashMap<String, String>>>;
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
@@ -133,6 +134,7 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     ignore_missing_packages: bool,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
     let resolve_cache: ResolveCache = DashMap::new();
+    let deps_cache: DepsCache = DashMap::new();
     workspaces
         .into_par_iter()
         .map(|(workspace, unresolved_deps)| {
@@ -142,6 +144,7 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
                 unresolved_deps,
                 ignore_missing_packages,
                 &resolve_cache,
+                &deps_cache,
             )?;
             Ok((workspace, closure))
         })
@@ -156,12 +159,14 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
     ignore_missing_packages: bool,
 ) -> Result<HashSet<Package>, Error> {
     let resolve_cache: ResolveCache = DashMap::new();
+    let deps_cache: DepsCache = DashMap::new();
     transitive_closure_cached(
         lockfile,
         workspace_path,
         unresolved_deps,
         ignore_missing_packages,
         &resolve_cache,
+        &deps_cache,
     )
 }
 
@@ -171,11 +176,13 @@ fn transitive_closure_cached<L: Lockfile + ?Sized>(
     unresolved_deps: HashMap<String, String>,
     ignore_missing_packages: bool,
     resolve_cache: &ResolveCache,
+    deps_cache: &DepsCache,
 ) -> Result<HashSet<Package>, Error> {
     let mut ctx = ClosureContext {
         lockfile,
         workspace_path,
         resolve_cache,
+        deps_cache,
         key_buf: String::new(),
     };
     let mut transitive_deps = HashSet::new();
@@ -192,6 +199,7 @@ struct ClosureContext<'a, L: Lockfile + ?Sized> {
     lockfile: &'a L,
     workspace_path: &'a str,
     resolve_cache: &'a ResolveCache,
+    deps_cache: &'a DepsCache,
     key_buf: String,
 }
 
@@ -275,7 +283,17 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
                 continue;
             }
 
-            let all_deps = self.lockfile.all_dependencies(&pkg.key)?;
+            let all_deps = if let Some(cached) = self.deps_cache.get(&pkg.key) {
+                cached.clone()
+            } else {
+                let deps = self
+                    .lockfile
+                    .all_dependencies(&pkg.key)?
+                    .map(|cow| cow.into_owned());
+                self.deps_cache.insert(pkg.key.clone(), deps.clone());
+                deps
+            };
+
             resolved_deps.insert(pkg);
             if let Some(deps) = all_deps {
                 self.walk(&deps, resolved_deps, false, false)?;
