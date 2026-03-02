@@ -4,8 +4,18 @@ description: "Sets up capnproto for the current platform"
 runs:
   using: "composite"
   steps:
+    - name: "Detect container"
+      id: detect-container
+      shell: bash
+      run: |
+        if [ -f /.dockerenv ] || [ -f /run/.containerenv ] || grep -q 'docker\|lxc\|containerd' /proc/1/cgroup 2>/dev/null; then
+          echo "in-container=true" >> $GITHUB_OUTPUT
+        else
+          echo "in-container=false" >> $GITHUB_OUTPUT
+        fi
+
     - name: "Cache capnproto (Linux)"
-      if: runner.os == 'Linux' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      if: runner.os == 'Linux' && steps.detect-container.outputs.in-container != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       uses: actions/cache@v4
       id: cache-capnp-linux
       with:
