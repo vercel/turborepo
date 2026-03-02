@@ -10,27 +10,19 @@ use std::{
     collections::{BTreeMap, HashMap, HashSet},
     fs::OpenOptions,
     io::Write,
-    sync::{Arc, LazyLock},
+    sync::LazyLock,
 };
 
 pub use config::{BoundariesConfig, Permissions, Rule, RulesMap};
 use globwalk::Settings;
 use indicatif::{ProgressBar, ProgressIterator};
 use miette::{Diagnostic, NamedSource, Report, SourceSpan};
+use oxc_ast::ast::Comment;
 use regex::Regex;
-use swc_common::{
-    FileName, SourceMap, Span,
-    comments::{Comments, SingleThreadedComments},
-    errors::Handler,
-    input::StringInput,
-};
-use swc_ecma_ast::EsVersion;
-use swc_ecma_parser::{EsSyntax, Parser, Syntax, TsSyntax, lexer::Lexer};
-use swc_ecma_visit::VisitWith;
 pub use tags::{ProcessedPermissions, ProcessedRule, ProcessedRulesMap};
 use thiserror::Error;
 use tracing::log::warn;
-use turbo_trace::{ImportFinder, Tracer};
+use turbo_trace::{ImportTraceType, Tracer, find_imports};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName, PackageNode};
@@ -197,8 +189,8 @@ pub enum BoundariesDiagnostic {
         #[source_code]
         text: NamedSource<String>,
     },
-    #[error("failed to parse file {0}")]
-    ParseError(AbsoluteSystemPathBuf, swc_ecma_parser::error::Error),
+    #[error("failed to parse file {0}: {1}")]
+    ParseError(AbsoluteSystemPathBuf, String),
 }
 
 #[derive(Debug, Error, Diagnostic)]
@@ -240,7 +232,6 @@ pub struct BoundariesResult {
     pub files_checked: usize,
     pub packages_checked: usize,
     pub warnings: Vec<String>,
-    pub source_map: Arc<SourceMap>,
     pub diagnostics: Vec<BoundariesDiagnostic>,
 }
 
@@ -250,24 +241,8 @@ impl BoundariesResult {
     }
 
     pub fn emit(&self, color_config: ColorConfig) {
-        let swc_color_config = if color_config.should_strip_ansi {
-            swc_common::errors::ColorConfig::Never
-        } else {
-            swc_common::errors::ColorConfig::Always
-        };
-
-        let handler =
-            Handler::with_tty_emitter(swc_color_config, true, false, Some(self.source_map.clone()));
-
         for diagnostic in self.diagnostics.clone() {
-            match diagnostic {
-                BoundariesDiagnostic::ParseError(_, e) => {
-                    e.clone().into_diagnostic(&handler).emit();
-                }
-                e => {
-                    eprintln!("{:?}", Report::new(e.to_owned()));
-                }
-            }
+            eprintln!("{:?}", Report::new(diagnostic));
         }
         let result_message = match self.diagnostics.len() {
             0 => color!(color_config, BOLD_GREEN, "no issues found"),
@@ -294,22 +269,64 @@ impl BoundariesResult {
     }
 }
 
+/// Parse a file with oxc, returning both imports and comments.
+///
+/// We parse directly here (rather than using `turbo_trace::parse_file`) because
+/// we need access to the comment list for `@boundaries-ignore` detection.
+fn parse_with_comments(
+    file_path: &AbsoluteSystemPath,
+    source: &str,
+) -> Option<(Vec<turbo_trace::ImportResult>, Vec<Comment>)> {
+    let allocator = oxc_allocator::Allocator::default();
+    let source_type = oxc_span::SourceType::from_path(file_path.as_std_path()).unwrap_or_default();
+    let ret = oxc_parser::Parser::new(&allocator, source, source_type).parse();
+    if ret.panicked {
+        return None;
+    }
+    let imports = find_imports(&ret.module_record, &ret.program.body, ImportTraceType::All);
+    let comments: Vec<Comment> = ret.program.comments.iter().copied().collect();
+    Some((imports, comments))
+}
+
 pub struct BoundariesChecker;
 
 impl BoundariesChecker {
-    /// Returns the underlying reason if an import has been marked as ignored
+    /// Returns the underlying reason if an import has been marked as ignored.
+    ///
+    /// Searches for the nearest comment that ends before the import span and
+    /// checks if it contains `@boundaries-ignore`.
     pub(crate) fn get_ignored_comment(
-        comments: &SingleThreadedComments,
-        span: Span,
+        comments: &[Comment],
+        source_text: &str,
+        import_span: oxc_span::Span,
     ) -> Option<String> {
-        if let Some(import_comments) = comments.get_leading(span.lo()) {
-            for comment in import_comments {
-                if let Some(reason) = comment.text.trim().strip_prefix("@boundaries-ignore") {
-                    return Some(reason.to_string());
-                }
-            }
-        }
+        // Walk backwards through comments that end before the import. We check
+        // multiple because there may be stacked comments before an import:
+        //   // @boundaries-ignore reason
+        //   // @ts-ignore
+        //   import { foo } from "bar";
+        //
+        // To detect blank lines we check the gap between each comment and the
+        // *next* item in the chain (initially the import, then the previous
+        // comment we visited). A blank line means >1 newline in that gap.
+        let leading = comments.iter().filter(|c| c.span.end <= import_span.start);
 
+        let mut next_start = import_span.start;
+
+        for comment in leading.rev() {
+            let between = &source_text[comment.span.end as usize..next_start as usize];
+            if between.chars().filter(|&c| c == '\n').count() > 1 {
+                break;
+            }
+
+            let content_span = comment.content_span();
+            let text = &source_text[content_span.start as usize..content_span.end as usize];
+            if let Some(reason) = text.trim().strip_prefix("@boundaries-ignore") {
+                return Some(reason.to_string());
+            }
+
+            next_start = comment.span.start;
+        }
         None
     }
 
@@ -569,50 +586,17 @@ impl BoundariesChecker {
             return Err(Error::FileNotFound(file_path.to_owned()));
         };
 
-        let comments = SingleThreadedComments::default();
-
-        let source_file = result.source_map.new_source_file(
-            FileName::Custom(file_path.to_string()).into(),
-            file_content.clone(),
-        );
-
-        let syntax = if matches!(file_path.extension(), Some("ts") | Some("tsx")) {
-            Syntax::Typescript(TsSyntax {
-                tsx: file_path.extension() == Some("tsx"),
-                decorators: true,
-                ..Default::default()
-            })
-        } else {
-            Syntax::Es(EsSyntax {
-                jsx: true,
-                import_attributes: true,
-                ..Default::default()
-            })
-        };
-
-        let lexer = Lexer::new(
-            syntax,
-            EsVersion::EsNext,
-            StringInput::from(&*source_file),
-            Some(&comments),
-        );
-
-        let mut parser = Parser::new_from(lexer);
-
-        // Parse the file as a module
-        let module: swc_ecma_ast::Module = match parser.parse_module() {
-            Ok(module) => module,
-            Err(err) => {
-                result
-                    .diagnostics
-                    .push(BoundariesDiagnostic::ParseError(file_path.to_owned(), err));
+        let (imports, comments) = match parse_with_comments(file_path, &file_content) {
+            Some(result) => result,
+            None => {
+                result.diagnostics.push(BoundariesDiagnostic::ParseError(
+                    file_path.to_owned(),
+                    "parser panicked".to_string(),
+                ));
                 return Ok(());
             }
         };
 
-        // Visit the AST and find imports
-        let mut finder = ImportFinder::default();
-        module.visit_with(&mut finder);
         let dependency_locations = DependencyLocations {
             package: package_name,
             internal_dependencies,
@@ -624,16 +608,17 @@ impl BoundariesChecker {
                 .as_ref(),
         };
 
-        for (import, span, import_type) in finder.imports() {
+        for import_result in &imports {
             imports::check_import(
                 &comments,
+                &file_content,
                 result,
-                &source_file,
                 package_name,
                 package_root,
-                import,
-                import_type,
-                span,
+                &import_result.specifier,
+                &import_result.import_type,
+                &import_result.span,
+                &import_result.statement_span,
                 file_path,
                 &file_content,
                 dependency_locations,

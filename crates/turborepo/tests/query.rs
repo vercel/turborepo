@@ -77,6 +77,7 @@ fn test_trace() -> Result<(), anyhow::Error> {
             "get `incorrect_extension.mjs` with dependencies" =>  ["query { file(path: \"incorrect_extension.mjs\") { path dependencies(depth: 1) { files { items { path } } } } }"],
             "get `export_all.js` with dependencies" => ["query { file(path: \"export_all.js\") { path dependencies { files { items { path } } } } }"],
             "get `export_named.js` with dependencies" => ["query { file(path: \"export_named.js\") { path dependencies { files { items { path } } } } }"],
+            "get `require_example.js` with dependencies" => ["query { file(path: \"require_example.js\") { path dependencies { files { items { path } } } } }"],
         );
 
         Ok(())

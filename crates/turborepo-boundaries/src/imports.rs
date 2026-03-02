@@ -1,12 +1,10 @@
-use std::{
-    collections::{BTreeMap, HashMap, HashSet},
-    sync::Arc,
-};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use camino::Utf8Path;
 use itertools::Itertools;
 use miette::{NamedSource, SourceSpan};
-use swc_common::{SourceFile, Span, comments::SingleThreadedComments};
+use oxc_ast::ast::Comment;
+use oxc_span::Span;
 use turbo_trace::ImportType;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_errors::Spanned;
@@ -136,14 +134,15 @@ fn check_import_as_tsconfig_path_alias(
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn check_import(
-    comments: &SingleThreadedComments,
+    comments: &[Comment],
+    source_text: &str,
     result: &mut BoundariesResult,
-    source_file: &Arc<SourceFile>,
     package_name: &PackageName,
     package_root: &AbsoluteSystemPath,
     import: &str,
     import_type: &ImportType,
     span: &Span,
+    statement_span: &Span,
     file_path: &AbsoluteSystemPath,
     file_content: &str,
     dependency_locations: DependencyLocations<'_>,
@@ -151,7 +150,7 @@ pub(crate) fn check_import(
 ) -> Result<(), Error> {
     // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
     // a warning
-    match BoundariesChecker::get_ignored_comment(comments, *span) {
+    match BoundariesChecker::get_ignored_comment(comments, source_text, *statement_span) {
         Some(reason) if reason.is_empty() => {
             result.warnings.push(
                 "@boundaries-ignore requires a reason, e.g. `// @boundaries-ignore implicit \
@@ -160,26 +159,21 @@ pub(crate) fn check_import(
             );
         }
         Some(_) => {
-            // Try to get the line number for warning
-            let line = result.source_map.lookup_line(span.lo()).map(|l| l.line);
-            if let Ok(line) = line {
-                result
-                    .warnings
-                    .push(format!("ignoring import on line {line} in {file_path}"));
-            } else {
-                result
-                    .warnings
-                    .push(format!("ignoring import in {file_path}"));
-            }
+            let line = source_text[..span.start as usize]
+                .chars()
+                .filter(|&c| c == '\n')
+                .count();
+            result
+                .warnings
+                .push(format!("ignoring import on line {line} in {file_path}"));
 
             return Ok(());
         }
         None => {}
     }
 
-    let (start, end) = result.source_map.span_to_char_offset(source_file, *span);
-    let start = start as usize;
-    let end = end as usize;
+    let start = span.start as usize;
+    let end = span.end as usize;
 
     let span = SourceSpan::new(start.into(), end - start);
 

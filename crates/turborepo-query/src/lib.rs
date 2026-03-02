@@ -47,7 +47,7 @@ type BoundariesFuture<'a> = Pin<
 /// The interface that the query layer requires from a "run" context.
 ///
 /// This trait decouples the GraphQL query layer from the concrete `Run` type
-/// in turborepo-lib, allowing the heavy async-graphql/axum/swc dependencies
+/// in turborepo-lib, allowing the heavy async-graphql/axum/oxc dependencies
 /// to compile in a separate crate.
 ///
 /// Object-safe so it can be used via `Arc<dyn QueryRun>`.
@@ -109,8 +109,8 @@ pub enum Error {
     #[error(transparent)]
     #[diagnostic(transparent)]
     Resolution(#[from] turborepo_scope::filter::ResolutionError),
-    #[error("Failed to parse file: {0:?}")]
-    Parse(swc_ecma_parser::error::Error),
+    #[error("Failed to parse file: {0}")]
+    Parse(String),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
 }

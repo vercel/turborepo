@@ -11,12 +11,14 @@ axum = { workspace = true }
 camino = "1.1.4"
 itertools = { workspace = true }
 miette = { workspace = true }
+oxc_allocator = { workspace = true }
+oxc_ast = { workspace = true }
+oxc_estree = { workspace = true }
+oxc_parser = { workspace = true }
+oxc_span = { workspace = true }
 petgraph = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-swc_common = { workspace = true }
-swc_ecma_ast = { workspace = true, features = ["serde-impl"] }
-swc_ecma_parser = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tower-http = { version = "0.5.2", features = ["cors"] }
