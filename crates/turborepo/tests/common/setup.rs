@@ -146,7 +146,62 @@ pub fn setup_package_manager(
         anyhow::bail!("corepack enable {} failed with {}", pm_name, status);
     }
 
+    // Pre-download the exact PM version into corepack's cache so that
+    // subsequent invocations (yarn install, turbo run build → yarn run build)
+    // resolve locally without any network access. Without this, every
+    // corepack-intercepted PM call can trigger a slow download that causes
+    // tests to timeout in CI.
+    let status = cmd("corepack")
+        .arg("prepare")
+        .arg(package_manager) // e.g. "yarn@1.22.17"
+        .arg("--activate")
+        .current_dir(target_dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .status()
+        .map_err(|e| anyhow::anyhow!("failed to run corepack prepare: {e}"))?;
+
+    if !status.success() {
+        anyhow::bail!(
+            "corepack prepare {} failed with {}",
+            package_manager,
+            status
+        );
+    }
+
     Ok(())
+}
+
+/// Read the `packageManager` field from `package.json` in `dir` and run
+/// `corepack prepare <value> --activate` to pre-warm the corepack cache.
+/// This is used by test setups that copy fixtures with a pre-existing
+/// `packageManager` field (e.g. lockfile-aware-caching tests) and don't go
+/// through `setup_package_manager`.
+pub fn prepare_corepack_from_package_json(dir: &Path) {
+    let pkg_json_path = dir.join("package.json");
+    let contents = fs::read_to_string(&pkg_json_path).expect("failed to read package.json");
+    let pkg: serde_json::Value =
+        serde_json::from_str(&contents).expect("failed to parse package.json");
+
+    let pm = match pkg.get("packageManager").and_then(|v| v.as_str()) {
+        Some(pm) => pm.to_string(),
+        None => return, // No packageManager field, nothing to prepare
+    };
+
+    let status = cmd("corepack")
+        .arg("prepare")
+        .arg(&pm)
+        .arg("--activate")
+        .current_dir(dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .status()
+        .unwrap_or_else(|e| panic!("failed to run corepack prepare {pm}: {e}"));
+
+    assert!(
+        status.success(),
+        "corepack prepare {pm} failed with {status}"
+    );
 }
 
 /// Install dependencies using the specified package manager.
@@ -244,9 +299,10 @@ fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(
     let output = cmd_with_path(program, path_env)
         .args(args)
         .current_dir(dir)
-        // Prevent corepack from prompting or downloading exact versions
+        // Safety net: auto-approve any corepack download prompt in case the
+        // cache is somehow cold. The setup pre-warms the cache via
+        // `corepack prepare` so this should rarely be needed.
         .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
-        .env("COREPACK_ENABLE_STRICT", "0")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .output()

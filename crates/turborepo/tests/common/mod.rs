@@ -27,14 +27,11 @@ pub fn turbo_command(test_dir: &Path) -> assert_cmd::Command {
         .env("DO_NOT_TRACK", "1")
         .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
         // Corepack intercepts package manager calls (yarn, pnpm) and can
-        // either prompt for download confirmation or fetch an exact version
-        // from the network, both of which hang in non-interactive CI.
-        // COREPACK_ENABLE_DOWNLOAD_PROMPT=0 auto-approves downloads.
-        // COREPACK_ENABLE_STRICT=0 lets corepack fall back to whatever
-        // version is already installed instead of downloading the exact
-        // version from packageManager field.
+        // prompt for download confirmation, which hangs in non-interactive CI.
+        // The test setup pre-warms the corepack cache via `corepack prepare`
+        // so the correct version is available locally without network access.
+        // DOWNLOAD_PROMPT=0 is a safety net in case the cache is somehow cold.
         .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
-        .env("COREPACK_ENABLE_STRICT", "0")
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir);
@@ -146,6 +143,10 @@ pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
 
     setup::copy_dir_all(&base_fixture, dir).unwrap();
     setup::copy_dir_all(&pm_overlay, dir).unwrap();
+
+    // Pre-warm the corepack cache for the declared packageManager version so
+    // that turbo's PM invocations resolve locally without network access.
+    setup::prepare_corepack_from_package_json(dir);
 
     // Lockfile tests need a minimal git init without .npmrc or extra .gitignore
     // entries that setup::setup_git() creates, since those would appear in git
