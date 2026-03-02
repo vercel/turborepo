@@ -1,6 +1,6 @@
 use std::{
     collections::HashSet,
-    io::{ErrorKind, Read},
+    io::{BufReader, ErrorKind, Read},
 };
 
 use globwalk::fix_glob_pattern;
@@ -11,25 +11,35 @@ use wax::{Glob, Program, any};
 
 use crate::{Error, GitHashes, OidHash};
 
+/// Hash a file as a git blob object using streaming I/O.
+///
+/// Writes the git blob header ("blob {size}\0") into the hasher using the
+/// file size from metadata, then streams the file contents in fixed-size
+/// chunks. Peak memory per call is bounded by `BUF_SIZE` (~64KB) regardless
+/// of file size.
+///
+/// Note: for symlinks, `open()` follows the link and reads the target. This
+/// is intentional for dotEnv file hashing.
 fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<OidHash, Error> {
     let mut hasher = Sha1::new();
-    let mut f = path.open()?;
-    // Pre-allocate the buffer based on file metadata to avoid repeated
-    // reallocations during read_to_end. The +1 accounts for read_to_end's
-    // probe read that confirms EOF.
-    let estimated_size = f.metadata().map(|m| m.len() as usize + 1).unwrap_or(0);
-    let mut buffer = Vec::with_capacity(estimated_size);
-    // Note that read_to_end reads the target if f is a symlink. Currently, this can
-    // happen when we are hashing a specific set of files, which in turn only
-    // happens for handling dotEnv files. It is likely that in the future we
-    // will want to ensure that the target is better accounted for in the set of
-    // inputs to the task. Manual hashing, as well as global deps and other
-    // places that support globs all ignore symlinks.
-    let size = f.read_to_end(&mut buffer)?;
-    hasher.update("blob ".as_bytes());
-    hasher.update(size.to_string().as_bytes());
+    let f = path.open()?;
+    let file_len = f.metadata()?.len();
+
+    hasher.update(b"blob ");
+    hasher.update(file_len.to_string().as_bytes());
     hasher.update([b'\0']);
-    hasher.update(buffer.as_slice());
+
+    const BUF_SIZE: usize = 64 * 1024;
+    let mut reader = BufReader::with_capacity(BUF_SIZE, f);
+    let mut buf = [0u8; BUF_SIZE];
+    loop {
+        let n = reader.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buf[..n]);
+    }
+
     let result = hasher.finalize();
     let mut hex_buf = [0u8; 40];
     hex::encode_to_slice(result, &mut hex_buf).unwrap();
@@ -551,5 +561,57 @@ mod tests {
             !hashes.contains_key(&RelativeUnixPathBuf::new("excluded.ts").unwrap()),
             "excluded.ts should NOT be present"
         );
+    }
+
+    /// Verify that the manual (non-git) hashing path produces OIDs identical
+    /// to `git hash-object`. This is the manual-path counterpart of
+    /// `hash_object::test::test_blob_hash_matches_git_hash_object` and
+    /// covers the streaming I/O boundary conditions.
+    #[test]
+    fn test_manual_hash_matches_git_hash_object() {
+        let (_tmp, turbo_root) = tmp_dir();
+
+        // 128KB: spans multiple 64KB read buffers
+        let multi_buf_content = vec![b'A'; 128 * 1024];
+        // Exactly 64KB: boundary where one read fills the buffer and the next returns 0
+        let exact_buf_content = vec![b'B'; 64 * 1024];
+
+        let cases: Vec<(&str, Vec<u8>)> = vec![
+            ("empty.txt", b"".to_vec()),
+            ("hello.txt", b"hello world\n".to_vec()),
+            ("binary.bin", vec![0u8, 1, 2, 255, 254, 253]),
+            ("small.txt", vec![b'x'; 10_000]),
+            ("multi_buf.bin", multi_buf_content),
+            ("exact_buf.bin", exact_buf_content),
+        ];
+
+        for (name, content) in &cases {
+            std::fs::write(turbo_root.as_path().join(name), content).unwrap();
+        }
+
+        // Use a temp git repo so we can call `git hash-object`
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(turbo_root.as_path())
+            .output()
+            .unwrap();
+
+        for (name, _) in &cases {
+            let output = std::process::Command::new("git")
+                .args(["hash-object", name])
+                .current_dir(turbo_root.as_path())
+                .output()
+                .unwrap();
+            assert!(output.status.success(), "git hash-object failed for {name}");
+            let expected_hash = String::from_utf8(output.stdout).unwrap();
+            let expected_hash = expected_hash.trim();
+
+            let path = turbo_root.join_component(name);
+            let actual = git_like_hash_file(&path).unwrap();
+            assert_eq!(
+                &*actual, expected_hash,
+                "manual hash for {name} must match git hash-object"
+            );
+        }
     }
 }

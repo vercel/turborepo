@@ -192,6 +192,37 @@ mod test {
         }
     );
 
+    // File package fixture - should have only 2 elements: [ident, info]
+    fixture!(
+        file_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "@api/sdk@file:apps/api/.api/apis/sdk".into(),
+            registry: None,
+            info: Some(PackageInfo {
+                dependencies: Some(("is-odd".into(), "^3.0.1".into()))
+                    .into_iter()
+                    .collect(),
+                ..Default::default()
+            }),
+            checksum: None,
+            root: None,
+        }
+    );
+
+    // Link package fixture - should have only 2 elements: [ident, info]
+    fixture!(
+        link_pkg,
+        PackageEntry,
+        PackageEntry {
+            ident: "my-pkg@link:../../local-pkg".into(),
+            registry: None,
+            info: Some(PackageInfo::default()),
+            checksum: None,
+            root: None,
+        }
+    );
+
     // Test fixture to verify defense-in-depth: even if a github package
     // somehow has registry set (e.g., from corrupted input), serialization
     // should NOT output the registry field
@@ -219,6 +250,8 @@ mod test {
     #[test_case(json!(["some-package@root:", {"bin": "bin", "binDir": "binDir"}]), root_pkg() ; "root package")]
     #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg() ; "github package")]
     #[test_case(json!(["my-package@git+https://github.com/user/repo#abc123", {"dependencies": {"lodash": "4.17.21"}}, "abc123"]), git_pkg() ; "git package")]
+    #[test_case(json!(["@api/sdk@file:apps/api/.api/apis/sdk", {"dependencies": {"is-odd": "^3.0.1"}}]), file_pkg() ; "file package")]
+    #[test_case(json!(["my-pkg@link:../../local-pkg", {}]), link_pkg() ; "link package")]
     // Defense-in-depth test: corrupted registry should be stripped from github packages during
     // serialization
     #[test_case(json!(["@tanstack/react-store@github:TanStack/store#24a971c", {"dependencies": {"@tanstack/store": "0.7.0"}}, "24a971c"]), github_pkg_with_corrupted_registry() ; "github package with corrupted registry stripped")]

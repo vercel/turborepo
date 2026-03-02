@@ -109,7 +109,7 @@ jobs:
 
           # Detect if Rust/core code changed (requires Rust tests + integration tests)
           # This excludes JS-only changes like packages/*, lockfile, etc.
-          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|\.github/|turborepo-tests/)"
+          RUST_PATTERNS="^(crates/|cli/|Cargo\.|rust-toolchain|\.cargo/|\.config/|\.github/|turborepo-tests/)"
           RUST_CHANGES=$(echo "$CHANGED_FILES" | grep -E "$RUST_PATTERNS" || true)
 
           if [ -n "$RUST_CHANGES" ]; then
@@ -155,22 +155,78 @@ jobs:
             exit 1
           fi
 
-  rust_test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-          - name: macos
-            runner: macos-latest-xlarge
-          - name: windows
-            runner: windows-latest
-        partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    runs-on: ${{ matrix.os.runner }}
+  build_rust_test_windows:
+    runs-on: windows-latest-8-core-oss
     timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on ${{ matrix.os.name }} (partition ${{ matrix.partition }}/10)
+    name: Build test artifacts (windows)
+    env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
+    steps:
+      - name: Install git (Windows larger runners)
+        shell: cmd
+        run: |
+          curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
+          mkdir "%ProgramFiles%\Git"
+          tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
+          del "%ProgramFiles%\Git\etc\gitconfig"
+          echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+
+      - name: Set git to use LF line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
+          package-install: "false"
+
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
+      - name: Install cargo-nextest
+        shell: cmd
+        run: |
+          curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
+          tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Build and archive test binaries
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          turbo run build:test-archive --filter=@turbo/cli
+        shell: bash
+
+  rust_test_macos:
+    runs-on: macos-latest-xlarge
+    timeout-minutes: 45
+    needs:
+      - find-changes
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    name: Rust testing on macos
     env:
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
@@ -182,12 +238,6 @@ jobs:
       SCCACHE_REQUEST_TIMEOUT: 30
       SCCACHE_ERROR_LOG: error
     steps:
-      - name: Set git to use LF line endings
-        run: |
-          git config --global core.autocrlf false
-          git config --global core.eol lf
-        if: matrix.os.name == 'windows'
-
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -196,22 +246,10 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
+          package-install: "false"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@v2
-        with:
-          macos-skip-brew-update: "true"
-        env:
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
-
-      - name: Cache Prysk venv
-        uses: actions/cache@v4
-        with:
-          path: turborepo-tests/integration/.cram_env
-          key: prysk-venv-${{ matrix.os.runner }}
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -221,30 +259,98 @@ jobs:
         with:
           tool: nextest
 
-      - name: Run tests
-        timeout-minutes: 45
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Build and cache test archive
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          if [ "$RUNNER_OS" == "Windows" ]; then
-              cargo nextest run --workspace --exclude turborepo-napi --no-fail-fast --partition hash:${{ matrix.partition }}/10
-          else
-              cargo nextest run --workspace --no-fail-fast --partition hash:${{ matrix.partition }}/10
-          fi
+          turbo run build:test-archive --filter=@turbo/cli
+        shell: bash
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_CACHE: remote:rw
+
+      - name: Run tests
+        timeout-minutes: 45
+        run: |
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast
         shell: bash
 
-  rust_test_ubuntu:
+  rust_test_windows:
     strategy:
       fail-fast: false
       matrix:
         partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    runs-on: windows-latest-8-core-oss
+    timeout-minutes: 45
+    needs:
+      - find-changes
+      - build_rust_test_windows
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    name: Rust testing on windows (partition ${{ matrix.partition }}/10)
+    steps:
+      - name: Install git (Windows larger runners)
+        shell: cmd
+        run: |
+          curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
+          mkdir "%ProgramFiles%\Git"
+          tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
+          del "%ProgramFiles%\Git\etc\gitconfig"
+          echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
+
+      - name: Set git to use LF line endings
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
+          capnproto: "false"
+          package-install: "false"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Install cargo-nextest
+        shell: cmd
+        run: |
+          curl -L -o "%TEMP%\nextest.zip" "https://get.nexte.st/latest/windows"
+          tar -xf "%TEMP%\nextest.zip" -C "%USERPROFILE%\.cargo\bin"
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Restore test archive from cache
+        run: turbo run build:test-archive --filter=@turbo/cli
+        shell: bash
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_CACHE: remote:rw
+
+      - name: Run tests
+        timeout-minutes: 45
+        run: |
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10
+        shell: bash
+
+  rust_test_ubuntu:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on ubuntu (partition ${{ matrix.partition }}/10)
+    name: Rust testing on ubuntu
     env:
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
@@ -264,20 +370,10 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
+          package-install: "false"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
-      - name: Setup Graphviz
-        uses: ts-graphviz/setup-graphviz@v2
-        env:
-          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: true
-
-      - name: Cache Prysk venv
-        uses: actions/cache@v4
-        with:
-          path: turborepo-tests/integration/.cram_env
-          key: prysk-venv-ubuntu-latest
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -292,35 +388,39 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Build turbo binary
-        timeout-minutes: 15
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Build coverage-instrumented test archive
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          cargo build -p turbo
+          turbo run build:test-archive-cov --filter=@turbo/cli
         shell: bash
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_CACHE: remote:rw
 
-      - name: Run tests with coverage
+      - name: Run tests and generate coverage
         timeout-minutes: 45
         run: |
-          if [ -z "${RUSTC_WRAPPER}" ]; then
-            unset RUSTC_WRAPPER
-          fi
-          cargo llvm-cov nextest \
-            --workspace \
-            --exclude turborepo-napi \
-            --partition hash:${{ matrix.partition }}/10 \
-            --no-fail-fast \
+          eval $(cargo llvm-cov show-env --export-prefix)
+          cargo nextest run \
+            --archive-file cli/nextest-archive-cov.tar.zst \
+            --no-fail-fast
+          cargo llvm-cov report \
             --lcov \
-            --output-path coverage-${{ matrix.partition }}.lcov
+            --output-path coverage.lcov
         shell: bash
 
       - name: Upload coverage artifact
+        if: ${{ hashFiles('coverage.lcov') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-partition-${{ matrix.partition }}
-          path: coverage-${{ matrix.partition }}.lcov
+          name: coverage
+          path: coverage.lcov
           retention-days: 1
 
   coverage_report:
@@ -342,23 +442,19 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Download coverage artifacts
+      - name: Download coverage artifact
+        id: download-coverage
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
-          pattern: coverage-partition-*
-          merge-multiple: true
+          name: coverage
 
-      - name: Install lcov
-        run: sudo apt-get install -y lcov
-
-      - name: Merge and transform coverage
-        if: ${{ !github.event.pull_request.head.repo.fork }}
+      - name: Transform coverage
+        if: ${{ steps.download-coverage.outcome == 'success' && !github.event.pull_request.head.repo.fork }}
         run: |
           SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
 
-          lcov --add-tracefile coverage-1.lcov --add-tracefile coverage-2.lcov --add-tracefile coverage-3.lcov --add-tracefile coverage-4.lcov --add-tracefile coverage-5.lcov --add-tracefile coverage-6.lcov --add-tracefile coverage-7.lcov --add-tracefile coverage-8.lcov --add-tracefile coverage-9.lcov --add-tracefile coverage-10.lcov --output-file coverage-merged.lcov
-
-          node scripts/transform-coverage.js coverage-merged.lcov coverage-transformed.json >> "$GITHUB_ENV"
+          node scripts/transform-coverage.js coverage.lcov coverage-transformed.json >> "$GITHUB_ENV"
 
           npx vercel blob put coverage-transformed.json --pathname="coverage/commits/${SHA}.json" \
             --token "${BLOB_READ_WRITE_TOKEN}"
@@ -374,7 +470,7 @@ jobs:
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
 
       - name: Comment on PR
-        if: github.event_name == 'pull_request' && env.COVERAGE_API_URL != '' && !github.event.pull_request.head.repo.fork
+        if: steps.download-coverage.outcome == 'success' && github.event_name == 'pull_request' && env.COVERAGE_API_URL != '' && !github.event.pull_request.head.repo.fork
         uses: actions/github-script@v7
         with:
           script: |
@@ -555,7 +651,9 @@ jobs:
     needs:
       - find-changes
       - turbo_types_check
-      - rust_test
+      - build_rust_test_windows
+      - rust_test_macos
+      - rust_test_windows
       - rust_test_ubuntu
       - coverage_report
       - check-examples
@@ -584,7 +682,9 @@ jobs:
           }
 
           subjob ${{needs.turbo_types_check.result}}
-          subjob ${{needs.rust_test.result}}
+          subjob ${{needs.build_rust_test_windows.result}}
+          subjob ${{needs.rust_test_macos.result}}
+          subjob ${{needs.rust_test_windows.result}}
           subjob ${{needs.rust_test_ubuntu.result}}
           subjob ${{needs.coverage_report.result}}
           subjob ${{needs.check-examples.result}}

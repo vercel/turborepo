@@ -30,7 +30,7 @@ use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
-use turborepo_run_summary::RunTracker;
+use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
@@ -78,6 +78,7 @@ pub struct Run {
     should_print_prelude: bool,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: Arc<Option<RepoGitIndex>>,
+    observability_handle: Option<ObservabilityHandle>,
 }
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
@@ -616,6 +617,9 @@ impl Run {
         rayon::scope(|s| {
             s.spawn(|_| {
                 let _span = tracing::info_span!("calculate_file_hashes_task").entered();
+                let needs_expanded = self.opts.run_opts.dry_run.is_some()
+                    || self.opts.run_opts.summarize
+                    || self.observability_handle.is_some();
                 file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
                     &self.scm,
                     self.engine.tasks(),
@@ -624,6 +628,7 @@ impl Run {
                     &self.repo_root,
                     &self.run_telemetry,
                     repo_index,
+                    needs_expanded,
                 ));
             });
             s.spawn(|_| {
@@ -706,6 +711,7 @@ impl Run {
             self.opts.synthesize_command(),
             self.version,
             Vendor::get_user(),
+            self.observability_handle.clone(),
         );
 
         let mut visitor = Visitor::new(

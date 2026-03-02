@@ -1,0 +1,17 @@
+---
+source: crates/turborepo/tests/passthrough_args_test.rs
+expression: stdout.to_string()
+---
+• Packages in scope: my-app
+• Running my-app#echo in 1 packages
+• Remote caching disabled
+my-app:echo: cache miss, executing f4397252b3a3d780
+my-app:echo: 
+my-app:echo: > echo
+my-app:echo: > echo goodbye
+my-app:echo: 
+my-app:echo: goodbye
+
+ Tasks:    1 successful, 1 total
+Cached:    0 cached, 1 total
+  Time:    [TIME]

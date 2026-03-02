@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -19,8 +21,6 @@ fn fixtures_dir() -> PathBuf {
 }
 
 /// Copy a fixture directory into `target_dir`.
-///
-/// Equivalent to: `cp -a fixtures/$fixture/. $target_dir/`
 pub fn copy_fixture(fixture: &str, target_dir: &Path) -> Result<(), anyhow::Error> {
     let src = fixtures_dir().join(fixture);
     if !src.exists() {
@@ -30,7 +30,7 @@ pub fn copy_fixture(fixture: &str, target_dir: &Path) -> Result<(), anyhow::Erro
     Ok(())
 }
 
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
+pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
@@ -69,9 +69,7 @@ fn copy_symlink(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
 }
 
 /// Initialize a git repository in `target_dir` with a single commit.
-///
-/// Equivalent to setup_git.sh:
-///   git init, configure user, write .npmrc, git add ., git commit
+/// Configures user, writes .npmrc, adds all files, and commits.
 pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
     let git = |args: &[&str]| -> Result<(), anyhow::Error> {
         let status = cmd("git")
@@ -92,7 +90,12 @@ pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
     git(&["config", "user.name", "Turbo Test"])?;
 
     // npm script-shell=bash for cross-platform consistency
-    fs::write(target_dir.join(".npmrc"), "script-shell=bash\n")?;
+    // update-notifier=false suppresses "npm notice" upgrade messages that cause
+    // test flakes
+    fs::write(
+        target_dir.join(".npmrc"),
+        "script-shell=bash\nupdate-notifier=false\n",
+    )?;
 
     git(&["add", "."])?;
     git(&["commit", "-m", "Initial", "--quiet"])?;
@@ -101,11 +104,8 @@ pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
 }
 
 /// Write the `packageManager` field into `package.json` and configure corepack.
-///
-/// Returns the path to the corepack install directory (outside `target_dir` so
-/// corepack shims don't appear as task inputs).
-///
-/// Equivalent to setup_package_manager.sh.
+/// The corepack install directory is placed outside `target_dir` so corepack
+/// shims don't appear as task inputs.
 pub fn setup_package_manager(
     target_dir: &Path,
     package_manager: &str,
@@ -150,8 +150,6 @@ pub fn setup_package_manager(
 }
 
 /// Install dependencies using the specified package manager.
-///
-/// Equivalent to install_deps.sh.
 pub fn install_deps(
     target_dir: &Path,
     package_manager: &str,
@@ -176,7 +174,12 @@ pub fn install_deps(
             run_cmd(
                 target_dir,
                 "yarn",
-                &["install", &format!("--cache-folder={}", cache.display())],
+                &[
+                    "install",
+                    "--prefer-offline",
+                    "--frozen-lockfile",
+                    &format!("--cache-folder={}", cache.display()),
+                ],
                 &path_env,
             )?;
 
@@ -209,11 +212,10 @@ pub fn install_deps(
     Ok(())
 }
 
-/// The full integration test setup, equivalent to `setup_integration_test.sh`.
+/// The full integration test setup.
 ///
 /// The corepack install directory is placed outside `target_dir` (in a sibling
-/// temp directory) so that corepack shims don't appear as turbo task inputs,
-/// matching the prysk shell setup behavior.
+/// temp directory) so that corepack shims don't appear as turbo task inputs.
 pub fn setup_integration_test(
     target_dir: &Path,
     fixture: &str,
@@ -239,16 +241,26 @@ pub fn setup_integration_test(
 }
 
 fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(), anyhow::Error> {
-    let status = cmd_with_path(program, path_env)
+    let output = cmd_with_path(program, path_env)
         .args(args)
         .current_dir(dir)
+        // Prevent corepack from prompting or downloading exact versions
+        .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
+        .env("COREPACK_ENABLE_STRICT", "0")
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
+        .stderr(std::process::Stdio::piped())
+        .output()
         .map_err(|e| anyhow::anyhow!("failed to run `{program}`: {e}"))?;
 
-    if !status.success() {
-        anyhow::bail!("{} {:?} failed with {}", program, args, status);
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!(
+            "{} {:?} failed with {}:\n{}",
+            program,
+            args,
+            output.status,
+            stderr
+        );
     }
     Ok(())
 }

@@ -17,7 +17,6 @@
     "turbo-prebuilt": "pnpm -- turbo",
     "prepare": "husky install",
     "test": "turbo run test",
-    "test:integration": "pnpm --filter turborepo-tests-integration exec prysk",
     "rustdoc": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going || true",
     "rustdoc:open": "RUSTDOCFLAGS=\"-Z unstable-options --enable-index-page\" cargo doc --workspace --no-deps --keep-going --open",
     "check": "ultracite check",

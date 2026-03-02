@@ -10,7 +10,6 @@ license = "MIT"
 default = ["rustls-tls"]
 native-tls = ["turborepo-api-client/native-tls", "turbo-updater/native-tls"]
 rustls-tls = ["turborepo-api-client/rustls-tls", "turbo-updater/rustls-tls"]
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dev-dependencies]
 anyhow = { workspace = true, features = ["backtrace"] }
@@ -116,6 +115,7 @@ turborepo-json-rewrite = { path = "../turborepo-json-rewrite" }
 turborepo-lockfiles = { workspace = true }
 turborepo-microfrontends = { workspace = true }
 turborepo-microfrontends-proxy = { workspace = true }
+turborepo-otel = { workspace = true }
 turborepo-process = { workspace = true }
 turborepo-profile-md = { workspace = true }
 turborepo-query = { workspace = true }

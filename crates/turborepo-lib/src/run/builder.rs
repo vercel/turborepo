@@ -21,6 +21,7 @@ use turborepo_repository::{
     package_json,
     package_json::PackageJson,
 };
+use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::TaskName;
@@ -449,6 +450,32 @@ impl RunBuilder {
             self.opts.run_opts.dry_run.is_some(),
         ));
 
+        // futureFlags are hard gates: reject observability config when disabled.
+        if let Some(obs_opts) = &self.opts.experimental_observability {
+            if obs_opts.otel.is_some() && !self.opts.future_flags.experimental_observability {
+                return Err(turborepo_config::Error::InvalidExperimentalOtelConfig {
+                    message: "experimentalObservability.otel is configured but \
+                              futureFlags.experimentalObservability is not enabled in turbo.json."
+                        .to_string(),
+                }
+                .into());
+            }
+        }
+
+        let observability_handle = self
+            .opts
+            .experimental_observability
+            .as_ref()
+            .and_then(|opts| {
+                let token = opts
+                    .otel
+                    .as_ref()
+                    .and_then(|otel| otel.use_remote_cache_token)
+                    .unwrap_or(false)
+                    .then(|| self.api_auth.as_ref().map(|auth| auth.token.expose()))
+                    .flatten();
+                observability::Handle::try_init(opts, token)
+            });
         Ok((
             Run {
                 version: self.version,
@@ -473,6 +500,7 @@ impl RunBuilder {
                 should_print_prelude,
                 micro_frontend_configs,
                 repo_index,
+                observability_handle,
             },
             analytics_handle,
         ))

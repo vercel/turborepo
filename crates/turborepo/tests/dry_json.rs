@@ -2,51 +2,18 @@ mod common;
 
 use std::path::Path;
 
-use common::setup;
+use common::{run_turbo, setup};
 use serde_json::Value;
 
 fn turbo_dry_json(test_dir: &Path, args: &[&str]) -> Result<Value, anyhow::Error> {
-    // Config dir must be outside test_dir so turbo doesn't pick up telemetry
-    // files as task inputs.
-    let config_dir = tempfile::tempdir()?;
-
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo")?;
-    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .current_dir(test_dir);
-
-    for arg in args {
-        cmd.arg(arg);
-    }
-
-    let output = cmd.output()?;
+    let output = run_turbo(test_dir, args);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let json: Value = serde_json::from_str(&stdout)?;
     Ok(json)
 }
 
 fn turbo_dry_json_expect_failure(test_dir: &Path, args: &[&str]) -> String {
-    let config_dir = tempfile::tempdir().unwrap();
-    let mut cmd = assert_cmd::Command::cargo_bin("turbo").unwrap();
-    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
-        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
-        .env("TURBO_PRINT_VERSION_DISABLED", "1")
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("DO_NOT_TRACK", "1")
-        .env_remove("CI")
-        .env_remove("GITHUB_ACTIONS")
-        .current_dir(test_dir);
-
-    for arg in args {
-        cmd.arg(arg);
-    }
-
-    let output = cmd.output().unwrap();
+    let output = run_turbo(test_dir, args);
     assert!(!output.status.success());
     String::from_utf8_lossy(&output.stderr).to_string()
 }

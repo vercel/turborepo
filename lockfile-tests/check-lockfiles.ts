@@ -64,7 +64,13 @@ function parseArgs(): CliArgs {
       args.fixture = next;
       i++;
     } else if (arg === "--pm" && next) {
-      const valid: PackageManagerType[] = ["npm", "pnpm", "yarn-berry", "bun"];
+      const valid: PackageManagerType[] = [
+        "npm",
+        "pnpm",
+        "yarn",
+        "yarn-berry",
+        "bun"
+      ];
       if (!valid.includes(next as PackageManagerType)) {
         console.error(
           `Invalid --pm: ${next}. Must be one of: ${valid.join(", ")}`
@@ -312,13 +318,29 @@ async function main(): Promise<void> {
     console.log(`  ${tc.label}`);
   }
 
+  // Group test cases by fixture so each fixture is set up once
+  const fixtureGroups = new Map<string, TestCase[]>();
+  for (const tc of testCases) {
+    const key = tc.fixture.filepath;
+    const group = fixtureGroups.get(key);
+    if (group) {
+      group.push(tc);
+    } else {
+      fixtureGroups.set(key, [tc]);
+    }
+  }
+
+  const groups = [...fixtureGroups.values()];
   console.log(
-    `\nRunning ${testCases.length} tests (concurrency: ${args.concurrency})...\n`
+    `\nRunning ${testCases.length} tests across ${groups.length} fixtures (concurrency: ${args.concurrency})...\n`
   );
 
-  const results = await runWithConcurrency(testCases, args.concurrency, (tc) =>
-    runner.runTestCase(tc, turboBinary)
+  const groupResults = await runWithConcurrency(
+    groups,
+    args.concurrency,
+    (group) => runner.runFixtureGroup(group, turboBinary)
   );
+  const results = groupResults.flat();
 
   // Summary
   const totalDuration = Date.now() - totalStart;

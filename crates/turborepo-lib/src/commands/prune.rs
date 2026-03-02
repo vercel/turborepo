@@ -6,6 +6,7 @@ use miette::Diagnostic;
 use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
+    RelativeUnixPathBuf,
 };
 use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageNode},
@@ -161,6 +162,8 @@ pub async fn prune(
             workspace_names.push(workspace);
         }
     }
+    prune.copy_file_dependencies(&workspace_names)?;
+
     trace!("new workspaces: {}", workspace_paths.join(", "));
     trace!("lockfile keys: {}", lockfile_keys.join(", "));
 
@@ -181,9 +184,33 @@ pub async fn prune(
             .create_with_contents(&lockfile_contents)?;
     }
 
+    // When the source repo uses per-workspace lockfiles, the workspace
+    // directories were copied with their own pnpm-lock.yaml files. Since the
+    // pruned output uses a single shared lockfile, remove these stale copies.
+    if matches!(
+        prune.package_graph.package_manager(),
+        turborepo_repository::package_manager::PackageManager::Pnpm
+            | turborepo_repository::package_manager::PackageManager::Pnpm6
+            | turborepo_repository::package_manager::PackageManager::Pnpm9
+    ) {
+        prune.remove_per_workspace_lockfiles(&workspace_paths, lockfile_name)?;
+    }
+
     for (relative_path, required_for_install) in ADDITIONAL_FILES.as_slice() {
         let path = relative_path.to_anchored_system_path_buf();
         prune.copy_file(&path, *required_for_install)?;
+    }
+
+    // The pruned output always uses a shared (root-level) lockfile, so if the
+    // source repo had shared-workspace-lockfile=false, we need to override it
+    // in the copied .npmrc so that pnpm install works correctly.
+    if matches!(
+        prune.package_graph.package_manager(),
+        turborepo_repository::package_manager::PackageManager::Pnpm
+            | turborepo_repository::package_manager::PackageManager::Pnpm6
+            | turborepo_repository::package_manager::PackageManager::Pnpm9
+    ) {
+        prune.ensure_shared_lockfile_in_npmrc()?;
     }
 
     for (relative_path, required_for_install) in ADDITIONAL_DIRECTORIES.as_slice() {
@@ -427,6 +454,128 @@ impl<'a> Prune<'a> {
                 package_json_path,
                 docker_workspace_dir.resolve(package_json()),
             )?;
+        }
+
+        Ok(())
+    }
+
+    /// Copy directories for `file:` protocol dependencies into the pruned
+    /// output. These are local packages referenced by path that aren't
+    /// workspaces, so they wouldn't otherwise be included.
+    fn copy_file_dependencies(&self, workspace_names: &[String]) -> Result<(), Error> {
+        let all_workspaces = std::iter::once(PackageName::Root).chain(
+            workspace_names
+                .iter()
+                .map(|name| PackageName::Other(name.clone())),
+        );
+
+        for workspace in all_workspaces {
+            let Some(info) = self.package_graph.package_info(&workspace) else {
+                continue;
+            };
+
+            let workspace_abs_dir = self.root.resolve(info.package_path());
+
+            for (_dep_name, dep_version) in info.package_json.all_dependencies() {
+                let Some(path_str) = dep_version.strip_prefix("file:") else {
+                    continue;
+                };
+
+                let Ok(relative_path) = RelativeUnixPathBuf::new(path_str) else {
+                    continue;
+                };
+
+                // Resolve the file: path relative to the workspace directory.
+                // join_unix_path normalizes the result (resolves ..)
+                let abs_dep_path = workspace_abs_dir.join_unix_path(relative_path);
+
+                // Skip if the path is outside the repo root
+                let Ok(anchored) = AnchoredSystemPathBuf::new(&self.root, &abs_dep_path) else {
+                    trace!(
+                        "file: dependency {path_str} from {workspace} is outside repo root, \
+                         skipping"
+                    );
+                    continue;
+                };
+
+                if !abs_dep_path.try_exists()? {
+                    trace!("file: dependency {path_str} from {workspace} doesn't exist, skipping");
+                    continue;
+                }
+
+                trace!(
+                    "Copying file: dependency {path_str} from {workspace} -> {}",
+                    anchored
+                );
+
+                self.copy_directory(&anchored, Some(CopyDestination::Docker))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Remove per-workspace lockfiles from workspace directories in the pruned
+    /// output. These are stale copies from the source repo that would conflict
+    /// with the merged root-level lockfile.
+    fn remove_per_workspace_lockfiles(
+        &self,
+        workspace_paths: &[String],
+        lockfile_name: &str,
+    ) -> Result<(), Error> {
+        for ws_path in workspace_paths {
+            let ws_dir = AnchoredSystemPathBuf::from_raw(ws_path)?;
+            let ws_lockfile_path = ws_dir.join_component(lockfile_name);
+            let full_path = self.full_directory.resolve(&ws_lockfile_path);
+            if full_path.try_exists()? {
+                trace!("Removing per-workspace lockfile: {}", full_path);
+                std::fs::remove_file(full_path.as_path())?;
+            }
+        }
+        Ok(())
+    }
+
+    /// When the source repo uses `shared-workspace-lockfile=false`, the pruned
+    /// output contains a single merged lockfile. We need to ensure the .npmrc
+    /// in the output uses the shared lockfile so `pnpm install` works
+    /// correctly.
+    fn ensure_shared_lockfile_in_npmrc(&self) -> Result<(), Error> {
+        let npmrc_path = AnchoredSystemPathBuf::from_raw(".npmrc")?;
+        let full_npmrc = self.full_directory.resolve(&npmrc_path);
+        if !full_npmrc.try_exists()? {
+            return Ok(());
+        }
+
+        let contents = full_npmrc.read_to_string()?;
+        if !contents.contains("shared-workspace-lockfile") {
+            return Ok(());
+        }
+
+        let rewritten: String = contents
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim();
+                if trimmed.starts_with("shared-workspace-lockfile") {
+                    "shared-workspace-lockfile=true"
+                } else {
+                    line
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let rewritten = if contents.ends_with('\n') && !rewritten.ends_with('\n') {
+            format!("{rewritten}\n")
+        } else {
+            rewritten
+        };
+
+        full_npmrc.create_with_contents(&rewritten)?;
+
+        if self.docker {
+            let docker_npmrc = self.docker_directory().resolve(&npmrc_path);
+            if docker_npmrc.try_exists()? {
+                docker_npmrc.create_with_contents(&rewritten)?;
+            }
         }
 
         Ok(())

@@ -64,6 +64,7 @@ pub struct Opts {
     pub scope_opts: ScopeOpts,
     pub tui_opts: TuiOpts,
     pub future_flags: FutureFlags,
+    pub experimental_observability: Option<crate::config::ExperimentalObservabilityOptions>,
     /// Pre-resolved git root from worktree detection, if available.
     /// Allows `SCM::new` to skip its own `git rev-parse` subprocess.
     pub git_root: Option<AbsoluteSystemPathBuf>,
@@ -180,6 +181,7 @@ impl Opts {
         let repo_opts = RepoOpts::from(inputs);
         let tui_opts = TuiOpts::from(inputs);
         let future_flags = config.future_flags();
+        let experimental_observability = config.experimental_observability().cloned();
 
         Ok(Self {
             repo_opts,
@@ -191,6 +193,7 @@ impl Opts {
             tui_opts,
             future_flags,
             git_root: cache_dir_result.git_root,
+            experimental_observability,
         })
     }
 }
@@ -729,6 +732,7 @@ mod test {
             runcache_opts,
             tui_opts,
             future_flags: Default::default(),
+            experimental_observability: None,
             git_root: None,
         };
         let synthesized = opts.synthesize_command();
