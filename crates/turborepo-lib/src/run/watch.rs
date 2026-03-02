@@ -44,6 +44,15 @@ impl ChangedPackages {
             ChangedPackages::Some(pkgs) => pkgs.is_empty(),
         }
     }
+
+    /// Filter a `Some` set down to only packages in the watched set.
+    /// `All` is left unchanged because it triggers a full rebuild that
+    /// recomputes the watched set from scratch.
+    fn filter_to_watched(&mut self, watched_packages: &HashSet<PackageName>) {
+        if let ChangedPackages::Some(pkgs) = self {
+            pkgs.retain(|pkg| watched_packages.contains(pkg));
+        }
+    }
 }
 
 pub struct WatchClient {
@@ -238,9 +247,14 @@ impl WatchClient {
                     // Clean up currently running tasks
                     self.active_runs.retain(|h| !h.run_task.is_finished());
 
+                    // Safe to filter early: the engine only contains tasks from
+                    // watched_packages, so unwatched packages can't impact any
+                    // running tasks.
+                    changed_packages.filter_to_watched(&self.watched_packages);
+
                     match changed_packages {
-                        ChangedPackages::Some(pkgs) => {
-                            let impacted = self.stop_impacted_tasks(&pkgs).await;
+                        ChangedPackages::Some(ref pkgs) => {
+                            let impacted = self.stop_impacted_tasks(pkgs).await;
                             changed_packages = ChangedPackages::Some(impacted);
                         }
                         ChangedPackages::All => {
@@ -363,14 +377,6 @@ impl WatchClient {
         trace!("handling run with changed packages: {changed_packages:?}");
         match changed_packages {
             ChangedPackages::Some(packages) => {
-                let packages = packages
-                    .into_iter()
-                    .filter(|pkg| {
-                        // If not in the watched packages set, ignore
-                        self.watched_packages.contains(pkg)
-                    })
-                    .collect();
-
                 let mut opts = self.base.opts().clone();
                 if !self.experimental_write_cache {
                     opts.cache_opts.cache.remote.write = false;
@@ -479,6 +485,230 @@ impl WatchClient {
                     })
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::{collections::HashSet, sync::Mutex};
+
+    use turborepo_daemon::proto;
+    use turborepo_repository::package_graph::PackageName;
+
+    use super::{ChangedPackages, WatchClient};
+
+    fn make_package_changed(name: &str) -> proto::package_change_event::Event {
+        proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
+            package_name: name.to_string(),
+        })
+    }
+
+    fn make_rediscover() -> proto::package_change_event::Event {
+        proto::package_change_event::Event::RediscoverPackages(proto::RediscoverPackages {})
+    }
+
+    fn make_error(msg: &str) -> proto::package_change_event::Event {
+        proto::package_change_event::Event::Error(proto::PackageChangeError {
+            message: msg.to_string(),
+        })
+    }
+
+    #[test]
+    fn changed_packages_default_is_empty() {
+        let cp = ChangedPackages::default();
+        assert!(cp.is_empty());
+        assert!(matches!(cp, ChangedPackages::Some(ref s) if s.is_empty()));
+    }
+
+    #[test]
+    fn changed_packages_all_is_never_empty() {
+        assert!(!ChangedPackages::All.is_empty());
+    }
+
+    #[test]
+    fn changed_packages_some_with_items_is_not_empty() {
+        let mut set = HashSet::new();
+        set.insert(PackageName::from("a"));
+        assert!(!ChangedPackages::Some(set).is_empty());
+    }
+
+    #[test]
+    fn handle_change_event_package_changed_inserts() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+
+        let guard = changed.lock().unwrap();
+        match &*guard {
+            ChangedPackages::Some(pkgs) => {
+                assert_eq!(pkgs.len(), 1);
+                assert!(pkgs.contains(&PackageName::from("web")));
+            }
+            ChangedPackages::All => panic!("expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn handle_change_event_multiple_packages_accumulate() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+        WatchClient::handle_change_event(&changed, make_package_changed("ui")).unwrap();
+        WatchClient::handle_change_event(&changed, make_package_changed("utils")).unwrap();
+
+        let guard = changed.lock().unwrap();
+        match &*guard {
+            ChangedPackages::Some(pkgs) => {
+                assert_eq!(pkgs.len(), 3);
+                assert!(pkgs.contains(&PackageName::from("web")));
+                assert!(pkgs.contains(&PackageName::from("ui")));
+                assert!(pkgs.contains(&PackageName::from("utils")));
+            }
+            ChangedPackages::All => panic!("expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn handle_change_event_duplicate_package_deduplicates() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+
+        let guard = changed.lock().unwrap();
+        match &*guard {
+            ChangedPackages::Some(pkgs) => assert_eq!(pkgs.len(), 1),
+            ChangedPackages::All => panic!("expected Some, got All"),
+        }
+    }
+
+    #[test]
+    fn handle_change_event_rediscover_sets_all() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+        WatchClient::handle_change_event(&changed, make_rediscover()).unwrap();
+
+        let guard = changed.lock().unwrap();
+        assert!(matches!(*guard, ChangedPackages::All));
+    }
+
+    #[test]
+    fn handle_change_event_package_changed_after_all_is_noop() {
+        let changed = Mutex::new(ChangedPackages::All);
+        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+
+        let guard = changed.lock().unwrap();
+        assert!(matches!(*guard, ChangedPackages::All));
+    }
+
+    #[test]
+    fn handle_change_event_error_returns_err() {
+        let changed = Mutex::new(ChangedPackages::default());
+        let result =
+            WatchClient::handle_change_event(&changed, make_error("daemon is unavailable"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn handle_change_event_rediscover_then_rediscover_stays_all() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_rediscover()).unwrap();
+        WatchClient::handle_change_event(&changed, make_rediscover()).unwrap();
+
+        let guard = changed.lock().unwrap();
+        assert!(matches!(*guard, ChangedPackages::All));
+    }
+
+    #[test]
+    fn filter_to_watched_removes_unwatched_packages() {
+        let watched: HashSet<_> = ["web", "ui"]
+            .iter()
+            .map(|s| PackageName::from(*s))
+            .collect();
+        let mut changed = ChangedPackages::Some(
+            ["web", "api", "ui", "utils"]
+                .iter()
+                .map(|s| PackageName::from(*s))
+                .collect(),
+        );
+
+        changed.filter_to_watched(&watched);
+
+        match changed {
+            ChangedPackages::Some(pkgs) => {
+                assert_eq!(pkgs.len(), 2);
+                assert!(pkgs.contains(&PackageName::from("web")));
+                assert!(pkgs.contains(&PackageName::from("ui")));
+                assert!(!pkgs.contains(&PackageName::from("api")));
+            }
+            ChangedPackages::All => panic!("expected Some"),
+        }
+    }
+
+    #[test]
+    fn filter_to_watched_leaves_all_unchanged() {
+        let watched: HashSet<_> = ["web"].iter().map(|s| PackageName::from(*s)).collect();
+        let mut changed = ChangedPackages::All;
+
+        changed.filter_to_watched(&watched);
+        assert!(matches!(changed, ChangedPackages::All));
+    }
+
+    #[test]
+    fn filter_to_watched_empty_watched_set_clears_all() {
+        let watched: HashSet<PackageName> = HashSet::new();
+        let mut changed = ChangedPackages::Some(
+            ["web", "ui"]
+                .iter()
+                .map(|s| PackageName::from(*s))
+                .collect(),
+        );
+
+        changed.filter_to_watched(&watched);
+
+        match changed {
+            ChangedPackages::Some(pkgs) => assert!(pkgs.is_empty()),
+            ChangedPackages::All => panic!("expected Some"),
+        }
+    }
+
+    #[test]
+    fn filter_to_watched_no_overlap() {
+        let watched: HashSet<_> = ["web"].iter().map(|s| PackageName::from(*s)).collect();
+        let mut changed = ChangedPackages::Some(
+            ["api", "utils"]
+                .iter()
+                .map(|s| PackageName::from(*s))
+                .collect(),
+        );
+
+        changed.filter_to_watched(&watched);
+
+        match changed {
+            ChangedPackages::Some(pkgs) => assert!(pkgs.is_empty()),
+            ChangedPackages::All => panic!("expected Some"),
+        }
+    }
+
+    #[test]
+    fn changed_packages_take_resets_to_default() {
+        let changed = Mutex::new(ChangedPackages::default());
+        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+
+        let taken = {
+            let mut guard = changed.lock().unwrap();
+            assert!(!guard.is_empty());
+            std::mem::take(&mut *guard)
+        };
+
+        // After take, the mutex should hold an empty Some
+        let guard = changed.lock().unwrap();
+        assert!(guard.is_empty());
+
+        // The taken value should have the package
+        match taken {
+            ChangedPackages::Some(pkgs) => {
+                assert!(pkgs.contains(&PackageName::from("web")));
+            }
+            ChangedPackages::All => panic!("expected Some"),
         }
     }
 }

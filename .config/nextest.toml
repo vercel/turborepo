@@ -13,6 +13,10 @@ turborepo-process-serial = { max-threads = 1 }
 # with environment variable manipulation
 turborepo-dirs-serial = { max-threads = 1 }
 
+# turbo watch tests spawn daemon processes and file watchers that fight
+# over resources when run concurrently
+turbo-watch-serial = { max-threads = 1 }
+
 [[profile.default.overrides]]
 # These tests run package installs from the network during setup, which can
 # take 20-60s+ on cold CI runners. Give them extra time instead of retries.
@@ -29,3 +33,10 @@ test-group = 'turborepo-process-serial'
 # These tests manipulate environment variables
 filter = 'package(turborepo-dirs)'
 test-group = 'turborepo-dirs-serial'
+
+[[profile.default.overrides]]
+# Watch tests spawn long-running turbo watch processes with 30s internal
+# timeouts. Serialize to avoid daemon socket contention and give extra time.
+filter = 'package(turbo) and test(/^watch_/)'
+test-group = 'turbo-watch-serial'
+slow-timeout = { period = "60s", terminate-after = 2 }
