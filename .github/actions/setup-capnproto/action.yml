@@ -1,39 +1,39 @@
 name: "Setup Capnproto"
 description: "Sets up capnproto for the current platform"
 
+inputs:
+  use-cache:
+    description: "Whether to cache the capnproto installation. Disable for container builds."
+    required: false
+    default: "true"
+
 runs:
   using: "composite"
   steps:
-    - name: "Detect container"
-      id: detect-container
-      shell: bash
-      run: |
-        if [ -f /.dockerenv ] || [ -f /run/.containerenv ] || grep -q 'docker\|lxc\|containerd' /proc/1/cgroup 2>/dev/null; then
-          echo "in-container=true" >> $GITHUB_OUTPUT
-        else
-          echo "in-container=false" >> $GITHUB_OUTPUT
-        fi
-
     - name: "Cache capnproto (Linux)"
-      if: runner.os == 'Linux' && steps.detect-container.outputs.in-container != 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      if: runner.os == 'Linux' && inputs.use-cache == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       uses: actions/cache@v4
       id: cache-capnp-linux
       with:
         path: |
           /usr/bin/capnp
           /usr/bin/capnpc
-        key: ${{ runner.os }}-capnproto-0.11.2
+        key: ${{ runner.os }}-capnproto-1.1.0
 
     - name: "Setup capnproto for Linux"
       if: runner.os == 'Linux' && (steps.cache-capnp-linux.outcome == 'skipped' || steps.cache-capnp-linux.outputs.cache-hit != 'true')
       shell: bash
       run: |
+        if command -v capnp &> /dev/null; then
+          echo "capnp already available: $(capnp --version)"
+          exit 0
+        fi
+
         if command -v apt-get &> /dev/null; then
           sudo apt-get -y update && sudo apt-get install -y capnproto
         elif command -v apk &> /dev/null; then
           apk add capnproto
-        elif command -v microdnf &> /dev/null; then
-          microdnf install -y make automake autoconf libtool gcc-c++
+        else
           curl -sSL https://capnproto.org/capnproto-c++-1.1.0.tar.gz | tar -zxf -
           cd capnproto-c++-1.1.0 && ./configure --prefix=/usr && make -j$(nproc) && make install && cd .. && rm -rf capnproto-c++-1.1.0
         fi

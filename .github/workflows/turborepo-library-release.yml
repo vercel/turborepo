@@ -42,7 +42,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             container: amazon/aws-lambda-nodejs:20
             install: |
-              microdnf install -y gcc gcc-c++ git tar xz
+              microdnf install -y gcc gcc-c++ git tar xz make
               curl https://sh.rustup.rs -sSf | bash -s -- -y
               npm i -g pnpm@10.28.0
               mkdir ../zig
@@ -118,6 +118,8 @@ jobs:
 
       - name: Setup capnproto
         uses: ./.github/actions/setup-capnproto
+        with:
+          use-cache: ${{ !matrix.settings.install }}
 
       - name: Setup toolchain
         run: ${{ matrix.settings.setup }}
