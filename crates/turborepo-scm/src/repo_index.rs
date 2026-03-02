@@ -70,11 +70,10 @@ impl RepoGitIndex {
         // The index is sorted by path. rayon's indexed collect preserves
         // order, and our sequential collection loop preserves order, so
         // ls_tree_hashes will be sorted without an explicit sort.
-        let num_entries = index
-            .entries()
-            .iter()
-            .filter(|e| !e.mode.is_submodule())
-            .count();
+        // Use the total entry count as a capacity hint (slightly over-
+        // estimates when submodules are present, but avoids a full
+        // sequential scan of all entries).
+        let num_entries = index.entries().len();
 
         // Classify entries in parallel: stat each file, compare with index,
         // and carry the raw ObjectId (20 bytes, Copy) instead of a heap-allocated
