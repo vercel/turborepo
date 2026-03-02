@@ -257,18 +257,25 @@ jobs:
         with:
           tool: nextest
 
-      - name: Run tests
-        timeout-minutes: 45
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Build and cache test archive
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          cargo nextest run \
-            --workspace \
-            --exclude turborepo-napi \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --no-fail-fast
+          turbo run build:test-archive --filter=@turbo/cli
+        shell: bash
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_CACHE: remote:rw
+
+      - name: Run tests
+        timeout-minutes: 45
+        run: |
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast
         shell: bash
 
   rust_test_windows:
