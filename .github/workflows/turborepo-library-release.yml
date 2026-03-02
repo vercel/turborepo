@@ -42,7 +42,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             container: amazon/aws-lambda-nodejs:20
             install: |
-              microdnf install -y gcc gcc-c++ git tar xz
+              microdnf install -y gcc gcc-c++ git tar xz capnproto
               curl https://sh.rustup.rs -sSf | bash -s -- -y
               npm i -g pnpm@10.28.0
               mkdir ../zig
@@ -57,7 +57,7 @@ jobs:
             container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
             install: |
               apk update && apk upgrade
-              apk add libc6-compat curl
+              apk add libc6-compat curl capnproto
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
             setup: |
@@ -71,7 +71,7 @@ jobs:
             container: ghcr.io/napi-rs/napi-rs/nodejs-rust:stable-2023-09-17-alpine
             install: |
               apk update && apk upgrade
-              apk add libc6-compat curl
+              apk add libc6-compat curl capnproto
               echo /root/.cargo/bin >> ${GITHUB_PATH}
               echo /usr/local/cargo/bin/rustup >> ${GITHUB_PATH}
               echo /aarch64-linux-musl-cross/bin >> ${GITHUB_PATH}
@@ -114,6 +114,10 @@ jobs:
         uses: ./.github/actions/setup-node
         with:
           enable-corepack: false
+        if: ${{ !matrix.settings.install }}
+
+      - name: Setup capnproto
+        uses: ./.github/actions/setup-capnproto
         if: ${{ !matrix.settings.install }}
 
       - name: Setup toolchain
