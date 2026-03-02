@@ -100,7 +100,7 @@ async-compression = { version = "0.3.13", default-features = false, features = [
   "gzip",
   "tokio",
 ] }
-async-graphql = "7.0.17"
+async-graphql = { version = "7.0.17", default-features = false, features = ["graphiql"] }
 async-graphql-axum = "7.0.16"
 async-trait = "0.1.64"
 axum = "0.8.4"
