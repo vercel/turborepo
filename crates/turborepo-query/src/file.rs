@@ -3,8 +3,6 @@ use std::sync::Arc;
 use async_graphql::{Enum, Object, SimpleObject};
 use camino::Utf8PathBuf;
 use miette::SourceCode;
-use swc_ecma_ast::EsVersion;
-use swc_ecma_parser::{EsSyntax, Syntax, TsSyntax};
 use turbo_trace::Tracer;
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -13,7 +11,7 @@ use crate::{Array, Diagnostic, Error, QueryRun};
 pub struct File {
     run: Arc<dyn QueryRun>,
     path: AbsoluteSystemPathBuf,
-    ast: Option<swc_ecma_ast::Module>,
+    ast: Option<serde_json::Value>,
 }
 
 impl File {
@@ -28,43 +26,21 @@ impl File {
         })
     }
 
-    pub fn with_ast(mut self, ast: Option<swc_ecma_ast::Module>) -> Self {
+    pub fn with_ast(mut self, ast: Option<serde_json::Value>) -> Self {
         self.ast = ast;
         self
     }
 
-    fn parse_file(&self) -> Result<swc_ecma_ast::Module, Error> {
+    fn parse_file(&self) -> Result<serde_json::Value, Error> {
         let contents = self.path.read_to_string()?;
-        let source_map = swc_common::SourceMap::default();
-        let file = source_map.new_source_file(
-            swc_common::FileName::Custom(self.path.to_string()).into(),
-            contents.clone(),
-        );
-        let syntax = if self.path.extension() == Some("ts") || self.path.extension() == Some("tsx")
-        {
-            Syntax::Typescript(TsSyntax {
-                tsx: self.path.extension() == Some("tsx"),
-                decorators: true,
-                ..Default::default()
-            })
-        } else {
-            Syntax::Es(EsSyntax {
-                jsx: self.path.ends_with(".jsx"),
-                ..Default::default()
-            })
-        };
-        let comments = swc_common::comments::SingleThreadedComments::default();
-        let mut errors = Vec::new();
-        let module = swc_ecma_parser::parse_file_as_module(
-            &file,
-            syntax,
-            EsVersion::EsNext,
-            Some(&comments),
-            &mut errors,
+        let (_, ast_json) = turbo_trace::parse_file(
+            &self.path,
+            &contents,
+            turbo_trace::ImportTraceType::All,
+            true,
         )
         .map_err(Error::Parse)?;
-
-        Ok(module)
+        ast_json.ok_or_else(|| Error::Parse("AST serialization failed".to_string()))
     }
 }
 
@@ -86,8 +62,8 @@ impl From<turbo_trace::TraceError> for Diagnostic {
                 path: Some(path.to_string()),
                 ..Default::default()
             },
-            turbo_trace::TraceError::ParseError(path, e) => Diagnostic {
-                message: format!("failed to parse file: {e:?}"),
+            turbo_trace::TraceError::ParseError(path, msg) => Diagnostic {
+                message: format!("failed to parse file: {msg}"),
                 path: Some(path.to_string()),
                 ..Default::default()
             },
@@ -229,9 +205,9 @@ impl File {
 
     async fn ast(&self) -> Option<serde_json::Value> {
         if let Some(ast) = &self.ast {
-            serde_json::to_value(ast).ok()
+            Some(ast.clone())
         } else {
-            serde_json::to_value(&self.parse_file().ok()?).ok()
+            self.parse_file().ok()
         }
     }
 }

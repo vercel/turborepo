@@ -120,13 +120,26 @@ fn test_ast_query() {
         r#"query { file(path: "main.ts") { path ast } }"#,
     );
     let ast = &json["data"]["file"]["ast"];
-    assert_eq!(ast["type"], "Module");
+    assert_eq!(ast["type"], "Program");
     assert!(!ast["body"].as_array().unwrap().is_empty());
 
     // First statement should be an import of Button from ./button.tsx
     let first = &ast["body"][0];
     assert_eq!(first["type"], "ImportDeclaration");
     assert_eq!(first["source"]["value"], "./button.tsx");
+}
+
+#[test]
+fn test_require_dependencies() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "turbo_trace", "npm@10.5.0", true).unwrap();
+
+    let json = query(
+        tempdir.path(),
+        r#"query { file(path: "require_example.js") { path, dependencies { files { items { path } } } } }"#,
+    );
+    let deps = file_paths(&json);
+    assert_eq!(deps, vec!["bar.js", "foo.js"]);
 }
 
 #[test]

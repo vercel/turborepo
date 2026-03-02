@@ -1,6 +1,6 @@
-use swc_common::{Span, Spanned};
-use swc_ecma_ast::{Decl, ModuleDecl, Stmt};
-use swc_ecma_visit::{Visit, VisitWith};
+use oxc_ast::ast::{Argument, Expression, Statement};
+use oxc_span::Span;
+use oxc_syntax::module_record::ModuleRecord;
 
 use crate::tracer::ImportTraceType;
 
@@ -15,92 +15,135 @@ pub enum ImportType {
     Value,
 }
 
-pub struct ImportFinder {
-    import_type: ImportTraceType,
-    imports: Vec<(String, Span, ImportType)>,
+pub struct ImportResult {
+    pub specifier: String,
+    /// Span of the specifier string (for error reporting).
+    pub span: Span,
+    /// Span of the entire import/require statement (for comment detection).
+    #[allow(dead_code)]
+    pub statement_span: Span,
+    #[allow(dead_code)]
+    pub import_type: ImportType,
 }
 
-impl Default for ImportFinder {
-    fn default() -> Self {
-        Self::new(ImportTraceType::All)
-    }
-}
+/// Extract imports from a parsed oxc module.
+///
+/// Uses `ModuleRecord` for ES import/export declarations (which covers
+/// `import`, `export { } from`, and `export * from`), and manually walks
+/// statements for CommonJS `require()` calls.
+pub fn find_imports(
+    module_record: &ModuleRecord,
+    statements: &[Statement],
+    import_trace_type: ImportTraceType,
+) -> Vec<ImportResult> {
+    let mut results = Vec::new();
 
-impl ImportFinder {
-    pub fn new(import_type: ImportTraceType) -> Self {
-        Self {
-            import_type,
-            imports: Vec::new(),
+    for (specifier, requested_modules) in &module_record.requested_modules {
+        let specifier_str: String = specifier.to_string();
+        for requested in requested_modules {
+            let import_type = if requested.is_type {
+                ImportType::Type
+            } else {
+                ImportType::Value
+            };
+
+            let should_include = match import_trace_type {
+                ImportTraceType::All => true,
+                ImportTraceType::Types => requested.is_type,
+                ImportTraceType::Values => !requested.is_type,
+            };
+
+            if should_include {
+                results.push(ImportResult {
+                    specifier: specifier_str.clone(),
+                    span: requested.span,
+                    statement_span: requested.statement_span,
+                    import_type,
+                });
+            }
         }
     }
 
-    pub fn imports(&self) -> &[(String, Span, ImportType)] {
-        &self.imports
-    }
+    find_require_calls(statements, &mut results);
+
+    results
 }
 
-impl Visit for ImportFinder {
-    fn visit_module_decl(&mut self, decl: &ModuleDecl) {
-        match decl {
-            ModuleDecl::Import(import) => {
-                let import_type = if import.type_only {
-                    ImportType::Type
-                } else {
-                    ImportType::Value
-                };
-                let import_value = import.src.value.to_string_lossy().into_owned();
-                match self.import_type {
-                    ImportTraceType::All => {
-                        self.imports.push((import_value, import.span, import_type));
+/// Recursively walk statements looking for `const foo = require("./bar")`
+/// patterns.
+fn find_require_calls(statements: &[Statement], results: &mut Vec<ImportResult>) {
+    for stmt in statements {
+        match stmt {
+            Statement::VariableDeclaration(var_decl) => {
+                for decl in &var_decl.declarations {
+                    let Some(init) = &decl.init else {
+                        continue;
+                    };
+                    let Expression::CallExpression(call_expr) = init else {
+                        continue;
+                    };
+                    let Expression::Identifier(callee) = &call_expr.callee else {
+                        continue;
+                    };
+                    if callee.name != "require" {
+                        continue;
                     }
-                    ImportTraceType::Types if import.type_only => {
-                        self.imports.push((import_value, import.span, import_type));
-                    }
-                    ImportTraceType::Values if !import.type_only => {
-                        self.imports.push((import_value, import.span, import_type));
-                    }
-                    _ => {}
+                    let Some(first_arg) = call_expr.arguments.first() else {
+                        continue;
+                    };
+                    let Argument::StringLiteral(lit) = first_arg else {
+                        continue;
+                    };
+                    results.push(ImportResult {
+                        specifier: lit.value.to_string(),
+                        span: callee.span,
+                        statement_span: var_decl.span,
+                        import_type: ImportType::Value,
+                    });
                 }
             }
-            ModuleDecl::ExportNamed(named_export) => {
-                if let Some(decl) = &named_export.src {
-                    self.imports.push((
-                        decl.value.to_string_lossy().into_owned(),
-                        decl.span,
-                        ImportType::Value,
-                    ));
+            Statement::BlockStatement(block) => {
+                find_require_calls(&block.body, results);
+            }
+            Statement::IfStatement(if_stmt) => {
+                find_require_calls(std::slice::from_ref(&if_stmt.consequent), results);
+                if let Some(alt) = &if_stmt.alternate {
+                    find_require_calls(std::slice::from_ref(alt), results);
                 }
             }
-            ModuleDecl::ExportAll(export_all) => {
-                self.imports.push((
-                    export_all.src.value.to_string_lossy().into_owned(),
-                    export_all.span,
-                    ImportType::Value,
-                ));
+            Statement::TryStatement(try_stmt) => {
+                find_require_calls(&try_stmt.block.body, results);
+                if let Some(handler) = &try_stmt.handler {
+                    find_require_calls(&handler.body.body, results);
+                }
+                if let Some(finalizer) = &try_stmt.finalizer {
+                    find_require_calls(&finalizer.body, results);
+                }
+            }
+            Statement::ForStatement(for_stmt) => {
+                find_require_calls(std::slice::from_ref(&for_stmt.body), results);
+            }
+            Statement::ForInStatement(for_in) => {
+                find_require_calls(std::slice::from_ref(&for_in.body), results);
+            }
+            Statement::ForOfStatement(for_of) => {
+                find_require_calls(std::slice::from_ref(&for_of.body), results);
+            }
+            Statement::WhileStatement(while_stmt) => {
+                find_require_calls(std::slice::from_ref(&while_stmt.body), results);
+            }
+            Statement::DoWhileStatement(do_while) => {
+                find_require_calls(std::slice::from_ref(&do_while.body), results);
+            }
+            Statement::SwitchStatement(switch) => {
+                for case in &switch.cases {
+                    find_require_calls(&case.consequent, results);
+                }
+            }
+            Statement::LabeledStatement(labeled) => {
+                find_require_calls(std::slice::from_ref(&labeled.body), results);
             }
             _ => {}
         }
-    }
-
-    fn visit_stmt(&mut self, stmt: &Stmt) {
-        if let Stmt::Decl(Decl::Var(var_decl)) = stmt {
-            for decl in &var_decl.decls {
-                if let Some(init) = &decl.init
-                    && let swc_ecma_ast::Expr::Call(call_expr) = &**init
-                    && let swc_ecma_ast::Callee::Expr(expr) = &call_expr.callee
-                    && let swc_ecma_ast::Expr::Ident(ident) = &**expr
-                    && ident.sym == *"require"
-                    && let Some(arg) = call_expr.args.first()
-                    && let swc_ecma_ast::Expr::Lit(swc_ecma_ast::Lit::Str(lit_str)) = &*arg.expr
-                {
-                    self.imports.push((
-                        lit_str.value.to_string_lossy().into_owned(),
-                        expr.span(),
-                        ImportType::Value,
-                    ));
-                }
-            }
-        }
-        stmt.visit_children_with(self);
     }
 }

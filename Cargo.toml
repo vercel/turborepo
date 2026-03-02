@@ -141,6 +141,13 @@ itertools = "0.14.0"
 merge = "0.2.0"
 nix = { version = "0.26.2", default-features = false, features = ["term"] }
 notify = "6.1.1"
+oxc_allocator = "0.115.0"
+oxc_ast = { version = "0.115.0", features = ["serialize"] }
+oxc_diagnostics = "0.115.0"
+oxc_estree = { version = "0.115.0", features = ["serialize"] }
+oxc_parser = "0.115.0"
+oxc_span = "0.115.0"
+oxc_syntax = "0.115.0"
 owo-colors = "3.5.0"
 unrs_resolver = "1.11.1"
 path-clean = "1.0.1"
@@ -157,10 +164,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.93"
 serde_yaml_ng = "0.10.0"
 sha2 = "0.10.6"
-swc_common = "18.0.1"
-swc_ecma_ast = "20.0.0"
-swc_ecma_parser = "33.0.0"
-swc_ecma_visit = "20.0.0"
+
 tempfile = "3.3.0"
 test-case = "3.3.1"
 thiserror = "2.0.18"

@@ -9,10 +9,14 @@ camino.workspace = true
 clap = { version = "4.5.17", features = ["derive"] }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 miette = { workspace = true, features = ["fancy"] }
-swc_common = { workspace = true, features = ["concurrent", "tty-emitter"] }
-swc_ecma_ast = { workspace = true }
-swc_ecma_parser = { workspace = true }
-swc_ecma_visit = { workspace = true }
+oxc_allocator = { workspace = true }
+oxc_ast = { workspace = true }
+oxc_diagnostics = { workspace = true }
+oxc_estree = { workspace = true }
+oxc_parser = { workspace = true }
+oxc_span = { workspace = true }
+oxc_syntax = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
