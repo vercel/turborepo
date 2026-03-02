@@ -384,23 +384,35 @@ jobs:
         with:
           tool: cargo-llvm-cov
 
-      - name: Run tests with coverage
-        timeout-minutes: 45
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Build coverage-instrumented test archive
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          cargo llvm-cov nextest \
-            --workspace \
-            --exclude turborepo-napi \
-            --exclude turborepo-lsp \
-            --exclude turborepo-schema-gen \
-            --no-fail-fast \
+          turbo run build:test-archive-cov --filter=@turbo/cli
+        shell: bash
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+          TURBO_CACHE: remote:rw
+
+      - name: Run tests and generate coverage
+        timeout-minutes: 45
+        run: |
+          eval $(cargo llvm-cov show-env --export-prefix)
+          cargo nextest run \
+            --archive-file cli/nextest-archive-cov.tar.zst \
+            --no-fail-fast
+          cargo llvm-cov report \
             --lcov \
             --output-path coverage.lcov
         shell: bash
 
       - name: Upload coverage artifact
+        if: ${{ hashFiles('coverage.lcov') != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: coverage
@@ -427,12 +439,14 @@ jobs:
           node-version: "20"
 
       - name: Download coverage artifact
+        id: download-coverage
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: coverage
 
       - name: Transform coverage
-        if: ${{ !github.event.pull_request.head.repo.fork }}
+        if: ${{ steps.download-coverage.outcome == 'success' && !github.event.pull_request.head.repo.fork }}
         run: |
           SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
 
@@ -452,7 +466,7 @@ jobs:
           BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
 
       - name: Comment on PR
-        if: github.event_name == 'pull_request' && env.COVERAGE_API_URL != '' && !github.event.pull_request.head.repo.fork
+        if: steps.download-coverage.outcome == 'success' && github.event_name == 'pull_request' && env.COVERAGE_API_URL != '' && !github.event.pull_request.head.repo.fork
         uses: actions/github-script@v7
         with:
           script: |

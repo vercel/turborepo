@@ -47,6 +47,18 @@
         "AWS_SECRET_ACCESS_KEY"
       ]
     },
+    "build:test-archive-cov": {
+      "outputs": ["nextest-archive-cov.tar.zst"],
+      "dependsOn": ["rust-src"],
+      "passThroughEnv": [
+        "SCCACHE_BUCKET",
+        "SCCACHE_REGION",
+        "RUSTC_WRAPPER",
+        "CARGO_INCREMENTAL",
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY"
+      ]
+    },
     "release-native": {
       "dependsOn": ["@turbo/releaser#build"],
       "cache": false
