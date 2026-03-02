@@ -19,7 +19,7 @@ fn set_engines(dir: &std::path::Path, node_version: &str) {
 #[test]
 fn test_engines_affect_hash() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     // Set engines to >=12
     set_engines(tempdir.path(), ">=12");
@@ -47,7 +47,7 @@ fn test_engines_affect_hash() {
 #[test]
 fn test_engines_in_global_cache_inputs() {
     let tempdir = tempfile::tempdir().unwrap();
-    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
 
     set_engines(tempdir.path(), ">=16");
 

@@ -1287,4 +1287,119 @@ snapshots:
             "pruned should have is-odd in packages via transitive deps"
         );
     }
+
+    #[test]
+    fn test_subgraph_with_pnpm9_link_injected_deps() {
+        // Reproduces https://github.com/vercel/turborepo/issues/8243
+        // In pnpm 9, dependenciesMeta.injected: true with link: resolution
+        // (not file:) should not cause "No lockfile entry found" errors.
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    devDependencies:
+      prettier:
+        specifier: 3.5.3
+        version: 3.5.3
+
+  apps/my-app:
+    dependencies:
+      '@repo/shared':
+        specifier: workspace:^
+        version: link:../../packages/shared
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+    dependenciesMeta:
+      '@repo/shared':
+        injected: true
+
+  packages/shared:
+    dependencies:
+      is-odd:
+        specifier: 3.0.1
+        version: 3.0.1
+
+packages:
+
+  is-number@6.0.0:
+    resolution: {integrity: sha512-abc}
+    engines: {node: '>=0.10.0'}
+
+  is-odd@3.0.1:
+    resolution: {integrity: sha512-def}
+    engines: {node: '>=4'}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-ghi}
+
+  prettier@3.5.3:
+    resolution: {integrity: sha512-jkl}
+    engines: {node: '>=14'}
+    hasBin: true
+
+snapshots:
+
+  is-number@6.0.0: {}
+
+  is-odd@3.0.1:
+    dependencies:
+      is-number: 6.0.0
+
+  lodash@4.17.21: {}
+
+  prettier@3.5.3: {}
+"#;
+        let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+        // The transitive closure should NOT include link: deps
+        let shared_pkg = lockfile
+            .resolve_package("apps/my-app", "@repo/shared", "workspace:^")
+            .unwrap();
+        assert!(
+            shared_pkg.is_none(),
+            "link: workspace deps should resolve to None (not external packages)"
+        );
+
+        // Prune to apps/my-app and packages/shared
+        let workspace_packages = vec!["apps/my-app".to_string(), "packages/shared".to_string()];
+        let resolved_packages = vec![
+            "is-number@6.0.0".to_string(),
+            "is-odd@3.0.1".to_string(),
+            "lodash@4.17.21".to_string(),
+            "prettier@3.5.3".to_string(),
+        ];
+        let pruned = lockfile
+            .subgraph(&workspace_packages, &resolved_packages)
+            .unwrap();
+
+        let pruned_bytes = pruned.encode().unwrap();
+        let pruned_lockfile = PnpmLockfile::from_bytes(&pruned_bytes).unwrap();
+
+        // The pruned lockfile should contain the expected packages
+        let packages = pruned_lockfile
+            .packages
+            .as_ref()
+            .expect("should have packages");
+        let snapshots = pruned_lockfile
+            .snapshots
+            .as_ref()
+            .expect("should have snapshots");
+
+        assert!(packages.contains_key("lodash@4.17.21"));
+        assert!(packages.contains_key("is-odd@3.0.1"));
+        assert!(packages.contains_key("is-number@6.0.0"));
+        assert!(snapshots.contains_key("lodash@4.17.21"));
+        assert!(snapshots.contains_key("is-odd@3.0.1"));
+        assert!(snapshots.contains_key("is-number@6.0.0"));
+
+        // The importer for apps/my-app should retain dependenciesMeta
+        let importer = pruned_lockfile.importers.get("apps/my-app").unwrap();
+        assert!(importer.dependencies_meta.is_some());
+    }
 }

@@ -1,10 +1,10 @@
-use std::{collections::BTreeMap, str::FromStr};
+use std::str::FromStr;
 
 use camino::Utf8PathBuf;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
 use turborepo_turbo_json::{
-    RawExperimentalObservability, RawKeyValue, RawObservabilityOtel, RawRemoteCacheOptions,
-    RawRootTurboJson, RawTurboJson,
+    RawExperimentalObservability, RawObservabilityOtel, RawRemoteCacheOptions, RawRootTurboJson,
+    RawTurboJson,
 };
 
 use crate::{
@@ -160,27 +160,17 @@ fn convert_raw_observability_otel(
         }),
     });
 
-    let headers = raw.headers.map(convert_key_values);
-
-    let resource = raw.resource.map(convert_key_values);
-
     Ok(ExperimentalOtelOptions {
         enabled: raw.enabled.map(|flag| *flag.as_inner()),
         protocol,
         endpoint: raw.endpoint.map(|endpoint| endpoint.into_inner().into()),
-        headers,
+        headers: raw.headers,
         timeout_ms: raw.timeout_ms.map(|timeout| *timeout.as_inner()),
         interval_ms: raw.interval_ms.map(|interval| *interval.as_inner()),
-        resource,
+        resource: raw.resource,
         metrics,
         use_remote_cache_token: raw.use_remote_cache_token.map(|flag| *flag.as_inner()),
     })
-}
-
-fn convert_key_values(raw: Vec<RawKeyValue>) -> BTreeMap<String, String> {
-    raw.into_iter()
-        .map(|kv| (kv.key.into_inner().into(), kv.value.into_inner().into()))
-        .collect()
 }
 
 #[cfg(test)]
@@ -429,14 +419,14 @@ mod test {
                     "otel": {
                         "enabled": true,
                         "endpoint": "https://example.com/otel",
-                        "headers": [
-                            { "key": "Authorization", "value": "Bearer token123" },
-                            { "key": "X-Custom-Header", "value": "custom-value" }
-                        ],
-                        "resource": [
-                            { "key": "service.name", "value": "turborepo" },
-                            { "key": "service.version", "value": "1.0.0" }
-                        ]
+                        "headers": {
+                            "Authorization": "Bearer token123",
+                            "X-Custom-Header": "custom-value"
+                        },
+                        "resource": {
+                            "service.name": "turborepo",
+                            "service.version": "1.0.0"
+                        }
                     }
                 }
             }))

@@ -366,13 +366,80 @@ impl BerryLockfile {
             }
         }
 
-        // Add any descriptors used by package extensions
-        for descriptor in &self.extensions {
-            let locator = self
-                .resolutions
-                .get(descriptor)
-                .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
-            resolutions.insert(descriptor.clone(), locator.clone());
+        // Include extension descriptors only when the package they were
+        // injected into is present in the pruned graph. Extensions come from
+        // Yarn's built-in packageExtensions (plugin-compat), which inject
+        // invisible dependencies into certain packages. The lockfile stores
+        // resolution entries for these injected deps but doesn't record which
+        // package triggered them.
+        //
+        // We approximate the association by checking if any package in the
+        // pruned transitive closure depends on a package whose name matches
+        // the extension's ident (or, for @types/* extensions, the unscoped
+        // name). This works because packageExtensions typically add @types/X
+        // to packages that depend on X, or add package Y to packages that
+        // logically need Y.
+        {
+            // Collect all dependency names from packages in the pruned closure
+            let mut dep_names_in_closure: HashSet<String> = HashSet::new();
+            for key in packages {
+                if let Ok(pkg_locator) = Locator::try_from(key.as_str())
+                    && let Some(pkg) = self.locator_package.get(&pkg_locator)
+                {
+                    for (name, _) in pkg.dependencies.iter().flatten() {
+                        dep_names_in_closure.insert(name.to_string());
+                    }
+                }
+            }
+            // Also include dep names from workspace packages
+            for (locator, package) in &self.locator_package {
+                if workspace_packages
+                    .iter()
+                    .map(|s| s.as_str())
+                    .chain(iter::once("."))
+                    .any(|path| locator.is_workspace_path(path))
+                {
+                    for (name, _) in package.dependencies.iter().flatten() {
+                        dep_names_in_closure.insert(name.to_string());
+                    }
+                }
+            }
+
+            for descriptor in &self.extensions {
+                let locator = self
+                    .resolutions
+                    .get(descriptor)
+                    .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
+
+                let ident = descriptor.ident.to_string();
+
+                // For @types/X extensions, check if X is a dep in the closure.
+                // For other extensions, check if the ident itself is a dep.
+                let search_name = ident.strip_prefix("@types/").unwrap_or(&ident);
+
+                let needed = dep_names_in_closure.contains(search_name)
+                    || dep_names_in_closure.contains(&ident);
+
+                if needed {
+                    resolutions.insert(descriptor.clone(), locator.clone());
+                    // Include transitive deps of the extension locator
+                    let mut queue = vec![locator.clone()];
+                    while let Some(loc) = queue.pop() {
+                        if let Some(pkg) = self.locator_package.get(&loc) {
+                            for (name, range) in pkg.dependencies.iter().flatten() {
+                                if let Ok(dep_desc) =
+                                    self.resolve_dependency(&loc, name, range.as_ref())
+                                    && let Some(dep_loc) = self.resolutions.get(&dep_desc)
+                                    && !resolutions.contains_key(&dep_desc)
+                                {
+                                    resolutions.insert(dep_desc, dep_loc.clone());
+                                    queue.push(dep_loc.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Ok(Self {
