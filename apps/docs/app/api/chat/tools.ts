@@ -13,8 +13,8 @@ const createSearchServer = (lang: string) => {
       description: page.data.description,
       url: page.url,
       id: page.url,
-      structuredData: page.data.structuredData
-    }))
+      structuredData: page.data.structuredData,
+    })),
   });
 };
 
@@ -22,7 +22,7 @@ const log = (message: string) => {
   console.log(`🤖 [Geistdocs] ${message}`);
 };
 
-const search_docs = (writer?: UIMessageStreamWriter) =>
+const search_docs = (writer: UIMessageStreamWriter) =>
   tool({
     description: "Search through documentation content by query",
     inputSchema: z.object({
@@ -31,7 +31,7 @@ const search_docs = (writer?: UIMessageStreamWriter) =>
         .string()
         .describe("The two letter language code of the documentation to search")
         .optional()
-        .default(i18n.defaultLanguage)
+        .default(i18n.defaultLanguage),
     }),
     execute: async ({ query, lang }) => {
       try {
@@ -46,14 +46,7 @@ const search_docs = (writer?: UIMessageStreamWriter) =>
         log(`Found ${results.length} results`);
 
         if (results.length === 0) {
-          return {
-            content: [
-              {
-                type: "text",
-                text: `No documentation found for query: "${query}"`
-              }
-            ]
-          };
+          return `No documentation found for query: "${query}"`;
         }
 
         log(`Processing ${results.length} results...`);
@@ -85,7 +78,7 @@ const search_docs = (writer?: UIMessageStreamWriter) =>
             title: page.data.title,
             description: page.data.description,
             content: JSON.stringify(page.data.structuredData.contents),
-            slug: page.url
+            slug: page.url,
           };
         });
 
@@ -121,17 +114,14 @@ const search_docs = (writer?: UIMessageStreamWriter) =>
 
         log(`Trimmed ${trimmedResults.length} results.`);
 
-        // Only write source URLs if writer is provided (generation phase)
-        if (writer) {
-          for (const [index, doc] of trimmedResults.entries()) {
-            log(`Writing doc: ${doc.title}, ${doc.slug}`);
-            writer.write({
-              type: "source-url",
-              sourceId: `doc-${index}-${doc.slug}`,
-              url: doc.slug,
-              title: doc.title
-            });
-          }
+        for (const [index, doc] of trimmedResults.entries()) {
+          log(`Writing doc: ${doc.title}, ${doc.slug}`);
+          writer.write({
+            type: "source-url",
+            sourceId: `doc-${index}-${doc.slug}`,
+            url: doc.slug,
+            title: doc.title,
+          });
         }
 
         const formattedResultsString = trimmedResults
@@ -139,8 +129,8 @@ const search_docs = (writer?: UIMessageStreamWriter) =>
             (doc) =>
               `**${doc.title}**\nURL: ${doc.slug}\n${
                 doc.description || ""
-              }\n\n${doc.content.slice(0, 5000)}${
-                doc.content.length > 5000 ? "..." : ""
+              }\n\n${doc.content.slice(0, 1500)}${
+                doc.content.length > 1500 ? "..." : ""
               }\n\n---\n`
           )
           .join("\n");
@@ -152,7 +142,7 @@ const search_docs = (writer?: UIMessageStreamWriter) =>
 
         return `Error processing results: ${message}`;
       }
-    }
+    },
   });
 
 const get_doc_page = tool({
@@ -166,7 +156,7 @@ const get_doc_page = tool({
       .string()
       .describe("The two letter language code of the documentation to search")
       .optional()
-      .default(i18n.defaultLanguage)
+      .default(i18n.defaultLanguage),
   }),
   // biome-ignore lint/suspicious/useAwait: "tool calls must be async"
   execute: async ({ slug, lang }) => {
@@ -177,20 +167,13 @@ const get_doc_page = tool({
     const doc = pages.find((d) => d.url === slug || d.url.endsWith(slug));
 
     if (!doc) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Documentation page not found: "${slug}"`
-          }
-        ]
-      };
+      return `Documentation page not found: "${slug}"`;
     }
 
     return `# ${doc.data.title}\n\n${
       doc.data.description ? `${doc.data.description}\n\n` : ""
     }${doc.data.structuredData.contents}`;
-  }
+  },
 });
 
 const list_docs = tool({
@@ -200,7 +183,7 @@ const list_docs = tool({
       .string()
       .describe("The two letter language code of the documentation to search")
       .optional()
-      .default(i18n.defaultLanguage)
+      .default(i18n.defaultLanguage),
   }),
   // biome-ignore lint/suspicious/useAwait: "tool calls must be async"
   execute: async ({ lang }) => {
@@ -214,15 +197,12 @@ const list_docs = tool({
       .join("\n");
 
     return `Available Documentation Pages (${pages.length} total):\n\n${docsList}`;
-  }
+  },
 });
 
-export const createTools = (writer?: UIMessageStreamWriter) =>
+export const createTools = (writer: UIMessageStreamWriter) =>
   ({
     get_doc_page,
     list_docs,
-    search_docs: search_docs(writer)
+    search_docs: search_docs(writer),
   }) satisfies ToolSet;
-
-// RAG-only tools without streaming (for retrieval phase)
-export const createRagTools = () => createTools();

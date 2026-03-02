@@ -18,7 +18,7 @@ export const GET = async (
     id: baseUrl,
     link: baseUrl,
     language: lang,
-    copyright: `All rights reserved ${new Date().getFullYear()}, Vercel`
+    copyright: `All rights reserved ${new Date().getFullYear()}, Vercel`,
   });
 
   for (const page of source.getPages(lang)) {
@@ -30,9 +30,9 @@ export const GET = async (
       date: new Date(page.data.lastModified ?? new Date()),
       author: [
         {
-          name: "Vercel"
-        }
-      ]
+          name: "Vercel",
+        },
+      ],
     });
   }
 
@@ -40,7 +40,7 @@ export const GET = async (
 
   return new Response(rss, {
     headers: {
-      "Content-Type": "application/rss+xml"
-    }
+      "Content-Type": "application/rss+xml",
+    },
   });
 };

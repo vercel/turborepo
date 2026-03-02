@@ -1,10 +1,10 @@
-type TextGridSectionProps = {
+interface TextGridSectionProps {
   data: {
     id: string;
     title: string;
     description: string;
   }[];
-};
+}
 
 export const TextGridSection = ({ data }: TextGridSectionProps) => (
   <div className="grid gap-8 px-4 py-8 sm:px-12 sm:py-12 md:grid-cols-3">

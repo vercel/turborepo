@@ -7,15 +7,13 @@ import {
   DocsBody,
   DocsDescription,
   DocsPage,
-  DocsTitle
+  DocsTitle,
 } from "@/components/geistdocs/docs-page";
 import { EditSource } from "@/components/geistdocs/edit-source";
 import { Feedback } from "@/components/geistdocs/feedback";
 import { getMDXComponents } from "@/components/geistdocs/mdx-components";
 import { OpenInChat } from "@/components/geistdocs/open-in-chat";
-import { RemoteCacheCounter } from "@/components/remote-cache-counter";
 import { ScrollTop } from "@/components/geistdocs/scroll-top";
-
 import { Separator } from "@/components/ui/separator";
 import { getLLMText, getPageImage, source } from "@/lib/geistdocs/source";
 
@@ -35,7 +33,6 @@ const Page = async ({ params }: PageProps<"/[lang]/docs/[[...slug]]">) => {
       full={page.data.full}
       tableOfContent={{
         style: "clerk",
-        header: <RemoteCacheCounter />,
         footer: (
           <div className="my-3 space-y-3">
             <Separator />
@@ -46,7 +43,7 @@ const Page = async ({ params }: PageProps<"/[lang]/docs/[[...slug]]">) => {
             <AskAI href={page.url} />
             <OpenInChat href={page.url} />
           </div>
-        )
+        ),
       }}
       toc={page.data.toc}
     >
@@ -55,10 +52,9 @@ const Page = async ({ params }: PageProps<"/[lang]/docs/[[...slug]]">) => {
       <DocsBody>
         <MDX
           components={getMDXComponents({
-            components: {
-              a: createRelativeLink(source, page)
-              // Add your custom components here
-            }
+            a: createRelativeLink(source, page),
+
+            // Add your custom components here
           })}
         />
       </DocsBody>
@@ -69,7 +65,7 @@ const Page = async ({ params }: PageProps<"/[lang]/docs/[[...slug]]">) => {
 export const generateStaticParams = () => source.generateParams();
 
 export const generateMetadata = async ({
-  params
+  params,
 }: PageProps<"/[lang]/docs/[[...slug]]">) => {
   const { slug, lang } = await params;
   const page = source.getPage(slug, lang);
@@ -82,13 +78,13 @@ export const generateMetadata = async ({
     title: page.data.title,
     description: page.data.description,
     openGraph: {
-      images: getPageImage(page).url
+      images: getPageImage(page).url,
     },
     alternates: {
       types: {
-        "text/markdown": slug ? `/docs/${slug.join("/")}.md` : "/docs.md"
-      }
-    }
+        "text/markdown": slug ? `/docs/${slug}.md` : "/docs.md",
+      },
+    },
   };
 
   return metadata;

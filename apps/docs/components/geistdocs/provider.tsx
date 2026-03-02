@@ -48,7 +48,7 @@ export const GeistdocsProvider = ({
           i18n={i18nProvider(lang)}
           search={{
             SearchDialog: SearchDialogComponent,
-            ...search
+            ...search,
           }}
           {...props}
         />

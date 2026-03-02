@@ -8,6 +8,6 @@ export const useSidebarContext = () => {
 
   return {
     isOpen,
-    setIsOpen
+    setIsOpen,
   };
 };

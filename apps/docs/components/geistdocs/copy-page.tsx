@@ -3,9 +3,9 @@
 import { useCopyButton } from "fumadocs-ui/utils/use-copy-button";
 import { CheckIcon, CopyIcon } from "lucide-react";
 
-type CopyPageProps = {
+interface CopyPageProps {
   text: string;
-};
+}
 
 export const CopyPage = ({ text }: CopyPageProps) => {
   const [checked, handleCopy] = useCopyButton(async () => {

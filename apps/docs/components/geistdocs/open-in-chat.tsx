@@ -9,12 +9,12 @@ import {
   OpenInSeparator,
   OpenInT3,
   OpenInTrigger,
-  OpenInv0
+  OpenInv0,
 } from "@/components/ai-elements/open-in-chat";
 
-type OpenInChatProps = {
+interface OpenInChatProps {
   href: string;
-};
+}
 
 export const OpenInChat = ({ href }: OpenInChatProps) => {
   const protocol = process.env.NODE_ENV === "production" ? "https" : "http";

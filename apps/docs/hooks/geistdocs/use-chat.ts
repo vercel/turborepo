@@ -18,6 +18,6 @@ export const useChatContext = () => {
     prompt,
     setPrompt,
     isOpen,
-    setIsOpen
+    setIsOpen,
   };
 };

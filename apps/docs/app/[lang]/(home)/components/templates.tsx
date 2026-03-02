@@ -1,16 +1,16 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
-type TemplatesProps = {
-  title: string;
-  description: string;
+interface TemplatesProps {
   data: {
     title: string;
     description: string;
     link: string;
     image: string;
   }[];
-};
+  description: string;
+  title: string;
+}
 
 export const Templates = ({ title, description, data }: TemplatesProps) => (
   <div className="grid gap-12 p-8 px-4 py-8 sm:p-12 sm:px-12 sm:py-12">
@@ -36,8 +36,8 @@ export const Templates = ({ title, description, data }: TemplatesProps) => (
           <Image
             alt={item.title}
             className={cn(
-              "-rotate-3 -mb-12 mt-8 ml-7 aspect-video overflow-hidden rounded-md border object-cover object-top",
-              "group-hover:-rotate-1 transition-transform duration-300 group-hover:scale-105"
+              "mt-8 -mb-12 ml-7 aspect-video -rotate-3 overflow-hidden rounded-md border object-cover object-top",
+              "transition-transform duration-300 group-hover:-rotate-1 group-hover:scale-105"
             )}
             height={336}
             src={item.image}

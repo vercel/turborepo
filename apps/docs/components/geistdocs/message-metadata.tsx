@@ -1,28 +1,34 @@
 import { isToolUIPart } from "ai";
+import { BookmarkIcon } from "lucide-react";
 import type { MyUIMessage } from "@/app/api/chat/types";
+import { Shimmer } from "../ai-elements/shimmer";
 import {
   Source,
   Sources,
   SourcesContent,
-  SourcesTrigger
+  SourcesTrigger,
 } from "../ai-elements/sources";
 
-type MessageMetadataProps = {
-  messageId?: string;
-  parts: MyUIMessage["parts"];
+interface MessageMetadataProps {
   inProgress: boolean;
-  isStreaming?: boolean;
-};
+  parts: MyUIMessage["parts"];
+}
 
 export const MessageMetadata = ({
   parts,
   inProgress,
-  isStreaming
 }: MessageMetadataProps) => {
   // Pull out last part that is either text or tool call
   const lastPart = parts
     .filter((part) => part.type === "text" || isToolUIPart(part))
     .at(-1);
+
+  if (!lastPart) {
+    return <Shimmer className="text-xs">Thinking...</Shimmer>;
+  }
+
+  const tool = isToolUIPart(lastPart) ? lastPart : null;
+  const hasTextPart = parts.some((part) => part.type === "text");
 
   const sources = Array.from(
     new Map(
@@ -32,18 +38,18 @@ export const MessageMetadata = ({
     ).values()
   );
 
-  const tool = lastPart && isToolUIPart(lastPart) ? lastPart : null;
+  // Show loading state when sources exist but text hasn't arrived yet
+  if (sources.length > 0 && !hasTextPart && inProgress) {
+    return <Shimmer className="text-xs">Searching sources...</Shimmer>;
+  }
 
-  // Show sources when:
-  // 1. Currently streaming (sources arrive before text) OR
-  // 2. Historical message that has text content
-  const shouldShowSources =
-    sources.length > 0 && !(tool && inProgress) && (isStreaming || lastPart);
-
-  if (shouldShowSources) {
+  if (sources.length > 0 && !(tool && inProgress)) {
     return (
       <Sources>
-        <SourcesTrigger count={sources.length} />
+        <SourcesTrigger count={sources.length}>
+          <BookmarkIcon className="size-4" />
+          <p>Used {sources.length} sources</p>
+        </SourcesTrigger>
         <SourcesContent>
           <ul className="flex flex-col gap-2">
             {sources.map((source) => (
@@ -59,5 +65,9 @@ export const MessageMetadata = ({
     );
   }
 
-  return null;
+  if (!tool && sources.length === 0) {
+    return null;
+  }
+
+  return <div className="h-12" />;
 };

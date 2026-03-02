@@ -6,23 +6,23 @@ import {
   type ReactNode,
   useCallback,
   useRef,
-  useState
+  useState,
 } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type CodeBlockProps = {
+interface CodeBlockProps {
   children: ReactNode;
   className?: string;
+  "data-line-highlighting"?: string;
+  "data-line-numbers"?: string;
   icon?: ReactNode;
   style?: CSSProperties;
   tabIndex?: number;
   title?: string;
-  "data-line-numbers"?: string;
-  "data-line-highlighting"?: string;
-};
+}
 
 export const CodeBlock = ({
   children,
@@ -104,7 +104,7 @@ export const CodeBlock = ({
     <Card className="not-prose mb-6 gap-0 overflow-hidden rounded-sm p-0 shadow-none">
       <CardHeader className="flex items-center gap-2 border-b bg-sidebar py-1.5! pr-1.5 pl-4 text-muted-foreground">
         <div
-          className="size-3.5 shrink-0"
+          className="flex size-3.5 shrink-0"
           // biome-ignore lint/security/noDangerouslySetInnerHtml: "Required for icon prop."
           dangerouslySetInnerHTML={{ __html: icon as unknown as TrustedHTML }}
         />

@@ -7,31 +7,31 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator
+  CommandSeparator,
 } from "@/components/ui/command";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
   HoverCard,
   HoverCardContent,
-  HoverCardTrigger
+  HoverCardTrigger,
 } from "@/components/ui/hover-card";
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupTextarea
+  InputGroupTextarea,
 } from "@/components/ui/input-group";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue
+  SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { ChatStatus, FileUIPart, SourceDocumentUIPart } from "ai";
@@ -41,7 +41,7 @@ import {
   Loader2Icon,
   PlusIcon,
   SquareIcon,
-  XIcon
+  XIcon,
 } from "lucide-react";
 import { nanoid } from "nanoid";
 import {
@@ -62,7 +62,7 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState
+  useState,
 } from "react";
 
 // ============================================================================
@@ -138,7 +138,7 @@ export type PromptInputProviderProps = PropsWithChildren<{
  */
 export function PromptInputProvider({
   initialInput: initialTextInput = "",
-  children
+  children,
 }: PromptInputProviderProps) {
   // ----- textInput state
   const [textInput, setTextInput] = useState(initialTextInput);
@@ -164,7 +164,7 @@ export function PromptInputProvider({
           type: "file" as const,
           url: URL.createObjectURL(file),
           mediaType: file.type,
-          filename: file.name
+          filename: file.name,
         }))
       )
     );
@@ -218,7 +218,7 @@ export function PromptInputProvider({
       remove,
       clear,
       openFileDialog,
-      fileInputRef
+      fileInputRef,
     }),
     [attachmentFiles, add, remove, clear, openFileDialog]
   );
@@ -236,10 +236,10 @@ export function PromptInputProvider({
       textInput: {
         value: textInput,
         setInput: setTextInput,
-        clear: clearInput
+        clear: clearInput,
       },
       attachments,
-      __registerFileInput
+      __registerFileInput,
     }),
     [textInput, clearInput, attachments, __registerFileInput]
   );
@@ -416,7 +416,7 @@ export const PromptInput = ({
       if (incoming.length && accepted.length === 0) {
         onError?.({
           code: "accept",
-          message: "No files match the accepted types."
+          message: "No files match the accepted types.",
         });
         return;
       }
@@ -426,7 +426,7 @@ export const PromptInput = ({
       if (accepted.length > 0 && sized.length === 0) {
         onError?.({
           code: "max_file_size",
-          message: "All files exceed the maximum size."
+          message: "All files exceed the maximum size.",
         });
         return;
       }
@@ -441,7 +441,7 @@ export const PromptInput = ({
         if (typeof capacity === "number" && sized.length > capacity) {
           onError?.({
             code: "max_files",
-            message: "Too many files. Some were not added."
+            message: "Too many files. Some were not added.",
           });
         }
         const next: (FileUIPart & { id: string })[] = [];
@@ -451,7 +451,7 @@ export const PromptInput = ({
             type: "file",
             url: URL.createObjectURL(file),
             mediaType: file.type,
-            filename: file.name
+            filename: file.name,
           });
         }
         return prev.concat(next);
@@ -480,7 +480,7 @@ export const PromptInput = ({
       if (incoming.length && accepted.length === 0) {
         onError?.({
           code: "accept",
-          message: "No files match the accepted types."
+          message: "No files match the accepted types.",
         });
         return;
       }
@@ -490,7 +490,7 @@ export const PromptInput = ({
       if (accepted.length > 0 && sized.length === 0) {
         onError?.({
           code: "max_file_size",
-          message: "All files exceed the maximum size."
+          message: "All files exceed the maximum size.",
         });
         return;
       }
@@ -505,7 +505,7 @@ export const PromptInput = ({
       if (typeof capacity === "number" && sized.length > capacity) {
         onError?.({
           code: "max_files",
-          message: "Too many files. Some were not added."
+          message: "Too many files. Some were not added.",
         });
       }
 
@@ -666,7 +666,7 @@ export const PromptInput = ({
       remove,
       clear: clearAttachments,
       openFileDialog,
-      fileInputRef: inputRef
+      fileInputRef: inputRef,
     }),
     [files, add, remove, clearAttachments, openFileDialog]
   );
@@ -683,7 +683,7 @@ export const PromptInput = ({
       remove: (id: string) => {
         setReferencedSources((prev) => prev.filter((s) => s.id !== id));
       },
-      clear: clearReferencedSources
+      clear: clearReferencedSources,
     }),
     [referencedSources, clearReferencedSources]
   );
@@ -707,13 +707,13 @@ export const PromptInput = ({
 
     // Convert blob URLs to data URLs asynchronously
     Promise.all(
-      files.map(async ({ id: _id, ...item }) => {
+      files.map(async ({ id, ...item }) => {
         if (item.url?.startsWith("blob:")) {
           const dataUrl = await convertBlobUrlToDataUrl(item.url);
           // If conversion failed, keep the original blob URL
           return {
             ...item,
-            url: dataUrl ?? item.url
+            url: dataUrl ?? item.url,
           };
         }
         return item;
@@ -887,10 +887,10 @@ export const PromptInputTextarea = ({
         onChange: (e: ChangeEvent<HTMLTextAreaElement>) => {
           controller.textInput.setInput(e.currentTarget.value);
           onChange?.(e);
-        }
+        },
       }
     : {
-        onChange
+        onChange,
       };
 
   return (

@@ -12,12 +12,12 @@ import type { MyUIMessage } from "@/app/api/chat/types";
 import {
   Conversation,
   ConversationContent,
-  ConversationScrollButton
+  ConversationScrollButton,
 } from "@/components/ai-elements/conversation";
 import {
   Message,
   MessageContent,
-  MessageResponse
+  MessageResponse,
 } from "@/components/ai-elements/message";
 import {
   PromptInput,
@@ -26,7 +26,7 @@ import {
   type PromptInputProps,
   PromptInputProvider,
   PromptInputSubmit,
-  PromptInputTextarea
+  PromptInputTextarea,
 } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { Button } from "@/components/ui/button";
@@ -79,9 +79,7 @@ export const useChatPersistence = () => {
   );
 
   const initialMessages =
-    freshMessages?.map(
-      ({ timestamp: _timestamp, sequence: _sequence, ...message }) => message
-    ) ?? [];
+    freshMessages?.map(({ timestamp, sequence, ...message }) => message) ?? [];
 
   const isLoading = storedMessages === undefined;
 
@@ -97,7 +95,7 @@ export const useChatPersistence = () => {
         const messagesToStore = messages.map((message, index) => ({
           ...message,
           timestamp: baseTimestamp + index * 1000,
-          sequence: index
+          sequence: index,
         }));
 
         await db.transaction("rw", db.messages, async () => {
@@ -133,14 +131,14 @@ export const useChatPersistence = () => {
     initialMessages,
     isLoading,
     saveMessages,
-    clearMessages
+    clearMessages,
   };
 };
 
-type ChatProps = {
+interface ChatProps {
   basePath: string | undefined;
   suggestions: string[];
-};
+}
 
 type ChatInnerProps = ChatProps & {
   isOpen: boolean;
@@ -157,13 +155,13 @@ const ChatInner = ({ basePath, suggestions, isOpen }: ChatInnerProps) => {
 
   const { messages, sendMessage, status, setMessages, stop } = useChat({
     transport: new DefaultChatTransport({
-      api: basePath ? `${basePath}/api/chat` : "/api/chat"
+      api: basePath ? `${basePath}/api/chat` : "/api/chat",
     }),
     onError: (error) => {
       toast.error(error.message, {
-        description: error.message
+        description: error.message,
       });
-    }
+    },
   });
 
   // Sync external prompt changes to local state and force provider remount
@@ -237,7 +235,7 @@ const ChatInner = ({ basePath, suggestions, isOpen }: ChatInnerProps) => {
       toast.success("Chat history cleared");
     } catch (error) {
       toast.error("Failed to clear chat history", {
-        description: error instanceof Error ? error.message : "Unknown error"
+        description: error instanceof Error ? error.message : "Unknown error",
       });
     }
   };

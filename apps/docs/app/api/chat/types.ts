@@ -4,23 +4,23 @@ import type { createTools } from "./tools";
 
 const dataPartsSchema = z.object({
   "stream-end": z.object({
-    message: z.string()
+    message: z.string(),
   }),
   notification: z.object({
-    message: z.string()
-  })
+    message: z.string(),
+  }),
 });
 
 type MyDataParts = z.infer<typeof dataPartsSchema>;
 
 export type MyTools = InferUITools<ReturnType<typeof createTools>>;
 
-type MessageMetadata = {
+interface MessageMetadata {
   isPageContext?: boolean;
   pageContext?: {
     title: string;
     url: string;
   };
-};
+}
 
 export type MyUIMessage = UIMessage<MessageMetadata, MyDataParts, MyTools>;

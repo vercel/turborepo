@@ -18,7 +18,7 @@ export const sendFeedback = async (
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       note: feedback.message,
@@ -26,8 +26,7 @@ export const sendFeedback = async (
       emotion: emoji,
       ua: headersList.get("user-agent") ?? undefined,
       ip: headersList.get("x-real-ip") || headersList.get("x-forwarded-for"),
-      label: "turbo-site"
-    })
+    }),
   });
 
   if (!response.ok) {
@@ -39,6 +38,6 @@ export const sendFeedback = async (
   }
 
   return {
-    success: true
+    success: true,
   };
 };

@@ -7,7 +7,7 @@ import {
   type FormEventHandler,
   useEffect,
   useState,
-  useTransition
+  useTransition,
 } from "react";
 import { sendFeedback } from "@/app/actions/feedback";
 import { emotions } from "@/app/actions/feedback/emotions";
@@ -18,11 +18,11 @@ import { Textarea } from "../ui/textarea";
 
 type Emotion = (typeof emotions)[number]["name"];
 
-export type Feedback = {
+export interface Feedback {
   emotion: Emotion;
-  url?: string;
   message: string;
-};
+  url?: string;
+}
 
 export const Feedback = () => {
   const url = usePathname();
@@ -51,7 +51,7 @@ export const Feedback = () => {
     startTransition(() => {
       const feedback: Feedback = {
         emotion,
-        message
+        message,
       };
 
       sendFeedback(url, feedback).then(() => {

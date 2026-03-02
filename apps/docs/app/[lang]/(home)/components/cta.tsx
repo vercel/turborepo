@@ -1,11 +1,11 @@
 import DynamicLink from "fumadocs-core/dynamic-link";
 import { Button } from "@/components/ui/button";
 
-type CTAProps = {
-  title: string;
-  href: string;
+interface CTAProps {
   cta: string;
-};
+  href: string;
+  title: string;
+}
 
 export const CTA = ({ title, href, cta }: CTAProps) => (
   <section className="flex flex-col gap-4 px-8 py-10 sm:px-12 md:flex-row md:items-center md:justify-between">

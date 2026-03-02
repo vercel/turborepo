@@ -1,57 +1,28 @@
-import Link from "next/link";
 import { SiVercel } from "@icons-pack/react-simple-icons";
-import { footerLinks } from "@/geistdocs";
+import { GitHubButton } from "./github-button";
+import { LanguageSelector } from "./language-selector";
+import { RSSButton } from "./rss-button";
 import { ThemeToggle } from "./theme-toggle";
 
-type FooterLink = {
-  href: string;
-  label: string;
-  id?: string;
-};
+interface FooterProps {
+  copyright?: string;
+}
 
-const FooterSection = ({
-  title,
-  links
-}: {
-  title: string;
-  links: FooterLink[];
-}) => (
-  <div className="flex flex-col gap-y-3 text-sm">
-    <h4 className="font-medium">{title}</h4>
-    <ul className="flex flex-col gap-y-3 text-muted-foreground">
-      {links.map((link) => (
-        <li
-          key={link.id ?? link.href}
-          className="transition duration-100 hover:text-foreground"
-        >
-          {link.href.startsWith("http") ? (
-            <a href={link.href} id={link.id} rel="noopener" target="_blank">
-              {link.label}
-            </a>
-          ) : (
-            <Link href={link.href} id={link.id}>
-              {link.label}
-            </Link>
-          )}
-        </li>
-      ))}
-    </ul>
-  </div>
-);
-
-export const Footer = () => (
-  <footer className="w-full border-t py-12">
-    <div className="mx-auto flex w-full max-w-screen-xl flex-col gap-y-12 px-6">
-      <div className="flex w-full flex-col items-start justify-between gap-y-12 md:flex-row">
-        <SiVercel className="size-6" />
-        <div className="grid grid-cols-2 gap-x-16 gap-y-12 md:auto-cols-max md:grid-flow-col md:gap-x-24">
-          <FooterSection title="Resources" links={footerLinks.resources} />
-          <FooterSection title="Community" links={footerLinks.community} />
-          <FooterSection title="Vercel" links={footerLinks.company} />
-          <FooterSection title="Legal" links={footerLinks.legal} />
-        </div>
+export const Footer = ({
+  copyright = `Copyright Vercel ${new Date().getFullYear()}. All rights reserved.`,
+}: FooterProps) => (
+  <footer className="border-t px-4 py-5 md:px-6">
+    <div className="mx-auto flex flex-col items-center justify-between gap-4 sm:flex-row">
+      <div className="flex items-center gap-2">
+        <SiVercel className="size-4 shrink-0" />
+        <p className="text-center text-muted-foreground text-sm sm:text-left">
+          {copyright}
+        </p>
       </div>
-      <div className="md:ml-auto">
+      <div className="flex items-center gap-2">
+        <LanguageSelector />
+        <RSSButton />
+        <GitHubButton />
         <ThemeToggle />
       </div>
     </div>

@@ -3,8 +3,8 @@ import Dexie, { type EntityTable } from "dexie";
 import { title } from "@/geistdocs";
 
 interface StoredMessage extends UIMessage {
-  timestamp: number;
   sequence: number;
+  timestamp: number;
 }
 
 class ChatDatabase extends Dexie {
@@ -13,7 +13,7 @@ class ChatDatabase extends Dexie {
   constructor() {
     super(title.replaceAll(" ", "").toLocaleLowerCase());
     this.version(1).stores({
-      messages: "id, timestamp, sequence"
+      messages: "id, timestamp, sequence",
     });
   }
 }

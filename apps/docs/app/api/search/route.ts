@@ -20,31 +20,31 @@ const localeMap: {
 } = Object.fromEntries(
   Object.entries(translations).map(([locale, translation]) => [
     locale,
-    { language: translation.displayName.toLowerCase() }
+    { language: translation.displayName.toLowerCase() },
   ])
 );
 
 if ("cn" in translations) {
   localeMap.cn = {
     components: {
-      tokenizer: createTokenizerMandarin()
+      tokenizer: createTokenizerMandarin(),
     },
     search: {
       threshold: 0,
-      tolerance: 0
-    }
+      tolerance: 0,
+    },
   };
 }
 
 if ("jp" in translations) {
   localeMap.jp = {
     components: {
-      tokenizer: createTokenizerJapanese()
+      tokenizer: createTokenizerJapanese(),
     },
     search: {
       threshold: 0,
-      tolerance: 0
-    }
+      tolerance: 0,
+    },
   };
 }
 

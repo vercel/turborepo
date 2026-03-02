@@ -1,35 +1,40 @@
 "use client";
 
 import type { Node } from "fumadocs-core/page-tree";
-import DynamicLink from "fumadocs-core/dynamic-link";
 import {
   SidebarFolder,
   SidebarFolderContent,
   SidebarFolderLink,
   SidebarFolderTrigger,
   SidebarItem,
-  SidebarSeparator
+  SidebarSeparator,
 } from "fumadocs-ui/components/sidebar/base";
 import type { SidebarPageTreeComponents } from "fumadocs-ui/components/sidebar/page-tree";
 import { useTreeContext, useTreePath } from "fumadocs-ui/contexts/tree";
-import { SiGithub } from "@icons-pack/react-simple-icons";
-import { ExternalLinkIcon } from "lucide-react";
-import { Fragment } from "react";
+import { usePathname } from "next/navigation";
+import { Fragment, useEffect, useRef } from "react";
 import {
   Sheet,
   SheetContent,
   SheetDescription,
   SheetHeader,
-  SheetTitle
+  SheetTitle,
 } from "@/components/ui/sheet";
-import { github, nav } from "@/geistdocs";
 import { useSidebarContext } from "@/hooks/geistdocs/use-sidebar";
 import { SearchButton } from "./search";
-import { VersionWarning } from "@/components/version-warning";
 
 export const Sidebar = () => {
   const { root } = useTreeContext();
   const { isOpen, setIsOpen } = useSidebarContext();
+  const pathname = usePathname();
+  const previousPathname = useRef(pathname);
+
+  useEffect(() => {
+    if (pathname !== previousPathname.current) {
+      setIsOpen(false);
+      previousPathname.current = pathname;
+    }
+  }, [pathname, setIsOpen]);
 
   const renderSidebarList = (items: Node[]) =>
     items.map((item) => {
@@ -50,15 +55,12 @@ export const Sidebar = () => {
     });
 
   return (
-    <>
-      <div
-        className="pointer-events-none sticky top-(--fd-docs-row-1) z-20 h-[calc(var(--fd-docs-height)-var(--fd-docs-row-1))] [grid-area:sidebar] *:pointer-events-auto max-md:hidden md:layout:[--fd-sidebar-width:268px]"
-        data-sidebar-placeholder
-      >
-        <div className="px-4 pt-12 pb-4 h-full overflow-y-auto">
-          <VersionWarning />
-          <Fragment key={root.$id}>{renderSidebarList(root.children)}</Fragment>
-        </div>
+    <div
+      className="pointer-events-none sticky top-(--fd-docs-row-1) z-20 h-[calc(var(--fd-docs-height)-var(--fd-docs-row-1))] [grid-area:sidebar] *:pointer-events-auto max-md:hidden md:layout:[--fd-sidebar-width:268px]"
+      data-sidebar-placeholder
+    >
+      <div className="h-full overflow-y-auto px-4 pt-12 pb-4">
+        <Fragment key={root.$id}>{renderSidebarList(root.children)}</Fragment>
       </div>
       <Sheet onOpenChange={setIsOpen} open={isOpen}>
         <SheetContent className="gap-0">
@@ -69,57 +71,18 @@ export const Sidebar = () => {
             </SheetDescription>
             <SearchButton onClick={() => setIsOpen(false)} />
           </SheetHeader>
-          <div className="overflow-y-auto flex-1">
-            <nav className="flex flex-col gap-1 border-b px-4 py-4">
-              {nav.map((item) =>
-                item.href.startsWith("http") ? (
-                  <a
-                    key={item.href}
-                    className="flex items-center gap-2 py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
-                    href={item.href}
-                    rel="noopener"
-                    target="_blank"
-                  >
-                    {item.label}
-                    <ExternalLinkIcon className="size-3.5" />
-                  </a>
-                ) : (
-                  <DynamicLink
-                    key={item.href}
-                    className="py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
-                    href={`/[lang]${item.href}`}
-                    onClick={() => setIsOpen(false)}
-                  >
-                    {item.label}
-                  </DynamicLink>
-                )
-              )}
-              {github.owner && github.repo ? (
-                <a
-                  className="flex items-center gap-2 py-1.5 text-muted-foreground text-sm transition-colors hover:text-foreground"
-                  href={`https://github.com/${github.owner}/${github.repo}`}
-                  rel="noopener"
-                  target="_blank"
-                >
-                  <SiGithub className="size-4" />
-                  GitHub
-                </a>
-              ) : null}
-            </nav>
-            <div className="px-4 pb-4">
-              <VersionWarning />
-              {renderSidebarList(root.children)}
-            </div>
+          <div className="flex-1 overflow-y-auto px-4 pb-4">
+            {renderSidebarList(root.children)}
           </div>
         </SheetContent>
       </Sheet>
-    </>
+    </div>
   );
 };
 
 export const Folder: SidebarPageTreeComponents["Folder"] = ({
   children,
-  item
+  item,
 }) => {
   const path = useTreePath();
   const defaultOpen = item.defaultOpen ?? path.includes(item);

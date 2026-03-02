@@ -1,27 +1,34 @@
 import type { MetadataRoute } from "next";
-import { loadState, getAllPageUrls, SITEMAP_CONFIG } from "../lib/sitemap";
 
-export const revalidate = 3600; // Revalidate every hour
+import { source } from "@/lib/geistdocs/source";
 
-// eslint-disable-next-line import/no-default-export -- Required by Next.js sitemap convention
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Load state from Redis
-  const state = await loadState();
+const protocol = process.env.NODE_ENV === "production" ? "https" : "http";
+const baseUrl = `${protocol}://${process.env.NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL}`;
 
-  // Get all page URLs
-  const pageUrls = getAllPageUrls();
+export const revalidate = false;
 
-  // Build sitemap entries
-  const entries: MetadataRoute.Sitemap = pageUrls.map((url) => {
-    const pageState = state?.pages[url];
+export default function sitemap(): MetadataRoute.Sitemap {
+  const url = (path: string): string => new URL(path, baseUrl).toString();
 
-    return {
-      url: `${SITEMAP_CONFIG.baseUrl}${url}`,
-      lastModified: pageState?.lastmod
-        ? new Date(pageState.lastmod)
-        : new Date()
-    };
-  });
+  const pages: MetadataRoute.Sitemap = [];
 
-  return entries;
+  for (const page of source.getPages()) {
+    pages.push({
+      changeFrequency: "weekly" as const,
+      lastModified: page.data.lastModified
+        ? new Date(page.data.lastModified)
+        : undefined,
+      priority: 0.5,
+      url: url(page.url),
+    });
+  }
+
+  return [
+    {
+      changeFrequency: "monthly",
+      priority: 1,
+      url: url("/"),
+    },
+    ...pages,
+  ];
 }

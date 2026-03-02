@@ -2,7 +2,7 @@ import {
   CalloutContainer as CalloutContainerPrimitive,
   CalloutDescription as CalloutDescriptionPrimitive,
   Callout as CalloutPrimitive,
-  CalloutTitle as CalloutTitlePrimitive
+  CalloutTitle as CalloutTitlePrimitive,
 } from "fumadocs-ui/components/callout";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";

@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 
-type HeroProps = {
+interface HeroProps {
   badge: string;
-  title: string;
-  description: string;
   children: ReactNode;
-};
+  description: string;
+  title: string;
+}
 
 export const Hero = ({ badge, title, description, children }: HeroProps) => (
   <section className="mt-(--fd-nav-height) space-y-6 px-4 pt-16 pb-16 text-center sm:pt-24">

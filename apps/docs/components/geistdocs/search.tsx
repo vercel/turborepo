@@ -10,19 +10,18 @@ import {
   SearchDialogInput,
   SearchDialogList,
   SearchDialogOverlay,
-  type SharedProps
+  type SharedProps,
 } from "fumadocs-ui/components/dialog/search";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
 import { useSearchContext } from "fumadocs-ui/contexts/search";
-import { SearchIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
 import { Kbd } from "../ui/kbd";
 
-type SearchButtonProps = {
+interface SearchButtonProps {
   className?: string;
   onClick?: () => void;
-};
+}
 
 export const SearchDialog = ({
   basePath,
@@ -32,7 +31,7 @@ export const SearchDialog = ({
   const { search, setSearch, query } = useDocsSearch({
     type: "fetch",
     locale,
-    api: basePath ? `${basePath}/api/search` : "/api/search"
+    api: basePath ? `${basePath}/api/search` : "/api/search",
   });
 
   return (
@@ -74,23 +73,6 @@ export const SearchButton = ({ className, onClick }: SearchButtonProps) => {
     >
       <span>Search...</span>
       <Kbd className="border bg-background font-medium">⌘K</Kbd>
-    </Button>
-  );
-};
-
-export const MobileSearchButton = ({ className }: { className?: string }) => {
-  const { setOpenSearch } = useSearchContext();
-
-  return (
-    <Button
-      className={cn("size-8 text-muted-foreground", className)}
-      onClick={() => setOpenSearch(true)}
-      size="icon"
-      type="button"
-      variant="ghost"
-    >
-      <SearchIcon className="size-5" />
-      <span className="sr-only">Search</span>
     </Button>
   );
 };

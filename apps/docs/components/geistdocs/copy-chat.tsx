@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Tooltip,
   TooltipContent,
-  TooltipTrigger
+  TooltipTrigger,
 } from "@/components/ui/tooltip";
 
 export const CopyChat = ({ messages }: { messages: UIMessage[] }) => {
@@ -31,7 +31,7 @@ export const CopyChat = ({ messages }: { messages: UIMessage[] }) => {
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       toast.error("Failed to copy chat", {
-        description: error instanceof Error ? error.message : "Unknown error"
+        description: error instanceof Error ? error.message : "Unknown error",
       });
     }
   };

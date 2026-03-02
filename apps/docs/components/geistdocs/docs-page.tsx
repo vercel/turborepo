@@ -2,7 +2,7 @@ import {
   DocsBody as FumadocsDocsBody,
   DocsDescription as FumadocsDocsDescription,
   DocsPage as FumadocsDocsPage,
-  DocsTitle as FumadocsDocsTitle
+  DocsTitle as FumadocsDocsTitle,
 } from "fumadocs-ui/layouts/docs/page";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";

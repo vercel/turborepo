@@ -6,15 +6,15 @@ import {
   NavigationMenu,
   NavigationMenuItem,
   NavigationMenuLink,
-  NavigationMenuList
+  NavigationMenuList,
 } from "@/components/ui/navigation-menu";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
-type DesktopMenuProps = {
-  items: { label: string; href: string }[];
+interface DesktopMenuProps {
   className?: string;
-};
+  items: { label: string; href: string }[];
+}
 
 export const DesktopMenu = ({ items, className }: DesktopMenuProps) => {
   const isMobile = useIsMobile();

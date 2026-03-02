@@ -2,7 +2,7 @@ import {
   Tabs,
   TabsContent,
   TabsList,
-  TabsTrigger
+  TabsTrigger,
 } from "fumadocs-ui/components/tabs.unstyled";
 import type { ComponentProps } from "react";
 import { cn } from "@/lib/utils";
@@ -36,7 +36,7 @@ export const CodeBlockTabsTrigger = ({
 );
 
 export const CodeBlockTabs = ({
-  ref: _ref,
+  ref,
   ...props
 }: ComponentProps<typeof Tabs>) => (
   <Tabs

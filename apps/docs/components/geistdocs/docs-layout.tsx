@@ -4,28 +4,28 @@ import {
   Folder,
   Item,
   Separator,
-  Sidebar
+  Sidebar,
 } from "@/components/geistdocs/sidebar";
 import { i18n } from "@/lib/geistdocs/i18n";
 
-type DocsLayoutProps = {
-  tree: ComponentProps<typeof FumadocsDocsLayout>["tree"];
+interface DocsLayoutProps {
   children: ReactNode;
-};
+  tree: ComponentProps<typeof FumadocsDocsLayout>["tree"];
+}
 
 export const DocsLayout = ({ tree, children }: DocsLayoutProps) => (
   <FumadocsDocsLayout
     containerProps={{
       style: {
-        "--fd-docs-row-1": "4rem"
-      } as CSSProperties
+        "--fd-docs-row-1": "4rem",
+      } as CSSProperties,
     }}
     i18n={i18n}
     nav={{
-      enabled: false
+      enabled: false,
     }}
     searchToggle={{
-      enabled: false
+      enabled: false,
     }}
     sidebar={{
       collapsible: false,
@@ -33,12 +33,12 @@ export const DocsLayout = ({ tree, children }: DocsLayoutProps) => (
       components: {
         Folder,
         Item,
-        Separator
-      }
+        Separator,
+      },
     }}
     tabMode="auto"
     themeSwitch={{
-      enabled: false
+      enabled: false,
     }}
     tree={tree}
   >

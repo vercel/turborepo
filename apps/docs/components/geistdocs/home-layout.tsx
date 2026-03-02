@@ -3,10 +3,10 @@ import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { i18n } from "@/lib/geistdocs/i18n";
 import { Folder, Item, Separator, Sidebar } from "./sidebar";
 
-type HomeLayoutProps = {
-  tree: ComponentProps<typeof FumadocsDocsLayout>["tree"];
+interface HomeLayoutProps {
   children: ReactNode;
-};
+  tree: ComponentProps<typeof FumadocsDocsLayout>["tree"];
+}
 
 export const HomeLayout = ({ tree, children }: HomeLayoutProps) => (
   <FumadocsDocsLayout
@@ -15,15 +15,15 @@ export const HomeLayout = ({ tree, children }: HomeLayoutProps) => (
       style: {
         display: "flex",
         flexDirection: "column",
-        "--fd-docs-row-1": "4rem"
-      } as CSSProperties
+        "--fd-docs-row-1": "4rem",
+      } as CSSProperties,
     }}
     i18n={i18n}
     nav={{
-      enabled: false
+      enabled: false,
     }}
     searchToggle={{
-      enabled: false
+      enabled: false,
     }}
     sidebar={{
       className: "md:hidden",
@@ -32,12 +32,12 @@ export const HomeLayout = ({ tree, children }: HomeLayoutProps) => (
       components: {
         Folder,
         Item,
-        Separator
-      }
+        Separator,
+      },
     }}
     tabMode="auto"
     themeSwitch={{
-      enabled: false
+      enabled: false,
     }}
     tree={tree}
   >
