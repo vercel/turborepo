@@ -155,12 +155,12 @@ impl PackageInputsHashes {
                 info.inputs.globs.clone(),
                 info.inputs.default,
             );
-            let idx = match key_indices.get(&key) {
-                Some(&idx) => idx,
-                None => {
+            let idx = match key_indices.entry(key) {
+                std::collections::hash_map::Entry::Occupied(e) => *e.get(),
+                std::collections::hash_map::Entry::Vacant(e) => {
                     let idx = unique_keys.len();
-                    key_indices.insert(key.clone(), idx);
-                    unique_keys.push(key);
+                    unique_keys.push(e.key().clone());
+                    e.insert(idx);
                     idx
                 }
             };
