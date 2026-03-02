@@ -190,6 +190,17 @@ impl RepoGitIndex {
         let prefix_str = pkg_prefix.as_str();
         let prefix_is_empty = prefix_str.is_empty();
 
+        // Compute range bounds once for both ls_tree and status lookups
+        let range_start;
+        let range_end;
+        if !prefix_is_empty {
+            range_start = format!("{}/", prefix_str);
+            range_end = format!("{}0", prefix_str);
+        } else {
+            range_start = String::new();
+            range_end = String::new();
+        }
+
         let mut hashes = if prefix_is_empty {
             let mut h = GitHashes::with_capacity(self.ls_tree_hashes.len());
             for (path, hash) in &self.ls_tree_hashes {
@@ -197,12 +208,12 @@ impl RepoGitIndex {
             }
             h
         } else {
-            let range_start = RelativeUnixPathBuf::new(format!("{}/", prefix_str)).unwrap();
-            let range_end = RelativeUnixPathBuf::new(format!("{}0", prefix_str)).unwrap();
             let lo = self
                 .ls_tree_hashes
-                .partition_point(|(k, _)| *k < range_start);
-            let hi = self.ls_tree_hashes.partition_point(|(k, _)| *k < range_end);
+                .partition_point(|(k, _)| k.as_str() < range_start.as_str());
+            let hi = self
+                .ls_tree_hashes
+                .partition_point(|(k, _)| k.as_str() < range_end.as_str());
             let mut h = GitHashes::with_capacity(hi - lo);
             for (path, hash) in &self.ls_tree_hashes[lo..hi] {
                 if let Ok(stripped) = path.strip_prefix(pkg_prefix) {
@@ -216,12 +227,12 @@ impl RepoGitIndex {
         let status_entries = if prefix_is_empty {
             &self.status_entries[..]
         } else {
-            let range_start = RelativeUnixPathBuf::new(format!("{}/", prefix_str)).unwrap();
-            let range_end = RelativeUnixPathBuf::new(format!("{}0", prefix_str)).unwrap();
             let lo = self
                 .status_entries
-                .partition_point(|e| e.path < range_start);
-            let hi = self.status_entries.partition_point(|e| e.path < range_end);
+                .partition_point(|e| e.path.as_str() < range_start.as_str());
+            let hi = self
+                .status_entries
+                .partition_point(|e| e.path.as_str() < range_end.as_str());
             &self.status_entries[lo..hi]
         };
         for entry in status_entries {
