@@ -210,10 +210,10 @@ pub struct RawObservabilityOtel {
     pub enabled: Option<Spanned<bool>>,
     pub protocol: Option<Spanned<UnescapedString>>,
     pub endpoint: Option<Spanned<UnescapedString>>,
-    pub headers: Option<Vec<RawKeyValue>>,
+    pub headers: Option<BTreeMap<String, String>>,
     pub timeout_ms: Option<Spanned<u64>>,
     pub interval_ms: Option<Spanned<u64>>,
-    pub resource: Option<Vec<RawKeyValue>>,
+    pub resource: Option<BTreeMap<String, String>>,
     pub metrics: Option<RawObservabilityOtelMetrics>,
     pub use_remote_cache_token: Option<Spanned<bool>>,
 }
@@ -223,13 +223,6 @@ pub struct RawObservabilityOtel {
 #[serde(rename_all = "camelCase")]
 pub struct RawExperimentalObservability {
     pub otel: Option<RawObservabilityOtel>,
-}
-
-/// A key-value pair for OTel configuration
-#[derive(Serialize, Debug, Clone, Iterable, Deserializable)]
-pub struct RawKeyValue {
-    pub key: Spanned<UnescapedString>,
-    pub value: Spanned<UnescapedString>,
 }
 
 /// OTel metrics configuration
@@ -247,15 +240,6 @@ pub struct RawObservabilityOtelMetrics {
 pub struct RawObservabilityOtelTaskAttributes {
     pub id: Option<Spanned<bool>>,
     pub hashes: Option<Spanned<bool>>,
-}
-
-impl Default for RawKeyValue {
-    fn default() -> Self {
-        Self {
-            key: Spanned::new(UnescapedString::from(String::new())),
-            value: Spanned::new(UnescapedString::from(String::new())),
-        }
-    }
 }
 
 // Root turbo.json
