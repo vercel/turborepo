@@ -26,10 +26,15 @@ pub fn turbo_command(test_dir: &Path) -> assert_cmd::Command {
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("DO_NOT_TRACK", "1")
         .env("NPM_CONFIG_UPDATE_NOTIFIER", "false")
-        // Allow corepack to download package managers without prompting.
-        // Without this, corepack can block waiting for stdin confirmation,
-        // causing tests to hang until they hit the >120s slow threshold.
+        // Corepack intercepts package manager calls (yarn, pnpm) and can
+        // either prompt for download confirmation or fetch an exact version
+        // from the network, both of which hang in non-interactive CI.
+        // COREPACK_ENABLE_DOWNLOAD_PROMPT=0 auto-approves downloads.
+        // COREPACK_ENABLE_STRICT=0 lets corepack fall back to whatever
+        // version is already installed instead of downloading the exact
+        // version from packageManager field.
         .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
+        .env("COREPACK_ENABLE_STRICT", "0")
         .env_remove("CI")
         .env_remove("GITHUB_ACTIONS")
         .current_dir(test_dir);

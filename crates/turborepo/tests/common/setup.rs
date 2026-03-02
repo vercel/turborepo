@@ -244,8 +244,9 @@ fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(
     let output = cmd_with_path(program, path_env)
         .args(args)
         .current_dir(dir)
-        // Allow corepack to download package managers without prompting
+        // Prevent corepack from prompting or downloading exact versions
         .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
+        .env("COREPACK_ENABLE_STRICT", "0")
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .output()
