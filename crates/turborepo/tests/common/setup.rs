@@ -349,7 +349,7 @@ fn git_commit_if_changed(dir: &Path, message: &str) -> Result<(), anyhow::Error>
 }
 
 fn corepack_supports(pm_name: &str) -> bool {
-    matches!(pm_name, "yarn" | "pnpm" | "berry")
+    matches!(pm_name, "npm" | "yarn" | "pnpm" | "berry")
 }
 
 fn prepend_to_path(dir: &Path) -> String {
