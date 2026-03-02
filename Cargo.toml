@@ -100,7 +100,9 @@ async-compression = { version = "0.3.13", default-features = false, features = [
   "gzip",
   "tokio",
 ] }
-async-graphql = { version = "7.0.17", default-features = false, features = ["graphiql"] }
+async-graphql = { version = "7.0.17", default-features = false, features = [
+  "graphiql",
+] }
 async-graphql-axum = "7.0.16"
 async-trait = "0.1.64"
 axum = "0.8.4"
@@ -114,7 +116,10 @@ biome_json_formatter = { version = "0.5.7" }
 biome_json_syntax = { version = "0.5.7" }
 bytes = "1.11.1"
 camino = { version = "1.1.4", features = ["serde1"] }
-chrono = { version = "0.4.23", default-features = false, features = ["clock", "std"] }
+chrono = { version = "0.4.23", default-features = false, features = [
+  "clock",
+  "std",
+] }
 clap = "4.5.16"
 clap_complete = "4.5.24"
 console = "0.16.0"
