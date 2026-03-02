@@ -198,6 +198,7 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
+          package-install: "false"
 
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
@@ -245,6 +246,7 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
+          package-install: "false"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
@@ -314,6 +316,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
           capnproto: "false"
+          package-install: "false"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
@@ -367,6 +370,7 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
+          package-install: "false"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
