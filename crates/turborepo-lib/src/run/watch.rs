@@ -100,6 +100,11 @@ pub enum Error {
     },
     #[error("Daemon connection closed.")]
     ConnectionClosed,
+    #[error(
+        "Timed out waiting for the daemon's file watcher to become ready. The daemon may be \
+         having trouble watching your repository. Try running `turbo daemon clean` and retrying."
+    )]
+    DaemonFileWatchingTimeout,
     #[error("Failed to subscribe to signal handler. Shutting down.")]
     NoSignalHandler,
     #[error("Watch interrupted due to signal.")]
@@ -186,6 +191,16 @@ impl WatchClient {
 
         let mut events = client.package_changes().await?;
 
+        // Wait for the initial event from the daemon with a timeout.
+        // The daemon sends a Rediscover event immediately when the stream opens,
+        // but the stream won't produce anything until the daemon's file watcher
+        // is ready. If it never becomes ready, we'd hang here forever.
+        let initial_event = tokio::time::timeout(std::time::Duration::from_secs(10), events.next())
+            .await
+            .map_err(|_| Error::DaemonFileWatchingTimeout)?
+            .ok_or(Error::ConnectionClosed)?;
+        let initial_event = initial_event?;
+
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
         // We explicitly use a tokio::sync::Mutex here to avoid deadlocks.
@@ -194,6 +209,10 @@ impl WatchClient {
         let changed_packages = Mutex::new(ChangedPackages::default());
         let notify_run = Arc::new(Notify::new());
         let notify_event = notify_run.clone();
+
+        // Process the initial event
+        Self::handle_change_event(&changed_packages, initial_event.event.unwrap())?;
+        notify_event.notify_one();
 
         let event_fut = async {
             while let Some(event) = events.next().await {

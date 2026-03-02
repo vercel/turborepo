@@ -281,10 +281,25 @@ impl Subscriber {
     }
 
     async fn watch(mut self, exit_rx: oneshot::Receiver<()>) {
-        let Ok(mut file_events) = self.file_events_lazy.get().await.map(|r| r.resubscribe()) else {
-            // if we get here, it means that file watching has not started, so we should
-            // just report that the package watcher is not available
-            tracing::debug!("file watching shut down, package watcher not available");
+        let file_events_result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            self.file_events_lazy.get(),
+        )
+        .await;
+        let Ok(mut file_events) = file_events_result
+            .map_err(|_elapsed| {
+                tracing::warn!(
+                    "timed out waiting for file watching to become ready after 5s. This usually \
+                     means the daemon's file watcher failed to initialize. Try running `turbo \
+                     daemon clean` and retrying."
+                );
+            })
+            .and_then(|r| {
+                r.map(|r| r.resubscribe()).map_err(|_| {
+                    tracing::debug!("file watching shut down, package watcher not available");
+                })
+            })
+        else {
             return;
         };
 
