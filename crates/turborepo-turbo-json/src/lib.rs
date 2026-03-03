@@ -578,22 +578,22 @@ mod tests {
         json.tasks.insert(
             TaskName::from("dev"),
             Spanned::new(RawTaskDefinition {
-                with: Some(vec![Spanned::new(UnescapedString::from("dev:ts"))]),
+                with: Some(vec![Spanned::new(UnescapedString::from("existing-task"))]),
                 ..Default::default()
             }),
         );
         // MFE injects its proxy
-        json.with_task(TaskName::from("dev"), &TaskName::from("next-site#proxy"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("web#proxy"));
         let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
         let with = dev_task.with.as_ref().unwrap();
-        // The user's "dev:ts" is preserved, $TURBO_EXTENDS$ is added, and the proxy is
-        // appended
+        // The user's existing task is preserved, $TURBO_EXTENDS$ is added, and the
+        // proxy is appended
         assert_eq!(
             with.as_slice(),
             &[
-                Spanned::new(UnescapedString::from("dev:ts")),
+                Spanned::new(UnescapedString::from("existing-task")),
                 Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
-                Spanned::new(UnescapedString::from("next-site#proxy")),
+                Spanned::new(UnescapedString::from("web#proxy")),
             ]
         );
     }
@@ -606,22 +606,22 @@ mod tests {
             TaskName::from("dev"),
             Spanned::new(RawTaskDefinition {
                 with: Some(vec![
-                    Spanned::new(UnescapedString::from("dev:ts")),
+                    Spanned::new(UnescapedString::from("existing-task")),
                     Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
                 ]),
                 ..Default::default()
             }),
         );
         // MFE injects its proxy — should not add a duplicate $TURBO_EXTENDS$
-        json.with_task(TaskName::from("dev"), &TaskName::from("next-site#proxy"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("web#proxy"));
         let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
         let with = dev_task.with.as_ref().unwrap();
         assert_eq!(
             with.as_slice(),
             &[
-                Spanned::new(UnescapedString::from("dev:ts")),
+                Spanned::new(UnescapedString::from("existing-task")),
                 Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
-                Spanned::new(UnescapedString::from("next-site#proxy")),
+                Spanned::new(UnescapedString::from("web#proxy")),
             ]
         );
     }
