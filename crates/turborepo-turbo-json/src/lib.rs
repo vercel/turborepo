@@ -599,6 +599,34 @@ mod tests {
     }
 
     #[test]
+    fn test_with_task_respects_existing_turbo_extends() {
+        let mut json = TurboJson::default();
+        // User already has $TURBO_EXTENDS$ in their with array
+        json.tasks.insert(
+            TaskName::from("dev"),
+            Spanned::new(RawTaskDefinition {
+                with: Some(vec![
+                    Spanned::new(UnescapedString::from("dev:ts")),
+                    Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                ]),
+                ..Default::default()
+            }),
+        );
+        // MFE injects its proxy — should not add a duplicate $TURBO_EXTENDS$
+        json.with_task(TaskName::from("dev"), &TaskName::from("next-site#proxy"));
+        let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
+        let with = dev_task.with.as_ref().unwrap();
+        assert_eq!(
+            with.as_slice(),
+            &[
+                Spanned::new(UnescapedString::from("dev:ts")),
+                Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                Spanned::new(UnescapedString::from("next-site#proxy")),
+            ]
+        );
+    }
+
+    #[test]
     fn test_future_flags_not_allowed_in_workspace() {
         let json = r#"{
             "extends": ["//"],
