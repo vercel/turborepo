@@ -333,7 +333,7 @@ jobs:
       - name: Run tests
         timeout-minutes: 45
         run: |
-          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10 --workspace-remap "$GITHUB_WORKSPACE"
         shell: bash
 
   rust_test_ubuntu:
