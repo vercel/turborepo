@@ -1,11 +1,11 @@
 mod common;
 
-use std::{fs, path::Path};
+use std::fs;
 
 use common::{run_turbo, setup, turbo_output_filters};
 
 fn version_txt() -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../version.txt");
+    let path = common::manifest_dir().join("../../version.txt");
     let contents = fs::read_to_string(&path).expect("failed to read version.txt");
     contents
         .lines()

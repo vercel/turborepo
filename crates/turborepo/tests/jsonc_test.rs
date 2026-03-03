@@ -22,7 +22,7 @@ fn git_commit(dir: &Path, msg: &str) {
 }
 
 fn basic_with_extends_json() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+    common::manifest_dir()
         .join("../../turborepo-tests/integration/fixtures/turbo-configs/basic-with-extends.json")
 }
 

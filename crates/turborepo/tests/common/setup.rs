@@ -6,8 +6,18 @@ use std::{
     process::Command,
 };
 
+fn manifest_dir() -> PathBuf {
+    // Prefer the runtime env var, which nextest sets when using --workspace-remap
+    // (e.g. running archived tests on a different machine). Fall back to the
+    // compile-time value for normal `cargo test` runs.
+    match std::env::var("CARGO_MANIFEST_DIR") {
+        Ok(dir) => PathBuf::from(dir),
+        Err(_) => PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+    }
+}
+
 fn workspace_root() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+    manifest_dir()
         .join("../..")
         .canonicalize()
         .expect("failed to resolve workspace root")
