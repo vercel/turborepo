@@ -284,14 +284,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        partition: [1, 2, 3, 4, 5]
     runs-on: windows-latest-8-core-oss
     timeout-minutes: 45
     needs:
       - find-changes
       - build_rust_test_windows
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on windows (partition ${{ matrix.partition }}/10)
+    name: Rust testing on windows (partition ${{ matrix.partition }}/5)
     steps:
       - name: Install git (Windows larger runners)
         shell: cmd
@@ -342,7 +342,7 @@ jobs:
       - name: Run tests
         timeout-minutes: 45
         run: |
-          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/5
         shell: bash
 
   rust_test_ubuntu:
