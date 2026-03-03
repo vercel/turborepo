@@ -99,6 +99,47 @@ impl Drop for WatchGuard {
     }
 }
 
+/// Modify `packages/a/src.js`, commit, and wait for the marker count to
+/// increase. If the watcher doesn't pick up the change within 15 seconds,
+/// retry with different content up to `max_attempts` times. Returns the
+/// final marker count.
+fn retry_file_change(test_dir: &Path, pkg: &str, before: usize, max_attempts: usize) -> usize {
+    let src_file = test_dir.join(format!("packages/{pkg}/src.js"));
+    for attempt in 0..max_attempts {
+        let value = 42 + attempt;
+        fs::write(&src_file, format!("module.exports = {{ a: {value} }};\n")).unwrap();
+
+        let status = std::process::Command::new("git")
+            .args(["add", "."])
+            .current_dir(test_dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .expect("git add failed to execute");
+        assert!(status.success(), "git add failed with {status}");
+
+        let status = std::process::Command::new("git")
+            .args([
+                "commit",
+                "-m",
+                &format!("modify {pkg} (attempt {attempt})"),
+                "--quiet",
+            ])
+            .current_dir(test_dir)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .expect("git commit failed to execute");
+        assert!(status.success(), "git commit failed with {status}");
+
+        let count = wait_for_markers(test_dir, pkg, before + 1, Duration::from_secs(15));
+        if count > before {
+            return count;
+        }
+    }
+    marker_count(test_dir, pkg)
+}
+
 fn setup_watch_test() -> (tempfile::TempDir, PathBuf) {
     let tempdir = tempfile::tempdir().expect("failed to create tempdir");
     let test_dir = tempdir.path().to_path_buf();
@@ -153,19 +194,24 @@ fn watch_file_change_reruns_affected_package() {
     wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
     wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
 
+    // Let the watcher fully settle after the initial build. The daemon's
+    // file watcher, hash watcher, and package changes watcher all process
+    // events asynchronously. Without this, the file modification below can
+    // race with the tail end of initial-build event processing, causing the
+    // filesystem event to be coalesced or the hash check to use stale state.
+    std::thread::sleep(Duration::from_secs(2));
+
     let a_before = marker_count(&test_dir, "a");
 
-    // Modify a file in package a
-    let src_file = test_dir.join("packages/a/src.js");
-    fs::write(&src_file, "module.exports = { a: 42 };\n").unwrap();
-
-    // The hash watcher uses git-based hashing, so the change must be
-    // committed for the watcher to detect a different hash.
-    common::git(&test_dir, &["add", "."]);
-    common::git(&test_dir, &["commit", "-m", "modify a", "--quiet"]);
-
-    // Wait for package a to rebuild
-    let a_after = wait_for_markers(&test_dir, "a", a_before + 1, Duration::from_secs(30));
+    // Modify a file in package a and commit. The hash watcher uses
+    // git-based hashing, so the change must be committed for the watcher
+    // to detect a different hash.
+    //
+    // Retry up to 3 times: on macOS, FSEvents can occasionally coalesce
+    // or delay events for files in temp directories, causing the watcher
+    // to miss a change. Each retry writes new content and commits,
+    // generating fresh filesystem events.
+    let a_after = retry_file_change(&test_dir, "a", a_before, 3);
 
     drop(guard);
 
