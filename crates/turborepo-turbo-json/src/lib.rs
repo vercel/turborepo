@@ -517,7 +517,7 @@ mod tests {
     #[test]
     fn test_with_sibling_empty() {
         let mut json = TurboJson::default();
-        json.with_task(TaskName::from("dev"), &TaskName::from("api#server"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("sibling-task"));
         let dev_task = json.tasks.get(&TaskName::from("dev"));
         assert!(dev_task.is_some());
         let dev_task = dev_task.unwrap().as_inner();
@@ -525,7 +525,7 @@ mod tests {
             dev_task.with.as_ref().unwrap().as_slice(),
             &[
                 Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
-                Spanned::new(UnescapedString::from("api#server")),
+                Spanned::new(UnescapedString::from("sibling-task")),
             ]
         );
     }
@@ -540,7 +540,7 @@ mod tests {
                 ..Default::default()
             }),
         );
-        json.with_task(TaskName::from("dev"), &TaskName::from("api#server"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("sibling-task"));
         let dev_task = json.tasks.get(&TaskName::from("dev"));
         assert!(dev_task.is_some());
         let dev_task = dev_task.unwrap().as_inner();
@@ -549,7 +549,7 @@ mod tests {
             dev_task.with.as_ref().unwrap().as_slice(),
             &[
                 Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
-                Spanned::new(UnescapedString::from("api#server")),
+                Spanned::new(UnescapedString::from("sibling-task")),
             ]
         );
     }
@@ -557,16 +557,16 @@ mod tests {
     #[test]
     fn test_with_task_includes_turbo_extends_only_once() {
         let mut json = TurboJson::default();
-        json.with_task(TaskName::from("dev"), &TaskName::from("api#server"));
-        json.with_task(TaskName::from("dev"), &TaskName::from("web#proxy"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("sibling-a"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("sibling-b"));
         let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
         let with = dev_task.with.as_ref().unwrap();
         assert_eq!(
             with.as_slice(),
             &[
                 Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
-                Spanned::new(UnescapedString::from("api#server")),
-                Spanned::new(UnescapedString::from("web#proxy")),
+                Spanned::new(UnescapedString::from("sibling-a")),
+                Spanned::new(UnescapedString::from("sibling-b")),
             ]
         );
     }
@@ -574,7 +574,6 @@ mod tests {
     #[test]
     fn test_with_task_preserves_user_configured_with() {
         let mut json = TurboJson::default();
-        // Simulate a workspace turbo.json that already has a user-configured `with`
         json.tasks.insert(
             TaskName::from("dev"),
             Spanned::new(RawTaskDefinition {
@@ -582,18 +581,15 @@ mod tests {
                 ..Default::default()
             }),
         );
-        // MFE injects its proxy
-        json.with_task(TaskName::from("dev"), &TaskName::from("web#proxy"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("injected-task"));
         let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
         let with = dev_task.with.as_ref().unwrap();
-        // The user's existing task is preserved, $TURBO_EXTENDS$ is added, and the
-        // proxy is appended
         assert_eq!(
             with.as_slice(),
             &[
                 Spanned::new(UnescapedString::from("existing-task")),
                 Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
-                Spanned::new(UnescapedString::from("web#proxy")),
+                Spanned::new(UnescapedString::from("injected-task")),
             ]
         );
     }
@@ -601,7 +597,6 @@ mod tests {
     #[test]
     fn test_with_task_respects_existing_turbo_extends() {
         let mut json = TurboJson::default();
-        // User already has $TURBO_EXTENDS$ in their with array
         json.tasks.insert(
             TaskName::from("dev"),
             Spanned::new(RawTaskDefinition {
@@ -612,8 +607,7 @@ mod tests {
                 ..Default::default()
             }),
         );
-        // MFE injects its proxy — should not add a duplicate $TURBO_EXTENDS$
-        json.with_task(TaskName::from("dev"), &TaskName::from("web#proxy"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("injected-task"));
         let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
         let with = dev_task.with.as_ref().unwrap();
         assert_eq!(
@@ -621,7 +615,7 @@ mod tests {
             &[
                 Spanned::new(UnescapedString::from("existing-task")),
                 Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
-                Spanned::new(UnescapedString::from("web#proxy")),
+                Spanned::new(UnescapedString::from("injected-task")),
             ]
         );
     }
