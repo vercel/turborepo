@@ -27,6 +27,10 @@ inputs:
     description: "Extra flags to pass to pnpm install"
     required: false
     default: ""
+  rust-cache:
+    description: "Whether to enable the Rust cache. Set to `false` for jobs that don't compile."
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
@@ -48,6 +52,7 @@ runs:
         shared-cache-key: turborepo-debug-build
         cache-key: ${{ inputs.target }}
         save-cache: true
+        cache: ${{ inputs.rust-cache }}
         github-token: ${{ inputs.github-token }}
 
     - name: "Setup capnproto"
