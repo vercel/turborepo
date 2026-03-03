@@ -182,7 +182,8 @@ impl RunBuilder {
                 .iter()
                 .map(|t| TaskName::from(t.as_str()))
                 .collect();
-            let all_package_qualified = task_names.iter().all(|t| t.is_package_task());
+            let all_package_qualified =
+                !task_names.is_empty() && task_names.iter().all(|t| t.is_package_task());
             if all_package_qualified {
                 let target_packages: HashSet<PackageName> = task_names
                     .iter()
