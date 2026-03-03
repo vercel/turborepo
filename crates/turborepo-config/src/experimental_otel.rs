@@ -11,7 +11,9 @@ use crate::Error;
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelTaskAttributesOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hashes: Option<bool>,
 }
 
@@ -19,8 +21,11 @@ pub struct ExperimentalOtelTaskAttributesOptions {
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelMetricsOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub run_summary: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub task_details: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub task_attributes: Option<ExperimentalOtelTaskAttributesOptions>,
 }
 
@@ -28,14 +33,23 @@ pub struct ExperimentalOtelMetricsOptions {
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<ExperimentalOtelProtocol>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub endpoint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub headers: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub interval_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub resource: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metrics: Option<ExperimentalOtelMetricsOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub use_remote_cache_token: Option<bool>,
 }
 
