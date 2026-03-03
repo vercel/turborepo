@@ -147,7 +147,7 @@ pub fn infer_framework(workspace: &PackageInfo, is_monorepo: bool) -> Option<&Fr
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
+    use std::collections::{BTreeMap, HashMap};
 
     use test_case::test_case;
     use turborepo_repository::{package_graph::PackageInfo, package_json::PackageJson};
@@ -159,6 +159,15 @@ mod tests {
             .iter()
             .find(|framework| framework.slug.as_str() == slug)
             .expect("framework not found")
+    }
+
+    fn deps(pairs: &[(&str, &str)]) -> Option<BTreeMap<String, String>> {
+        Some(
+            pairs
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        )
     }
 
     #[test_case(PackageInfo::default(), None, true; "empty dependencies")]
@@ -276,6 +285,44 @@ mod tests {
         Some(get_framework_by_slug("vite")),
         false;
         "Finds vite in devDependencies in non-monorepo"
+    )]
+    #[test_case(PackageInfo::default(), None, false; "empty dependencies in non-monorepo")]
+    #[test_case(
+        PackageInfo {
+            package_json: PackageJson {
+                dev_dependencies: deps(&[("vite", "*")]),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        None,
+        true;
+        "devDependencies in package_json ignored in monorepo mode"
+    )]
+    #[test_case(
+        PackageInfo {
+            package_json: PackageJson {
+                dependencies: deps(&[("solid-js", "*")]),
+                dev_dependencies: deps(&[("solid-start", "*")]),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(get_framework_by_slug("solidstart")),
+        false;
+        "Strategy::All matches deps split across dependencies and devDependencies"
+    )]
+    #[test_case(
+        PackageInfo {
+            package_json: PackageJson {
+                dev_dependencies: deps(&[("react-scripts", "*")]),
+                ..Default::default()
+            },
+            ..Default::default()
+        },
+        Some(get_framework_by_slug("create-react-app")),
+        false;
+        "Strategy::Some matches devDependency in non-monorepo"
     )]
     fn test_infer_framework(
         workspace_info: PackageInfo,
