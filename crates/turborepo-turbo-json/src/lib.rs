@@ -279,6 +279,11 @@ impl TurboJson {
 
         let with_tasks = task_definition.as_inner_mut().with.get_or_insert_default();
 
+        if !with_tasks.iter().any(|t| t.as_str() == "$TURBO_EXTENDS$") {
+            with_tasks.push(Spanned::new(UnescapedString::from(
+                "$TURBO_EXTENDS$".to_string(),
+            )));
+        }
         with_tasks.push(Spanned::new(UnescapedString::from(with.to_string())))
     }
 
@@ -518,7 +523,10 @@ mod tests {
         let dev_task = dev_task.unwrap().as_inner();
         assert_eq!(
             dev_task.with.as_ref().unwrap().as_slice(),
-            &[Spanned::new(UnescapedString::from("api#server"))]
+            &[
+                Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                Spanned::new(UnescapedString::from("api#server")),
+            ]
         );
     }
 
@@ -539,7 +547,54 @@ mod tests {
         assert_eq!(dev_task.persistent, Some(Spanned::new(true)));
         assert_eq!(
             dev_task.with.as_ref().unwrap().as_slice(),
-            &[Spanned::new(UnescapedString::from("api#server"))]
+            &[
+                Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                Spanned::new(UnescapedString::from("api#server")),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_with_task_includes_turbo_extends_only_once() {
+        let mut json = TurboJson::default();
+        json.with_task(TaskName::from("dev"), &TaskName::from("api#server"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("web#proxy"));
+        let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
+        let with = dev_task.with.as_ref().unwrap();
+        assert_eq!(
+            with.as_slice(),
+            &[
+                Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                Spanned::new(UnescapedString::from("api#server")),
+                Spanned::new(UnescapedString::from("web#proxy")),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_with_task_preserves_user_configured_with() {
+        let mut json = TurboJson::default();
+        // Simulate a workspace turbo.json that already has a user-configured `with`
+        json.tasks.insert(
+            TaskName::from("dev"),
+            Spanned::new(RawTaskDefinition {
+                with: Some(vec![Spanned::new(UnescapedString::from("dev:ts"))]),
+                ..Default::default()
+            }),
+        );
+        // MFE injects its proxy
+        json.with_task(TaskName::from("dev"), &TaskName::from("next-site#proxy"));
+        let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
+        let with = dev_task.with.as_ref().unwrap();
+        // The user's "dev:ts" is preserved, $TURBO_EXTENDS$ is added, and the proxy is
+        // appended
+        assert_eq!(
+            with.as_slice(),
+            &[
+                Spanned::new(UnescapedString::from("dev:ts")),
+                Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                Spanned::new(UnescapedString::from("next-site#proxy")),
+            ]
         );
     }
 
