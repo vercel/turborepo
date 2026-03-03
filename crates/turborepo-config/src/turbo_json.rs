@@ -457,4 +457,64 @@ mod test {
         assert_eq!(resource.get("service.name"), Some(&"turborepo".to_string()));
         assert_eq!(resource.get("service.version"), Some(&"1.0.0".to_string()));
     }
+
+    #[test]
+    fn test_otel_prune_roundtrip_omits_none_fields() {
+        let input = json!({
+            "futureFlags": {
+                "experimentalObservability": true
+            },
+            "experimentalObservability": {
+                "otel": {
+                    "enabled": true,
+                    "protocol": "http/protobuf",
+                    "endpoint": "https://example.com/v1/metrics",
+                    "timeoutMs": 10000,
+                    "intervalMs": 15000,
+                    "resource": {
+                        "service.name": "turborepo"
+                    },
+                    "metrics": {
+                        "runSummary": true,
+                        "taskDetails": true,
+                        "taskAttributes": {
+                            "id": true,
+                            "hashes": true
+                        }
+                    },
+                    "useRemoteCacheToken": true
+                }
+            }
+        });
+
+        let turbo_json: turborepo_turbo_json::RawTurboJson =
+            RawRootTurboJson::parse(&serde_json::to_string_pretty(&input).unwrap(), "turbo.json")
+                .unwrap()
+                .into();
+
+        let serialized = serde_json::to_string_pretty(&turbo_json).unwrap();
+
+        assert!(
+            !serialized.contains("null"),
+            "serialized output should not contain null for omitted fields, got:\n{serialized}"
+        );
+
+        // Re-parse must succeed (this is the turbo prune round-trip scenario)
+        let reparsed: turborepo_turbo_json::RawTurboJson =
+            RawRootTurboJson::parse(&serialized, "turbo.json")
+                .unwrap()
+                .into();
+
+        let config = TurboJsonReader::turbo_json_to_config_options(reparsed).unwrap();
+        let otel = config
+            .experimental_observability()
+            .and_then(|obs| obs.otel.as_ref())
+            .expect("otel config should survive round-trip");
+        assert_eq!(otel.enabled, Some(true));
+        assert_eq!(otel.headers, None);
+        assert_eq!(
+            otel.endpoint.as_deref(),
+            Some("https://example.com/v1/metrics")
+        );
+    }
 }

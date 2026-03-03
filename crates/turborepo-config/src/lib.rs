@@ -57,6 +57,7 @@ pub use experimental_otel::{
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalObservabilityOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub otel: Option<ExperimentalOtelOptions>,
 }
 
