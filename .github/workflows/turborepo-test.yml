@@ -520,7 +520,7 @@ jobs:
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
