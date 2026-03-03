@@ -29,7 +29,7 @@ pub const BUILTIN_PASS_THROUGH_ENV: &[&str] = &[
     "DBUS_SESSION_BUS_ADDRESS",
     "CI",
     "NODE_OPTIONS",
-    "COREPACK_HOME",
+    "COREPACK_*",
     "LD_LIBRARY_PATH",
     "DYLD_FALLBACK_LIBRARY_PATH",
     "LIBPATH",

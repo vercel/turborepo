@@ -48,9 +48,8 @@ fn test_one_good_one_bad_task() {
     );
 }
 
-// The prysk test verifies that running a task named "something" (which itself
-// invokes turbo) does NOT produce a "looks like it invokes turbo" warning.
-// The grep for that string exits 1 in prysk, meaning the warning is absent.
+// Running a task named "something" should NOT produce a recursive turbo
+// invocation warning when the task doesn't exist.
 #[test]
 fn test_no_recursive_turbo_warning_for_missing_task() {
     let tempdir = tempfile::tempdir().unwrap();

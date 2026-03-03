@@ -9,13 +9,13 @@ failure-output = "immediate-final"
 # and timing issues, especially on macOS where PTY devices are limited
 turborepo-process-serial = { max-threads = 1 }
 
-# Integration tests that spawn turbo binaries should run serially to avoid
-# race conditions with binary detection and stdout/stderr capture
-turborepo-integration-serial = { max-threads = 1 }
-
 # turborepo-dirs tests should run serially to avoid race conditions
 # with environment variable manipulation
 turborepo-dirs-serial = { max-threads = 1 }
+
+# turbo watch tests spawn daemon processes and file watchers that fight
+# over resources when run concurrently
+turbo-watch-serial = { max-threads = 1 }
 
 [[profile.default.overrides]]
 # These tests run package installs from the network during setup, which can
@@ -29,13 +29,14 @@ filter = 'package(turborepo-process)'
 test-group = 'turborepo-process-serial'
 
 [[profile.default.overrides]]
-# Run integration tests that use check_json_output! serially
-# These tests spawn turbo processes and parse JSON from stdout
-filter = 'package(turbo) and (test(boundaries) or test(query) or test(ls))'
-test-group = 'turborepo-integration-serial'
-
-[[profile.default.overrides]]
 # Run all tests in the turborepo-dirs crate serially
 # These tests manipulate environment variables
 filter = 'package(turborepo-dirs)'
 test-group = 'turborepo-dirs-serial'
+
+[[profile.default.overrides]]
+# Watch tests spawn long-running turbo watch processes with 30s internal
+# timeouts. Serialize to avoid daemon socket contention and give extra time.
+filter = 'package(turbo) and test(/^watch_/)'
+test-group = 'turbo-watch-serial'
+slow-timeout = { period = "60s", terminate-after = 2 }

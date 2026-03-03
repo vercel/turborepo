@@ -461,6 +461,16 @@ impl PackageManager {
         root_path: &AbsoluteSystemPath,
         root_package_json: &PackageJson,
     ) -> Result<Box<dyn Lockfile>, Error> {
+        // For pnpm, check if per-workspace lockfiles are configured
+        if matches!(
+            self,
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+        ) && let Some(lockfile) =
+            self.try_read_pnpm_per_workspace_lockfiles(root_path, root_package_json)?
+        {
+            return Ok(lockfile);
+        }
+
         let lockfile_path = self.lockfile_path(root_path);
         let contents = lockfile_path
             .read()
@@ -533,6 +543,72 @@ impl PackageManager {
                 unreachable!("npm and yarn 1 don't have a concept of patches")
             }
         }
+    }
+
+    /// When pnpm is configured with `shared-workspace-lockfile=false`, each
+    /// workspace gets its own `pnpm-lock.yaml`. This method reads and
+    /// merges them into a single lockfile. Returns `None` if shared
+    /// lockfile mode is active (the default).
+    fn try_read_pnpm_per_workspace_lockfiles(
+        &self,
+        root_path: &AbsoluteSystemPath,
+        _root_package_json: &PackageJson,
+    ) -> Result<Option<Box<dyn Lockfile>>, Error> {
+        let npmrc = npmrc::NpmRc::from_file(root_path)
+            .inspect_err(|e| tracing::debug!("unable to read npmrc: {e}"))
+            .unwrap_or_default();
+
+        // shared-workspace-lockfile defaults to true
+        if npmrc.shared_workspace_lockfile != Some(false) {
+            return Ok(None);
+        }
+
+        tracing::debug!(
+            "shared-workspace-lockfile=false detected, reading per-workspace lockfiles"
+        );
+
+        let lockfile_name = self.lockfile_name();
+        let root_lockfile_path = root_path.join_component(lockfile_name);
+        let root_contents = root_lockfile_path
+            .read()
+            .map_err(|_| Error::LockfileMissing(root_lockfile_path.clone()))?;
+
+        let mut lockfile = turborepo_lockfiles::PnpmLockfile::from_bytes(&root_contents)?;
+
+        // Discover workspace directories by finding all package.json files
+        let globs = self.get_workspace_globs(root_path)?;
+        let workspace_package_jsons: Vec<_> = globs.get_package_jsons(root_path)?.collect();
+
+        let mut workspace_lockfile_data: Vec<(String, Vec<u8>)> = Vec::new();
+        for pkg_json_path in &workspace_package_jsons {
+            let ws_dir = pkg_json_path.parent().expect("package.json has parent dir");
+            let ws_lockfile_path = ws_dir.join_component(lockfile_name);
+            if ws_lockfile_path.exists() {
+                let relative_path = root_path
+                    .anchor(ws_dir)
+                    .expect("workspace is under repo root");
+                let unix_path = relative_path.to_unix();
+                let bytes = ws_lockfile_path.read().map_err(|e| {
+                    tracing::warn!(
+                        "Failed to read per-workspace lockfile at {}: {}",
+                        ws_lockfile_path,
+                        e
+                    );
+                    Error::Io(std::io::Error::other(format!(
+                        "Failed to read {ws_lockfile_path}"
+                    )))
+                })?;
+                workspace_lockfile_data.push((unix_path.to_string(), bytes));
+            }
+        }
+
+        let refs: Vec<(&str, &[u8])> = workspace_lockfile_data
+            .iter()
+            .map(|(path, bytes)| (path.as_str(), bytes.as_slice()))
+            .collect();
+        lockfile.merge_per_workspace_lockfiles(&refs)?;
+
+        Ok(Some(Box::new(lockfile)))
     }
 
     pub fn lockfile_path(&self, turbo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {

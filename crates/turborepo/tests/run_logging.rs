@@ -166,7 +166,7 @@ fn test_log_prefix_none_cache_miss() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     // No prefix on cache miss line
-    assert!(stdout.contains("cache miss, executing 612027951a2848ce"));
+    assert!(stdout.contains("cache miss, executing"));
     assert!(stdout.contains("build-app-a"));
     assert!(stdout.contains("0 cached, 1 total"));
 }

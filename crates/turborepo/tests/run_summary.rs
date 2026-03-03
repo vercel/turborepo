@@ -2,33 +2,7 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{run_turbo, run_turbo_with_env, setup};
-
-fn replace_turbo_json(dir: &Path, config_name: &str) {
-    let workspace_root =
-        dunce::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
-    let src = workspace_root
-        .join("turborepo-tests/integration/fixtures/turbo-configs")
-        .join(config_name);
-    fs::copy(&src, dir.join("turbo.json")).unwrap();
-    let normalized = fs::read_to_string(dir.join("turbo.json"))
-        .unwrap()
-        .replace("\r\n", "\n");
-    fs::write(dir.join("turbo.json"), normalized).unwrap();
-    std::process::Command::new("git")
-        .args([
-            "commit",
-            "-am",
-            "replace turbo.json",
-            "--quiet",
-            "--allow-empty",
-        ])
-        .current_dir(dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .unwrap();
-}
+use common::{replace_turbo_json, run_turbo, run_turbo_with_env, setup};
 
 fn read_run_summaries(dir: &Path) -> Vec<serde_json::Value> {
     let runs_dir = dir.join(".turbo/runs");
@@ -312,17 +286,18 @@ fn test_run_summary_monorepo() {
         &["run", "build", "--summarize", "--", "someargs"],
     );
 
-    // Sleep for ksuid ordering
-    std::thread::sleep(std::time::Duration::from_secs(1));
-
     // Second run (cache hit)
     run_turbo(
         tempdir.path(),
         &["run", "build", "--summarize", "--", "someargs"],
     );
 
-    let summaries = read_run_summaries(tempdir.path());
+    let mut summaries = read_run_summaries(tempdir.path());
     assert_eq!(summaries.len(), 2);
+
+    // Sort by cached count so first=miss (0 cached), second=hit (2 cached).
+    // This avoids relying on ksuid timestamp ordering which needs a 1s sleep.
+    summaries.sort_by_key(|s| s["execution"]["cached"].as_u64().unwrap_or(0));
 
     let first = &summaries[0];
     let second = &summaries[1];
@@ -347,7 +322,10 @@ fn test_run_summary_monorepo() {
 
     assert_eq!(first_app["execution"]["exitCode"], 0);
     assert_eq!(first_app["cliArguments"], serde_json::json!(["someargs"]));
-    assert_eq!(first_app["hashOfExternalDependencies"], "459c029558afe716");
+    insta::assert_snapshot!(
+        "external_deps_hash",
+        first_app["hashOfExternalDependencies"].as_str().unwrap()
+    );
 
     // First run: MISS, second run: HIT
     assert_eq!(first_app["cache"]["status"], "MISS");

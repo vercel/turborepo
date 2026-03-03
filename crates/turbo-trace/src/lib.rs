@@ -8,5 +8,5 @@
 mod import_finder;
 mod tracer;
 
-pub use import_finder::{ImportFinder, ImportType};
-pub use tracer::{ImportTraceType, TraceError, TraceResult, Tracer};
+pub use import_finder::{ImportResult, ImportType, find_imports};
+pub use tracer::{ImportTraceType, TraceError, TraceResult, Tracer, parse_file};

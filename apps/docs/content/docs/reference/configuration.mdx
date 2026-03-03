@@ -886,9 +886,9 @@ The `experimentalObservability` configuration requires `futureFlags.experimental
       },
       "timeoutMs": 10000,
       "intervalMs": 15000,
-      "resource": [
-        { "key": "service.name", "value": "turborepo" }
-      ],
+      "resource": {
+        "service.name": "turborepo"
+      },
       "metrics": {
         "runSummary": true,
         "taskDetails": false,
@@ -970,17 +970,17 @@ Interval in milliseconds between periodic exports to the collector. This control
 
 #### `experimentalObservability.otel.resource`
 
-Optional resource attributes to attach to all exported metrics. Each entry is an object with `key` and `value` fields. These help identify the source of metrics in your observability platform.
+Optional resource attributes to attach to all exported metrics. These help identify the source of metrics in your observability platform.
 
 ```jsonc title="./turbo.json"
 {
   "experimentalObservability": {
     "otel": {
-      "resource": [
-        { "key": "service.name", "value": "turborepo" },
-        { "key": "service.namespace", "value": "ci" },
-        { "key": "deployment.environment", "value": "production" }
-      ]
+      "resource": {
+        "service.name": "turborepo",
+        "service.namespace": "ci",
+        "deployment.environment": "production"
+      }
     }
   }
 }

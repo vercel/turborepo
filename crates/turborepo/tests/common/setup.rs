@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -19,8 +21,6 @@ fn fixtures_dir() -> PathBuf {
 }
 
 /// Copy a fixture directory into `target_dir`.
-///
-/// Equivalent to: `cp -a fixtures/$fixture/. $target_dir/`
 pub fn copy_fixture(fixture: &str, target_dir: &Path) -> Result<(), anyhow::Error> {
     let src = fixtures_dir().join(fixture);
     if !src.exists() {
@@ -30,7 +30,7 @@ pub fn copy_fixture(fixture: &str, target_dir: &Path) -> Result<(), anyhow::Erro
     Ok(())
 }
 
-fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
+pub fn copy_dir_all(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
     fs::create_dir_all(dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
@@ -69,9 +69,7 @@ fn copy_symlink(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
 }
 
 /// Initialize a git repository in `target_dir` with a single commit.
-///
-/// Equivalent to setup_git.sh:
-///   git init, configure user, write .npmrc, git add ., git commit
+/// Configures user, writes .npmrc, adds all files, and commits.
 pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
     let git = |args: &[&str]| -> Result<(), anyhow::Error> {
         let status = cmd("git")
@@ -106,11 +104,8 @@ pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
 }
 
 /// Write the `packageManager` field into `package.json` and configure corepack.
-///
-/// Returns the path to the corepack install directory (outside `target_dir` so
-/// corepack shims don't appear as task inputs).
-///
-/// Equivalent to setup_package_manager.sh.
+/// The corepack install directory is placed outside `target_dir` so corepack
+/// shims don't appear as task inputs.
 pub fn setup_package_manager(
     target_dir: &Path,
     package_manager: &str,
@@ -133,8 +128,13 @@ pub fn setup_package_manager(
         &format!("Updated package manager to {package_manager}"),
     )?;
 
-    // Enable corepack for this package manager
+    // Corepack only manages yarn and pnpm. npm ships with node and bun is
+    // its own runtime — neither needs corepack setup.
     let pm_name = package_manager.split('@').next().unwrap_or(package_manager);
+    if !corepack_supports(pm_name) {
+        return Ok(());
+    }
+
     fs::create_dir_all(corepack_dir)?;
 
     let status = cmd("corepack")
@@ -151,12 +151,70 @@ pub fn setup_package_manager(
         anyhow::bail!("corepack enable {} failed with {}", pm_name, status);
     }
 
+    // Pre-download the exact PM version into corepack's cache so that
+    // subsequent invocations (yarn install, turbo run build → yarn run build)
+    // resolve locally without any network access. Without this, every
+    // corepack-intercepted PM call can trigger a slow download that causes
+    // tests to timeout in CI.
+    let status = cmd("corepack")
+        .arg("prepare")
+        .arg(package_manager) // e.g. "yarn@1.22.17"
+        .arg("--activate")
+        .current_dir(target_dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .status()
+        .map_err(|e| anyhow::anyhow!("failed to run corepack prepare: {e}"))?;
+
+    if !status.success() {
+        anyhow::bail!(
+            "corepack prepare {} failed with {}",
+            package_manager,
+            status
+        );
+    }
+
     Ok(())
 }
 
+/// Read the `packageManager` field from `package.json` in `dir` and run
+/// `corepack prepare <value> --activate` to pre-warm the corepack cache.
+/// This is used by test setups that copy fixtures with a pre-existing
+/// `packageManager` field (e.g. lockfile-aware-caching tests) and don't go
+/// through `setup_package_manager`.
+pub fn prepare_corepack_from_package_json(dir: &Path) {
+    let pkg_json_path = dir.join("package.json");
+    let contents = fs::read_to_string(&pkg_json_path).expect("failed to read package.json");
+    let pkg: serde_json::Value =
+        serde_json::from_str(&contents).expect("failed to parse package.json");
+
+    let pm = match pkg.get("packageManager").and_then(|v| v.as_str()) {
+        Some(pm) => pm.to_string(),
+        None => return,
+    };
+
+    let pm_name = pm.split('@').next().unwrap_or(&pm);
+    if !corepack_supports(pm_name) {
+        return;
+    }
+
+    let status = cmd("corepack")
+        .arg("prepare")
+        .arg(&pm)
+        .arg("--activate")
+        .current_dir(dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped())
+        .status()
+        .unwrap_or_else(|e| panic!("failed to run corepack prepare {pm}: {e}"));
+
+    assert!(
+        status.success(),
+        "corepack prepare {pm} failed with {status}"
+    );
+}
+
 /// Install dependencies using the specified package manager.
-///
-/// Equivalent to install_deps.sh.
 pub fn install_deps(
     target_dir: &Path,
     package_manager: &str,
@@ -181,7 +239,12 @@ pub fn install_deps(
             run_cmd(
                 target_dir,
                 "yarn",
-                &["install", &format!("--cache-folder={}", cache.display())],
+                &[
+                    "install",
+                    "--prefer-offline",
+                    "--frozen-lockfile",
+                    &format!("--cache-folder={}", cache.display()),
+                ],
                 &path_env,
             )?;
 
@@ -214,11 +277,10 @@ pub fn install_deps(
     Ok(())
 }
 
-/// The full integration test setup, equivalent to `setup_integration_test.sh`.
+/// The full integration test setup.
 ///
 /// The corepack install directory is placed outside `target_dir` (in a sibling
-/// temp directory) so that corepack shims don't appear as turbo task inputs,
-/// matching the prysk shell setup behavior.
+/// temp directory) so that corepack shims don't appear as turbo task inputs.
 pub fn setup_integration_test(
     target_dir: &Path,
     fixture: &str,
@@ -244,16 +306,27 @@ pub fn setup_integration_test(
 }
 
 fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(), anyhow::Error> {
-    let status = cmd_with_path(program, path_env)
+    let output = cmd_with_path(program, path_env)
         .args(args)
         .current_dir(dir)
+        // Safety net: auto-approve any corepack download prompt in case the
+        // cache is somehow cold. The setup pre-warms the cache via
+        // `corepack prepare` so this should rarely be needed.
+        .env("COREPACK_ENABLE_DOWNLOAD_PROMPT", "0")
         .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
+        .stderr(std::process::Stdio::piped())
+        .output()
         .map_err(|e| anyhow::anyhow!("failed to run `{program}`: {e}"))?;
 
-    if !status.success() {
-        anyhow::bail!("{} {:?} failed with {}", program, args, status);
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!(
+            "{} {:?} failed with {}:\n{}",
+            program,
+            args,
+            output.status,
+            stderr
+        );
     }
     Ok(())
 }
@@ -273,6 +346,10 @@ fn git_commit_if_changed(dir: &Path, message: &str) -> Result<(), anyhow::Error>
             .status();
     }
     Ok(())
+}
+
+fn corepack_supports(pm_name: &str) -> bool {
+    matches!(pm_name, "npm" | "yarn" | "pnpm" | "berry")
 }
 
 fn prepend_to_path(dir: &Path) -> String {

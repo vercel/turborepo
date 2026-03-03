@@ -2,23 +2,18 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{run_turbo, run_turbo_with_env, setup};
+use common::{git, run_turbo, run_turbo_with_env, setup};
 
-fn git_commit(dir: &Path, msg: &str) {
-    std::process::Command::new("git")
-        .args(["add", "."])
-        .current_dir(dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .unwrap();
-    std::process::Command::new("git")
-        .args(["commit", "-am", msg, "--quiet", "--allow-empty"])
-        .current_dir(dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .unwrap();
+/// Extract a hash from a log line like "cache miss, executing abc123def"
+fn extract_hash<'a>(output: &'a str, prefix: &str) -> &'a str {
+    output
+        .lines()
+        .find_map(|line| {
+            let idx = line.find(prefix)?;
+            let rest = &line[idx + prefix.len()..];
+            Some(rest.split_whitespace().next().unwrap_or(rest.trim()))
+        })
+        .expect("could not find hash in output")
 }
 
 // --- global-deps.t ---
@@ -68,31 +63,39 @@ fn test_root_deps_caching() {
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
     assert_eq!(json["packages"], serde_json::json!([]));
 
-    // Warm cache: cache miss, hash 6a4c300cb14847b0
+    // Warm cache: cache miss — snapshot the hash
     let output = run_turbo(
         tempdir.path(),
         &["build", "--filter=another", "--output-logs=hash-only"],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("cache miss, executing 6a4c300cb14847b0"));
+    assert!(stdout.contains("cache miss, executing"));
+    let initial_hash = extract_hash(&stdout, "cache miss, executing ");
+    insta::assert_snapshot!("root_deps_initial_hash", initial_hash);
 
-    // Cache hit
+    // Cache hit — same hash
     let output = run_turbo(
         tempdir.path(),
         &["build", "--filter=another", "--output-logs=hash-only"],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("cache hit, suppressing logs 6a4c300cb14847b0"));
+    assert!(stdout.contains(&format!("cache hit, suppressing logs {initial_hash}")));
     assert!(stdout.contains("FULL TURBO"));
 
-    // Touch a root internal dependency → cache miss with new hash
+    // Touch a root internal dependency → cache miss with DIFFERENT hash
     fs::write(tempdir.path().join("packages/util/important.txt"), "").unwrap();
     let output = run_turbo(
         tempdir.path(),
         &["build", "--filter=another", "--output-logs=hash-only"],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("cache miss, executing 34787620f332fb95"));
+    assert!(stdout.contains("cache miss, executing"));
+    let new_hash = extract_hash(&stdout, "cache miss, executing ");
+    assert_ne!(
+        initial_hash, new_hash,
+        "hash should change after root dep change"
+    );
+    insta::assert_snapshot!("root_deps_changed_hash", new_hash);
 
     // All packages in scope after root dep change
     let output = run_turbo(tempdir.path(), &["build", "--filter=[HEAD]", "--dry=json"]);
@@ -102,7 +105,7 @@ fn test_root_deps_caching() {
         serde_json::json!(["//", "another", "my-app", "util", "yet-another"])
     );
 
-    // Touch gitignored file → still cache hit
+    // Touch gitignored file → still cache hit with SAME hash
     fs::create_dir_all(tempdir.path().join("packages/util/dist")).unwrap();
     fs::write(tempdir.path().join("packages/util/dist/unused.txt"), "").unwrap();
     let output = run_turbo(
@@ -110,7 +113,7 @@ fn test_root_deps_caching() {
         &["build", "--filter=another", "--output-logs=hash-only"],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("cache hit, suppressing logs 34787620f332fb95"));
+    assert!(stdout.contains(&format!("cache hit, suppressing logs {new_hash}")));
 
     // Dependants of root dep
     let output = run_turbo(tempdir.path(), &["build", "--filter=...util", "--dry=json"]);
@@ -149,7 +152,10 @@ fn test_remote_caching_enable() {
         .join("\n");
     let normalized = stripped.replace("\r\n", "\n");
     fs::write(&turbo_json_path, &normalized).unwrap();
-    git_commit(tempdir.path(), "remove comments");
+    git(
+        tempdir.path(),
+        &["commit", "-am", "remove comments", "--quiet"],
+    );
 
     // No remoteCache config → enabled by default
     let output = run_turbo(
@@ -171,7 +177,15 @@ fn test_remote_caching_enable() {
     let new_contents = serde_json::to_string_pretty(&json).unwrap() + "\n";
     let new_normalized = new_contents.replace("\r\n", "\n");
     fs::write(&turbo_json_path, &new_normalized).unwrap();
-    git_commit(tempdir.path(), "add empty remote caching config");
+    git(
+        tempdir.path(),
+        &[
+            "commit",
+            "-am",
+            "add empty remote caching config",
+            "--quiet",
+        ],
+    );
 
     let output = run_turbo(
         tempdir.path(),
@@ -192,7 +206,10 @@ fn test_remote_caching_enable() {
     let disabled_contents = serde_json::to_string_pretty(&json).unwrap() + "\n";
     let disabled_normalized = disabled_contents.replace("\r\n", "\n");
     fs::write(&turbo_json_path, &disabled_normalized).unwrap();
-    git_commit(tempdir.path(), "disable remote caching");
+    git(
+        tempdir.path(),
+        &["commit", "-am", "disable remote caching", "--quiet"],
+    );
 
     let output = run_turbo(
         tempdir.path(),
@@ -260,15 +277,22 @@ fn test_excluded_inputs() {
     let src = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../turborepo-tests/integration/tests/run-caching/excluded-inputs/turbo.json");
     fs::copy(&src, tempdir.path().join("turbo.json")).unwrap();
-    git_commit(
+    git(
         tempdir.path(),
-        "Update turbo.json to include special inputs config",
+        &[
+            "commit",
+            "-am",
+            "Update turbo.json to include special inputs config",
+            "--quiet",
+        ],
     );
 
-    // Run 1: cache miss
+    // Run 1: cache miss — capture hash
     let output = run_turbo(tempdir.path(), &["run", "build", "--filter=my-app"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("cache miss, executing e228bd94fd46352c"));
+    assert!(stdout.contains("cache miss, executing"));
+    let hash = extract_hash(&stdout, "cache miss, executing ");
+    insta::assert_snapshot!("excluded_inputs_hash", hash);
     assert!(stdout.contains("0 cached, 1 total"));
 
     // Modify excluded file
@@ -278,10 +302,10 @@ fn test_excluded_inputs() {
     )
     .unwrap();
 
-    // Run 2: still cache hit (excluded file doesn't affect hash)
+    // Run 2: still cache hit with SAME hash (excluded file doesn't affect hash)
     let output = run_turbo(tempdir.path(), &["run", "build", "--filter=my-app"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("cache hit, replaying logs e228bd94fd46352c"));
+    assert!(stdout.contains(&format!("cache hit, replaying logs {hash}")));
     assert!(stdout.contains("1 cached, 1 total"));
     assert!(stdout.contains("FULL TURBO"));
 }

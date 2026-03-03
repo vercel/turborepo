@@ -99,29 +99,15 @@ cargo test -p <module>
 ```
 
 - Integration tests
-  ```bash
-  pnpm test -- --filter=turborepo-tests-integration
-  ```
-- A single integration test
-  e.g., to run everything in `turborepo-tests/integration/tests/run-summary`:
 
   ```bash
-  # Build `turbo` first because the next command doesn't run through `turbo`
-  pnpm -- turbo run build --filter=@turbo/cli
-  pnpm test -F turborepo-tests-integration -- "run-summary"
+  cargo test -p turbo
   ```
 
-- Updating integration tests
+- A single integration test file
 
   ```bash
-  turbo run build --filter=@turbo/cli
-  pnpm --filter turborepo-tests-integration test:interactive
-  ```
-
-  You can pass a test name to run a single test, or a directory to run all tests in that directory.
-
-  ```bash
-  pnpm --filter turborepo-tests-integration test:interactive tests/turbo-help.t
+  cargo test -p turbo --test force_test
   ```
 
 ## Manually testing `turbo`

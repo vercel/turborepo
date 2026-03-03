@@ -6,6 +6,8 @@
     "clean": "cargo clean --package turbo",
     "build": "cargo build --package turbo",
     "build:release": "cargo build --package turbo --profile release-turborepo",
+    "build:test-archive": "cargo nextest archive --workspace --exclude turborepo-lsp --exclude turborepo-schema-gen --exclude turborepo-napi --archive-file nextest-archive.tar.zst",
+    "build:test-archive-cov": "eval $(cargo llvm-cov show-env --export-prefix) && cargo llvm-cov clean --workspace && cargo nextest archive --workspace --exclude turborepo-lsp --exclude turborepo-schema-gen --exclude turborepo-napi --archive-file nextest-archive-cov.tar.zst",
     "release-native": "turboreleaser --version-path ../version.txt"
   },
   "dependencies": {

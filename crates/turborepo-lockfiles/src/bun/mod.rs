@@ -896,6 +896,15 @@ impl BunLockfile {
                 output.push_str(&format!(
                     "    \"{key}\": [{ident_json}, {info_json_spaced}],"
                 ));
+            } else if ident.is_local_package() {
+                // file:, link:, and tarball entries: [ident, info] — 2 elements
+                let ident_json = serde_json::to_string(&entry.ident)?;
+                let info_json =
+                    serde_json::to_string(&entry.info.as_ref().unwrap_or(&PackageInfo::default()))?;
+                let info_json_spaced = self.format_info_json(&info_json);
+                output.push_str(&format!(
+                    "    \"{key}\": [{ident_json}, {info_json_spaced}],",
+                ));
             } else {
                 let ident_json = serde_json::to_string(&entry.ident)?;
                 let info_json =
@@ -3057,5 +3066,142 @@ mod test {
             .unwrap()
             .expect("should resolve chalk");
         assert_eq!(chalk_dep.key, "chalk@2.4.2");
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/11701
+    // file: protocol dependencies should be serialized as 2-element arrays
+    // [ident, info], not corrupted into 4-element arrays [ident, "", info, ""]
+    #[test]
+    fn test_file_protocol_roundtrip() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "file-dep-fixture",
+                },
+                "apps/api": {
+                    "name": "api",
+                    "dependencies": {
+                        "@api/sdk": "file:apps/api/.api/apis/sdk",
+                        "lodash": "^4.17.21"
+                    }
+                },
+                "packages/ui": {
+                    "name": "@repo/ui",
+                    "dependencies": {
+                        "lodash": "^4.17.21"
+                    }
+                }
+            },
+            "packages": {
+                "@api/sdk": ["@api/sdk@file:apps/api/.api/apis/sdk", { "dependencies": { "cross-fetch": "^3.1.5" } }],
+                "@repo/ui": ["@repo/ui@workspace:packages/ui"],
+                "api": ["api@workspace:apps/api"],
+                "cross-fetch": ["cross-fetch@3.1.8", "", { "dependencies": { "node-fetch": "^2.6.12" } }, "sha512-crossfetch"],
+                "lodash": ["lodash@4.17.23", "", {}, "sha512-lodash"],
+                "node-fetch": ["node-fetch@2.7.0", "", {}, "sha512-nodefetch"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        // Verify the file: entry was parsed correctly
+        let sdk_entry = &lockfile.data.packages["@api/sdk"];
+        assert_eq!(sdk_entry.ident, "@api/sdk@file:apps/api/.api/apis/sdk");
+        assert!(
+            sdk_entry.registry.is_none(),
+            "file: packages should not have registry"
+        );
+        assert!(
+            sdk_entry.checksum.is_none(),
+            "file: packages should not have checksum"
+        );
+
+        // Prune to just the api workspace
+        let mut api_deps = std::collections::HashMap::new();
+        api_deps.insert(
+            "@api/sdk".to_string(),
+            "file:apps/api/.api/apis/sdk".to_string(),
+        );
+        api_deps.insert("lodash".to_string(), "^4.17.21".to_string());
+
+        let closure = crate::transitive_closure(&lockfile, "apps/api", api_deps, false).unwrap();
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+        let subgraph = lockfile
+            .subgraph(&["apps/api".into()], &package_idents)
+            .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+
+        // The encoded lockfile must be reparseable
+        let reparsed = BunLockfile::from_str(&encoded_str)
+            .expect("pruned lockfile with file: deps should be parseable");
+
+        // Verify the file: entry survived the roundtrip as a 2-element array
+        let sdk_reparsed = &reparsed.data.packages["@api/sdk"];
+        assert_eq!(sdk_reparsed.ident, "@api/sdk@file:apps/api/.api/apis/sdk");
+        assert!(
+            sdk_reparsed.registry.is_none(),
+            "file: packages should not gain a registry after roundtrip"
+        );
+        assert!(
+            sdk_reparsed.checksum.is_none(),
+            "file: packages should not gain a checksum after roundtrip"
+        );
+
+        // Verify the encoded string does NOT contain empty strings for the file: entry
+        // A correct entry looks like: ["@api/sdk@file:apps/api/.api/apis/sdk", { ... }]
+        // A corrupted entry looks like: ["@api/sdk@file:apps/api/.api/apis/sdk", "", {
+        // ... }, ""]
+        assert!(
+            !encoded_str.contains(r#""@api/sdk@file:apps/api/.api/apis/sdk", """#),
+            "file: entry should not have empty registry string inserted"
+        );
+    }
+
+    // Regression test: link: protocol dependencies should also be 2-element arrays
+    #[test]
+    fn test_link_protocol_roundtrip() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "link-dep-fixture",
+                },
+                "apps/web": {
+                    "name": "web",
+                    "dependencies": {
+                        "my-local-pkg": "link:../../local-pkg"
+                    }
+                }
+            },
+            "packages": {
+                "my-local-pkg": ["my-local-pkg@link:../../local-pkg", {}],
+                "web": ["web@workspace:apps/web"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+        let subgraph = lockfile
+            .subgraph(
+                &["apps/web".into()],
+                &["my-local-pkg@link:../../local-pkg".into()],
+            )
+            .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+
+        BunLockfile::from_str(&encoded_str)
+            .expect("pruned lockfile with link: deps should be parseable");
+
+        assert!(
+            !encoded_str.contains(r#""my-local-pkg@link:../../local-pkg", """#),
+            "link: entry should not have empty registry string inserted"
+        );
     }
 }
