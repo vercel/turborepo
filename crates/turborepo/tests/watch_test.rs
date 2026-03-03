@@ -21,6 +21,55 @@ fn marker_count(test_dir: &Path, pkg: &str) -> usize {
         .unwrap_or(0)
 }
 
+/// Count marker files matching a given prefix (e.g. "build-" or "dev-").
+fn prefixed_marker_count(test_dir: &Path, pkg: &str, prefix: &str) -> usize {
+    let marker_dir = test_dir.join("packages").join(pkg).join(".markers");
+    if !marker_dir.exists() {
+        return 0;
+    }
+    fs::read_dir(&marker_dir)
+        .map(|entries| {
+            entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.file_name().to_string_lossy().starts_with(prefix))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+/// Wait until the prefixed marker count for a package reaches at least
+/// `expected`, or timeout.
+fn wait_for_prefixed_markers(
+    test_dir: &Path,
+    pkg: &str,
+    prefix: &str,
+    expected: usize,
+    timeout: Duration,
+) -> usize {
+    let start = Instant::now();
+    loop {
+        let count = prefixed_marker_count(test_dir, pkg, prefix);
+        if count >= expected {
+            return count;
+        }
+        if start.elapsed() > timeout {
+            return count;
+        }
+        std::thread::sleep(Duration::from_millis(200));
+    }
+}
+
+/// Read the timestamp from a marker file. Returns None if the file doesn't
+/// exist or can't be parsed.
+fn read_marker_timestamp(test_dir: &Path, pkg: &str, marker_name: &str) -> Option<u64> {
+    let path = test_dir
+        .join("packages")
+        .join(pkg)
+        .join(".markers")
+        .join(marker_name);
+    fs::read_to_string(path).ok()?.trim().parse().ok()
+}
+
 /// Wait until the marker count for a package reaches at least `expected`,
 /// or timeout. Returns the final marker count.
 fn wait_for_markers(test_dir: &Path, pkg: &str, expected: usize, timeout: Duration) -> usize {
@@ -37,12 +86,15 @@ fn wait_for_markers(test_dir: &Path, pkg: &str, expected: usize, timeout: Durati
     }
 }
 
-/// Spawn `turbo watch build` as a child process.
-fn spawn_turbo_watch(test_dir: &Path) -> Child {
+/// Spawn `turbo watch` with the given tasks as a child process.
+fn spawn_turbo_watch_with_tasks(test_dir: &Path, tasks: &[&str]) -> Child {
     let turbo_bin = assert_cmd::cargo::cargo_bin("turbo");
-    std::process::Command::new(turbo_bin)
-        .args(["watch", "build"])
-        .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+    let mut cmd = std::process::Command::new(turbo_bin);
+    cmd.arg("watch");
+    for task in tasks {
+        cmd.arg(task);
+    }
+    cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
         .env("DO_NOT_TRACK", "1")
@@ -55,6 +107,11 @@ fn spawn_turbo_watch(test_dir: &Path) -> Child {
         .stderr(Stdio::piped())
         .spawn()
         .expect("failed to spawn turbo watch")
+}
+
+/// Spawn `turbo watch build` as a child process.
+fn spawn_turbo_watch(test_dir: &Path) -> Child {
+    spawn_turbo_watch_with_tasks(test_dir, &["build"])
 }
 
 /// Gracefully stop a turbo watch process.
@@ -262,4 +319,105 @@ fn watch_clean_shutdown_on_sigint() {
             Err(e) => panic!("error waiting for turbo watch: {e}"),
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Watch dependency ordering tests (watch_deps_test fixture)
+// ---------------------------------------------------------------------------
+
+fn setup_watch_deps_test() -> (tempfile::TempDir, PathBuf) {
+    let tempdir = tempfile::tempdir().expect("failed to create tempdir");
+    let test_dir = tempdir.path().to_path_buf();
+
+    setup::copy_fixture("watch_deps_test", &test_dir).unwrap();
+    setup::setup_git(&test_dir).unwrap();
+
+    let gitignore = test_dir.join(".gitignore");
+    let mut gi = fs::read_to_string(&gitignore).unwrap_or_default();
+    gi.push_str(".markers/\n");
+    fs::write(&gitignore, gi).unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "add markers ignore", "--quiet"],
+    );
+
+    (tempdir, test_dir)
+}
+
+/// Verify that persistent tasks (dev) only start after non-persistent tasks
+/// (build) complete successfully. The `dev` task has `dependsOn: ["build"]`
+/// and `persistent: true` (non-interruptible by default), so the watch
+/// coordinator should gate it behind the build.
+#[test]
+fn watch_persistent_tasks_wait_for_build() {
+    let (_tempdir, test_dir) = setup_watch_deps_test();
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
+
+    // Wait for dev markers to appear — this implies build already ran since
+    // dev depends on build and is gated behind its success.
+    let dev_a = wait_for_prefixed_markers(&test_dir, "a", "dev-", 1, Duration::from_secs(60));
+    let build_a = prefixed_marker_count(&test_dir, "a", "build-");
+
+    drop(guard);
+
+    assert!(
+        build_a >= 1,
+        "build should have run before dev, but build ran {build_a} times"
+    );
+    assert!(
+        dev_a >= 1,
+        "dev should have started after build, but dev ran {dev_a} times"
+    );
+
+    // Verify ordering via timestamps: build must have started before dev
+    let build_ts = read_marker_timestamp(&test_dir, "a", "build-0");
+    let dev_ts = read_marker_timestamp(&test_dir, "a", "dev-0");
+
+    if let (Some(build_t), Some(dev_t)) = (build_ts, dev_ts) {
+        assert!(
+            build_t <= dev_t,
+            "build timestamp ({build_t}) should be <= dev timestamp ({dev_t})"
+        );
+    }
+}
+
+/// Verify that when build fails, persistent dev tasks never start.
+#[test]
+fn watch_persistent_tasks_skipped_on_build_failure() {
+    let (_tempdir, test_dir) = setup_watch_deps_test();
+
+    // Overwrite build.js in package a to exit with code 1
+    let failing_build = r#"
+const fs = require('fs');
+const path = require('path');
+const markerDir = path.join(__dirname, '.markers');
+fs.mkdirSync(markerDir, { recursive: true });
+const count = fs.readdirSync(markerDir).filter(f => f.startsWith('build-')).length;
+fs.writeFileSync(path.join(markerDir, `build-${count}`), `${Date.now()}\n`);
+console.log(`pkg-a build #${count} (FAILING)`);
+process.exit(1);
+"#;
+    fs::write(test_dir.join("packages/a/build.js"), failing_build).unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(&test_dir, &["commit", "-m", "make build fail", "--quiet"]);
+
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
+
+    // Wait long enough for build to run and fail
+    wait_for_prefixed_markers(&test_dir, "a", "build-", 1, Duration::from_secs(30));
+
+    // Give extra time to confirm dev does NOT start
+    std::thread::sleep(Duration::from_secs(5));
+
+    let dev_a = prefixed_marker_count(&test_dir, "a", "dev-");
+
+    drop(guard);
+
+    assert_eq!(
+        dev_a, 0,
+        "dev should not have started because build failed, but dev ran {dev_a} times"
+    );
 }

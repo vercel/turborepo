@@ -517,6 +517,7 @@ impl WatchClient {
 mod test {
     use std::{collections::HashSet, sync::Mutex};
 
+    use tokio::sync::oneshot;
     use turborepo_daemon::proto;
     use turborepo_repository::package_graph::PackageName;
 
@@ -734,5 +735,98 @@ mod test {
             }
             ChangedPackages::All => panic!("expected Some"),
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Oneshot coordination pattern tests
+    //
+    // These test the contract used in execute_run to gate persistent tasks
+    // behind non-persistent task completion. The pattern:
+    //   - Non-persistent run sends on ready_tx only when result is Ok(0)
+    //   - Persistent run waits on ready_rx before starting
+    //   - If ready_tx is dropped (failure/cancellation), persistent run exits
+    // -----------------------------------------------------------------------
+
+    /// Simulates the non-persistent side of the coordination: only sends the
+    /// ready signal when the run result is Ok(0).
+    fn simulate_non_persistent(
+        ready_tx: oneshot::Sender<()>,
+        result: Result<i32, &str>,
+    ) -> Result<i32, &str> {
+        if matches!(result, Ok(0)) {
+            let _ = ready_tx.send(());
+        }
+        result
+    }
+
+    #[tokio::test]
+    async fn persistent_starts_after_successful_build() {
+        let (ready_tx, ready_rx) = oneshot::channel::<()>();
+
+        let persistent = tokio::spawn(async move {
+            match ready_rx.await {
+                Ok(()) => "started",
+                Err(_) => "skipped",
+            }
+        });
+
+        let _ = simulate_non_persistent(ready_tx, Ok(0));
+
+        let outcome = persistent.await.unwrap();
+        assert_eq!(outcome, "started");
+    }
+
+    #[tokio::test]
+    async fn persistent_skipped_on_nonzero_exit() {
+        let (ready_tx, ready_rx) = oneshot::channel::<()>();
+
+        let persistent = tokio::spawn(async move {
+            match ready_rx.await {
+                Ok(()) => "started",
+                Err(_) => "skipped",
+            }
+        });
+
+        let result = simulate_non_persistent(ready_tx, Ok(1));
+        assert!(matches!(result, Ok(1)));
+
+        let outcome = persistent.await.unwrap();
+        assert_eq!(outcome, "skipped");
+    }
+
+    #[tokio::test]
+    async fn persistent_skipped_on_error() {
+        let (ready_tx, ready_rx) = oneshot::channel::<()>();
+
+        let persistent = tokio::spawn(async move {
+            match ready_rx.await {
+                Ok(()) => "started",
+                Err(_) => "skipped",
+            }
+        });
+
+        let result = simulate_non_persistent(ready_tx, Err("build failed"));
+        assert!(result.is_err());
+
+        let outcome = persistent.await.unwrap();
+        assert_eq!(outcome, "skipped");
+    }
+
+    #[tokio::test]
+    async fn persistent_skipped_when_sender_dropped_without_sending() {
+        let (ready_tx, ready_rx) = oneshot::channel::<()>();
+
+        let persistent = tokio::spawn(async move {
+            match ready_rx.await {
+                Ok(()) => "started",
+                Err(_) => "skipped",
+            }
+        });
+
+        // Simulate non-persistent task being cancelled: sender dropped
+        drop(ready_tx);
+
+        let outcome = persistent.await.unwrap();
+        assert_eq!(outcome, "skipped");
     }
 }
