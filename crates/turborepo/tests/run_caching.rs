@@ -1,6 +1,6 @@
 mod common;
 
-use std::{fs, path::Path};
+use std::fs;
 
 use common::{git, run_turbo, run_turbo_with_env, setup};
 
@@ -274,7 +274,7 @@ fn test_excluded_inputs() {
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
 
     // Copy the special turbo.json with excluded inputs config
-    let src = Path::new(env!("CARGO_MANIFEST_DIR"))
+    let src = common::manifest_dir()
         .join("../../turborepo-tests/integration/tests/run-caching/excluded-inputs/turbo.json");
     fs::copy(&src, tempdir.path().join("turbo.json")).unwrap();
     git(

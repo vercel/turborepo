@@ -77,6 +77,16 @@ jobs:
     if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -87,8 +97,15 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node: "false"
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
       - name: Run cargo clippy
-        run: cargo lint
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          cargo lint
 
   rust_check:
     name: Rust check
@@ -96,6 +113,16 @@ jobs:
     if: ${{ needs.determine_changes.outputs.rust == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      SCCACHE_BUCKET: turborepo-sccache
+      SCCACHE_REGION: us-east-2
+      RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
+      CARGO_INCREMENTAL: 0
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      SCCACHE_IDLE_TIMEOUT: 0
+      SCCACHE_REQUEST_TIMEOUT: 30
+      SCCACHE_ERROR_LOG: error
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -106,8 +133,15 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node: "false"
 
+      - name: Run sccache-cache
+        uses: mozilla-actions/sccache-action@v0.0.6
+
       - name: Run cargo check
-        run: cargo check --workspace
+        run: |
+          if [ -z "${RUSTC_WRAPPER}" ]; then
+            unset RUSTC_WRAPPER
+          fi
+          cargo check --workspace
 
   rust_licenses:
     name: Rust licenses

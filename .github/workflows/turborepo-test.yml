@@ -285,7 +285,7 @@ jobs:
       fail-fast: false
       matrix:
         partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    runs-on: windows-latest-8-core-oss
+    runs-on: windows-latest
     timeout-minutes: 45
     needs:
       - find-changes
@@ -293,15 +293,6 @@ jobs:
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on windows (partition ${{ matrix.partition }}/10)
     steps:
-      - name: Install git (Windows larger runners)
-        shell: cmd
-        run: |
-          curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
-          mkdir "%ProgramFiles%\Git"
-          tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
-          del "%ProgramFiles%\Git\etc\gitconfig"
-          echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
-
       - name: Set git to use LF line endings
         run: |
           git config --global core.autocrlf false
@@ -316,7 +307,9 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
           capnproto: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
+          rust: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
           package-install: "false"
+          rust-cache: "false"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
@@ -341,8 +334,10 @@ jobs:
       - name: Run tests
         timeout-minutes: 45
         run: |
-          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10 --workspace-remap "$GITHUB_WORKSPACE"
         shell: bash
+        env:
+          INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
 
   rust_test_ubuntu:
     runs-on: ubuntu-latest
