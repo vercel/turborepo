@@ -285,7 +285,7 @@ jobs:
       fail-fast: false
       matrix:
         partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    runs-on: windows-latest-8-core-oss
+    runs-on: windows-latest
     timeout-minutes: 45
     needs:
       - find-changes
@@ -293,15 +293,6 @@ jobs:
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on windows (partition ${{ matrix.partition }}/10)
     steps:
-      - name: Install git (Windows larger runners)
-        shell: cmd
-        run: |
-          curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
-          mkdir "%ProgramFiles%\Git"
-          tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
-          del "%ProgramFiles%\Git\etc\gitconfig"
-          echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
-
       - name: Set git to use LF line endings
         run: |
           git config --global core.autocrlf false
