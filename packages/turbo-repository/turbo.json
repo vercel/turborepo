@@ -4,7 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["@turbo/cli#rust-src"],
-      "env": ["NODE_VERSION"],
+      "env": ["NODE_VERSION", "CARGO_BUILD_JOBS", "RUSTFLAGS"],
       "outputs": ["js/dist/**/*", "native/**/*"]
     },
     "test": {

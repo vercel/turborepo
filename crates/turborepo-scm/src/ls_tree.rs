@@ -40,52 +40,6 @@ impl GitRepo {
     }
 
     /// Run `git ls-tree` once at the git repo root, returning all committed
-    /// file hashes in a sorted Vec for efficient prefix-range lookups.
-    ///
-    /// Uses libgit2 to walk the HEAD tree in-process, avoiding the overhead
-    /// of spawning a git subprocess.
-    #[cfg(feature = "git2")]
-    #[tracing::instrument(skip(self))]
-    pub fn git_ls_tree_repo_root_sorted(&self) -> Result<SortedGitHashes, Error> {
-        let repo = git2::Repository::open(self.root.as_std_path())
-            .map_err(|e| Error::git2_error_context(e, "opening repo for ls-tree".into()))?;
-        let head = repo
-            .head()
-            .map_err(|e| Error::git2_error_context(e, "resolving HEAD".into()))?;
-        let tree = head
-            .peel_to_tree()
-            .map_err(|e| Error::git2_error_context(e, "peeling HEAD to tree".into()))?;
-
-        let mut hashes = Vec::new();
-        let mut path_buf = String::with_capacity(128);
-        let mut hex_buf = [0u8; 40];
-        tree.walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
-            if entry.kind() == Some(git2::ObjectType::Blob) {
-                let name = match entry.name() {
-                    Some(n) => n,
-                    None => return git2::TreeWalkResult::Ok,
-                };
-                path_buf.clear();
-                path_buf.push_str(dir);
-                path_buf.push_str(name);
-                if let Ok(path) = RelativeUnixPathBuf::new(path_buf.clone()) {
-                    hex::encode_to_slice(entry.id().as_bytes(), &mut hex_buf).unwrap();
-                    hashes.push((path, OidHash::from_hex_buf(hex_buf)));
-                }
-            }
-            git2::TreeWalkResult::Ok
-        })
-        .map_err(|e| Error::git2_error_context(e, "walking tree".into()))?;
-
-        // git2 tree walk is in pre-order which is lexicographic within each
-        // directory level, but the flattened paths may not be globally sorted
-        // (e.g. "a/b" vs "a.txt"). Sort to maintain the binary-search invariant.
-        hashes.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-        Ok(hashes)
-    }
-
-    /// Run `git ls-tree` once at the git repo root, returning all committed
     /// file hashes keyed by git-root-relative paths.
     #[tracing::instrument(skip(self))]
     pub fn git_ls_tree_repo_root(&self) -> Result<GitHashes, Error> {

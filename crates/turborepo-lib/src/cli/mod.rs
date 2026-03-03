@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, env, ffi::OsString, fmt, io, mem, process};
+use std::{env, ffi::OsString, fmt, io, mem, process};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -31,6 +31,8 @@ use crate::{
 };
 
 mod error;
+mod observability;
+
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
@@ -99,6 +101,8 @@ pub struct Args {
     /// verbosity
     #[clap(flatten)]
     pub verbosity: Verbosity,
+    #[clap(flatten)]
+    pub experimental_otel_args: observability::ExperimentalOtelCliArgs,
     /// Force a check for a new version of turbo
     #[clap(long, global = true, hide = true)]
     pub check_for_update: bool,
@@ -1266,7 +1270,7 @@ fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
         // We clone instead of take as take would leave the command base a copy of cli_args
         // missing any execution args.
         .clone()
-        .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
+        .ok_or_else(|| Error::NoCommand)?;
 
     if execution_args.tasks.is_empty() {
         let mut cmd = <Args as CommandFactory>::command();

@@ -530,8 +530,6 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
-  packages/prysk: {}
-
   packages/top-issues:
     dependencies:
       '@actions/core':
@@ -634,8 +632,6 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
-  packages/turbo-exe-stub: {}
-
   packages/turbo-gen:
     dependencies:
       '@inquirer/prompts':
@@ -710,20 +706,20 @@ importers:
         version: 5.0.0
     optionalDependencies:
       '@turbo/gen-darwin-64':
-        specifier: 2.8.11
-        version: 2.8.11
+        specifier: 2.8.13-canary.14
+        version: 2.8.13-canary.14
       '@turbo/gen-darwin-arm64':
-        specifier: 2.8.11
-        version: 2.8.11
+        specifier: 2.8.13-canary.14
+        version: 2.8.13-canary.14
       '@turbo/gen-linux-64':
-        specifier: 2.8.11
-        version: 2.8.11
+        specifier: 2.8.13-canary.14
+        version: 2.8.13-canary.14
       '@turbo/gen-linux-arm64':
-        specifier: 2.8.11
-        version: 2.8.11
+        specifier: 2.8.13-canary.14
+        version: 2.8.13-canary.14
       '@turbo/gen-windows-64':
-        specifier: 2.8.11
-        version: 2.8.11
+        specifier: 2.8.13-canary.14
+        version: 2.8.13-canary.14
 
   packages/turbo-ignore:
     dependencies:
@@ -1097,22 +1093,6 @@ importers:
       '@turbo/workspaces':
         specifier: workspace:*
         version: link:../../packages/turbo-workspaces
-
-  turborepo-tests/integration:
-    dependencies:
-      '@turbo/exe-stub':
-        specifier: workspace:*
-        version: link:../../packages/turbo-exe-stub
-      prysk:
-        specifier: workspace:*
-        version: link:../../packages/prysk
-      turborepo-tests-helpers:
-        specifier: workspace:*
-        version: link:../helpers
-    devDependencies:
-      cross-env:
-        specifier: 7.0.3
-        version: 7.0.3
 
 packages:
 
@@ -4169,28 +4149,28 @@ packages:
   '@tsconfig/node16@1.0.4':
     resolution: {integrity: sha512-vxhUy4J8lyeyinH7Azl1pdd43GJhZH/tP2weN8TntQblOY+A0XbT8DJk1/oCPuOOyg/Ja757rG0CgHcWC8OfMA==}
 
-  '@turbo/gen-darwin-64@2.8.11':
-    resolution: {integrity: sha512-xrx2diQfiZOQ//BTDDjBfT8GG5gKUQ15QlvHFn/9kSyZSBZUkgDeuCbk12K15/kZfjfa6e0Il0guVCKld2pzhg==}
+  '@turbo/gen-darwin-64@2.8.13-canary.14':
+    resolution: {integrity: sha512-mYpyOPdd06R2t5y6JJyDg813t3hw0P7XM85foPiBQh5nCPO3E0I6XojOjkLeMEgDPXPlpO4wTx8LDqtVWOFPqQ==}
     cpu: [x64]
     os: [darwin]
 
-  '@turbo/gen-darwin-arm64@2.8.11':
-    resolution: {integrity: sha512-D7sSxQLRU4pHWvz9o+SXtfGgRgQ/UEi4DKXNZViSIvCctq5rSzQFioD7M0BigUBLYTxxb7cAbY9PFNmPbe8rkw==}
+  '@turbo/gen-darwin-arm64@2.8.13-canary.14':
+    resolution: {integrity: sha512-0WoiTI6mRP76tija/77bZEclAS4K9omxtUU8R1M6LTlaoEvyC992oEU2qif4hQXaDhrwv/3Q9tFGV+c3YA09+w==}
     cpu: [arm64]
     os: [darwin]
 
-  '@turbo/gen-linux-64@2.8.11':
-    resolution: {integrity: sha512-NmzZ+GVs2DuJFBsTXlViOcANA4xWmOl1VN8UfmbYuZzkaH9oIB4L5ehg88PZkzO12yn8qULnyzqGxNYa/YzAKw==}
+  '@turbo/gen-linux-64@2.8.13-canary.14':
+    resolution: {integrity: sha512-soXj7zlpANOqrsYEhrIWuM87JLYLg0eoyeVO43SlR1QNctppTloESIHaNlHbdYs7op+djWw4aAJ/p7HCg8O8tA==}
     cpu: [x64]
     os: [linux]
 
-  '@turbo/gen-linux-arm64@2.8.11':
-    resolution: {integrity: sha512-Y4yqldcNZXdIYWfm/iByOxYjeXYw53gHU0NRlbwD4hqW5v/Hi/846ehVtEGH4hzmy4r94k4jrEu+ftxK/oJSUw==}
+  '@turbo/gen-linux-arm64@2.8.13-canary.14':
+    resolution: {integrity: sha512-78dOXYldYROxeifKg/rie7nEhEJhmL1b+vWj3Hkp9z8Vz6lrUmdM9o6JuZtemq7xgouHfcTnfH1MjXxX/sSWNQ==}
     cpu: [arm64]
     os: [linux]
 
-  '@turbo/gen-windows-64@2.8.11':
-    resolution: {integrity: sha512-qHGQum/Xae5BThd0A/a8w3yjq5EndJj4szjXxZlzTQEddzMCAFSO5DfJpRWkSZ/g8ei/6JebFiIAxZMkuQ1SAw==}
+  '@turbo/gen-windows-64@2.8.13-canary.14':
+    resolution: {integrity: sha512-qXFcdB6Sxd6ZkfoVuspH8GmAiWWbrZEvfoXOoqa6k7F/uictrcTH95P/tY1vvHHYLVAkBLejGyvZLOeZxT2fTQ==}
     cpu: [x64]
     os: [win32]
 
@@ -5267,11 +5247,6 @@ packages:
 
   create-require@1.1.1:
     resolution: {integrity: sha512-dcKFX3jn0MpIaXjisoRvexIJVEKzaq7z2rZKxf+MSr9TkdmHmsU4m2lcLojrj/FHl8mk5VxMmYA+ftRkP/3oKQ==}
-
-  cross-env@7.0.3:
-    resolution: {integrity: sha512-+/HKd6EgcQCJGh2PSjZuUitQBQynKor4wrFbRg4DtAgS1aWO+gU52xpH7M9ScGgXSYmAVS9bIJ8EzuaGw0oNAw==}
-    engines: {node: '>=10.14', npm: '>=6', yarn: '>=1'}
-    hasBin: true
 
   cross-spawn-async@2.2.5:
     resolution: {integrity: sha512-snteb3aVrxYYOX9e8BabYFK9WhCDhTlw1YQktfTthBogxri4/2r9U2nQc0ffY73ZAxezDc+U8gvHAeU1wy1ubQ==}
@@ -12043,19 +12018,19 @@ snapshots:
 
   '@tsconfig/node16@1.0.4': {}
 
-  '@turbo/gen-darwin-64@2.8.11':
+  '@turbo/gen-darwin-64@2.8.13-canary.14':
     optional: true
 
-  '@turbo/gen-darwin-arm64@2.8.11':
+  '@turbo/gen-darwin-arm64@2.8.13-canary.14':
     optional: true
 
-  '@turbo/gen-linux-64@2.8.11':
+  '@turbo/gen-linux-64@2.8.13-canary.14':
     optional: true
 
-  '@turbo/gen-linux-arm64@2.8.11':
+  '@turbo/gen-linux-arm64@2.8.13-canary.14':
     optional: true
 
-  '@turbo/gen-windows-64@2.8.11':
+  '@turbo/gen-windows-64@2.8.13-canary.14':
     optional: true
 
   '@tybys/wasm-util@0.10.1':
@@ -13100,10 +13075,6 @@ snapshots:
       layout-base: 2.0.1
 
   create-require@1.1.1: {}
-
-  cross-env@7.0.3:
-    dependencies:
-      cross-spawn: 7.0.6
 
   cross-spawn-async@2.2.5:
     dependencies:

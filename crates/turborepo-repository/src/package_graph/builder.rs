@@ -676,7 +676,14 @@ impl Dependencies {
             if let Some(workspace) = splitter.is_internal(name, version) {
                 internal.insert(workspace);
             } else {
-                external.insert(name.clone(), version.clone());
+                // Use entry API so earlier dependency types (dev, optional,
+                // regular) are not overwritten by later ones (peer).
+                // peerDependencies often use broad specifiers like "*" that
+                // don't resolve through the lockfile, so the concrete
+                // specifier from a prior dependency type must be preserved.
+                external
+                    .entry(name.clone())
+                    .or_insert_with(|| version.clone());
             }
         }
         Self { internal, external }

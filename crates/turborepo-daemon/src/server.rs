@@ -691,40 +691,59 @@ impl<W: PackageChangesWatcher + 'static> proto::turbod_server::Turbod for TurboG
 
         tokio::spawn(async move {
             loop {
-                let event = match package_changes_rx.recv().await {
+                match package_changes_rx.recv().await {
                     Err(RecvError::Lagged(_)) => {
                         warn!("package changes stream lagged");
-                        proto::PackageChangeEvent {
+                        let event = proto::PackageChangeEvent {
                             event: Some(proto::package_change_event::Event::RediscoverPackages(
                                 proto::RediscoverPackages {},
                             )),
+                        };
+                        if let Err(err) = tx.send(Ok(event)).await {
+                            error!("package changes stream closed: {}", err);
+                            break;
                         }
                     }
-                    Err(err) => proto::PackageChangeEvent {
-                        event: Some(proto::package_change_event::Event::Error(
-                            proto::PackageChangeError {
-                                message: err.to_string(),
-                            },
-                        )),
-                    },
-                    Ok(PackageChangeEvent::Package { name }) => proto::PackageChangeEvent {
-                        event: Some(proto::package_change_event::Event::PackageChanged(
-                            proto::PackageChanged {
-                                package_name: name.to_string(),
-                            },
-                        )),
-                    },
-                    Ok(PackageChangeEvent::Rediscover) => proto::PackageChangeEvent {
-                        event: Some(proto::package_change_event::Event::RediscoverPackages(
-                            proto::RediscoverPackages {},
-                        )),
-                    },
+                    Err(RecvError::Closed) => {
+                        warn!(
+                            "package changes channel closed, file watching may have failed to \
+                             initialize"
+                        );
+                        let event = proto::PackageChangeEvent {
+                            event: Some(proto::package_change_event::Event::Error(
+                                proto::PackageChangeError {
+                                    message: "file watching failed to initialize".to_string(),
+                                },
+                            )),
+                        };
+                        let _ = tx.send(Ok(event)).await;
+                        break;
+                    }
+                    Ok(PackageChangeEvent::Package { name }) => {
+                        let event = proto::PackageChangeEvent {
+                            event: Some(proto::package_change_event::Event::PackageChanged(
+                                proto::PackageChanged {
+                                    package_name: name.to_string(),
+                                },
+                            )),
+                        };
+                        if let Err(err) = tx.send(Ok(event)).await {
+                            error!("package changes stream closed: {}", err);
+                            break;
+                        }
+                    }
+                    Ok(PackageChangeEvent::Rediscover) => {
+                        let event = proto::PackageChangeEvent {
+                            event: Some(proto::package_change_event::Event::RediscoverPackages(
+                                proto::RediscoverPackages {},
+                            )),
+                        };
+                        if let Err(err) = tx.send(Ok(event)).await {
+                            error!("package changes stream closed: {}", err);
+                            break;
+                        }
+                    }
                 };
-
-                if let Err(err) = tx.send(Ok(event)).await {
-                    error!("package changes stream closed: {}", err);
-                    break;
-                }
             }
         });
 
@@ -1009,5 +1028,97 @@ mod test {
             .expect("no timeout")
             .expect("server exited");
         assert_matches!(close_reason, Ok(CloseReason::Shutdown));
+    }
+
+    /// Verifies that when the package changes broadcast sender is dropped
+    /// (e.g. because file watching failed to initialize), the gRPC stream
+    /// forwarding loop sends an error event and terminates instead of
+    /// spinning forever.
+    #[tokio::test]
+    async fn package_changes_stream_closes_on_sender_drop() {
+        let (package_tx, mut package_rx) = broadcast::channel::<PackageChangeEvent>(16);
+
+        // Simulate the forwarding loop from the package_changes handler
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<
+            Result<crate::proto::PackageChangeEvent, tonic::Status>,
+        >(16);
+
+        let handle = tokio::spawn(async move {
+            loop {
+                match package_rx.recv().await {
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        let event = crate::proto::PackageChangeEvent {
+                            event: Some(
+                                crate::proto::package_change_event::Event::RediscoverPackages(
+                                    crate::proto::RediscoverPackages {},
+                                ),
+                            ),
+                        };
+                        if tx.send(Ok(event)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        let event = crate::proto::PackageChangeEvent {
+                            event: Some(crate::proto::package_change_event::Event::Error(
+                                crate::proto::PackageChangeError {
+                                    message: "file watching failed to initialize".to_string(),
+                                },
+                            )),
+                        };
+                        let _ = tx.send(Ok(event)).await;
+                        break;
+                    }
+                    Ok(PackageChangeEvent::Package { name }) => {
+                        let event = crate::proto::PackageChangeEvent {
+                            event: Some(crate::proto::package_change_event::Event::PackageChanged(
+                                crate::proto::PackageChanged {
+                                    package_name: name.to_string(),
+                                },
+                            )),
+                        };
+                        if tx.send(Ok(event)).await.is_err() {
+                            break;
+                        }
+                    }
+                    Ok(PackageChangeEvent::Rediscover) => {
+                        let event = crate::proto::PackageChangeEvent {
+                            event: Some(
+                                crate::proto::package_change_event::Event::RediscoverPackages(
+                                    crate::proto::RediscoverPackages {},
+                                ),
+                            ),
+                        };
+                        if tx.send(Ok(event)).await.is_err() {
+                            break;
+                        }
+                    }
+                };
+            }
+        });
+
+        // Drop the sender, simulating file watching failure
+        drop(package_tx);
+
+        // The loop should send an error event and terminate
+        let event = tokio::time::timeout(Duration::from_secs(1), rx.recv())
+            .await
+            .expect("should not time out")
+            .expect("should receive an event");
+
+        let event = event.expect("should be Ok");
+        assert_matches!(
+            event.event,
+            Some(crate::proto::package_change_event::Event::Error(_))
+        );
+
+        // The loop task should complete (not hang)
+        tokio::time::timeout(Duration::from_secs(1), handle)
+            .await
+            .expect("loop should terminate")
+            .expect("loop should not panic");
+
+        // Channel should be closed after the loop exits
+        assert!(rx.recv().await.is_none());
     }
 }

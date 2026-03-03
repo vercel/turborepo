@@ -37,22 +37,11 @@ impl SCM {
         }
     }
 
-    /// Get both branch and SHA with a single libgit2 Repository::open,
-    /// avoiding the overhead of opening the repo twice and spawning two
-    /// git subprocesses. Falls back to subprocess calls if libgit2 fails.
     pub fn get_current_branch_and_sha(
         &self,
         _path: &AbsoluteSystemPath,
     ) -> (Option<String>, Option<String>) {
         match self {
-            #[cfg(feature = "git2")]
-            Self::Git(git) => {
-                if let Some((branch, sha)) = git.get_current_branch_and_sha() {
-                    return (Some(branch), Some(sha));
-                }
-                (git.get_current_branch().ok(), git.get_current_sha().ok())
-            }
-            #[cfg(not(feature = "git2"))]
             Self::Git(git) => (git.get_current_branch().ok(), git.get_current_sha().ok()),
             Self::Manual => (None, None),
         }
@@ -193,67 +182,16 @@ impl CIEnv {
 }
 
 impl GitRepo {
-    #[cfg(feature = "git2")]
-    fn get_current_branch(&self) -> Result<String, Error> {
-        let repo = git2::Repository::open(self.root.as_std_path())
-            .map_err(|e| Error::git2_error_context(e, "opening repo for branch".into()))?;
-        let head = repo
-            .head()
-            .map_err(|e| Error::git2_error_context(e, "resolving HEAD for branch".into()))?;
-        if head.is_branch() {
-            Ok(head.shorthand().unwrap_or("").to_string())
-        } else {
-            // Detached HEAD — matches `git branch --show-current` which prints nothing
-            Ok(String::new())
-        }
-    }
-
-    #[cfg(not(feature = "git2"))]
     fn get_current_branch(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["branch", "--show-current"], "")?;
         let output = String::from_utf8(output)?;
         Ok(output.trim().to_owned())
     }
 
-    #[cfg(feature = "git2")]
-    fn get_current_sha(&self) -> Result<String, Error> {
-        let repo = git2::Repository::open(self.root.as_std_path())
-            .map_err(|e| Error::git2_error_context(e, "opening repo for sha".into()))?;
-        let head = repo
-            .head()
-            .map_err(|e| Error::git2_error_context(e, "resolving HEAD for sha".into()))?;
-        let commit = head
-            .peel_to_commit()
-            .map_err(|e| Error::git2_error_context(e, "peeling HEAD to commit".into()))?;
-        Ok(commit.id().to_string())
-    }
-
-    #[cfg(not(feature = "git2"))]
     fn get_current_sha(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["rev-parse", "HEAD"], "")?;
         let output = String::from_utf8(output)?;
         Ok(output.trim().to_owned())
-    }
-
-    /// Get branch and SHA in a single libgit2 Repository::open call.
-    #[cfg(feature = "git2")]
-    fn get_current_branch_and_sha(&self) -> Option<(String, String)> {
-        let repo = git2::Repository::open(self.root.as_std_path()).ok()?;
-        let head = repo.head().ok()?;
-
-        let branch = if head.is_branch() {
-            head.shorthand().unwrap_or("").to_owned()
-        } else {
-            String::new()
-        };
-
-        let commit = head.peel_to_commit().ok()?;
-        let mut hex_buf = [0u8; 40];
-        hex::encode_to_slice(commit.id().as_bytes(), &mut hex_buf).ok()?;
-        // SAFETY: hex output is always valid ASCII
-        let sha = unsafe { std::str::from_utf8_unchecked(&hex_buf) }.to_owned();
-
-        Some((branch, sha))
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
@@ -505,7 +443,6 @@ mod tests {
         process::Command,
     };
 
-    use git2::{Oid, Repository, RepositoryInitOptions};
     use tempfile::{NamedTempFile, TempDir};
     use test_case::test_case;
     use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
@@ -517,20 +454,42 @@ mod tests {
         git::{GitHubCommit, GitHubEvent},
     };
 
-    fn setup_repository(
-        init_opts: Option<&RepositoryInitOptions>,
-    ) -> Result<(TempDir, Repository), Error> {
-        let repo_root = tempfile::tempdir()?;
-        let repo = Repository::init_opts(
-            repo_root.path(),
-            init_opts.unwrap_or(&RepositoryInitOptions::new()),
-        )
-        .unwrap();
-        let mut config = repo.config().unwrap();
-        config.set_str("user.name", "test").unwrap();
-        config.set_str("user.email", "test@example.com").unwrap();
+    fn run_git(repo_root: &Path, args: &[&str]) -> String {
+        let output = Command::new("git")
+            .args(args)
+            .current_dir(repo_root)
+            .env("GIT_AUTHOR_NAME", "test")
+            .env("GIT_AUTHOR_EMAIL", "test@test.com")
+            .env("GIT_COMMITTER_NAME", "test")
+            .env("GIT_COMMITTER_EMAIL", "test@test.com")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "git {:?} failed: {}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_string()
+    }
 
-        Ok((repo_root, repo))
+    fn setup_repository(initial_head: Option<&str>) -> Result<(TempDir, PathBuf), Error> {
+        let repo_root = tempfile::tempdir()?;
+        run_git(repo_root.path(), &["init"]);
+        if let Some(branch) = initial_head {
+            run_git(
+                repo_root.path(),
+                &["symbolic-ref", "HEAD", &format!("refs/heads/{}", branch)],
+            );
+        }
+        run_git(repo_root.path(), &["config", "user.name", "test"]);
+        run_git(
+            repo_root.path(),
+            &["config", "user.email", "test@example.com"],
+        );
+
+        let path = repo_root.path().to_path_buf();
+        Ok((repo_root, path))
     }
 
     fn changed_files(
@@ -565,65 +524,23 @@ mod tests {
             .collect::<HashSet<_>>())
     }
 
-    fn commit_file(repo: &Repository, path: &Path, previous_commit: Option<Oid>) -> Oid {
-        let mut index = repo.index().unwrap();
-        index.add_path(path).unwrap();
-        let tree_oid = index.write_tree().unwrap();
-        index.write().unwrap();
-        let tree = repo.find_tree(tree_oid).unwrap();
-        let previous_commit = previous_commit
-            .map(|oid| repo.find_commit(oid))
-            .transpose()
-            .unwrap();
-
-        repo.commit(
-            Some("HEAD"),
-            &repo.signature().unwrap(),
-            &repo.signature().unwrap(),
-            "Commit",
-            &tree,
-            previous_commit.as_ref().as_slice(),
-        )
-        .unwrap()
+    fn commit_file(repo_root: &Path, path: &Path, _previous_commit: Option<&str>) -> String {
+        run_git(repo_root, &["add", &path.to_string_lossy()]);
+        run_git(repo_root, &["commit", "-m", "Commit"]);
+        run_git(repo_root, &["rev-parse", "HEAD"])
     }
 
-    fn commit_delete(repo: &Repository, path: &Path, previous_commit: Oid) -> Oid {
-        let mut index = repo.index().unwrap();
-        index.remove_path(path).unwrap();
-        let tree_oid = index.write_tree().unwrap();
-        index.write().unwrap();
-        let tree = repo.find_tree(tree_oid).unwrap();
-        let previous_commit = repo.find_commit(previous_commit).unwrap();
-
-        repo.commit(
-            Some("HEAD"),
-            &repo.signature().unwrap(),
-            &repo.signature().unwrap(),
-            "Commit",
-            &tree,
-            std::slice::from_ref(&&previous_commit),
-        )
-        .unwrap()
+    fn commit_delete(repo_root: &Path, path: &Path) -> String {
+        run_git(repo_root, &["rm", &path.to_string_lossy()]);
+        run_git(repo_root, &["commit", "-m", "Commit"]);
+        run_git(repo_root, &["rev-parse", "HEAD"])
     }
 
-    fn commit_rename(repo: &Repository, source: &Path, dest: &Path, previous_commit: Oid) -> Oid {
-        let mut index = repo.index().unwrap();
-        index.remove_path(source).unwrap();
-        index.add_path(dest).unwrap();
-        let tree_oid = index.write_tree().unwrap();
-        index.write().unwrap();
-        let tree = repo.find_tree(tree_oid).unwrap();
-        let previous_commit = repo.find_commit(previous_commit).unwrap();
-
-        repo.commit(
-            Some("HEAD"),
-            &repo.signature().unwrap(),
-            &repo.signature().unwrap(),
-            "Commit",
-            &tree,
-            std::slice::from_ref(&&previous_commit),
-        )
-        .unwrap()
+    fn commit_rename(repo_root: &Path, source: &Path, dest: &Path) -> String {
+        run_git(repo_root, &["rm", &source.to_string_lossy()]);
+        run_git(repo_root, &["add", &dest.to_string_lossy()]);
+        run_git(repo_root, &["commit", "-m", "Commit"]);
+        run_git(repo_root, &["rev-parse", "HEAD"])
     }
 
     #[test]
@@ -669,18 +586,17 @@ mod tests {
 
     #[test]
     fn test_deleted_files() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
 
         let file = repo_root.path().join("foo.js");
         let file_path = Path::new("foo.js");
         fs::write(&file, "let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, file_path, None);
+        let first_commit_sha = commit_file(&repo_path, file_path, None);
 
         fs::remove_file(&file)?;
-        let _second_commit_oid = commit_delete(&repo, file_path, first_commit_oid);
+        let _second_commit_sha = commit_delete(&repo_path, file_path);
 
-        let first_commit_sha = first_commit_oid.to_string();
         let git_root = repo_root.path().to_owned();
         let turborepo_root = repo_root.path().to_owned();
         let files = changed_files(
@@ -697,20 +613,19 @@ mod tests {
 
     #[test]
     fn test_renamed_files() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
 
         let file = repo_root.path().join("foo.js");
         let file_path = Path::new("foo.js");
         fs::write(&file, "let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, file_path, None);
+        let first_commit_sha = commit_file(&repo_path, file_path, None);
 
         fs::rename(file, repo_root.path().join("bar.js")).unwrap();
 
         let new_file_path = Path::new("bar.js");
-        let _second_commit_oid = commit_rename(&repo, file_path, new_file_path, first_commit_oid);
+        let _second_commit_sha = commit_rename(&repo_path, file_path, new_file_path);
 
-        let first_commit_sha = first_commit_oid.to_string();
         let git_root = repo_root.path().to_owned();
         let turborepo_root = repo_root.path().to_owned();
         let files = changed_files(
@@ -729,41 +644,47 @@ mod tests {
     }
     #[test]
     fn test_merge_base() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
         let first_file = repo_root.path().join("foo.js");
         fs::write(first_file, "let z = 0;")?;
         // Create a base commit. This will *not* be the merge base
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("foo.js"), None);
 
         let second_file = repo_root.path().join("bar.js");
         fs::write(second_file, "let y = 1;")?;
         // This commit will be the merge base
-        let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid));
+        let second_commit_sha =
+            commit_file(&repo_path, Path::new("bar.js"), Some(&first_commit_sha));
 
         let third_file = repo_root.path().join("baz.js");
         fs::write(third_file, "let x = 2;")?;
         // Create a first commit off of merge base
-        let third_commit_oid = commit_file(&repo, Path::new("baz.js"), Some(second_commit_oid));
+        let third_commit_sha =
+            commit_file(&repo_path, Path::new("baz.js"), Some(&second_commit_sha));
 
-        // Move head back to merge base
-        repo.set_head_detached(second_commit_oid).unwrap();
+        // Move HEAD back to merge base without resetting the working tree.
+        // `git reset --soft` moves HEAD but keeps the index and working tree intact,
+        // matching the old git2 `set_head_detached` behavior.
+        run_git(&repo_path, &["reset", "--soft", &second_commit_sha]);
         let fourth_file = repo_root.path().join("qux.js");
         fs::write(fourth_file, "let w = 3;")?;
         // Create a second commit off of merge base
-        let fourth_commit_oid = commit_file(&repo, Path::new("qux.js"), Some(second_commit_oid));
+        let fourth_commit_sha =
+            commit_file(&repo_path, Path::new("qux.js"), Some(&second_commit_sha));
 
-        repo.set_head_detached(third_commit_oid).unwrap();
-        let merge_base = repo
-            .merge_base(third_commit_oid, fourth_commit_oid)
-            .unwrap();
+        run_git(&repo_path, &["checkout", "--detach", &third_commit_sha]);
+        let merge_base = run_git(
+            &repo_path,
+            &["merge-base", &third_commit_sha, &fourth_commit_sha],
+        );
 
-        assert_eq!(merge_base, second_commit_oid);
+        assert_eq!(merge_base, second_commit_sha);
 
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            Some(&third_commit_oid.to_string()),
-            Some(&fourth_commit_oid.to_string()),
+            Some(&third_commit_sha),
+            Some(&fourth_commit_sha),
             false,
         )?;
 
@@ -777,14 +698,13 @@ mod tests {
 
     #[test]
     fn test_changed_files() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
-        let mut index = repo.index().unwrap();
+        let (repo_root, repo_path) = setup_repository(None)?;
         let turbo_root = repo_root.path();
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
 
         // First commit (we need a base commit to compare against)
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("foo.js"), None);
 
         // Now change another file
         let new_file = repo_root.path().join("bar.js");
@@ -823,8 +743,7 @@ mod tests {
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Add file to index
-        index.add_path(Path::new("bar.js")).unwrap();
-        index.write().unwrap();
+        run_git(&repo_path, &["add", "bar.js"]);
 
         // Test that uncommitted file in index is not marked as changed when not
         // checking uncommitted
@@ -848,14 +767,15 @@ mod tests {
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
         // Now commit file
-        let second_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(first_commit_oid));
+        let second_commit_sha =
+            commit_file(&repo_path, Path::new("bar.js"), Some(&first_commit_sha));
 
         // Test that only second file is marked as changed when we check commit range
         let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
-            Some(first_commit_oid.to_string().as_str()),
-            Some(second_commit_oid.to_string().as_str()),
+            Some(first_commit_sha.as_str()),
+            Some(second_commit_sha.as_str()),
             false,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
@@ -869,8 +789,8 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            Some(first_commit_oid.to_string().as_str()),
-            Some(second_commit_oid.to_string().as_str()),
+            Some(first_commit_sha.as_str()),
+            Some(second_commit_sha.as_str()),
             false,
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
@@ -879,7 +799,7 @@ mod tests {
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            Some(second_commit_oid.to_string().as_str()),
+            Some(second_commit_sha.as_str()),
             None,
             true,
         )?;
@@ -889,18 +809,18 @@ mod tests {
         );
 
         // Commit the new file so it shows up in the changed files
-        let third_commit_oid = commit_file(
-            &repo,
+        let third_commit_sha = commit_file(
+            &repo_path,
             &Path::new("subdir").join("baz.js"),
-            Some(second_commit_oid),
+            Some(&second_commit_sha),
         );
 
         // Test that `turbo_root` filters out files not in the specified directory
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            Some(first_commit_oid.to_string().as_str()),
-            Some(third_commit_oid.to_string().as_str()),
+            Some(first_commit_sha.as_str()),
+            Some(third_commit_sha.as_str()),
             false,
         )?;
         assert_eq!(files, HashSet::from(["baz.js".to_string()]));
@@ -910,12 +830,12 @@ mod tests {
 
     #[test]
     fn test_changed_files_with_root_as_relative() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
         let file = repo_root.path().join("foo.js");
         fs::write(file, "let z = 0;")?;
 
         // First commit (we need a base commit to compare against)
-        commit_file(&repo, Path::new("foo.js"), None);
+        commit_file(&repo_path, Path::new("foo.js"), None);
 
         // Now change another file
         let new_file = repo_root.path().join("bar.js");
@@ -939,7 +859,7 @@ mod tests {
     // (occurs when the monorepo is nested inside a subdirectory of git repository)
     #[test]
     fn test_changed_files_with_subdir_as_turbo_root() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
 
         fs::create_dir(repo_root.path().join("subdir"))?;
         // Create additional nested directory to test that we return a system path
@@ -948,7 +868,7 @@ mod tests {
 
         let file = repo_root.path().join("subdir").join("foo.js");
         fs::write(file, "let z = 0;")?;
-        let first_commit = commit_file(&repo, Path::new("subdir/foo.js"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("subdir/foo.js"), None);
 
         let new_file = repo_root.path().join("subdir").join("src").join("bar.js");
         fs::write(new_file, "let y = 1;")?;
@@ -971,21 +891,19 @@ mod tests {
             assert_eq!(files, HashSet::from(["src\\bar.js".to_string()]));
         }
 
-        commit_file(&repo, Path::new("subdir/src/bar.js"), Some(first_commit));
+        commit_file(
+            &repo_path,
+            Path::new("subdir/src/bar.js"),
+            Some(&first_commit_sha),
+        );
+
+        let head_sha = run_git(&repo_path, &["rev-parse", "HEAD"]);
 
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
-            Some(first_commit.to_string().as_str()),
-            Some(
-                repo.head()
-                    .unwrap()
-                    .peel_to_commit()
-                    .unwrap()
-                    .id()
-                    .to_string()
-                    .as_str(),
-            ),
+            Some(first_commit_sha.as_str()),
+            Some(head_sha.as_str()),
             false,
         )?;
 
@@ -1004,19 +922,20 @@ mod tests {
 
     #[test]
     fn test_previous_content() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
 
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
         let file = root.join_component("foo.js");
         file.create_with_contents("let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("foo.js"), None);
         fs::write(&file, "let z = 1;")?;
-        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid));
+        let second_commit_sha =
+            commit_file(&repo_path, Path::new("foo.js"), Some(&first_commit_sha));
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
-            Some(first_commit_oid.to_string().as_str()),
+            Some(first_commit_sha.as_str()),
             file.to_string(),
         )?;
 
@@ -1024,14 +943,14 @@ mod tests {
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
-            Some(second_commit_oid.to_string().as_str()),
+            Some(second_commit_sha.as_str()),
             file.to_string(),
         )?;
         assert_eq!(content, b"let z = 1;");
 
         let content = previous_content(
             repo_root.path().to_path_buf(),
-            Some(second_commit_oid.to_string().as_str()),
+            Some(second_commit_sha.as_str()),
             "foo.js".to_string(),
         )?;
         assert_eq!(content, b"let z = 1;");
@@ -1041,20 +960,21 @@ mod tests {
 
     #[test]
     fn test_revparse() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         let file = root.join_component("foo.js");
         file.create_with_contents("let z = 0;")?;
 
-        let first_commit_oid = commit_file(&repo, Path::new("foo.js"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("foo.js"), None);
         fs::write(&file, "let z = 1;")?;
-        let second_commit_oid = commit_file(&repo, Path::new("foo.js"), Some(first_commit_oid));
+        let second_commit_sha =
+            commit_file(&repo_path, Path::new("foo.js"), Some(&first_commit_sha));
 
-        let revparsed_head = repo.revparse_single("HEAD").unwrap();
-        assert_eq!(revparsed_head.id(), second_commit_oid);
-        let revparsed_head_minus_1 = repo.revparse_single("HEAD~1").unwrap();
-        assert_eq!(revparsed_head_minus_1.id(), first_commit_oid);
+        let revparsed_head = run_git(&repo_path, &["rev-parse", "HEAD"]);
+        assert_eq!(revparsed_head, second_commit_sha);
+        let revparsed_head_minus_1 = run_git(&repo_path, &["rev-parse", "HEAD~1"]);
+        assert_eq!(revparsed_head_minus_1, first_commit_sha);
 
         let files = changed_files(
             repo_root.path().to_path_buf(),
@@ -1074,9 +994,9 @@ mod tests {
 
         let new_file = repo_root.path().join("bar.js");
         fs::write(new_file, "let y = 0;")?;
-        let third_commit_oid = commit_file(&repo, Path::new("bar.js"), Some(second_commit_oid));
-        let third_commit = repo.find_commit(third_commit_oid).unwrap();
-        repo.branch("release-1", &third_commit, false).unwrap();
+        let third_commit_sha =
+            commit_file(&repo_path, Path::new("bar.js"), Some(&second_commit_sha));
+        run_git(&repo_path, &["branch", "release-1", &third_commit_sha]);
 
         let files = changed_files(
             repo_root.path().to_path_buf(),
@@ -1108,24 +1028,20 @@ mod tests {
         target_branch: Option<&str>,
         expected: Option<&str>,
     ) -> Result<(), Error> {
-        let mut repo_opts = RepositoryInitOptions::new();
-
         let (first_branch, remaining_branches) = branches_to_create.split_first().unwrap();
 
-        let repo_init = repo_opts.initial_head(first_branch);
-        let (repo_root, repo) = setup_repository(Some(repo_init))?;
+        let (repo_root, repo_path) = setup_repository(Some(first_branch))?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         // WARNING:
         // if you do not make a commit, git will show you that you have no branches.
         let file = root.join_component("todo.txt");
         file.create_with_contents("1. make async Rust good")?;
-        let first_commit = commit_file(&repo, Path::new("todo.txt"), None);
-        let commit = repo.find_commit(first_commit).unwrap();
+        let first_commit_sha = commit_file(&repo_path, Path::new("todo.txt"), None);
 
-        remaining_branches.iter().for_each(|branch| {
-            repo.branch(branch, &commit, true).unwrap();
-        });
+        for branch in remaining_branches {
+            run_git(&repo_path, &["branch", branch, &first_commit_sha]);
+        }
 
         let thing = GitRepo::find(&root).unwrap();
         let actual = thing.resolve_base(target_branch, CIEnv::none()).ok();
@@ -1148,7 +1064,7 @@ mod tests {
 
         assert_matches!(repo_does_not_exist, Err(Error::GitRequired(_)));
 
-        let (repo_root, _repo) = setup_repository(None)?;
+        let (repo_root, _repo_path) = setup_repository(None)?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         let commit_does_not_exist = changed_files(
@@ -1187,17 +1103,14 @@ mod tests {
 
     #[test]
     fn test_changed_files_no_base() -> Result<(), Error> {
-        let mut repo_opts = RepositoryInitOptions::new();
-
-        let repo_init = repo_opts.initial_head("my-main");
-        let (repo_root, repo) = setup_repository(Some(repo_init))?;
+        let (repo_root, repo_path) = setup_repository(Some("my-main"))?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         // WARNING:
         // if you do not make a commit, git will show you that you have no branches.
         let file = root.join_component("todo.txt");
         file.create_with_contents("1. explain why async Rust is good")?;
-        let _first_commit = commit_file(&repo, Path::new("todo.txt"), None);
+        let _first_commit = commit_file(&repo_path, Path::new("todo.txt"), None);
 
         let scm = SCM::new(&root);
         let actual = scm
@@ -1217,7 +1130,7 @@ mod tests {
 
     #[test]
     fn test_unicode_filenames_in_changed_files() -> Result<(), Error> {
-        let (repo_root, repo) = setup_repository(None)?;
+        let (repo_root, repo_path) = setup_repository(None)?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         // Test various Unicode filenames that should be properly handled with -z flag
@@ -1235,7 +1148,7 @@ mod tests {
         // Create initial commit with a base file
         let base_file = root.join_component("base.txt");
         base_file.create_with_contents("base content")?;
-        let first_commit_oid = commit_file(&repo, Path::new("base.txt"), None);
+        let first_commit_sha = commit_file(&repo_path, Path::new("base.txt"), None);
 
         // Create and commit all Unicode files
         for filename in &test_files {
@@ -1259,16 +1172,16 @@ mod tests {
         }
 
         // Commit all Unicode files
-        let mut last_commit = first_commit_oid;
+        let mut last_commit = first_commit_sha.clone();
         for filename in &test_files {
-            last_commit = commit_file(&repo, Path::new(filename), Some(last_commit));
+            last_commit = commit_file(&repo_path, Path::new(filename), Some(&last_commit));
         }
 
         // Test committed Unicode files in range
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
-            Some(first_commit_oid.to_string().as_str()),
+            Some(first_commit_sha.as_str()),
             Some("HEAD"),
             false,
         )?;
@@ -1493,104 +1406,5 @@ mod tests {
         let actual = github_event.get_parent_ref_of_first_commit();
 
         assert_eq!(None, actual);
-    }
-
-    // Regression: git2 get_current_branch and get_current_sha must match the
-    // subprocess equivalents. This captures the invariant that must hold when
-    // switching from `git branch --show-current` / `git rev-parse HEAD` to
-    // git2::Repository.
-    #[test]
-    fn test_git2_branch_and_sha_match_subprocess() {
-        let (repo_root, repo) = setup_repository(None).unwrap();
-        let root = repo_root.path();
-
-        // Create an initial commit so HEAD exists
-        let file_path = root.join("file.txt");
-        fs::write(&file_path, "hello").unwrap();
-        let mut index = repo.index().unwrap();
-        index.add_path(Path::new("file.txt")).unwrap();
-        index.write().unwrap();
-        let tree_id = index.write_tree().unwrap();
-        let tree = repo.find_tree(tree_id).unwrap();
-        let sig = repo.signature().unwrap();
-        repo.commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
-            .unwrap();
-
-        // Create a branch name and switch to it
-        repo.branch(
-            "test-branch",
-            &repo.head().unwrap().peel_to_commit().unwrap(),
-            false,
-        )
-        .unwrap();
-        repo.set_head("refs/heads/test-branch").unwrap();
-
-        let abs_root = AbsoluteSystemPathBuf::try_from(root).unwrap();
-        let git_repo = GitRepo::find(&abs_root).unwrap();
-
-        // Subprocess-based results
-        let subprocess_branch = git_repo.get_current_branch().unwrap();
-        let subprocess_sha = git_repo.get_current_sha().unwrap();
-
-        // git2-based equivalents
-        let git2_repo = Repository::open(root).unwrap();
-        let head = git2_repo.head().unwrap();
-        let git2_branch = head.shorthand().unwrap_or("").to_string();
-        let git2_sha = head.peel_to_commit().unwrap().id().to_string();
-
-        assert_eq!(
-            subprocess_branch, git2_branch,
-            "git2 branch must match subprocess"
-        );
-        assert_eq!(subprocess_sha, git2_sha, "git2 sha must match subprocess");
-    }
-
-    // Regression: detached HEAD should return empty branch name.
-    #[test]
-    fn test_git2_detached_head_branch() {
-        let (repo_root, repo) = setup_repository(None).unwrap();
-        let root = repo_root.path();
-
-        // Create an initial commit
-        let file_path = root.join("file.txt");
-        fs::write(&file_path, "hello").unwrap();
-        let mut index = repo.index().unwrap();
-        index.add_path(Path::new("file.txt")).unwrap();
-        index.write().unwrap();
-        let tree_id = index.write_tree().unwrap();
-        let tree = repo.find_tree(tree_id).unwrap();
-        let sig = repo.signature().unwrap();
-        let commit_oid = repo
-            .commit(Some("HEAD"), &sig, &sig, "initial", &tree, &[])
-            .unwrap();
-
-        // Detach HEAD
-        repo.set_head_detached(commit_oid).unwrap();
-
-        let abs_root = AbsoluteSystemPathBuf::try_from(root).unwrap();
-        let git_repo = GitRepo::find(&abs_root).unwrap();
-
-        // Subprocess returns empty string for detached HEAD
-        let subprocess_branch = git_repo.get_current_branch().unwrap();
-        assert!(
-            subprocess_branch.is_empty(),
-            "detached HEAD branch should be empty, got: {subprocess_branch}"
-        );
-
-        // git2: shorthand returns the abbreviated SHA, not empty.
-        // We handle this by checking if HEAD is a branch.
-        let git2_repo = Repository::open(root).unwrap();
-        let head = git2_repo.head().unwrap();
-        let is_branch = head.is_branch();
-        let git2_branch = if is_branch {
-            head.shorthand().unwrap_or("").to_string()
-        } else {
-            String::new()
-        };
-
-        assert_eq!(
-            subprocess_branch, git2_branch,
-            "git2 detached HEAD branch must match subprocess (empty)"
-        );
     }
 }

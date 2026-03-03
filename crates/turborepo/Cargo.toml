@@ -7,8 +7,7 @@ license = "MIT"
 [features]
 # By default, we enable rustls-tls for reqwest via downstream transitive features.
 # This is for the convenience of running daily dev workflows, i.e running
-# `cargo xxx` without explicitly specifying features, not that we want to
-# promote this as default backend.
+# `cargo xxx` without explicitly specifying features.
 default = ["rustls-tls"]
 native-tls = ["turborepo-lib/native-tls"]
 rustls-tls = ["turborepo-lib/rustls-tls"]
@@ -21,14 +20,18 @@ build-target = "0.4.0"
 [dev-dependencies]
 assert_cmd = { workspace = true }
 camino = { workspace = true }
-insta = { version = "1.40.0", features = ["json", "filters"] }
+dunce = { workspace = true }
+insta = { version = "1.40.0", features = ["json", "filters", "redactions"] }
 itertools = { workspace = true }
+nix = { workspace = true, features = ["signal"] }
 pretty_assertions = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }
-turbopath = { workspace = true }
 which = { workspace = true }
 
+[[bin]]
+name = "echo_args"
+path = "../../turborepo-tests/helpers/echo_args.rs"
 
 [lints]
 workspace = true

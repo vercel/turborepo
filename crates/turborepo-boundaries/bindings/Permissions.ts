@@ -3,15 +3,14 @@
 /**
  * Permission rules for boundaries.
  */
-export type Permissions = {
-  /**
-   * Lists which tags are allowed.
-   *
-   * Any tag not included will be banned. If omitted, all tags are permitted.
-   */
-  allow: Array<string> | null;
-  /**
-   * Lists which tags are banned.
-   */
-  deny: Array<string> | null;
-};
+export type Permissions = { 
+/**
+ * Lists which tags are allowed.
+ *
+ * Any tag not included will be banned. If omitted, all tags are permitted.
+ */
+allow?: Array<string>, 
+/**
+ * Lists which tags are banned.
+ */
+deny?: Array<string>, };

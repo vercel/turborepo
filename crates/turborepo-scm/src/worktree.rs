@@ -29,120 +29,98 @@ impl WorktreeInfo {
 
     /// Detect worktree configuration from a path within a Git repository.
     ///
-    /// When the `git2` feature is enabled, uses libgit2 to resolve worktree
-    /// info in-process (avoiding subprocess overhead). Otherwise falls back
-    /// to spawning `git rev-parse`.
+    /// Walks up from `path` looking for a `.git` entry (directory or file),
+    /// then reads the git metadata directly from the filesystem instead of
+    /// spawning a `git rev-parse` subprocess.
     #[tracing::instrument]
     pub fn detect(path: &AbsoluteSystemPath) -> Result<Self, Error> {
-        #[cfg(feature = "git2")]
-        {
-            Self::detect_git2(path)
-        }
-        #[cfg(not(feature = "git2"))]
-        {
-            Self::detect_subprocess(path)
-        }
-    }
+        // Walk up from `path` to find the directory containing `.git`.
+        let worktree_root = find_git_ancestor(path)?;
+        let dot_git = worktree_root.join_component(".git");
+        let dot_git_meta = std::fs::symlink_metadata(dot_git.as_std_path())
+            .map_err(|e| Error::git_error(format!("failed to stat .git: {}", e)))?;
 
-    #[cfg(feature = "git2")]
-    fn detect_git2(path: &AbsoluteSystemPath) -> Result<Self, Error> {
-        let repo = git2::Repository::discover(path.as_std_path())
-            .map_err(|e| Error::git_error(format!("git2 repository discovery failed: {e}")))?;
+        if dot_git_meta.is_dir() {
+            // Main worktree: .git is a directory.
+            Ok(Self {
+                worktree_root: worktree_root.clone(),
+                main_worktree_root: worktree_root.clone(),
+                git_root: worktree_root,
+            })
+        } else if dot_git_meta.is_file() {
+            // Linked worktree: .git is a file containing "gitdir: <path>".
+            let content = std::fs::read_to_string(dot_git.as_std_path())
+                .map_err(|e| Error::git_error(format!("failed to read .git file: {}", e)))?;
+            let gitdir_path = content
+                .strip_prefix("gitdir: ")
+                .ok_or_else(|| {
+                    Error::git_error(format!(
+                        ".git file has unexpected format (expected 'gitdir: ...'): {:?}",
+                        content.trim()
+                    ))
+                })?
+                .trim();
 
-        let worktree_root = repo
-            .workdir()
-            .ok_or_else(|| Error::git_error("bare repository has no workdir"))?;
-        let worktree_root = AbsoluteSystemPathBuf::try_from(worktree_root)?.to_realpath()?;
+            // Resolve the gitdir path (may be relative to the worktree root)
+            let gitdir = if std::path::Path::new(gitdir_path).is_absolute() {
+                AbsoluteSystemPathBuf::try_from(gitdir_path)?
+            } else {
+                let resolved = worktree_root.as_std_path().join(gitdir_path);
+                AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?
+            };
 
-        let git_common_dir = repo.commondir().to_string_lossy().to_string();
+            // Read commondir to find the main .git directory.
+            // commondir is relative to the gitdir (e.g., "../.." points from
+            // .git/worktrees/<name> back to .git).
+            let commondir_file = gitdir.join_component("commondir");
+            let commondir_content = std::fs::read_to_string(commondir_file.as_std_path())
+                .map_err(|e| Error::git_error(format!("failed to read commondir: {}", e)))?;
+            let commondir_rel = commondir_content.trim();
 
-        let main_worktree_root = resolve_main_worktree_root(path, &git_common_dir)?;
-        let git_root = worktree_root.clone();
+            let git_common_path = if std::path::Path::new(commondir_rel).is_absolute() {
+                AbsoluteSystemPathBuf::try_from(commondir_rel)?
+            } else {
+                let resolved = gitdir.as_std_path().join(commondir_rel);
+                AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?
+            };
 
-        Ok(Self {
-            worktree_root,
-            main_worktree_root,
-            git_root,
-        })
-    }
+            // The main worktree root is the parent of the common .git directory.
+            let main_worktree_root = git_common_path
+                .parent()
+                .map(|p| p.to_owned())
+                .ok_or_else(|| Error::git_error("git common dir has no parent directory"))?;
 
-    #[cfg(not(feature = "git2"))]
-    fn detect_subprocess(path: &AbsoluteSystemPath) -> Result<Self, Error> {
-        use std::process::Command;
-
-        let output = Command::new("git")
-            .args([
-                "rev-parse",
-                "--show-toplevel",
-                "--git-common-dir",
-                "--show-cdup",
-            ])
-            .current_dir(path)
-            .output()?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(Error::git_error(format!("git rev-parse failed: {stderr}")));
-        }
-
-        let stdout = String::from_utf8(output.stdout)?;
-        let mut lines = stdout.lines();
-
-        let toplevel = lines
-            .next()
-            .ok_or_else(|| Error::git_error("git rev-parse produced no output"))?
-            .trim();
-        let worktree_root = AbsoluteSystemPathBuf::try_from(toplevel)?;
-
-        let git_common_dir = lines
-            .next()
-            .ok_or_else(|| Error::git_error("git rev-parse --git-common-dir produced no output"))?
-            .trim()
-            .to_string();
-
-        let show_cdup = lines
-            .next()
-            .ok_or_else(|| Error::git_error("git rev-parse --show-cdup produced no output"))?
-            .trim();
-        let git_root = if show_cdup.is_empty() {
-            path.to_owned()
+            Ok(Self {
+                worktree_root: worktree_root.clone(),
+                main_worktree_root,
+                git_root: worktree_root,
+            })
         } else {
-            let resolved = path.as_std_path().join(show_cdup);
-            AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?
-        };
-
-        let main_worktree_root = resolve_main_worktree_root(path, &git_common_dir)?;
-
-        Ok(Self {
-            worktree_root,
-            main_worktree_root,
-            git_root,
-        })
+            Err(Error::git_error(
+                ".git exists but is neither a directory nor a file",
+            ))
+        }
     }
 }
 
-/// Derive the main worktree root from the git common directory path.
-///
-/// The git common directory (`--git-common-dir`) points to:
-/// - For the main worktree: `.git` (relative) or the absolute path to `.git`
-/// - For linked worktrees: The path to the main repo's `.git` directory
-///
-/// The main worktree root is the parent of the git common directory.
-fn resolve_main_worktree_root(
-    cwd: &AbsoluteSystemPath,
-    git_common_dir: &str,
-) -> Result<AbsoluteSystemPathBuf, Error> {
-    let git_common_path = if std::path::Path::new(git_common_dir).is_absolute() {
-        AbsoluteSystemPathBuf::try_from(git_common_dir)?
-    } else {
-        let resolved = cwd.as_std_path().join(git_common_dir);
-        AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?
-    };
-
-    git_common_path
-        .parent()
-        .map(|p| p.to_owned())
-        .ok_or_else(|| Error::git_error("git common dir has no parent directory"))
+/// Walk up from `path` looking for a directory that contains a `.git` entry.
+fn find_git_ancestor(path: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBuf, Error> {
+    let mut current = path.to_owned();
+    loop {
+        let dot_git = current.join_component(".git");
+        if dot_git.as_std_path().exists() {
+            return Ok(current);
+        }
+        match current.parent() {
+            Some(parent) => current = parent.to_owned(),
+            None => {
+                return Err(Error::git_error(format!(
+                    "not a git repository (or any parent up to root): {}",
+                    path
+                )));
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -152,6 +130,28 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
+
+    /// Derive the main worktree root from the git common directory path.
+    /// Only used by the subprocess-based test helper for equivalence testing.
+    fn resolve_main_worktree_root(
+        cwd: &AbsoluteSystemPath,
+        git_common_dir: &str,
+    ) -> Result<AbsoluteSystemPathBuf, Error> {
+        let git_common_path = if std::path::Path::new(git_common_dir).is_absolute() {
+            AbsoluteSystemPathBuf::try_from(git_common_dir).unwrap()
+        } else {
+            let resolved = cwd.as_std_path().join(git_common_dir);
+            AbsoluteSystemPathBuf::try_from(resolved.as_path())
+                .unwrap()
+                .to_realpath()
+                .unwrap()
+        };
+
+        git_common_path
+            .parent()
+            .map(|p| p.to_owned())
+            .ok_or_else(|| Error::git_error("git common dir has no parent directory"))
+    }
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -317,5 +317,103 @@ mod tests {
         assert_eq!(info.worktree_root, worktree_path);
         assert_eq!(info.main_worktree_root, repo_root);
         assert!(info.is_linked_worktree());
+    }
+
+    /// Detect worktree info using a git subprocess (the old implementation).
+    /// Used as a reference to verify the pure-Rust implementation.
+    fn detect_via_subprocess(
+        path: &AbsoluteSystemPath,
+    ) -> Result<WorktreeInfo, Box<dyn std::error::Error>> {
+        let output = Command::new("git")
+            .args([
+                "rev-parse",
+                "--show-toplevel",
+                "--git-common-dir",
+                "--show-cdup",
+            ])
+            .current_dir(path)
+            .output()?;
+
+        if !output.status.success() {
+            return Err(format!(
+                "git rev-parse failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+
+        let stdout = String::from_utf8(output.stdout)?;
+        let mut lines = stdout.lines();
+
+        let toplevel = lines.next().unwrap().trim();
+        let worktree_root = AbsoluteSystemPathBuf::try_from(toplevel)?;
+
+        let git_common_dir = lines.next().unwrap().trim().to_string();
+
+        let show_cdup = lines.next().unwrap().trim();
+        let git_root = if show_cdup.is_empty() {
+            path.to_owned()
+        } else {
+            let resolved = path.as_std_path().join(show_cdup);
+            AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?
+        };
+
+        let main_worktree_root = resolve_main_worktree_root(path, &git_common_dir)?;
+
+        Ok(WorktreeInfo {
+            worktree_root,
+            main_worktree_root,
+            git_root,
+        })
+    }
+
+    #[test]
+    fn test_equivalence_with_subprocess() {
+        let (_tmp, repo_root) = tmp_dir();
+        setup_repository(&repo_root);
+
+        // Create a linked worktree
+        let worktree_path = repo_root.join_component("worktree-equiv");
+        require_git_cmd(
+            &repo_root,
+            &[
+                "worktree",
+                "add",
+                worktree_path.as_str(),
+                "-b",
+                "test-equiv",
+            ],
+        );
+
+        let subdir = repo_root.join_component("packages").join_component("app");
+        subdir.create_dir_all().unwrap();
+
+        let wt_subdir = worktree_path.join_component("src");
+        wt_subdir.create_dir_all().unwrap();
+
+        // Verify both implementations agree for every scenario
+        let test_paths = [
+            ("main root", &repo_root),
+            ("main subdir", &subdir),
+            ("worktree root", &worktree_path),
+            ("worktree subdir", &wt_subdir),
+        ];
+
+        for (label, path) in &test_paths {
+            let pure_rust = WorktreeInfo::detect(path).unwrap();
+            let subprocess = detect_via_subprocess(path).unwrap();
+            assert_eq!(
+                pure_rust.worktree_root, subprocess.worktree_root,
+                "{label}: worktree_root mismatch"
+            );
+            assert_eq!(
+                pure_rust.main_worktree_root, subprocess.main_worktree_root,
+                "{label}: main_worktree_root mismatch"
+            );
+            assert_eq!(
+                pure_rust.git_root, subprocess.git_root,
+                "{label}: git_root mismatch"
+            );
+        }
     }
 }

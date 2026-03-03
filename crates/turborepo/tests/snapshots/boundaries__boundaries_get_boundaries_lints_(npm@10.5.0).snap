@@ -1,6 +1,5 @@
 ---
 source: crates/turborepo/tests/boundaries.rs
-assertion_line: 5
 expression: query_output
 ---
 {
@@ -22,6 +21,10 @@ expression: query_output
         {
           "message": "Package `utils` found without any tag listed in allowlist for `my-app`",
           "import": "utils"
+        },
+        {
+          "message": "cannot import package `module-package` because it is not a dependency",
+          "import": "module-package"
         },
         {
           "message": "cannot import package `module-package` because it is not a dependency",
