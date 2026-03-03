@@ -315,7 +315,7 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
-          capnproto: "false"
+          capnproto: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
           package-install: "false"
 
       - name: Install Bun
