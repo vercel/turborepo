@@ -503,7 +503,7 @@ fn build_resource(config: &Config) -> Resource {
 }
 
 fn default_temporality() -> Temporality {
-    Temporality::Cumulative
+    Temporality::Delta
 }
 
 fn create_instruments(meter: &Meter) -> Instruments {
