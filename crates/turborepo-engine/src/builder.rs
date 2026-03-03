@@ -171,6 +171,16 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         };
 
         for (workspace, task) in self.workspaces.iter().cartesian_product(tasks.iter()) {
+            // When a task uses package#task syntax (e.g. "web#build"), the task_id
+            // always resolves to that specific package regardless of which workspace
+            // we're iterating over. Skip workspaces that don't match to avoid
+            // unnecessary turbo.json lookups across every package in the monorepo.
+            if let Some(task_pkg) = task.package()
+                && workspace != &PackageName::from(task_pkg)
+            {
+                continue;
+            }
+
             let task_id = task
                 .task_id()
                 .unwrap_or_else(|| TaskId::new(workspace.as_ref(), task.task()));
@@ -4367,5 +4377,210 @@ mod test {
             1,
             "Should only have one definition from shared-config, not root + shared-config"
         );
+    }
+
+    #[test]
+    fn test_package_task_syntax_filters_workspaces() {
+        // When using "app1#build" syntax with all workspaces, the engine should
+        // produce the same graph as when only "app1" is in the workspace list.
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "app2" => ["libA"],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+
+        // Simulate `turbo run app1#build` without --filter (all workspaces passed in)
+        let engine_all_workspaces = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("app1#build"))))
+            .with_workspaces(vec![
+                PackageName::from("app1"),
+                PackageName::from("app2"),
+                PackageName::from("libA"),
+            ])
+            .build()
+            .unwrap();
+
+        // Simulate `turbo run build --filter=app1` (only app1 in workspaces)
+        let engine_filtered = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![PackageName::from("app1")])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "app1#build" => ["libA#build"],
+            "libA#build" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine_all_workspaces), expected);
+        assert_eq!(all_dependencies(&engine_filtered), expected);
+    }
+
+    #[test]
+    fn test_package_task_syntax_mixed_with_plain_task() {
+        // "turbo run app1#build lint" should run app1#build only for app1,
+        // but lint for all workspaces.
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "app2" => [],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                    "lint": {},
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(vec![
+                Spanned::new(TaskName::from("app1#build")),
+                Spanned::new(TaskName::from("lint")),
+            ])
+            .with_workspaces(vec![
+                PackageName::from("app1"),
+                PackageName::from("app2"),
+                PackageName::from("libA"),
+            ])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "app1#build" => ["libA#build"],
+            "libA#build" => ["___ROOT___"],
+            "app1#lint" => ["___ROOT___"],
+            "app2#lint" => ["___ROOT___"],
+            "libA#lint" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_multiple_package_tasks_target_different_packages() {
+        // "turbo run app1#build app2#test" with all workspaces should only
+        // process each package-qualified task for its target package.
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "app2" => ["libA"],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                    "test": { "dependsOn": ["^build"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(vec![
+                Spanned::new(TaskName::from("app1#build")),
+                Spanned::new(TaskName::from("app2#test")),
+            ])
+            .with_workspaces(vec![
+                PackageName::from("app1"),
+                PackageName::from("app2"),
+                PackageName::from("libA"),
+            ])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "app1#build" => ["libA#build"],
+            "app2#test" => ["libA#build"],
+            "libA#build" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_root_task_with_package_task_syntax_and_all_workspaces() {
+        // When mixing a root-enabled task ("rootlint") with a package-qualified
+        // task ("app1#build") and all workspaces, the root task should only run
+        // on root, and the package-qualified task only on its target package.
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "app2" => [],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                    "//#rootlint": {},
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(vec![
+                Spanned::new(TaskName::from("app1#build")),
+                Spanned::new(TaskName::from("rootlint")),
+            ])
+            .with_root_tasks(vec![TaskName::from("//#rootlint")])
+            .with_workspaces(vec![
+                PackageName::Root,
+                PackageName::from("app1"),
+                PackageName::from("app2"),
+                PackageName::from("libA"),
+            ])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "app1#build" => ["libA#build"],
+            "libA#build" => ["___ROOT___"],
+            "//#rootlint" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
     }
 }

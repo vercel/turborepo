@@ -173,6 +173,23 @@ impl RunBuilder {
                     break;
                 }
             }
+
+            // When all tasks use package#task syntax, we can narrow the package
+            // set to only the referenced packages rather than the entire monorepo.
+            let task_names: Vec<TaskName> = opts
+                .run_opts
+                .tasks
+                .iter()
+                .map(|t| TaskName::from(t.as_str()))
+                .collect();
+            let all_package_qualified = task_names.iter().all(|t| t.is_package_task());
+            if all_package_qualified {
+                let target_packages: HashSet<PackageName> = task_names
+                    .iter()
+                    .filter_map(|t| t.package().map(PackageName::from))
+                    .collect();
+                filtered_pkgs.retain(|pkg, _| target_packages.contains(pkg));
+            }
         };
 
         Ok(filtered_pkgs)
