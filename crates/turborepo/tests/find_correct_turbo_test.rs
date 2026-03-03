@@ -1,13 +1,11 @@
 mod common;
 
-use std::path::Path;
-
 use common::turbo_command;
 
 #[test]
 fn test_bin_matches_running_binary() {
     let tempdir = tempfile::tempdir().unwrap();
-    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
+    let repo_root = common::manifest_dir().join("../../");
 
     let output = turbo_command(tempdir.path())
         .args(["--cwd", repo_root.to_str().unwrap(), "bin"])

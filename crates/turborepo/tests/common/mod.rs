@@ -2,7 +2,18 @@
 
 pub mod setup;
 
-use std::{fs, path::Path, process::Output};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Output,
+};
+
+pub fn manifest_dir() -> PathBuf {
+    match std::env::var("CARGO_MANIFEST_DIR") {
+        Ok(dir) => PathBuf::from(dir),
+        Err(_) => PathBuf::from(env!("CARGO_MANIFEST_DIR")),
+    }
+}
 
 /// Insta filters that normalize non-deterministic parts of turbo's stdout:
 /// - Path separators (backslash → forward slash for Windows)
@@ -78,8 +89,7 @@ pub fn combined_output(output: &Output) -> String {
 }
 
 pub fn turbo_configs_dir() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../turborepo-tests/integration/fixtures/turbo-configs")
+    manifest_dir().join("../../turborepo-tests/integration/fixtures/turbo-configs")
 }
 
 /// Copy a turbo-config JSON into the test directory as `turbo.json` and commit.
@@ -134,7 +144,7 @@ pub fn mock_telemetry_config(config_dir: &Path) {
 /// overlays the package-manager-specific files (lockfile, patches,
 /// package.json).
 pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
-    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
+    let repo_root = manifest_dir().join("../../");
     let base_fixture =
         repo_root.join("turborepo-tests/integration/fixtures/lockfile_aware_caching");
     let pm_overlay = repo_root.join(format!(
@@ -167,7 +177,7 @@ pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
 /// Set up a find-turbo test fixture. Copies the fixture directory, makes
 /// scripts executable on Unix, and places echo_args as turbo.exe on Windows.
 pub fn setup_find_turbo(dir: &Path, fixture_name: &str) {
-    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../");
+    let repo_root = manifest_dir().join("../../");
     let fixture_src = repo_root.join(format!(
         "turborepo-tests/integration/fixtures/find_turbo/{fixture_name}"
     ));
