@@ -307,6 +307,7 @@ jobs:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
           capnproto: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
+          rust: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
           package-install: "false"
           rust-cache: "false"
 
