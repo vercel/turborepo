@@ -336,6 +336,8 @@ jobs:
         run: |
           cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10 --workspace-remap "$GITHUB_WORKSPACE"
         shell: bash
+        env:
+          INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
 
   rust_test_ubuntu:
     runs-on: ubuntu-latest
