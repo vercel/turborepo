@@ -115,14 +115,19 @@ fn check_import_as_tsconfig_path_alias(
 
     match resolver.resolve(dir, import) {
         Ok(resolution) => {
-            // If the resolver found a package.json the resolution went through
-            // node_modules (a real npm package), not a tsconfig path alias pointing
-            // to a local file.  Return false so the caller falls through to
-            // `check_package_import`.
-            if resolution.package_json().is_some() {
+            // If the resolved path goes through node_modules, the import resolved to
+            // a real npm package rather than a tsconfig path alias pointing to a local
+            // file.  Return false so the caller falls through to `check_package_import`.
+            //
+            // We intentionally do NOT use `resolution.package_json().is_some()` here
+            // because oxc_resolver may return a package.json for any file inside a
+            // package directory — including files that are local tsconfig path alias
+            // targets.  Checking for `node_modules` in the resolved path is the
+            // canonical way to distinguish npm packages from local source files.
+            let path = resolution.path();
+            if path.components().any(|c| c.as_os_str() == "node_modules") {
                 return Ok(false);
             }
-            let path = resolution.path();
             let Some(utf8_path) = Utf8Path::from_path(path) else {
                 result.diagnostics.push(BoundariesDiagnostic::InvalidPath {
                     path: path.to_string_lossy().to_string(),
@@ -557,6 +562,67 @@ mod test {
             "features/feature-a with a tsconfig `*` alias should be resolved as a local import"
         );
         // The resolved path is inside the package root, so no boundary violation
+        assert!(
+            result.diagnostics.is_empty(),
+            "expected no boundary violations for a locally-aliased import"
+        );
+    }
+    /// Regression test: a tsconfig path alias must still be resolved as a local
+    /// import even when the package root contains a `package.json` file.
+    ///
+    /// Previously, using `resolution.package_json().is_some()` caused the check
+    /// to incorrectly treat tsconfig aliases as npm packages in any real project
+    /// that has a `package.json` in its root directory.
+    #[test]
+    fn tsconfig_alias_resolves_with_package_json_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Create a package.json so oxc_resolver can find it during resolution
+        std::fs::write(
+            root.join("package.json"),
+            r#"{ "name": "test-pkg", "version": "1.0.0" }"#,
+        )
+        .unwrap();
+
+        let tsconfig = root.join("tsconfig.json");
+        std::fs::write(
+            &tsconfig,
+            r#"{ "compilerOptions": { "paths": { "@/*": ["./*"] } } }"#,
+        )
+        .unwrap();
+
+        std::fs::create_dir_all(root.join("utils")).unwrap();
+        std::fs::write(root.join("utils").join("helper.ts"), "export const x = 1;").unwrap();
+
+        let file_content = "import { x } from \"@/utils/helper\";";
+        std::fs::write(root.join("index.ts"), file_content).unwrap();
+
+        let package_root = AbsoluteSystemPath::new(root.to_str().unwrap()).unwrap();
+        let tsconfig_path = AbsoluteSystemPath::new(tsconfig.to_str().unwrap()).unwrap();
+        let file_path = package_root.join_component("index.ts");
+        let package_name = PackageName::from("test-pkg");
+        let span = SourceSpan::new(0.into(), 0);
+        let mut result = BoundariesResult::default();
+
+        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+
+        let resolved = check_import_as_tsconfig_path_alias(
+            &resolver,
+            &package_name,
+            package_root,
+            span,
+            &file_path,
+            file_content,
+            "@/utils/helper",
+            &mut result,
+        )
+        .unwrap();
+
+        assert!(
+            resolved,
+            "@/utils/helper should be resolved as a tsconfig path alias even when package.json is present"
+        );
         assert!(
             result.diagnostics.is_empty(),
             "expected no boundary violations for a locally-aliased import"
