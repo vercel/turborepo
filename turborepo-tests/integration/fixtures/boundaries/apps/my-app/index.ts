@@ -3,6 +3,9 @@ import { blackbeard } from "../../packages/another/index.jsx";
 // Import type without "type" specifier in import
 import { Ship } from "ship";
 import { Ship } from "@types/ship";
+// Bun runtime imports should not be flagged even with @types/bun in devDependencies
+import { $, which } from "bun";
+import { test } from "bun:test";
 // Import package that is not specified
 import { walkThePlank } from "module-package";
 
