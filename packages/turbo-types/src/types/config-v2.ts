@@ -207,6 +207,15 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   errorsOnlyShowHash?: boolean;
+  /**
+   * Enforce a minimum length of 32 bytes for
+   * `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is
+   * enabled. Short keys weaken the HMAC-SHA256 signature, making brute-force
+   * tag collision feasible.
+   *
+   * @defaultValue `false`
+   */
+  longerSignatureKey?: boolean;
 }
 
 export interface Pipeline {

@@ -332,6 +332,11 @@
           "type": "boolean",
           "description": "When using `outputLogs: \"errors-only\"`, show task hashes when tasks complete successfully. This provides visibility into which tasks are running without showing full output logs.",
           "default": false
+        },
+        "longerSignatureKey": {
+          "type": "boolean",
+          "description": "Enforce a minimum length of 32 bytes for `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is enabled. Short keys weaken the HMAC-SHA256 signature, making brute-force tag collision feasible.",
+          "default": false
         }
       },
       "additionalProperties": false

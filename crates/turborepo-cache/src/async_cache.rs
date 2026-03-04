@@ -279,6 +279,7 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 
@@ -368,6 +369,7 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 
@@ -467,6 +469,7 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 

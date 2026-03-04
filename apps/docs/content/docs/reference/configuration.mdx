@@ -231,6 +231,25 @@ With this flag enabled, successful tasks will show messages like:
 }
 ```
 
+#### `longerSignatureKey`
+
+Default: `false`
+
+Enforce a minimum length of 32 bytes for the `TURBO_REMOTE_CACHE_SIGNATURE_KEY` environment variable when [`remoteCache.signature`](#signature) is enabled. HMAC-SHA256 accepts any key length, but keys shorter than 32 bytes significantly weaken the signature, making brute-force tag collision feasible.
+
+When this flag is enabled and the key is too short, Turborepo will fail immediately at the start of the run with an error message indicating the key length and the minimum requirement.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "longerSignatureKey": true,
+  },
+  "remoteCache": {
+    "signature": true,
+  },
+}
+```
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"
@@ -790,6 +809,10 @@ Default: `false`
 Enables signature verification for requests to the remote cache.
 When `true`, Turborepo will sign every uploaded artifact using the value of the environment variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`.
 Turborepo will reject any downloaded artifacts that have an invalid signature or are missing a signature.
+
+<Callout type="warn">
+  Enable [`futureFlags.longerSignatureKey`](#longersignaturekey) to enforce a minimum key length of 32 bytes. Short keys weaken the HMAC-SHA256 signature and will be rejected in a future major version.
+</Callout>
 
 ### `preflight`
 
