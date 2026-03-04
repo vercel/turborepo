@@ -231,6 +231,25 @@ With this flag enabled, successful tasks will show messages like:
 }
 ```
 
+#### `longerSignatureKey`
+
+Default: `false`
+
+Enforce a minimum length of 32 bytes for the `TURBO_REMOTE_CACHE_SIGNATURE_KEY` environment variable when [`remoteCache.signature`](#signature) is enabled. HMAC-SHA256 accepts any key length, but keys shorter than 32 bytes significantly weaken the signature, making brute-force tag collision feasible.
+
+When this flag is enabled and the key is too short, Turborepo will fail immediately at the start of the run with an error message indicating the key length and the minimum requirement.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "longerSignatureKey": true,
+  },
+  "remoteCache": {
+    "signature": true,
+  },
+}
+```
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"
@@ -791,6 +810,10 @@ Enables signature verification for requests to the remote cache.
 When `true`, Turborepo will sign every uploaded artifact using the value of the environment variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`.
 Turborepo will reject any downloaded artifacts that have an invalid signature or are missing a signature.
 
+<Callout type="warn">
+  Enable [`futureFlags.longerSignatureKey`](#longersignaturekey) to enforce a minimum key length of 32 bytes. Short keys weaken the HMAC-SHA256 signature and will be rejected in a future major version.
+</Callout>
+
 ### `preflight`
 
 Default: `false`
@@ -835,3 +858,270 @@ Must start with `team_` or it will not be used.
 
 The slug of the Remote Cache team.
 Value will be passed as `slug` in the querystring for all Remote Cache HTTP calls.
+
+## Future flags
+
+Future flags allow you to opt-in to experimental features before they become the default behavior.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalObservability": true
+  }
+}
+```
+
+### `experimentalObservability`
+
+Default: `false`
+
+When enabled, Turborepo will honor the `experimentalObservability.otel` configuration block (if present) to send run summaries to an OpenTelemetry Protocol (OTLP) collector.
+
+<Callout type="info">
+  Invalid or incomplete OTEL configuration (e.g., missing endpoint, invalid
+  protocol) results in metrics being disabled rather than causing runs to fail.
+  Turborepo will continue executing tasks normally even if the exporter cannot
+  be initialized.
+</Callout>
+
+## Experimental observability
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+Configure Turborepo to export metrics to observability backends like Datadog, Prometheus, or other OTLP-compatible collectors.
+
+### `experimentalObservability`
+
+The `experimentalObservability` configuration requires `futureFlags.experimentalObservability` to be set to `true` in your root `turbo.json`. This applies to all configuration sources, including the `turbo.json` block, environment variables, and CLI flags. Turborepo will error if observability is configured without the future flag enabled.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "experimentalObservability": true
+  },
+  "experimentalObservability": {
+    "otel": {
+      "enabled": true,
+      "protocol": "grpc",
+      "endpoint": "https://api.datadoghq.com/api/v2/otlp",
+      "headers": {
+        "X-Custom-Header": "value"
+      },
+      "timeoutMs": 10000,
+      "intervalMs": 15000,
+      "resource": {
+        "service.name": "turborepo"
+      },
+      "metrics": {
+        "runSummary": true,
+        "taskDetails": false,
+        "runAttributes": {
+          "id": false,
+          "scmRevision": false
+        },
+        "taskAttributes": {
+          "id": false,
+          "hashes": false
+        }
+      },
+      "useRemoteCacheToken": true
+    }
+  }
+}
+```
+
+#### `experimentalObservability.otel.enabled`
+
+Default: `true` (when endpoint is provided)
+
+Enable or disable the OpenTelemetry metrics exporter.
+
+#### `experimentalObservability.otel.protocol`
+
+Default: `"grpc"`
+
+The OTLP protocol to use. Supported values:
+
+- `"grpc"` - OTLP over gRPC
+- `"http/protobuf"` - OTLP over HTTP with protobuf encoding
+
+#### `experimentalObservability.otel.endpoint`
+
+**Required** when using file-based configuration.
+
+The OTLP collector endpoint URL. For example:
+
+- Datadog: `"https://api.datadoghq.com/api/v2/otlp"`
+- Custom collector: `"https://otel-collector.example.com:4317"` (gRPC) or `"https://otel-collector.example.com:4318"` (HTTP)
+
+If the endpoint is missing or empty when OTEL is enabled, the exporter will not be initialized and metrics will be disabled. The run will continue normally.
+
+<Callout type="warn">
+  OTEL endpoints must use `https://`. `http://` endpoints are rejected to ensure
+  metrics and authentication headers are sent over TLS.
+</Callout>
+
+#### `experimentalObservability.otel.headers`
+
+Optional HTTP headers to include with export requests. Useful for authentication (e.g., API keys) or custom metadata.
+
+```jsonc title="./turbo.json"
+{
+  "experimentalObservability": {
+    "otel": {
+      "headers": {
+        "X-Custom-Header": "value"
+      }
+    }
+  }
+}
+```
+
+<Callout type="warn">
+  Avoid storing tokens or API keys in `turbo.json`. `turbo.json` is often
+  committed to source control, so prefer environment variables or your CI
+  secret manager for sensitive header values.
+</Callout>
+
+#### `experimentalObservability.otel.timeoutMs`
+
+Default: `10000` (10 seconds)
+
+Timeout in milliseconds for export requests to the collector.
+
+#### `experimentalObservability.otel.intervalMs`
+
+Default: `15000` (15 seconds)
+
+Interval in milliseconds between periodic exports to the collector. This controls how frequently metrics are batched and sent to the OTLP collector during a run. A final flush is always performed when the run completes, regardless of this setting.
+
+#### `experimentalObservability.otel.resource`
+
+Optional resource attributes to attach to all exported metrics. These help identify the source of metrics in your observability platform.
+
+```jsonc title="./turbo.json"
+{
+  "experimentalObservability": {
+    "otel": {
+      "resource": {
+        "service.name": "turborepo",
+        "service.namespace": "ci",
+        "deployment.environment": "production"
+      }
+    }
+  }
+}
+```
+
+#### `experimentalObservability.otel.metrics`
+
+Control which metric groups are exported.
+
+<Callout type="info">
+  Some metric attributes have **unbounded cardinality** — their unique values
+  grow without limit (e.g., a unique run ID per invocation, a unique hash per
+  input change). Backends like Datadog charge per unique metric series, so these
+  attributes are disabled by default and can be opted into via `runAttributes`
+  and `taskAttributes`.
+</Callout>
+
+##### `metrics.runSummary`
+
+Default: `true`
+
+Export run-level metrics:
+
+- Run duration
+- Tasks attempted, failed, and cached
+- Exit code
+- SCM branch
+
+##### `metrics.taskDetails`
+
+Default: `false`
+
+Export per-task metrics:
+
+- Task execution duration
+- Cache hit/miss status and source
+- Task identifiers (task ID, package, hash)
+
+##### `metrics.runAttributes`
+
+Control which run attributes are included in run-level metrics. These options only take effect when `runSummary` is enabled.
+
+###### `runAttributes.id`
+
+Default: `false`
+
+Include the `turbo.run.id` attribute on run-level metrics. Each Turborepo invocation generates a unique run ID, so enabling this increases metric cardinality.
+
+###### `runAttributes.scmRevision`
+
+Default: `false`
+
+Include the `turbo.scm.revision` attribute (full Git SHA) on run-level metrics. Each commit produces a unique value, so enabling this increases metric cardinality.
+
+##### `metrics.taskAttributes`
+
+Control which task attributes are included in per-task metrics. These options only take effect when `taskDetails` is enabled.
+
+###### `taskAttributes.id`
+
+Default: `false`
+
+Include the `turbo.task.id` attribute (`package#task`) on per-task metrics.
+
+###### `taskAttributes.hashes`
+
+Default: `false`
+
+Include the `turbo.task.hash` and `turbo.task.external_inputs_hash` attributes on per-task metrics. These are content hashes that change whenever task inputs change, so enabling this increases metric cardinality.
+
+#### `experimentalObservability.otel.useRemoteCacheToken`
+
+Default: `false`
+
+When enabled, automatically adds an `Authorization: Bearer <token>` header to OTLP export requests using your existing remote cache credentials (from `turbo login` or the `TURBO_TOKEN` environment variable). Existing `Authorization` headers in the `headers` configuration are preserved and take precedence.
+
+This is useful when your OTLP collector uses the same authentication as your remote cache.
+
+<Callout type="info">
+  Exporter failures are logged but do not cause the run to fail. If the
+  collector is unavailable or misconfigured, Turborepo will continue executing
+  tasks normally. Invalid or incomplete configuration (e.g., missing endpoint
+  when enabled) results in the exporter not being initialized, and metrics will
+  be disabled for that run.
+</Callout>
+
+### Environment variables
+
+You can also configure observability via environment variables, which take precedence over `turbo.json` settings:
+
+- `TURBO_EXPERIMENTAL_OTEL_ENABLED` - Enable/disable exporter (`1` or `0`)
+- `TURBO_EXPERIMENTAL_OTEL_PROTOCOL` - Protocol (`grpc` or `http/protobuf`)
+- `TURBO_EXPERIMENTAL_OTEL_ENDPOINT` - Collector HTTPS endpoint URL
+- `TURBO_EXPERIMENTAL_OTEL_TIMEOUT_MS` - Timeout in milliseconds
+- `TURBO_EXPERIMENTAL_OTEL_INTERVAL_MS` - Export interval in milliseconds
+- `TURBO_EXPERIMENTAL_OTEL_HEADERS` - Comma-separated key=value pairs (e.g., `"Header=value,Other=value"`)
+- `TURBO_EXPERIMENTAL_OTEL_RESOURCE` - Comma-separated key=value pairs for resource attributes
+- `TURBO_EXPERIMENTAL_OTEL_METRICS_RUN_SUMMARY` - Enable run summary metrics (`1` or `0`)
+- `TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS` - Enable task details metrics (`1` or `0`)
+- `TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_ATTRIBUTES_ID` - Include task ID attribute (`1` or `0`)
+- `TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_ATTRIBUTES_HASHES` - Include task hash attributes (`1` or `0`)
+- `TURBO_EXPERIMENTAL_OTEL_USE_REMOTE_CACHE_TOKEN` - Use remote cache token for OTLP authentication (`1` or `0`)
+
+### CLI flags
+
+You can override observability settings via CLI flags:
+
+- `--experimental-otel-enabled` - Enable/disable exporter
+- `--experimental-otel-protocol` - Protocol (`grpc` or `http/protobuf`)
+- `--experimental-otel-endpoint` - Collector HTTPS endpoint URL
+- `--experimental-otel-timeout-ms` - Timeout in milliseconds
+- `--experimental-otel-interval-ms` - Export interval in milliseconds
+- `--experimental-otel-header KEY=VALUE` - Add HTTP header (can be repeated)
+- `--experimental-otel-resource KEY=VALUE` - Add resource attribute (can be repeated)
+- `--experimental-otel-metrics-run-summary` - Enable run summary metrics
+- `--experimental-otel-metrics-task-details` - Enable task details metrics
+- `--experimental-otel-use-remote-cache-token` - Use remote cache token for OTLP authentication

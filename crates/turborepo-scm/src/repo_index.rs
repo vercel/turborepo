@@ -1,9 +1,9 @@
-#![cfg(feature = "git2")]
-
 use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
-use crate::{Error, GitHashes, GitRepo, ls_tree::SortedGitHashes, status::RepoStatusEntry};
+use crate::{
+    Error, GitHashes, GitRepo, OidHash, ls_tree::SortedGitHashes, status::RepoStatusEntry,
+};
 
 /// Pre-computed repo-wide git index that caches file hashes and working-tree
 /// status so they can be filtered per-package without spawning additional
@@ -20,48 +20,9 @@ pub struct RepoGitIndex {
 }
 
 impl RepoGitIndex {
-    /// Build the index using the gix-index path when available, falling back to
-    /// the libgit2 ls-tree + status path otherwise.
     #[tracing::instrument(skip(git))]
     pub fn new(git: &GitRepo) -> Result<Self, Error> {
-        #[cfg(feature = "gix")]
-        {
-            match Self::new_from_gix_index(git) {
-                Ok(index) => return Ok(index),
-                Err(e) => {
-                    debug!("gix-index path failed: {}. Falling back to libgit2.", e);
-                }
-            }
-        }
-
-        Self::new_from_libgit2(git)
-    }
-
-    /// Build the index by running `git ls-tree` and `git status` via libgit2
-    /// on separate threads.
-    fn new_from_libgit2(git: &GitRepo) -> Result<Self, Error> {
-        let (ls_tree_hashes, status_entries) = std::thread::scope(|s| {
-            let ls_tree = s.spawn(|| git.git_ls_tree_repo_root_sorted());
-            let status = s.spawn(|| git.git_status_repo_root());
-            (
-                ls_tree.join().expect("ls-tree thread panicked"),
-                status.join().expect("status thread panicked"),
-            )
-        });
-        let ls_tree_hashes = ls_tree_hashes?;
-        let mut status_entries = status_entries?;
-
-        status_entries.sort_by(|a, b| a.path.cmp(&b.path));
-
-        debug!(
-            "built repo git index (libgit2): ls_tree_count={}, status_count={}",
-            ls_tree_hashes.len(),
-            status_entries.len(),
-        );
-        Ok(Self {
-            ls_tree_hashes,
-            status_entries,
-        })
+        Self::new_from_gix_index(git)
     }
 
     /// Build the index by reading `.git/index` directly via gix-index.
@@ -76,7 +37,6 @@ impl RepoGitIndex {
     /// the stat comparison) are deferred to per-package hashing rather than
     /// content-hashed inline. This avoids reading every file from disk on
     /// freshly cloned/checked-out repos.
-    #[cfg(feature = "gix")]
     #[tracing::instrument(skip(git))]
     fn new_from_gix_index(git: &GitRepo) -> Result<Self, Error> {
         use rayon::prelude::*;
@@ -110,11 +70,10 @@ impl RepoGitIndex {
         // The index is sorted by path. rayon's indexed collect preserves
         // order, and our sequential collection loop preserves order, so
         // ls_tree_hashes will be sorted without an explicit sort.
-        let num_entries = index
-            .entries()
-            .iter()
-            .filter(|e| !e.mode.is_submodule())
-            .count();
+        // Use the total entry count as a capacity hint (slightly over-
+        // estimates when submodules are present, but avoids a full
+        // sequential scan of all entries).
+        let num_entries = index.entries().len();
 
         // Classify entries in parallel: stat each file, compare with index,
         // and carry the raw ObjectId (20 bytes, Copy) instead of a heap-allocated
@@ -152,17 +111,11 @@ impl RepoGitIndex {
                             return Ok(EntryClassification::Modified { path: rel_path });
                         }
 
-                        // Clean: hex-encode the OID using a stack buffer to
-                        // avoid the intermediate HexDisplay allocation from
-                        // to_hex().to_string().
                         let mut hex_buf = [0u8; 40];
                         hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).unwrap();
-                        // SAFETY: hex output is always valid ASCII/UTF-8.
-                        let oid_str =
-                            unsafe { std::str::from_utf8_unchecked(&hex_buf) }.to_string();
                         Ok(EntryClassification::Clean {
                             path: rel_path,
-                            oid: oid_str,
+                            oid: OidHash::from_hex_buf(hex_buf),
                         })
                     }
                     Err(_) => Ok(EntryClassification::Deleted { path: rel_path }),
@@ -236,23 +189,34 @@ impl RepoGitIndex {
         let prefix_str = pkg_prefix.as_str();
         let prefix_is_empty = prefix_str.is_empty();
 
+        // Compute range bounds once for both ls_tree and status lookups
+        let range_start;
+        let range_end;
+        if !prefix_is_empty {
+            range_start = format!("{}/", prefix_str);
+            range_end = format!("{}0", prefix_str);
+        } else {
+            range_start = String::new();
+            range_end = String::new();
+        }
+
         let mut hashes = if prefix_is_empty {
             let mut h = GitHashes::with_capacity(self.ls_tree_hashes.len());
             for (path, hash) in &self.ls_tree_hashes {
-                h.insert(path.clone(), hash.clone());
+                h.insert(path.clone(), *hash);
             }
             h
         } else {
-            let range_start = RelativeUnixPathBuf::new(format!("{}/", prefix_str)).unwrap();
-            let range_end = RelativeUnixPathBuf::new(format!("{}0", prefix_str)).unwrap();
             let lo = self
                 .ls_tree_hashes
-                .partition_point(|(k, _)| *k < range_start);
-            let hi = self.ls_tree_hashes.partition_point(|(k, _)| *k < range_end);
+                .partition_point(|(k, _)| k.as_str() < range_start.as_str());
+            let hi = self
+                .ls_tree_hashes
+                .partition_point(|(k, _)| k.as_str() < range_end.as_str());
             let mut h = GitHashes::with_capacity(hi - lo);
             for (path, hash) in &self.ls_tree_hashes[lo..hi] {
                 if let Ok(stripped) = path.strip_prefix(pkg_prefix) {
-                    h.insert(stripped, hash.clone());
+                    h.insert(stripped, *hash);
                 }
             }
             h
@@ -262,12 +226,12 @@ impl RepoGitIndex {
         let status_entries = if prefix_is_empty {
             &self.status_entries[..]
         } else {
-            let range_start = RelativeUnixPathBuf::new(format!("{}/", prefix_str)).unwrap();
-            let range_end = RelativeUnixPathBuf::new(format!("{}0", prefix_str)).unwrap();
             let lo = self
                 .status_entries
-                .partition_point(|e| e.path < range_start);
-            let hi = self.status_entries.partition_point(|e| e.path < range_end);
+                .partition_point(|e| e.path.as_str() < range_start.as_str());
+            let hi = self
+                .status_entries
+                .partition_point(|e| e.path.as_str() < range_end.as_str());
             &self.status_entries[lo..hi]
         };
         for entry in status_entries {
@@ -302,7 +266,6 @@ impl RepoGitIndex {
 ///
 /// Each walker thread accumulates results in a thread-local Vec and
 /// batch-sends them through a channel, avoiding per-file mutex contention.
-#[cfg(feature = "gix")]
 #[tracing::instrument(skip(git, ls_tree_hashes, status_entries))]
 fn find_untracked_files(
     git: &GitRepo,
@@ -313,18 +276,97 @@ fn find_untracked_files(
 
     use ignore::WalkBuilder;
 
-    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
     let root = git.root.as_std_path();
 
+    // Pre-build gitignore matchers from all tracked .gitignore files.
+    // Each .gitignore is built with a builder rooted at its containing
+    // directory so patterns are scoped correctly (e.g., `dist/` in
+    // `packages/ui/.gitignore` only matches under `packages/ui/`).
+    let gitignore_matchers = {
+        let mut matchers: Vec<ignore::gitignore::Gitignore> = Vec::new();
+
+        // Global gitignore + .git/info/exclude are rooted at the repo root
+        let mut root_builder = ignore::gitignore::GitignoreBuilder::new(root);
+        let mut has_root_rules = false;
+        if let Some(global_path) = ignore::gitignore::gitconfig_excludes_path()
+            && global_path.exists()
+        {
+            let _ = root_builder.add(&global_path);
+            has_root_rules = true;
+        }
+        let info_exclude = root.join(".git").join("info").join("exclude");
+        if info_exclude.exists() {
+            let _ = root_builder.add(&info_exclude);
+            has_root_rules = true;
+        }
+
+        for (path, _) in ls_tree_hashes.iter() {
+            let s = path.as_str();
+            if s.ends_with(".gitignore") {
+                let abs_path = root.join(s);
+                if !abs_path.exists() {
+                    continue;
+                }
+                let gi_dir = abs_path.parent().unwrap_or(root);
+                if gi_dir == root {
+                    // Root .gitignore goes into the root builder alongside
+                    // global and info/exclude rules
+                    let _ = root_builder.add(&abs_path);
+                    has_root_rules = true;
+                } else {
+                    // Nested .gitignore gets its own matcher scoped to its dir
+                    let mut builder = ignore::gitignore::GitignoreBuilder::new(gi_dir);
+                    let _ = builder.add(&abs_path);
+                    if let Ok(gi) = builder.build()
+                        && !gi.is_empty()
+                    {
+                        matchers.push(gi);
+                    }
+                }
+            }
+        }
+
+        if has_root_rules
+            && let Ok(gi) = root_builder.build()
+            && !gi.is_empty()
+        {
+            matchers.insert(0, gi);
+        }
+
+        matchers
+    };
+    let gitignore_matchers = std::sync::Arc::new(gitignore_matchers);
+
+    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
+
+    // Disable ALL per-directory probing. Gitignore rules are applied via
+    // filter_entry using the pre-built matcher above.
     let walker = WalkBuilder::new(root)
         .follow_links(false)
-        .git_ignore(true)
-        .require_git(true)
+        .git_ignore(false)
+        .git_exclude(false)
+        .require_git(false)
+        .ignore(false)
+        .parents(false)
         .hidden(false)
-        .filter_entry(|entry| {
-            // Never descend into .git/ — the ignore crate may walk it when
-            // hidden(false) is set because .git is a hidden directory.
-            !(entry.file_type().is_some_and(|ft| ft.is_dir()) && entry.file_name() == ".git")
+        .filter_entry({
+            let matchers = gitignore_matchers.clone();
+            move |entry| {
+                if entry.file_name() == ".git" {
+                    return false;
+                }
+                let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
+                let path = entry.path();
+                // Check against all pre-built gitignore matchers. For
+                // directories, returning false prunes the entire subtree.
+                // Only check matchers whose root is a prefix of the entry
+                // path — a matcher scoped to packages/ui/ can't affect
+                // files under apps/web/.
+                !matchers.iter().any(|gi| {
+                    path.starts_with(gi.path())
+                        && gi.matched_path_or_any_parents(path, is_dir).is_ignore()
+                })
+            }
         })
         .threads(rayon::current_num_threads().min(8))
         .build_parallel();
@@ -378,7 +420,6 @@ fn find_untracked_files(
             #[cfg(windows)]
             let unix_str: &str = &unix_str_owned;
 
-            // Binary search directly on the borrowed slices — no cloned Strings.
             let in_ls_tree = ls_tree_hashes
                 .binary_search_by(|(p, _)| p.as_str().cmp(unix_str))
                 .is_ok();
@@ -398,19 +439,53 @@ fn find_untracked_files(
     });
     drop(tx);
 
-    let mut untracked = Vec::new();
+    let mut untracked: Vec<RelativeUnixPathBuf> = Vec::new();
     for batch in rx.iter() {
         untracked.extend(batch);
+    }
+
+    // Post-filter: check for untracked .gitignore files that we couldn't
+    // know about during the walk. If any exist, build per-directory matchers
+    // from them and remove files that should be ignored.
+    let untracked_gitignores: Vec<&RelativeUnixPathBuf> = untracked
+        .iter()
+        .filter(|p| p.as_str().ends_with(".gitignore"))
+        .collect();
+
+    if !untracked_gitignores.is_empty() {
+        let mut extra_matchers: Vec<ignore::gitignore::Gitignore> = Vec::new();
+        for gi_path in &untracked_gitignores {
+            let abs = root.join(gi_path.as_str());
+            let gi_dir = abs.parent().unwrap_or(root);
+            let mut builder = ignore::gitignore::GitignoreBuilder::new(gi_dir);
+            let _ = builder.add(&abs);
+            if let Ok(gi) = builder.build()
+                && !gi.is_empty()
+            {
+                extra_matchers.push(gi);
+            }
+        }
+        if !extra_matchers.is_empty() {
+            untracked.retain(|p| {
+                if p.as_str().ends_with(".gitignore") {
+                    return true;
+                }
+                let abs = root.join(p.as_str());
+                !extra_matchers.iter().any(|gi| {
+                    abs.starts_with(gi.path())
+                        && gi.matched_path_or_any_parents(&abs, false).is_ignore()
+                })
+            });
+        }
     }
 
     Ok(untracked)
 }
 
-#[cfg(feature = "gix")]
 enum EntryClassification {
     Clean {
         path: RelativeUnixPathBuf,
-        oid: String,
+        oid: OidHash,
     },
     Modified {
         path: RelativeUnixPathBuf,
@@ -432,10 +507,14 @@ mod tests {
         RelativeUnixPathBuf::new(s).unwrap()
     }
 
+    fn pad_hex(s: &str) -> String {
+        format!("{:0<40}", s)
+    }
+
     fn make_index(ls_tree: Vec<(&str, &str)>, status: Vec<(&str, bool)>) -> RepoGitIndex {
         let mut ls_tree_hashes: SortedGitHashes = ls_tree
             .into_iter()
-            .map(|(p, h)| (path(p), h.to_string()))
+            .map(|(p, h)| (path(p), OidHash::from_hex_str(&pad_hex(h))))
             .collect::<Vec<_>>();
         ls_tree_hashes.sort_by(|(a, _), (b, _)| a.cmp(b));
         let mut status_entries: Vec<RepoStatusEntry> = status
@@ -480,8 +559,8 @@ mod tests {
         );
         let (hashes, to_hash) = index.get_package_hashes(&path("apps/web")).unwrap();
         assert_eq!(hashes.len(), 2);
-        assert_eq!(hashes.get(&path("src/index.ts")).unwrap(), "aaa");
-        assert_eq!(hashes.get(&path("package.json")).unwrap(), "bbb");
+        assert_eq!(*hashes.get(&path("src/index.ts")).unwrap(), *pad_hex("aaa"));
+        assert_eq!(*hashes.get(&path("package.json")).unwrap(), *pad_hex("bbb"));
         assert!(to_hash.is_empty());
     }
 
@@ -637,7 +716,7 @@ mod tests {
         let index = make_index(ls_tree_data, vec![]);
         let (hashes, to_hash) = index.get_package_hashes(&path("")).unwrap();
         assert_eq!(hashes.len(), 3);
-        assert_eq!(hashes.get(&path("a.ts")).unwrap(), "111");
+        assert_eq!(*hashes.get(&path("a.ts")).unwrap(), *pad_hex("111"));
         assert!(to_hash.is_empty());
     }
 

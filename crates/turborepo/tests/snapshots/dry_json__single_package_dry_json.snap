@@ -1,0 +1,95 @@
+---
+source: crates/turborepo/tests/dry_json.rs
+expression: json
+---
+{
+  "id": "[id]",
+  "version": "1",
+  "turboVersion": "[turboVersion]",
+  "monorepo": false,
+  "globalCacheInputs": {
+    "rootKey": "I can’t see ya, but I know you’re here",
+    "files": {
+      "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
+      "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
+      "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057"
+    },
+    "hashOfExternalDependencies": "",
+    "hashOfInternalDependencies": "",
+    "environmentVariables": {
+      "specified": {
+        "env": [],
+        "passThroughEnv": null
+      },
+      "configured": [],
+      "inferred": [],
+      "passthrough": null
+    },
+    "engines": null
+  },
+  "envMode": "strict",
+  "frameworkInference": true,
+  "tasks": [
+    {
+      "taskId": "build",
+      "task": "build",
+      "hash": "99180a8fe2df621b",
+      "inputs": {
+        ".gitignore": "03b541460c1b836f96f9c0a941ceb48e91a9fd83",
+        "package-lock.json": "1c117cce37347befafe3a9cba1b8a609b3600021",
+        "package.json": "8606ff4b95a5330740d8d9d0948faeada64f1f32",
+        "somefile.txt": "45b983be36b73c0788dc9cbcb76cbb80fc7bb057",
+        "turbo.json": "7c63f35ef4a45cec9b74cacb44c5f0211c50d8f5"
+      },
+      "hashOfExternalDependencies": "",
+      "cache": {
+        "local": false,
+        "remote": false,
+        "status": "MISS",
+        "timeSaved": 0
+      },
+      "command": "echo building > foo.txt",
+      "cliArguments": [],
+      "outputs": [
+        "foo.txt"
+      ],
+      "excludedOutputs": null,
+      "logFile": ".turbo/turbo-build.log",
+      "dependencies": [],
+      "dependents": [],
+      "with": [],
+      "resolvedTaskDefinition": {
+        "outputs": [
+          "foo.txt"
+        ],
+        "cache": true,
+        "dependsOn": [],
+        "inputs": [],
+        "outputLogs": "full",
+        "persistent": false,
+        "interruptible": false,
+        "env": [],
+        "passThroughEnv": null,
+        "interactive": false
+      },
+      "expandedOutputs": [],
+      "framework": "",
+      "envMode": "strict",
+      "environmentVariables": {
+        "specified": {
+          "env": [],
+          "passThroughEnv": null
+        },
+        "configured": [],
+        "inferred": [],
+        "passthrough": null
+      }
+    }
+  ],
+  "user": "[user]",
+  "scm": {
+    "type": "git",
+    "sha": "[sha]",
+    "branch": "[branch]"
+  }
+}

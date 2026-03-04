@@ -2,8 +2,11 @@
   "name": "reproduce",
   "version": "0.0.0",
   "private": true,
-  "packageManager": "yarn@4.1.0",
   "workspaces": [
     "packages/*"
-  ]
+  ],
+  "resolutions": {
+    "react": "18.2.0"
+  },
+  "packageManager": "yarn@4.1.0"
 }

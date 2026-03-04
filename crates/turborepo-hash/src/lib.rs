@@ -4,11 +4,13 @@
 //! deterministic serialization across languages and platforms, then applies
 //! xxHash64 for fast hashing.
 
+mod oid_hash;
 mod traits;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use capnp::message::{Builder, HeapAllocator};
+pub use oid_hash::OidHash;
 pub use traits::TurboHash;
 // Re-export for backward compatibility. New code should import from `turborepo_types`.
 #[deprecated(
@@ -58,7 +60,7 @@ pub type EnvironmentVariablePairs = Vec<String>;
 pub struct TaskHashable<'a> {
     // hashes
     pub global_hash: &'a str,
-    pub task_dependency_hashes: Vec<String>,
+    pub task_dependency_hashes: Vec<Arc<str>>,
     pub hash_of_files: &'a str,
     pub external_deps_hash: Option<&'a str>,
 
@@ -108,7 +110,7 @@ pub struct LockFilePackages(pub Vec<turborepo_lockfiles::Package>);
 pub struct LockFilePackagesRef<'a>(pub Vec<&'a turborepo_lockfiles::Package>);
 
 #[derive(Debug, Clone)]
-pub struct FileHashes(pub Vec<(turbopath::RelativeUnixPathBuf, String)>);
+pub struct FileHashes(pub Vec<(turbopath::RelativeUnixPathBuf, OidHash)>);
 
 /// Wrapper type for TaskOutputs to enable capnp serialization.
 /// This is needed due to Rust's orphan rule - we can't implement From
@@ -244,7 +246,7 @@ impl From<FileHashes> for Builder<HeapAllocator> {
             for (i, (key, value)) in file_hashes.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
                 entry.set_key(key.as_str());
-                entry.set_value(value);
+                entry.set_value(&**value);
             }
         }
 
@@ -286,7 +288,7 @@ impl From<&FileHashes> for Builder<HeapAllocator> {
             for (i, (key, value)) in file_hashes.iter().enumerate() {
                 let mut entry = entries.reborrow().get(i as u32);
                 entry.set_key(key.as_str());
-                entry.set_value(value);
+                entry.set_value(&**value);
             }
         }
 
@@ -338,7 +340,7 @@ impl From<TaskHashable<'_>> for Builder<HeapAllocator> {
                 .reborrow()
                 .init_task_dependency_hashes(task_hashable.task_dependency_hashes.len() as u32);
             for (i, hash) in task_hashable.task_dependency_hashes.iter().enumerate() {
-                task_dependency_hashes_builder.set(i as u32, hash);
+                task_dependency_hashes_builder.set(i as u32, &**hash);
             }
         }
 
@@ -497,19 +499,22 @@ impl From<GlobalHashable<'_>> for Builder<HeapAllocator> {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
     use test_case::test_case;
     use turborepo_lockfiles::Package;
     use turborepo_types::{EnvMode, TaskOutputs};
 
     use super::{
-        FileHashes, GlobalHashable, LockFilePackages, LockFilePackagesRef, TaskHashable, TurboHash,
+        FileHashes, GlobalHashable, LockFilePackages, LockFilePackagesRef, OidHash, TaskHashable,
+        TurboHash,
     };
 
     #[test]
     fn task_hashable() {
         let task_hashable = TaskHashable {
             global_hash: "global_hash",
-            task_dependency_hashes: vec!["task_dependency_hash".to_string()],
+            task_dependency_hashes: vec![Arc::from("task_dependency_hash")],
             package_dir: Some(turbopath::RelativeUnixPathBuf::new("package_dir").unwrap()),
             hash_of_files: "hash_of_files",
             external_deps_hash: Some("external_deps_hash"),
@@ -526,6 +531,36 @@ mod test {
         };
 
         assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
+    }
+
+    #[test]
+    fn task_hashable_multiple_dependency_hashes() {
+        let task_hashable = TaskHashable {
+            global_hash: "global_hash",
+            task_dependency_hashes: vec![
+                Arc::from("dep_hash_a"),
+                Arc::from("dep_hash_b"),
+                Arc::from("dep_hash_c"),
+            ],
+            package_dir: Some(turbopath::RelativeUnixPathBuf::new("package_dir").unwrap()),
+            hash_of_files: "hash_of_files",
+            external_deps_hash: Some("external_deps_hash"),
+            task: "task",
+            outputs: TaskOutputs {
+                inclusions: vec!["inclusions".to_string()],
+                exclusions: vec!["exclusions".to_string()],
+            },
+            pass_through_args: &["pass_thru_args".to_string()],
+            env: &["env".to_string()],
+            resolved_env_vars: vec![],
+            pass_through_env: &["pass_thru_env".to_string()],
+            env_mode: EnvMode::Strict,
+        };
+
+        let hash = task_hashable.hash();
+        assert!(!hash.is_empty());
+        // Pin the hash so any serialization change is caught
+        assert_eq!(hash, "7676d7bb7c86d257");
     }
 
     #[test]
@@ -591,39 +626,46 @@ mod test {
         lock_file_packages(packages.collect(), "4fd770c37194168e");
     }
 
-    fn sorted_file_hashes(pairs: Vec<(String, String)>) -> FileHashes {
-        let mut v: Vec<_> = pairs
+    fn sorted_file_hashes(pairs: Vec<(&str, &str)>) -> FileHashes {
+        let mut v: Vec<(turbopath::RelativeUnixPathBuf, OidHash)> = pairs
             .into_iter()
-            .map(|(a, b)| (turbopath::RelativeUnixPathBuf::new(a).unwrap(), b))
+            .map(|(a, b)| {
+                (
+                    turbopath::RelativeUnixPathBuf::new(a).unwrap(),
+                    OidHash::from_hex_str(b),
+                )
+            })
             .collect();
         v.sort_by(|(a, _), (b, _)| a.cmp(b));
         FileHashes(v)
     }
 
+    // OID-sized test hashes (40 hex chars each)
+    const OID_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const OID_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+    const OID_C: &str = "cccccccccccccccccccccccccccccccccccccccc";
+    const OID_D: &str = "dddddddddddddddddddddddddddddddddddddddd";
+
     #[test_case(vec![], "459c029558afe716" ; "empty")]
     #[test_case(vec![
-        ("a".to_string(), "b".to_string()),
-        ("c".to_string(), "d".to_string()),
-    ], "c9301c0bf1899c07" ; "non-empty")]
+        ("a", OID_A),
+        ("c", OID_B),
+    ], "03e24e42bd35dcaf" ; "non-empty")]
     #[test_case(vec![
-        ("c".to_string(), "d".to_string()),
-        ("a".to_string(), "b".to_string()),
-    ], "c9301c0bf1899c07" ; "order resistant")]
-    fn file_hashes(pairs: Vec<(String, String)>, expected: &str) {
+        ("c", OID_B),
+        ("a", OID_A),
+    ], "03e24e42bd35dcaf" ; "order resistant")]
+    fn file_hashes(pairs: Vec<(&str, &str)>, expected: &str) {
         assert_eq!(sorted_file_hashes(pairs).hash(), expected);
     }
 
     #[test]
     fn file_hashes_ref_matches_owned() {
-        let file_hashes = sorted_file_hashes(vec![
-            ("c".to_string(), "d".to_string()),
-            ("a".to_string(), "b".to_string()),
-        ]);
+        let file_hashes = sorted_file_hashes(vec![("c", OID_B), ("a", OID_A)]);
 
         let ref_hash = (&file_hashes).hash();
         let owned_hash = file_hashes.hash();
         assert_eq!(ref_hash, owned_hash);
-        assert_eq!(ref_hash, "c9301c0bf1899c07");
     }
 
     #[test]
@@ -636,7 +678,7 @@ mod test {
                     (
                         turbopath::RelativeUnixPathBuf::new(format!("path/to/file_{i:03}"))
                             .unwrap(),
-                        format!("hash_{i}"),
+                        OidHash::from_hex_str(&format!("{i:040x}")),
                     )
                 })
                 .collect(),
@@ -685,35 +727,21 @@ mod test {
     }
 
     // Regression: FileHashes constructed from a pre-sorted Vec must produce
-    // identical hashes to FileHashes constructed from a HashMap. This captures
-    // the invariant that must hold when switching FileHashes from HashMap to
-    // sorted Vec.
-    // Regression: sorted Vec construction must produce identical hashes to what
-    // the old HashMap-based construction produced. Pinned hash values.
+    // identical hashes regardless of input order.
     #[test]
     fn file_hashes_sorted_vec_pinned_values() {
-        let pairs = [
-            ("c/z.ts", "hash_cz"),
-            ("a/b.ts", "hash_ab"),
-            ("a/a.ts", "hash_aa"),
-            ("b.ts", "hash_b"),
+        let pairs = vec![
+            ("c/z.ts", OID_C),
+            ("a/b.ts", OID_A),
+            ("a/a.ts", OID_B),
+            ("b.ts", OID_D),
         ];
 
-        let fh = sorted_file_hashes(
-            pairs
-                .iter()
-                .map(|(p, h)| (p.to_string(), h.to_string()))
-                .collect(),
-        );
+        let fh = sorted_file_hashes(pairs.clone());
         let hash = fh.hash();
 
         // Verify ref and owned produce same hash
-        let fh2 = sorted_file_hashes(
-            pairs
-                .iter()
-                .map(|(p, h)| (p.to_string(), h.to_string()))
-                .collect(),
-        );
+        let fh2 = sorted_file_hashes(pairs);
         assert_eq!((&fh2).hash(), hash);
     }
 
@@ -721,22 +749,27 @@ mod test {
     // of original insertion order.
     #[test]
     fn file_hashes_large_deterministic() {
-        let fh_forward = sorted_file_hashes(
-            (0..1000)
-                .map(|i| (format!("pkg/file_{:04}", i), format!("{:040x}", i)))
-                .collect(),
-        );
+        let pairs_forward: Vec<_> = (0..1000)
+            .map(|i| {
+                // Leak to get &'static str for the test helper
+                let path: &str = Box::leak(format!("pkg/file_{i:04}").into_boxed_str());
+                let hash: &str = Box::leak(format!("{i:040x}").into_boxed_str());
+                (path, hash)
+            })
+            .collect();
 
-        let fh_reverse = sorted_file_hashes(
-            (0..1000)
-                .rev()
-                .map(|i| (format!("pkg/file_{:04}", i), format!("{:040x}", i)))
-                .collect(),
-        );
+        let pairs_reverse: Vec<_> = (0..1000)
+            .rev()
+            .map(|i| {
+                let path: &str = Box::leak(format!("pkg/file_{i:04}").into_boxed_str());
+                let hash: &str = Box::leak(format!("{i:040x}").into_boxed_str());
+                (path, hash)
+            })
+            .collect();
 
         assert_eq!(
-            fh_forward.hash(),
-            fh_reverse.hash(),
+            sorted_file_hashes(pairs_forward).hash(),
+            sorted_file_hashes(pairs_reverse).hash(),
             "insertion order must not affect hash output"
         );
     }

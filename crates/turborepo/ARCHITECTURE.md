@@ -285,3 +285,85 @@ RunTracker
 2. `ExecutionTracker` aggregates state across all tasks
 3. Final summary includes timing, cache status, errors
 4. Summary is saved to `.turbo/runs/` and optionally printed
+
+### 8. Observability (`crates/turborepo-run-summary/src/observability/` and `crates/turborepo-otel/`)
+
+The observability subsystem enables exporting run metrics to external backends via OpenTelemetry.
+
+#### Architecture
+
+The system uses a two-layer design:
+
+1. **`turborepo-otel`**: Low-level OTLP exporter crate
+   - Manages the OpenTelemetry SDK meter provider and instruments
+   - Supports gRPC and HTTP/Protobuf protocols
+   - Handles connection lifecycle and metric flushing
+
+2. **`turborepo-run-summary/observability`**: Integration layer
+   - Provides a `RunObserver` trait for pluggable backends
+   - Converts `RunSummary` data into metrics payloads
+   - Enabled via the `otel` feature flag
+
+#### Main Components
+
+- `observability::Handle`: Main entry point; wraps backend-specific implementations
+- `RunObserver` trait: Abstraction allowing future backends (Prometheus, etc.)
+- `OtelObserver`: OpenTelemetry implementation of `RunObserver`
+
+#### Configuration
+
+Observability is configured via `experimentalObservability.otel` in `turbo.json`:
+
+```jsonc
+{
+  "futureFlags": {
+    "experimentalObservability": true
+  },
+  "experimentalObservability": {
+    "otel": {
+      "enabled": true,
+      "protocol": "http/protobuf",
+      "endpoint": "https://otel-collector.example.com:4318/v1/metrics",
+      "resource": {
+        "service.name": "turborepo"
+      },
+      "metrics": {
+        "runSummary": true,
+        "taskDetails": true,
+        "runAttributes": {
+          "id": false,        // turbo.run.id — unbounded cardinality
+          "scmRevision": false // turbo.scm.revision — unbounded cardinality
+        },
+        "taskAttributes": {
+          "id": false,    // turbo.task.id
+          "hashes": false // turbo.task.hash, turbo.task.external_inputs_hash — unbounded
+        }
+      }
+    }
+  }
+}
+```
+
+Configuration can also be set via environment variables (`TURBO_EXPERIMENTAL_OTEL_*`) or CLI flags (`--experimental-otel-*`).
+
+#### Metrics Emitted
+
+- `turbo.run.duration_ms` - Run duration histogram
+- `turbo.run.tasks.attempted` - Tasks attempted counter
+- `turbo.run.tasks.failed` - Tasks failed counter
+- `turbo.run.tasks.cached` - Cache hit counter
+- `turbo.task.duration_ms` - Per-task duration histogram (when `taskDetails` enabled)
+- `turbo.task.cache.events` - Per-task cache events (when `taskDetails` enabled)
+
+Attributes with unbounded cardinality (unique run IDs, Git SHAs, content hashes) are gated behind `runAttributes` and `taskAttributes` config flags, all defaulting to `false`. See the `Metric Attributes and Cardinality` section in `crates/turborepo-otel/src/lib.rs` for the full attribute inventory.
+
+#### Data Flow
+
+```
+RunSummary.finish()
+  ├── observability::Handle.record(&summary)
+  │     ├── Convert to RunMetricsPayload
+  │     └── Record via OpenTelemetry instruments
+  └── observability::Handle.shutdown()
+        └── Flush pending metrics to backend
+```

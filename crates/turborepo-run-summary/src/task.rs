@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
@@ -47,7 +47,7 @@ pub struct TaskCacheSummary {
 
 #[derive(Debug, Serialize, Copy, Clone)]
 #[serde(rename_all = "UPPERCASE")]
-enum CacheStatus {
+pub enum CacheStatus {
     Hit,
     Miss,
 }
@@ -87,7 +87,7 @@ pub struct SinglePackageTaskSummary {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedTaskSummary<T> {
-    pub hash: String,
+    pub hash: Arc<str>,
     pub inputs: BTreeMap<RelativeUnixPathBuf, String>,
     pub hash_of_external_dependencies: String,
     pub cache: TaskCacheSummary,
@@ -146,6 +146,19 @@ pub struct TaskEnvVarSummary {
 }
 
 impl TaskCacheSummary {
+    // Used in observability/otel.rs to populate TaskMetricsPayload.cache_status
+    pub(crate) fn status(&self) -> CacheStatus {
+        self.status
+    }
+
+    // Used in observability/otel.rs to populate TaskMetricsPayload.cache_source
+    pub(crate) fn cache_source_label(&self) -> Option<&'static str> {
+        self.source.map(|source| match source {
+            CacheSource::Local => "LOCAL",
+            CacheSource::Remote => "REMOTE",
+        })
+    }
+
     pub fn cache_miss() -> Self {
         Self {
             local: false,

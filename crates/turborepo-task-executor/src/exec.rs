@@ -287,16 +287,14 @@ where
             result = Err(InternalError::Io(e));
         }
 
-        match result {
-            Ok(ExecOutcome::Success(outcome)) => {
-                match outcome {
-                    SuccessOutcome::CacheHit => tracker.cached().await,
-                    SuccessOutcome::Run => tracker.build_succeeded(0).await,
-                };
+        // Send the callback as early as possible after output is flushed.
+        // For cache hits, this unblocks dependent tasks before the tracker
+        // bookkeeping runs, shaving latency off the critical path.
+        match &result {
+            Ok(ExecOutcome::Success(_)) => {
                 callback.send(Ok(())).ok();
             }
-            Ok(ExecOutcome::Task { exit_code, message }) => {
-                tracker.build_failed(exit_code, message).await;
+            Ok(ExecOutcome::Task { .. }) => {
                 callback
                     .send(match self.continue_on_error {
                         ContinueMode::Always => Ok(()),
@@ -304,7 +302,26 @@ where
                         ContinueMode::Never => Err(StopExecution::AllTasks),
                     })
                     .ok();
+            }
+            Ok(ExecOutcome::Shutdown) | Err(_) => {
+                callback.send(Err(StopExecution::AllTasks)).ok();
+            }
+            Ok(ExecOutcome::Restarted) => {
+                callback.send(Err(StopExecution::DependentTasks)).ok();
+            }
+        }
 
+        // Tracker bookkeeping happens after the callback so dependents
+        // can start while we update summaries.
+        match result {
+            Ok(ExecOutcome::Success(outcome)) => {
+                match outcome {
+                    SuccessOutcome::CacheHit => tracker.cached().await,
+                    SuccessOutcome::Run => tracker.build_succeeded(0).await,
+                };
+            }
+            Ok(ExecOutcome::Task { exit_code, message }) => {
+                tracker.build_failed(exit_code, message).await;
                 match self.continue_on_error {
                     ContinueMode::Always | ContinueMode::DependenciesSuccessful => (),
                     ContinueMode::Never => self.manager.stop().await,
@@ -312,16 +329,13 @@ where
             }
             Ok(ExecOutcome::Shutdown) => {
                 tracker.cancel();
-                callback.send(Err(StopExecution::AllTasks)).ok();
                 self.manager.stop().await;
             }
             Ok(ExecOutcome::Restarted) => {
                 tracker.cancel();
-                callback.send(Err(StopExecution::DependentTasks)).ok();
             }
             Err(e) => {
                 tracker.cancel();
-                callback.send(Err(StopExecution::AllTasks)).ok();
                 self.manager.stop().await;
                 return Err(e);
             }

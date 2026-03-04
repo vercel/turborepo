@@ -1,5 +1,3 @@
-use std::backtrace;
-
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
@@ -29,19 +27,19 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Expected `run` command.")]
-    ExpectedRun(#[backtrace] backtrace::Backtrace),
+    ExpectedRun,
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error(
         "Invalid percentage value for `--concurrency` flag. This should be a percentage of CPU \
-         cores, between 1% and 100%: {1}"
+         cores, between 1% and 100%: {0}"
     )]
-    InvalidConcurrencyPercentage(#[backtrace] backtrace::Backtrace, f64),
+    InvalidConcurrencyPercentage(f64),
     #[error(
         "Invalid value for `--concurrency` flag. This should be a positive integer greater than \
-         or equal to 1: {1}"
+         or equal to 1: {0}"
     )]
-    ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
+    ConcurrencyOutOfBounds(String),
     #[error(
         "Cannot set `cache` config and other cache options (`force`, `remoteOnly`, \
          `remoteCacheReadOnly`) at the same time."
@@ -66,6 +64,7 @@ pub struct Opts {
     pub scope_opts: ScopeOpts,
     pub tui_opts: TuiOpts,
     pub future_flags: FutureFlags,
+    pub experimental_observability: Option<crate::config::ExperimentalObservabilityOptions>,
     /// Pre-resolved git root from worktree detection, if available.
     /// Allows `SCM::new` to skip its own `git rev-parse` subprocess.
     pub git_root: Option<AbsoluteSystemPathBuf>,
@@ -182,6 +181,7 @@ impl Opts {
         let repo_opts = RepoOpts::from(inputs);
         let tui_opts = TuiOpts::from(inputs);
         let future_flags = config.future_flags();
+        let experimental_observability = config.experimental_observability().cloned();
 
         Ok(Self {
             repo_opts,
@@ -193,6 +193,7 @@ impl Opts {
             tui_opts,
             future_flags,
             git_root: cache_dir_result.git_root,
+            experimental_observability,
         })
     }
 }
@@ -345,18 +346,12 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
                 .unwrap_or(1);
             Ok((num_cpus as f64 * percent / 100.0).max(1.0) as u32)
         } else {
-            Err(Error::InvalidConcurrencyPercentage(
-                backtrace::Backtrace::capture(),
-                percent,
-            ))
+            Err(Error::InvalidConcurrencyPercentage(percent))
         };
     }
     match concurrency_raw.parse::<u32>() {
         Ok(concurrency) if concurrency >= 1 => Ok(concurrency),
-        Ok(_) | Err(_) => Err(Error::ConcurrencyOutOfBounds(
-            backtrace::Backtrace::capture(),
-            concurrency_raw.to_string(),
-        )),
+        Ok(_) | Err(_) => Err(Error::ConcurrencyOutOfBounds(concurrency_raw.to_string())),
     }
 }
 
@@ -466,9 +461,11 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
         let unused_remote_cache_opts_team_id =
             inputs.config.team_id().map(|team_id| team_id.to_string());
         let signature = inputs.config.signature();
+        let enforce_signature_key_length = inputs.config.future_flags().longer_signature_key;
         let remote_cache_opts = Some(RemoteCacheOpts::new(
             unused_remote_cache_opts_team_id,
             signature,
+            enforce_signature_key_length,
         ));
 
         let cache_opts = CacheOpts {
@@ -737,6 +734,7 @@ mod test {
             runcache_opts,
             tui_opts,
             future_flags: Default::default(),
+            experimental_observability: None,
             git_root: None,
         };
         let synthesized = opts.synthesize_command();

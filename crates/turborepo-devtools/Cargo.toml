@@ -14,7 +14,7 @@ tokio = { workspace = true, features = ["full", "sync"] }
 
 # Web server + WebSocket
 axum = { workspace = true, features = ["ws"] }
-tower-http = { version = "0.5.2", features = ["cors"] }
+tower-http = { version = "0.6", features = ["cors"] }
 
 # Serialization
 serde = { workspace = true, features = ["derive"] }

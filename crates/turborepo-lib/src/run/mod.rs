@@ -30,7 +30,7 @@ use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
-use turborepo_run_summary::RunTracker;
+use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
@@ -78,6 +78,7 @@ pub struct Run {
     should_print_prelude: bool,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: Arc<Option<RepoGitIndex>>,
+    observability_handle: Option<ObservabilityHandle>,
 }
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
@@ -612,9 +613,13 @@ impl Run {
         let mut internal_deps_result = None;
         let mut global_file_result = None;
 
+        let _hash_scope_span = tracing::info_span!("hash_scope").entered();
         rayon::scope(|s| {
             s.spawn(|_| {
                 let _span = tracing::info_span!("calculate_file_hashes_task").entered();
+                let needs_expanded = self.opts.run_opts.dry_run.is_some()
+                    || self.opts.run_opts.summarize
+                    || self.observability_handle.is_some();
                 file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
                     &self.scm,
                     self.engine.tasks(),
@@ -623,6 +628,7 @@ impl Run {
                     &self.repo_root,
                     &self.run_telemetry,
                     repo_index,
+                    needs_expanded,
                 ));
             });
             s.spawn(|_| {
@@ -654,6 +660,8 @@ impl Run {
                 ));
             });
         });
+
+        drop(_hash_scope_span);
 
         let package_inputs_hashes = file_hash_result.expect("file hash task did not complete")?;
         let root_internal_dependencies_hash =
@@ -703,6 +711,7 @@ impl Run {
             self.opts.synthesize_command(),
             self.version,
             Vendor::get_user(),
+            self.observability_handle.clone(),
         );
 
         let mut visitor = Visitor::new(
@@ -853,6 +862,74 @@ impl turborepo_engine::ChildProcess for SharedChildWrapper {
 
     fn wait(&self) -> Result<(), io::Error> {
         self.0.wait().map(|_| ())
+    }
+}
+
+impl turborepo_query::QueryRun for Run {
+    fn version(&self) -> &'static str {
+        self.version
+    }
+
+    fn repo_root(&self) -> &turbopath::AbsoluteSystemPath {
+        &self.repo_root
+    }
+
+    fn pkg_dep_graph(&self) -> &turborepo_repository::package_graph::PackageGraph {
+        &self.pkg_dep_graph
+    }
+
+    fn engine(
+        &self,
+    ) -> &turborepo_engine::Engine<turborepo_engine::Built, turborepo_types::TaskDefinition> {
+        &self.engine
+    }
+
+    fn scm(&self) -> &turborepo_scm::SCM {
+        &self.scm
+    }
+
+    fn root_turbo_json(&self) -> &turborepo_turbo_json::TurboJson {
+        &self.root_turbo_json
+    }
+
+    fn calculate_affected_packages(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> Result<
+        std::collections::HashMap<
+            turborepo_repository::package_graph::PackageName,
+            turborepo_repository::change_mapper::PackageInclusionReason,
+        >,
+        turborepo_query::AffectedPackagesError,
+    > {
+        let mut opts = self.opts.as_ref().clone();
+        opts.scope_opts.affected_range = Some((base, head));
+        builder::RunBuilder::calculate_filtered_packages(
+            &self.repo_root,
+            &opts,
+            &self.pkg_dep_graph,
+            &self.scm,
+            &self.root_turbo_json,
+        )
+        .map_err(|e| turborepo_query::AffectedPackagesError::Other(Box::new(e)))
+    }
+
+    fn check_boundaries(
+        &self,
+        show_progress: bool,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        turborepo_boundaries::BoundariesResult,
+                        turborepo_boundaries::Error,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(self.check_boundaries(show_progress))
     }
 }
 

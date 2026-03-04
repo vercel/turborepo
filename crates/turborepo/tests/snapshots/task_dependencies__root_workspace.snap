@@ -1,0 +1,23 @@
+---
+source: crates/turborepo/tests/task_dependencies.rs
+expression: stdout.to_string()
+---
+• Packages in scope: //, lib-a
+• Running mytask in 2 packages
+• Remote caching disabled
+lib-a:build: cache miss, executing eddc59f63124ca26
+lib-a:build: 
+lib-a:build: > build
+lib-a:build: > echo build-lib-a
+lib-a:build: 
+lib-a:build: build-lib-a
+//:mytask: cache miss, executing 168c3aacff2835ea
+//:mytask: 
+//:mytask: > mytask
+//:mytask: > echo root-mytask
+//:mytask: 
+//:mytask: root-mytask
+
+ Tasks:    2 successful, 2 total
+Cached:    0 cached, 2 total
+  Time:    [TIME]

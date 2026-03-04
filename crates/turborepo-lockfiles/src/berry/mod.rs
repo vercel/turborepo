@@ -252,21 +252,14 @@ impl BerryLockfile {
             packages.insert(key, package.clone());
         }
 
-        // If there aren't any checksums in the lockfile, then cache key is omitted
-        let mut no_checksum = true;
-        for pkg in self.resolutions.values().map(|locator| {
-            self.locator_package
-                .get(locator)
-                .ok_or_else(|| Error::MissingPackageForLocator(locator.as_owned()))
-        }) {
-            let pkg = pkg?;
-            no_checksum = pkg.checksum.is_none();
-            if !no_checksum {
-                break;
+        // Yarn v6 (Berry 3.x) strips cacheKey when a pruned subgraph contains
+        // only workspace packages (no checksums). Yarn v8 (Berry 4.x) always
+        // keeps it. Match each version's behavior so frozen installs pass.
+        if metadata.version == "6" {
+            let has_checksum = packages.values().any(|pkg| pkg.checksum.is_some());
+            if !has_checksum {
+                metadata.cache_key = None;
             }
-        }
-        if no_checksum {
-            metadata.cache_key = None;
         }
 
         Ok(LockfileData { metadata, packages })
@@ -373,13 +366,80 @@ impl BerryLockfile {
             }
         }
 
-        // Add any descriptors used by package extensions
-        for descriptor in &self.extensions {
-            let locator = self
-                .resolutions
-                .get(descriptor)
-                .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
-            resolutions.insert(descriptor.clone(), locator.clone());
+        // Include extension descriptors only when the package they were
+        // injected into is present in the pruned graph. Extensions come from
+        // Yarn's built-in packageExtensions (plugin-compat), which inject
+        // invisible dependencies into certain packages. The lockfile stores
+        // resolution entries for these injected deps but doesn't record which
+        // package triggered them.
+        //
+        // We approximate the association by checking if any package in the
+        // pruned transitive closure depends on a package whose name matches
+        // the extension's ident (or, for @types/* extensions, the unscoped
+        // name). This works because packageExtensions typically add @types/X
+        // to packages that depend on X, or add package Y to packages that
+        // logically need Y.
+        {
+            // Collect all dependency names from packages in the pruned closure
+            let mut dep_names_in_closure: HashSet<String> = HashSet::new();
+            for key in packages {
+                if let Ok(pkg_locator) = Locator::try_from(key.as_str())
+                    && let Some(pkg) = self.locator_package.get(&pkg_locator)
+                {
+                    for (name, _) in pkg.dependencies.iter().flatten() {
+                        dep_names_in_closure.insert(name.to_string());
+                    }
+                }
+            }
+            // Also include dep names from workspace packages
+            for (locator, package) in &self.locator_package {
+                if workspace_packages
+                    .iter()
+                    .map(|s| s.as_str())
+                    .chain(iter::once("."))
+                    .any(|path| locator.is_workspace_path(path))
+                {
+                    for (name, _) in package.dependencies.iter().flatten() {
+                        dep_names_in_closure.insert(name.to_string());
+                    }
+                }
+            }
+
+            for descriptor in &self.extensions {
+                let locator = self
+                    .resolutions
+                    .get(descriptor)
+                    .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
+
+                let ident = descriptor.ident.to_string();
+
+                // For @types/X extensions, check if X is a dep in the closure.
+                // For other extensions, check if the ident itself is a dep.
+                let search_name = ident.strip_prefix("@types/").unwrap_or(&ident);
+
+                let needed = dep_names_in_closure.contains(search_name)
+                    || dep_names_in_closure.contains(&ident);
+
+                if needed {
+                    resolutions.insert(descriptor.clone(), locator.clone());
+                    // Include transitive deps of the extension locator
+                    let mut queue = vec![locator.clone()];
+                    while let Some(loc) = queue.pop() {
+                        if let Some(pkg) = self.locator_package.get(&loc) {
+                            for (name, range) in pkg.dependencies.iter().flatten() {
+                                if let Ok(dep_desc) =
+                                    self.resolve_dependency(&loc, name, range.as_ref())
+                                    && let Some(dep_loc) = self.resolutions.get(&dep_desc)
+                                    && !resolutions.contains_key(&dep_desc)
+                                {
+                                    resolutions.insert(dep_desc, dep_loc.clone());
+                                    queue.push(dep_loc.clone());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Ok(Self {
@@ -701,6 +761,214 @@ mod test {
                 malicious_version
             );
         }
+    }
+
+    #[test]
+    fn test_npm_alias_does_not_resolve_to_workspace() {
+        // Regression test for https://github.com/vercel/turborepo/issues/8989
+        // When a dependency uses `npm:buffer@6.0.3`, it should resolve to the
+        // npm package, not the workspace with the same name.
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  dependencies:
+    buffer: "npm:buffer@6.0.3"
+  languageName: unknown
+  linkType: soft
+
+"base64-js@npm:^1.3.1":
+  version: 1.5.1
+  resolution: "base64-js@npm:1.5.1"
+  checksum: 10c0-abc123
+  languageName: node
+  linkType: hard
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"buffer@npm:buffer@6.0.3":
+  version: 6.0.3
+  resolution: "buffer@npm:6.0.3"
+  dependencies:
+    base64-js: "npm:^1.3.1"
+    ieee754: "npm:^1.2.1"
+  checksum: 10c0-def456
+  languageName: node
+  linkType: hard
+
+"buffer@workspace:packages/buffer":
+  version: 0.0.0-use.local
+  resolution: "buffer@workspace:packages/buffer"
+  languageName: unknown
+  linkType: soft
+
+"ieee754@npm:^1.2.1":
+  version: 1.2.1
+  resolution: "ieee754@npm:1.2.1"
+  checksum: 10c0-ghi789
+  languageName: node
+  linkType: hard
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        // Resolving "buffer" with version "npm:buffer@6.0.3" from workspace "a"
+        // should return the npm package, not the workspace.
+        let resolved = lockfile
+            .resolve_package("packages/a", "buffer", "npm:buffer@6.0.3")
+            .unwrap();
+        assert!(resolved.is_some(), "should resolve the npm alias package");
+        let pkg = resolved.unwrap();
+        assert_eq!(pkg.key, "buffer@npm:6.0.3");
+        assert_eq!(pkg.version, "6.0.3");
+
+        // Pruning for workspace "a" should include the npm buffer package
+        let subgraph = lockfile
+            .subgraph(
+                &["packages/a".to_string()],
+                &["buffer@npm:6.0.3".to_string()],
+            )
+            .unwrap();
+        let encoded = String::from_utf8(subgraph.encode().unwrap()).unwrap();
+        assert!(
+            encoded.contains("buffer@npm:buffer@6.0.3"),
+            "pruned lockfile should contain the npm alias entry"
+        );
+    }
+
+    #[test]
+    fn test_prune_with_patch_resolution() {
+        // Regression test for https://github.com/vercel/turborepo/issues/3273
+        // Berry lockfiles with patched dependencies via resolutions should
+        // prune correctly without panicking.
+        //
+        // When a resolution override points to a patch, the lockfile entry
+        // for the unpatched package uses the resolved version (not the range)
+        // because yarn resolves the override before writing the lockfile.
+        let yaml = r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  dependencies:
+    lodash: ^4.17.21
+  languageName: unknown
+  linkType: soft
+
+"lodash@npm:4.17.21":
+  version: 4.17.21
+  resolution: "lodash@npm:4.17.21"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+
+"lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch::locator=root%40workspace%3A.":
+  version: 4.17.21
+  resolution: "lodash@patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch::version=4.17.21&hash=2c6e9e&locator=root%40workspace%3A."
+  checksum: def456
+  languageName: node
+  linkType: hard
+"#;
+
+        let resolutions: HashMap<String, String> = HashMap::from([(
+            "lodash@^4.17.21".to_string(),
+            "patch:lodash@npm%3A4.17.21#./.yarn/patches/lodash-npm-4.17.21-6382451519.patch"
+                .to_string(),
+        )]);
+        let manifest = BerryManifest::with_resolutions(resolutions);
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        let result = lockfile.subgraph(
+            &["packages/a".to_string()],
+            &["lodash@npm:4.17.21".to_string()],
+        );
+        assert!(
+            result.is_ok(),
+            "subgraph should not panic or error: {:?}",
+            result.err()
+        );
+        let pruned = result.unwrap();
+        let encoded = String::from_utf8(pruned.encode().unwrap()).unwrap();
+        assert!(
+            encoded.contains("lodash@npm:4.17.21"),
+            "pruned lockfile should contain lodash"
+        );
+    }
+
+    #[test]
+    fn test_prune_with_scoped_patch_resolution() {
+        // Regression test for https://github.com/vercel/turborepo/issues/3273
+        // Scoped packages with patches (e.g. @google-cloud/datastore) should
+        // work correctly during prune.
+        let yaml = r#"__metadata:
+  version: 6
+  cacheKey: 8c0
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  dependencies:
+    "@google-cloud/datastore": ^7.0.0
+  languageName: unknown
+  linkType: soft
+
+"@google-cloud/datastore@npm:7.0.0":
+  version: 7.0.0
+  resolution: "@google-cloud/datastore@npm:7.0.0"
+  checksum: abc123
+  languageName: node
+  linkType: hard
+
+"@google-cloud/datastore@patch:@google-cloud/datastore@npm%3A7.0.0#./.yarn/patches/@google-cloud-datastore-npm-7.0.0-994584c630.patch::locator=root%40workspace%3A.":
+  version: 7.0.0
+  resolution: "@google-cloud/datastore@patch:@google-cloud/datastore@npm%3A7.0.0#./.yarn/patches/@google-cloud-datastore-npm-7.0.0-994584c630.patch::version=7.0.0&hash=abc123&locator=root%40workspace%3A."
+  checksum: def456
+  languageName: node
+  linkType: hard
+"#;
+
+        let resolutions: HashMap<String, String> = HashMap::from([(
+            "@google-cloud/datastore@^7.0.0".to_string(),
+            "patch:@google-cloud/datastore@npm%3A7.0.0#./.yarn/patches/@\
+             google-cloud-datastore-npm-7.0.0-994584c630.patch"
+                .to_string(),
+        )]);
+        let manifest = BerryManifest::with_resolutions(resolutions);
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        let result = lockfile.subgraph(
+            &["packages/a".to_string()],
+            &["@google-cloud/datastore@npm:7.0.0".to_string()],
+        );
+        assert!(
+            result.is_ok(),
+            "subgraph should not panic or error: {:?}",
+            result.err()
+        );
     }
 
     #[test]

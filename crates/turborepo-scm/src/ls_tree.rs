@@ -6,13 +6,13 @@ use std::{
 use nom::Finish;
 use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{Error, GitHashes, GitRepo, wait_for_success};
+use crate::{Error, GitHashes, GitRepo, OidHash, wait_for_success};
 
 /// Sorted list of (path, hash) pairs from `git ls-tree`. Uses a `Vec` instead
 /// of `BTreeMap` because git output is already sorted by pathname, giving us
 /// free insertion order with better cache locality for the `partition_point`
 /// range lookups performed in `RepoGitIndex::get_package_hashes`.
-pub(crate) type SortedGitHashes = Vec<(RelativeUnixPathBuf, String)>;
+pub(crate) type SortedGitHashes = Vec<(RelativeUnixPathBuf, OidHash)>;
 
 impl GitRepo {
     #[tracing::instrument(skip(self))]
@@ -40,54 +40,6 @@ impl GitRepo {
     }
 
     /// Run `git ls-tree` once at the git repo root, returning all committed
-    /// file hashes in a sorted Vec for efficient prefix-range lookups.
-    ///
-    /// Uses libgit2 to walk the HEAD tree in-process, avoiding the overhead
-    /// of spawning a git subprocess.
-    #[cfg(feature = "git2")]
-    #[tracing::instrument(skip(self))]
-    pub fn git_ls_tree_repo_root_sorted(&self) -> Result<SortedGitHashes, Error> {
-        let repo = git2::Repository::open(self.root.as_std_path())
-            .map_err(|e| Error::git2_error_context(e, "opening repo for ls-tree".into()))?;
-        let head = repo
-            .head()
-            .map_err(|e| Error::git2_error_context(e, "resolving HEAD".into()))?;
-        let tree = head
-            .peel_to_tree()
-            .map_err(|e| Error::git2_error_context(e, "peeling HEAD to tree".into()))?;
-
-        let mut hashes = Vec::new();
-        let mut path_buf = String::with_capacity(128);
-        let mut hex_buf = [0u8; 40];
-        tree.walk(git2::TreeWalkMode::PreOrder, |dir, entry| {
-            if entry.kind() == Some(git2::ObjectType::Blob) {
-                let name = match entry.name() {
-                    Some(n) => n,
-                    None => return git2::TreeWalkResult::Ok,
-                };
-                path_buf.clear();
-                path_buf.push_str(dir);
-                path_buf.push_str(name);
-                if let Ok(path) = RelativeUnixPathBuf::new(path_buf.clone()) {
-                    hex::encode_to_slice(entry.id().as_bytes(), &mut hex_buf).unwrap();
-                    // SAFETY: hex output is always valid ASCII
-                    let hash = unsafe { std::str::from_utf8_unchecked(&hex_buf) }.to_string();
-                    hashes.push((path, hash));
-                }
-            }
-            git2::TreeWalkResult::Ok
-        })
-        .map_err(|e| Error::git2_error_context(e, "walking tree".into()))?;
-
-        // git2 tree walk is in pre-order which is lexicographic within each
-        // directory level, but the flattened paths may not be globally sorted
-        // (e.g. "a/b" vs "a.txt"). Sort to maintain the binary-search invariant.
-        hashes.sort_by(|(a, _), (b, _)| a.cmp(b));
-
-        Ok(hashes)
-    }
-
-    /// Run `git ls-tree` once at the git repo root, returning all committed
     /// file hashes keyed by git-root-relative paths.
     #[tracing::instrument(skip(self))]
     pub fn git_ls_tree_repo_root(&self) -> Result<GitHashes, Error> {
@@ -105,7 +57,7 @@ fn read_ls_tree<R: Read>(reader: R, hashes: &mut GitHashes) -> Result<(), Error>
         let filename = std::str::from_utf8(entry.filename)
             .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree filename: {e}")))?;
         let path = RelativeUnixPathBuf::new(filename)?;
-        hashes.insert(path, hash.to_owned());
+        hashes.insert(path, OidHash::from_hex_str(hash));
         buffer.clear();
     }
     Ok(())
@@ -122,7 +74,7 @@ fn read_ls_tree_sorted<R: Read>(reader: R, hashes: &mut SortedGitHashes) -> Resu
         let filename = std::str::from_utf8(entry.filename)
             .map_err(|e| Error::git_error(format!("invalid utf8 in ls-tree filename: {e}")))?;
         let path = RelativeUnixPathBuf::new(filename)?;
-        hashes.push((path, hash.to_owned()));
+        hashes.push((path, OidHash::from_hex_str(hash)));
         buffer.clear();
     }
     debug_assert!(
@@ -167,20 +119,26 @@ mod tests {
 
     use turbopath::RelativeUnixPathBuf;
 
-    use crate::{GitHashes, ls_tree::read_ls_tree};
+    use crate::{GitHashes, OidHash, ls_tree::read_ls_tree};
 
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(
-            pairs
-                .iter()
-                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
-        )
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
+            (
+                RelativeUnixPathBuf::new(*path).unwrap(),
+                OidHash::from_hex_str(hash),
+            )
+        }))
     }
 
     fn to_sorted_hashes(pairs: &[(&str, &str)]) -> super::SortedGitHashes {
         pairs
             .iter()
-            .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string()))
+            .map(|(path, hash)| {
+                (
+                    RelativeUnixPathBuf::new(*path).unwrap(),
+                    OidHash::from_hex_str(hash),
+                )
+            })
             .collect()
     }
 

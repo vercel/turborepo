@@ -6,11 +6,12 @@ use std::{
 };
 
 use chrono::Local;
-use tracing::debug;
+use tracing::Instrument;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_analytics::{start_analytics, AnalyticsHandle, AnalyticsSender};
+use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
+use turborepo_daemon::{DaemonClient, DaemonConnector};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -20,6 +21,7 @@ use turborepo_repository::{
     package_json,
     package_json::PackageJson,
 };
+use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
 use turborepo_signals::SignalHandler;
 use turborepo_task_id::TaskName;
@@ -49,8 +51,7 @@ pub struct RunBuilder {
     repo_root: AbsoluteSystemPathBuf,
     color_config: ColorConfig,
     version: &'static str,
-    api_client: APIClient,
-    analytics_sender: Option<AnalyticsSender>,
+    http_client_cell: Arc<tokio::sync::OnceCell<reqwest::Client>>,
     // In watch mode, we can have a changed package that we want to serve as an entrypoint.
     // We will then prune away any tasks that do not depend on tasks inside
     // this package.
@@ -60,16 +61,21 @@ pub struct RunBuilder {
     should_validate_engine: bool,
     // If true, we will add all tasks to the graph, even if they are not specified
     add_all_tasks: bool,
+    // When running under `turbo watch`, a daemon client is needed so that
+    // the run cache can register output globs and skip restoring outputs
+    // that are already on disk. Without this, cache restores write files
+    // that trigger the file watcher, causing an infinite rebuild loop.
+    daemon_client: Option<DaemonClient<DaemonConnector>>,
 }
 
 impl RunBuilder {
     #[tracing::instrument(skip_all)]
-    pub fn new(base: CommandBase, http_client: Option<&reqwest::Client>) -> Result<Self, Error> {
-        let api_client = match http_client {
-            Some(client) => base.api_client_with_http(client),
-            None => base.api_client()?,
-        };
-
+    pub fn new(
+        base: CommandBase,
+        http_client_cell: Option<Arc<tokio::sync::OnceCell<reqwest::Client>>>,
+    ) -> Result<Self, Error> {
+        let http_client_cell =
+            http_client_cell.unwrap_or_else(|| Arc::new(tokio::sync::OnceCell::new()));
         let opts = base.opts();
         let api_auth = base.api_auth()?;
 
@@ -92,21 +98,26 @@ impl RunBuilder {
         Ok(Self {
             processes,
             opts,
-            api_client,
+            http_client_cell,
             repo_root,
             color_config: ui,
             version,
             api_auth,
-            analytics_sender: None,
             entrypoint_packages: None,
             should_print_prelude_override: None,
             should_validate_engine: true,
             add_all_tasks: false,
+            daemon_client: None,
         })
     }
 
     pub fn with_entrypoint_packages(mut self, entrypoint_packages: HashSet<PackageName>) -> Self {
         self.entrypoint_packages = Some(entrypoint_packages);
+        self
+    }
+
+    pub fn with_daemon_client(mut self, client: DaemonClient<DaemonConnector>) -> Self {
+        self.daemon_client = Some(client);
         self
     }
 
@@ -127,11 +138,6 @@ impl RunBuilder {
 
     fn will_execute_tasks(&self) -> bool {
         self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
-    }
-
-    pub fn with_analytics_sender(mut self, analytics_sender: Option<AnalyticsSender>) -> Self {
-        self.analytics_sender = analytics_sender;
-        self
     }
 
     pub fn calculate_filtered_packages(
@@ -167,30 +173,35 @@ impl RunBuilder {
                     break;
                 }
             }
+
+            // When all tasks use package#task syntax, we can narrow the package
+            // set to only the referenced packages rather than the entire monorepo.
+            let task_names: Vec<TaskName> = opts
+                .run_opts
+                .tasks
+                .iter()
+                .map(|t| TaskName::from(t.as_str()))
+                .collect();
+            let all_package_qualified =
+                !task_names.is_empty() && task_names.iter().all(|t| t.is_package_task());
+            if all_package_qualified {
+                let target_packages: HashSet<PackageName> = task_names
+                    .iter()
+                    .filter_map(|t| t.package().map(PackageName::from))
+                    .collect();
+                filtered_pkgs.retain(|pkg, _| target_packages.contains(pkg));
+            }
         };
 
         Ok(filtered_pkgs)
     }
 
-    // Starts analytics and returns handle. This is not included in the main `build`
-    // function because we don't want the handle stored in the `Run` struct.
-    pub fn start_analytics(&self) -> (Option<AnalyticsSender>, Option<AnalyticsHandle>) {
-        // If there's no API auth, we don't want to record analytics
-        let Some(api_auth) = self.api_auth.clone() else {
-            return (None, None);
-        };
-        api_auth
-            .is_linked()
-            .then(|| start_analytics(api_auth, self.api_client.clone()))
-            .unzip()
-    }
-
     #[tracing::instrument(skip(self, signal_handler))]
     pub async fn build(
-        mut self,
+        self,
         signal_handler: &SignalHandler,
         telemetry: CommandEventBuilder,
-    ) -> Result<Run, Error> {
+    ) -> Result<(Run, Option<AnalyticsHandle>), Error> {
         tracing::trace!(
             platform = %TurboState::platform_name(),
             start_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).expect("system time after epoch").as_micros(),
@@ -229,7 +240,7 @@ impl RunBuilder {
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
         if is_linked {
-            run_telemetry.track_remote_cache(self.api_client.base_url());
+            run_telemetry.track_remote_cache(&self.opts.api_client_opts.api_url);
         }
         let _is_structured_output = self.opts.run_opts.graph.is_some()
             || matches!(self.opts.run_opts.dry_run, Some(DryRunMode::Json));
@@ -253,7 +264,10 @@ impl RunBuilder {
                 .with_single_package_mode(self.opts.run_opts.single_package)
                 .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
 
-            let graph = builder.build().await;
+            let graph = builder
+                .build()
+                .instrument(tracing::info_span!("pkg_dep_graph_build"))
+                .await;
 
             match graph {
                 Ok(graph) => graph,
@@ -277,89 +291,151 @@ impl RunBuilder {
         repo_telemetry.track_package_manager(pkg_dep_graph.package_manager().name().to_string());
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
-        let micro_frontend_configs =
+        let micro_frontend_configs = {
+            let _span = tracing::info_span!("micro_frontends_from_disk").entered();
             match MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph) {
                 Ok(configs) => configs,
                 Err(err) => {
                     return Err(Error::MicroFrontends(err));
                 }
-            };
+            }
+        };
 
-        let (scm, repo_index) = scm_task.await.expect("detecting scm panicked");
+        let (scm, repo_index) = scm_task
+            .instrument(tracing::info_span!("scm_task_await"))
+            .await
+            .expect("detecting scm panicked");
         let repo_index = Arc::new(repo_index);
-        debug!(
-            "RunBuilder creating AsyncCache with cache_dir={}, repo_root={}",
-            self.opts.cache_opts.cache_dir, self.repo_root
-        );
-        let async_cache = AsyncCache::new(
-            &self.opts.cache_opts,
-            &self.repo_root,
-            self.api_client.clone(),
-            self.api_auth.clone(),
-            self.analytics_sender.take(),
-        )?;
 
-        // restore config from task access trace if it's enabled
-        let task_access = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
-        task_access.restore_config().await;
+        // Resolve the HTTP client. TLS initialization has been running in the
+        // background since cli::run started, overlapping with arg parsing,
+        // config loading, package graph construction, and SCM indexing.
+        let api_client = {
+            let _span = tracing::info_span!("resolve_api_client").entered();
+            let http_client = match self.http_client_cell.get() {
+                Some(client) => client.clone(),
+                None => tokio::task::spawn_blocking(|| APIClient::build_http_client(None))
+                    .await
+                    .map_err(|_| turborepo_api_client::Error::HttpClientCancelled)??,
+            };
+            let timeout = self.opts.api_client_opts.timeout;
+            let upload_timeout = self.opts.api_client_opts.upload_timeout;
+            APIClient::new_with_client(
+                http_client.clone(),
+                &self.opts.api_client_opts.api_url,
+                if timeout > 0 {
+                    Some(std::time::Duration::from_secs(timeout))
+                } else {
+                    None
+                },
+                if upload_timeout > 0 {
+                    Some(std::time::Duration::from_secs(upload_timeout))
+                } else {
+                    None
+                },
+                self.version,
+                self.opts.api_client_opts.preflight,
+            )
+        };
+
+        let (analytics_sender, analytics_handle) = self
+            .api_auth
+            .as_ref()
+            .filter(|auth| auth.is_linked())
+            .map(|auth| start_analytics(auth.clone(), api_client.clone()))
+            .unzip();
+
+        let async_cache = {
+            let _span = tracing::info_span!("async_cache_new").entered();
+            AsyncCache::new(
+                &self.opts.cache_opts,
+                &self.repo_root,
+                api_client.clone(),
+                self.api_auth.clone(),
+                analytics_sender,
+            )?
+        };
+
+        let task_access = {
+            let _span = tracing::info_span!("task_access_setup").entered();
+            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
+            ta.restore_config().await;
+            ta
+        };
 
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
         let future_flags = self.opts.future_flags;
 
         let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);
 
-        let turbo_json_loader = if task_access.is_enabled() {
-            UnifiedTurboJsonLoader::task_access(
-                reader,
-                root_turbo_json_path.clone(),
-                root_package_json.clone(),
-            )
-        } else if is_single_package {
-            UnifiedTurboJsonLoader::single_package(
-                reader,
-                root_turbo_json_path.clone(),
-                root_package_json.clone(),
-            )
-        } else if !root_turbo_json_path.exists() &&
-        // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
-        (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
-        {
-            UnifiedTurboJsonLoader::workspace_no_turbo_json(
-                reader,
-                pkg_dep_graph.packages(),
-                micro_frontend_configs.clone(),
-            )
-        } else if let Some(micro_frontends) = &micro_frontend_configs {
-            UnifiedTurboJsonLoader::workspace_with_microfrontends(
-                reader,
-                root_turbo_json_path.clone(),
-                pkg_dep_graph.packages(),
-                micro_frontends.clone(),
-            )
-        } else {
-            UnifiedTurboJsonLoader::workspace(
-                reader,
-                root_turbo_json_path.clone(),
-                pkg_dep_graph.packages(),
-            )
+        let turbo_json_loader = {
+            let _span = tracing::info_span!("turbo_json_loader_setup").entered();
+            if task_access.is_enabled() {
+                UnifiedTurboJsonLoader::task_access(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    root_package_json.clone(),
+                )
+            } else if is_single_package {
+                UnifiedTurboJsonLoader::single_package(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    root_package_json.clone(),
+                )
+            } else if !root_turbo_json_path.exists() &&
+            // Infer a turbo.json if allowing no turbo.json is explicitly allowed or if MFE configs are discovered
+            (self.opts.repo_opts.allow_no_turbo_json || micro_frontend_configs.is_some())
+            {
+                UnifiedTurboJsonLoader::workspace_no_turbo_json(
+                    reader,
+                    pkg_dep_graph.packages(),
+                    micro_frontend_configs.clone(),
+                )
+            } else if let Some(micro_frontends) = &micro_frontend_configs {
+                UnifiedTurboJsonLoader::workspace_with_microfrontends(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    pkg_dep_graph.packages(),
+                    micro_frontends.clone(),
+                )
+            } else {
+                UnifiedTurboJsonLoader::workspace(
+                    reader,
+                    root_turbo_json_path.clone(),
+                    pkg_dep_graph.packages(),
+                )
+            }
         };
 
-        let root_turbo_json = turbo_json_loader.load(&PackageName::Root)?.clone();
+        let root_turbo_json = {
+            let _span = tracing::info_span!("root_turbo_json_load").entered();
+            turbo_json_loader.load(&PackageName::Root)?.clone()
+        };
 
-        pkg_dep_graph.validate()?;
+        {
+            let _span = tracing::info_span!("pkg_dep_graph_validate").entered();
+            pkg_dep_graph.validate()?;
+        }
 
-        let filtered_pkgs = Self::calculate_filtered_packages(
-            &self.repo_root,
-            &self.opts,
-            &pkg_dep_graph,
-            &scm,
-            &root_turbo_json,
-        )?;
+        let filtered_pkgs = {
+            let _span = tracing::info_span!("calculate_filtered_packages").entered();
+            Self::calculate_filtered_packages(
+                &self.repo_root,
+                &self.opts,
+                &pkg_dep_graph,
+                &scm,
+                &root_turbo_json,
+            )?
+        };
 
-        let env_at_execution_start = EnvironmentVariableMap::infer();
-        // Pre-warm the turbo.json cache: read and parse all package turbo.json
-        // files in parallel before the engine builder needs them sequentially.
-        turbo_json_loader.preload_all();
+        let env_at_execution_start = {
+            let _span = tracing::info_span!("env_infer").entered();
+            EnvironmentVariableMap::infer()
+        };
+        {
+            let _span = tracing::info_span!("turbo_json_preload").entered();
+            turbo_json_loader.preload_all();
+        }
 
         let mut engine = self.build_engine(
             &pkg_dep_graph,
@@ -378,43 +454,74 @@ impl RunBuilder {
             )?;
         }
 
+        let should_print_prelude = self
+            .should_print_prelude_override
+            .unwrap_or_else(|| self.will_execute_tasks());
+
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
             self.opts.runcache_opts,
             &self.opts.cache_opts,
+            self.daemon_client,
             self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));
 
-        let should_print_prelude = self
-            .should_print_prelude_override
-            .unwrap_or_else(|| self.will_execute_tasks());
+        // futureFlags are hard gates: reject observability config when disabled.
+        if let Some(obs_opts) = &self.opts.experimental_observability {
+            if obs_opts.otel.is_some() && !self.opts.future_flags.experimental_observability {
+                return Err(turborepo_config::Error::InvalidExperimentalOtelConfig {
+                    message: "experimentalObservability.otel is configured but \
+                              futureFlags.experimentalObservability is not enabled in turbo.json."
+                        .to_string(),
+                }
+                .into());
+            }
+        }
 
-        Ok(Run {
-            version: self.version,
-            color_config: self.color_config,
-            start_at,
-            processes: self.processes,
-            run_telemetry,
-            task_access,
-            repo_root: self.repo_root,
-            opts: Arc::new(self.opts),
-            api_client: self.api_client,
-            api_auth: self.api_auth,
-            env_at_execution_start,
-            filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
-            pkg_dep_graph: Arc::new(pkg_dep_graph),
-            turbo_json_loader,
-            root_turbo_json,
-            scm,
-            engine: Arc::new(engine),
-            run_cache,
-            signal_handler: signal_handler.clone(),
-            should_print_prelude,
-            micro_frontend_configs,
-            repo_index,
-        })
+        let observability_handle = self
+            .opts
+            .experimental_observability
+            .as_ref()
+            .and_then(|opts| {
+                let token = opts
+                    .otel
+                    .as_ref()
+                    .and_then(|otel| otel.use_remote_cache_token)
+                    .unwrap_or(false)
+                    .then(|| self.api_auth.as_ref().map(|auth| auth.token.expose()))
+                    .flatten();
+                observability::Handle::try_init(opts, token)
+            });
+        Ok((
+            Run {
+                version: self.version,
+                color_config: self.color_config,
+                start_at,
+                processes: self.processes,
+                run_telemetry,
+                task_access,
+                repo_root: self.repo_root,
+                opts: Arc::new(self.opts),
+                api_client,
+                api_auth: self.api_auth,
+                env_at_execution_start,
+                filtered_pkgs: filtered_pkgs.keys().cloned().collect(),
+                pkg_dep_graph: Arc::new(pkg_dep_graph),
+                turbo_json_loader,
+                root_turbo_json,
+                scm,
+                engine: Arc::new(engine),
+                run_cache,
+                signal_handler: signal_handler.clone(),
+                should_print_prelude,
+                micro_frontend_configs,
+                repo_index,
+                observability_handle,
+            },
+            analytics_handle,
+        ))
     }
 
     #[tracing::instrument(skip_all)]

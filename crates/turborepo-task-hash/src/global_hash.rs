@@ -160,7 +160,11 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
         .map(|p| root_path.anchor(p).expect("path should be from root"))
         .collect::<Vec<_>>();
 
-    let global_file_hash_map = hasher.get_hashes_for_files(root_path, &global_deps_paths, false)?;
+    let global_file_hash_map = hasher
+        .get_hashes_for_files(root_path, &global_deps_paths, false)?
+        .into_iter()
+        .map(|(k, v)| (k, String::from(v)))
+        .collect();
 
     Ok(GlobalFileHashInputs {
         global_file_hash_map,

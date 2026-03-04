@@ -12,7 +12,6 @@ use turborepo_repository::{
 };
 use turborepo_scm::SCM;
 // Re-export modules and types from turborepo-scope crate for backward compatibility
-pub use turborepo_scope::filter;
 pub use turborepo_scope::{filter::ResolutionError, target_selector, ScopeOpts};
 
 use crate::turbo_json::TurboJson;

@@ -192,10 +192,10 @@ export * from './modal';
 
 ```typescript
 // BAD: Reaching into another package
-import { Button } from '../../packages/ui/src/button';
+import { Button } from "../../packages/ui/src/button";
 
 // GOOD: Install and import properly
-import { Button } from '@repo/ui/button';
+import { Button } from "@repo/ui/button";
 ```
 
 ### Shared Code in Apps

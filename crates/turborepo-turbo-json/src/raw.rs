@@ -203,6 +203,72 @@ pub struct RawRemoteCacheOptions {
     pub upload_timeout: Option<Spanned<u64>>,
 }
 
+/// OpenTelemetry exporter configuration
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawObservabilityOtel {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub protocol: Option<Spanned<UnescapedString>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<Spanned<UnescapedString>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub headers: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timeout_ms: Option<Spanned<u64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interval_ms: Option<Spanned<u64>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub resource: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<RawObservabilityOtelMetrics>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_remote_cache_token: Option<Spanned<bool>>,
+}
+
+/// Experimental observability configuration
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawExperimentalObservability {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub otel: Option<RawObservabilityOtel>,
+}
+
+/// OTel metrics configuration
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawObservabilityOtelMetrics {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_summary: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_details: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_attributes: Option<RawObservabilityOtelRunAttributes>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub task_attributes: Option<RawObservabilityOtelTaskAttributes>,
+}
+
+/// OTel run attribute configuration for run-level metrics.
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawObservabilityOtelRunAttributes {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scm_revision: Option<Spanned<bool>>,
+}
+
+/// OTel task attribute configuration for task detail metrics.
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawObservabilityOtelTaskAttributes {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hashes: Option<Spanned<bool>>,
+}
+
 // Root turbo.json
 #[derive(Default, Debug, Clone, Iterable, Deserializable)]
 pub struct RawRootTurboJson {
@@ -234,6 +300,8 @@ pub struct RawRootTurboJson {
     pub boundaries: Option<Spanned<BoundariesConfig>>,
 
     pub future_flags: Option<Spanned<FutureFlags>>,
+    #[deserializable(rename = "experimentalObservability")]
+    pub experimental_observability: Option<RawExperimentalObservability>,
     #[deserializable(rename = "//")]
     pub _comment: Option<String>,
 }
@@ -432,6 +500,13 @@ pub struct RawTurboJson {
     #[ts(optional)]
     pub future_flags: Option<Spanned<FutureFlags>>,
 
+    /// Experimental observability configuration for OpenTelemetry export.
+    #[serde(rename = "experimentalObservability")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub experimental_observability: Option<RawExperimentalObservability>,
+
     // Internal field - excluded from schema
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -629,6 +704,7 @@ impl From<RawRootTurboJson> for RawTurboJson {
             boundaries: root.boundaries,
             concurrency: root.concurrency,
             future_flags: root.future_flags,
+            experimental_observability: root.experimental_observability,
             _comment: root._comment,
             extends: None, // Root configs never have extends
         }

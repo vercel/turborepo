@@ -151,6 +151,28 @@ impl<'a> DependencyVersion<'a> {
         )
     }
 
+    /// Returns true if this dependency uses an npm alias (`npm:pkg@version`).
+    /// This is distinct from a plain npm range (`npm:^1.0.0`). When a package
+    /// name is present in the specifier, the user is explicitly requesting an
+    /// npm registry package, which should never resolve to a workspace.
+    fn is_npm_alias(&self) -> bool {
+        if self.protocol != Some("npm") {
+            return false;
+        }
+        // npm alias format: `npm:<package-name>@<version>`
+        // A scoped package looks like `npm:@scope/pkg@version`, so we need to
+        // handle the leading `@` carefully.
+        let name_and_version = if let Some(rest) = self.version.strip_prefix('@') {
+            // Scoped: skip past scope to find the `@version` separator
+            rest.find('@').map(|i| i + 1)
+        } else {
+            self.version.find('@')
+        };
+        // If there's an `@` separating a package name from a version, and the
+        // part before it isn't empty, this is an alias.
+        name_and_version.is_some_and(|i| i > 0)
+    }
+
     fn is_external(&self) -> bool {
         // The npm protocol for yarn by default still uses the workspace package if the
         // workspace version is in a compatible semver range. See https://github.com/yarnpkg/berry/discussions/4015
@@ -185,6 +207,9 @@ impl<'a> DependencyVersion<'a> {
                 // Other protocols are assumed to be external references ("github:", etc)
                 false
             }
+            // npm: alias syntax (e.g. `npm:buffer@6.0.3` or `npm:@scope/pkg@^1.0.0`)
+            // means the user explicitly wants the npm registry package, not a workspace.
+            Some("npm") if self.is_npm_alias() => false,
             _ if self.version == "*" => true,
             _ if package_version.is_empty() => {
                 // The workspace version of this package does not contain a version, no version
@@ -253,6 +278,9 @@ mod test {
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@*", Some("@scope/foo"), true ; "handles pnpm alias star")]
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@~", Some("@scope/foo"), true ; "handles pnpm alias tilde")]
     #[test_case("1.2.3", Some("foo"), "workspace:@scope/foo@^", Some("@scope/foo"), true ; "handles pnpm alias caret")]
+    #[test_case("6.0.3", Some("buffer"), "npm:buffer@6.0.3", None, true ; "handles npm alias with matching workspace name")]
+    #[test_case("1.2.3", None, "npm:other-pkg@^1.0.0", None, true ; "handles npm alias with different package name")]
+    #[test_case("1.2.3", None, "npm:@scope/foo@^1.0.0", None, true ; "handles npm alias with scoped package")]
     #[test_case("1.2.3", None, "1.2.3", None, false ; "no workspace linking")]
     #[test_case("1.2.3", None, "workspace:1.2.3", Some("@scope/foo"), false ; "no workspace linking with protocol")]
     #[test_case("", None, "1.2.3", None, true ; "no workspace package version")]
@@ -318,6 +346,21 @@ mod test {
                     transitive_dependencies: None,
                 },
             );
+            map.insert(
+                PackageName::Other("buffer".to_string()),
+                PackageInfo {
+                    package_json: PackageJson {
+                        version: Some("6.0.3".to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw(
+                        ["packages", "buffer", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
+                    )
+                    .unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
             map
         };
 
@@ -334,6 +377,17 @@ mod test {
             splitter.is_internal(dependency_name.unwrap_or("@scope/foo"), range),
             expected.map(PackageName::from)
         );
+    }
+
+    #[test_case("npm:buffer@6.0.3", true ; "npm alias unscoped")]
+    #[test_case("npm:@scope/pkg@^1.0.0", true ; "npm alias scoped")]
+    #[test_case("npm:^1.2.3", false ; "npm range")]
+    #[test_case("npm:*", false ; "npm wildcard")]
+    #[test_case("workspace:*", false ; "workspace protocol")]
+    #[test_case("^1.0.0", false ; "bare range")]
+    fn test_is_npm_alias(version: &str, expected: bool) {
+        let dep = DependencyVersion::new(version);
+        assert_eq!(dep.is_npm_alias(), expected, "is_npm_alias({version})");
     }
 
     #[test_case("1.2.3", None ; "non-workspace")]

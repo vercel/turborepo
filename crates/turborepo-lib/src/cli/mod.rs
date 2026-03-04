@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, env, ffi::OsString, fmt, io, mem, process};
+use std::{env, ffi::OsString, fmt, io, mem, process};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -31,6 +31,8 @@ use crate::{
 };
 
 mod error;
+mod observability;
+
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
@@ -99,6 +101,8 @@ pub struct Args {
     /// verbosity
     #[clap(flatten)]
     pub verbosity: Verbosity,
+    #[clap(flatten)]
+    pub experimental_otel_args: observability::ExperimentalOtelCliArgs,
     /// Force a check for a new version of turbo
     #[clap(long, global = true, hide = true)]
     pub check_for_update: bool,
@@ -1158,6 +1162,25 @@ fn initialize_telemetry_client(
     }
 }
 
+fn initialize_deferred_telemetry_client(
+    http_client_cell: std::sync::Arc<tokio::sync::OnceCell<reqwest::Client>>,
+    color_config: ColorConfig,
+    version: &str,
+) -> Option<TelemetryHandle> {
+    let deferred_client = turborepo_api_client::telemetry::DeferredTelemetryClient::new(
+        http_client_cell,
+        "https://telemetry.vercel.com",
+        version,
+    );
+    match init_telemetry(deferred_client, color_config) {
+        Ok(h) => Some(h),
+        Err(error) => {
+            debug!("failed to start telemetry: {:?}", error);
+            None
+        }
+    }
+}
+
 #[derive(PartialEq)]
 enum PrintVersionState {
     Enabled,
@@ -1247,7 +1270,7 @@ fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
         // We clone instead of take as take would leave the command base a copy of cli_args
         // missing any execution args.
         .clone()
-        .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
+        .ok_or_else(|| Error::NoCommand)?;
 
     if execution_args.tasks.is_empty() {
         let mut cmd = <Args as CommandFactory>::command();
@@ -1298,17 +1321,41 @@ pub async fn run(
     #[allow(unused_variables)] logger: &TurboSubscriber,
     color_config: ColorConfig,
 ) -> Result<i32, Error> {
-    // TODO: remove mutability from this function
-    let mut cli_args = Args::new(env::args_os().collect());
+    let _cli_run_span = tracing::info_span!("cli_run").entered();
+
+    // Spawn TLS initialization on a background thread immediately.
+    // This takes ~100ms (loading root certificates, TLS backend init)
+    // and runs fully in the background. Neither telemetry nor the run
+    // path block on it — the HTTP client is resolved lazily when the
+    // first network request is actually needed.
+    let http_client_cell = std::sync::Arc::new(tokio::sync::OnceCell::<reqwest::Client>::new());
+    {
+        let cell = http_client_cell.clone();
+        tokio::task::spawn(async move {
+            if let Ok(Ok(client)) = tokio::task::spawn_blocking(|| {
+                let _span = tracing::info_span!("http_client_init").entered();
+                APIClient::build_http_client(None)
+            })
+            .await
+            {
+                cell.set(client).ok();
+            }
+        });
+    }
+
+    let mut cli_args = {
+        let _span = tracing::info_span!("cli_arg_parsing").entered();
+        Args::new(env::args_os().collect())
+    };
     let version = get_version();
 
-    // Build a single HTTP client to share across telemetry, API, and cache
-    // operations. This avoids redundant TLS initialization (~150ms savings).
-    let http_client = APIClient::build_http_client(None)
-        .expect("Failed to create HTTP client: TLS initialization failed");
-
-    // track telemetry handle to close at the end of the run
-    let telemetry_handle = initialize_telemetry_client(&http_client, color_config, version);
+    // Initialize telemetry immediately with a deferred HTTP client.
+    // Events are queued to a channel from the start; the actual HTTP
+    // client is only resolved when the worker flushes its first batch.
+    let telemetry_handle = {
+        let _span = tracing::info_span!("telemetry_init").entered();
+        initialize_deferred_telemetry_client(http_client_cell.clone(), color_config, version)
+    };
 
     if should_print_version() {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
@@ -1319,9 +1366,6 @@ pub async fn run(
     // Set some run flags if we have the data and are executing a Run
     set_run_flags(&mut command, &repo_state, &cli_args)?;
 
-    // TODO: make better use of RepoState, here and below. We've already inferred
-    // the repo root, we don't need to calculate it again, along with package
-    // manager inference.
     let cwd = repo_state
         .as_ref()
         .map(|state| state.root.as_path())
@@ -1592,7 +1636,10 @@ pub async fn run(
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
             event.track_call();
 
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            let base = {
+                let _span = tracing::info_span!("command_base_new").entered();
+                CommandBase::new(cli_args.clone(), repo_root, version, color_config)?
+            };
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             if execution_args.tasks.is_empty() {
@@ -1601,11 +1648,13 @@ pub async fn run(
             }
 
             run_args.track(&event);
-            let exit_code = run::run(base, event, &http_client).await.inspect(|code| {
-                if *code != 0 {
-                    error!("run failed: command  exited ({code})");
-                }
-            })?;
+            let exit_code = run::run(base, event, http_client_cell)
+                .await
+                .inspect(|code| {
+                    if *code != 0 {
+                        error!("run failed: command  exited ({code})");
+                    }
+                })?;
 
             // Chrome tracing is enabled early in shim::run(). Here we just
             // flush and generate the markdown summary.

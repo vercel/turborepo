@@ -3,8 +3,27 @@
   "displayName": "Turborepo LSP",
   "version": "2.0.0",
   "description": "Tools and instant feedback for your build system",
-  "main": "out/main.js",
+  "categories": [
+    "Linters"
+  ],
+  "keywords": [
+    "monorepo",
+    "turbo",
+    "turborepo",
+    "vercel"
+  ],
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
+  "license": "MIT",
+  "author": "Vercel",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vercel/turborepo",
+    "directory": "packages/turbo-vsc"
+  },
   "publisher": "Vercel",
+  "main": "out/main.js",
   "scripts": {
     "vscode:prepublish": "npm run esbuild-base -- --minify",
     "esbuild-base": "esbuild ./src/extension.ts --bundle --main-fields=module,main --outfile=out/main.js --external:vscode --format=cjs --platform=node",
@@ -20,39 +39,15 @@
     "copy": "pnpm run copy-darwin-arm64 && pnpm run copy-darwin-x64 && pnpm run copy-win32-x64 && pnpm run copy-linux-arm64 && pnpm run copy-linux-x64",
     "test-compile": "tsc -p ./"
   },
-  "keywords": [
-    "turbo",
-    "turborepo",
-    "monorepo",
-    "vercel"
-  ],
-  "readme": "README.md",
-  "categories": [
-    "Linters"
-  ],
-  "icon": "resources/icon.png",
-  "bugs": {
-    "url": "https://github.com/vercel/turborepo/issues"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/vercel/turborepo",
-    "directory": "packages/turbo-vsc"
-  },
-  "author": "Vercel",
-  "license": "MIT",
   "dependencies": {
     "jsonc-parser": "3.2.0",
     "vscode-languageclient": "9.0.1"
   },
-  "engines": {
-    "vscode": "^1.84.2"
-  },
   "devDependencies": {
+    "@turbo/tsconfig": "workspace:*",
     "@types/node": "20.10.8",
     "@types/vscode": "1.85.0",
-    "esbuild": "0.27.2",
-    "@turbo/tsconfig": "workspace:*"
+    "esbuild": "0.27.2"
   },
   "contributes": {
     "commands": [
@@ -90,13 +85,18 @@
       }
     }
   },
+  "activationEvents": [
+    "workspaceContains:**/turbo.json"
+  ],
+  "icon": "resources/icon.png",
+  "engines": {
+    "vscode": "^1.84.2"
+  },
   "capabilities": {
     "virtualWorkspaces": {
       "supported": "limited",
       "description": "The language server requires a turbo daemon to function correctly."
     }
   },
-  "activationEvents": [
-    "workspaceContains:**/turbo.json"
-  ]
+  "readme": "README.md"
 }

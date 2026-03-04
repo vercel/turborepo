@@ -1,4 +1,3 @@
-#![cfg(feature = "git2")]
 use std::str::FromStr;
 
 use globwalk::ValidatedGlob;
@@ -6,9 +5,7 @@ use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
-#[cfg(feature = "git2")]
-use crate::hash_object::hash_objects;
-use crate::{Error, GitHashes, GitRepo, RepoGitIndex, SCM};
+use crate::{Error, GitHashes, GitRepo, RepoGitIndex, SCM, hash_object::hash_objects};
 
 impl SCM {
     pub fn get_hashes_for_files(
@@ -387,7 +384,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
-    use crate::manual::get_package_file_hashes_without_git;
+    use crate::{OidHash, manual::get_package_file_hashes_without_git};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -476,7 +473,7 @@ mod tests {
         let mut expected = GitHashes::new();
         expected.insert(
             RelativeUnixPathBuf::new("committed-file").unwrap(),
-            "3a29e62ea9ba15c4a4009d1f605d391cdd262033".to_string(),
+            OidHash::from_hex_str("3a29e62ea9ba15c4a4009d1f605d391cdd262033"),
         );
         assert_eq!(hashes, expected);
     }
@@ -589,15 +586,15 @@ mod tests {
         let mut all_expected = all_expected.clone();
         all_expected.insert(
             RelativeUnixPathBuf::new("../new-root-file").unwrap(),
-            "8906ddcdd634706188bd8ef1c98ac07b9be3425e".to_string(),
+            OidHash::from_hex_str("8906ddcdd634706188bd8ef1c98ac07b9be3425e"),
         );
         all_expected.insert(
             RelativeUnixPathBuf::new("dir/ignored-file").unwrap(),
-            "5537770d04ec8aaf7bae2d9ff78866de86df415c".to_string(),
+            OidHash::from_hex_str("5537770d04ec8aaf7bae2d9ff78866de86df415c"),
         );
         all_expected.insert(
             RelativeUnixPathBuf::new("$TURBO_DEFAULT$").unwrap(),
-            "2f26c7b914476b3c519e4f0fbc0d16c52a60d178".to_string(),
+            OidHash::from_hex_str("2f26c7b914476b3c519e4f0fbc0d16c52a60d178"),
         );
 
         let input_tests: &[(&[&str], bool, &[&str])] = &[
@@ -703,7 +700,7 @@ mod tests {
         for (inputs, include_default_files, expected_files) in input_tests {
             let expected: GitHashes = HashMap::from_iter(expected_files.iter().map(|key| {
                 let key = RelativeUnixPathBuf::new(*key).unwrap();
-                let value = all_expected.get(&key).unwrap().clone();
+                let value = *all_expected.get(&key).unwrap();
                 (key, value)
             }));
 
@@ -721,11 +718,87 @@ mod tests {
         Ok(())
     }
 
+    /// Regression test for worktrees that live outside the main repo directory.
+    ///
+    /// Reproduces the real-world layout where:
+    ///   ~/project/front           <- main repo
+    ///   ~/project/front-worktree/ <- linked worktrees (sibling, NOT a child)
+    ///
+    /// Before the fix, `git_root` was set to the main worktree root, causing
+    /// `self.root.anchor(turbo_root)` to fail with "Path X is not parent of Y"
+    /// because the worktree path cannot be strip-prefixed by a sibling path.
+    #[test]
+    fn test_package_hashes_in_external_worktree() -> Result<(), Error> {
+        use crate::worktree::WorktreeInfo;
+
+        // Two separate temp dirs to simulate sibling directories
+        let (_tmp_main, main_root) = tmp_dir();
+        let (_tmp_wt, worktree_parent) = tmp_dir();
+
+        // Set up the main repo with a package
+        let pkg_dir = main_root.join_component("my-pkg");
+        pkg_dir.create_dir_all()?;
+        main_root
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        pkg_dir
+            .join_component("index.js")
+            .create_with_contents("console.log('hello')")?;
+
+        setup_repository(&main_root);
+        commit_all(&main_root);
+
+        // Create a linked worktree at a sibling path (not inside main_root)
+        let worktree_path = worktree_parent.join_component("my-branch");
+        require_git_cmd(
+            &main_root,
+            &[
+                "worktree",
+                "add",
+                worktree_path.as_str(),
+                "-b",
+                "test-external-worktree",
+            ],
+        );
+
+        // Detect worktree info from within the linked worktree
+        let info = WorktreeInfo::detect(&worktree_path).unwrap();
+        assert!(info.is_linked_worktree());
+        assert_eq!(info.git_root, worktree_path);
+
+        // Construct SCM the same way the run builder does: using the pre-resolved
+        // git_root from worktree detection
+        let scm = crate::SCM::new_with_git_root(&worktree_path, info.git_root);
+        let crate::SCM::Git(git) = scm else {
+            panic!("expected git SCM");
+        };
+
+        // This is the call that previously failed with "is not parent of"
+        let package_path = AnchoredSystemPathBuf::from_raw("my-pkg")?;
+        let hashes =
+            git.get_package_file_hashes::<&str>(&worktree_path, &package_path, &[], false, None)?;
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("index.js").unwrap()),
+            "should hash files in the worktree package"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()),
+            "should hash package.json in the worktree package"
+        );
+
+        Ok(())
+    }
+
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(
-            pairs
-                .iter()
-                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
-        )
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
+            (
+                RelativeUnixPathBuf::new(*path).unwrap(),
+                OidHash::from_hex_str(hash),
+            )
+        }))
     }
 }

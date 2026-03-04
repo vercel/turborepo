@@ -2,9 +2,9 @@ import path from "node:path";
 import fs from "fs-extra";
 import type { RootSchema } from "@turbo/types";
 import type { Transformer, TransformerArgs } from "../types";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { loadTurboJson } from "../utils/load-turbo-json";
 
 // transformer details
 const TRANSFORMER = "stabilize-ui";

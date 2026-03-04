@@ -2,7 +2,7 @@ import { logger } from "@turbo/utils";
 import { getCustomGenerators, runCustomGenerator } from "../utils/plop";
 import * as prompts from "../commands/run/prompts";
 import { GeneratorError } from "../utils/error";
-import { setupFromTemplate } from "../utils/setupFromTemplate";
+import { setupFromTemplate } from "../utils/setup-from-template";
 import type { CustomGeneratorArguments } from "./types";
 
 export async function generate({

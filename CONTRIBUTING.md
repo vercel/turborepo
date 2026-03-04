@@ -65,6 +65,18 @@ and `rustls-tls` features.
 By default, the `rustls-tls` feature is selected so that `cargo build` works
 out of the box. If you wish to select `native-tls`, you may do so by running `cargo build --no-default-features --features native-tls`.
 
+### OpenTelemetry Observability
+
+Turborepo includes OpenTelemetry (OTel) support for exporting metrics in default builds.
+
+If you need to build without OTel support, use:
+
+```bash
+cargo build -p turbo --no-default-features --features rustls-tls
+```
+
+`experimentalObservability` is still gated by `futureFlags.experimentalObservability` in `turbo.json`.
+
 ## Running tests
 
 > [!IMPORTANT]
@@ -87,29 +99,15 @@ cargo test -p <module>
 ```
 
 - Integration tests
-  ```bash
-  pnpm test -- --filter=turborepo-tests-integration
-  ```
-- A single integration test
-  e.g., to run everything in `turborepo-tests/integration/tests/run-summary`:
 
   ```bash
-  # Build `turbo` first because the next command doesn't run through `turbo`
-  pnpm -- turbo run build --filter=@turbo/cli
-  pnpm test -F turborepo-tests-integration -- "run-summary"
+  cargo test -p turbo
   ```
 
-- Updating integration tests
+- A single integration test file
 
   ```bash
-  turbo run build --filter=@turbo/cli
-  pnpm --filter turborepo-tests-integration test:interactive
-  ```
-
-  You can pass a test name to run a single test, or a directory to run all tests in that directory.
-
-  ```bash
-  pnpm --filter turborepo-tests-integration test:interactive tests/turbo-help.t
+  cargo test -p turbo --test force_test
   ```
 
 ## Manually testing `turbo`

@@ -10,6 +10,11 @@ export default defineConfig((options: Options) => ({
   clean: true,
   format: ["cjs", "esm"],
   external: ["react"],
-  dts: true,
+  dts: {
+    compilerOptions: {
+      skipLibCheck: true,
+      types: [],
+    },
+  },
   ...options,
 }));

@@ -202,7 +202,10 @@ impl AsyncCache {
             .send(WorkerRequest::Shutdown(closing_tx, closed_tx))
             .await
             .map_err(|_| CacheError::CacheShuttingDown)?;
-        Ok((closing_rx.await.unwrap(), closed_rx)) // todo
+        closing_rx
+            .await
+            .map(|status| (status, closed_rx))
+            .map_err(|_| CacheError::CacheShuttingDown)
     }
 
     /// Shut down the cache, waiting for all workers to finish writing.
@@ -279,6 +282,7 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 
@@ -368,6 +372,7 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 
@@ -467,6 +472,7 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 

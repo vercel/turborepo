@@ -73,7 +73,7 @@ When you run `turbo run lint`, Turborepo finds all packages with a `lint` script
 
 ```json
 {
-  "$schema": "https://turborepo.dev/schema.v2.json",
+  "$schema": "https://v2-8-14-canary-4.turborepo.dev/schema.json",
   "globalEnv": ["CI"],
   "globalDependencies": ["tsconfig.json"],
   "tasks": {
@@ -188,7 +188,7 @@ Use `extends: false` to exclude a task from a package:
   "extends": ["//"],
   "tasks": {
     "e2e": {
-      "extends": false  // UI package doesn't have e2e tests
+      "extends": false // UI package doesn't have e2e tests
     }
   }
 }

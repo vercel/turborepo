@@ -40,6 +40,19 @@ pub struct FutureFlags {
     /// running without showing full output logs.
     #[serde(default)]
     pub errors_only_show_hash: bool,
+    /// Enable experimental OpenTelemetry exporter support.
+    ///
+    /// When enabled, Turborepo will honor the `experimentalObservability`
+    /// configuration block (if present) to send run summaries to an
+    /// observability backend.
+    #[serde(default)]
+    pub experimental_observability: bool,
+    /// Enforce a minimum length of 32 bytes for
+    /// `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is
+    /// enabled. Short keys weaken the HMAC-SHA256 signature, making
+    /// brute-force tag collision feasible.
+    #[serde(default)]
+    pub longer_signature_key: bool,
 }
 
 impl TS for FutureFlags {
@@ -51,19 +64,27 @@ impl TS for FutureFlags {
     }
 
     fn inline() -> String {
-        "{ errorsOnlyShowHash?: boolean }".to_string()
+        "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
+         boolean }"
+            .to_string()
     }
 
     fn inline_flattened() -> String {
-        "{ errorsOnlyShowHash?: boolean }".to_string()
+        "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
+         boolean }"
+            .to_string()
     }
 
     fn decl() -> String {
-        "type FutureFlags = { errorsOnlyShowHash?: boolean };".to_string()
+        "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
+         longerSignatureKey?: boolean };"
+            .to_string()
     }
 
     fn decl_concrete() -> String {
-        "type FutureFlags = { errorsOnlyShowHash?: boolean };".to_string()
+        "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
+         longerSignatureKey?: boolean };"
+            .to_string()
     }
 
     fn dependencies() -> Vec<ts_rs::Dependency> {

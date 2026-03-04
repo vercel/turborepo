@@ -261,6 +261,16 @@
           "description": "When using `outputLogs: \"errors-only\"`, show task hashes when tasks complete successfully. This provides visibility into which tasks are running without showing full output logs.",
           "default": false,
           "type": "boolean"
+        },
+        "experimentalObservability": {
+          "description": "Enable experimental OpenTelemetry exporter support.\n\nWhen enabled, Turborepo will honor the `experimentalObservability` configuration block (if present) to send run summaries to an observability backend.",
+          "default": false,
+          "type": "boolean"
+        },
+        "longerSignatureKey": {
+          "description": "Enforce a minimum length of 32 bytes for `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is enabled. Short keys weaken the HMAC-SHA256 signature, making brute-force tag collision feasible.",
+          "default": false,
+          "type": "boolean"
         }
       }
     },
