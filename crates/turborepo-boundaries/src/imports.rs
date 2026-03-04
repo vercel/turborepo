@@ -83,15 +83,15 @@ impl<'a> DependencyLocations<'a> {
 /// resolver, e.g. `@/types/foo` -> `./src/foo` or `features/foo` -> `./src/features/foo`,
 /// and if so, checks the resolved path against package boundaries.
 ///
-/// Attempts resolution for all non-relative imports, including those that look
-/// like bare package names (e.g. `features/feature-a`). This allows tsconfig
-/// `paths` entries that shadow package-name-shaped specifiers to be recognised as
-/// local imports instead of being incorrectly flagged as undeclared dependencies.
-/// If the resolver cannot resolve the import (no matching tsconfig alias and no
-/// file on disk), `Ok(false)` is returned and the caller falls through to
-/// `check_package_import`.
+/// Only called for package-name-shaped imports (after `is_potential_package_name` guard
+/// in `check_import`). This allows tsconfig `paths` entries that shadow package-name-shaped
+/// specifiers to be recognised as local imports instead of being incorrectly flagged as
+/// undeclared dependencies.
 ///
-/// Returns true if the import was resolved as a tsconfig path alias.
+/// Returns `Ok(true)` if the import was resolved as a local tsconfig path alias.
+/// Returns `Ok(false)` if the resolver found a real npm package (has a package.json),
+/// could not resolve the import, or the import is relative — the caller should then
+/// fall through to `check_package_import`.
 #[allow(clippy::too_many_arguments)]
 fn check_import_as_tsconfig_path_alias(
     resolver: &Resolver,
@@ -115,13 +115,14 @@ fn check_import_as_tsconfig_path_alias(
 
     match resolver.resolve(dir, import) {
         Ok(resolution) => {
-            let path = resolution.path();
-            // If the import resolved to a path inside node_modules, it is a
-            // real package import — not a tsconfig alias.  Return false so the
-            // caller falls through to `check_package_import`.
-            if path.components().any(|c| c.as_os_str() == "node_modules") {
+            // If the resolver found a package.json the resolution went through
+            // node_modules (a real npm package), not a tsconfig path alias pointing
+            // to a local file.  Return false so the caller falls through to
+            // `check_package_import`.
+            if resolution.package_json().is_some() {
                 return Ok(false);
             }
+            let path = resolution.path();
             let Some(utf8_path) = Utf8Path::from_path(path) else {
                 result.diagnostics.push(BoundariesDiagnostic::InvalidPath {
                     path: path.to_string_lossy().to_string(),
@@ -189,19 +190,6 @@ pub(crate) fn check_import(
 
     let span = SourceSpan::new(start.into(), end - start);
 
-    if check_import_as_tsconfig_path_alias(
-        resolver,
-        package_name,
-        package_root,
-        span,
-        file_path,
-        file_content,
-        import,
-        result,
-    )? {
-        return Ok(());
-    }
-
     // We have a file import
     let check_result = if import.starts_with(".") {
         let import_path = RelativeUnixPath::new(import)?;
@@ -219,6 +207,23 @@ pub(crate) fn check_import(
             file_content,
         )?
     } else if BoundariesChecker::is_potential_package_name(import) {
+        // For package-name-shaped imports, first check whether the import resolves
+        // as a tsconfig path alias (e.g. `features/*` → `./src/features/*`).
+        // If so, validate the resolved path against package boundaries.
+        // Only if the resolver does not find a tsconfig alias do we fall through
+        // to the ordinary dependency-declaration check.
+        if check_import_as_tsconfig_path_alias(
+            resolver,
+            package_name,
+            package_root,
+            span,
+            file_path,
+            file_content,
+            import,
+            result,
+        )? {
+            return Ok(());
+        }
         check_package_import(
             import,
             *import_type,
