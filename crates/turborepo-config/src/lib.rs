@@ -50,7 +50,7 @@ pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 
 pub use experimental_otel::{
     ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
-    ExperimentalOtelTaskAttributesOptions,
+    ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
 };
 
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
@@ -850,6 +850,7 @@ mod test {
                     metrics: Some(ExperimentalOtelMetricsOptions {
                         run_summary: Some(false),
                         task_details: Some(false),
+                        run_attributes: None,
                         task_attributes: None,
                     }),
                     ..Default::default()

@@ -31,11 +31,9 @@
 //!     protocol: Protocol::Grpc,
 //!     headers: BTreeMap::new(),
 //!     timeout: Duration::from_secs(10),
+//!     interval: Duration::from_secs(15),
 //!     resource_attributes: BTreeMap::new(),
-//!     metrics: MetricsConfig {
-//!         run_summary: true,
-//!         task_details: false,
-//!     },
+//!     metrics: MetricsConfig::default(),
 //! };
 //!
 //! let handle = Handle::try_new(config)?;
@@ -64,6 +62,25 @@
 //! When `task_details` is enabled:
 //! - `turbo.task.duration_ms` - Histogram of individual task durations
 //! - `turbo.task.cache.events` - Counter of cache events with hit/miss status
+//!
+//! # Metric Attributes and Cardinality
+//!
+//! Attributes with unbounded cardinality (unique values grow without limit)
+//! are gated behind opt-in config flags to avoid creating excessive metric
+//! series in backends like Datadog that charge per unique series.
+//!
+//! **Always attached** (bounded cardinality):
+//! - `turbo.run.exit_code`, `turbo.version`, `turbo.scm.branch`
+//! - `turbo.task.name`, `turbo.task.package`, `turbo.task.command`
+//! - `turbo.task.cache_status`, `turbo.task.cache_source`,
+//!   `turbo.task.exit_code`
+//!
+//! **Gated by `run_attributes`** (unbounded — opt-in):
+//! - `turbo.run.id` — unique KSUID per invocation
+//! - `turbo.scm.revision` — full Git SHA, unique per commit
+//!
+//! **Gated by `task_attributes`** (unbounded — opt-in):
+//! - `turbo.task.id`, `turbo.task.hash`, `turbo.task.external_inputs_hash`
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -150,7 +167,14 @@ impl std::str::FromStr for Protocol {
     }
 }
 
-/// Metric toggle configuration.
+/// Controls which attributes are attached to run-level metrics.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct RunAttributesConfig {
+    pub id: bool,
+    pub scm_revision: bool,
+}
+
+/// Controls which attributes are attached to per-task metrics.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct TaskAttributesConfig {
     pub id: bool,
@@ -162,6 +186,7 @@ pub struct TaskAttributesConfig {
 pub struct MetricsConfig {
     pub run_summary: bool,
     pub task_details: bool,
+    pub run_attributes: RunAttributesConfig,
     pub task_attributes: TaskAttributesConfig,
 }
 
@@ -204,7 +229,6 @@ pub struct TaskMetricsPayload {
     pub duration_ms: Option<f64>,
     pub cache_status: TaskCacheStatus,
     pub cache_source: Option<String>,
-    pub cache_time_saved_ms: Option<u64>,
     pub exit_code: Option<i32>,
 }
 
@@ -302,7 +326,9 @@ impl Handle {
             payload.cached_tasks
         );
         if self.inner.metrics.run_summary {
-            self.inner.instruments.record_run_summary(payload);
+            self.inner
+                .instruments
+                .record_run_summary(payload, self.inner.metrics);
         }
         if self.inner.metrics.task_details {
             self.inner
@@ -336,7 +362,7 @@ impl Handle {
 }
 
 impl Instruments {
-    fn record_run_summary(&self, payload: &RunMetricsPayload) {
+    fn record_run_summary(&self, payload: &RunMetricsPayload, metrics: MetricsConfig) {
         tracing::debug!(
             target: "turborepo_otel",
             "record_run_summary run_id={} duration_ms={} attempted={}",
@@ -344,7 +370,7 @@ impl Instruments {
             payload.duration_ms,
             payload.attempted_tasks
         );
-        let attrs = build_run_attributes(payload);
+        let attrs = build_run_attributes(payload, metrics.run_attributes);
         self.run_duration.record(payload.duration_ms, &attrs);
         self.run_attempted.add(payload.attempted_tasks, &attrs);
         self.run_failed.add(payload.failed_tasks, &attrs);
@@ -358,7 +384,7 @@ impl Instruments {
             payload.run_id,
             payload.tasks.len()
         );
-        let base_attrs = build_run_attributes(payload);
+        let base_attrs = build_run_attributes(payload, metrics.run_attributes);
         for task in payload.tasks.iter() {
             let mut attrs = base_attrs.clone();
             attrs.push(KeyValue::new("turbo.task.name", task.task.clone()));
@@ -380,12 +406,6 @@ impl Instruments {
             ));
             if let Some(source) = &task.cache_source {
                 attrs.push(KeyValue::new("turbo.task.cache_source", source.clone()));
-            }
-            if let Some(time_saved) = task.cache_time_saved_ms {
-                attrs.push(KeyValue::new(
-                    "turbo.task.cache_time_saved_ms",
-                    time_saved as i64,
-                ));
             }
             if let Some(exit_code) = task.exit_code {
                 attrs.push(KeyValue::new("turbo.task.exit_code", exit_code as i64));
@@ -542,9 +562,14 @@ fn create_instruments(meter: &Meter) -> Instruments {
     }
 }
 
-fn build_run_attributes(payload: &RunMetricsPayload) -> Vec<KeyValue> {
+fn build_run_attributes(
+    payload: &RunMetricsPayload,
+    run_attributes: RunAttributesConfig,
+) -> Vec<KeyValue> {
     let mut attrs = Vec::with_capacity(6);
-    attrs.push(KeyValue::new("turbo.run.id", payload.run_id.clone()));
+    if run_attributes.id {
+        attrs.push(KeyValue::new("turbo.run.id", payload.run_id.clone()));
+    }
     attrs.push(KeyValue::new(
         "turbo.run.exit_code",
         payload.exit_code.to_string(),
@@ -556,7 +581,9 @@ fn build_run_attributes(payload: &RunMetricsPayload) -> Vec<KeyValue> {
     if let Some(branch) = &payload.scm_branch {
         attrs.push(KeyValue::new("turbo.scm.branch", branch.clone()));
     }
-    if let Some(revision) = &payload.scm_revision {
+    if run_attributes.scm_revision
+        && let Some(revision) = &payload.scm_revision
+    {
         attrs.push(KeyValue::new("turbo.scm.revision", revision.clone()));
     }
     attrs

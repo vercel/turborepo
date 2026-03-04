@@ -244,7 +244,19 @@ pub struct RawObservabilityOtelMetrics {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_details: Option<Spanned<bool>>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_attributes: Option<RawObservabilityOtelRunAttributes>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub task_attributes: Option<RawObservabilityOtelTaskAttributes>,
+}
+
+/// OTel run attribute configuration for run-level metrics.
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable)]
+#[serde(rename_all = "camelCase")]
+pub struct RawObservabilityOtelRunAttributes {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<Spanned<bool>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scm_revision: Option<Spanned<bool>>,
 }
 
 /// OTel task attribute configuration for task detail metrics.
