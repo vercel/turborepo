@@ -17,10 +17,6 @@ Run tasks specified in `turbo.json`.
 turbo run [tasks] [options] [-- [args passed to tasks]]
 ```
 
-- **[tasks]**: Turborepo can run one or many tasks at the same time. To run a task through `turbo`, it must be specified in `turbo.json`.
-- **[options]**: Options are used to control the behavior of the `turbo run` command. Available flag options are described below.
-- **[-- [args passed to tasks]]**: You may also pass arguments to the underlying scripts. Note that all arguments will be passed to all tasks that are named in the run command.
-
 <Callout type="info">
   `turbo run` is aliased to `turbo`. `turbo run build lint check-types` is the
   same as `turbo build lint check-types`. We recommend [using `turbo run` in CI
@@ -28,6 +24,14 @@ turbo run [tasks] [options] [-- [args passed to tasks]]
   and `turbo` with [global `turbo`
   locally](/docs/getting-started/installation#global-installation) for ease of
   use.
+</Callout>
+
+- **[tasks]**: Turborepo can run one or many tasks at the same time. To run a task through `turbo`, it must be specified in `turbo.json`.
+- **[options]**: Options are used to control the behavior of the `turbo run` command. Available flag options are described below.
+- **[-- [args passed to tasks]]**: You may also pass arguments to the underlying scripts. Note that all arguments will be passed to all tasks that are named in the run command.
+
+<Callout type="info">
+  If you're using Yarn v1, you will need to use `-- --` (two sets of double dashes) to pass arguments through to tasks, e.g. `yarn turbo run build -- -- --sourcemap`. Yarn v1 consumes the first `--` before forwarding arguments to the underlying script.
 </Callout>
 
 If no tasks are provided, `turbo` will display what tasks are available for the packages in the repository.
