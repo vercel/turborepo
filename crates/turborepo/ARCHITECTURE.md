@@ -314,7 +314,7 @@ The system uses a two-layer design:
 
 Observability is configured via `experimentalObservability.otel` in `turbo.json`:
 
-```json
+```jsonc
 {
   "futureFlags": {
     "experimentalObservability": true
@@ -329,7 +329,15 @@ Observability is configured via `experimentalObservability.otel` in `turbo.json`
       },
       "metrics": {
         "runSummary": true,
-        "taskDetails": true
+        "taskDetails": true,
+        "runAttributes": {
+          "id": false,        // turbo.run.id — unbounded cardinality
+          "scmRevision": false // turbo.scm.revision — unbounded cardinality
+        },
+        "taskAttributes": {
+          "id": false,    // turbo.task.id
+          "hashes": false // turbo.task.hash, turbo.task.external_inputs_hash — unbounded
+        }
       }
     }
   }
@@ -346,6 +354,8 @@ Configuration can also be set via environment variables (`TURBO_EXPERIMENTAL_OTE
 - `turbo.run.tasks.cached` - Cache hit counter
 - `turbo.task.duration_ms` - Per-task duration histogram (when `taskDetails` enabled)
 - `turbo.task.cache.events` - Per-task cache events (when `taskDetails` enabled)
+
+Attributes with unbounded cardinality (unique run IDs, Git SHAs, content hashes) are gated behind `runAttributes` and `taskAttributes` config flags, all defaulting to `false`. See the `Metric Attributes and Cardinality` section in `crates/turborepo-otel/src/lib.rs` for the full attribute inventory.
 
 #### Data Flow
 

@@ -9,8 +9,8 @@ use turborepo_turbo_json::{
 
 use crate::{
     ConfigurationOptions, Error, ExperimentalObservabilityOptions, ExperimentalOtelMetricsOptions,
-    ExperimentalOtelOptions, ExperimentalOtelProtocol, ExperimentalOtelTaskAttributesOptions,
-    ResolvedConfigurationOptions,
+    ExperimentalOtelOptions, ExperimentalOtelProtocol, ExperimentalOtelRunAttributesOptions,
+    ExperimentalOtelTaskAttributesOptions, ResolvedConfigurationOptions,
 };
 
 pub struct TurboJsonReader<'a> {
@@ -152,6 +152,12 @@ fn convert_raw_observability_otel(
     let metrics = raw.metrics.map(|metrics| ExperimentalOtelMetricsOptions {
         run_summary: metrics.run_summary.map(|flag| *flag.as_inner()),
         task_details: metrics.task_details.map(|flag| *flag.as_inner()),
+        run_attributes: metrics
+            .run_attributes
+            .map(|attrs| ExperimentalOtelRunAttributesOptions {
+                id: attrs.id.map(|flag| *flag.as_inner()),
+                scm_revision: attrs.scm_revision.map(|flag| *flag.as_inner()),
+            }),
         task_attributes: metrics.task_attributes.map(|attrs| {
             ExperimentalOtelTaskAttributesOptions {
                 id: attrs.id.map(|flag| *flag.as_inner()),
