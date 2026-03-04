@@ -17,7 +17,7 @@ use turborepo_api_client::{
 use crate::{
     CacheError, CacheHitMetadata, CacheOpts, CacheSource,
     cache_archive::{CacheReader, CacheWriter},
-    signature_authentication::ArtifactSignatureAuthenticator,
+    signature_authentication::{ArtifactSignatureAuthenticator, SignatureError},
     upload_progress::{UploadProgress, UploadProgressQuery},
 };
 
@@ -40,13 +40,14 @@ impl HTTPCache {
         repo_root: AbsoluteSystemPathBuf,
         api_auth: APIAuth,
         analytics_recorder: Option<AnalyticsSender>,
-    ) -> HTTPCache {
-        let signer_verifier = if opts
-            .remote_cache_opts
-            .as_ref()
-            .is_some_and(|remote_cache_opts| remote_cache_opts.signature)
-        {
-            Some(ArtifactSignatureAuthenticator {
+    ) -> Result<HTTPCache, CacheError> {
+        let remote_cache_opts = opts.remote_cache_opts.as_ref();
+        let wants_signature = remote_cache_opts.is_some_and(|o| o.signature);
+        let enforce_key_length =
+            remote_cache_opts.is_some_and(|o| o.enforce_signature_key_length());
+
+        let signer_verifier = if wants_signature {
+            let authenticator = ArtifactSignatureAuthenticator {
                 team_id: api_auth
                     .team_id
                     .as_deref()
@@ -54,19 +55,35 @@ impl HTTPCache {
                     .as_bytes()
                     .to_vec(),
                 secret_key_override: None,
-            })
+            };
+
+            if let Err(e) = authenticator.validate_key_length() {
+                if enforce_key_length {
+                    return Err(e.into());
+                }
+
+                if matches!(e, SignatureError::SignatureKeyTooShort { .. }) {
+                    warn!(
+                        "{e} This will become a fatal error in the next major version of \
+                         Turborepo. Enable `futureFlags.longerSignatureKey` in turbo.json to \
+                         enforce this now."
+                    );
+                }
+            }
+
+            Some(authenticator)
         } else {
             None
         };
 
-        HTTPCache {
+        Ok(HTTPCache {
             client,
             signer_verifier,
             repo_root,
             uploads: Arc::new(Mutex::new(HashMap::new())),
             api_auth: Arc::new(Mutex::new(api_auth)),
             analytics_recorder,
-        }
+        })
     }
 
     /// Attempts to refresh the auth token when a cache operation encounters a
@@ -453,7 +470,8 @@ mod test {
             repo_root_path.to_owned(),
             api_auth,
             Some(analytics_recorder),
-        );
+        )
+        .unwrap();
 
         // Should be a cache miss at first
         let miss = cache.fetch(hash).await?;
@@ -556,7 +574,7 @@ mod test {
             team_slug: None,
         };
 
-        let cache = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None);
+        let cache = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None).unwrap();
 
         // Verify that the cache has the token refresh capability
         // The actual token refresh would be tested in integration tests with a proper
@@ -596,7 +614,8 @@ mod test {
             team_slug: None,
         };
 
-        let cache = HTTPCache::new(api_client, &opts, repo_root_path, initial_api_auth, None);
+        let cache =
+            HTTPCache::new(api_client, &opts, repo_root_path, initial_api_auth, None).unwrap();
 
         // Verify initial token
         let initial_auth = cache.api_auth.lock().unwrap().clone();
@@ -649,13 +668,8 @@ mod test {
             team_slug: None,
         };
 
-        let cache = Arc::new(HTTPCache::new(
-            api_client,
-            &opts,
-            repo_root_path,
-            api_auth,
-            None,
-        ));
+        let cache =
+            Arc::new(HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None).unwrap());
 
         // Test concurrent access to the auth mutex
         let handles: Vec<_> = (0..5)
@@ -677,5 +691,142 @@ mod test {
             let result = handle.join().unwrap();
             assert!(result.starts_with("thread-"));
         }
+    }
+
+    #[test]
+    fn test_short_signature_key_rejected_when_enforced() {
+        let repo_root = tempfile::tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let api_client = APIClient::new(
+            "http://localhost:8000",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            false,
+        )
+        .unwrap();
+
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: Some(crate::RemoteCacheOpts::new(
+                None, true, // signature enabled
+                true, // enforce key length
+            )),
+        };
+
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+
+        // SAFETY: test-only, no other thread reads this env var concurrently
+        unsafe {
+            std::env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "short");
+        }
+        let result = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None);
+        unsafe {
+            std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
+        }
+
+        let err = result.err().expect("expected an error for short key");
+        assert_snapshot!(err.to_string(), @"artifact signature error");
+
+        // Verify the source chain carries the detail
+        let source = std::error::Error::source(&err).expect("should have a source error");
+        assert_snapshot!(
+            source.to_string(),
+            @"TURBO_REMOTE_CACHE_SIGNATURE_KEY is too short (5 bytes). A minimum of 32 bytes is required for cryptographic strength."
+        );
+    }
+
+    #[test]
+    fn test_short_signature_key_accepted_without_enforcement() {
+        let repo_root = tempfile::tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let api_client = APIClient::new(
+            "http://localhost:8000",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            false,
+        )
+        .unwrap();
+
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: Some(crate::RemoteCacheOpts::new(
+                None, true,  // signature enabled
+                false, // enforcement OFF (no future flag)
+            )),
+        };
+
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+
+        // SAFETY: test-only, no other thread reads this env var concurrently
+        unsafe {
+            std::env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "short");
+        }
+        let result = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None);
+        unsafe {
+            std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
+        }
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_valid_signature_key_accepted_when_enforced() {
+        let repo_root = tempfile::tempdir().unwrap();
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+
+        let api_client = APIClient::new(
+            "http://localhost:8000",
+            Some(Duration::from_secs(200)),
+            None,
+            "2.0.0",
+            false,
+        )
+        .unwrap();
+
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: Default::default(),
+            workers: 0,
+            remote_cache_opts: Some(crate::RemoteCacheOpts::new(
+                None, true, // signature enabled
+                true, // enforce key length
+            )),
+        };
+
+        let api_auth = APIAuth {
+            team_id: Some("my-team".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        };
+
+        // SAFETY: test-only, no other thread reads this env var concurrently
+        unsafe {
+            std::env::set_var(
+                "TURBO_REMOTE_CACHE_SIGNATURE_KEY",
+                "this-key-is-at-least-32-bytes-!!", // exactly 32 bytes
+            );
+        }
+        let result = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None);
+        unsafe {
+            std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
+        }
+
+        assert!(result.is_ok());
     }
 }

@@ -66,7 +66,8 @@ impl CacheMultiplexer {
                     api_auth,
                     analytics_recorder.clone(),
                 )
-            });
+            })
+            .transpose()?;
 
         Ok(CacheMultiplexer {
             should_print_skipping_remote_put: AtomicBool::new(true),

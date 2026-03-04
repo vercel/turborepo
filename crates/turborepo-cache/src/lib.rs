@@ -58,7 +58,7 @@ pub enum CacheError {
     TimeoutError(String),
     #[error("could not connect to the cache")]
     ConnectError,
-    #[error("signing artifact failed: {0}")]
+    #[error("artifact signature error")]
     SignatureError(#[from] SignatureError, #[backtrace] Backtrace),
     #[error("invalid duration")]
     InvalidDuration(#[backtrace] Backtrace),
@@ -192,13 +192,23 @@ pub struct CacheOpts {
 pub struct RemoteCacheOpts {
     unused_team_id: Option<String>,
     signature: bool,
+    enforce_signature_key_length: bool,
 }
 
 impl RemoteCacheOpts {
-    pub fn new(unused_team_id: Option<String>, signature: bool) -> Self {
+    pub fn new(
+        unused_team_id: Option<String>,
+        signature: bool,
+        enforce_signature_key_length: bool,
+    ) -> Self {
         Self {
             unused_team_id,
             signature,
+            enforce_signature_key_length,
         }
+    }
+
+    pub fn enforce_signature_key_length(&self) -> bool {
+        self.enforce_signature_key_length
     }
 }

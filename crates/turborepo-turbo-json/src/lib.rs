@@ -710,6 +710,33 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_future_flags_longer_signature_key() {
+        let json = r#"{
+            "tasks": {
+                "build": {}
+            },
+            "futureFlags": {
+                "longerSignatureKey": true
+            }
+        }"#;
+
+        let deserialized_result = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+
+        assert!(raw_turbo_json.future_flags.is_some());
+        let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
+        assert!(future_flags.as_inner().longer_signature_key);
+
+        let turbo_json = TurboJson::try_from(raw_turbo_json);
+        assert!(turbo_json.is_ok());
+        assert!(turbo_json.unwrap().future_flags.longer_signature_key);
+    }
+
+    #[test]
     fn test_is_root_config_with_root_path() {
         let turbo_json = TurboJson {
             path: Some("turbo.json".into()),

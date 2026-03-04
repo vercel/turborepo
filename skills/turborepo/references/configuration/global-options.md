@@ -142,6 +142,10 @@ When using `outputLogs: "errors-only"`, show task hashes on start/completion:
 - Cache miss: `cache miss, executing <hash> (only logging errors)`
 - Cache hit: `cache hit, replaying logs (no errors) <hash>`
 
+### `longerSignatureKey`
+
+Enforce a minimum key length of 32 bytes for `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is enabled. Short keys weaken HMAC-SHA256 signatures. Fails the run immediately if the key is too short.
+
 ## noUpdateNotifier
 
 Disable update notifications when new turbo versions are available.
