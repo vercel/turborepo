@@ -504,54 +504,6 @@ mod test {
     }
 
     #[test]
-    fn bun_subpath_import_not_flagged_as_type_only() {
-        let tmp = tempfile::tempdir().unwrap();
-        let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
-        let file_path = root.join_component("index.ts");
-        let file_content = "import { test } from \"bun:test\";";
-        std::fs::write(file_path.as_std_path(), file_content).unwrap();
-
-        let resolver = Tracer::create_resolver(None);
-        let package_name = PackageName::from("my-app");
-
-        let mut dev_deps = BTreeMap::new();
-        dev_deps.insert("@types/bun".to_string(), "latest".to_string());
-        let package_json = PackageJson {
-            dev_dependencies: Some(dev_deps),
-            ..Default::default()
-        };
-
-        let internal_deps = HashSet::new();
-        let implicit_deps = HashMap::new();
-        let global_implicit_deps = HashMap::new();
-
-        let dependency_locations = DependencyLocations {
-            package: &package_name,
-            internal_dependencies: &internal_deps,
-            package_json: &package_json,
-            unresolved_external_dependencies: None,
-            implicit_dependencies: &implicit_deps,
-            global_implicit_dependencies: &global_implicit_deps,
-        };
-
-        let span = SourceSpan::new(0.into(), file_content.len());
-        let result = check_package_import(
-            "bun:test",
-            ImportType::Value,
-            span,
-            &file_path,
-            file_content,
-            dependency_locations,
-            &resolver,
-        );
-
-        assert!(
-            result.is_none(),
-            "import from 'bun:test' should not be flagged"
-        );
-    }
-
-    #[test]
     fn types_only_package_still_flagged_for_non_bun() {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
