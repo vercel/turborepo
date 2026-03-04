@@ -264,6 +264,16 @@ pub(crate) fn check_file_import(
     }
 }
 
+/// Returns true if the import specifier refers to a Bun runtime builtin module.
+///
+/// Bun provides its own built-in modules (`bun`, `bun:test`, `bun:sqlite`,
+/// etc.) that are available at runtime but are not Node.js builtins. Without
+/// this check, a project with `@types/bun` in devDependencies would incorrectly
+/// flag `import { $ } from "bun"` as a type-only import.
+fn is_bun_builtin(import: &str) -> bool {
+    import == "bun" || import.starts_with("bun:")
+}
+
 pub(crate) fn get_package_name(import: &str) -> String {
     if import.starts_with("@") {
         import.split('/').take(2).join("/")
@@ -301,6 +311,7 @@ pub(crate) fn check_package_import(
     let is_valid_dependency = dependency_locations.is_dependency(&package_name);
 
     if !is_valid_dependency
+        && !is_bun_builtin(import)
         && !matches!(
             resolver.resolve(folder, import),
             Err(ResolveError::Builtin { .. })
@@ -342,6 +353,19 @@ mod test {
     use turbo_trace::Tracer;
 
     use super::*;
+
+    #[test_case("bun", true ; "bun bare import")]
+    #[test_case("bun:test", true ; "bun test module")]
+    #[test_case("bun:sqlite", true ; "bun sqlite module")]
+    #[test_case("bun:ffi", true ; "bun ffi module")]
+    #[test_case("bun:jsc", true ; "bun jsc module")]
+    #[test_case("bunny", false ; "package starting with bun")]
+    #[test_case("bun-framework", false ; "package with bun prefix")]
+    #[test_case("@types/bun", false ; "types for bun")]
+    #[test_case("react", false ; "unrelated package")]
+    fn test_is_bun_builtin(import: &str, expected: bool) {
+        assert_eq!(is_bun_builtin(import), expected);
+    }
 
     #[test_case("", ""; "empty")]
     #[test_case("ship", "ship"; "basic")]
@@ -428,6 +452,108 @@ mod test {
             "relative import {import:?} should not be resolved as tsconfig alias"
         );
         assert!(result.diagnostics.is_empty());
+    }
+
+    #[test]
+    fn bun_import_not_flagged_as_type_only_when_types_bun_is_dependency() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let file_path = root.join_component("index.ts");
+        let file_content = "import { $, which } from \"bun\";";
+        std::fs::write(file_path.as_std_path(), file_content).unwrap();
+
+        let resolver = Tracer::create_resolver(None);
+        let package_name = PackageName::from("my-app");
+
+        // `@types/bun` is listed as a devDependency, but `bun` itself is not
+        let mut dev_deps = BTreeMap::new();
+        dev_deps.insert("@types/bun".to_string(), "latest".to_string());
+        let package_json = PackageJson {
+            dev_dependencies: Some(dev_deps),
+            ..Default::default()
+        };
+
+        let internal_deps = HashSet::new();
+        let implicit_deps = HashMap::new();
+        let global_implicit_deps = HashMap::new();
+
+        let dependency_locations = DependencyLocations {
+            package: &package_name,
+            internal_dependencies: &internal_deps,
+            package_json: &package_json,
+            unresolved_external_dependencies: None,
+            implicit_dependencies: &implicit_deps,
+            global_implicit_dependencies: &global_implicit_deps,
+        };
+
+        let span = SourceSpan::new(0.into(), file_content.len());
+        let result = check_package_import(
+            "bun",
+            ImportType::Value,
+            span,
+            &file_path,
+            file_content,
+            dependency_locations,
+            &resolver,
+        );
+
+        assert!(
+            result.is_none(),
+            "import from 'bun' should not be flagged even when @types/bun is a devDependency"
+        );
+    }
+
+    #[test]
+    fn types_only_package_still_flagged_for_non_bun() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::new(tmp.path().to_str().unwrap()).unwrap();
+        let file_path = root.join_component("index.ts");
+        let file_content = "import { Ship } from \"ship\";";
+        std::fs::write(file_path.as_std_path(), file_content).unwrap();
+
+        let resolver = Tracer::create_resolver(None);
+        let package_name = PackageName::from("my-app");
+
+        // Only @types/ship exists, not ship itself
+        let mut dev_deps = BTreeMap::new();
+        dev_deps.insert("@types/ship".to_string(), "*".to_string());
+        let package_json = PackageJson {
+            dev_dependencies: Some(dev_deps),
+            ..Default::default()
+        };
+
+        let internal_deps = HashSet::new();
+        let implicit_deps = HashMap::new();
+        let global_implicit_deps = HashMap::new();
+
+        let dependency_locations = DependencyLocations {
+            package: &package_name,
+            internal_dependencies: &internal_deps,
+            package_json: &package_json,
+            unresolved_external_dependencies: None,
+            implicit_dependencies: &implicit_deps,
+            global_implicit_dependencies: &global_implicit_deps,
+        };
+
+        let span = SourceSpan::new(0.into(), file_content.len());
+        let result = check_package_import(
+            "ship",
+            ImportType::Value,
+            span,
+            &file_path,
+            file_content,
+            dependency_locations,
+            &resolver,
+        );
+
+        assert!(
+            result.is_some(),
+            "import from 'ship' should still be flagged when only @types/ship is a dependency"
+        );
+        assert!(matches!(
+            result.unwrap(),
+            BoundariesDiagnostic::NotTypeOnlyImport { .. }
+        ));
     }
 
     #[test]

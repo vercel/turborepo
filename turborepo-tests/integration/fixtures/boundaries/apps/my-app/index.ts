@@ -31,3 +31,7 @@ import { anchor } from "another/helpers";
 
 // Subpath import from a package that is NOT a dependency should fail
 import { data } from "utils/data";
+
+// Bun runtime imports should not be flagged even with @types/bun in devDependencies
+import { $, which } from "bun";
+import { test } from "bun:test";

@@ -594,7 +594,11 @@ impl RepositoryQuery {
                 .diagnostics
                 .into_iter()
                 .map(|b| b.into())
-                .sorted_by(|a: &Diagnostic, b: &Diagnostic| a.message.cmp(&b.message))
+                .sorted_by(|a: &Diagnostic, b: &Diagnostic| {
+                    a.message
+                        .cmp(&b.message)
+                        .then_with(|| a.import.cmp(&b.import))
+                })
                 .collect()),
             Err(err) => Err(Error::Boundaries(err)),
         }
