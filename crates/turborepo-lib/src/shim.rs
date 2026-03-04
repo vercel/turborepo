@@ -88,21 +88,27 @@ impl ConfigProvider for TurboConfigProvider {
 
 /// Reads `noUpdateNotifier` directly from turbo.json as a fallback.
 ///
-/// This is used when the full configuration pipeline does not yield a
-/// `no_update_notifier` value, which can happen if a higher-priority
-/// configuration source (global config, auth file, environment variable)
-/// errors during resolution, aborting the pipeline before turbo.json is
-/// processed.
+/// Called only when the full configuration pipeline errors — for example,
+/// a malformed global config or auth file can abort the pipeline before
+/// turbo.json is ever processed. In that case we parse turbo.json in
+/// isolation so the update-notifier flag is still honoured.
+///
+/// Because this bypasses the pipeline, higher-priority sources (env vars,
+/// CLI flags) are not consulted. This is acceptable because the fallback
+/// only fires when the pipeline is broken, and a wrong update-notification
+/// preference is low-severity.
 fn read_no_update_notifier_from_turbo_json(
     root: &AbsoluteSystemPath,
     root_turbo_json: Option<&AbsoluteSystemPathBuf>,
 ) -> bool {
-    let turbo_json_path = root_turbo_json
-        .cloned()
-        .or_else(|| {
-            turborepo_config::resolve_turbo_config_path(root)
-                .ok()
-        });
+    let turbo_json_path = root_turbo_json.cloned().or_else(|| {
+        turborepo_config::resolve_turbo_config_path(root)
+            .map_err(|e| {
+                tracing::debug!("Failed to resolve turbo config path in fallback: {e}");
+                e
+            })
+            .ok()
+    });
 
     let Some(path) = turbo_json_path else {
         return false;
@@ -110,16 +116,23 @@ fn read_no_update_notifier_from_turbo_json(
 
     let contents = match path.read_existing_to_string() {
         Ok(Some(contents)) => contents,
-        _ => return false,
+        Ok(None) => return false,
+        Err(e) => {
+            tracing::debug!("Failed to read {path} for noUpdateNotifier fallback: {e}");
+            return false;
+        }
     };
 
-    // Parse the turbo.json and check for noUpdateNotifier
-    match turborepo_turbo_json::RawRootTurboJson::parse(&contents, "turbo.json") {
+    let file_path = path.file_name().unwrap_or("turbo.json");
+    match turborepo_turbo_json::RawRootTurboJson::parse(&contents, file_path) {
         Ok(raw) => raw
             .no_update_notifier
             .map(|v| *v.as_inner())
             .unwrap_or(false),
-        Err(_) => false,
+        Err(e) => {
+            tracing::debug!("Failed to parse {file_path} for noUpdateNotifier fallback: {e}");
+            false
+        }
     }
 }
 
@@ -216,5 +229,108 @@ pub fn run() -> Result<i32, Error> {
         ShimResult::Ok(code) => Ok(code),
         ShimResult::ShimError(e) => Err(Error::Shim(e)),
         ShimResult::CliError(e) => Err(Error::Cli(e)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tempfile::TempDir;
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use super::read_no_update_notifier_from_turbo_json;
+
+    #[test]
+    fn fallback_reads_true_from_turbo_json() {
+        let tmp = TempDir::new().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents(r#"{"noUpdateNotifier": true}"#)
+            .unwrap();
+
+        assert!(read_no_update_notifier_from_turbo_json(&root, None));
+    }
+
+    #[test]
+    fn fallback_reads_false_from_turbo_json() {
+        let tmp = TempDir::new().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents(r#"{"noUpdateNotifier": false}"#)
+            .unwrap();
+
+        assert!(!read_no_update_notifier_from_turbo_json(&root, None));
+    }
+
+    #[test]
+    fn fallback_defaults_false_when_field_absent() {
+        let tmp = TempDir::new().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents(r#"{}"#)
+            .unwrap();
+
+        assert!(!read_no_update_notifier_from_turbo_json(&root, None));
+    }
+
+    #[test]
+    fn fallback_returns_false_when_no_turbo_json() {
+        let tmp = TempDir::new().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+
+        assert!(!read_no_update_notifier_from_turbo_json(&root, None));
+    }
+
+    #[test]
+    fn fallback_returns_false_for_malformed_json() {
+        let tmp = TempDir::new().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents("not valid json at all")
+            .unwrap();
+
+        assert!(!read_no_update_notifier_from_turbo_json(&root, None));
+    }
+
+    #[test]
+    fn fallback_uses_custom_turbo_json_path() {
+        let tmp = TempDir::new().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let custom_path = root.join_component("custom-turbo.json");
+        custom_path
+            .create_with_contents(r#"{"noUpdateNotifier": true}"#)
+            .unwrap();
+
+        assert!(read_no_update_notifier_from_turbo_json(
+            &root,
+            Some(&custom_path)
+        ));
+    }
+
+    #[test]
+    fn fallback_returns_false_for_nonexistent_custom_path() {
+        let tmp = TempDir::new().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let nonexistent = root.join_component("does-not-exist.json");
+
+        assert!(!read_no_update_notifier_from_turbo_json(
+            &root,
+            Some(&nonexistent)
+        ));
+    }
+
+    #[test]
+    fn fallback_reads_from_turbo_jsonc() {
+        let tmp = TempDir::new().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component("turbo.jsonc")
+            .create_with_contents(
+                r#"{
+                    // Comments are allowed in jsonc
+                    "noUpdateNotifier": true
+                }"#,
+            )
+            .unwrap();
+
+        assert!(read_no_update_notifier_from_turbo_json(&root, None));
     }
 }
