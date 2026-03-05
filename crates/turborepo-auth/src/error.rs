@@ -54,4 +54,22 @@ pub enum Error {
 
     #[error(transparent)]
     Path(#[from] PathError),
+
+    #[error("OIDC discovery failed: {message}")]
+    DiscoveryFailed { message: String },
+    #[error("device authorization failed: {message}")]
+    DeviceAuthorizationFailed { message: String },
+    #[error("authorization timed out — the device code expired")]
+    DeviceCodeExpired,
+    #[error("authorization denied by user")]
+    AuthorizationDenied,
+    #[error("OAuth error: {code}{}", description.as_ref().map(|d| format!(": {d}")).unwrap_or_default())]
+    OAuthError {
+        code: String,
+        description: Option<String>,
+    },
+    #[error("SSO requires an existing login. Please run `turbo login` first.")]
+    SSORequiresLogin,
+    #[error("token introspection failed: {message}")]
+    IntrospectionFailed { message: String },
 }

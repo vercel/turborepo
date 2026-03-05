@@ -373,7 +373,7 @@ pub struct APIClientOpts {
     pub login_url: String,
     /// Whether to use preflight requests
     pub preflight: bool,
-    /// Port for SSO login callback
+    /// Port for SSO login callback (non-Vercel flows only)
     pub sso_login_callback_port: Option<u16>,
 }
 

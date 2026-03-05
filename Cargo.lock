@@ -427,23 +427,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum-server"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1df331683d982a0b9492b38127151e6453639cd34926eb9c07d4cd8c6d22bfc"
-dependencies = [
- "bytes",
- "either",
- "fs-err 3.3.0",
- "http",
- "http-body",
- "hyper",
- "hyper-util",
- "tokio",
- "tower-service",
-]
-
-[[package]]
 name = "backtrace"
 version = "0.3.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2001,16 +1984,6 @@ name = "fs-err"
 version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0845fa252299212f0389d64ba26f34fa32cfe41588355f21ed507c59a0f64541"
-
-[[package]]
-name = "fs-err"
-version = "3.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "73fde052dbfc920003cfd2c8e2c6e6d4cc7c1091538c3a24226cec0665ab08c0"
-dependencies = [
- "autocfg",
- "tokio",
-]
 
 [[package]]
 name = "fsevent-sys"
@@ -7152,7 +7125,7 @@ dependencies = [
  "biome_json_parser",
  "camino",
  "dunce",
- "fs-err 2.9.0",
+ "fs-err",
  "miette",
  "path-clean",
  "serde",
@@ -7215,16 +7188,13 @@ dependencies = [
 name = "turborepo-auth"
 version = "0.1.0"
 dependencies = [
- "anyhow",
- "async-trait",
- "axum",
- "axum-server",
  "chrono",
  "hostname",
  "http",
  "httpmock",
  "insta",
  "port_scanner",
+ "rand 0.8.5",
  "reqwest",
  "serde",
  "serde_json",
@@ -7549,7 +7519,7 @@ dependencies = [
 name = "turborepo-fs"
 version = "0.1.0"
 dependencies = [
- "fs-err 2.9.0",
+ "fs-err",
  "ignore",
  "tempfile",
  "test-case",
