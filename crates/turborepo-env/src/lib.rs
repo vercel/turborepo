@@ -36,6 +36,8 @@ pub const BUILTIN_PASS_THROUGH_ENV: &[&str] = &[
     "LD_PRELOAD",
     "DYLD_INSERT_LIBRARIES",
     "COLORTERM",
+    "FORCE_COLOR",
+    "NO_COLOR",
     "TERM",
     "TERM_PROGRAM",
     "DISPLAY",
