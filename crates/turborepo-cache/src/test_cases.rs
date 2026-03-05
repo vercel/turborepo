@@ -68,11 +68,24 @@ pub(crate) async fn validate_analytics(
     source: analytics::CacheSource,
     port: u16,
 ) -> Result<()> {
-    let response = reqwest::get(format!("http://localhost:{port}/v8/artifacts/events")).await?;
-    assert_eq!(response.status(), 200);
-    let analytics_events: Vec<AnalyticsEvent> = response.json().await?;
+    let expected_count = test_cases.len() * 2;
 
-    assert_eq!(analytics_events.len(), test_cases.len() * 2);
+    // Analytics events are sent via fire-and-forget tokio::spawn tasks, so they
+    // may not have arrived at the mock server immediately after close(). Poll
+    // with a short retry loop.
+    let mut analytics_events: Vec<AnalyticsEvent> = Vec::new();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        let response = reqwest::get(format!("http://localhost:{port}/v8/artifacts/events")).await?;
+        assert_eq!(response.status(), 200);
+        analytics_events = response.json().await?;
+        if analytics_events.len() >= expected_count || tokio::time::Instant::now() >= deadline {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
+
+    assert_eq!(analytics_events.len(), expected_count);
 
     println!("{analytics_events:#?}");
     for test_case in test_cases {
