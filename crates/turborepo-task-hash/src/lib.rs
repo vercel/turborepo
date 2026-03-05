@@ -297,6 +297,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     /// Pre-compute and cache external dependency hashes for all packages.
     /// Many tasks share the same package, so this avoids re-sorting
     /// transitive dependencies for every task.
+    #[tracing::instrument(skip_all)]
     pub fn precompute_external_deps_hashes<'b>(
         &mut self,
         workspaces: impl Iterator<Item = (&'b PackageName, &'b PackageInfo)>,
