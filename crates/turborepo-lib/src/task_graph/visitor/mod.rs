@@ -158,7 +158,11 @@ impl<'a> Visitor<'a> {
 
         // Set up correct size for underlying pty (requires .await, so outside span)
         if let Some(app) = ui_sender.as_ref() {
-            if let Some(pane_size) = app.pane_size().await {
+            if let Some(pane_size) = app
+                .pane_size()
+                .instrument(tracing::debug_span!("configure_pane_size"))
+                .await
+            {
                 manager.set_pty_size(pane_size.rows, pane_size.cols);
             }
         }

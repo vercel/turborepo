@@ -235,6 +235,7 @@ fn collect_global_deps(
 }
 
 impl<'a> GlobalHashableInputs<'a> {
+    #[tracing::instrument(skip_all)]
     pub fn calculate_global_hash(&self) -> String {
         let global_hashable = GlobalHashable {
             global_cache_key: self.global_cache_key,

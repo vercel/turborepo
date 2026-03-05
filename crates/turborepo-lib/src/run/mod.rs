@@ -663,6 +663,8 @@ impl Run {
 
         drop(_hash_scope_span);
 
+        let _setup_span = tracing::debug_span!("post_hashing_setup").entered();
+
         let package_inputs_hashes = file_hash_result.expect("file hash task did not complete")?;
         let root_internal_dependencies_hash =
             internal_deps_result.expect("internal deps task did not complete")?;
@@ -713,6 +715,8 @@ impl Run {
             Vendor::get_user(),
             self.observability_handle.clone(),
         );
+
+        drop(_setup_span);
 
         let mut visitor = Visitor::new(
             self.pkg_dep_graph.clone(),
