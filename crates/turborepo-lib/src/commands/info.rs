@@ -65,6 +65,10 @@ pub async fn run(base: CommandBase) {
     println!("Environment:");
     println!("   CI: {:#?}", turborepo_ci::Vendor::get_name());
     println!(
+        "   AI agent: {}",
+        turborepo_ai_agents::get_agent().unwrap_or("None")
+    );
+    println!(
         "   Terminal (TERM): {}",
         env::var("TERM").unwrap_or_else(|_| "unknown".to_owned())
     );
