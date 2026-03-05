@@ -37,6 +37,7 @@ pub use run::package_discovery::DaemonPackageDiscovery;
 pub use turborepo_daemon::{
     DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths as DaemonPaths,
 };
+pub use turborepo_query_api::QueryServer;
 
 pub use crate::{child::spawn_child, cli::Args, panic_handler::panic_handler};
 
@@ -49,8 +50,16 @@ pub fn get_version() -> &'static str {
         .trim_end()
 }
 
-pub fn main() -> Result<i32, shim::Error> {
-    shim::run()
+/// Main entry point for the turborepo CLI.
+///
+/// `query_server` provides the GraphQL query execution layer. When `None`,
+/// the `turbo query` command returns an error and the Web UI mode falls
+/// back silently. Pass `Some(...)` with a [`QueryServer`] implementation
+/// to enable the full query subsystem.
+pub fn main(
+    query_server: Option<std::sync::Arc<dyn turborepo_query_api::QueryServer>>,
+) -> Result<i32, shim::Error> {
+    shim::run(query_server)
 }
 
 #[cfg(all(feature = "native-tls", feature = "rustls-tls"))]

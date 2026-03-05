@@ -79,6 +79,7 @@ pub struct Run {
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: Arc<Option<RepoGitIndex>>,
     observability_handle: Option<ObservabilityHandle>,
+    pub(crate) query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
@@ -265,9 +266,13 @@ impl Run {
         }
     }
     fn start_web_ui(self: &Arc<Self>) -> WuiResult {
+        let Some(query_server) = self.query_server.clone() else {
+            tracing::warn!("Web UI requires a query server implementation");
+            return Ok(None);
+        };
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone()));
+        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone(), query_server));
 
         Ok(Some((WebUISender { tx }, handle)))
     }
@@ -869,7 +874,7 @@ impl turborepo_engine::ChildProcess for SharedChildWrapper {
     }
 }
 
-impl turborepo_query::QueryRun for Run {
+impl turborepo_query_api::QueryRun for Run {
     fn version(&self) -> &'static str {
         self.version
     }
@@ -905,7 +910,7 @@ impl turborepo_query::QueryRun for Run {
             turborepo_repository::package_graph::PackageName,
             turborepo_repository::change_mapper::PackageInclusionReason,
         >,
-        turborepo_query::AffectedPackagesError,
+        turborepo_query_api::AffectedPackagesError,
     > {
         let mut opts = self.opts.as_ref().clone();
         opts.scope_opts.affected_range = Some((base, head));
@@ -916,7 +921,7 @@ impl turborepo_query::QueryRun for Run {
             &self.scm,
             &self.root_turbo_json,
         )
-        .map_err(|e| turborepo_query::AffectedPackagesError::Other(Box::new(e)))
+        .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))
     }
 
     fn check_boundaries(

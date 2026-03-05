@@ -40,11 +40,18 @@ pub enum Error {
 /// Implementation of `TurboRunner` that calls into `turborepo-lib`'s CLI.
 struct TurboCliRunner<'a> {
     subscriber: &'a TurboSubscriber,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
 
 impl<'a> TurboCliRunner<'a> {
-    fn new(subscriber: &'a TurboSubscriber) -> Self {
-        Self { subscriber }
+    fn new(
+        subscriber: &'a TurboSubscriber,
+        query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+    ) -> Self {
+        Self {
+            subscriber,
+            query_server,
+        }
     }
 }
 
@@ -52,7 +59,7 @@ impl TurboRunner for TurboCliRunner<'_> {
     type Error = cli::Error;
 
     fn run(&self, repo_state: Option<RepoState>, ui: ColorConfig) -> Result<i32, Self::Error> {
-        cli::run(repo_state, self.subscriber, ui)
+        cli::run(repo_state, self.subscriber, ui, self.query_server.clone())
     }
 }
 
@@ -199,7 +206,7 @@ fn normalize_config_dir_env_vars() {
 /// 3. Create TurboSubscriber with verbosity and color config
 /// 4. Create runtime with trait implementations
 /// 5. Execute shim logic (miette hook setup, repo inference, turbo execution)
-pub fn run() -> Result<i32, Error> {
+pub fn run(query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>) -> Result<i32, Error> {
     // Normalize env vars first, before arg parsing (matches original behavior)
     normalize_config_dir_env_vars();
 
@@ -218,7 +225,7 @@ pub fn run() -> Result<i32, Error> {
 
     // Create the runtime with all implementations
     let runtime = ShimRuntime::new(
-        TurboCliRunner::new(&subscriber),
+        TurboCliRunner::new(&subscriber, query_server),
         TurboConfigProvider,
         TurboChildSpawner,
         TurboVersionProvider,
