@@ -1261,11 +1261,11 @@ mod tests {
 
         #[test]
         fn test_unicode_slash_lookalike_in_path() -> Result<()> {
-            // U+2215 is "DIVISION SLASH" — could be confused with path separator
-            let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
-                path: "foo\u{2215}..\\..\\escape",
-                body: b"escaped".to_vec(),
-            }]);
+            // U+2215 is "DIVISION SLASH" — could be confused with path separator.
+            // On Windows the tar builder interprets backslashes as path separators
+            // and rejects `..` components, so we use the raw tar generator.
+            let tar_bytes =
+                generate_raw_tar_with_unsafe_path("foo\u{2215}..\\..\\escape", b"escaped");
 
             let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
             let output_dir = tempdir()?;
