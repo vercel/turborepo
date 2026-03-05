@@ -253,6 +253,7 @@ impl RunBuilder {
         });
 
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
+        run_telemetry.track_ai_agent(turborepo_ai_agents::get_agent());
 
         // The daemon is no longer used for `turbo run`. It provided no measurable
         // performance benefit and added IPC overhead. The daemon is still used by

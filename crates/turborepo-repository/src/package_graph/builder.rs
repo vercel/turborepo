@@ -516,9 +516,6 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             .package_manager;
         self.connect_internal_dependencies(&package_manager)?;
 
-        // Collect the lockfile result now — after connect_internal_dependencies
-        // so the lockfile parse overlaps with both parse_package_jsons AND
-        // internal dependency resolution.
         if let Some(handle) = lockfile_future
             && let Ok(Some(lockfile)) = handle.await
         {
