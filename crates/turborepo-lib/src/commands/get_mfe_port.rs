@@ -270,9 +270,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_port_with_package_name_different_from_app_key() {
-        // Covers the case where the application key in microfrontends.json is a Vercel
-        // project name that differs from the workspace package name. The packageName
-        // field bridges the two, and turbo get-mfe-port must resolve the port via it.
         let tmp = TempDir::new().unwrap();
         let repo_root = setup_test_repo(&tmp);
 
@@ -284,7 +281,6 @@ mod tests {
             .create_with_contents(r#"{"name": "my-app"}"#)
             .unwrap();
 
-        // Application key is the Vercel project name; packageName is the workspace name
         app_dir
             .join_component("microfrontends.json")
             .create_with_contents(
@@ -304,7 +300,6 @@ mod tests {
 
         let base = create_command_base(repo_root);
 
-        // Lookup by workspace package name should succeed via packageName fallback
         let port = get_port_for_package(&base, "my-app").await.unwrap();
         assert_eq!(port, 3005);
     }

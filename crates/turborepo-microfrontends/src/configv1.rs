@@ -240,11 +240,9 @@ impl ConfigV1 {
     }
 
     pub fn port(&self, name: &str) -> Option<u16> {
-        // Fast path: direct lookup by application key
         if let Some(application) = self.applications.get(name) {
             return Some(application.port(name));
         }
-        // Fallback: find by packageName field (e.g. Vercel project name != package name)
         self.applications
             .iter()
             .find(|(key, app)| app.package_name(key) == name)
@@ -449,7 +447,6 @@ mod test {
 
     #[test]
     fn test_port_lookup_by_package_name() {
-        // Application key differs from packageName (e.g. Vercel project name vs workspace name)
         let input = r#"{
         "applications": {
             "my-vercel-project": {
@@ -461,9 +458,7 @@ mod test {
         let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
         match config {
             ParseResult::Actual(config_v1) => {
-                // Lookup by packageName should resolve the port
                 assert_eq!(config_v1.port("my-app"), Some(3001));
-                // Lookup by application key should still work too
                 assert_eq!(config_v1.port("my-vercel-project"), Some(3001));
             }
             ParseResult::Reference(_) => panic!("expected main config"),
@@ -472,7 +467,6 @@ mod test {
 
     #[test]
     fn test_port_lookup_by_package_name_auto_generated() {
-        // When no explicit port is set, port is generated from the application key (not packageName)
         let input = r#"{
         "applications": {
             "my-vercel-project": {
@@ -485,10 +479,8 @@ mod test {
             ParseResult::Actual(config_v1) => {
                 let port_by_pkg = config_v1.port("my-app");
                 let port_by_key = config_v1.port("my-vercel-project");
-                // Both lookups should return a port
                 assert!(port_by_pkg.is_some());
                 assert!(port_by_key.is_some());
-                // Both should be the same port (generated from the application key)
                 assert_eq!(port_by_pkg, port_by_key);
                 assert_eq!(port_by_key, Some(generate_port_from_name("my-vercel-project")));
             }
