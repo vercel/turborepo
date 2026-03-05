@@ -183,20 +183,7 @@ where
             true => Ok(state.build_single_package_graph().await?),
             false => {
                 let state = state.parse_package_jsons().await?;
-
-                // If we started a lockfile read, collect the result before
-                // entering resolve_lockfile so it becomes a cache hit.
-                let state = if let Some(handle) = lockfile_future {
-                    if let Ok(Some(lockfile)) = handle.await {
-                        state.with_lockfile(lockfile)
-                    } else {
-                        state
-                    }
-                } else {
-                    state
-                };
-
-                let state = state.resolve_lockfile().await?;
+                let state = state.resolve_lockfile(lockfile_future).await?;
                 Ok(state.build_inner().await?)
             }
         }
@@ -428,11 +415,6 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
 }
 
 impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
-    fn with_lockfile(mut self, lockfile: Box<dyn Lockfile>) -> Self {
-        self.lockfile = Some(lockfile);
-        self
-    }
-
     #[tracing::instrument(skip(self))]
     fn connect_internal_dependencies(
         &mut self,
@@ -520,8 +502,11 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         }
     }
 
-    #[tracing::instrument(skip(self))]
-    async fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile, T>, Error> {
+    #[tracing::instrument(skip(self, lockfile_future))]
+    async fn resolve_lockfile(
+        mut self,
+        lockfile_future: Option<tokio::task::JoinHandle<Option<Box<dyn Lockfile>>>>,
+    ) -> Result<BuildState<'a, ResolvedLockfile, T>, Error> {
         // Since we've already performed package discovery, this should just be a cache
         // hit
         let package_manager = self
@@ -530,6 +515,15 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             .await?
             .package_manager;
         self.connect_internal_dependencies(&package_manager)?;
+
+        // Collect the lockfile result now — after connect_internal_dependencies
+        // so the lockfile parse overlaps with both parse_package_jsons AND
+        // internal dependency resolution.
+        if let Some(handle) = lockfile_future
+            && let Ok(Some(lockfile)) = handle.await
+        {
+            self.lockfile = Some(lockfile);
+        }
 
         let lockfile = match self.populate_lockfile().await {
             Ok(lockfile) => Some(lockfile),
