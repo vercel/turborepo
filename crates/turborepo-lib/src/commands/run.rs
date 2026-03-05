@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use tracing::error;
+use turborepo_query_api::QueryServer;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
@@ -12,14 +13,18 @@ pub async fn run(
     base: CommandBase,
     telemetry: CommandEventBuilder,
     http_client_cell: Arc<tokio::sync::OnceCell<reqwest::Client>>,
+    query_server: Option<Arc<dyn QueryServer>>,
 ) -> Result<i32, run::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let run_builder = {
+    let mut run_builder = {
         let _span = tracing::info_span!("run_builder_new").entered();
         RunBuilder::new(base, Some(http_client_cell))?
     };
+    if let Some(qs) = query_server {
+        run_builder = run_builder.with_query_server(qs);
+    }
 
     let run_fut = async {
         let (run, analytics_handle) = {

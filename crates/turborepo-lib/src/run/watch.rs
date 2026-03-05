@@ -75,6 +75,7 @@ pub struct WatchClient {
     ui_sender: Option<UISender>,
     ui_handle: Option<JoinHandle<Result<(), turborepo_ui::Error>>>,
     experimental_write_cache: bool,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
 
 struct RunHandle {
@@ -139,6 +140,7 @@ impl WatchClient {
         base: CommandBase,
         experimental_write_cache: bool,
         telemetry: CommandEventBuilder,
+        query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
     ) -> Result<Self, Error> {
         let signal = get_signal()?;
         let handler = SignalHandler::new(signal);
@@ -172,10 +174,12 @@ impl WatchClient {
         let daemon_client = connector.clone().connect().await?;
 
         let new_base = base.clone();
-        let (run, _analytics) = RunBuilder::new(new_base, None)?
-            .with_daemon_client(daemon_client.clone())
-            .build(&handler, telemetry.clone())
-            .await?;
+        let mut run_builder =
+            RunBuilder::new(new_base, None)?.with_daemon_client(daemon_client.clone());
+        if let Some(ref qs) = query_server {
+            run_builder = run_builder.with_query_server(qs.clone());
+        }
+        let (run, _analytics) = run_builder.build(&handler, telemetry.clone()).await?;
         let run = Arc::new(run);
 
         let watched_packages = run.get_relevant_packages();
@@ -195,6 +199,7 @@ impl WatchClient {
             active_runs: Vec::new(),
             ui_sender,
             ui_handle,
+            query_server,
         })
     }
 
@@ -397,12 +402,14 @@ impl WatchClient {
                 let signal_handler = self.handler.clone();
                 let telemetry = self.telemetry.clone();
 
-                let (run, _analytics) = RunBuilder::new(new_base, None)?
+                let mut run_builder = RunBuilder::new(new_base, None)?
                     .with_daemon_client(self.daemon_client.clone())
                     .with_entrypoint_packages(packages)
-                    .hide_prelude()
-                    .build(&signal_handler, telemetry)
-                    .await?;
+                    .hide_prelude();
+                if let Some(ref qs) = self.query_server {
+                    run_builder = run_builder.with_query_server(qs.clone());
+                }
+                let (run, _analytics) = run_builder.build(&signal_handler, telemetry).await?;
 
                 if let Some(sender) = &self.ui_sender {
                     let task_names = run.engine.tasks_with_command(&run.pkg_dep_graph);
@@ -432,9 +439,13 @@ impl WatchClient {
                 );
 
                 // rebuild run struct
-                let (run, _analytics) = RunBuilder::new(base.clone(), None)?
+                let mut run_builder = RunBuilder::new(base.clone(), None)?
                     .with_daemon_client(self.daemon_client.clone())
-                    .hide_prelude()
+                    .hide_prelude();
+                if let Some(ref qs) = self.query_server {
+                    run_builder = run_builder.with_query_server(qs.clone());
+                }
+                let (run, _analytics) = run_builder
                     .build(&self.handler, self.telemetry.clone())
                     .await?;
                 self.run = run.into();

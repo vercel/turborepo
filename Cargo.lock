@@ -7097,6 +7097,10 @@ dependencies = [
  "serde_json",
  "tempfile",
  "turborepo-lib",
+ "turborepo-query",
+ "turborepo-query-api",
+ "turborepo-signals",
+ "turborepo-ui",
  "which",
 ]
 
@@ -7697,7 +7701,7 @@ dependencies = [
  "turborepo-otel",
  "turborepo-process",
  "turborepo-profile-md",
- "turborepo-query",
+ "turborepo-query-api",
  "turborepo-repository",
  "turborepo-run-cache",
  "turborepo-run-summary",
@@ -7893,6 +7897,7 @@ dependencies = [
  "turborepo-engine",
  "turborepo-errors",
  "turborepo-lockfiles",
+ "turborepo-query-api",
  "turborepo-repository",
  "turborepo-scm",
  "turborepo-scope",
@@ -7902,6 +7907,24 @@ dependencies = [
  "turborepo-types",
  "turborepo-ui",
  "webbrowser",
+]
+
+[[package]]
+name = "turborepo-query-api"
+version = "0.1.0"
+dependencies = [
+ "miette",
+ "thiserror 2.0.18",
+ "turbopath",
+ "turborepo-boundaries",
+ "turborepo-engine",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-scope",
+ "turborepo-signals",
+ "turborepo-turbo-json",
+ "turborepo-types",
+ "turborepo-ui",
 ]
 
 [[package]]

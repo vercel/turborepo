@@ -18,6 +18,8 @@ use crate::{
 pub enum Error {
     #[error("No command specified.")]
     NoCommand,
+    #[error("Query server not available. The turbo query command requires the full turbo binary.")]
+    QueryNotAvailable,
     #[error("{0}")]
     Bin(#[from] bin::Error),
     #[error(transparent)]
@@ -63,7 +65,7 @@ pub enum Error {
     Run(#[from] run::Error),
     #[error(transparent)]
     #[diagnostic(transparent)]
-    Query(#[from] turborepo_query::Error),
+    Query(#[from] turborepo_query_api::Error),
     #[error(transparent)]
     SerdeJson(#[from] serde_json::Error),
     #[error(transparent)]
