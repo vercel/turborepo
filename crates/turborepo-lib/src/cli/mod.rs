@@ -1,4 +1,4 @@
-use std::{env, ffi::OsString, fmt, io, mem, process};
+use std::{env, ffi::OsString, fmt, io, mem, process, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -1320,6 +1320,7 @@ pub async fn run(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
     color_config: ColorConfig,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 ) -> Result<i32, Error> {
     let _cli_run_span = tracing::info_span!("cli_run").entered();
 
@@ -1649,7 +1650,7 @@ pub async fn run(
             }
 
             run_args.track(&event);
-            let exit_code = run::run(base, event, http_client_cell)
+            let exit_code = run::run(base, event, http_client_cell, query_server.clone())
                 .await
                 .inspect(|code| {
                     if *code != 0 {
@@ -1678,6 +1679,9 @@ pub async fn run(
             variables,
             schema,
         } => {
+            let Some(ref query_server) = query_server else {
+                return Err(error::Error::QueryNotAvailable);
+            };
             warn!("query command is experimental and may change in the future");
             let query = query.clone();
             let variables = variables.clone();
@@ -1688,7 +1692,15 @@ pub async fn run(
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            let query = query::run(base, event, query, variables.as_deref(), schema).await?;
+            let query = query::run(
+                base,
+                event,
+                query,
+                variables.as_deref(),
+                schema,
+                query_server.as_ref(),
+            )
+            .await?;
 
             Ok(query)
         }
@@ -1706,7 +1718,9 @@ pub async fn run(
                 return Ok(1);
             }
 
-            let mut client = WatchClient::new(base, *experimental_write_cache, event).await?;
+            let mut client =
+                WatchClient::new(base, *experimental_write_cache, event, query_server.clone())
+                    .await?;
             if let Err(e) = client.start().await {
                 client.shutdown().await;
                 return Err(e.into());

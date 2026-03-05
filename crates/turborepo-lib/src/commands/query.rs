@@ -4,7 +4,7 @@ use camino::Utf8Path;
 use miette::{Diagnostic, Report, SourceSpan};
 use thiserror::Error;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_query::QueryRun;
+use turborepo_query_api::{QueryRun, QueryServer};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 
@@ -33,7 +33,7 @@ impl QueryError {
         index + column - 1
     }
 
-    fn from_query_error(error: turborepo_query::QueryErrorLocation, query: String) -> Self {
+    fn from_query_error(error: turborepo_query_api::QueryErrorLocation, query: String) -> Self {
         let idx = Self::get_index_from_row_column(&query, error.line, error.column);
         QueryError {
             message: error.message,
@@ -51,6 +51,7 @@ pub async fn run(
     query: Option<String>,
     variables_path: Option<&Utf8Path>,
     include_schema: bool,
+    query_server: &dyn QueryServer,
 ) -> Result<i32, cli::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -63,7 +64,7 @@ pub async fn run(
 
     let query = query
         .as_deref()
-        .or(include_schema.then_some(turborepo_query::SCHEMA_QUERY));
+        .or(include_schema.then_some(turborepo_query_api::SCHEMA_QUERY));
     if let Some(query) = query {
         let trimmed_query = query.trim();
         let query = if (trimmed_query.starts_with("query")
@@ -74,18 +75,20 @@ pub async fn run(
             query
         } else {
             &fs::read_to_string(AbsoluteSystemPathBuf::from_unknown(run.repo_root(), query))
-                .map_err(turborepo_query::Error::Server)?
+                .map_err(turborepo_query_api::Error::Server)?
         };
 
         let variables_json = variables_path
             .map(AbsoluteSystemPathBuf::from_cwd)
             .transpose()
-            .map_err(turborepo_query::Error::Path)?
+            .map_err(turborepo_query_api::Error::Path)?
             .map(|path| path.read_to_string())
             .transpose()
-            .map_err(turborepo_query::Error::Server)?;
+            .map_err(turborepo_query_api::Error::Server)?;
 
-        let result = turborepo_query::execute_query(run, query, variables_json.as_deref()).await?;
+        let result = query_server
+            .execute_query(run, query, variables_json.as_deref())
+            .await?;
 
         println!("{}", result.result_json);
         if !result.errors.is_empty() {
@@ -95,7 +98,7 @@ pub async fn run(
             }
         }
     } else {
-        turborepo_query::run_query_server(run, handler).await?;
+        query_server.run_query_server(run, handler).await?;
     }
 
     Ok(0)

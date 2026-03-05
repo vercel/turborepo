@@ -17,7 +17,7 @@ A run consists of the following steps:
 
 ## Entry Point
 
-- **CLI Entry**: `crates/turborepo/src/main.rs` - Thin wrapper that calls `turborepo_lib::main`
+- **CLI Entry**: `crates/turborepo/src/main.rs` - Constructs `TurboQueryServer` (the concrete `QueryServer` implementation) and passes it to `turborepo_lib::main`
 - **Command Handler**: `crates/turborepo-lib/src/commands/run.rs` - Entry point for the run command, sets up signal handling and UI
 - **Main Logic**: `crates/turborepo-lib/src/run/mod.rs` - Core run implementation
 
@@ -192,6 +192,27 @@ The summary module is responsible for any time of summary:
 
 - Stitches together result from visitor and the task tracker
 - Constructs final summary depending on user ask e.g. `--dry=json`/`--summarize`
+
+### 8. Query Subsystem
+
+The query subsystem powers `turbo query` (GraphQL introspection of the
+package/task graph) and the Web UI mode (`--ui=web`).
+
+**Crate layout:**
+
+- `turborepo-query-api` — Trait definitions (`QueryServer`, `QueryRun`) and
+  shared error/result types.  `turborepo-lib` depends on this thin interface
+  crate instead of the heavy implementation.
+- `turborepo-query` — GraphQL implementation using async-graphql, axum, and
+  oxc.  Implements the resolvers and HTTP server.
+- `turborepo/src/main.rs` — Wires the two halves together via `TurboQueryServer`,
+  which implements `QueryServer` by delegating to `turborepo-query`.
+
+**Data flow:** `main()` constructs `Arc<TurboQueryServer>` → passes to
+`turborepo_lib::main` → threaded through `shim` → `cli::run` →
+`commands::run` → `RunBuilder` → `Run`.  The `Run` struct stores the
+`query_server` and uses it in `start_web_ui()` and the `turbo query`
+command handler.
 
 ## Data Flow Overview
 

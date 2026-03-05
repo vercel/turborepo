@@ -66,6 +66,7 @@ pub struct RunBuilder {
     // that are already on disk. Without this, cache restores write files
     // that trigger the file watcher, causing an infinite rebuild loop.
     daemon_client: Option<DaemonClient<DaemonConnector>>,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
 
 impl RunBuilder {
@@ -108,6 +109,7 @@ impl RunBuilder {
             should_validate_engine: true,
             add_all_tasks: false,
             daemon_client: None,
+            query_server: None,
         })
     }
 
@@ -118,6 +120,11 @@ impl RunBuilder {
 
     pub fn with_daemon_client(mut self, client: DaemonClient<DaemonConnector>) -> Self {
         self.daemon_client = Some(client);
+        self
+    }
+
+    pub fn with_query_server(mut self, server: Arc<dyn turborepo_query_api::QueryServer>) -> Self {
+        self.query_server = Some(server);
         self
     }
 
@@ -520,6 +527,7 @@ impl RunBuilder {
                 micro_frontend_configs,
                 repo_index,
                 observability_handle,
+                query_server: self.query_server,
             },
             analytics_handle,
         ))
