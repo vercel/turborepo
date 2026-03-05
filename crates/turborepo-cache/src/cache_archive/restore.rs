@@ -192,6 +192,120 @@ mod tests {
 
     use crate::cache_archive::{restore::CacheReader, restore_symlink::canonicalize_linkname};
 
+    enum RawTarEntry {
+        File {
+            path: &'static str,
+            body: Vec<u8>,
+        },
+        Directory {
+            path: &'static str,
+        },
+        Symlink {
+            link_path: &'static str,
+            link_target: &'static str,
+        },
+    }
+
+    fn generate_raw_tar(entries: &[RawTarEntry]) -> Vec<u8> {
+        let mut buf = Vec::new();
+        {
+            let mut builder = tar::Builder::new(&mut buf);
+            for entry in entries {
+                match entry {
+                    RawTarEntry::File { path, body } => {
+                        let mut header = Header::new_gnu();
+                        header.set_size(body.len() as u64);
+                        header.set_entry_type(tar::EntryType::Regular);
+                        header.set_mode(0o644);
+                        builder.append_data(&mut header, path, &body[..]).unwrap();
+                    }
+                    RawTarEntry::Directory { path } => {
+                        let mut header = Header::new_gnu();
+                        header.set_entry_type(tar::EntryType::Directory);
+                        header.set_size(0);
+                        header.set_mode(0o755);
+                        builder.append_data(&mut header, path, empty()).unwrap();
+                    }
+                    RawTarEntry::Symlink {
+                        link_path,
+                        link_target,
+                    } => {
+                        let mut header = Header::new_gnu();
+                        header.set_entry_type(tar::EntryType::Symlink);
+                        header.set_size(0);
+                        builder
+                            .append_link(&mut header, link_path, link_target)
+                            .unwrap();
+                    }
+                }
+            }
+            builder.into_inner().unwrap();
+        }
+        buf
+    }
+
+    // The `tar` crate's Builder rejects absolute paths and `..` segments.
+    // To test that our restore code handles these, we write raw tar bytes
+    // with the path injected directly into the header, bypassing builder
+    // validation.
+    fn generate_raw_tar_with_unsafe_path(path: &str, body: &[u8]) -> Vec<u8> {
+        use std::io::Write;
+
+        let mut buf = Vec::new();
+
+        let mut header_bytes = [0u8; 512];
+
+        // Write name (first 100 bytes of header)
+        let name_bytes = path.as_bytes();
+        let copy_len = name_bytes.len().min(100);
+        header_bytes[..copy_len].copy_from_slice(&name_bytes[..copy_len]);
+
+        // Mode at offset 100 (8 bytes, octal ASCII)
+        header_bytes[100..107].copy_from_slice(b"0000644");
+
+        // UID at offset 108
+        header_bytes[108..115].copy_from_slice(b"0001000");
+
+        // GID at offset 116
+        header_bytes[116..123].copy_from_slice(b"0001000");
+
+        // Size at offset 124 (11 octal digits + null)
+        let size_str = format!("{:011o}", body.len());
+        header_bytes[124..135].copy_from_slice(size_str.as_bytes());
+
+        // Mtime at offset 136
+        header_bytes[136..147].copy_from_slice(b"00000000000");
+
+        // Typeflag at offset 156: '0' = regular file
+        header_bytes[156] = b'0';
+
+        // USTAR magic at offset 257
+        header_bytes[257..263].copy_from_slice(b"ustar\0");
+        // Version at offset 263
+        header_bytes[263..265].copy_from_slice(b"00");
+
+        // Compute checksum: sum of all bytes in header, treating
+        // the checksum field (offset 148-155) as spaces
+        header_bytes[148..156].copy_from_slice(b"        ");
+        let checksum: u32 = header_bytes.iter().map(|&b| b as u32).sum();
+        let checksum_str = format!("{:06o}\0 ", checksum);
+        header_bytes[148..156].copy_from_slice(checksum_str.as_bytes());
+
+        buf.write_all(&header_bytes).unwrap();
+
+        // Write body padded to 512 bytes
+        buf.write_all(body).unwrap();
+        let padding = 512 - (body.len() % 512);
+        if padding < 512 {
+            buf.write_all(&vec![0u8; padding]).unwrap();
+        }
+
+        // End-of-archive: two 512-byte blocks of zeros
+        buf.write_all(&[0u8; 1024]).unwrap();
+
+        buf
+    }
+
     // Expected output of the cache
     #[derive(Debug)]
     struct ExpectedOutput(Vec<AnchoredSystemPathBuf>);
@@ -930,5 +1044,918 @@ mod tests {
         assert_eq!(received_path.to_string(), canonical_windows);
 
         Ok(())
+    }
+
+    mod absolute_path_tests {
+        use super::*;
+
+        #[test]
+        fn test_absolute_path_file_rejected() -> Result<()> {
+            let tar_bytes = generate_raw_tar_with_unsafe_path("/etc/passwd", b"malicious content");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(
+                result.is_err(),
+                "absolute path /etc/passwd should be rejected"
+            );
+            let err = result.unwrap_err().to_string();
+            assert!(
+                err.contains("malformed") || err.contains("Invalid"),
+                "error should indicate malformed path, got: {err}"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_absolute_path_directory_rejected() -> Result<()> {
+            let tar_bytes = generate_raw_tar_with_unsafe_path("/tmp/evil", b"");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(
+                result.is_err(),
+                "absolute directory path should be rejected"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_root_path_rejected() -> Result<()> {
+            let tar_bytes = generate_raw_tar_with_unsafe_path("/", b"root");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "root path should be rejected");
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_deep_absolute_path_rejected() -> Result<()> {
+            let tar_bytes =
+                generate_raw_tar_with_unsafe_path("/usr/local/bin/evil", b"#!/bin/sh\necho pwned");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "deep absolute path should be rejected");
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_absolute_path_does_not_write_to_filesystem() -> Result<()> {
+            let target = tempdir()?;
+            let evil_file = target.path().join("should_not_exist");
+
+            let tar_bytes =
+                generate_raw_tar_with_unsafe_path(&evil_file.to_string_lossy(), b"evil");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let _ = reader.restore(anchor);
+
+            assert!(
+                !evil_file.exists(),
+                "file should not have been written to the absolute path"
+            );
+
+            Ok(())
+        }
+    }
+
+    mod traversal_tests {
+        use super::*;
+
+        #[test]
+        fn test_dot_dot_at_start_rejected() -> Result<()> {
+            let tar_bytes = generate_raw_tar_with_unsafe_path("../escape", b"escaped");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "../escape should be rejected");
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_dot_dot_in_middle_rejected() -> Result<()> {
+            let tar_bytes =
+                generate_raw_tar_with_unsafe_path("foo/../../../etc/passwd", b"escaped");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(
+                result.is_err(),
+                "path with excessive ../ components should be rejected"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_current_dir_prefix_rejected() -> Result<()> {
+            let tar_bytes = generate_raw_tar_with_unsafe_path("./../escape", b"escaped");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "./../escape should be rejected");
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_dot_only_path_rejected() -> Result<()> {
+            let tar_bytes = generate_raw_tar_with_unsafe_path(".", b"dot");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "'.' path should be rejected");
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_dot_dot_only_path_rejected() -> Result<()> {
+            let tar_bytes = generate_raw_tar_with_unsafe_path("..", b"dotdot");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "'..' path should be rejected");
+
+            Ok(())
+        }
+    }
+
+    mod unicode_tests {
+        use super::*;
+
+        #[test]
+        fn test_unicode_dot_lookalike_in_path() -> Result<()> {
+            // U+FF0E is a fullwidth period that could be confused with '.'
+            // If normalization occurs, "．．/escape" could become "../escape"
+            let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
+                path: "\u{FF0E}\u{FF0E}/escape",
+                body: b"escaped".to_vec(),
+            }]);
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            // Fullwidth dots are not ASCII dots so this won't form a real
+            // traversal. The key assertion is no file escapes the anchor.
+            if result.is_ok() {
+                let parent_escape = output_dir.path().parent().unwrap().join("escape");
+                assert!(
+                    !parent_escape.exists(),
+                    "unicode lookalike should not escape the anchor"
+                );
+            }
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_unicode_slash_lookalike_in_path() -> Result<()> {
+            // U+2215 is "DIVISION SLASH" — could be confused with path separator
+            let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
+                path: "foo\u{2215}..\\..\\escape",
+                body: b"escaped".to_vec(),
+            }]);
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            if result.is_ok() {
+                let parent_escape = output_dir.path().parent().unwrap().join("escape");
+                assert!(
+                    !parent_escape.exists(),
+                    "unicode slash lookalike should not cause directory escape"
+                );
+            }
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_nfc_vs_nfd_normalization() -> Result<()> {
+            // e-acute as NFC (U+00E9) vs NFD (e + combining acute U+0301)
+            // Two entries that look the same but differ in normalization could collide
+            let tar_bytes = generate_raw_tar(&[
+                RawTarEntry::Directory {
+                    path: "caf\u{00E9}",
+                },
+                RawTarEntry::File {
+                    path: "caf\u{00E9}/file_nfc",
+                    body: b"nfc".to_vec(),
+                },
+                RawTarEntry::File {
+                    path: "cafe\u{0301}/file_nfd",
+                    body: b"nfd".to_vec(),
+                },
+            ]);
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            // On macOS (HFS+), NFC and NFD paths resolve to the same file.
+            // On Linux (ext4), they are distinct. Either behavior is acceptable
+            // as long as we don't crash or escape the anchor.
+            let result = reader.restore(anchor);
+            if let Err(e) = &result {
+                let err_str = e.to_string();
+                assert!(
+                    !err_str.contains("outside of directory"),
+                    "unicode normalization should not cause directory escape, got: {err_str}"
+                );
+            }
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_null_byte_in_path() -> Result<()> {
+            // Null bytes can truncate paths in C-based systems. The tar crate
+            // should handle this, but we verify restore doesn't do something
+            // unexpected.
+            let mut buf = Vec::new();
+            {
+                let mut builder = tar::Builder::new(&mut buf);
+                let mut header = Header::new_gnu();
+                header.set_size(5);
+                header.set_entry_type(tar::EntryType::Regular);
+                header.set_mode(0o644);
+                // The tar crate validates path names, so this may fail at
+                // the builder level — that's fine, it means the attack vector
+                // is blocked upstream.
+                let path_result =
+                    builder.append_data(&mut header, "safe\x00/../../../etc/passwd", &b"evil"[..]);
+                if path_result.is_err() {
+                    return Ok(());
+                }
+                builder.into_inner().unwrap();
+            }
+
+            let mut reader = CacheReader::from_reader(&buf[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let _ = reader.restore(anchor);
+
+            // The only thing that matters is /etc/passwd wasn't overwritten
+            assert!(
+                !std::path::Path::new("/etc/passwd")
+                    .metadata()
+                    .map(|m| m.len() == 4)
+                    .unwrap_or(false),
+                "null byte injection should not write to arbitrary paths"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_unicode_bidi_override_in_path() -> Result<()> {
+            // Right-to-left override (U+202E) can visually disguise path names
+            let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
+                path: "legit/\u{202E}dcba/file",
+                body: b"bidi".to_vec(),
+            }]);
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            // We don't necessarily reject bidi characters, but must not escape
+            let result = reader.restore(anchor);
+            if result.is_ok() {
+                let parent = output_dir.path().parent().unwrap();
+                for entry in fs::read_dir(parent)? {
+                    let entry = entry?;
+                    let name = entry.file_name();
+                    assert!(
+                        !name.to_string_lossy().contains("dcba"),
+                        "bidi override should not cause files to escape anchor"
+                    );
+                }
+            }
+
+            Ok(())
+        }
+    }
+
+    mod long_path_tests {
+        use super::*;
+
+        #[test]
+        fn test_path_exceeding_260_chars() -> Result<()> {
+            // Windows MAX_PATH is 260 characters. Paths exceeding this could
+            // cause unexpected behavior on some systems.
+            let long_component = "a".repeat(250);
+            let long_path: &'static str =
+                Box::leak(format!("dir/{long_component}/file.txt").into_boxed_str());
+
+            let tar_bytes = generate_raw_tar(&[
+                RawTarEntry::Directory {
+                    path: Box::leak("dir".to_string().into_boxed_str()),
+                },
+                RawTarEntry::Directory {
+                    path: Box::leak(format!("dir/{long_component}").into_boxed_str()),
+                },
+                RawTarEntry::File {
+                    path: long_path,
+                    body: b"long path content".to_vec(),
+                },
+            ]);
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            // On Unix this should succeed; on Windows it may fail due to MAX_PATH.
+            // Either way, no panic or escape should occur.
+            let _ = reader.restore(anchor);
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_deeply_nested_path() -> Result<()> {
+            let mut components = Vec::new();
+            for i in 0..50 {
+                components.push(format!("d{i}"));
+            }
+            let deep_file = format!("{}/file.txt", components.join("/"));
+
+            let mut entries: Vec<RawTarEntry> = Vec::new();
+            let mut accumulated = String::new();
+            for component in &components {
+                if accumulated.is_empty() {
+                    accumulated = component.clone();
+                } else {
+                    accumulated = format!("{accumulated}/{component}");
+                }
+                entries.push(RawTarEntry::Directory {
+                    path: Box::leak(accumulated.clone().into_boxed_str()),
+                });
+            }
+            entries.push(RawTarEntry::File {
+                path: Box::leak(deep_file.into_boxed_str()),
+                body: b"deep".to_vec(),
+            });
+
+            let tar_bytes = generate_raw_tar(&entries);
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(
+                result.is_ok(),
+                "deeply nested path should restore successfully"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_total_path_length_over_4096() -> Result<()> {
+            // PATH_MAX on Linux is typically 4096. Test paths near this limit.
+            let component = "x".repeat(200);
+            let path: &'static str = Box::leak(
+                format!(
+                    "{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/{c}/\
+                     {c}/file",
+                    c = component
+                )
+                .into_boxed_str(),
+            );
+
+            let mut entries = Vec::new();
+            let mut accumulated = String::new();
+            for _ in 0..20 {
+                if accumulated.is_empty() {
+                    accumulated = component.clone();
+                } else {
+                    accumulated = format!("{accumulated}/{component}");
+                }
+                entries.push(RawTarEntry::Directory {
+                    path: Box::leak(accumulated.clone().into_boxed_str()),
+                });
+            }
+            entries.push(RawTarEntry::File {
+                path,
+                body: b"very long".to_vec(),
+            });
+
+            let tar_bytes = generate_raw_tar(&entries);
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            // May fail with IO error due to path length limits,
+            // but should not panic or cause undefined behavior
+            let _ = reader.restore(anchor);
+
+            Ok(())
+        }
+    }
+
+    #[cfg(unix)]
+    mod toctou_tests {
+        use std::{
+            sync::{Arc, Barrier},
+            thread,
+        };
+
+        use super::*;
+
+        #[test]
+        fn test_concurrent_restore_to_same_anchor() -> Result<()> {
+            let output_dir = tempdir()?;
+            let anchor_path = output_dir.path().to_string_lossy().into_owned();
+
+            let tar1 = generate_raw_tar(&[
+                RawTarEntry::Directory { path: "shared" },
+                RawTarEntry::File {
+                    path: "shared/safe_file",
+                    body: b"safe".to_vec(),
+                },
+            ]);
+
+            let tar2 = generate_raw_tar(&[
+                RawTarEntry::Directory { path: "shared" },
+                RawTarEntry::File {
+                    path: "shared/another_file",
+                    body: b"also safe".to_vec(),
+                },
+            ]);
+
+            let barrier = Arc::new(Barrier::new(2));
+            let anchor1 = anchor_path.clone();
+            let anchor2 = anchor_path.clone();
+            let b1 = barrier.clone();
+            let b2 = barrier.clone();
+
+            let h1 = thread::spawn(move || {
+                b1.wait();
+                let mut reader = CacheReader::from_reader(&tar1[..], false).unwrap();
+                let anchor = AbsoluteSystemPath::new(&anchor1).unwrap();
+                reader.restore(anchor)
+            });
+
+            let h2 = thread::spawn(move || {
+                b2.wait();
+                let mut reader = CacheReader::from_reader(&tar2[..], false).unwrap();
+                let anchor = AbsoluteSystemPath::new(&anchor2).unwrap();
+                reader.restore(anchor)
+            });
+
+            let r1 = h1.join().expect("thread 1 panicked");
+            let r2 = h2.join().expect("thread 2 panicked");
+
+            let parent = output_dir.path().parent().unwrap();
+            assert!(
+                !parent.join("safe_file").exists(),
+                "concurrent restore should not write outside anchor"
+            );
+            assert!(
+                !parent.join("another_file").exists(),
+                "concurrent restore should not write outside anchor"
+            );
+
+            assert!(
+                r1.is_ok() || r2.is_ok(),
+                "at least one concurrent restore should succeed"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_concurrent_restore_with_symlink_attack() -> Result<()> {
+            // One "archive" tries to create a symlink escape while
+            // another writes through the same path name.
+            let output_dir = tempdir()?;
+            let anchor_path = output_dir.path().to_string_lossy().into_owned();
+
+            let attacker_tar = generate_raw_tar(&[RawTarEntry::Symlink {
+                link_path: "escape",
+                link_target: "..",
+            }]);
+
+            let victim_tar = generate_raw_tar(&[
+                RawTarEntry::Directory { path: "escape" },
+                RawTarEntry::File {
+                    path: "escape/payload",
+                    body: b"should not escape".to_vec(),
+                },
+            ]);
+
+            let barrier = Arc::new(Barrier::new(2));
+            let anchor1 = anchor_path.clone();
+            let anchor2 = anchor_path.clone();
+            let b1 = barrier.clone();
+            let b2 = barrier.clone();
+
+            let h1 = thread::spawn(move || {
+                b1.wait();
+                let mut reader = CacheReader::from_reader(&attacker_tar[..], false).unwrap();
+                let anchor = AbsoluteSystemPath::new(&anchor1).unwrap();
+                let _ = reader.restore(anchor);
+            });
+
+            let h2 = thread::spawn(move || {
+                b2.wait();
+                let mut reader = CacheReader::from_reader(&victim_tar[..], false).unwrap();
+                let anchor = AbsoluteSystemPath::new(&anchor2).unwrap();
+                let _ = reader.restore(anchor);
+            });
+
+            h1.join().expect("attacker thread panicked");
+            h2.join().expect("victim thread panicked");
+
+            let parent = output_dir.path().parent().unwrap();
+            assert!(
+                !parent.join("payload").exists(),
+                "TOCTOU attack should not allow writing outside anchor"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_many_concurrent_restores() -> Result<()> {
+            let output_dir = tempdir()?;
+            let num_threads = 10;
+            let barrier = Arc::new(Barrier::new(num_threads));
+            let mut handles = Vec::new();
+
+            for i in 0..num_threads {
+                let b = barrier.clone();
+                let base = output_dir.path().to_path_buf();
+
+                handles.push(thread::spawn(move || {
+                    let subdir = base.join(format!("worker_{i}"));
+                    std::fs::create_dir_all(&subdir).unwrap();
+                    let anchor_str = subdir.to_string_lossy().into_owned();
+
+                    let dir_path: &'static str = Box::leak(format!("output_{i}").into_boxed_str());
+                    let file_path: &'static str =
+                        Box::leak(format!("output_{i}/result.txt").into_boxed_str());
+
+                    let tar = generate_raw_tar(&[
+                        RawTarEntry::Directory { path: dir_path },
+                        RawTarEntry::File {
+                            path: file_path,
+                            body: format!("result from thread {i}").into_bytes(),
+                        },
+                    ]);
+
+                    b.wait();
+                    let mut reader = CacheReader::from_reader(&tar[..], false).unwrap();
+                    let anchor = AbsoluteSystemPath::new(&anchor_str).unwrap();
+                    reader.restore(anchor)
+                }));
+            }
+
+            for (i, handle) in handles.into_iter().enumerate() {
+                let result = handle.join().expect("thread panicked");
+                assert!(
+                    result.is_ok(),
+                    "worker {i} failed: {:?}",
+                    result.unwrap_err()
+                );
+            }
+
+            Ok(())
+        }
+    }
+
+    mod malformed_tar_tests {
+        use super::*;
+
+        #[test]
+        fn test_empty_path_in_entry() -> Result<()> {
+            let mut buf = Vec::new();
+            {
+                let mut builder = tar::Builder::new(&mut buf);
+                let mut header = Header::new_gnu();
+                header.set_size(4);
+                header.set_entry_type(tar::EntryType::Regular);
+                header.set_mode(0o644);
+                let result = builder.append_data(&mut header, "", &b"test"[..]);
+                if result.is_err() {
+                    return Ok(());
+                }
+                builder.into_inner().unwrap();
+            }
+
+            let mut reader = CacheReader::from_reader(&buf[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "empty path should be rejected");
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_double_slash_in_path() -> Result<()> {
+            let tar_bytes = generate_raw_tar_with_unsafe_path("foo//bar", b"content");
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "double slash in path should be rejected");
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_symlink_with_empty_target() -> Result<()> {
+            let mut buf = Vec::new();
+            {
+                let mut builder = tar::Builder::new(&mut buf);
+                let mut header = Header::new_gnu();
+                header.set_entry_type(tar::EntryType::Symlink);
+                header.set_size(0);
+                let result = builder.append_data(&mut header, "orphan_link", empty());
+                if result.is_err() {
+                    return Ok(());
+                }
+                builder.into_inner().unwrap();
+            }
+
+            let mut reader = CacheReader::from_reader(&buf[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "symlink without target should be rejected");
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_hardlink_entry_type_rejected() -> Result<()> {
+            let mut buf = Vec::new();
+            {
+                let mut builder = tar::Builder::new(&mut buf);
+                let mut header = Header::new_gnu();
+                header.set_entry_type(tar::EntryType::Link);
+                header.set_size(0);
+                builder
+                    .append_link(&mut header, "hardlink", "target")
+                    .unwrap();
+                builder.into_inner().unwrap();
+            }
+
+            let mut reader = CacheReader::from_reader(&buf[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "hardlink entry type should be rejected");
+            let err = result.unwrap_err().to_string();
+            assert!(
+                err.contains("unsupported file type"),
+                "should report unsupported file type, got: {err}"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_character_device_entry_type_rejected() -> Result<()> {
+            let mut buf = Vec::new();
+            {
+                let mut builder = tar::Builder::new(&mut buf);
+                let mut header = Header::new_gnu();
+                header.set_entry_type(tar::EntryType::Char);
+                header.set_size(0);
+                header.set_mode(0o644);
+                builder
+                    .append_data(&mut header, "chardev", empty())
+                    .unwrap();
+                builder.into_inner().unwrap();
+            }
+
+            let mut reader = CacheReader::from_reader(&buf[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(
+                result.is_err(),
+                "character device entry type should be rejected"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_block_device_entry_type_rejected() -> Result<()> {
+            let mut buf = Vec::new();
+            {
+                let mut builder = tar::Builder::new(&mut buf);
+                let mut header = Header::new_gnu();
+                header.set_entry_type(tar::EntryType::Block);
+                header.set_size(0);
+                header.set_mode(0o644);
+                builder
+                    .append_data(&mut header, "blockdev", empty())
+                    .unwrap();
+                builder.into_inner().unwrap();
+            }
+
+            let mut reader = CacheReader::from_reader(&buf[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(
+                result.is_err(),
+                "block device entry type should be rejected"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_completely_invalid_tar_data() -> Result<()> {
+            let garbage = b"this is not a tar file at all, just random garbage data";
+
+            let mut reader = CacheReader::from_reader(&garbage[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            // Should not panic
+            let result = reader.restore(anchor);
+            assert!(
+                result.is_err() || result.unwrap().is_empty(),
+                "garbage data should produce error or empty result"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_truncated_tar_data() -> Result<()> {
+            let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
+                path: "legitimate_file",
+                body: vec![0u8; 10000],
+            }]);
+            let truncated = &tar_bytes[..tar_bytes.len() / 2];
+
+            let mut reader = CacheReader::from_reader(truncated, false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "truncated tar should produce an error");
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_mixed_valid_and_malicious_entries() -> Result<()> {
+            // Build a tar with a valid file followed by a traversal entry.
+            // We need to construct this manually since the tar builder rejects
+            // `..` in paths.
+            use std::io::Write;
+
+            let mut buf = Vec::new();
+
+            // First entry: safe_file (valid, uses the builder)
+            {
+                let mut inner_buf = Vec::new();
+                let mut builder = tar::Builder::new(&mut inner_buf);
+                let mut header = Header::new_gnu();
+                header.set_size(12);
+                header.set_entry_type(tar::EntryType::Regular);
+                header.set_mode(0o644);
+                builder
+                    .append_data(&mut header, "safe_file", &b"safe content"[..])
+                    .unwrap();
+                builder.into_inner().unwrap();
+                // Strip the 1024-byte end-of-archive marker
+                buf.write_all(&inner_buf[..inner_buf.len() - 1024]).unwrap();
+            }
+
+            // Second entry: ../escaped_file (malicious, written raw)
+            {
+                let path = "../escaped_file";
+                let body = b"malicious";
+                let mut header_bytes = [0u8; 512];
+                let name_bytes = path.as_bytes();
+                header_bytes[..name_bytes.len()].copy_from_slice(name_bytes);
+                header_bytes[100..107].copy_from_slice(b"0000644");
+                header_bytes[108..115].copy_from_slice(b"0001000");
+                header_bytes[116..123].copy_from_slice(b"0001000");
+                let size_str = format!("{:011o}", body.len());
+                header_bytes[124..135].copy_from_slice(size_str.as_bytes());
+                header_bytes[136..147].copy_from_slice(b"00000000000");
+                header_bytes[156] = b'0';
+                header_bytes[257..263].copy_from_slice(b"ustar\0");
+                header_bytes[263..265].copy_from_slice(b"00");
+                header_bytes[148..156].copy_from_slice(b"        ");
+                let checksum: u32 = header_bytes.iter().map(|&b| b as u32).sum();
+                let checksum_str = format!("{:06o}\0 ", checksum);
+                header_bytes[148..156].copy_from_slice(checksum_str.as_bytes());
+                buf.write_all(&header_bytes).unwrap();
+                buf.write_all(body).unwrap();
+                let padding = 512 - (body.len() % 512);
+                if padding < 512 {
+                    buf.write_all(&vec![0u8; padding]).unwrap();
+                }
+            }
+
+            // End-of-archive
+            buf.write_all(&[0u8; 1024]).unwrap();
+
+            let mut reader = CacheReader::from_reader(&buf[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor);
+            assert!(result.is_err(), "archive with malicious entry should fail");
+
+            let parent = output_dir.path().parent().unwrap();
+            assert!(
+                !parent.join("escaped_file").exists(),
+                "malicious file should not be written outside anchor"
+            );
+
+            Ok(())
+        }
     }
 }
