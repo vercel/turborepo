@@ -1663,6 +1663,12 @@ pub async fn run(
             if let Some(file_path) = logger.chrome_tracing_file() {
                 let _ = logger.flush_chrome_tracing();
 
+                if let Err(e) =
+                    crate::tracing::inject_trace_metadata(std::path::Path::new(&file_path), version)
+                {
+                    warn!("Failed to inject trace metadata: {e}");
+                }
+
                 let md_path = format!("{file_path}.md");
                 if let Err(e) = turborepo_profile_md::trace_to_markdown(
                     std::path::Path::new(&file_path),
