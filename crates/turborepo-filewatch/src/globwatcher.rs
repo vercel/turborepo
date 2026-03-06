@@ -785,4 +785,140 @@ mod test {
             .unwrap();
         assert_eq!(results, candidates);
     }
+
+    // -----------------------------------------------------------------------
+    // Regression tests for OutputWatcher trait compatibility
+    //
+    // These tests verify that GlobWatcher's API satisfies the contract
+    // required by the OutputWatcher trait (defined in turborepo-run-cache).
+    // When we replace the daemon with in-process file watching, an
+    // InProcessOutputWatcher will delegate to GlobWatcher. These tests
+    // ensure the delegation is correct.
+    // -----------------------------------------------------------------------
+
+    /// Verifies that watch_globs + get_changed_globs round-trips correctly
+    /// when used with the string-based API that OutputWatcher will use.
+    /// This mirrors what the daemon server does in its NotifyOutputsWritten
+    /// and GetChangedOutputs RPC handlers.
+    #[tokio::test]
+    async fn test_output_watcher_delegation_unchanged() {
+        let timeout = Duration::from_secs(2);
+        let (repo_root, _tmp_dir) = temp_dir();
+        setup(&repo_root);
+        let cookie_dir = repo_root.join_component(".git");
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, timeout, recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
+
+        // Simulate notify_outputs_written: construct GlobSet from string slices
+        // (the same conversion InProcessOutputWatcher will do)
+        let include_globs = vec!["my-pkg/dist/**".to_string()];
+        let exclude_globs: Vec<String> = vec![];
+        let glob_set = GlobSet::from_raw(include_globs.clone(), exclude_globs).unwrap();
+        let hash = "test-hash".to_string();
+
+        glob_watcher
+            .watch_globs(hash.clone(), glob_set, timeout)
+            .await
+            .unwrap();
+
+        // Simulate get_changed_outputs: pass include globs as candidates
+        let candidates: HashSet<String> = include_globs.into_iter().collect();
+        let changed = glob_watcher
+            .get_changed_globs(hash.clone(), candidates, timeout)
+            .await
+            .unwrap();
+
+        // No files were modified, so nothing should have changed
+        assert!(
+            changed.is_empty(),
+            "expected no changed outputs when no files were modified, got: {changed:?}"
+        );
+    }
+
+    /// Verifies that after registering globs via watch_globs and then
+    /// modifying a file that matches, get_changed_globs reports the change.
+    #[tokio::test]
+    async fn test_output_watcher_delegation_with_change() {
+        let timeout = Duration::from_secs(2);
+        let (repo_root, _tmp_dir) = temp_dir();
+        setup(&repo_root);
+        let cookie_dir = repo_root.join_component(".git");
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, timeout, recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
+
+        let include_globs = vec!["my-pkg/dist/**".to_string()];
+        let exclude_globs: Vec<String> = vec![];
+        let glob_set = GlobSet::from_raw(include_globs.clone(), exclude_globs).unwrap();
+        let hash = "test-hash".to_string();
+
+        glob_watcher
+            .watch_globs(hash.clone(), glob_set, timeout)
+            .await
+            .unwrap();
+
+        // Modify a file matching the glob
+        repo_root
+            .join_components(&["my-pkg", "dist", "new-output"])
+            .create_with_contents("build output")
+            .unwrap();
+
+        let candidates: HashSet<String> = include_globs.into_iter().collect();
+        let changed = glob_watcher
+            .get_changed_globs(hash.clone(), candidates, timeout)
+            .await
+            .unwrap();
+
+        assert!(
+            changed.contains("my-pkg/dist/**"),
+            "expected dist glob to be reported as changed after file write, got: {changed:?}"
+        );
+    }
+
+    /// Verifies that exclusion globs are properly respected when constructing
+    /// a GlobSet from raw strings (the path InProcessOutputWatcher will use).
+    #[tokio::test]
+    async fn test_output_watcher_delegation_exclusions() {
+        let timeout = Duration::from_secs(2);
+        let (repo_root, _tmp_dir) = temp_dir();
+        setup(&repo_root);
+        let cookie_dir = repo_root.join_component(".git");
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(&cookie_dir, timeout, recv.clone());
+        let glob_watcher = GlobWatcher::new(repo_root.clone(), cookie_writer, recv);
+
+        let include_globs = vec!["my-pkg/.next/**".to_string()];
+        let exclude_globs = vec!["my-pkg/.next/cache/**".to_string()];
+        let glob_set = GlobSet::from_raw(include_globs.clone(), exclude_globs).unwrap();
+        let hash = "test-hash".to_string();
+
+        glob_watcher
+            .watch_globs(hash.clone(), glob_set, timeout)
+            .await
+            .unwrap();
+
+        // Write a file that matches the EXCLUSION glob — should not trigger change
+        repo_root
+            .join_components(&["my-pkg", ".next", "cache", "cached-file"])
+            .create_with_contents("cached data")
+            .unwrap();
+
+        let candidates: HashSet<String> = include_globs.into_iter().collect();
+        let changed = glob_watcher
+            .get_changed_globs(hash.clone(), candidates, timeout)
+            .await
+            .unwrap();
+
+        assert!(
+            changed.is_empty(),
+            "files matching exclusion globs should not trigger changes, got: {changed:?}"
+        );
+    }
 }

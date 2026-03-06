@@ -441,3 +441,108 @@ fn watch_persistent_tasks_skipped_on_build_failure() {
         "dev for pkg-b should not have started because build failed, but dev ran {dev_b} times"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Regression tests for daemon removal from watch
+//
+// These tests characterize behaviors that depend on the output watcher
+// (GlobWatcher) and hash-based deduplication. They must remain green after
+// the daemon is replaced with in-process file watching.
+// ---------------------------------------------------------------------------
+
+/// After the initial build completes and the watcher settles, no further
+/// rebuilds should occur. The output watcher tracks which files were written
+/// by the build; a cache hit for the same hash should detect that outputs
+/// are already on disk and skip the restore, avoiding file writes that
+/// would otherwise trigger the watcher in an infinite loop.
+#[test]
+fn watch_no_spurious_rebuild_after_settle() {
+    let (_tempdir, test_dir) = setup_watch_test();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+
+    // Wait for initial build
+    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
+
+    // Let everything settle: the file watcher, hash watcher, and output
+    // tracker all process events asynchronously.
+    std::thread::sleep(Duration::from_secs(3));
+
+    let a_settled = marker_count(&test_dir, "a");
+    let b_settled = marker_count(&test_dir, "b");
+
+    // Wait a generous window with no file changes. If the output tracker
+    // is working, no rebuilds should fire.
+    std::thread::sleep(Duration::from_secs(10));
+
+    let a_after = marker_count(&test_dir, "a");
+    let b_after = marker_count(&test_dir, "b");
+
+    drop(guard);
+
+    assert_eq!(
+        a_settled, a_after,
+        "package a should not have rebuilt after settling. settled: {a_settled}, after: {a_after}"
+    );
+    assert_eq!(
+        b_settled, b_after,
+        "package b should not have rebuilt after settling. settled: {b_settled}, after: {b_after}"
+    );
+}
+
+/// Writing the same content to a source file and committing should not
+/// trigger a rebuild. The hash watcher computes git content hashes; if the
+/// content hasn't changed, the PackageChangesWatcher suppresses the event.
+#[test]
+fn watch_same_content_write_does_not_rebuild() {
+    let (_tempdir, test_dir) = setup_watch_test();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+
+    // Wait for initial build
+    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
+
+    // Let the watcher fully settle
+    std::thread::sleep(Duration::from_secs(3));
+
+    let a_before = marker_count(&test_dir, "a");
+
+    // Read the current content and write it back (no content change)
+    let src_file = test_dir.join("packages/a/src.js");
+    let content = fs::read_to_string(&src_file).unwrap();
+    fs::write(&src_file, &content).unwrap();
+
+    // Commit so git tracks the "change" — but since content is identical,
+    // git hash-object returns the same OID.
+    let status = std::process::Command::new("git")
+        .args(["add", "."])
+        .current_dir(&test_dir)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .expect("git add failed");
+    assert!(status.success());
+
+    // git commit may fail with "nothing to commit" since content is the same.
+    // That's fine — the point is the file was written (triggering inotify/FSEvents)
+    // but the hash hasn't changed.
+    let _ = std::process::Command::new("git")
+        .args(["commit", "-m", "no-op write", "--allow-empty", "--quiet"])
+        .current_dir(&test_dir)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status();
+
+    // Wait and verify no rebuild occurred
+    std::thread::sleep(Duration::from_secs(10));
+
+    let a_after = marker_count(&test_dir, "a");
+
+    drop(guard);
+
+    assert_eq!(
+        a_before, a_after,
+        "package a should not rebuild when file content is unchanged. before: {a_before}, after: \
+         {a_after}"
+    );
+}
