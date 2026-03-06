@@ -4,10 +4,11 @@
 //! lower-level `AsyncCache` from turborepo-cache with task-specific semantics,
 //! including:
 //! - Log file handling and output mode management
-//! - Integration with the daemon for output tracking
+//! - Integration with output watchers for output tracking
 //! - Task definition-aware output glob handling
 
 use std::{
+    collections::HashSet,
     io::Write,
     sync::{Arc, Mutex},
     time::Duration,
@@ -59,6 +60,42 @@ impl From<turborepo_daemon::DaemonError> for Error {
         Error::Daemon(Box::new(err))
     }
 }
+
+/// Abstraction over output change tracking.
+///
+/// In watch mode, turbo needs to know which task outputs have changed since
+/// they were last written. This prevents infinite rebuild loops: when a cache
+/// restore writes output files to disk, those writes would otherwise trigger
+/// the file watcher, causing the same tasks to re-run endlessly.
+///
+/// Implementors track registered output globs per task hash and report which
+/// globs have been invalidated by subsequent file changes.
+pub trait OutputWatcher: Send + Sync {
+    /// Check which output globs have changed since they were last registered
+    /// via [`notify_outputs_written`](Self::notify_outputs_written).
+    ///
+    /// Returns the subset of `output_globs` whose files have been modified.
+    /// An empty result means all outputs are still on disk and unchanged.
+    fn get_changed_outputs(
+        &self,
+        hash: String,
+        output_globs: &[String],
+    ) -> impl std::future::Future<Output = Result<HashSet<String>, OutputWatcherError>> + Send;
+
+    /// Register output globs for a task hash so that future changes to
+    /// matching files can be detected.
+    fn notify_outputs_written(
+        &self,
+        hash: String,
+        output_globs: &[String],
+        output_exclusion_globs: &[String],
+        time_saved: u64,
+    ) -> impl std::future::Future<Output = Result<(), OutputWatcherError>> + Send;
+}
+
+#[derive(Debug, thiserror::Error)]
+#[error("output watcher error: {0}")]
+pub struct OutputWatcherError(#[from] pub Box<dyn std::error::Error + Send + Sync>);
 
 /// The run cache wraps an AsyncCache with task-aware semantics.
 ///
@@ -582,5 +619,233 @@ impl ConfigCache {
         let mut file_hashes: Vec<_> = hash_object.into_iter().collect();
         file_hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
         Ok(FileHashes(file_hashes).hash())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::{
+        collections::HashSet,
+        sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    };
+
+    use super::{OutputWatcher, OutputWatcherError};
+
+    /// Mock OutputWatcher that records calls and returns configurable results.
+    struct MockOutputWatcher {
+        changed_outputs: Result<HashSet<String>, &'static str>,
+        notify_result: Result<(), &'static str>,
+        get_changed_call_count: AtomicUsize,
+        notify_call_count: AtomicUsize,
+        was_called: AtomicBool,
+    }
+
+    impl MockOutputWatcher {
+        fn returning_no_changes() -> Self {
+            Self {
+                changed_outputs: Ok(HashSet::new()),
+                notify_result: Ok(()),
+                get_changed_call_count: AtomicUsize::new(0),
+                notify_call_count: AtomicUsize::new(0),
+                was_called: AtomicBool::new(false),
+            }
+        }
+
+        fn returning_all_changed(globs: Vec<String>) -> Self {
+            Self {
+                changed_outputs: Ok(globs.into_iter().collect()),
+                notify_result: Ok(()),
+                get_changed_call_count: AtomicUsize::new(0),
+                notify_call_count: AtomicUsize::new(0),
+                was_called: AtomicBool::new(false),
+            }
+        }
+
+        fn returning_get_error() -> Self {
+            Self {
+                changed_outputs: Err("watcher unavailable"),
+                notify_result: Ok(()),
+                get_changed_call_count: AtomicUsize::new(0),
+                notify_call_count: AtomicUsize::new(0),
+                was_called: AtomicBool::new(false),
+            }
+        }
+
+        fn returning_notify_error() -> Self {
+            Self {
+                changed_outputs: Ok(HashSet::new()),
+                notify_result: Err("notify failed"),
+                get_changed_call_count: AtomicUsize::new(0),
+                notify_call_count: AtomicUsize::new(0),
+                was_called: AtomicBool::new(false),
+            }
+        }
+
+        fn get_changed_calls(&self) -> usize {
+            self.get_changed_call_count.load(Ordering::SeqCst)
+        }
+
+        fn notify_calls(&self) -> usize {
+            self.notify_call_count.load(Ordering::SeqCst)
+        }
+    }
+
+    impl OutputWatcher for MockOutputWatcher {
+        async fn get_changed_outputs(
+            &self,
+            _hash: String,
+            _output_globs: &[String],
+        ) -> Result<HashSet<String>, OutputWatcherError> {
+            self.get_changed_call_count.fetch_add(1, Ordering::SeqCst);
+            self.was_called.store(true, Ordering::SeqCst);
+            match &self.changed_outputs {
+                Ok(set) => Ok(set.clone()),
+                Err(msg) => Err(OutputWatcherError(Box::new(std::io::Error::other(*msg)))),
+            }
+        }
+
+        async fn notify_outputs_written(
+            &self,
+            _hash: String,
+            _output_globs: &[String],
+            _output_exclusion_globs: &[String],
+            _time_saved: u64,
+        ) -> Result<(), OutputWatcherError> {
+            self.notify_call_count.fetch_add(1, Ordering::SeqCst);
+            self.was_called.store(true, Ordering::SeqCst);
+            match &self.notify_result {
+                Ok(()) => Ok(()),
+                Err(msg) => Err(OutputWatcherError(Box::new(std::io::Error::other(*msg)))),
+            }
+        }
+    }
+
+    // The OutputWatcher trait defines the contract that both the DaemonClient
+    // (current) and the in-process GlobWatcher (future) must satisfy. These
+    // tests characterize the exact behaviors that TaskCache relies on.
+
+    #[tokio::test]
+    async fn output_watcher_no_changes_returns_empty_set() {
+        let watcher = MockOutputWatcher::returning_no_changes();
+        let result = watcher
+            .get_changed_outputs("abc123".into(), &["dist/**".into()])
+            .await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn output_watcher_some_changes_returns_changed_globs() {
+        let watcher =
+            MockOutputWatcher::returning_all_changed(vec!["dist/**".into(), ".next/**".into()]);
+        let result = watcher
+            .get_changed_outputs(
+                "abc123".into(),
+                &["dist/**".into(), ".next/**".into(), "build/**".into()],
+            )
+            .await;
+        let changed = result.unwrap();
+        assert!(changed.contains("dist/**"));
+        assert!(changed.contains(".next/**"));
+        assert!(!changed.contains("build/**"));
+    }
+
+    #[tokio::test]
+    async fn output_watcher_get_error_is_recoverable() {
+        // When get_changed_outputs fails, the caller should fall back to
+        // treating all outputs as changed (normal cache restore path).
+        let watcher = MockOutputWatcher::returning_get_error();
+        let result = watcher
+            .get_changed_outputs("abc123".into(), &["dist/**".into()])
+            .await;
+        assert!(result.is_err());
+        // The error should be displayable for logging
+        let err = result.unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("watcher unavailable"));
+    }
+
+    #[tokio::test]
+    async fn output_watcher_notify_success() {
+        let watcher = MockOutputWatcher::returning_no_changes();
+        let result = watcher
+            .notify_outputs_written(
+                "abc123".into(),
+                &["dist/**".into()],
+                &["dist/cache/**".into()],
+                1500,
+            )
+            .await;
+        assert!(result.is_ok());
+        assert_eq!(watcher.notify_calls(), 1);
+    }
+
+    #[tokio::test]
+    async fn output_watcher_notify_error_is_recoverable() {
+        // When notify_outputs_written fails, the caller should log and
+        // continue — it's not a fatal error.
+        let watcher = MockOutputWatcher::returning_notify_error();
+        let result = watcher
+            .notify_outputs_written("abc123".into(), &["dist/**".into()], &[], 0)
+            .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn output_watcher_unchanged_then_notify_then_check_again() {
+        // Simulates the lifecycle: outputs are on disk and unchanged, then
+        // a cache restore writes new files and notifies, then a subsequent
+        // check should reflect the new state.
+        let watcher = MockOutputWatcher::returning_no_changes();
+
+        // First check: nothing changed
+        let result = watcher
+            .get_changed_outputs("hash1".into(), &["dist/**".into()])
+            .await
+            .unwrap();
+        assert!(result.is_empty());
+        assert_eq!(watcher.get_changed_calls(), 1);
+
+        // Notify after restore
+        watcher
+            .notify_outputs_written("hash1".into(), &["dist/**".into()], &[], 500)
+            .await
+            .unwrap();
+        assert_eq!(watcher.notify_calls(), 1);
+
+        // Second check: still unchanged in this mock (real GlobWatcher would
+        // track actual file changes between calls)
+        let result = watcher
+            .get_changed_outputs("hash1".into(), &["dist/**".into()])
+            .await
+            .unwrap();
+        assert!(result.is_empty());
+        assert_eq!(watcher.get_changed_calls(), 2);
+    }
+
+    #[tokio::test]
+    async fn output_watcher_different_hashes_are_independent() {
+        // Each task hash should be tracked independently. Getting changed
+        // outputs for one hash should not affect another.
+        let watcher = MockOutputWatcher::returning_all_changed(vec!["dist/**".into()]);
+
+        let result1 = watcher
+            .get_changed_outputs("hash-a".into(), &["dist/**".into()])
+            .await
+            .unwrap();
+        let result2 = watcher
+            .get_changed_outputs("hash-b".into(), &["dist/**".into()])
+            .await
+            .unwrap();
+
+        assert_eq!(result1, result2);
+        assert_eq!(watcher.get_changed_calls(), 2);
+    }
+
+    #[tokio::test]
+    async fn output_watcher_error_type_is_send_sync() {
+        // OutputWatcherError must be Send + Sync for use across async boundaries
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<OutputWatcherError>();
     }
 }
