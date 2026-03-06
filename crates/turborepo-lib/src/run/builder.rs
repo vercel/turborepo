@@ -11,7 +11,6 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
-use turborepo_daemon::{DaemonClient, DaemonConnector};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -61,11 +60,11 @@ pub struct RunBuilder {
     should_validate_engine: bool,
     // If true, we will add all tasks to the graph, even if they are not specified
     add_all_tasks: bool,
-    // When running under `turbo watch`, a daemon client is needed so that
+    // When running under `turbo watch`, an output watcher is needed so that
     // the run cache can register output globs and skip restoring outputs
     // that are already on disk. Without this, cache restores write files
     // that trigger the file watcher, causing an infinite rebuild loop.
-    daemon_client: Option<DaemonClient<DaemonConnector>>,
+    output_watcher: Option<Arc<dyn turborepo_run_cache::OutputWatcher>>,
     query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
 
@@ -108,7 +107,7 @@ impl RunBuilder {
             should_print_prelude_override: None,
             should_validate_engine: true,
             add_all_tasks: false,
-            daemon_client: None,
+            output_watcher: None,
             query_server: None,
         })
     }
@@ -118,8 +117,11 @@ impl RunBuilder {
         self
     }
 
-    pub fn with_daemon_client(mut self, client: DaemonClient<DaemonConnector>) -> Self {
-        self.daemon_client = Some(client);
+    pub fn with_output_watcher(
+        mut self,
+        watcher: Arc<dyn turborepo_run_cache::OutputWatcher>,
+    ) -> Self {
+        self.output_watcher = Some(watcher);
         self
     }
 
@@ -309,11 +311,12 @@ impl RunBuilder {
             }
         };
 
-        let (scm, repo_index) = scm_task
-            .instrument(tracing::info_span!("scm_task_await"))
-            .await
-            .expect("detecting scm panicked");
-        let repo_index = Arc::new(repo_index);
+        // SCM-independent work runs while the background scm_task continues.
+        // The await is deferred until just before the first consumer
+        // (task_access_setup / calculate_filtered_packages), letting API
+        // client resolution, cache init, turbo.json loading, validation, env
+        // inference, and turbo.json preloading overlap with git index
+        // construction and untracked-file discovery.
 
         // Resolve the HTTP client. TLS initialization has been running in the
         // background since cli::run started, overlapping with arg parsing,
@@ -364,13 +367,6 @@ impl RunBuilder {
             )?
         };
 
-        let task_access = {
-            let _span = tracing::info_span!("task_access_setup").entered();
-            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
-            ta.restore_config().await;
-            ta
-        };
-
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
         let future_flags = self.opts.future_flags;
 
@@ -378,7 +374,7 @@ impl RunBuilder {
 
         let turbo_json_loader = {
             let _span = tracing::info_span!("turbo_json_loader_setup").entered();
-            if task_access.is_enabled() {
+            if TaskAccess::check_enabled(&self.repo_root) {
                 UnifiedTurboJsonLoader::task_access(
                     reader,
                     root_turbo_json_path.clone(),
@@ -425,6 +421,30 @@ impl RunBuilder {
             pkg_dep_graph.validate()?;
         }
 
+        let env_at_execution_start = {
+            let _span = tracing::info_span!("env_infer").entered();
+            EnvironmentVariableMap::infer()
+        };
+        {
+            let _span = tracing::info_span!("turbo_json_preload").entered();
+            turbo_json_loader.preload_all();
+        }
+
+        // Await the SCM background task. Everything above ran while git index
+        // construction + untracked-file discovery continued in the background.
+        let (scm, repo_index) = scm_task
+            .instrument(tracing::info_span!("scm_task_await"))
+            .await
+            .expect("detecting scm panicked");
+        let repo_index = Arc::new(repo_index);
+
+        let task_access = {
+            let _span = tracing::info_span!("task_access_setup").entered();
+            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
+            ta.restore_config().await;
+            ta
+        };
+
         let filtered_pkgs = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();
             Self::calculate_filtered_packages(
@@ -435,15 +455,6 @@ impl RunBuilder {
                 &root_turbo_json,
             )?
         };
-
-        let env_at_execution_start = {
-            let _span = tracing::info_span!("env_infer").entered();
-            EnvironmentVariableMap::infer()
-        };
-        {
-            let _span = tracing::info_span!("turbo_json_preload").entered();
-            turbo_json_loader.preload_all();
-        }
 
         let mut engine = self.build_engine(
             &pkg_dep_graph,
@@ -471,7 +482,7 @@ impl RunBuilder {
             &self.repo_root,
             self.opts.runcache_opts,
             &self.opts.cache_opts,
-            self.daemon_client,
+            self.output_watcher,
             self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));

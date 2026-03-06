@@ -435,7 +435,34 @@ impl<W> App<W> {
         }
 
         if !found_task {
-            return Err(Error::TaskNotFound { name: task.into() });
+            // Task might already be running or finished (e.g., from a concurrent
+            // watch run that hasn't fully stopped yet, or from in-flight events
+            // of a prior run). Handle gracefully instead of crashing the TUI.
+            let in_running = self
+                .tasks_by_status
+                .running
+                .iter()
+                .any(|t| t.name() == task);
+            let in_finished = self
+                .tasks_by_status
+                .finished
+                .iter()
+                .any(|t| t.name() == task);
+            if !in_running && !in_finished {
+                return Err(Error::TaskNotFound { name: task.into() });
+            }
+            if in_finished
+                && let Some(idx) = self
+                    .tasks_by_status
+                    .finished
+                    .iter()
+                    .position(|t| t.name() == task)
+            {
+                let finished = self.tasks_by_status.finished.remove(idx);
+                self.tasks_by_status
+                    .running
+                    .push(finished.restart().start());
+            }
         }
         self.tasks
             .get_mut(task)
@@ -2377,6 +2404,76 @@ mod test {
                 "terminal output {name} should be resized back when sidebar is shown"
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_start_task_idempotent_when_already_running() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<bool> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Start task a normally (planned -> running)
+        app.start_task("a", OutputLogs::Full)?;
+        assert_eq!(app.tasks_by_status.running.len(), 1);
+        assert_eq!(app.tasks_by_status.planned.len(), 1);
+
+        // Call start_task again while a is already running. This can happen
+        // when a concurrent watch run sends StartTask for a task that hasn't
+        // been fully stopped yet. Should not error.
+        app.start_task("a", OutputLogs::Full)?;
+        assert_eq!(
+            app.tasks_by_status.running.len(),
+            1,
+            "task should still be in running exactly once"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_start_task_restarts_finished_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<bool> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Run task a to completion
+        app.start_task("a", OutputLogs::Full)?;
+        app.finish_task("a", TaskResult::Success)?;
+        assert_eq!(app.tasks_by_status.finished.len(), 1);
+        assert_eq!(app.tasks_by_status.running.len(), 0);
+
+        // Call start_task on the finished task. This happens when a watch
+        // rebuild starts a task that completed in a prior run but wasn't
+        // moved back to planned via restart_tasks. Should move it to running.
+        app.start_task("a", OutputLogs::Full)?;
+        assert_eq!(
+            app.tasks_by_status.running.len(),
+            1,
+            "finished task should move to running"
+        );
+        assert_eq!(
+            app.tasks_by_status.finished.len(),
+            0,
+            "task should no longer be in finished"
+        );
 
         Ok(())
     }

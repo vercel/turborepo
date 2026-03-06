@@ -441,9 +441,27 @@ impl Subscriber {
             else {
                 return;
             };
-            // We store the hash of the package's files. If the hash is already
-            // in here, we don't need to recompute it
+            // Pre-populate hash baselines for all known packages. Without
+            // this, the first file change for each package would always be
+            // treated as "new" (no old hash to compare against), causing
+            // spurious rebuilds from build output writes on the initial run.
             let mut package_file_hashes = HashMap::new();
+            for (name, info) in repo_state.pkg_dep_graph.packages() {
+                let pkg = WorkspacePackage {
+                    name: name.clone(),
+                    path: info.package_path().to_owned(),
+                };
+                if let Ok(hash) = self
+                    .hash_watcher
+                    .get_file_hashes(HashSpec {
+                        package_path: pkg.path.clone(),
+                        inputs: InputGlobs::Default,
+                    })
+                    .await
+                {
+                    package_file_hashes.insert(pkg.path, hash);
+                }
+            }
 
             let mut change_mapper = match repo_state.get_change_mapper() {
                 Some(change_mapper) => change_mapper,

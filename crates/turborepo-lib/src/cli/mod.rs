@@ -1727,12 +1727,18 @@ pub async fn run(
             let mut client =
                 WatchClient::new(base, *experimental_write_cache, event, query_server.clone())
                     .await?;
-            if let Err(e) = client.start().await {
-                client.shutdown().await;
-                return Err(e.into());
+            match client.start().await {
+                Ok(()) => {}
+                Err(crate::run::watch::Error::SignalInterrupt) => {
+                    // Normal shutdown via Ctrl+C — not an error.
+                }
+                Err(e) => {
+                    client.shutdown().await;
+                    return Err(e.into());
+                }
             }
-            // We only exit if we get a signal, so we return a non-zero exit code
-            return Ok(1);
+            client.shutdown().await;
+            return Ok(0);
         }
         Command::Prune {
             scope,

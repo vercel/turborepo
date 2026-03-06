@@ -304,9 +304,12 @@ fn watch_clean_shutdown_on_sigint() {
     let start = Instant::now();
     loop {
         match child.try_wait() {
-            Ok(Some(_status)) => {
-                // Process exited — turbo watch exits with non-zero on
-                // signal interrupt, which is expected.
+            Ok(Some(status)) => {
+                // Process exited cleanly. SIGINT is a normal shutdown.
+                assert!(
+                    status.success(),
+                    "turbo watch should exit cleanly on SIGINT, got: {status}"
+                );
                 return;
             }
             Ok(None) => {
@@ -545,4 +548,224 @@ fn watch_same_content_write_does_not_rebuild() {
         "package a should not rebuild when file content is unchanged. before: {a_before}, after: \
          {a_after}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Regression tests for in-process watcher behavior
+// ---------------------------------------------------------------------------
+
+/// Create a fixture where package a's build takes ~3 seconds, giving us
+/// time to edit files while the build is running.
+fn setup_slow_build_test() -> (tempfile::TempDir, PathBuf) {
+    let tempdir = tempfile::tempdir().expect("failed to create tempdir");
+    let test_dir = tempdir.path().to_path_buf();
+
+    setup::copy_fixture("watch_test", &test_dir).unwrap();
+    setup::setup_git(&test_dir).unwrap();
+
+    let gitignore = test_dir.join(".gitignore");
+    let mut gi = fs::read_to_string(&gitignore).unwrap_or_default();
+    gi.push_str(".markers/\n");
+    fs::write(&gitignore, gi).unwrap();
+
+    // Make package a's build slow (3 seconds)
+    let build_a = test_dir.join("packages/a/build.js");
+    fs::write(
+        &build_a,
+        "const fs = require('fs');\nconst path = require('path');\nconst markerDir = \
+         path.join(__dirname, '.markers');\nfs.mkdirSync(markerDir, { recursive: true });\nconst \
+         count = fs.readdirSync(markerDir).length;\nfs.writeFileSync(path.join(markerDir, \
+         `run-${count}`), `${Date.now()}\\n`);\nconsole.log(`pkg-a slow build #${count}`);\n// \
+         Simulate a slow build\nconst start = Date.now();\nwhile (Date.now() - start < 3000) {}\n",
+    )
+    .unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(&test_dir, &["commit", "-m", "slow build setup", "--quiet"]);
+
+    (tempdir, test_dir)
+}
+
+/// Editing a file while a build is running should trigger a rebuild after
+/// the current build finishes. The in-process watcher must not discard
+/// events that arrive during a run.
+#[test]
+fn watch_edit_during_build_triggers_rebuild() {
+    let (_tempdir, test_dir) = setup_slow_build_test();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+
+    // Wait for the initial build to start (marker appears)
+    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+
+    // While the slow build is still running (3s), edit package b's source.
+    // Package b's build is fast, but the watch coordinator waits for all
+    // active runs to finish before processing new events.
+    let b_before = marker_count(&test_dir, "b");
+    let src_file = test_dir.join("packages/b/src.js");
+    fs::write(
+        &src_file,
+        "module.exports = { b: 'edited-during-build' };\n",
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "edit b during slow build", "--quiet"],
+    );
+
+    // Wait for b to rebuild. The edit should not be lost — after the slow
+    // build completes and the system processes accumulated events, b should
+    // rebuild.
+    let b_after = wait_for_markers(&test_dir, "b", b_before + 1, Duration::from_secs(30));
+
+    drop(guard);
+
+    assert!(
+        b_after > b_before,
+        "package b should have rebuilt after edit during build. before: {b_before}, after: \
+         {b_after}"
+    );
+}
+
+/// Rapid successive edits to the same file should be coalesced by the hash
+/// watcher's debouncer and the PackageChangesWatcher's 100ms batching,
+/// producing at most 2 rebuilds rather than one per edit.
+#[test]
+fn watch_rapid_edits_produce_single_rebuild() {
+    let (_tempdir, test_dir) = setup_watch_test();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+
+    // Wait for initial build and settle
+    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
+    std::thread::sleep(Duration::from_secs(3));
+
+    let a_before = marker_count(&test_dir, "a");
+
+    // Rapidly edit the same file 5 times, committing each time.
+    let src_file = test_dir.join("packages/a/src.js");
+    for i in 0..5 {
+        fs::write(
+            &src_file,
+            format!("module.exports = {{ a: 'rapid-{i}' }};\n"),
+        )
+        .unwrap();
+        common::git(&test_dir, &["add", "."]);
+        common::git(
+            &test_dir,
+            &[
+                "commit",
+                "-m",
+                &format!("rapid edit {i}"),
+                "--quiet",
+                "--allow-empty",
+            ],
+        );
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    // Wait for at least one rebuild, then let the system fully settle.
+    wait_for_markers(&test_dir, "a", a_before + 1, Duration::from_secs(30));
+    std::thread::sleep(Duration::from_secs(5));
+
+    let a_after = marker_count(&test_dir, "a");
+
+    drop(guard);
+
+    let rebuilds = a_after - a_before;
+    assert!(
+        (1..=3).contains(&rebuilds),
+        "5 rapid edits should be debounced to at most 3 rebuilds, but got {rebuilds}"
+    );
+}
+
+/// Verify that builds of the same package don't run concurrently. The watch
+/// coordinator waits for active runs to finish before starting new ones.
+/// We verify this by checking that marker timestamps are sequential (no
+/// overlap).
+#[test]
+fn watch_no_concurrent_builds_of_same_package() {
+    let (_tempdir, test_dir) = setup_watch_test();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+
+    // Wait for initial build and settle
+    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    std::thread::sleep(Duration::from_secs(3));
+
+    // Trigger two sequential rebuilds by editing twice with a gap
+    let src_file = test_dir.join("packages/a/src.js");
+
+    fs::write(&src_file, "module.exports = { a: 'first-edit' };\n").unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(&test_dir, &["commit", "-m", "first edit", "--quiet"]);
+    wait_for_markers(&test_dir, "a", 2, Duration::from_secs(30));
+    std::thread::sleep(Duration::from_secs(2));
+
+    fs::write(&src_file, "module.exports = { a: 'second-edit' };\n").unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(&test_dir, &["commit", "-m", "second edit", "--quiet"]);
+    wait_for_markers(&test_dir, "a", 3, Duration::from_secs(30));
+
+    drop(guard);
+
+    // Read timestamps from markers. Each marker file contains a Date.now()
+    // timestamp. Sequential builds mean each timestamp is >= the previous.
+    let marker_dir = test_dir.join("packages/a/.markers");
+    let mut timestamps: Vec<u64> = fs::read_dir(&marker_dir)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter_map(|e| fs::read_to_string(e.path()).ok())
+        .filter_map(|content| content.trim().parse::<u64>().ok())
+        .collect();
+    timestamps.sort();
+
+    for window in timestamps.windows(2) {
+        assert!(
+            window[1] >= window[0],
+            "marker timestamps should be sequential (no concurrent builds). got: {timestamps:?}"
+        );
+    }
+}
+
+/// Verify that Ctrl+C (SIGINT) produces a clean exit with code 0, not an
+/// error message.
+#[cfg(unix)]
+#[test]
+fn watch_sigint_exits_with_zero() {
+    use nix::{
+        sys::signal::{self, Signal},
+        unistd::Pid,
+    };
+
+    let (_tempdir, test_dir) = setup_watch_test();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+
+    // Wait for the initial build to complete
+    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    std::thread::sleep(Duration::from_secs(2));
+
+    let mut child = guard.take();
+    let pid = Pid::from_raw(child.id() as i32);
+    signal::kill(pid, Signal::SIGINT).expect("failed to send SIGINT");
+
+    let start = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                assert!(
+                    status.success(),
+                    "turbo watch should exit with code 0 on SIGINT, got: {status}"
+                );
+                return;
+            }
+            Ok(None) => {
+                if start.elapsed() > Duration::from_secs(10) {
+                    child.kill().unwrap();
+                    panic!("turbo watch did not exit within 10s after SIGINT");
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => panic!("error waiting for turbo watch: {e}"),
+        }
+    }
 }
