@@ -613,10 +613,19 @@ impl Run {
         });
 
         let env_mode = self.opts.run_opts.env_mode;
+        let global_inputs_as_task_inputs = self.opts.future_flags.global_inputs_as_task_inputs;
 
         let mut file_hash_result = None;
         let mut internal_deps_result = None;
         let mut global_file_result = None;
+
+        // When the flag is enabled, global dep globs are prepended to each task's
+        // inputs in calculate_file_hashes instead of being folded into the global hash.
+        let global_input_globs: &[String] = if global_inputs_as_task_inputs {
+            &self.root_turbo_json.global_deps
+        } else {
+            &[]
+        };
 
         let _hash_scope_span = tracing::info_span!("hash_scope").entered();
         rayon::scope(|s| {
@@ -634,6 +643,7 @@ impl Run {
                     &self.run_telemetry,
                     repo_index,
                     needs_expanded,
+                    global_input_globs,
                 ));
             });
             s.spawn(|_| {
@@ -662,6 +672,7 @@ impl Run {
                     &self.env_at_execution_start,
                     &self.root_turbo_json.global_env,
                     &self.scm,
+                    global_inputs_as_task_inputs,
                 ));
             });
         });

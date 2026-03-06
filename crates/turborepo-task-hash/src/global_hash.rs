@@ -73,6 +73,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     env_mode: EnvMode,
     framework_inference: bool,
     hasher: &SCM,
+    global_inputs_as_task_inputs: bool,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
     let GlobalFileHashInputs {
         global_file_hash_map,
@@ -87,6 +88,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         env_at_execution_start,
         global_env,
         hasher,
+        global_inputs_as_task_inputs,
     )?;
 
     debug!(
@@ -123,6 +125,10 @@ pub struct GlobalFileHashInputs<'a> {
 /// This is the expensive I/O-bound portion of global hash computation and
 /// can be run concurrently with package file hashing and internal deps
 /// hashing since it has no dependencies on those results.
+///
+/// When `global_inputs_as_task_inputs` is true, global file dependencies are
+/// not resolved or hashed here — they will instead be prepended to each
+/// task's input globs in `PackageInputsHashes::calculate_file_hashes`.
 #[allow(clippy::too_many_arguments, clippy::result_large_err)]
 pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
     root_package: &'a PackageInfo,
@@ -133,6 +139,7 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_env: &'a [String],
     hasher: &SCM,
+    global_inputs_as_task_inputs: bool,
 ) -> Result<GlobalFileHashInputs<'a>, Error> {
     let engines = root_package.package_json.engines();
 
@@ -144,8 +151,11 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
         global_hashable_env_vars.all.names()
     );
 
-    let mut global_deps =
-        collect_global_deps(package_manager, root_path, global_file_dependencies)?;
+    let mut global_deps = if global_inputs_as_task_inputs {
+        HashSet::new()
+    } else {
+        collect_global_deps(package_manager, root_path, global_file_dependencies)?
+    };
 
     if lockfile.is_none() {
         global_deps.insert(root_path.join_component("package.json"));
@@ -370,7 +380,7 @@ mod tests {
     use turborepo_scm::SCM;
     use turborepo_types::EnvMode;
 
-    use super::{collect_global_deps, get_global_hash_inputs};
+    use super::{collect_global_deps, collect_global_file_hash_inputs, get_global_hash_inputs};
 
     #[test]
     fn test_absolute_path() {
@@ -408,6 +418,7 @@ mod tests {
             EnvMode::Strict,
             false,
             &SCM::new(&root),
+            false,
         );
         assert!(result.is_ok());
     }
@@ -449,5 +460,91 @@ mod tests {
 
         // should not yield the root folder itself, src, or empty-folder
         assert_eq!(results.len(), 3, "{:?}", results);
+    }
+
+    #[test]
+    fn test_flag_off_includes_global_deps_in_hash() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        root.join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        root.join_component("config.txt")
+            .create_with_contents("some config")
+            .unwrap();
+
+        let env_var_map = EnvironmentVariableMap::default();
+        let package_info = PackageInfo::default();
+        let lockfile: Option<&dyn Lockfile> = None;
+        let file_deps = ["config.txt".to_string()];
+
+        let result = collect_global_file_hash_inputs(
+            &package_info,
+            &root,
+            &PackageManager::Pnpm,
+            lockfile,
+            &file_deps,
+            &env_var_map,
+            &[],
+            &SCM::new(&root),
+            false,
+        )
+        .unwrap();
+
+        assert!(
+            !result.global_file_hash_map.is_empty(),
+            "flag off: global_file_hash_map should contain the global dep files"
+        );
+    }
+
+    #[test]
+    fn test_flag_on_excludes_global_deps_from_hash() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        root.join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        root.join_component("config.txt")
+            .create_with_contents("some config")
+            .unwrap();
+
+        let env_var_map = EnvironmentVariableMap::default();
+        let package_info = PackageInfo::default();
+        let lockfile: Option<&dyn Lockfile> = None;
+        let file_deps = ["config.txt".to_string()];
+
+        let result = collect_global_file_hash_inputs(
+            &package_info,
+            &root,
+            &PackageManager::Pnpm,
+            lockfile,
+            &file_deps,
+            &env_var_map,
+            &[],
+            &SCM::new(&root),
+            true,
+        )
+        .unwrap();
+
+        // When the flag is on and there's no lockfile, package.json and
+        // the lockfile path may still be present, but the user-specified
+        // global dep (config.txt) should NOT be in the map.
+        let has_config = result
+            .global_file_hash_map
+            .keys()
+            .any(|k| k.as_str().contains("config.txt"));
+        assert!(
+            !has_config,
+            "flag on: config.txt should not appear in global_file_hash_map, got: {:?}",
+            result.global_file_hash_map.keys().collect::<Vec<_>>()
+        );
     }
 }

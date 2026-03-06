@@ -53,6 +53,12 @@ pub struct FutureFlags {
     /// brute-force tag collision feasible.
     #[serde(default)]
     pub longer_signature_key: bool,
+    /// Treat `globalDependencies` as implicit task inputs prepended to every
+    /// task's input globs instead of folding them into the global hash.
+    /// This allows individual tasks to negate specific global inputs via
+    /// `inputs: ["!$TURBO_ROOT$/some-global-file.txt"]`.
+    #[serde(default)]
+    pub global_inputs_as_task_inputs: bool,
 }
 
 impl TS for FutureFlags {
@@ -65,25 +71,25 @@ impl TS for FutureFlags {
 
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean }"
+         boolean, globalInputsAsTaskInputs?: boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean }"
+         boolean, globalInputsAsTaskInputs?: boolean }"
             .to_string()
     }
 
     fn decl() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
-         longerSignatureKey?: boolean };"
+         longerSignatureKey?: boolean, globalInputsAsTaskInputs?: boolean };"
             .to_string()
     }
 
     fn decl_concrete() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
-         longerSignatureKey?: boolean };"
+         longerSignatureKey?: boolean, globalInputsAsTaskInputs?: boolean };"
             .to_string()
     }
 
