@@ -23,7 +23,6 @@ use turbopath::{
 use turborepo_cache::{
     AsyncCache, CacheError, CacheHitMetadata, CacheOpts, CacheSource, http::UploadMap,
 };
-use turborepo_daemon::{DaemonClient, DaemonConnector};
 use turborepo_hash::{FileHashes, TurboHash};
 use turborepo_repository::package_graph::PackageInfo;
 use turborepo_scm::SCM;
@@ -47,18 +46,12 @@ pub enum Error {
     Globwalk(#[from] globwalk::WalkError),
     #[error("Invalid globwalk pattern: {0}")]
     Glob(#[from] globwalk::GlobError),
-    #[error("Error with daemon: {0}")]
-    Daemon(Box<turborepo_daemon::DaemonError>),
+    #[error("Error with output watcher: {0}")]
+    OutputWatcher(#[from] OutputWatcherError),
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
-}
-
-impl From<turborepo_daemon::DaemonError> for Error {
-    fn from(err: turborepo_daemon::DaemonError) -> Self {
-        Error::Daemon(Box::new(err))
-    }
 }
 
 /// Abstraction over output change tracking.
@@ -79,18 +72,20 @@ pub trait OutputWatcher: Send + Sync {
     fn get_changed_outputs(
         &self,
         hash: String,
-        output_globs: &[String],
-    ) -> impl std::future::Future<Output = Result<HashSet<String>, OutputWatcherError>> + Send;
+        output_globs: Vec<String>,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<HashSet<String>, OutputWatcherError>> + Send>,
+    >;
 
     /// Register output globs for a task hash so that future changes to
     /// matching files can be detected.
     fn notify_outputs_written(
         &self,
         hash: String,
-        output_globs: &[String],
-        output_exclusion_globs: &[String],
+        output_globs: Vec<String>,
+        output_exclusion_globs: Vec<String>,
         time_saved: u64,
-    ) -> impl std::future::Future<Output = Result<(), OutputWatcherError>> + Send;
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), OutputWatcherError>> + Send>>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -110,7 +105,7 @@ pub struct RunCache {
     reads_disabled: bool,
     writes_disabled: bool,
     repo_root: AbsoluteSystemPathBuf,
-    daemon_client: Option<DaemonClient<DaemonConnector>>,
+    output_watcher: Option<Arc<dyn OutputWatcher>>,
     ui: ColorConfig,
     /// When using `outputLogs: "errors-only"`, show task hashes when tasks
     /// complete successfully. Controlled by the `errorsOnlyShowHash` future
@@ -131,7 +126,7 @@ impl RunCache {
         repo_root: &AbsoluteSystemPath,
         run_cache_opts: RunCacheOpts,
         cache_opts: &CacheOpts,
-        daemon_client: Option<DaemonClient<DaemonConnector>>,
+        output_watcher: Option<Arc<dyn OutputWatcher>>,
         ui: ColorConfig,
         is_dry_run: bool,
     ) -> Self {
@@ -147,7 +142,7 @@ impl RunCache {
             reads_disabled: !cache_opts.cache.remote.read && !cache_opts.cache.local.read,
             writes_disabled: !cache_opts.cache.remote.write && !cache_opts.cache.local.write,
             repo_root: repo_root.to_owned(),
-            daemon_client,
+            output_watcher,
             ui,
             errors_only_show_hash: run_cache_opts.errors_only_show_hash,
         }
@@ -184,7 +179,7 @@ impl RunCache {
             task_output_logs,
             caching_disabled,
             log_file_path,
-            daemon_client: self.daemon_client.clone(),
+            output_watcher: self.output_watcher.clone(),
             ui: self.ui,
             warnings: self.warnings.clone(),
             errors_only_show_hash: self.errors_only_show_hash,
@@ -218,7 +213,7 @@ pub struct TaskCache {
     task_output_logs: OutputLogsMode,
     caching_disabled: bool,
     log_file_path: AbsoluteSystemPathBuf,
-    daemon_client: Option<DaemonClient<DaemonConnector>>,
+    output_watcher: Option<Arc<dyn OutputWatcher>>,
     ui: ColorConfig,
     task_id: TaskId<'static>,
     warnings: Arc<Mutex<Vec<String>>>,
@@ -320,14 +315,18 @@ impl TaskCache {
 
         let validated_inclusions = self.repo_relative_globs.validated_inclusions()?;
 
-        // If the daemon is connected, check whether outputs have changed since
-        // they were last written. When outputs are already on disk and unchanged,
-        // we can skip the cache restore entirely — avoiding file writes that would
-        // otherwise trigger the file watcher and cause an infinite rebuild loop
-        // in `turbo watch`.
-        let changed_output_count = if let Some(daemon_client) = &mut self.daemon_client {
-            match daemon_client
-                .get_changed_outputs(self.hash.to_string(), &validated_inclusions)
+        // If an output watcher is connected, check whether outputs have changed
+        // since they were last written. When outputs are already on disk and
+        // unchanged, we can skip the cache restore entirely — avoiding file writes
+        // that would otherwise trigger the file watcher and cause an infinite
+        // rebuild loop in `turbo watch`.
+        let inclusion_strings: Vec<String> = validated_inclusions
+            .iter()
+            .map(|g| g.as_ref().to_string())
+            .collect();
+        let changed_output_count = if let Some(output_watcher) = &self.output_watcher {
+            match output_watcher
+                .get_changed_outputs(self.hash.to_string(), inclusion_strings.clone())
                 .await
             {
                 Ok(changed_output_globs) => changed_output_globs.len(),
@@ -386,13 +385,18 @@ impl TaskCache {
 
             self.expanded_outputs = restored_files;
 
-            if let Some(daemon_client) = &mut self.daemon_client {
-                let validated_exclusions = self.repo_relative_globs.validated_exclusions()?;
-                if let Err(err) = daemon_client
+            if let Some(output_watcher) = &self.output_watcher {
+                let exclusion_strings: Vec<String> = self
+                    .repo_relative_globs
+                    .validated_exclusions()?
+                    .iter()
+                    .map(|g| g.as_ref().to_string())
+                    .collect();
+                if let Err(err) = output_watcher
                     .notify_outputs_written(
                         self.hash.clone(),
-                        &validated_inclusions,
-                        &validated_exclusions,
+                        inclusion_strings.clone(),
+                        exclusion_strings,
                         cache_hit_metadata.time_saved,
                     )
                     .await
@@ -508,20 +512,28 @@ impl TaskCache {
             )
             .await?;
 
-        if let Some(daemon_client) = self.daemon_client.as_mut()
-            && let Err(err) = daemon_client
+        if let Some(output_watcher) = &self.output_watcher {
+            let inclusion_strings: Vec<String> = validated_inclusions
+                .iter()
+                .map(|g| g.as_ref().to_string())
+                .collect();
+            let exclusion_strings: Vec<String> = validated_exclusions
+                .iter()
+                .map(|g| g.as_ref().to_string())
+                .collect();
+            if let Err(err) = output_watcher
                 .notify_outputs_written(
                     self.hash.to_string(),
-                    &validated_inclusions,
-                    &validated_exclusions,
+                    inclusion_strings,
+                    exclusion_strings,
                     duration.as_millis() as u64,
                 )
                 .await
-                .map_err(Error::from)
-        {
-            telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
-            let task_id = &self.task_id;
-            debug!("failed to mark outputs as cached for {task_id}: {err}");
+            {
+                telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
+                let task_id = &self.task_id;
+                debug!("failed to mark outputs as cached for {task_id}: {err}");
+            }
         }
 
         self.expanded_outputs = relative_paths;
@@ -691,32 +703,41 @@ mod test {
     }
 
     impl OutputWatcher for MockOutputWatcher {
-        async fn get_changed_outputs(
+        fn get_changed_outputs(
             &self,
             _hash: String,
-            _output_globs: &[String],
-        ) -> Result<HashSet<String>, OutputWatcherError> {
+            _output_globs: Vec<String>,
+        ) -> std::pin::Pin<
+            Box<
+                dyn std::future::Future<Output = Result<HashSet<String>, OutputWatcherError>>
+                    + Send,
+            >,
+        > {
             self.get_changed_call_count.fetch_add(1, Ordering::SeqCst);
             self.was_called.store(true, Ordering::SeqCst);
-            match &self.changed_outputs {
+            let result = match &self.changed_outputs {
                 Ok(set) => Ok(set.clone()),
                 Err(msg) => Err(OutputWatcherError(Box::new(std::io::Error::other(*msg)))),
-            }
+            };
+            Box::pin(async move { result })
         }
 
-        async fn notify_outputs_written(
+        fn notify_outputs_written(
             &self,
             _hash: String,
-            _output_globs: &[String],
-            _output_exclusion_globs: &[String],
+            _output_globs: Vec<String>,
+            _output_exclusion_globs: Vec<String>,
             _time_saved: u64,
-        ) -> Result<(), OutputWatcherError> {
+        ) -> std::pin::Pin<
+            Box<dyn std::future::Future<Output = Result<(), OutputWatcherError>> + Send>,
+        > {
             self.notify_call_count.fetch_add(1, Ordering::SeqCst);
             self.was_called.store(true, Ordering::SeqCst);
-            match &self.notify_result {
+            let result = match &self.notify_result {
                 Ok(()) => Ok(()),
                 Err(msg) => Err(OutputWatcherError(Box::new(std::io::Error::other(*msg)))),
-            }
+            };
+            Box::pin(async move { result })
         }
     }
 
@@ -728,7 +749,7 @@ mod test {
     async fn output_watcher_no_changes_returns_empty_set() {
         let watcher = MockOutputWatcher::returning_no_changes();
         let result = watcher
-            .get_changed_outputs("abc123".into(), &["dist/**".into()])
+            .get_changed_outputs("abc123".into(), vec!["dist/**".into()])
             .await;
         assert!(result.is_ok());
         assert!(result.unwrap().is_empty());
@@ -741,7 +762,7 @@ mod test {
         let result = watcher
             .get_changed_outputs(
                 "abc123".into(),
-                &["dist/**".into(), ".next/**".into(), "build/**".into()],
+                vec!["dist/**".into(), ".next/**".into(), "build/**".into()],
             )
             .await;
         let changed = result.unwrap();
@@ -756,7 +777,7 @@ mod test {
         // treating all outputs as changed (normal cache restore path).
         let watcher = MockOutputWatcher::returning_get_error();
         let result = watcher
-            .get_changed_outputs("abc123".into(), &["dist/**".into()])
+            .get_changed_outputs("abc123".into(), vec!["dist/**".into()])
             .await;
         assert!(result.is_err());
         // The error should be displayable for logging
@@ -771,8 +792,8 @@ mod test {
         let result = watcher
             .notify_outputs_written(
                 "abc123".into(),
-                &["dist/**".into()],
-                &["dist/cache/**".into()],
+                vec!["dist/**".into()],
+                vec!["dist/cache/**".into()],
                 1500,
             )
             .await;
@@ -786,7 +807,7 @@ mod test {
         // continue — it's not a fatal error.
         let watcher = MockOutputWatcher::returning_notify_error();
         let result = watcher
-            .notify_outputs_written("abc123".into(), &["dist/**".into()], &[], 0)
+            .notify_outputs_written("abc123".into(), vec!["dist/**".into()], vec![], 0)
             .await;
         assert!(result.is_err());
     }
@@ -800,7 +821,7 @@ mod test {
 
         // First check: nothing changed
         let result = watcher
-            .get_changed_outputs("hash1".into(), &["dist/**".into()])
+            .get_changed_outputs("hash1".into(), vec!["dist/**".into()])
             .await
             .unwrap();
         assert!(result.is_empty());
@@ -808,7 +829,7 @@ mod test {
 
         // Notify after restore
         watcher
-            .notify_outputs_written("hash1".into(), &["dist/**".into()], &[], 500)
+            .notify_outputs_written("hash1".into(), vec!["dist/**".into()], vec![], 500)
             .await
             .unwrap();
         assert_eq!(watcher.notify_calls(), 1);
@@ -816,7 +837,7 @@ mod test {
         // Second check: still unchanged in this mock (real GlobWatcher would
         // track actual file changes between calls)
         let result = watcher
-            .get_changed_outputs("hash1".into(), &["dist/**".into()])
+            .get_changed_outputs("hash1".into(), vec!["dist/**".into()])
             .await
             .unwrap();
         assert!(result.is_empty());
@@ -830,11 +851,11 @@ mod test {
         let watcher = MockOutputWatcher::returning_all_changed(vec!["dist/**".into()]);
 
         let result1 = watcher
-            .get_changed_outputs("hash-a".into(), &["dist/**".into()])
+            .get_changed_outputs("hash-a".into(), vec!["dist/**".into()])
             .await
             .unwrap();
         let result2 = watcher
-            .get_changed_outputs("hash-b".into(), &["dist/**".into()])
+            .get_changed_outputs("hash-b".into(), vec!["dist/**".into()])
             .await
             .unwrap();
 
