@@ -32,14 +32,14 @@ pub use error::Error;
 pub use npm::*;
 pub use pnpm::{PnpmLockfile, pnpm_global_change, pnpm_subgraph};
 use rayon::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
 type ResolveCache = DashMap<String, Option<Package>>;
 type DepsCache = DashMap<String, Option<HashMap<String, String>>>;
 
-#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
+#[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct Package {
     pub key: String,
     pub version: String,

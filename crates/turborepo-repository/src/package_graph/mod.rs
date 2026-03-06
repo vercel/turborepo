@@ -6,7 +6,7 @@ use std::{
 
 use itertools::Itertools;
 use petgraph::graph::{Edge, NodeIndex};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
@@ -20,7 +20,9 @@ use crate::{
 };
 
 pub mod builder;
+pub mod cache;
 mod dep_splitter;
+pub mod lazy_lockfile;
 
 pub use builder::{Error, PackageGraphBuilder};
 
@@ -28,14 +30,13 @@ pub const ROOT_PKG_NAME: &str = "//";
 
 #[derive(Debug)]
 pub struct PackageGraph {
-    graph: petgraph::Graph<PackageNode, ()>,
-    #[allow(dead_code)]
-    node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
-    packages: HashMap<PackageName, PackageInfo>,
-    package_manager: PackageManager,
-    lockfile: Option<Box<dyn Lockfile>>,
-    repo_root: AbsoluteSystemPathBuf,
-    external_dep_to_internal_dependents:
+    pub(crate) graph: petgraph::Graph<PackageNode, ()>,
+    pub(crate) node_lookup: HashMap<PackageNode, petgraph::graph::NodeIndex>,
+    pub(crate) packages: HashMap<PackageName, PackageInfo>,
+    pub(crate) package_manager: PackageManager,
+    pub(crate) lockfile: Option<Box<dyn Lockfile>>,
+    pub(crate) repo_root: AbsoluteSystemPathBuf,
+    pub(crate) external_dep_to_internal_dependents:
         OnceLock<HashMap<turborepo_lockfiles::Package, HashSet<PackageNode>>>,
 }
 
@@ -63,7 +64,7 @@ impl WorkspacePackage {
 }
 
 /// PackageInfo represents a package within the workspace.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct PackageInfo {
     pub package_json: PackageJson,
     pub package_json_path: AnchoredSystemPathBuf,
@@ -115,6 +116,13 @@ impl Serialize for PackageName {
     }
 }
 
+impl<'de> Deserialize<'de> for PackageName {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        Ok(PackageName::from(s))
+    }
+}
+
 impl PackageName {
     pub fn as_str(&self) -> &str {
         match self {
@@ -124,7 +132,7 @@ impl PackageName {
     }
 }
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum PackageNode {
     Root,
     Workspace(PackageName),
@@ -149,6 +157,12 @@ pub struct ExternalDependencyChange {
 }
 
 impl PackageGraph {
+    /// Set the lockfile on this graph. Used by the cache-hit path where
+    /// the lockfile is loaded lazily.
+    pub fn set_lockfile(&mut self, lockfile: Option<Box<dyn Lockfile>>) {
+        self.lockfile = lockfile;
+    }
+
     pub fn builder(
         repo_root: &AbsoluteSystemPath,
         root_package_json: PackageJson,

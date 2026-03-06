@@ -17,9 +17,15 @@ use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
 use turborepo_repository::{
     change_mapper::PackageInclusionReason,
-    package_graph::{PackageGraph, PackageName},
+    discovery::{LocalPackageDiscovery, PackageDiscovery},
+    package_graph::{
+        PackageGraph, PackageName,
+        cache as graph_cache,
+        lazy_lockfile::LazyLockfile,
+    },
     package_json,
     package_json::PackageJson,
+    package_manager::PackageManager,
 };
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
@@ -147,6 +153,161 @@ impl RunBuilder {
         self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
     }
 
+    /// Try to load a cached PackageGraph. Returns None on any failure.
+    async fn try_load_cached_graph(
+        &self,
+        root_package_json: &PackageJson,
+    ) -> Option<PackageGraph> {
+        let _span = tracing::info_span!("try_load_cached_graph").entered();
+
+        // Detect package manager
+        let package_manager = PackageManager::get_package_manager(&self.repo_root, root_package_json)
+            .ok()?;
+
+        // Run workspace discovery to get the current workspace paths
+        let discovery = LocalPackageDiscovery::new(
+            self.repo_root.clone(),
+            package_manager.clone(),
+        );
+        let discovery_response = discovery.discover_packages().await.ok()?;
+
+        // Collect workspace package.json paths (sorted for deterministic fingerprint)
+        let mut workspace_pkg_json_paths: Vec<AbsoluteSystemPathBuf> = discovery_response
+            .workspaces
+            .iter()
+            .map(|w| w.package_json.clone())
+            .collect();
+        workspace_pkg_json_paths.sort();
+
+        // Collect turbo.json paths
+        let mut turbo_json_paths: Vec<AbsoluteSystemPathBuf> = Vec::new();
+        let root_turbo_json = self.opts.repo_opts.root_turbo_json_path.clone();
+        if root_turbo_json.exists() {
+            turbo_json_paths.push(root_turbo_json);
+        }
+        for ws in &discovery_response.workspaces {
+            if let Some(ref tj) = ws.turbo_json {
+                turbo_json_paths.push(tj.clone());
+            }
+        }
+        turbo_json_paths.sort();
+
+        // Compute sorted workspace paths for the fingerprint
+        let workspace_paths: Vec<String> = workspace_pkg_json_paths
+            .iter()
+            .filter_map(|p| self.repo_root.anchor(p).ok().map(|r| r.to_string()))
+            .collect();
+
+        // Collect all input files and compute fingerprint
+        let input_files = graph_cache::collect_input_files(
+            &self.repo_root,
+            &package_manager,
+            &workspace_pkg_json_paths,
+            &turbo_json_paths,
+        );
+
+        let fingerprint = graph_cache::compute_fingerprint(
+            &self.repo_root,
+            &input_files,
+            workspace_paths,
+        )?;
+
+        // Try to load the cache
+        let cache_dir = self.repo_root.join_components(&[".turbo", "cache"]);
+        let cache_path = cache_dir.join_component(graph_cache::CACHE_FILE_NAME);
+
+        // Spawn lazy lockfile parsing in background (runs in parallel with cache load)
+        let lazy_lockfile = LazyLockfile::spawn(
+            package_manager.clone(),
+            self.repo_root.clone(),
+            root_package_json.clone(),
+        );
+
+        let graph = graph_cache::try_load(
+            &cache_path,
+            &fingerprint,
+            self.version,
+            &self.repo_root,
+            None, // lockfile loaded lazily
+        );
+
+        match graph {
+            Some(mut graph) => {
+                // Resolve the lazy lockfile — it's been parsing in the background
+                let lockfile = lazy_lockfile.resolve().await;
+                graph.set_lockfile(lockfile);
+                tracing::info!("package graph loaded from cache");
+                Some(graph)
+            }
+            None => {
+                // Cache miss — don't waste the lockfile parse though
+                tracing::debug!("package graph cache miss");
+                None
+            }
+        }
+    }
+
+    /// Best-effort save of the PackageGraph to the cache file.
+    fn save_graph_cache(&self, graph: &PackageGraph, _root_package_json: &PackageJson) {
+        let _span = tracing::info_span!("save_graph_cache").entered();
+
+        let package_manager = graph.package_manager().clone();
+
+        // Collect workspace package.json paths from the graph
+        let mut workspace_pkg_json_paths: Vec<AbsoluteSystemPathBuf> = graph
+            .packages()
+            .filter(|(name, _)| !matches!(name, PackageName::Root))
+            .map(|(_, info)| self.repo_root.resolve(&info.package_json_path))
+            .collect();
+        workspace_pkg_json_paths.sort();
+
+        // Collect turbo.json paths
+        let mut turbo_json_paths: Vec<AbsoluteSystemPathBuf> = Vec::new();
+        let root_turbo_json = self.opts.repo_opts.root_turbo_json_path.clone();
+        if root_turbo_json.exists() {
+            turbo_json_paths.push(root_turbo_json);
+        }
+        // Check for workspace turbo.json files
+        for (name, info) in graph.packages() {
+            if matches!(name, PackageName::Root) {
+                continue;
+            }
+            let ws_turbo_json = self.repo_root
+                .resolve(info.package_path())
+                .join_component("turbo.json");
+            if ws_turbo_json.exists() {
+                turbo_json_paths.push(ws_turbo_json);
+            }
+        }
+        turbo_json_paths.sort();
+
+        let workspace_paths: Vec<String> = workspace_pkg_json_paths
+            .iter()
+            .filter_map(|p| self.repo_root.anchor(p).ok().map(|r| r.to_string()))
+            .collect();
+
+        let input_files = graph_cache::collect_input_files(
+            &self.repo_root,
+            &package_manager,
+            &workspace_pkg_json_paths,
+            &turbo_json_paths,
+        );
+
+        let fingerprint = match graph_cache::compute_fingerprint(
+            &self.repo_root,
+            &input_files,
+            workspace_paths,
+        ) {
+            Some(fp) => fp,
+            None => return,
+        };
+
+        let cache_dir = self.repo_root.join_components(&[".turbo", "cache"]);
+        let cache_path = cache_dir.join_component(graph_cache::CACHE_FILE_NAME);
+
+        graph_cache::save(&cache_path, graph, fingerprint, self.version);
+    }
+
     pub fn calculate_filtered_packages(
         repo_root: &AbsoluteSystemPath,
         opts: &Opts,
@@ -268,31 +429,52 @@ impl RunBuilder {
         run_telemetry.track_daemon_init(DaemonInitStatus::Disabled);
 
         let mut pkg_dep_graph = {
-            let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
-                .with_single_package_mode(self.opts.run_opts.single_package)
-                .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
+            let _span = tracing::info_span!("pkg_dep_graph_build").entered();
 
-            let graph = builder
-                .build()
-                .instrument(tracing::info_span!("pkg_dep_graph_build"))
-                .await;
+            // Try to load from cache (only for multi-package repos)
+            let cached_graph = if !self.opts.run_opts.single_package {
+                self.try_load_cached_graph(&root_package_json).await
+            } else {
+                None
+            };
 
-            match graph {
-                Ok(graph) => graph,
-                // if we can't find the package.json, it is a bug, and we should report it.
-                // likely cause is that package discovery watching is not up to date.
-                // note: there _is_ a false positive from a race condition that can occur
-                //       from toctou if the package.json is deleted, but we'd like to know
-                Err(turborepo_repository::package_graph::Error::PackageJson(
-                    package_json::Error::Io(io),
-                )) if io.kind() == ErrorKind::NotFound => {
-                    run_telemetry.track_error(TrackedErrors::InvalidPackageDiscovery);
-                    return Err(turborepo_repository::package_graph::Error::PackageJson(
-                        package_json::Error::Io(io),
-                    )
-                    .into());
+            match cached_graph {
+                Some(graph) => graph,
+                None => {
+                    // Cache miss or single-package mode — build from scratch
+                    let builder =
+                        PackageGraph::builder(&self.repo_root, root_package_json.clone())
+                            .with_single_package_mode(self.opts.run_opts.single_package)
+                            .with_allow_no_package_manager(
+                                self.opts.repo_opts.allow_no_package_manager,
+                            );
+
+                    let graph = builder.build().await;
+
+                    let graph = match graph {
+                        Ok(graph) => graph,
+                        Err(turborepo_repository::package_graph::Error::PackageJson(
+                            package_json::Error::Io(io),
+                        )) if io.kind() == ErrorKind::NotFound => {
+                            run_telemetry
+                                .track_error(TrackedErrors::InvalidPackageDiscovery);
+                            return Err(
+                                turborepo_repository::package_graph::Error::PackageJson(
+                                    package_json::Error::Io(io),
+                                )
+                                .into(),
+                            );
+                        }
+                        Err(e) => return Err(e.into()),
+                    };
+
+                    // Best-effort save to cache
+                    if !self.opts.run_opts.single_package {
+                        self.save_graph_cache(&graph, &root_package_json);
+                    }
+
+                    graph
                 }
-                Err(e) => return Err(e.into()),
             }
         };
 
