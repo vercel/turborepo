@@ -10,7 +10,7 @@ const MAX_RETRIES: u32 = 10;
 const BASE_DELAY_MS: u64 = 10;
 const MAX_DELAY_MS: u64 = 1000;
 
-fn hash_file_with_retry(
+pub(crate) fn hash_file_with_retry(
     path: &AbsoluteSystemPath,
 ) -> Result<gix_index::hash::ObjectId, std::io::Error> {
     for attempt in 0..MAX_RETRIES {

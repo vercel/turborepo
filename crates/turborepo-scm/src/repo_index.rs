@@ -1,8 +1,13 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use tracing::{debug, trace};
 use turbopath::RelativeUnixPathBuf;
 
 use crate::{
-    Error, GitHashes, GitRepo, OidHash, ls_tree::SortedGitHashes, status::RepoStatusEntry,
+    Error, GitHashes, GitRepo, OidHash,
+    hash_object::hash_file_with_retry,
+    ls_tree::SortedGitHashes,
+    status::RepoStatusEntry,
 };
 
 /// Pre-computed repo-wide git index that caches file hashes and working-tree
@@ -79,6 +84,9 @@ impl RepoGitIndex {
         // and carry the raw ObjectId (20 bytes, Copy) instead of a heap-allocated
         // hex String. Hex conversion uses a thread-local stack buffer to avoid
         // allocator contention across rayon threads.
+        let racy_resolved_count = AtomicUsize::new(0);
+        let stat_mismatch_count = AtomicUsize::new(0);
+        let racy_modified_count = AtomicUsize::new(0);
         let classified: Vec<Result<EntryClassification, Error>> = index
             .entries()
             .par_iter()
@@ -103,12 +111,54 @@ impl RepoGitIndex {
                         let stat_matches = e.stat.matches(&fs_stat, stat_opts);
 
                         if !stat_matches {
-                            return Ok(EntryClassification::Modified { path: rel_path });
+                            // Stat mismatch — file may be modified, or the index
+                            // stats may be stale (e.g. fresh checkout, CI, container).
+                            // Content-hash to resolve: if hash matches index, the
+                            // file is clean despite the stat difference.
+                            match hash_file_with_retry(&abs_path) {
+                                Ok(actual_oid) if actual_oid.as_bytes() == e.id.as_bytes() => {
+                                    // Content matches — stat is stale but file is clean
+                                    stat_mismatch_count.fetch_add(1, Ordering::Relaxed);
+                                    let mut hex_buf = [0u8; 40];
+                                    hex::encode_to_slice(e.id.as_bytes(), &mut hex_buf).unwrap();
+                                    return Ok(EntryClassification::Clean {
+                                        path: rel_path,
+                                        oid: OidHash::from_hex_buf(hex_buf),
+                                    });
+                                }
+                                Ok(_) => {
+                                    // Truly modified
+                                    return Ok(EntryClassification::Modified { path: rel_path });
+                                }
+                                Err(_) => {
+                                    return Ok(EntryClassification::Modified { path: rel_path });
+                                }
+                            }
                         }
 
+                        // Racy-git: when mtime >= index timestamp, stat can't prove
+                        // the file is unchanged. Resolve by content-hashing now
+                        // (during the parallel index build) rather than deferring
+                        // to per-package hashing. This avoids re-hashing thousands
+                        // of files during hash_scope on fresh checkouts.
                         let is_racy = e.stat.is_racy(index_timestamp, stat_opts);
                         if is_racy {
-                            return Ok(EntryClassification::Modified { path: rel_path });
+                            match hash_file_with_retry(&abs_path) {
+                                Ok(actual_oid) if actual_oid.as_bytes() == e.id.as_bytes() => {
+                                    // Content matches index — file is clean
+                                    racy_resolved_count.fetch_add(1, Ordering::Relaxed);
+                                }
+                                Ok(_) => {
+                                    // Content differs — truly modified
+                                    racy_modified_count.fetch_add(1, Ordering::Relaxed);
+                                    return Ok(EntryClassification::Modified { path: rel_path });
+                                }
+                                Err(_) => {
+                                    // Can't read the file — treat as modified
+                                    // (per-package hashing will handle the error)
+                                    return Ok(EntryClassification::Modified { path: rel_path });
+                                }
+                            }
                         }
 
                         let mut hex_buf = [0u8; 40];
@@ -163,10 +213,17 @@ impl RepoGitIndex {
 
         status_entries.sort_by(|a, b| a.path.cmp(&b.path));
 
+        let racy_count = racy_resolved_count.load(Ordering::Relaxed);
+        let stat_mismatch = stat_mismatch_count.load(Ordering::Relaxed);
+        let racy_modified = racy_modified_count.load(Ordering::Relaxed);
         debug!(
-            "built repo git index (gix-index): clean_count={}, status_count={}",
+            "built repo git index (gix-index): clean_count={}, status_count={}, \
+             racy_resolved={}, stat_mismatch={}, racy_modified={}",
             ls_tree_hashes.len(),
             status_entries.len(),
+            racy_count,
+            stat_mismatch,
+            racy_modified,
         );
 
         Ok(Self {

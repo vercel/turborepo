@@ -154,15 +154,30 @@ impl GitRepo {
         let pkg_prefix = git_to_pkg_path.to_unix();
 
         let (mut hashes, to_hash) = if let Some(index) = repo_index {
+            let _span = tracing::info_span!("index_lookup").entered();
             index.get_package_hashes(&pkg_prefix)?
         } else {
+            let _span = tracing::info_span!("git_subprocess_fallback").entered();
             let mut hashes = self.git_ls_tree(&full_pkg_path)?;
             let to_hash = self.append_git_status(&full_pkg_path, &pkg_prefix, &mut hashes)?;
             (hashes, to_hash)
         };
 
         // Note: to_hash is *git repo relative*
-        hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
+        let to_hash_count = to_hash.len();
+        tracing::debug!(
+            to_hash_count,
+            clean_count = hashes.len(),
+            "package file hash breakdown"
+        );
+        if !to_hash.is_empty() {
+            let _span = tracing::info_span!(
+                "hash_objects_for_dirty",
+                count = to_hash_count,
+            )
+            .entered();
+            hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
+        }
         Ok(hashes)
     }
 
@@ -223,18 +238,28 @@ impl GitRepo {
                 inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
             }
         }
-        let files = globwalk::globwalk(
-            turbo_root,
-            &inclusions,
-            &exclusions,
-            globwalk::WalkType::Files,
-        )?;
+        let files = {
+            let _span = tracing::info_span!("globwalk_inputs").entered();
+            globwalk::globwalk(
+                turbo_root,
+                &inclusions,
+                &exclusions,
+                globwalk::WalkType::Files,
+            )?
+        };
         let mut to_hash = Vec::with_capacity(files.len());
         for entry in &files {
             to_hash.push(self.root.anchor(entry)?.to_unix());
         }
         let mut hashes = GitHashes::with_capacity(files.len());
-        hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
+        {
+            let _span = tracing::info_span!(
+                "hash_objects_from_inputs",
+                count = to_hash.len(),
+            )
+            .entered();
+            hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
+        }
         Ok(hashes)
     }
 

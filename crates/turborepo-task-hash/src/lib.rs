@@ -180,20 +180,30 @@ impl PackageInputsHashes {
         let file_hash_results: Vec<Result<Arc<FileHashes>, Error>> = unique_keys
             .into_par_iter()
             .map(|(package_path, globs, default)| {
-                scm.get_package_file_hashes(
+                let _span = tracing::info_span!(
+                    "per_package_file_hash",
+                    package = %package_path,
+                    globs_count = globs.len(),
+                    include_default = default,
+                )
+                .entered();
+                let hash_result = scm.get_package_file_hashes(
                     repo_root,
                     &package_path,
                     &globs,
                     default,
                     None,
                     repo_index,
-                )
-                .map(|h| {
-                    let mut v: Vec<_> = h.into_iter().collect();
-                    v.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
-                    Arc::new(FileHashes(v))
-                })
-                .map_err(Error::from)
+                );
+                hash_result
+                    .map(|h| {
+                        let _sort_span =
+                            tracing::info_span!("sort_and_wrap_file_hashes").entered();
+                        let mut v: Vec<_> = h.into_iter().collect();
+                        v.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+                        Arc::new(FileHashes(v))
+                    })
+                    .map_err(Error::from)
             })
             .collect();
 
@@ -202,6 +212,7 @@ impl PackageInputsHashes {
             .collect::<Result<Vec<_>, _>>()?;
 
         // Phase 3: Distribute shared results to individual tasks.
+        let _phase3_span = tracing::info_span!("distribute_file_hashes").entered();
         let mut hashes = HashMap::with_capacity(task_infos.len());
         let mut expanded_hashes = if needs_expanded_hashes {
             HashMap::with_capacity(task_infos.len())
@@ -220,6 +231,7 @@ impl PackageInputsHashes {
                 expanded_hashes.insert(info.task_id, Arc::clone(file_hashes));
             }
         }
+        drop(_phase3_span);
 
         Ok(PackageInputsHashes {
             hashes,
