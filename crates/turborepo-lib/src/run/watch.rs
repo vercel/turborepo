@@ -2,21 +2,25 @@ use std::{
     collections::HashSet,
     ops::DerefMut as _,
     sync::{Arc, Mutex},
+    time::Duration,
 };
 
-use futures::{future::join_all, StreamExt};
 use miette::{Diagnostic, SourceSpan};
 use thiserror::Error;
 use tokio::{
     select,
-    sync::{oneshot, Notify},
+    sync::{broadcast, oneshot, Notify},
     task::JoinHandle,
 };
 use tracing::{instrument, trace};
-use turborepo_daemon::{
-    proto, DaemonClient, DaemonConnector, DaemonConnectorError, DaemonError, Paths,
+use turborepo_daemon::{PackageChangeEvent, PackageChangesWatcher as PackageChangesWatcherTrait};
+use turborepo_filewatch::{
+    cookies::CookieWriter, globwatcher::GlobWatcher, hash_watcher::HashWatcher,
+    package_watcher::PackageWatcher, FileSystemWatcher,
 };
 use turborepo_repository::package_graph::PackageName;
+use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
+use turborepo_scm::SCM;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::sender::UISender;
@@ -26,6 +30,7 @@ use crate::{
     config::resolve_turbo_config_path,
     engine::{EngineExt, TaskNode},
     get_version, opts,
+    package_changes_watcher::PackageChangesWatcher,
     run::{self, builder::RunBuilder, scope::target_selector::InvalidSelectorError, Run},
 };
 
@@ -59,16 +64,77 @@ impl ChangedPackages {
     }
 }
 
+/// In-process file watching infrastructure that replaces the daemon.
+/// All components are standalone structs from `turborepo-filewatch`
+/// and `turborepo-lib` — no gRPC or IPC involved.
+struct FileWatching {
+    // Kept alive so the OS-level watcher keeps running.
+    _watcher: Arc<FileSystemWatcher>,
+    glob_watcher: Arc<GlobWatcher>,
+    // Kept alive so its background tasks continue providing package
+    // discovery data to the HashWatcher.
+    _package_watcher: Arc<PackageWatcher>,
+    // Kept alive to maintain the watcher background task.
+    _package_changes_watcher: PackageChangesWatcher,
+}
+
+/// Adapts `GlobWatcher` to the `OutputWatcher` trait so it can be passed
+/// to `RunCache`/`TaskCache` for output change tracking.
+struct InProcessOutputWatcher {
+    glob_watcher: Arc<GlobWatcher>,
+}
+
+impl OutputWatcher for InProcessOutputWatcher {
+    fn get_changed_outputs(
+        &self,
+        hash: String,
+        output_globs: Vec<String>,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<HashSet<String>, OutputWatcherError>> + Send>,
+    > {
+        let glob_watcher = self.glob_watcher.clone();
+        let candidates: HashSet<String> = output_globs.into_iter().collect();
+        Box::pin(async move {
+            glob_watcher
+                .get_changed_globs(hash, candidates, Duration::from_millis(100))
+                .await
+                .map_err(|e| OutputWatcherError(Box::new(e)))
+        })
+    }
+
+    fn notify_outputs_written(
+        &self,
+        hash: String,
+        output_globs: Vec<String>,
+        output_exclusion_globs: Vec<String>,
+        _time_saved: u64,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), OutputWatcherError>> + Send>>
+    {
+        let glob_watcher = self.glob_watcher.clone();
+        Box::pin(async move {
+            let glob_set = turborepo_filewatch::globwatcher::GlobSet::from_raw(
+                output_globs,
+                output_exclusion_globs,
+            )
+            .map_err(|e| OutputWatcherError(Box::new(e)))?;
+            glob_watcher
+                .watch_globs(hash, glob_set, Duration::from_millis(100))
+                .await
+                .map_err(|e| OutputWatcherError(Box::new(e)))
+        })
+    }
+}
+
 pub struct WatchClient {
     run: Arc<Run>,
     watched_packages: HashSet<PackageName>,
     persistent_tasks_handle: Option<RunHandle>,
     active_runs: Vec<RunHandle>,
-    connector: DaemonConnector,
-    // A daemon client used by the run cache to register output globs and check
-    // whether outputs have changed. This prevents cache restores from writing
-    // files that trigger the file watcher and cause infinite rebuild loops.
-    daemon_client: DaemonClient<DaemonConnector>,
+    _watching: FileWatching,
+    output_watcher: Arc<dyn OutputWatcher>,
+    // Subscribed eagerly (before building the Run) so we don't miss the
+    // initial Rediscover event from the PackageChangesWatcher.
+    package_change_events: broadcast::Receiver<PackageChangeEvent>,
     base: CommandBase,
     telemetry: CommandEventBuilder,
     handler: SignalHandler,
@@ -85,13 +151,10 @@ struct RunHandle {
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
-    #[error("Failed to connect to daemon.")]
-    #[diagnostic(transparent)]
-    Daemon(#[from] DaemonError),
-    #[error("Failed to connect to daemon.")]
-    DaemonConnector(#[from] DaemonConnectorError),
-    #[error("Failed to decode message from daemon.")]
-    Decode(#[from] prost::DecodeError),
+    #[error("File watcher error: {0}")]
+    FileWatcher(#[from] turborepo_filewatch::WatchError),
+    #[error("Package watcher error: {0}")]
+    PackageWatcher(String),
     #[error("Could not get current executable.")]
     CurrentExe(std::io::Error),
     #[error("Could not start `turbo`.")]
@@ -112,23 +175,21 @@ pub enum Error {
         #[label]
         span: SourceSpan,
     },
-    #[error("Daemon connection closed.")]
-    ConnectionClosed,
     #[error(
-        "Timed out waiting for the daemon's file watcher to become ready. The daemon may be \
-         having trouble watching your repository. Try running `turbo daemon clean` and retrying."
+        "Timed out waiting for the file watcher to become ready. Try running `turbo daemon clean` \
+         and retrying."
     )]
-    DaemonFileWatchingTimeout,
+    FileWatchingTimeout,
     #[error("Failed to subscribe to signal handler. Shutting down.")]
     NoSignalHandler,
     #[error("Watch interrupted due to signal.")]
     SignalInterrupt,
-    #[error("Package change error.")]
-    PackageChange(#[from] tonic::Status),
+    #[error("Package change channel closed.")]
+    PackageChangeClosed,
+    #[error("Package change channel lagged.")]
+    PackageChangeLagged,
     #[error(transparent)]
     UI(#[from] turborepo_ui::Error),
-    #[error("Could not connect to UI thread: {0}")]
-    UISend(String),
     #[error("Invalid config: {0}")]
     Config(#[from] crate::config::Error),
     #[error(transparent)]
@@ -147,7 +208,6 @@ impl WatchClient {
 
         let standard_config_path = resolve_turbo_config_path(&base.repo_root)?;
 
-        // Determine if we're using a custom turbo.json path
         let custom_turbo_json_path =
             if base.opts.repo_opts.root_turbo_json_path != standard_config_path {
                 tracing::info!(
@@ -160,22 +220,56 @@ impl WatchClient {
                 None
             };
 
-        let connector = DaemonConnector {
-            can_start_server: true,
-            can_kill_server: true,
-            paths: Paths::from_repo_root(&base.repo_root),
+        // Build the in-process file watching stack (replaces the daemon).
+        let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(
+            &base.repo_root,
+        )?);
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+        let glob_watcher = Arc::new(GlobWatcher::new(
+            base.repo_root.clone(),
+            cookie_writer.clone(),
+            recv.clone(),
+        ));
+        let package_watcher = Arc::new(
+            PackageWatcher::new(base.repo_root.clone(), recv.clone(), cookie_writer)
+                .map_err(|e| Error::PackageWatcher(format!("{e:?}")))?,
+        );
+        let scm = SCM::new(&base.repo_root);
+        let hash_watcher = Arc::new(HashWatcher::new(
+            base.repo_root.clone(),
+            package_watcher.watch_discovery(),
+            recv.clone(),
+            scm,
+        ));
+        let package_changes_watcher = PackageChangesWatcher::new(
+            base.repo_root.clone(),
+            recv,
+            hash_watcher,
             custom_turbo_json_path,
+        );
+
+        // Subscribe before building the Run so we don't miss the initial
+        // Rediscover event that PackageChangesWatcher emits on startup.
+        let package_change_events = package_changes_watcher.package_changes().await;
+
+        let watching = FileWatching {
+            _watcher: watcher,
+            glob_watcher: glob_watcher.clone(),
+            _package_watcher: package_watcher,
+            _package_changes_watcher: package_changes_watcher,
         };
 
-        // Connect a daemon client for the run cache. This allows the cache to
-        // register output globs with the daemon's GlobWatcher and skip restoring
-        // outputs that are already on disk, preventing the file watcher from
-        // seeing restored files as changes and causing an infinite rebuild loop.
-        let daemon_client = connector.clone().connect().await?;
+        let output_watcher: Arc<dyn OutputWatcher> =
+            Arc::new(InProcessOutputWatcher { glob_watcher });
 
         let new_base = base.clone();
         let mut run_builder =
-            RunBuilder::new(new_base, None)?.with_daemon_client(daemon_client.clone());
+            RunBuilder::new(new_base, None)?.with_output_watcher(output_watcher.clone());
         if let Some(ref qs) = query_server {
             run_builder = run_builder.with_query_server(qs.clone());
         }
@@ -190,8 +284,9 @@ impl WatchClient {
             base,
             run,
             watched_packages,
-            connector,
-            daemon_client,
+            _watching: watching,
+            output_watcher,
+            package_change_events,
             handler,
             telemetry,
             experimental_write_cache,
@@ -204,63 +299,65 @@ impl WatchClient {
     }
 
     pub async fn start(&mut self) -> Result<(), Error> {
-        let connector = self.connector.clone();
-        let mut client = connector.connect().await?;
+        let mut events = std::mem::replace(
+            &mut self.package_change_events,
+            // Replace with a dummy receiver. The real one is consumed above.
+            broadcast::channel(1).1,
+        );
 
-        let mut events = client.package_changes().await?;
-
-        // Wait for the initial event from the daemon with a timeout.
-        // The daemon sends a Rediscover event immediately when the stream opens,
-        // but the stream won't produce anything until the daemon's file watcher
-        // is ready. If it never becomes ready, we'd hang here forever.
-        let initial_event = tokio::time::timeout(std::time::Duration::from_secs(10), events.next())
+        // Wait for the initial Rediscover event, which signals that the file
+        // watcher is ready. The PackageChangesWatcher emits this on startup.
+        let initial_event = tokio::time::timeout(std::time::Duration::from_secs(10), events.recv())
             .await
-            .map_err(|_| Error::DaemonFileWatchingTimeout)?
-            .ok_or(Error::ConnectionClosed)?;
-        let initial_event = initial_event?;
+            .map_err(|_| Error::FileWatchingTimeout)?;
+        let initial_event = match initial_event {
+            Ok(event) => event,
+            Err(broadcast::error::RecvError::Closed) => return Err(Error::PackageChangeClosed),
+            Err(broadcast::error::RecvError::Lagged(_)) => return Err(Error::PackageChangeLagged),
+        };
 
         let signal_subscriber = self.handler.subscribe().ok_or(Error::NoSignalHandler)?;
 
-        // We explicitly use a tokio::sync::Mutex here to avoid deadlocks.
-        // If we used a std::sync::Mutex, we could deadlock by spinning the lock
-        // and not yielding back to the tokio runtime.
-        let changed_packages = Mutex::new(ChangedPackages::default());
+        let pending_changes = Mutex::new(ChangedPackages::default());
         let notify_run = Arc::new(Notify::new());
         let notify_event = notify_run.clone();
 
-        // Process the initial event
-        Self::handle_change_event(&changed_packages, initial_event.event.unwrap())?;
+        Self::handle_change_event(&pending_changes, initial_event);
         notify_event.notify_one();
 
         let event_fut = async {
-            while let Some(event) = events.next().await {
-                let event = event?;
-                Self::handle_change_event(&changed_packages, event.event.unwrap())?;
-                notify_event.notify_one();
+            loop {
+                match events.recv().await {
+                    Ok(event) => {
+                        Self::handle_change_event(&pending_changes, event);
+                        notify_event.notify_one();
+                    }
+                    Err(broadcast::error::RecvError::Closed) => {
+                        return Err(Error::PackageChangeClosed);
+                    }
+                    Err(broadcast::error::RecvError::Lagged(_)) => {
+                        Self::handle_change_event(&pending_changes, PackageChangeEvent::Rediscover);
+                        notify_event.notify_one();
+                    }
+                }
             }
-
-            Err(Error::ConnectionClosed)
         };
 
         let run_fut = async {
             loop {
                 notify_run.notified().await;
                 let some_changed_packages = {
-                    let mut changed_packages_guard =
-                        changed_packages.lock().expect("poisoned lock");
-                    (!changed_packages_guard.is_empty())
-                        .then(|| std::mem::take(changed_packages_guard.deref_mut()))
+                    let mut guard = pending_changes.lock().expect("poisoned lock");
+                    (!guard.is_empty()).then(|| std::mem::take(guard.deref_mut()))
                 };
 
                 if let Some(mut changed_packages) = some_changed_packages {
-                    // Clean up currently running tasks
-                    self.active_runs.retain(|h| !h.run_task.is_finished());
-
-                    // Safe to filter early: the engine only contains tasks from
-                    // watched_packages, so unwatched packages can't impact any
-                    // running tasks.
-                    changed_packages.filter_to_watched(&self.watched_packages);
-
+                    // Stop impacted tasks and wait for prior runs to finish
+                    // before starting new ones. This prevents:
+                    // - Concurrent builds of the same package (Next.js lock conflicts, duplicated
+                    //   output)
+                    // - A cache-hit run incorrectly signaling persistent task readiness when the
+                    //   real build failed
                     match changed_packages {
                         ChangedPackages::Some(ref pkgs) => {
                             let impacted = self.stop_impacted_tasks(pkgs).await;
@@ -273,8 +370,20 @@ impl WatchClient {
                             }
                         }
                     }
+
+                    changed_packages.filter_to_watched(&self.watched_packages);
+
                     let new_run = self.execute_run(changed_packages).await?;
                     self.active_runs.push(new_run);
+
+                    // Wait for runs to complete before processing more events.
+                    // Combined with the hash baseline pre-population in
+                    // PackageChangesWatcher, this ensures build output writes
+                    // don't trigger spurious rebuilds.
+                    for handle in &mut self.active_runs {
+                        let _ = (&mut handle.run_task).await;
+                    }
+                    self.active_runs.retain(|h| !h.run_task.is_finished());
                 }
             }
         };
@@ -295,68 +404,24 @@ impl WatchClient {
     }
 
     #[instrument(skip(changed_packages))]
-    fn handle_change_event(
-        changed_packages: &Mutex<ChangedPackages>,
-        event: proto::package_change_event::Event,
-    ) -> Result<(), Error> {
-        // Should we recover here?
+    fn handle_change_event(changed_packages: &Mutex<ChangedPackages>, event: PackageChangeEvent) {
         match event {
-            proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
-                package_name,
-            }) => {
-                let package_name = PackageName::from(package_name);
-
+            PackageChangeEvent::Package { name } => {
                 match changed_packages.lock().expect("poisoned lock").deref_mut() {
                     ChangedPackages::All => {
-                        // If we've already changed all packages, ignore
+                        // Already rediscovering everything, ignore
                     }
                     ChangedPackages::Some(ref mut pkgs) => {
-                        pkgs.insert(package_name);
+                        pkgs.insert(name);
                     }
                 }
             }
-            proto::package_change_event::Event::RediscoverPackages(_) => {
+            PackageChangeEvent::Rediscover => {
                 *changed_packages.lock().expect("poisoned lock") = ChangedPackages::All;
             }
-            proto::package_change_event::Event::Error(proto::PackageChangeError { message }) => {
-                return Err(DaemonError::Unavailable(message).into());
-            }
         }
-
-        Ok(())
     }
 
-    async fn stop_impacted_tasks(&self, pkgs: &HashSet<PackageName>) -> HashSet<PackageName> {
-        let engine = self.run.engine();
-
-        let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
-
-        // Extract task IDs from task nodes (filtering out Root nodes)
-        let task_ids: Vec<_> = impacted_nodes
-            .iter()
-            .filter_map(|node| match node {
-                TaskNode::Task(task_id) => Some(task_id.clone()),
-                TaskNode::Root => None,
-            })
-            .collect();
-
-        // Collect unique impacted packages
-        let impacted_packages: HashSet<_> = task_ids
-            .iter()
-            .map(|task_id| PackageName::from(task_id.package()))
-            .collect();
-
-        join_all(
-            self.active_runs
-                .iter()
-                .map(|handle| handle.stopper.stop_tasks(&task_ids)),
-        )
-        .await;
-
-        impacted_packages
-    }
-
-    /// Shut down any resources that run as part of watch.
     pub async fn shutdown(&mut self) {
         if let Some(sender) = &self.ui_sender {
             sender.stop().await;
@@ -366,23 +431,48 @@ impl WatchClient {
             let _ = handle.run_task.await;
         }
         if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
-            // Shut down the tasks for the run
             stopper.stop().await;
-            // Run should exit shortly after we stop all child tasks, wait for it to finish
-            // to ensure all messages are flushed.
             let _ = run_task.await;
         }
     }
 
-    /// Executes a run with the given changed packages. Splits the run into two
-    /// parts:
-    /// 1. The persistent tasks that are not allowed to be interrupted
+    async fn stop_impacted_tasks(&self, pkgs: &HashSet<PackageName>) -> HashSet<PackageName> {
+        let engine = self.run.engine();
+
+        let impacted_nodes = engine.tasks_impacted_by_packages(pkgs);
+
+        let task_ids: Vec<_> = impacted_nodes
+            .iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(task_id) => Some(task_id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect();
+
+        let impacted_packages: HashSet<PackageName> = task_ids
+            .iter()
+            .map(|task_id| PackageName::from(task_id.package()))
+            .collect();
+
+        for handle in &self.active_runs {
+            handle.stopper.stop_tasks(&task_ids).await;
+        }
+
+        impacted_packages
+    }
+
+    /// Start executing tasks.
+    ///
+    /// If `changed_packages` is `Some(set)`, only tasks in those packages run.
+    /// If `All`, we rebuild the entire Run struct and re-run everything.
+    ///
+    /// Persistent (non-interruptible) tasks are split into a separate handle:
+    /// 1. First we run non-persistent + interruptible tasks
     /// 2. The non-persistent tasks and the persistent tasks that are allowed to
     ///    be interrupted
     ///
     /// Returns a handle to the task running (2)
     async fn execute_run(&mut self, changed_packages: ChangedPackages) -> Result<RunHandle, Error> {
-        // Should we recover here?
         trace!("handling run with changed packages: {changed_packages:?}");
         match changed_packages {
             ChangedPackages::Some(packages) => {
@@ -403,7 +493,7 @@ impl WatchClient {
                 let telemetry = self.telemetry.clone();
 
                 let mut run_builder = RunBuilder::new(new_base, None)?
-                    .with_daemon_client(self.daemon_client.clone())
+                    .with_output_watcher(self.output_watcher.clone())
                     .with_entrypoint_packages(packages)
                     .hide_prelude();
                 if let Some(ref qs) = self.query_server {
@@ -413,9 +503,9 @@ impl WatchClient {
 
                 if let Some(sender) = &self.ui_sender {
                     let task_names = run.engine.tasks_with_command(&run.pkg_dep_graph);
-                    sender
-                        .restart_tasks(task_names)
-                        .map_err(|err| Error::UISend(format!("some packages changed: {err}")))?;
+                    if let Err(err) = sender.restart_tasks(task_names) {
+                        tracing::warn!("failed to notify UI of restarted tasks: {err}");
+                    }
                 }
 
                 let ui_sender = self.ui_sender.clone();
@@ -438,9 +528,8 @@ impl WatchClient {
                     self.base.color_config,
                 );
 
-                // rebuild run struct
                 let mut run_builder = RunBuilder::new(base.clone(), None)?
-                    .with_daemon_client(self.daemon_client.clone())
+                    .with_output_watcher(self.output_watcher.clone())
                     .hide_prelude();
                 if let Some(ref qs) = self.query_server {
                     run_builder = run_builder.with_query_server(qs.clone());
@@ -452,19 +541,15 @@ impl WatchClient {
 
                 self.watched_packages = self.run.get_relevant_packages();
 
-                // Clean up currently running persistent tasks
                 if let Some(RunHandle { stopper, run_task }) = self.persistent_tasks_handle.take() {
-                    // Shut down the tasks for the run
                     stopper.stop().await;
-                    // Run should exit shortly after we stop all child tasks, wait for it to finish
-                    // to ensure all messages are flushed.
                     let _ = run_task.await;
                 }
                 if let Some(sender) = &self.ui_sender {
                     let task_names = self.run.engine.tasks_with_command(&self.run.pkg_dep_graph);
-                    sender
-                        .update_tasks(task_names)
-                        .map_err(|err| Error::UISend(format!("all packages changed {err}")))?;
+                    if let Err(err) = sender.update_tasks(task_names) {
+                        tracing::warn!("failed to notify UI of updated tasks: {err}");
+                    }
                 }
 
                 if self.run.has_non_interruptible_tasks() {
@@ -481,12 +566,8 @@ impl WatchClient {
                     let non_persistent_ui_sender = self.ui_sender.clone();
                     let persistent_ui_sender = self.ui_sender.clone();
 
-                    // Signal from non-persistent run to persistent run: non-persistent
-                    // tasks finished successfully, so it's safe to start persistent ones.
                     let (ready_tx, ready_rx) = oneshot::channel::<()>();
 
-                    // If we have persistent tasks, we run them on a separate thread
-                    // since persistent tasks don't finish
                     let persistent_task = tokio::spawn(async move {
                         match ready_rx.await {
                             Ok(()) => persistent_run.run(persistent_ui_sender, true).await,
@@ -529,25 +610,19 @@ mod test {
     use std::{collections::HashSet, sync::Mutex};
 
     use tokio::sync::oneshot;
-    use turborepo_daemon::proto;
+    use turborepo_daemon::PackageChangeEvent;
     use turborepo_repository::package_graph::PackageName;
 
     use super::{ChangedPackages, WatchClient};
 
-    fn make_package_changed(name: &str) -> proto::package_change_event::Event {
-        proto::package_change_event::Event::PackageChanged(proto::PackageChanged {
-            package_name: name.to_string(),
-        })
+    fn make_package_changed(name: &str) -> PackageChangeEvent {
+        PackageChangeEvent::Package {
+            name: PackageName::from(name),
+        }
     }
 
-    fn make_rediscover() -> proto::package_change_event::Event {
-        proto::package_change_event::Event::RediscoverPackages(proto::RediscoverPackages {})
-    }
-
-    fn make_error(msg: &str) -> proto::package_change_event::Event {
-        proto::package_change_event::Event::Error(proto::PackageChangeError {
-            message: msg.to_string(),
-        })
+    fn make_rediscover() -> PackageChangeEvent {
+        PackageChangeEvent::Rediscover
     }
 
     #[test]
@@ -572,7 +647,7 @@ mod test {
     #[test]
     fn handle_change_event_package_changed_inserts() {
         let changed = Mutex::new(ChangedPackages::default());
-        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
 
         let guard = changed.lock().unwrap();
         match &*guard {
@@ -587,9 +662,9 @@ mod test {
     #[test]
     fn handle_change_event_multiple_packages_accumulate() {
         let changed = Mutex::new(ChangedPackages::default());
-        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
-        WatchClient::handle_change_event(&changed, make_package_changed("ui")).unwrap();
-        WatchClient::handle_change_event(&changed, make_package_changed("utils")).unwrap();
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
+        WatchClient::handle_change_event(&changed, make_package_changed("ui"));
+        WatchClient::handle_change_event(&changed, make_package_changed("utils"));
 
         let guard = changed.lock().unwrap();
         match &*guard {
@@ -606,8 +681,8 @@ mod test {
     #[test]
     fn handle_change_event_duplicate_package_deduplicates() {
         let changed = Mutex::new(ChangedPackages::default());
-        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
-        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
 
         let guard = changed.lock().unwrap();
         match &*guard {
@@ -619,8 +694,8 @@ mod test {
     #[test]
     fn handle_change_event_rediscover_sets_all() {
         let changed = Mutex::new(ChangedPackages::default());
-        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
-        WatchClient::handle_change_event(&changed, make_rediscover()).unwrap();
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
+        WatchClient::handle_change_event(&changed, make_rediscover());
 
         let guard = changed.lock().unwrap();
         assert!(matches!(*guard, ChangedPackages::All));
@@ -629,25 +704,17 @@ mod test {
     #[test]
     fn handle_change_event_package_changed_after_all_is_noop() {
         let changed = Mutex::new(ChangedPackages::All);
-        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
 
         let guard = changed.lock().unwrap();
         assert!(matches!(*guard, ChangedPackages::All));
     }
 
     #[test]
-    fn handle_change_event_error_returns_err() {
-        let changed = Mutex::new(ChangedPackages::default());
-        let result =
-            WatchClient::handle_change_event(&changed, make_error("daemon is unavailable"));
-        assert!(result.is_err());
-    }
-
-    #[test]
     fn handle_change_event_rediscover_then_rediscover_stays_all() {
         let changed = Mutex::new(ChangedPackages::default());
-        WatchClient::handle_change_event(&changed, make_rediscover()).unwrap();
-        WatchClient::handle_change_event(&changed, make_rediscover()).unwrap();
+        WatchClient::handle_change_event(&changed, make_rediscover());
+        WatchClient::handle_change_event(&changed, make_rediscover());
 
         let guard = changed.lock().unwrap();
         assert!(matches!(*guard, ChangedPackages::All));
@@ -727,7 +794,7 @@ mod test {
     #[test]
     fn changed_packages_take_resets_to_default() {
         let changed = Mutex::new(ChangedPackages::default());
-        WatchClient::handle_change_event(&changed, make_package_changed("web")).unwrap();
+        WatchClient::handle_change_event(&changed, make_package_changed("web"));
 
         let taken = {
             let mut guard = changed.lock().unwrap();
@@ -735,11 +802,9 @@ mod test {
             std::mem::take(&mut *guard)
         };
 
-        // After take, the mutex should hold an empty Some
         let guard = changed.lock().unwrap();
         assert!(guard.is_empty());
 
-        // The taken value should have the package
         match taken {
             ChangedPackages::Some(pkgs) => {
                 assert!(pkgs.contains(&PackageName::from("web")));
@@ -750,16 +815,8 @@ mod test {
 
     // -----------------------------------------------------------------------
     // Oneshot coordination pattern tests
-    //
-    // These test the contract used in execute_run to gate persistent tasks
-    // behind non-persistent task completion. The pattern:
-    //   - Non-persistent run sends on ready_tx only when result is Ok(0)
-    //   - Persistent run waits on ready_rx before starting
-    //   - If ready_tx is dropped (failure/cancellation), persistent run exits
     // -----------------------------------------------------------------------
 
-    /// Simulates the non-persistent side of the coordination: only sends the
-    /// ready signal when the run result is Ok(0).
     fn simulate_non_persistent(
         ready_tx: oneshot::Sender<()>,
         result: Result<i32, &str>,
@@ -834,7 +891,6 @@ mod test {
             }
         });
 
-        // Simulate non-persistent task being cancelled: sender dropped
         drop(ready_tx);
 
         let outcome = persistent.await.unwrap();

@@ -11,7 +11,6 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient};
 use turborepo_cache::AsyncCache;
-use turborepo_daemon::{DaemonClient, DaemonConnector};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -61,11 +60,11 @@ pub struct RunBuilder {
     should_validate_engine: bool,
     // If true, we will add all tasks to the graph, even if they are not specified
     add_all_tasks: bool,
-    // When running under `turbo watch`, a daemon client is needed so that
+    // When running under `turbo watch`, an output watcher is needed so that
     // the run cache can register output globs and skip restoring outputs
     // that are already on disk. Without this, cache restores write files
     // that trigger the file watcher, causing an infinite rebuild loop.
-    daemon_client: Option<DaemonClient<DaemonConnector>>,
+    output_watcher: Option<Arc<dyn turborepo_run_cache::OutputWatcher>>,
     query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
 
@@ -108,7 +107,7 @@ impl RunBuilder {
             should_print_prelude_override: None,
             should_validate_engine: true,
             add_all_tasks: false,
-            daemon_client: None,
+            output_watcher: None,
             query_server: None,
         })
     }
@@ -118,8 +117,11 @@ impl RunBuilder {
         self
     }
 
-    pub fn with_daemon_client(mut self, client: DaemonClient<DaemonConnector>) -> Self {
-        self.daemon_client = Some(client);
+    pub fn with_output_watcher(
+        mut self,
+        watcher: Arc<dyn turborepo_run_cache::OutputWatcher>,
+    ) -> Self {
+        self.output_watcher = Some(watcher);
         self
     }
 
@@ -471,7 +473,7 @@ impl RunBuilder {
             &self.repo_root,
             self.opts.runcache_opts,
             &self.opts.cache_opts,
-            self.daemon_client,
+            self.output_watcher,
             self.color_config,
             self.opts.run_opts.dry_run.is_some(),
         ));
