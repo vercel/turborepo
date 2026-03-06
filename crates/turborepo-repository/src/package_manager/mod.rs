@@ -61,7 +61,7 @@ impl From<Workspaces> for Vec<String> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PackageManager {
     Berry,
     Npm,

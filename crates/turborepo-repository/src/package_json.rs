@@ -9,12 +9,12 @@ use biome_deserialize_macros::Deserializable;
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
 use miette::Diagnostic;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
 use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
 use turborepo_unescape::UnescapedString;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PackageJson {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -44,7 +44,7 @@ pub struct PackageJson {
     pub other: BTreeMap<String, serde_json::Value>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PnpmConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
