@@ -6,6 +6,7 @@ use turbopath::{
 };
 
 use super::{PackageInfo, PackageName};
+use crate::package_manager::pnpm::PnpmCatalogs;
 
 /// Reverse index from package path to package name, built once and shared
 /// across all `DependencySplitter` instances.
@@ -28,6 +29,7 @@ pub struct DependencySplitter<'a> {
     workspaces: &'a HashMap<PackageName, PackageInfo>,
     path_index: &'a WorkspacePathIndex<'a>,
     link_workspace_packages: bool,
+    catalogs: Option<&'a PnpmCatalogs>,
 }
 
 impl<'a> DependencySplitter<'a> {
@@ -37,6 +39,7 @@ impl<'a> DependencySplitter<'a> {
         workspaces: &'a HashMap<PackageName, PackageInfo>,
         link_workspace_packages: bool,
         path_index: &'a WorkspacePathIndex<'a>,
+        catalogs: Option<&'a PnpmCatalogs>,
     ) -> Self {
         Self {
             repo_root,
@@ -44,10 +47,24 @@ impl<'a> DependencySplitter<'a> {
             workspaces,
             path_index,
             link_workspace_packages,
+            catalogs,
         }
     }
 
     pub fn is_internal(&self, name: &str, version: &str) -> Option<PackageName> {
+        // Resolve catalog: specifiers to their actual version strings
+        let resolved;
+        let version = if version.starts_with("catalog:") {
+            if let Some(catalogs) = self.catalogs {
+                resolved = catalogs.resolve(name, version);
+                resolved.unwrap_or(version)
+            } else {
+                version
+            }
+        } else {
+            version
+        };
+
         // If link_workspace_packages isn't set any version without workspace protocol
         // is considered external.
         if !self.link_workspace_packages && !version.starts_with("workspace:") {
@@ -371,6 +388,7 @@ mod test {
             workspaces: &workspaces,
             path_index: &path_index,
             link_workspace_packages,
+            catalogs: None,
         };
 
         assert_eq!(
@@ -402,5 +420,269 @@ mod test {
     #[test_case("workspace:../@scope/foo", Some(WorkspacePackageSpecifier::Path(RelativeUnixPath::new("../@scope/foo").unwrap())) ; "scope in path")]
     fn test_workspace_specifier(input: &str, expected: Option<WorkspacePackageSpecifier>) {
         assert_eq!(WorkspacePackageSpecifier::new(input), expected);
+    }
+
+    fn make_catalogs(default: &[(&str, &str)], named: &[(&str, &[(&str, &str)])]) -> PnpmCatalogs {
+        PnpmCatalogs {
+            default: default
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+            named: named
+                .iter()
+                .map(|(name, entries)| {
+                    (
+                        name.to_string(),
+                        entries
+                            .iter()
+                            .map(|(k, v)| (k.to_string(), v.to_string()))
+                            .collect(),
+                    )
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn catalog_default_resolves_to_workspace() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("pkg-b".to_string()),
+                PackageInfo {
+                    package_json: PackageJson {
+                        version: Some("1.0.0".to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw(
+                        ["packages", "pkg-b", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
+                    )
+                    .unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
+            map
+        };
+        let catalogs = make_catalogs(&[("pkg-b", "workspace:*")], &[]);
+        let path_index = WorkspacePathIndex::new(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            link_workspace_packages: false,
+            catalogs: Some(&catalogs),
+        };
+        assert_eq!(
+            splitter.is_internal("pkg-b", "catalog:"),
+            Some(PackageName::Other("pkg-b".to_string()))
+        );
+    }
+
+    #[test]
+    fn catalog_named_resolves_to_workspace() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("pkg-b".to_string()),
+                PackageInfo {
+                    package_json: PackageJson {
+                        version: Some("1.0.0".to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw(
+                        ["packages", "pkg-b", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
+                    )
+                    .unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
+            map
+        };
+        let catalogs = make_catalogs(&[], &[("internal", &[("pkg-b", "workspace:*")])]);
+        let path_index = WorkspacePathIndex::new(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            link_workspace_packages: false,
+            catalogs: Some(&catalogs),
+        };
+        assert_eq!(
+            splitter.is_internal("pkg-b", "catalog:internal"),
+            Some(PackageName::Other("pkg-b".to_string()))
+        );
+    }
+
+    #[test]
+    fn catalog_resolves_to_matching_semver() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("pkg-b".to_string()),
+                PackageInfo {
+                    package_json: PackageJson {
+                        version: Some("1.2.3".to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw(
+                        ["packages", "pkg-b", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
+                    )
+                    .unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
+            map
+        };
+        // catalog resolves to a semver range that matches the workspace package version
+        let catalogs = make_catalogs(&[("pkg-b", "^1.0.0")], &[]);
+        let path_index = WorkspacePathIndex::new(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            link_workspace_packages: true,
+            catalogs: Some(&catalogs),
+        };
+        assert_eq!(
+            splitter.is_internal("pkg-b", "catalog:"),
+            Some(PackageName::Other("pkg-b".to_string()))
+        );
+    }
+
+    #[test]
+    fn catalog_resolves_to_external_package() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = HashMap::new();
+        // "react" is not a workspace package
+        let catalogs = make_catalogs(&[("react", "^18.2.0")], &[]);
+        let path_index = WorkspacePathIndex::new(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            link_workspace_packages: false,
+            catalogs: Some(&catalogs),
+        };
+        assert_eq!(splitter.is_internal("react", "catalog:"), None);
+    }
+
+    #[test]
+    fn catalog_without_catalogs_configured() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("pkg-b".to_string()),
+                PackageInfo {
+                    package_json: PackageJson {
+                        version: Some("1.0.0".to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw(
+                        ["packages", "pkg-b", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
+                    )
+                    .unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
+            map
+        };
+        let path_index = WorkspacePathIndex::new(&workspaces);
+        // No catalogs - catalog: specifier can't be resolved, treated as external
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            link_workspace_packages: false,
+            catalogs: None,
+        };
+        assert_eq!(splitter.is_internal("pkg-b", "catalog:internal"), None);
+    }
+
+    #[test]
+    fn catalog_default_keyword() {
+        let root = AbsoluteSystemPathBuf::new(if cfg!(windows) {
+            "C:\\some\\repo"
+        } else {
+            "/some/repo"
+        })
+        .unwrap();
+        let pkg_dir = root.join_components(&["packages", "app-a"]);
+        let workspaces = {
+            let mut map = HashMap::new();
+            map.insert(
+                PackageName::Other("pkg-b".to_string()),
+                PackageInfo {
+                    package_json: PackageJson {
+                        version: Some("1.0.0".to_string()),
+                        ..Default::default()
+                    },
+                    package_json_path: AnchoredSystemPathBuf::from_raw(
+                        ["packages", "pkg-b", "package.json"].join(std::path::MAIN_SEPARATOR_STR),
+                    )
+                    .unwrap(),
+                    unresolved_external_dependencies: None,
+                    transitive_dependencies: None,
+                },
+            );
+            map
+        };
+        // "catalog:default" should resolve to the default catalog
+        let catalogs = make_catalogs(&[("pkg-b", "workspace:*")], &[]);
+        let path_index = WorkspacePathIndex::new(&workspaces);
+        let splitter = DependencySplitter {
+            repo_root: &root,
+            workspace_dir: &pkg_dir,
+            workspaces: &workspaces,
+            path_index: &path_index,
+            link_workspace_packages: false,
+            catalogs: Some(&catalogs),
+        };
+        assert_eq!(
+            splitter.is_internal("pkg-b", "catalog:default"),
+            Some(PackageName::Other("pkg-b".to_string()))
+        );
     }
 }
