@@ -61,11 +61,32 @@ impl TestRepo {
             .expect("failed to build repo index")
     }
 
+    fn build_scoped_repo_index(&self, prefixes: &[&str]) -> RepoGitIndex {
+        let scm = self.scm();
+        let mut index = scm
+            .build_tracked_repo_index_eager()
+            .expect("failed to build tracked repo index");
+        let prefixes = prefixes
+            .iter()
+            .map(|prefix| path(prefix))
+            .collect::<Vec<_>>();
+        scm.populate_repo_index_untracked(&mut index, &prefixes)
+            .expect("failed to scope repo index");
+        index
+    }
+
     fn get_hashes(&self, package_path: &str) -> GitHashes {
         let scm = self.scm();
         let pkg = AnchoredSystemPathBuf::from_raw(package_path).unwrap();
         let index = self.build_repo_index();
         scm.get_package_file_hashes::<&str>(&self.root, &pkg, &[], false, None, Some(&index))
+            .unwrap()
+    }
+
+    fn get_hashes_with_index(&self, package_path: &str, index: &RepoGitIndex) -> GitHashes {
+        let scm = self.scm();
+        let pkg = AnchoredSystemPathBuf::from_raw(package_path).unwrap();
+        scm.get_package_file_hashes::<&str>(&self.root, &pkg, &[], false, None, Some(index))
             .unwrap()
     }
 
@@ -220,6 +241,59 @@ fn test_untracked_files_detected() {
     assert_eq!(hashes.len(), 3);
     assert!(hashes.contains_key(&path("untracked.ts")));
     assert!(hashes.contains_key(&path("committed.ts")));
+}
+
+#[test]
+fn test_scoped_untracked_files_only_include_selected_package() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/committed.ts", "committed a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/committed.ts", "committed b");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("pkg-a/untracked-a.ts", "new a");
+    repo.create_file("pkg-b/untracked-b.ts", "new b");
+
+    let index = repo.build_scoped_repo_index(&["pkg-a"]);
+
+    let pkg_a_hashes = repo.get_hashes_with_index("pkg-a", &index);
+    let pkg_a_no_index = repo.get_hashes_no_index("pkg-a");
+    assert_eq!(pkg_a_hashes, pkg_a_no_index);
+    assert!(pkg_a_hashes.contains_key(&path("untracked-a.ts")));
+
+    let pkg_b_hashes = repo.get_hashes_with_index("pkg-b", &index);
+    assert!(
+        !pkg_b_hashes.contains_key(&path("untracked-b.ts")),
+        "scoped repo index should not include untracked files for packages outside the selected \
+         scope"
+    );
+}
+
+#[test]
+fn test_scoped_untracked_files_respect_ancestor_gitignore() {
+    let repo = TestRepo::new();
+
+    repo.create_file("apps/web/src/index.ts", "code");
+    repo.create_file("apps/web/package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("apps/.gitignore", "ignored.ts\n");
+    repo.create_file("apps/web/keep.ts", "keep");
+    repo.create_file("apps/web/ignored.ts", "ignore");
+
+    let index = repo.build_scoped_repo_index(&["apps/web"]);
+
+    let hashes = repo.get_hashes_with_index("apps/web", &index);
+    assert!(hashes.contains_key(&path("keep.ts")));
+    assert!(
+        !hashes.contains_key(&path("ignored.ts")),
+        "ancestor .gitignore files discovered during the scoped walk should still apply"
+    );
+
+    let hashes_no_index = repo.get_hashes_no_index("apps/web");
+    assert_eq!(hashes, hashes_no_index);
 }
 
 #[test]

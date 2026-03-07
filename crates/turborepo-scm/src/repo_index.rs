@@ -17,11 +17,19 @@ pub struct RepoGitIndex {
     /// Sorted by path so per-package filtering can use binary-search range
     /// queries instead of linear scans.
     status_entries: Vec<RepoStatusEntry>,
+    untracked_entries_populated: bool,
 }
 
 impl RepoGitIndex {
     #[tracing::instrument(skip(git))]
     pub fn new(git: &GitRepo) -> Result<Self, Error> {
+        let mut index = Self::new_tracked(git)?;
+        index.populate_all_untracked(git)?;
+        Ok(index)
+    }
+
+    #[tracing::instrument(skip(git))]
+    pub fn new_tracked(git: &GitRepo) -> Result<Self, Error> {
         Self::new_from_gix_index(git)
     }
 
@@ -30,8 +38,8 @@ impl RepoGitIndex {
     /// This replaces both `git ls-tree` and `git status` with a single
     /// operation: reading the index file gives us committed blob OIDs, and
     /// stat-comparing each entry against the filesystem tells us which files
-    /// are modified or deleted. Untracked files are detected by a parallel
-    /// walk of the working tree respecting .gitignore.
+    /// are modified or deleted. Untracked files can be layered on later once
+    /// the caller knows which package prefixes actually need them.
     ///
     /// Racy-git entries (where mtime >= index timestamp, so we can't trust
     /// the stat comparison) are deferred to per-package hashing rather than
@@ -153,18 +161,8 @@ impl RepoGitIndex {
         // directly on &[RepoStatusEntry] without cloning paths into Strings.
         status_entries.sort_by(|a, b| a.path.cmp(&b.path));
 
-        let untracked = find_untracked_files(git, &ls_tree_hashes, &status_entries)?;
-        for path in untracked {
-            status_entries.push(RepoStatusEntry {
-                path,
-                is_delete: false,
-            });
-        }
-
-        status_entries.sort_by(|a, b| a.path.cmp(&b.path));
-
         debug!(
-            "built repo git index (gix-index): clean_count={}, status_count={}",
+            "built tracked repo git index (gix-index): clean_count={}, status_count={}",
             ls_tree_hashes.len(),
             status_entries.len(),
         );
@@ -172,7 +170,59 @@ impl RepoGitIndex {
         Ok(Self {
             ls_tree_hashes,
             status_entries,
+            untracked_entries_populated: false,
         })
+    }
+
+    #[tracing::instrument(skip(self, git))]
+    pub fn populate_all_untracked(&mut self, git: &GitRepo) -> Result<(), Error> {
+        self.populate_untracked(git, None)
+    }
+
+    #[tracing::instrument(skip(self, git, prefixes))]
+    pub fn populate_untracked_for_prefixes(
+        &mut self,
+        git: &GitRepo,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Result<(), Error> {
+        if prefixes.is_empty() {
+            return Ok(());
+        }
+
+        self.populate_untracked(git, Some(prefixes))
+    }
+
+    fn populate_untracked(
+        &mut self,
+        git: &GitRepo,
+        prefixes: Option<&[RelativeUnixPathBuf]>,
+    ) -> Result<(), Error> {
+        if self.untracked_entries_populated {
+            return Ok(());
+        }
+
+        let before_status_count = self.status_entries.len();
+        let untracked =
+            find_untracked_files(git, &self.ls_tree_hashes, &self.status_entries, prefixes)?;
+        for path in untracked {
+            self.status_entries.push(RepoStatusEntry {
+                path,
+                is_delete: false,
+            });
+        }
+
+        self.status_entries.sort_by(|a, b| a.path.cmp(&b.path));
+        self.untracked_entries_populated = true;
+
+        debug!(
+            "populated repo git index with untracked files: added_count={}, status_count={}",
+            self.status_entries
+                .len()
+                .saturating_sub(before_status_count),
+            self.status_entries.len(),
+        );
+
+        Ok(())
     }
 
     /// Extract hashes for a single package from the cached repo-wide data.
@@ -262,21 +312,27 @@ impl RepoGitIndex {
 /// `ls_tree_hashes` and `status_entries` slices — no intermediate
 /// allocations needed.
 ///
+/// When `prefixes` is provided, the walker prunes subtrees outside the
+/// requested package prefixes while still visiting ancestor `.gitignore`
+/// files that can affect those prefixes.
+///
 /// IMPORTANT: `status_entries` must be sorted by path before calling.
 ///
 /// Each walker thread accumulates results in a thread-local Vec and
 /// batch-sends them through a channel, avoiding per-file mutex contention.
-#[tracing::instrument(skip(git, ls_tree_hashes, status_entries))]
+#[tracing::instrument(skip(git, ls_tree_hashes, status_entries, prefixes))]
 fn find_untracked_files(
     git: &GitRepo,
     ls_tree_hashes: &SortedGitHashes,
     status_entries: &[RepoStatusEntry],
+    prefixes: Option<&[RelativeUnixPathBuf]>,
 ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
     use std::sync::mpsc;
 
     use ignore::WalkBuilder;
 
-    let root = git.root.as_std_path();
+    let root = std::sync::Arc::new(git.root.as_std_path().to_path_buf());
+    let scope = std::sync::Arc::new(UntrackedScope::new(prefixes));
 
     // Pre-build gitignore matchers from all tracked .gitignore files.
     // Each .gitignore is built with a builder rooted at its containing
@@ -286,7 +342,7 @@ fn find_untracked_files(
         let mut matchers: Vec<ignore::gitignore::Gitignore> = Vec::new();
 
         // Global gitignore + .git/info/exclude are rooted at the repo root
-        let mut root_builder = ignore::gitignore::GitignoreBuilder::new(root);
+        let mut root_builder = ignore::gitignore::GitignoreBuilder::new(root.as_path());
         let mut has_root_rules = false;
         if let Some(global_path) = ignore::gitignore::gitconfig_excludes_path()
             && global_path.exists()
@@ -307,8 +363,8 @@ fn find_untracked_files(
                 if !abs_path.exists() {
                     continue;
                 }
-                let gi_dir = abs_path.parent().unwrap_or(root);
-                if gi_dir == root {
+                let gi_dir = abs_path.parent().unwrap_or(root.as_path());
+                if gi_dir == root.as_path() {
                     // Root .gitignore goes into the root builder alongside
                     // global and info/exclude rules
                     let _ = root_builder.add(&abs_path);
@@ -341,7 +397,7 @@ fn find_untracked_files(
 
     // Disable ALL per-directory probing. Gitignore rules are applied via
     // filter_entry using the pre-built matcher above.
-    let walker = WalkBuilder::new(root)
+    let walker = WalkBuilder::new(root.as_path())
         .follow_links(false)
         .git_ignore(false)
         .git_exclude(false)
@@ -351,12 +407,38 @@ fn find_untracked_files(
         .hidden(false)
         .filter_entry({
             let matchers = gitignore_matchers.clone();
+            let root = root.clone();
+            let scope = scope.clone();
             move |entry| {
                 if entry.file_name() == ".git" {
                     return false;
                 }
                 let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
                 let path = entry.path();
+
+                let rel_path = match path.strip_prefix(root.as_path()) {
+                    Ok(rel) => rel,
+                    Err(_) => return false,
+                };
+                #[cfg(windows)]
+                let rel_path_owned = rel_path.to_string_lossy().replace('\\', "/");
+                #[cfg(windows)]
+                let rel_path = rel_path_owned.as_str();
+                #[cfg(not(windows))]
+                let rel_path = match rel_path.to_str() {
+                    Some(rel) => rel,
+                    None => return false,
+                };
+
+                let in_scope = if is_dir {
+                    scope.should_visit_dir(rel_path)
+                } else {
+                    scope.should_consider_file(rel_path, entry.file_name() == ".gitignore")
+                };
+                if !in_scope {
+                    return false;
+                }
+
                 // Check against all pre-built gitignore matchers. For
                 // directories, returning false prunes the entire subtree.
                 // Only check matchers whose root is a prefix of the entry
@@ -386,6 +468,7 @@ fn find_untracked_files(
     }
 
     walker.run(|| {
+        let root = root.clone();
         let mut guard = FlushOnDrop {
             buf: Vec::new(),
             tx: tx.clone(),
@@ -405,7 +488,7 @@ fn find_untracked_files(
             }
 
             let abs_path = entry.into_path();
-            let rel_path = match abs_path.strip_prefix(root) {
+            let rel_path = match abs_path.strip_prefix(root.as_path()) {
                 Ok(rel) => rel,
                 Err(_) => return ignore::WalkState::Continue,
             };
@@ -456,7 +539,7 @@ fn find_untracked_files(
         let mut extra_matchers: Vec<ignore::gitignore::Gitignore> = Vec::new();
         for gi_path in &untracked_gitignores {
             let abs = root.join(gi_path.as_str());
-            let gi_dir = abs.parent().unwrap_or(root);
+            let gi_dir = abs.parent().unwrap_or(root.as_path());
             let mut builder = ignore::gitignore::GitignoreBuilder::new(gi_dir);
             let _ = builder.add(&abs);
             if let Ok(gi) = builder.build()
@@ -480,6 +563,95 @@ fn find_untracked_files(
     }
 
     Ok(untracked)
+}
+
+#[derive(Debug, Clone)]
+struct UntrackedScope {
+    prefixes: Vec<String>,
+    is_full_walk: bool,
+}
+
+impl UntrackedScope {
+    fn new(prefixes: Option<&[RelativeUnixPathBuf]>) -> Self {
+        let Some(prefixes) = prefixes else {
+            return Self {
+                prefixes: Vec::new(),
+                is_full_walk: true,
+            };
+        };
+
+        if prefixes.iter().any(|prefix| prefix.as_str().is_empty()) {
+            return Self {
+                prefixes: Vec::new(),
+                is_full_walk: true,
+            };
+        }
+
+        let mut normalized = prefixes
+            .iter()
+            .map(|prefix| prefix.as_str().to_string())
+            .collect::<Vec<_>>();
+        normalized.sort_unstable();
+        normalized.dedup();
+
+        let mut scoped: Vec<String> = Vec::with_capacity(normalized.len());
+        for prefix in normalized {
+            if scoped
+                .iter()
+                .any(|existing| prefix == *existing || is_nested_path(&prefix, existing))
+            {
+                continue;
+            }
+            scoped.push(prefix);
+        }
+
+        Self {
+            prefixes: scoped,
+            is_full_walk: false,
+        }
+    }
+
+    fn should_visit_dir(&self, rel_path: &str) -> bool {
+        if self.is_full_walk || rel_path.is_empty() {
+            return true;
+        }
+
+        self.prefixes.iter().any(|prefix| {
+            rel_path == prefix
+                || is_nested_path(rel_path, prefix)
+                || is_nested_path(prefix, rel_path)
+        })
+    }
+
+    fn should_consider_file(&self, rel_path: &str, is_gitignore: bool) -> bool {
+        if self.is_full_walk || self.is_within_selected_prefix(rel_path) {
+            return true;
+        }
+
+        is_gitignore && self.should_visit_dir(parent_path(rel_path))
+    }
+
+    fn is_within_selected_prefix(&self, rel_path: &str) -> bool {
+        if self.is_full_walk {
+            return true;
+        }
+
+        self.prefixes
+            .iter()
+            .any(|prefix| rel_path == prefix || is_nested_path(rel_path, prefix))
+    }
+}
+
+fn is_nested_path(path: &str, prefix: &str) -> bool {
+    path.len() > prefix.len()
+        && path.starts_with(prefix)
+        && path.as_bytes().get(prefix.len()) == Some(&b'/')
+}
+
+fn parent_path(path: &str) -> &str {
+    path.rsplit_once('/')
+        .map(|(parent, _)| parent)
+        .unwrap_or("")
 }
 
 enum EntryClassification {
@@ -528,6 +700,7 @@ mod tests {
         RepoGitIndex {
             ls_tree_hashes,
             status_entries,
+            untracked_entries_populated: true,
         }
     }
 

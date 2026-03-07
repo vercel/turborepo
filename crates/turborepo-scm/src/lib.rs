@@ -369,6 +369,42 @@ impl SCM {
             SCM::Manual => None,
         }
     }
+
+    /// Build only the tracked portion of the repo index.
+    ///
+    /// This is intended for speculative startup work on the `turbo run` path.
+    /// Untracked-file discovery can be layered on later once the selected
+    /// package set is known.
+    pub fn build_tracked_repo_index_eager(&self) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new_tracked(git) {
+                Ok(index) => {
+                    debug!("tracked repo git index built eagerly");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build tracked repo git index eagerly: {}. Will hash \
+                         per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    pub fn populate_repo_index_untracked(
+        &self,
+        repo_index: &mut RepoGitIndex,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Result<(), Error> {
+        match self {
+            SCM::Git(git) => repo_index.populate_untracked_for_prefixes(git, prefixes),
+            SCM::Manual => Ok(()),
+        }
+    }
 }
 
 #[cfg(test)]
