@@ -2,6 +2,7 @@
 . "$(dirname -- "$0")/_/husky.sh"
 
 pnpm exec lint-staged
+oxfmt --check
 
 export RUSTFLAGS="-D warnings"
 cargo fmt --check
