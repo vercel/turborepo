@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use tracing::error;
+use turborepo_api_client::SharedHttpClient;
 use turborepo_query_api::QueryServer;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
@@ -12,7 +13,7 @@ use crate::{commands::CommandBase, run, run::builder::RunBuilder};
 pub async fn run(
     base: CommandBase,
     telemetry: CommandEventBuilder,
-    http_client_cell: Arc<tokio::sync::OnceCell<reqwest::Client>>,
+    http_client: SharedHttpClient,
     query_server: Option<Arc<dyn QueryServer>>,
 ) -> Result<i32, run::Error> {
     let signal = get_signal()?;
@@ -20,7 +21,7 @@ pub async fn run(
 
     let mut run_builder = {
         let _span = tracing::info_span!("run_builder_new").entered();
-        RunBuilder::new(base, Some(http_client_cell))?
+        RunBuilder::new(base, Some(http_client))?
     };
     if let Some(qs) = query_server {
         run_builder = run_builder.with_query_server(qs);

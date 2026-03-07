@@ -23,7 +23,7 @@ use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_api_client::APIAuth;
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_proxy::ProxyServer;
@@ -63,7 +63,6 @@ pub struct Run {
     run_telemetry: GenericEventBuilder,
     repo_root: AbsoluteSystemPathBuf,
     opts: Arc<Opts>,
-    api_client: APIClient,
     api_auth: Option<APIAuth>,
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
