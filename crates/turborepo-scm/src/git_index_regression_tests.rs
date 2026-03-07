@@ -723,10 +723,10 @@ fn test_many_packages_all_correct() {
 
 #[test]
 fn test_racy_entries_still_produce_correct_final_hashes() {
-    // Racy-git entries (mtime >= index timestamp) are deferred to hash_objects
-    // instead of being verified inline. This test creates files and commits
-    // in rapid succession to maximize the chance of racy entries, then verifies
-    // the final hashes through the full pipeline are correct.
+    // Racy-git entries (mtime >= index timestamp) are content-hashed inline
+    // during the index build to resolve them eagerly. This test creates files
+    // and commits in rapid succession to maximize the chance of racy entries,
+    // then verifies the final hashes through the full pipeline are correct.
     let repo = TestRepo::new();
 
     repo.create_file("my-pkg/file-a.ts", "content a");
@@ -1146,4 +1146,156 @@ fn test_nested_gitignore_scoping() {
     let web_no_index = repo.get_hashes_no_index("apps/web");
     assert_eq!(ui, ui_no_index, "packages/ui mismatch");
     assert_eq!(web, web_no_index, "apps/web mismatch");
+}
+
+#[test]
+fn test_stat_mismatch_resolved_as_clean_when_content_matches() {
+    // Deterministically create stat mismatches by changing file mtimes after
+    // commit. The index build should content-hash these files, find that
+    // the content matches the index OID, and classify them as Clean —
+    // meaning to_hash should be empty.
+    let repo = TestRepo::new();
+
+    repo.create_file("my-pkg/file-a.ts", "content a");
+    repo.create_file("my-pkg/file-b.ts", "content b");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.commit_all();
+
+    // Perturb mtimes to force stat mismatches without changing content.
+    // Setting mtime far in the past guarantees it differs from the index
+    // timestamp, triggering the stat-mismatch branch.
+    let past = filetime::FileTime::from_unix_time(1_000_000, 0);
+    for name in &[
+        "my-pkg/file-a.ts",
+        "my-pkg/file-b.ts",
+        "my-pkg/package.json",
+    ] {
+        let full = repo.root.join_unix_path(path(name));
+        filetime::set_file_mtime(full.as_std_path(), past).unwrap();
+    }
+
+    let index = repo.build_repo_index();
+    let (hashes, to_hash) = index.get_package_hashes(&path("my-pkg")).unwrap();
+
+    assert_eq!(
+        hashes.len(),
+        3,
+        "all files should be classified as Clean despite stale stats"
+    );
+    assert!(
+        to_hash.is_empty(),
+        "to_hash should be empty — stat mismatches resolved via content-hash"
+    );
+
+    // Verify final hashes match a clean (no stat perturbation) build
+    let clean_repo = TestRepo::new();
+    clean_repo.create_file("my-pkg/file-a.ts", "content a");
+    clean_repo.create_file("my-pkg/file-b.ts", "content b");
+    clean_repo.create_file("my-pkg/package.json", "{}");
+    clean_repo.commit_all();
+
+    let clean_hashes = clean_repo.get_hashes("my-pkg");
+    assert_eq!(
+        hashes, clean_hashes,
+        "hashes must be identical whether stats are fresh or stale"
+    );
+}
+
+#[test]
+fn test_stat_mismatch_with_modified_content_classified_as_modified() {
+    // When a file has both a stat mismatch AND different content, the
+    // index build should classify it as Modified (in to_hash), not Clean.
+    let repo = TestRepo::new();
+
+    repo.create_file("my-pkg/stable.ts", "unchanged");
+    repo.create_file("my-pkg/modified.ts", "original");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.commit_all();
+
+    // Change content after commit (also changes stat naturally)
+    repo.create_file("my-pkg/modified.ts", "changed content");
+
+    // Also perturb mtime on the stable file to create a stat mismatch
+    // without content change
+    let past = filetime::FileTime::from_unix_time(1_000_000, 0);
+    let stable_path = repo.root.join_unix_path(path("my-pkg/stable.ts"));
+    filetime::set_file_mtime(stable_path.as_std_path(), past).unwrap();
+
+    let index = repo.build_repo_index();
+    let (hashes, to_hash) = index.get_package_hashes(&path("my-pkg")).unwrap();
+
+    // stable.ts: stat mismatch but content matches → Clean (in hashes)
+    assert!(
+        hashes.contains_key(&path("stable.ts")),
+        "stable.ts should be in hashes (resolved as clean)"
+    );
+
+    // modified.ts: content differs → Modified (in to_hash, not in hashes)
+    let modified_in_to_hash = to_hash.iter().any(|p| p.as_str().ends_with("modified.ts"));
+    assert!(
+        modified_in_to_hash,
+        "modified.ts should be in to_hash (truly modified)"
+    );
+
+    // Final hashes through the full pipeline should reflect the new content
+    let full_hashes = repo.get_hashes("my-pkg");
+    assert_eq!(full_hashes.len(), 3);
+
+    let clean_repo = TestRepo::new();
+    clean_repo.create_file("my-pkg/stable.ts", "unchanged");
+    clean_repo.create_file("my-pkg/modified.ts", "original");
+    clean_repo.create_file("my-pkg/package.json", "{}");
+    clean_repo.commit_all();
+    let original_hashes = clean_repo.get_hashes("my-pkg");
+
+    assert_ne!(
+        full_hashes.get(&path("modified.ts")),
+        original_hashes.get(&path("modified.ts")),
+        "modified file must have a different hash"
+    );
+    assert_eq!(
+        full_hashes.get(&path("stable.ts")),
+        original_hashes.get(&path("stable.ts")),
+        "stable file must have the same hash"
+    );
+}
+
+#[test]
+fn test_future_mtime_racy_entries_resolved_as_clean() {
+    // Files with mtime in the future (>= index timestamp) trigger the
+    // racy-git branch. The index build should content-hash them and
+    // classify as Clean when content matches.
+    let repo = TestRepo::new();
+
+    repo.create_file("my-pkg/file.ts", "racy content");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.commit_all();
+
+    // Set mtime far in the future to guarantee it's >= index timestamp
+    let future = filetime::FileTime::from_unix_time(4_000_000_000, 0);
+    for name in &["my-pkg/file.ts", "my-pkg/package.json"] {
+        let full = repo.root.join_unix_path(path(name));
+        filetime::set_file_mtime(full.as_std_path(), future).unwrap();
+    }
+
+    let index = repo.build_repo_index();
+    let (hashes, to_hash) = index.get_package_hashes(&path("my-pkg")).unwrap();
+
+    assert_eq!(
+        hashes.len(),
+        2,
+        "both files should be classified as Clean despite future mtime"
+    );
+    assert!(
+        to_hash.is_empty(),
+        "to_hash should be empty — racy entries resolved via content-hash"
+    );
+
+    // Verify equivalence with subprocess path
+    let subprocess_hashes = repo.get_hashes_no_index("my-pkg");
+    let index_hashes = repo.get_hashes("my-pkg");
+    assert_eq!(
+        index_hashes, subprocess_hashes,
+        "index path and subprocess path must produce identical hashes"
+    );
 }

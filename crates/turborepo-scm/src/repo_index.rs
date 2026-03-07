@@ -1,13 +1,11 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 use turbopath::RelativeUnixPathBuf;
 
 use crate::{
-    Error, GitHashes, GitRepo, OidHash,
-    hash_object::hash_file_with_retry,
-    ls_tree::SortedGitHashes,
-    status::RepoStatusEntry,
+    Error, GitHashes, GitRepo, OidHash, hash_object::hash_file_with_retry,
+    ls_tree::SortedGitHashes, status::RepoStatusEntry,
 };
 
 /// Pre-computed repo-wide git index that caches file hashes and working-tree
@@ -38,10 +36,11 @@ impl RepoGitIndex {
     /// are modified or deleted. Untracked files are detected by a parallel
     /// walk of the working tree respecting .gitignore.
     ///
-    /// Racy-git entries (where mtime >= index timestamp, so we can't trust
-    /// the stat comparison) are deferred to per-package hashing rather than
-    /// content-hashed inline. This avoids reading every file from disk on
-    /// freshly cloned/checked-out repos.
+    /// Racy-git entries (where mtime >= index timestamp) and stat-mismatch
+    /// entries (where stat differs but content may match) are content-hashed
+    /// inline during the parallel index build. This resolves ambiguous entries
+    /// once, avoiding redundant re-hashing across per-package hash_scope calls
+    /// on fresh checkouts and CI environments.
     #[tracing::instrument(skip(git))]
     fn new_from_gix_index(git: &GitRepo) -> Result<Self, Error> {
         use rayon::prelude::*;
@@ -87,6 +86,7 @@ impl RepoGitIndex {
         let racy_resolved_count = AtomicUsize::new(0);
         let stat_mismatch_count = AtomicUsize::new(0);
         let racy_modified_count = AtomicUsize::new(0);
+        let hash_error_count = AtomicUsize::new(0);
         let classified: Vec<Result<EntryClassification, Error>> = index
             .entries()
             .par_iter()
@@ -130,7 +130,13 @@ impl RepoGitIndex {
                                     // Truly modified
                                     return Ok(EntryClassification::Modified { path: rel_path });
                                 }
-                                Err(_) => {
+                                Err(e) => {
+                                    hash_error_count.fetch_add(1, Ordering::Relaxed);
+                                    warn!(
+                                        path = %path_str,
+                                        error = %e,
+                                        "content-hash failed during stat-mismatch resolution, treating as modified"
+                                    );
                                     return Ok(EntryClassification::Modified { path: rel_path });
                                 }
                             }
@@ -153,9 +159,13 @@ impl RepoGitIndex {
                                     racy_modified_count.fetch_add(1, Ordering::Relaxed);
                                     return Ok(EntryClassification::Modified { path: rel_path });
                                 }
-                                Err(_) => {
-                                    // Can't read the file — treat as modified
-                                    // (per-package hashing will handle the error)
+                                Err(e) => {
+                                    hash_error_count.fetch_add(1, Ordering::Relaxed);
+                                    warn!(
+                                        path = %path_str,
+                                        error = %e,
+                                        "content-hash failed during racy-git resolution, treating as modified"
+                                    );
                                     return Ok(EntryClassification::Modified { path: rel_path });
                                 }
                             }
@@ -216,14 +226,16 @@ impl RepoGitIndex {
         let racy_count = racy_resolved_count.load(Ordering::Relaxed);
         let stat_mismatch = stat_mismatch_count.load(Ordering::Relaxed);
         let racy_modified = racy_modified_count.load(Ordering::Relaxed);
+        let hash_errors = hash_error_count.load(Ordering::Relaxed);
         debug!(
-            "built repo git index (gix-index): clean_count={}, status_count={}, \
-             racy_resolved={}, stat_mismatch={}, racy_modified={}",
+            "built repo git index (gix-index): clean_count={}, status_count={}, racy_resolved={}, \
+             stat_mismatch={}, racy_modified={}, hash_errors={}",
             ls_tree_hashes.len(),
             status_entries.len(),
             racy_count,
             stat_mismatch,
             racy_modified,
+            hash_errors,
         );
 
         Ok(Self {

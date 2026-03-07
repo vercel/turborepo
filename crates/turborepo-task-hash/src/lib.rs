@@ -197,8 +197,7 @@ impl PackageInputsHashes {
                 );
                 hash_result
                     .map(|h| {
-                        let _sort_span =
-                            tracing::info_span!("sort_and_wrap_file_hashes").entered();
+                        let _sort_span = tracing::info_span!("sort_and_wrap_file_hashes").entered();
                         let mut v: Vec<_> = h.into_iter().collect();
                         v.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
                         Arc::new(FileHashes(v))

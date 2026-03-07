@@ -171,11 +171,8 @@ impl GitRepo {
             "package file hash breakdown"
         );
         if !to_hash.is_empty() {
-            let _span = tracing::info_span!(
-                "hash_objects_for_dirty",
-                count = to_hash_count,
-            )
-            .entered();
+            let _span =
+                tracing::info_span!("hash_objects_for_dirty", count = to_hash_count,).entered();
             hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
         }
         Ok(hashes)
@@ -253,11 +250,8 @@ impl GitRepo {
         }
         let mut hashes = GitHashes::with_capacity(files.len());
         {
-            let _span = tracing::info_span!(
-                "hash_objects_from_inputs",
-                count = to_hash.len(),
-            )
-            .entered();
+            let _span =
+                tracing::info_span!("hash_objects_from_inputs", count = to_hash.len(),).entered();
             hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
         }
         Ok(hashes)
