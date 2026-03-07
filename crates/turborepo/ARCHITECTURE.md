@@ -33,6 +33,8 @@ A run consists of the following steps:
 - Cache setup (local and remote)
 - Activating shared HTTP client initialization once telemetry, remote cache, or
   linked analytics are known to be needed
+- Building a tracked repo index eagerly, then augmenting it with scoped
+  untracked-file discovery once the selected package set is known
 - Producing a final `Run` struct ready for execution
 
 ### 2. Package Graph (`crates/turborepo-repository/src/package_graph/`)
@@ -140,6 +142,20 @@ startup. Instead:
 
 This avoids paying client/TLS setup on invocations with no network use while
 still warming the client before the first network request in the common case.
+
+#### Two-Stage Repo Index Construction
+
+`turbo run` builds SCM state in two stages:
+
+1. A background startup task reads `.git/index` and records committed blob IDs
+   plus modified/deleted tracked files for the whole repo
+2. After package filtering finishes, Turborepo computes the package roots it
+   actually needs for hashing and augments that tracked index with untracked
+   files only for those prefixes
+
+This keeps the cheap tracked-index work overlapped with other startup work while
+avoiding a repo-wide untracked walk when only a subset of packages will be
+hashed.
 
 #### Worktree Cache Sharing
 
