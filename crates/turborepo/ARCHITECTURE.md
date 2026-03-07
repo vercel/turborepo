@@ -31,6 +31,8 @@ A run consists of the following steps:
 - Task filtering based on arguments (task names and `--filter`)
 - Task graph construction and validation
 - Cache setup (local and remote)
+- Activating shared HTTP client initialization once telemetry, remote cache, or
+  linked analytics are known to be needed
 - Producing a final `Run` struct ready for execution
 
 ### 2. Package Graph (`crates/turborepo-repository/src/package_graph/`)
@@ -121,6 +123,23 @@ Multi-layered caching system:
 - `RunCache`: High-level cache coordination
 - `TaskCache`: Individual task cache management
 - `AsyncCache`: Handles async cache operations. Supports both local filesystem and remote HTTP caches
+- `SharedHttpClient`: Process-wide lazy/activatable `reqwest::Client`
+  initialization shared by telemetry and remote-cache consumers
+
+#### Shared HTTP Client Initialization
+
+Network consumers do not construct an HTTP client speculatively at process
+startup. Instead:
+
+1. The CLI and run builder determine whether telemetry, remote cache, or linked
+   analytics will actually need networking for the current invocation
+2. Once that need is known, they activate shared client initialization
+   immediately so TLS setup overlaps with other startup work
+3. Telemetry flushes and remote-cache operations both reuse the same initialized
+   `reqwest::Client`
+
+This avoids paying client/TLS setup on invocations with no network use while
+still warming the client before the first network request in the common case.
 
 #### Worktree Cache Sharing
 

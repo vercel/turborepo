@@ -79,10 +79,11 @@ fn init(
     mut config: TelemetryConfig,
     client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
     color_config: ColorConfig,
-) -> Result<(TelemetryHandle, TelemetrySender), Box<dyn std::error::Error>> {
+) -> Result<(TelemetryHandle, TelemetrySender, bool), Box<dyn std::error::Error>> {
     let (tx, rx) = mpsc::unbounded_channel();
     let (cancel_tx, cancel_rx) = oneshot::channel();
     config.show_alert(color_config);
+    let enabled = config.is_enabled();
 
     let session_id = Uuid::new_v4();
     let worker = Worker {
@@ -92,7 +93,7 @@ fn init(
         client,
         session_id: session_id.to_string(),
         telemetry_id: config.get_id().to_string(),
-        enabled: config.is_enabled(),
+        enabled,
         color_config,
     };
     let handle = worker.start();
@@ -103,7 +104,7 @@ fn init(
     };
 
     // return
-    Ok((telemetry_handle, tx))
+    Ok((telemetry_handle, tx, enabled))
 }
 
 /// Starts the `Worker` on a separate tokio thread. Returns an `TelemetrySender`
@@ -115,16 +116,16 @@ fn init(
 pub fn init_telemetry(
     client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
     color_config: ColorConfig,
-) -> Result<TelemetryHandle, Box<dyn std::error::Error>> {
+) -> Result<(TelemetryHandle, bool), Box<dyn std::error::Error>> {
     // make sure we're not already initialized
     if SENDER_INSTANCE.get().is_some() {
         debug!("telemetry already initialized");
         return Err(Box::new(Error::AlreadyInitialized()));
     }
     let config = TelemetryConfig::with_default_config_path()?;
-    let (handle, sender) = init(config, client, color_config)?;
+    let (handle, sender, enabled) = init(config, client, color_config)?;
     SENDER_INSTANCE.set(sender).unwrap();
-    Ok(handle)
+    Ok((handle, enabled))
 }
 
 impl TelemetryHandle {
@@ -334,7 +335,7 @@ mod tests {
 
         let result = init(config, client.clone(), ColorConfig::new(false));
 
-        let (telemetry_handle, telemetry_sender) = result.unwrap();
+        let (telemetry_handle, telemetry_sender, _) = result.unwrap();
 
         for _ in 0..2 {
             telemetry_sender
@@ -374,7 +375,7 @@ mod tests {
 
         let result = init(config, client.clone(), ColorConfig::new(false));
 
-        let (telemetry_handle, telemetry_sender) = result.unwrap();
+        let (telemetry_handle, telemetry_sender, _) = result.unwrap();
 
         for _ in 0..12 {
             telemetry_sender
@@ -428,7 +429,7 @@ mod tests {
                 .unwrap();
 
         let result = init(config, SlowClient, ColorConfig::new(false));
-        let (telemetry_handle, telemetry_sender) = result.unwrap();
+        let (telemetry_handle, telemetry_sender, _) = result.unwrap();
 
         for _ in 0..2 {
             telemetry_sender
@@ -464,7 +465,7 @@ mod tests {
 
         let result = init(config, client.clone(), ColorConfig::new(false));
 
-        let (telemetry_handle, telemetry_sender) = result.unwrap();
+        let (telemetry_handle, telemetry_sender, _) = result.unwrap();
 
         for _ in 0..2 {
             telemetry_sender

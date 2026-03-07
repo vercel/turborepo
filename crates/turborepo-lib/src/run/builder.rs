@@ -2,14 +2,14 @@ use std::{
     collections::{HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
     sync::Arc,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 
 use chrono::Local;
 use tracing::Instrument;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
-use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_api_client::{APIAuth, APIClient, SharedHttpClient};
 use turborepo_cache::AsyncCache;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
@@ -50,7 +50,7 @@ pub struct RunBuilder {
     repo_root: AbsoluteSystemPathBuf,
     color_config: ColorConfig,
     version: &'static str,
-    http_client_cell: Arc<tokio::sync::OnceCell<reqwest::Client>>,
+    http_client: SharedHttpClient,
     // In watch mode, we can have a changed package that we want to serve as an entrypoint.
     // We will then prune away any tasks that do not depend on tasks inside
     // this package.
@@ -70,12 +70,8 @@ pub struct RunBuilder {
 
 impl RunBuilder {
     #[tracing::instrument(skip_all)]
-    pub fn new(
-        base: CommandBase,
-        http_client_cell: Option<Arc<tokio::sync::OnceCell<reqwest::Client>>>,
-    ) -> Result<Self, Error> {
-        let http_client_cell =
-            http_client_cell.unwrap_or_else(|| Arc::new(tokio::sync::OnceCell::new()));
+    pub fn new(base: CommandBase, http_client: Option<SharedHttpClient>) -> Result<Self, Error> {
+        let http_client = http_client.unwrap_or_default();
         let opts = base.opts();
         let api_auth = base.api_auth()?;
 
@@ -98,7 +94,7 @@ impl RunBuilder {
         Ok(Self {
             processes,
             opts,
-            http_client_cell,
+            http_client,
             repo_root,
             color_config: ui,
             version,
@@ -147,6 +143,33 @@ impl RunBuilder {
 
     fn will_execute_tasks(&self) -> bool {
         self.opts.run_opts.dry_run.is_none() && self.opts.run_opts.graph.is_none()
+    }
+
+    fn should_initialize_http_client(&self) -> bool {
+        self.api_auth.as_ref().is_some_and(APIAuth::is_linked)
+            || (self.opts.cache_opts.cache.remote.should_use() && self.api_auth.is_some())
+    }
+
+    fn api_client_from_http(&self, http_client: reqwest::Client) -> APIClient {
+        let timeout = self.opts.api_client_opts.timeout;
+        let upload_timeout = self.opts.api_client_opts.upload_timeout;
+
+        APIClient::new_with_client(
+            http_client,
+            &self.opts.api_client_opts.api_url,
+            if timeout > 0 {
+                Some(Duration::from_secs(timeout))
+            } else {
+                None
+            },
+            if upload_timeout > 0 {
+                Some(Duration::from_secs(upload_timeout))
+            } else {
+                None
+            },
+            self.version,
+            self.opts.api_client_opts.preflight,
+        )
     }
 
     pub fn calculate_filtered_packages(
@@ -269,6 +292,10 @@ impl RunBuilder {
         // `turbo watch` which connects independently.
         run_telemetry.track_daemon_init(DaemonInitStatus::Disabled);
 
+        if self.should_initialize_http_client() {
+            self.http_client.activate();
+        }
+
         let mut pkg_dep_graph = {
             let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
@@ -318,42 +345,24 @@ impl RunBuilder {
         // inference, and turbo.json preloading overlap with git index
         // construction and untracked-file discovery.
 
-        // Resolve the HTTP client. TLS initialization has been running in the
-        // background since cli::run started, overlapping with arg parsing,
-        // config loading, package graph construction, and SCM indexing.
-        let api_client = {
+        let api_client = if self.should_initialize_http_client() {
             let _span = tracing::info_span!("resolve_api_client").entered();
-            let http_client = match self.http_client_cell.get() {
-                Some(client) => client.clone(),
-                None => tokio::task::spawn_blocking(|| APIClient::build_http_client(None))
-                    .await
-                    .map_err(|_| turborepo_api_client::Error::HttpClientCancelled)??,
-            };
-            let timeout = self.opts.api_client_opts.timeout;
-            let upload_timeout = self.opts.api_client_opts.upload_timeout;
-            APIClient::new_with_client(
-                http_client.clone(),
-                &self.opts.api_client_opts.api_url,
-                if timeout > 0 {
-                    Some(std::time::Duration::from_secs(timeout))
-                } else {
-                    None
-                },
-                if upload_timeout > 0 {
-                    Some(std::time::Duration::from_secs(upload_timeout))
-                } else {
-                    None
-                },
-                self.version,
-                self.opts.api_client_opts.preflight,
-            )
+            let http_client = self.http_client.get_or_init().await?;
+            Some(self.api_client_from_http(http_client))
+        } else {
+            None
         };
 
         let (analytics_sender, analytics_handle) = self
             .api_auth
             .as_ref()
             .filter(|auth| auth.is_linked())
-            .map(|auth| start_analytics(auth.clone(), api_client.clone()))
+            .map(|auth| {
+                let api_client = api_client
+                    .clone()
+                    .expect("linked analytics require a resolved API client");
+                start_analytics(auth.clone(), api_client)
+            })
             .unzip();
 
         let async_cache = {
@@ -523,7 +532,6 @@ impl RunBuilder {
                 task_access,
                 repo_root: self.repo_root,
                 opts: Arc::new(self.opts),
-                api_client,
                 api_auth: self.api_auth,
                 env_at_execution_start,
                 filtered_pkgs: filtered_pkgs.keys().cloned().collect(),

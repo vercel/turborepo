@@ -27,9 +27,11 @@ pub use crate::error::{Error, Result};
 pub mod analytics;
 mod error;
 mod retry;
+mod shared_http_client;
 pub mod telemetry;
 
 pub use bytes::Bytes;
+pub use shared_http_client::SharedHttpClient;
 pub use tokio_stream::Stream;
 
 static AUTHORIZATION_REGEX: LazyLock<Regex> =
