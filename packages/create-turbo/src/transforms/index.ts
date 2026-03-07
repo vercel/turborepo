@@ -9,5 +9,5 @@ import type { TransformInput, TransformResult } from "./types";
 export const transforms: Array<(args: TransformInput) => TransformResult> = [
   officialStarter,
   gitIgnoreTransform,
-  packageManagerTransform,
+  packageManagerTransform
 ];
