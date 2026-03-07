@@ -33,7 +33,7 @@ impl CacheMultiplexer {
     pub fn new(
         opts: &CacheOpts,
         repo_root: &AbsoluteSystemPath,
-        api_client: APIClient,
+        api_client: Option<APIClient>,
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<Self, CacheError> {
@@ -55,19 +55,20 @@ impl CacheMultiplexer {
             .then(|| FSCache::new(&opts.cache_dir, repo_root, analytics_recorder.clone()))
             .transpose()?;
 
-        let http_cache = use_http_cache
-            .then_some(api_auth)
-            .flatten()
-            .map(|api_auth| {
-                HTTPCache::new(
+        let http_cache = if use_http_cache {
+            match (api_client, api_auth) {
+                (Some(api_client), Some(api_auth)) => Some(HTTPCache::new(
                     api_client,
                     opts,
                     repo_root.to_owned(),
                     api_auth,
                     analytics_recorder.clone(),
-                )
-            })
-            .transpose()?;
+                )?),
+                _ => None,
+            }
+        } else {
+            None
+        };
 
         Ok(CacheMultiplexer {
             should_print_skipping_remote_put: AtomicBool::new(true),
