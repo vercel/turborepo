@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use node_semver::{Range, Version};
 use serde::Deserialize;
@@ -142,6 +142,12 @@ struct PnpmWorkspace {
     link_workspace_packages: Option<LinkWorkspacePackages>,
     pub patched_dependencies:
         Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>,
+    /// Default catalog (`catalog:` protocol resolves to these)
+    #[serde(default)]
+    pub catalog: HashMap<String, String>,
+    /// Named catalogs (`catalog:<name>` protocol resolves to these)
+    #[serde(default)]
+    pub catalogs: HashMap<String, HashMap<String, String>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -164,6 +170,43 @@ impl PnpmWorkspace {
             LinkWorkspacePackages::Bool(value) => Some(*value),
             LinkWorkspacePackages::Str(value) => Some(value == "deep"),
         }
+    }
+}
+
+/// Read catalog definitions from pnpm-workspace.yaml. Returns `None` if the
+/// file doesn't exist or can't be parsed (non-fatal).
+pub fn read_catalogs(repo_root: &AbsoluteSystemPath) -> Option<PnpmCatalogs> {
+    let workspace = PnpmWorkspace::from_file(repo_root)
+        .inspect_err(|e| debug!("unable to read {WORKSPACE_CONFIGURATION_PATH}: {e}"))
+        .ok()?;
+    if workspace.catalog.is_empty() && workspace.catalogs.is_empty() {
+        return None;
+    }
+    Some(PnpmCatalogs {
+        default: workspace.catalog,
+        named: workspace.catalogs,
+    })
+}
+
+/// Resolved catalog definitions from pnpm-workspace.yaml.
+#[derive(Debug, Default)]
+pub struct PnpmCatalogs {
+    pub default: HashMap<String, String>,
+    pub named: HashMap<String, HashMap<String, String>>,
+}
+
+impl PnpmCatalogs {
+    /// Resolve a `catalog:` or `catalog:<name>` specifier to the actual
+    /// version string. Returns `None` if the specifier is not a catalog
+    /// reference or the package isn't found in the catalog.
+    pub fn resolve<'a>(&'a self, name: &str, specifier: &str) -> Option<&'a str> {
+        let catalog_name = specifier.strip_prefix("catalog:")?;
+        let catalog_map = if catalog_name.is_empty() || catalog_name == "default" {
+            Some(&self.default)
+        } else {
+            self.named.get(catalog_name)
+        };
+        catalog_map.and_then(|m| m.get(name).map(|s| s.as_str()))
     }
 }
 
@@ -382,5 +425,113 @@ mod test {
             .unwrap();
         let actual = link_workspace_packages(PnpmVersion::Pnpm9, repo_root);
         assert!(actual, "deep should be treated as true");
+    }
+
+    #[test]
+    fn test_workspace_parses_catalogs() {
+        let yaml = r#"
+packages:
+  - "packages/*"
+catalog:
+  react: "^18.2.0"
+  pkg-a: "workspace:*"
+catalogs:
+  internal:
+    pkg-b: "workspace:*"
+    pkg-c: "workspace:^"
+"#;
+        let config: PnpmWorkspace = serde_yaml_ng::from_str(yaml).unwrap();
+        assert_eq!(config.catalog.get("react").unwrap(), "^18.2.0");
+        assert_eq!(config.catalog.get("pkg-a").unwrap(), "workspace:*");
+        let internal = config.catalogs.get("internal").unwrap();
+        assert_eq!(internal.get("pkg-b").unwrap(), "workspace:*");
+        assert_eq!(internal.get("pkg-c").unwrap(), "workspace:^");
+    }
+
+    #[test]
+    fn test_workspace_parses_without_catalogs() {
+        let yaml = "packages:\n  - \"packages/*\"\n";
+        let config: PnpmWorkspace = serde_yaml_ng::from_str(yaml).unwrap();
+        assert!(config.catalog.is_empty());
+        assert!(config.catalogs.is_empty());
+    }
+
+    #[test]
+    fn test_pnpm_catalogs_resolve_default() {
+        let catalogs = PnpmCatalogs {
+            default: [("react".to_string(), "^18.2.0".to_string())]
+                .into_iter()
+                .collect(),
+            named: HashMap::new(),
+        };
+        assert_eq!(catalogs.resolve("react", "catalog:"), Some("^18.2.0"));
+        assert_eq!(
+            catalogs.resolve("react", "catalog:default"),
+            Some("^18.2.0")
+        );
+        assert_eq!(catalogs.resolve("unknown", "catalog:"), None);
+    }
+
+    #[test]
+    fn test_pnpm_catalogs_resolve_named() {
+        let catalogs = PnpmCatalogs {
+            default: HashMap::new(),
+            named: [(
+                "internal".to_string(),
+                [("pkg-b".to_string(), "workspace:*".to_string())]
+                    .into_iter()
+                    .collect(),
+            )]
+            .into_iter()
+            .collect(),
+        };
+        assert_eq!(
+            catalogs.resolve("pkg-b", "catalog:internal"),
+            Some("workspace:*")
+        );
+        assert_eq!(catalogs.resolve("pkg-b", "catalog:nonexistent"), None);
+        assert_eq!(catalogs.resolve("unknown", "catalog:internal"), None);
+    }
+
+    #[test]
+    fn test_pnpm_catalogs_non_catalog_specifier() {
+        let catalogs = PnpmCatalogs {
+            default: [("react".to_string(), "^18.2.0".to_string())]
+                .into_iter()
+                .collect(),
+            named: HashMap::new(),
+        };
+        assert_eq!(catalogs.resolve("react", "^18.2.0"), None);
+        assert_eq!(catalogs.resolve("react", "workspace:*"), None);
+    }
+
+    #[test]
+    fn test_read_catalogs_from_file() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        repo_root
+            .join_component(WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents(
+                "packages:\n  - \"packages/*\"\ncatalog:\n  react: \"^18.2.0\"\ncatalogs:\n  \
+                 internal:\n    pkg-b: \"workspace:*\"\n",
+            )
+            .unwrap();
+        let catalogs = read_catalogs(repo_root).expect("should read catalogs");
+        assert_eq!(catalogs.resolve("react", "catalog:"), Some("^18.2.0"));
+        assert_eq!(
+            catalogs.resolve("pkg-b", "catalog:internal"),
+            Some("workspace:*")
+        );
+    }
+
+    #[test]
+    fn test_read_catalogs_no_catalogs() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        repo_root
+            .join_component(WORKSPACE_CONFIGURATION_PATH)
+            .create_with_contents("packages:\n  - \"packages/*\"\n")
+            .unwrap();
+        assert!(read_catalogs(repo_root).is_none());
     }
 }

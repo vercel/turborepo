@@ -650,6 +650,19 @@ impl PackageManager {
             PackageManager::Yarn | PackageManager::Bun | PackageManager::Npm => true,
         }
     }
+
+    /// Read catalog definitions from the package manager's configuration.
+    /// Currently only pnpm supports catalogs in pnpm-workspace.yaml.
+    pub fn read_catalogs(&self, repo_root: &AbsoluteSystemPath) -> Option<pnpm::PnpmCatalogs> {
+        match self {
+            PackageManager::Pnpm9 | PackageManager::Pnpm | PackageManager::Pnpm6 => {
+                pnpm::read_catalogs(repo_root)
+            }
+            // Berry catalogs are handled during lockfile parsing, not here.
+            // Bun catalogs are handled during lockfile parsing, not here.
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]
