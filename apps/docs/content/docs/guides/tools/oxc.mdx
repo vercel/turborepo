@@ -100,6 +100,19 @@ Register the scripts to Turborepo as [Root Tasks](/docs/crafting-your-repository
 
 You can now run `turbo run lint` to lint your entire repository.
 
+<Callout type="warn" title="Type-aware linting">
+  If you enable [type-aware linting rules](https://oxc.rs/docs/guide/usage/linter/config#type-aware-linting) in oxlint, the linter needs TypeScript type information to work correctly. This means any dependencies that must be built before type-checking (such as internal packages in your monorepo) also need to be built before linting.
+
+Run your builds before linting in CI:
+
+```bash title="Terminal"
+turbo run build --filter=./packages/* && turbo run lint
+```
+
+Alternatively, you can switch to per-package lint tasks with `dependsOn: ["^build"]` to let Turborepo handle the ordering for you.
+
+</Callout>
+
 ## Setting up oxfmt
 
 oxfmt is a fast code formatter for JavaScript and TypeScript, designed to be a drop-in replacement for Prettier.
@@ -210,6 +223,7 @@ For repositories using both tools, you can orchestrate them with a unified quali
     },
     "//#format": {},
     "//#format:fix": {
+      "dependsOn": ["//#lint:fix"],
       "cache": false
     }
   }
@@ -218,5 +232,5 @@ For repositories using both tools, you can orchestrate them with a unified quali
 
 With this configuration:
 
-- Run `turbo run quality` to check both linting and formatting
-- Run `turbo run quality:fix` to fix both linting and formatting issues
+- Run `turbo run quality` to check both linting and formatting in parallel (safe because neither modifies files)
+- Run `turbo run quality:fix` to fix both linting and formatting issues, with formatting running after lint fixes to avoid file write race conditions
