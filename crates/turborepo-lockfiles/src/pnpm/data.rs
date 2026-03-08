@@ -279,7 +279,9 @@ impl PnpmLockfile {
     }
 
     fn build_dependency_index(&mut self) {
-        let mut index = HashMap::new();
+        let snapshot_count = self.snapshots.as_ref().map_or(0, HashMap::len);
+        let package_count = self.packages.as_ref().map_or(0, HashMap::len);
+        let mut index = HashMap::with_capacity(snapshot_count + package_count);
         if let Some(snapshots) = &self.snapshots {
             for (key, snapshot) in snapshots {
                 index.insert(key.clone(), snapshot.dependencies());
@@ -827,12 +829,27 @@ impl Dependency {
 
 impl PackageSnapshotV7 {
     pub fn dependencies(&self) -> HashMap<String, String> {
-        self.dependencies
-            .iter()
-            .flatten()
-            .chain(self.optional_dependencies.iter().flatten())
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect()
+        let dependency_count = self.dependencies.as_ref().map_or(0, Map::len)
+            + self.optional_dependencies.as_ref().map_or(0, Map::len);
+        let mut combined = HashMap::with_capacity(dependency_count);
+
+        if let Some(dependencies) = &self.dependencies {
+            combined.extend(
+                dependencies
+                    .iter()
+                    .map(|(name, version)| (name.clone(), version.clone())),
+            );
+        }
+
+        if let Some(optional_dependencies) = &self.optional_dependencies {
+            combined.extend(
+                optional_dependencies
+                    .iter()
+                    .map(|(name, version)| (name.clone(), version.clone())),
+            );
+        }
+
+        combined
     }
 }
 
