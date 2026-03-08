@@ -196,7 +196,7 @@ Creates a "content identifier" for a specific task depending on current state of
 - **Task Hash**: Task definition, package dependencies, input files, environment variables
 - **File Hashing**: Uses git for tracking file changes efficiently
 - **Explicit Inputs**: When tasks use custom `inputs`, glob matches still walk the
-  filesystem, but clean tracked matches now reuse blob OIDs from the repo index
+  filesystem, but clean tracked matches reuse blob OIDs from the repo index
   instead of re-hashing file contents
 
 #### Hash Calculation
