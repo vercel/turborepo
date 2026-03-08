@@ -7,7 +7,7 @@ use std::{
 
 use chrono::Local;
 use tracing::Instrument;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient, SharedHttpClient};
 use turborepo_cache::AsyncCache;
@@ -172,6 +172,26 @@ impl RunBuilder {
         )
     }
 
+    fn repo_index_untracked_prefixes(
+        pkg_dep_graph: &PackageGraph,
+        filtered_pkgs: &HashMap<PackageName, PackageInclusionReason>,
+    ) -> Vec<RelativeUnixPathBuf> {
+        let mut prefixes = filtered_pkgs
+            .keys()
+            .filter_map(|package| pkg_dep_graph.package_dir(package))
+            .map(|package_dir| package_dir.to_unix())
+            .collect::<Vec<_>>();
+
+        prefixes.extend(
+            pkg_dep_graph
+                .root_internal_package_dependencies_paths()
+                .into_iter()
+                .map(|package_dir| package_dir.to_unix()),
+        );
+
+        prefixes
+    }
+
     pub fn calculate_filtered_packages(
         repo_root: &AbsoluteSystemPath,
         opts: &Opts,
@@ -252,7 +272,7 @@ impl RunBuilder {
                     Some(root) => SCM::new_with_git_root(&repo_root, root),
                     None => SCM::new(&repo_root),
                 };
-                let repo_index = scm.build_repo_index_eager();
+                let repo_index = scm.build_tracked_repo_index_eager();
                 (scm, repo_index)
             })
         };
@@ -339,11 +359,10 @@ impl RunBuilder {
         };
 
         // SCM-independent work runs while the background scm_task continues.
-        // The await is deferred until just before the first consumer
-        // (task_access_setup / calculate_filtered_packages), letting API
-        // client resolution, cache init, turbo.json loading, validation, env
-        // inference, and turbo.json preloading overlap with git index
-        // construction and untracked-file discovery.
+        // The await is deferred until just before the first SCM consumer,
+        // letting API client resolution, cache init, turbo.json loading,
+        // validation, env inference, and turbo.json preloading overlap with
+        // tracked git-index construction.
 
         let api_client = if self.should_initialize_http_client() {
             let _span = tracing::info_span!("resolve_api_client").entered();
@@ -439,20 +458,12 @@ impl RunBuilder {
             turbo_json_loader.preload_all();
         }
 
-        // Await the SCM background task. Everything above ran while git index
-        // construction + untracked-file discovery continued in the background.
+        // Await the SCM background task. Everything above ran while tracked
+        // git-index construction continued in the background.
         let (scm, repo_index) = scm_task
             .instrument(tracing::info_span!("scm_task_await"))
             .await
             .expect("detecting scm panicked");
-        let repo_index = Arc::new(repo_index);
-
-        let task_access = {
-            let _span = tracing::info_span!("task_access_setup").entered();
-            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
-            ta.restore_config().await;
-            ta
-        };
 
         let filtered_pkgs = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();
@@ -463,6 +474,37 @@ impl RunBuilder {
                 &scm,
                 &root_turbo_json,
             )?
+        };
+        let repo_index_task = repo_index.and_then(|repo_index| {
+            let scoped_prefixes =
+                Self::repo_index_untracked_prefixes(&pkg_dep_graph, &filtered_pkgs);
+            if scoped_prefixes.is_empty() {
+                return None;
+            }
+
+            let scm = scm.clone();
+            Some(tokio::task::spawn_blocking(move || {
+                let _span = tracing::info_span!("repo_index_scope_untracked").entered();
+                let mut repo_index = repo_index;
+                match scm.populate_repo_index_untracked(&mut repo_index, &scoped_prefixes) {
+                    Ok(()) => Some(repo_index),
+                    Err(err) => {
+                        tracing::debug!(
+                            "failed to scope repo git index with untracked files: {}. Will hash \
+                             per-package.",
+                            err,
+                        );
+                        None
+                    }
+                }
+            }))
+        });
+
+        let task_access = {
+            let _span = tracing::info_span!("task_access_setup").entered();
+            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
+            ta.restore_config().await;
+            ta
         };
 
         let mut engine = self.build_engine(
@@ -522,6 +564,13 @@ impl RunBuilder {
                     .flatten();
                 observability::Handle::try_init(opts, token)
             });
+        let repo_index = Arc::new(match repo_index_task {
+            Some(repo_index_task) => repo_index_task
+                .instrument(tracing::info_span!("repo_index_untracked_await"))
+                .await
+                .expect("scoping repo index panicked"),
+            None => None,
+        });
         Ok((
             Run {
                 version: self.version,
