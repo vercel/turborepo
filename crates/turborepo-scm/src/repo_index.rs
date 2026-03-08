@@ -1006,6 +1006,129 @@ mod tests {
         assert_eq!(to_hash, vec![path("pkg/b.ts"), path("pkg/c.ts")]);
     }
 
+    // UntrackedScope tests
+
+    #[test]
+    fn test_untracked_scope_none_prefixes_is_full_walk() {
+        let scope = UntrackedScope::new(None);
+        assert!(scope.is_full_walk);
+        assert!(scope.should_visit_dir("anything"));
+        assert!(scope.should_consider_file("any/file.ts", false));
+        assert!(scope.is_within_selected_prefix("any/path"));
+    }
+
+    #[test]
+    fn test_untracked_scope_empty_string_prefix_is_full_walk() {
+        let prefixes = [path("")];
+        let scope = UntrackedScope::new(Some(&prefixes));
+        assert!(scope.is_full_walk);
+        assert!(scope.should_visit_dir("packages/a"));
+        assert!(scope.should_consider_file("packages/a/file.ts", false));
+    }
+
+    #[test]
+    fn test_untracked_scope_nested_prefixes_deduplicated() {
+        let prefixes = [path("packages/a"), path("packages/a/sub")];
+        let scope = UntrackedScope::new(Some(&prefixes));
+        assert!(!scope.is_full_walk);
+        // packages/a/sub is nested under packages/a, so only packages/a should remain
+        assert_eq!(scope.prefixes.len(), 1);
+        assert_eq!(scope.prefixes[0], "packages/a");
+    }
+
+    #[test]
+    fn test_untracked_scope_duplicate_prefixes_deduplicated() {
+        let prefixes = [path("packages/a"), path("packages/b"), path("packages/a")];
+        let scope = UntrackedScope::new(Some(&prefixes));
+        assert_eq!(scope.prefixes.len(), 2);
+    }
+
+    #[test]
+    fn test_untracked_scope_should_visit_dir_ancestor_traversal() {
+        let prefixes = [path("packages/a")];
+        let scope = UntrackedScope::new(Some(&prefixes));
+
+        // Ancestor dirs must be visited to reach the prefix
+        assert!(scope.should_visit_dir(""), "root dir");
+        assert!(scope.should_visit_dir("packages"), "parent of prefix");
+        assert!(scope.should_visit_dir("packages/a"), "exact prefix");
+        assert!(scope.should_visit_dir("packages/a/src"), "child of prefix");
+    }
+
+    #[test]
+    fn test_untracked_scope_should_visit_dir_sibling_excluded() {
+        let prefixes = [path("packages/a")];
+        let scope = UntrackedScope::new(Some(&prefixes));
+
+        assert!(!scope.should_visit_dir("packages/b"), "sibling excluded");
+        assert!(!scope.should_visit_dir("apps"), "unrelated dir excluded");
+        assert!(
+            !scope.should_visit_dir("packages/ab"),
+            "substring prefix not matched"
+        );
+    }
+
+    #[test]
+    fn test_untracked_scope_should_consider_file_within_prefix() {
+        let prefixes = [path("packages/a")];
+        let scope = UntrackedScope::new(Some(&prefixes));
+
+        assert!(scope.should_consider_file("packages/a/file.ts", false));
+        assert!(scope.should_consider_file("packages/a/src/deep.ts", false));
+    }
+
+    #[test]
+    fn test_untracked_scope_should_consider_file_outside_prefix() {
+        let prefixes = [path("packages/a")];
+        let scope = UntrackedScope::new(Some(&prefixes));
+
+        assert!(!scope.should_consider_file("packages/b/file.ts", false));
+        assert!(!scope.should_consider_file("root.json", false));
+    }
+
+    #[test]
+    fn test_untracked_scope_ancestor_gitignore_considered() {
+        let prefixes = [path("packages/a")];
+        let scope = UntrackedScope::new(Some(&prefixes));
+
+        // .gitignore at repo root should be considered (ancestor of prefix)
+        assert!(scope.should_consider_file(".gitignore", true));
+        // .gitignore in packages/ should be considered (parent of prefix)
+        assert!(scope.should_consider_file("packages/.gitignore", true));
+        // .gitignore inside the prefix itself
+        assert!(scope.should_consider_file("packages/a/.gitignore", true));
+        // .gitignore in a sibling package should NOT be considered
+        assert!(!scope.should_consider_file("packages/b/.gitignore", true));
+    }
+
+    #[test]
+    fn test_untracked_scope_empty_prefixes_slice_considers_nothing() {
+        let prefixes: Vec<RelativeUnixPathBuf> = vec![];
+        let scope = UntrackedScope::new(Some(&prefixes));
+        assert!(!scope.is_full_walk);
+        // Empty prefix list means no dirs/files are in scope
+        assert!(!scope.should_consider_file("any/file.ts", false));
+        // Root dir is always visitable (empty string check)
+        assert!(scope.should_visit_dir(""));
+    }
+
+    #[test]
+    fn test_untracked_scope_multiple_disjoint_prefixes() {
+        let prefixes = [path("apps/web"), path("packages/ui")];
+        let scope = UntrackedScope::new(Some(&prefixes));
+
+        assert!(scope.should_visit_dir("apps"));
+        assert!(scope.should_visit_dir("apps/web"));
+        assert!(scope.should_visit_dir("packages"));
+        assert!(scope.should_visit_dir("packages/ui"));
+        assert!(!scope.should_visit_dir("apps/docs"));
+        assert!(!scope.should_visit_dir("packages/utils"));
+
+        assert!(scope.should_consider_file("apps/web/index.ts", false));
+        assert!(scope.should_consider_file("packages/ui/button.tsx", false));
+        assert!(!scope.should_consider_file("apps/docs/readme.md", false));
+    }
+
     #[test]
     fn test_partition_existing_paths_for_hashing_reuses_clean_tracked_only() {
         let index = make_index(
