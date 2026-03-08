@@ -304,6 +304,45 @@ impl RepoGitIndex {
 
         Ok((hashes, to_hash))
     }
+
+    /// Partition a set of existing git-root-relative file paths into:
+    /// - clean tracked files whose blob OIDs can be reused immediately
+    /// - files that still need content hashing because they are dirty,
+    ///   untracked, or absent from the tracked index
+    ///
+    /// Status entries always win over ls-tree entries so modified tracked files
+    /// are conservatively re-hashed instead of reusing stale blob IDs.
+    pub fn partition_existing_paths_for_hashing(
+        &self,
+        paths: impl IntoIterator<Item = RelativeUnixPathBuf>,
+    ) -> (
+        Vec<(RelativeUnixPathBuf, OidHash)>,
+        Vec<RelativeUnixPathBuf>,
+    ) {
+        let mut known_hashes = Vec::new();
+        let mut to_hash = Vec::new();
+
+        for path in paths {
+            let in_status = self
+                .status_entries
+                .binary_search_by(|entry| entry.path.as_str().cmp(path.as_str()))
+                .is_ok();
+            if in_status {
+                to_hash.push(path);
+                continue;
+            }
+
+            match self
+                .ls_tree_hashes
+                .binary_search_by(|(entry_path, _)| entry_path.as_str().cmp(path.as_str()))
+            {
+                Ok(idx) => known_hashes.push((path, self.ls_tree_hashes[idx].1)),
+                Err(_) => to_hash.push(path),
+            }
+        }
+
+        (known_hashes, to_hash)
+    }
 }
 
 /// Walk the working tree to find untracked files (files on disk that are
@@ -965,5 +1004,44 @@ mod tests {
         let (hashes, to_hash) = index.get_package_hashes(&path("pkg")).unwrap();
         assert!(hashes.is_empty(), "a.ts was deleted");
         assert_eq!(to_hash, vec![path("pkg/b.ts"), path("pkg/c.ts")]);
+    }
+
+    #[test]
+    fn test_partition_existing_paths_for_hashing_reuses_clean_tracked_only() {
+        let index = make_index(
+            vec![
+                ("pkg/clean.ts", "aaa"),
+                ("pkg/also-clean.ts", "bbb"),
+                ("root/config.json", "ccc"),
+            ],
+            vec![("pkg/dirty.ts", false), ("pkg/deleted.ts", true)],
+        );
+
+        let (known_hashes, to_hash) = index.partition_existing_paths_for_hashing(vec![
+            path("pkg/clean.ts"),
+            path("pkg/dirty.ts"),
+            path("pkg/deleted.ts"),
+            path("pkg/untracked.ts"),
+            path("root/config.json"),
+        ]);
+
+        assert_eq!(
+            known_hashes,
+            vec![
+                (path("pkg/clean.ts"), OidHash::from_hex_str(&pad_hex("aaa"))),
+                (
+                    path("root/config.json"),
+                    OidHash::from_hex_str(&pad_hex("ccc"))
+                ),
+            ]
+        );
+        assert_eq!(
+            to_hash,
+            vec![
+                path("pkg/dirty.ts"),
+                path("pkg/deleted.ts"),
+                path("pkg/untracked.ts"),
+            ]
+        );
     }
 }
