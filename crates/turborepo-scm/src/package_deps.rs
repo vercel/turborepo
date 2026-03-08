@@ -246,8 +246,9 @@ impl GitRepo {
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
+        let package_unix_path_buf = package_path.to_unix();
         let pkg_prefix = self.root.anchor(&full_pkg_path)?.to_unix();
-        let package_unix_path = pkg_prefix.as_str();
+        let package_unix_path = package_unix_path_buf.as_str();
 
         static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
         let extra_inputs = if include_configs { CONFIG_FILES } else { &[] };
@@ -856,6 +857,49 @@ mod tests {
             "should hash package.json in the worktree package"
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_inputs_in_nested_turbo_root() -> Result<(), Error> {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let turbo_root = repo_root.join_component("subdir");
+        let my_pkg_dir = turbo_root.join_component("my-pkg");
+        my_pkg_dir.create_dir_all()?;
+
+        my_pkg_dir
+            .join_component("committed-file")
+            .create_with_contents("committed bytes")?;
+        my_pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+
+        setup_repository(&repo_root);
+        commit_all(&repo_root);
+
+        my_pkg_dir
+            .join_component("uncommitted-file")
+            .create_with_contents("uncommitted bytes")?;
+
+        let scm = crate::SCM::new_with_git_root(&turbo_root, repo_root.clone());
+        let crate::SCM::Git(git) = scm else {
+            panic!("expected git SCM");
+        };
+        let package_path = AnchoredSystemPathBuf::from_raw("my-pkg")?;
+
+        let hashes =
+            git.get_package_file_hashes(&turbo_root, &package_path, &["**/*-file"], false, None)?;
+
+        let expected = to_hash_map(&[
+            ("committed-file", "3a29e62ea9ba15c4a4009d1f605d391cdd262033"),
+            (
+                "uncommitted-file",
+                "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+            ),
+            ("package.json", "9e26dfeeb6e641a33dae4961196235bdb965b21b"),
+        ]);
+
+        assert_eq!(hashes, expected);
         Ok(())
     }
 
