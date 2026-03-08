@@ -12,7 +12,7 @@
 
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{test_utils, GitHashes, RepoGitIndex, SCM};
+use crate::{GitHashes, RepoGitIndex, SCM, test_utils};
 
 fn path(s: &str) -> RelativeUnixPathBuf {
     RelativeUnixPathBuf::new(s).unwrap()

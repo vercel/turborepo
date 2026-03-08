@@ -365,17 +365,14 @@ impl RunBuilder {
                 };
                 let tracked_index = tracked_index?;
                 tokio::task::spawn_blocking(move || {
-                    let _span =
-                        tracing::info_span!("repo_index_scope_untracked").entered();
+                    let _span = tracing::info_span!("repo_index_scope_untracked").entered();
                     let mut repo_index = tracked_index;
-                    match scm
-                        .populate_repo_index_untracked(&mut repo_index, &all_prefixes)
-                    {
+                    match scm.populate_repo_index_untracked(&mut repo_index, &all_prefixes) {
                         Ok(()) => Some(repo_index),
                         Err(err) => {
                             tracing::debug!(
-                                "failed to scope repo git index with untracked files: \
-                                 {}. Will hash per-package.",
+                                "failed to scope repo git index with untracked files: {}. Will \
+                                 hash per-package.",
                                 err,
                             );
                             None

@@ -1052,10 +1052,7 @@ mod tests {
         assert!(scope.should_visit_dir(""), "root dir");
         assert!(scope.should_visit_dir("packages"), "parent of prefix");
         assert!(scope.should_visit_dir("packages/a"), "exact prefix");
-        assert!(
-            scope.should_visit_dir("packages/a/src"),
-            "child of prefix"
-        );
+        assert!(scope.should_visit_dir("packages/a/src"), "child of prefix");
     }
 
     #[test]
