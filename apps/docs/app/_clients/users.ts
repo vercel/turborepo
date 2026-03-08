@@ -52,6 +52,7 @@ import wayfairWhite from "../../public/images/logos/white/wayfair.svg";
 import woocommerceWhite from "../../public/images/logos/white/woocommerce.svg";
 import xataWhite from "../../public/images/logos/white/xata.svg";
 import xiaomiWhite from "../../public/images/logos/white/xiaomi.svg";
+import gridaWhite from "../../public/images/logos/white/grida.svg";
 
 // Color logos (for light mode)
 import adobeColor from "../../public/images/logos/color/adobe.svg";
@@ -104,6 +105,7 @@ import wayfairColor from "../../public/images/logos/color/wayfair.svg";
 import woocommerceColor from "../../public/images/logos/color/woocommerce.svg";
 import xataColor from "../../public/images/logos/color/xata.svg";
 import xiaomiColor from "../../public/images/logos/color/xiaomi.svg";
+import gridaColor from "../../public/images/logos/color/grida.svg";
 
 export interface TurboUser {
   caption: string;
@@ -570,5 +572,15 @@ export const users: Array<TurboUser> = [
     imageColor: makeswiftColor,
     infoLink: "https://www.makeswift.com/",
     pinned: true
+  },
+  {
+    caption: "Grida",
+    imageWhite: gridaWhite,
+    imageColor: gridaColor,
+    infoLink: "https://grida.co/",
+    pinned: true,
+    style: {
+      width: 100
+    }
   }
 ];
