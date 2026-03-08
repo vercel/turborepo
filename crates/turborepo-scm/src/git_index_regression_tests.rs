@@ -116,6 +116,18 @@ impl TestRepo {
         )
         .unwrap()
     }
+
+    fn get_hashes_with_inputs_no_index(
+        &self,
+        package_path: &str,
+        inputs: &[&str],
+        include_default_files: bool,
+    ) -> GitHashes {
+        let scm = self.scm();
+        let pkg = AnchoredSystemPathBuf::from_raw(package_path).unwrap();
+        scm.get_package_file_hashes(&self.root, &pkg, inputs, include_default_files, None, None)
+            .unwrap()
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -732,6 +744,26 @@ fn test_inputs_explicit_include_finds_gitignored_files() {
     let hashes = repo.get_hashes_with_inputs("my-pkg", &["**/*-file"], false);
 
     assert!(hashes.contains_key(&path("dir/ignored-file")));
+}
+
+#[test]
+fn test_inputs_without_defaults_match_no_index_for_tracked_and_parent_files() {
+    let repo = TestRepo::new();
+
+    repo.create_file("my-pkg/committed-file", "committed");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.create_file("new-root-file", "root");
+    repo.commit_all();
+
+    repo.create_file("my-pkg/uncommitted-file", "new");
+
+    let with_index = repo.get_hashes_with_inputs("my-pkg", &["../**/*-file"], false);
+    let without_index = repo.get_hashes_with_inputs_no_index("my-pkg", &["../**/*-file"], false);
+
+    assert_eq!(with_index, without_index);
+    assert!(with_index.contains_key(&path("committed-file")));
+    assert!(with_index.contains_key(&path("uncommitted-file")));
+    assert!(with_index.contains_key(&path("../new-root-file")));
 }
 
 #[test]
