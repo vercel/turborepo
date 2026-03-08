@@ -19,7 +19,7 @@ use crate::{
         PackageDiscoveryBuilder,
     },
     package_json::PackageJson,
-    package_manager::PackageManager,
+    package_manager::{PackageManager, pnpm::PnpmCatalogs},
 };
 
 pub struct PackageGraphBuilder<'a, T> {
@@ -425,6 +425,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         // Without hoisting, the par_iter below would redundantly read the
         // same file N times (once per workspace).
         let link_workspace_packages = package_manager.link_workspace_packages(self.repo_root);
+        let catalogs = package_manager.read_catalogs(self.repo_root);
         // Resolve internal vs external dependencies in parallel. Each
         // Dependencies::new call is read-only on the workspaces map
         // so this is safe. Graph mutation stays sequential below.
@@ -442,6 +443,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                             link_workspace_packages,
                             entry.package_json.all_dependencies(),
                             &path_index,
+                            catalogs.as_ref(),
                         ),
                     )
                 })
@@ -649,6 +651,7 @@ impl Dependencies {
         link_workspace_packages: bool,
         dependencies: I,
         path_index: &WorkspacePathIndex<'_>,
+        catalogs: Option<&PnpmCatalogs>,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
         let workspace_dir = resolved_workspace_json_path
@@ -662,6 +665,7 @@ impl Dependencies {
             workspaces,
             link_workspace_packages,
             path_index,
+            catalogs,
         );
         for (name, version) in dependencies.into_iter() {
             if let Some(workspace) = splitter.is_internal(name, version) {
