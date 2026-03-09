@@ -2644,6 +2644,11 @@ expression: query_output
             },
             {
               "kind": "OBJECT",
+              "name": "TaskPackageDependencyChanged",
+              "ofType": null
+            },
+            {
+              "kind": "OBJECT",
               "name": "TaskGlobalFileChanged",
               "ofType": null
             },
@@ -2763,6 +2768,33 @@ expression: query_output
           "fields": [
             {
               "name": "filePath",
+              "description": null,
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            }
+          ],
+          "inputFields": null,
+          "interfaces": [],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "OBJECT",
+          "name": "TaskPackageDependencyChanged",
+          "description": null,
+          "fields": [
+            {
+              "name": "packageName",
               "description": null,
               "args": [],
               "type": {
