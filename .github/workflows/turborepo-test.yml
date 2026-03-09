@@ -220,18 +220,17 @@ jobs:
           turbo run build:test-archive --filter=@turbo/cli
         shell: bash
 
-  rust_test_macos:
+  build_rust_test_macos:
     runs-on: macos-latest-xlarge
     timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2]
-    name: Rust testing on macos (partition ${{ matrix.partition }}/2)
+    name: Build test artifacts (macos)
     env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
       RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
@@ -252,9 +251,6 @@ jobs:
           node-version: "18.20.2"
           package-install: "false"
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
@@ -266,12 +262,50 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Build and cache test archive
+      - name: Build and archive test binaries
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
           turbo run build:test-archive --filter=@turbo/cli
+        shell: bash
+
+  rust_test_macos:
+    runs-on: macos-latest-xlarge
+    timeout-minutes: 45
+    needs:
+      - find-changes
+      - build_rust_test_macos
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
+    name: Rust testing on macos (partition ${{ matrix.partition }}/2)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
+          package-install: "false"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Restore test archive from cache
+        run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -343,18 +377,17 @@ jobs:
         env:
           INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
 
-  rust_test_ubuntu:
+  build_rust_test_ubuntu:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2]
-    name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
+    name: Build test artifacts (ubuntu)
     env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
       RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
@@ -375,9 +408,6 @@ jobs:
           node-version: "18.20.2"
           package-install: "false"
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
@@ -394,12 +424,55 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Build coverage-instrumented test archive
+      - name: Build and archive coverage test binaries
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
           turbo run build:test-archive-cov --filter=@turbo/cli
+        shell: bash
+
+  rust_test_ubuntu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - find-changes
+      - build_rust_test_ubuntu
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
+    name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
+          package-install: "false"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Restore coverage test archive from cache
+        run: turbo run build:test-archive-cov --filter=@turbo/cli
         shell: bash
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -662,7 +735,9 @@ jobs:
     needs:
       - find-changes
       - turbo_types_check
+      - build_rust_test_macos
       - build_rust_test_windows
+      - build_rust_test_ubuntu
       - rust_test_macos
       - rust_test_windows
       - rust_test_ubuntu
@@ -693,7 +768,9 @@ jobs:
           }
 
           subjob ${{needs.turbo_types_check.result}}
+          subjob ${{needs.build_rust_test_macos.result}}
           subjob ${{needs.build_rust_test_windows.result}}
+          subjob ${{needs.build_rust_test_ubuntu.result}}
           subjob ${{needs.rust_test_macos.result}}
           subjob ${{needs.rust_test_windows.result}}
           subjob ${{needs.rust_test_ubuntu.result}}
