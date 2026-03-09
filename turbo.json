@@ -65,7 +65,8 @@
         "!.next/cache/**/*",
         "!.next/dev/**/*"
       ],
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULTS$", "!README.md"]
     },
     "build:test-archive": {},
     "build:test-archive-cov": {},
