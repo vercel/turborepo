@@ -262,7 +262,9 @@ impl RunBuilder {
         let start_at = Local::now();
 
         let (tracked_index_tx, tracked_index_rx) =
-            tokio::sync::oneshot::channel::<(SCM, Option<turborepo_scm::RepoGitIndex>)>();
+            tokio::sync::oneshot::channel::<Option<turborepo_scm::RepoGitIndex>>();
+        let (git_root_tx, git_root_rx) =
+            tokio::sync::oneshot::channel::<Option<turbopath::AbsoluteSystemPathBuf>>();
         let scm_task = {
             let repo_root = self.repo_root.clone();
             let git_root = self.opts.git_root.clone();
@@ -271,8 +273,11 @@ impl RunBuilder {
                     Some(root) => SCM::new_with_git_root(&repo_root, root),
                     None => SCM::new(&repo_root),
                 };
+                // Send git root immediately so the filesystem walk can start
+                // while index construction continues.
+                let _ = git_root_tx.send(scm.git_root().map(|r| r.to_owned()));
                 let repo_index = scm.build_tracked_repo_index_eager();
-                let _ = tracked_index_tx.send((scm.clone(), repo_index));
+                let _ = tracked_index_tx.send(repo_index);
                 scm
             })
         };
@@ -349,40 +354,39 @@ impl RunBuilder {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
-        // Spawn the untracked-file walk as soon as the package graph is ready.
-        // We use all-package prefixes (superset of any filtered selection) so
-        // the walk can start before filter resolution. Per-package hash queries
-        // use binary-search range scoping, so extra untracked files outside a
-        // queried package are never returned.
+        // Spawn the filesystem walk as soon as the git root is resolved.
+        // It only needs the git root and package prefixes, not the tracked
+        // index. The walk runs in parallel with new_from_gix_index (~267ms).
         let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph);
-        let repo_index_task = if all_prefixes.is_empty() {
+        let walk_task = if all_prefixes.is_empty() {
             None
         } else {
             Some(tokio::task::spawn(async move {
-                let (scm, tracked_index) = match tracked_index_rx.await {
-                    Ok(pair) => pair,
-                    Err(_) => return None,
+                let git_root = match git_root_rx.await {
+                    Ok(Some(root)) => root,
+                    _ => return None,
                 };
-                let tracked_index = tracked_index?;
                 tokio::task::spawn_blocking(move || {
-                    let _span = tracing::info_span!("repo_index_scope_untracked").entered();
-                    let mut repo_index = tracked_index;
-                    match scm.populate_repo_index_untracked(&mut repo_index, &all_prefixes) {
-                        Ok(()) => Some(repo_index),
-                        Err(err) => {
-                            tracing::debug!(
-                                "failed to scope repo git index with untracked files: {}. Will \
-                                 hash per-package.",
-                                err,
-                            );
-                            None
-                        }
-                    }
+                    let _span = tracing::info_span!("walk_candidate_files").entered();
+                    turborepo_scm::walk_candidate_files(git_root.as_std_path(), Some(&all_prefixes))
+                        .ok()
                 })
                 .await
                 .ok()?
             }))
         };
+
+        // Combine the walk results with the tracked index once both are ready.
+        let repo_index_task = walk_task.map(|walk_task| {
+            tokio::task::spawn(async move {
+                let (candidates, tracked_index) = tokio::join!(walk_task, tracked_index_rx);
+                let candidates = candidates.ok()??;
+                let tracked_index = tracked_index.ok()??;
+                let mut repo_index = tracked_index;
+                repo_index.populate_untracked_from_candidates(candidates);
+                Some(repo_index)
+            })
+        });
         let micro_frontend_configs = {
             let _span = tracing::info_span!("micro_frontends_from_disk").entered();
             match MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph) {
