@@ -43,7 +43,35 @@ runs:
       shell: bash
       run: brew install capnp
 
+    - name: "Cache capnproto (Windows)"
+      if: runner.os == 'Windows' && inputs.use-cache == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+      uses: actions/cache@v4
+      id: cache-capnp-windows
+      with:
+        path: C:\capnproto
+        key: ${{ runner.os }}-capnproto-1.1.0
+
     - name: "Setup capnproto for Windows"
+      if: runner.os == 'Windows' && (steps.cache-capnp-windows.outcome == 'skipped' || steps.cache-capnp-windows.outputs.cache-hit != 'true')
+      shell: pwsh
+      run: |
+        $url = "https://capnproto.org/capnproto-c++-win32-1.1.0.zip"
+        $zip = "$env:RUNNER_TEMP\capnproto.zip"
+        Write-Host "Downloading capnproto from $url"
+        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+        Expand-Archive -Path $zip -DestinationPath "C:\capnproto" -Force
+        Remove-Item $zip
+
+    - name: "Add capnproto to PATH (Windows)"
       if: runner.os == 'Windows'
-      shell: bash
-      run: choco install capnproto
+      shell: pwsh
+      run: |
+        $toolsDir = "C:\capnproto\capnproto-tools-win32-1.1.0"
+        if (Test-Path "$toolsDir\capnp.exe") {
+          Write-Host "Adding $toolsDir to PATH"
+          echo "$toolsDir" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        } else {
+          Write-Error "capnp.exe not found at expected path: $toolsDir"
+          Get-ChildItem -Path "C:\capnproto" -Recurse | Select-Object FullName
+          exit 1
+        }
