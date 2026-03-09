@@ -261,24 +261,12 @@ impl RunBuilder {
         );
         let start_at = Local::now();
 
-        let (tracked_index_tx, tracked_index_rx) =
-            tokio::sync::oneshot::channel::<Option<turborepo_scm::RepoGitIndex>>();
-        let (git_root_tx, git_root_rx) =
-            tokio::sync::oneshot::channel::<Option<turbopath::AbsoluteSystemPathBuf>>();
         let scm_task = {
             let repo_root = self.repo_root.clone();
             let git_root = self.opts.git_root.clone();
-            tokio::task::spawn_blocking(move || {
-                let scm = match git_root {
-                    Some(root) => SCM::new_with_git_root(&repo_root, root),
-                    None => SCM::new(&repo_root),
-                };
-                // Send git root immediately so the filesystem walk can start
-                // while index construction continues.
-                let _ = git_root_tx.send(scm.git_root().map(|r| r.to_owned()));
-                let repo_index = scm.build_tracked_repo_index_eager();
-                let _ = tracked_index_tx.send(repo_index);
-                scm
+            tokio::task::spawn_blocking(move || match git_root {
+                Some(root) => SCM::new_with_git_root(&repo_root, root),
+                None => SCM::new(&repo_root),
             })
         };
         let package_json_path = self.repo_root.join_component("package.json");
@@ -354,39 +342,21 @@ impl RunBuilder {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
-        // Spawn the filesystem walk as soon as the git root is resolved.
-        // It only needs the git root and package prefixes, not the tracked
-        // index. The walk runs in parallel with new_from_gix_index (~267ms).
-        let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph);
-        let walk_task = if all_prefixes.is_empty() {
-            None
-        } else {
-            Some(tokio::task::spawn(async move {
-                let git_root = match git_root_rx.await {
-                    Ok(Some(root)) => root,
-                    _ => return None,
-                };
-                tokio::task::spawn_blocking(move || {
-                    let _span = tracing::info_span!("walk_candidate_files").entered();
-                    turborepo_scm::walk_candidate_files(git_root.as_std_path(), Some(&all_prefixes))
-                        .ok()
-                })
-                .await
-                .ok()?
+        // Build the repo index using three parallel git subprocesses
+        // (ls-tree, diff-index, ls-files). This is faster than gix-index +
+        // filesystem walk because git's internal implementations are optimized
+        // for large repos (~350ms vs ~475ms on 185K files).
+        let scm = scm_task
+            .instrument(tracing::info_span!("scm_task_await"))
+            .await
+            .expect("detecting scm panicked");
+        let repo_index_task = {
+            let scm = scm.clone();
+            Some(tokio::task::spawn_blocking(move || {
+                let _span = tracing::info_span!("build_repo_index_subprocesses").entered();
+                scm.build_repo_index_from_subprocesses()
             }))
         };
-
-        // Combine the walk results with the tracked index once both are ready.
-        let repo_index_task = walk_task.map(|walk_task| {
-            tokio::task::spawn(async move {
-                let (candidates, tracked_index) = tokio::join!(walk_task, tracked_index_rx);
-                let candidates = candidates.ok()??;
-                let tracked_index = tracked_index.ok()??;
-                let mut repo_index = tracked_index;
-                repo_index.populate_untracked_from_candidates(candidates);
-                Some(repo_index)
-            })
-        });
         let micro_frontend_configs = {
             let _span = tracing::info_span!("micro_frontends_from_disk").entered();
             match MicrofrontendsConfigs::from_disk(&self.repo_root, &pkg_dep_graph) {
@@ -496,13 +466,6 @@ impl RunBuilder {
             let _span = tracing::info_span!("turbo_json_preload").entered();
             turbo_json_loader.preload_all();
         }
-
-        // Await the SCM background task. The tracked index was already
-        // forwarded to the untracked walk via oneshot channel above.
-        let scm = scm_task
-            .instrument(tracing::info_span!("scm_task_await"))
-            .await
-            .expect("detecting scm panicked");
 
         let filtered_pkgs = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();

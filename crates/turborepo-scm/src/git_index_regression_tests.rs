@@ -49,6 +49,14 @@ impl TestRepo {
         test_utils::commit_all(&self.root);
     }
 
+    fn stage_file(&self, rel_path: &str) {
+        test_utils::require_git_cmd(&self.root, &["add", rel_path]);
+    }
+
+    fn git_cmd(&self, args: &[&str]) {
+        test_utils::require_git_cmd(&self.root, args);
+    }
+
     fn scm(&self) -> SCM {
         let scm = SCM::new(&self.root);
         assert!(matches!(scm, SCM::Git(_)), "expected Git SCM, got Manual");
@@ -59,6 +67,12 @@ impl TestRepo {
         self.scm()
             .build_repo_index_eager()
             .expect("failed to build repo index")
+    }
+
+    fn build_subprocess_index(&self) -> RepoGitIndex {
+        self.scm()
+            .build_repo_index_from_subprocesses()
+            .expect("failed to build subprocess repo index")
     }
 
     fn build_split_repo_index(&self, prefixes: &[&str]) -> RepoGitIndex {
@@ -1627,4 +1641,469 @@ fn test_nested_gitignore_scoping() {
     let web_no_index = repo.get_hashes_no_index("apps/web");
     assert_eq!(ui, ui_no_index, "packages/ui mismatch");
     assert_eq!(web, web_no_index, "apps/web mismatch");
+}
+
+// Category 7: Index construction equivalence tests
+//
+// These tests establish ground truth for the per-package hashes produced by
+// the current index construction path (gix-index + walk). Any alternative
+// construction (e.g., subprocess-based) must produce identical results.
+// The tests use get_hashes_no_index (subprocess fallback) as an independent
+// oracle to verify correctness.
+
+#[test]
+fn test_index_equivalence_with_staged_changes() {
+    // A file that is `git add`-ed but not committed should still produce
+    // correct hashes. The index reflects the staged content; any alternative
+    // construction must account for this.
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "original");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // Modify and stage (but don't commit)
+    repo.create_file("pkg-a/src/index.ts", "modified and staged");
+    repo.stage_file("pkg-a/src/index.ts");
+
+    let index_hashes = repo.get_hashes("pkg-a");
+    let no_index_hashes = repo.get_hashes_no_index("pkg-a");
+
+    assert_eq!(
+        index_hashes, no_index_hashes,
+        "staged file: index path must match no-index subprocess path"
+    );
+
+    // The hash must reflect the staged content, not the original
+    let original_hash = {
+        repo.create_file("pkg-a/src/index.ts", "original");
+        let h = repo.get_hashes_no_index("pkg-a");
+        // Restore staged content on disk
+        repo.create_file("pkg-a/src/index.ts", "modified and staged");
+        h
+    };
+    assert_ne!(
+        index_hashes.get(&path("src/index.ts")),
+        original_hash.get(&path("src/index.ts")),
+        "staged file hash must differ from original committed content"
+    );
+}
+
+#[test]
+fn test_index_equivalence_with_staged_new_file() {
+    // A brand new file that is staged but not committed.
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("pkg-a/src/new-file.ts", "brand new");
+    repo.stage_file("pkg-a/src/new-file.ts");
+
+    let index_hashes = repo.get_hashes("pkg-a");
+    let no_index_hashes = repo.get_hashes_no_index("pkg-a");
+
+    assert_eq!(
+        index_hashes, no_index_hashes,
+        "staged new file: index must match no-index"
+    );
+    assert!(
+        index_hashes.contains_key(&path("src/new-file.ts")),
+        "staged new file must appear in hashes"
+    );
+}
+
+#[test]
+fn test_index_equivalence_with_deleted_files() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/src/helper.ts", "helper");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // Delete a tracked file without staging the deletion
+    repo.delete_file("pkg-a/src/helper.ts");
+
+    let index_hashes = repo.get_hashes("pkg-a");
+    let no_index_hashes = repo.get_hashes_no_index("pkg-a");
+
+    assert_eq!(
+        index_hashes, no_index_hashes,
+        "deleted file: index must match no-index"
+    );
+    assert!(
+        !index_hashes.contains_key(&path("src/helper.ts")),
+        "deleted file must not appear in hashes"
+    );
+    assert!(
+        index_hashes.contains_key(&path("src/index.ts")),
+        "non-deleted file must still appear"
+    );
+}
+
+#[test]
+fn test_index_equivalence_with_staged_deletion() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/src/helper.ts", "helper");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // Stage the deletion
+    repo.delete_file("pkg-a/src/helper.ts");
+    repo.git_cmd(&["add", "pkg-a/src/helper.ts"]);
+
+    let index_hashes = repo.get_hashes("pkg-a");
+    let no_index_hashes = repo.get_hashes_no_index("pkg-a");
+
+    assert_eq!(
+        index_hashes, no_index_hashes,
+        "staged deletion: index must match no-index"
+    );
+    assert!(!index_hashes.contains_key(&path("src/helper.ts")));
+}
+
+#[test]
+fn test_index_equivalence_with_modified_unstaged_files() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "original");
+    repo.create_file("pkg-b/src/index.ts", "b original");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // Modify without staging
+    repo.create_file("pkg-a/src/index.ts", "modified but not staged");
+
+    let index_a = repo.get_hashes("pkg-a");
+    let no_index_a = repo.get_hashes_no_index("pkg-a");
+    assert_eq!(
+        index_a, no_index_a,
+        "modified unstaged: pkg-a index must match no-index"
+    );
+
+    // pkg-b should be unaffected
+    let index_b = repo.get_hashes("pkg-b");
+    let no_index_b = repo.get_hashes_no_index("pkg-b");
+    assert_eq!(
+        index_b, no_index_b,
+        "unmodified pkg-b: index must match no-index"
+    );
+}
+
+#[test]
+fn test_index_equivalence_comprehensive() {
+    // Combined scenario: staged changes, unstaged modifications, deleted
+    // files, untracked files, and gitignored files all at once.
+    let repo = TestRepo::new();
+
+    repo.create_gitignore(".gitignore", "*.log\ndist/\n");
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/src/utils.ts", "utils");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/src/index.ts", "b");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.create_file("pkg-c/src/index.ts", "c");
+    repo.create_file("pkg-c/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // pkg-a: staged modification
+    repo.create_file("pkg-a/src/index.ts", "a modified and staged");
+    repo.stage_file("pkg-a/src/index.ts");
+
+    // pkg-a: unstaged modification
+    repo.create_file("pkg-a/src/utils.ts", "utils modified");
+
+    // pkg-a: untracked file
+    repo.create_file("pkg-a/src/new.ts", "new");
+
+    // pkg-a: gitignored files (should not appear)
+    repo.create_file("pkg-a/debug.log", "log");
+    repo.create_file("pkg-a/dist/bundle.js", "bundle");
+
+    // pkg-b: deleted file
+    repo.delete_file("pkg-b/src/index.ts");
+
+    // pkg-c: completely clean (no changes)
+
+    for pkg in &["pkg-a", "pkg-b", "pkg-c"] {
+        let index_hashes = repo.get_hashes(pkg);
+        let no_index_hashes = repo.get_hashes_no_index(pkg);
+        assert_eq!(
+            index_hashes, no_index_hashes,
+            "{}: comprehensive equivalence failed",
+            pkg
+        );
+    }
+
+    // Specific assertions
+    let a = repo.get_hashes("pkg-a");
+    assert!(
+        a.contains_key(&path("src/new.ts")),
+        "untracked file present"
+    );
+    assert!(
+        !a.contains_key(&path("debug.log")),
+        "gitignored log excluded"
+    );
+    assert!(
+        !a.contains_key(&path("dist/bundle.js")),
+        "gitignored dist excluded"
+    );
+
+    let b = repo.get_hashes("pkg-b");
+    assert!(
+        !b.contains_key(&path("src/index.ts")),
+        "deleted file excluded"
+    );
+}
+
+#[test]
+fn test_index_equivalence_no_commits_graceful() {
+    // A fresh git init with no commits. The index path should not crash.
+    let (tmp, root) = test_utils::tmp_dir();
+    test_utils::init_repo(&root);
+
+    let full = root.join_unix_path(path("pkg-a/src/index.ts"));
+    full.ensure_dir().unwrap();
+    full.create_with_contents("a").unwrap();
+    let pkg_json = root.join_unix_path(path("pkg-a/package.json"));
+    pkg_json.create_with_contents("{}").unwrap();
+
+    let scm = SCM::new(&root);
+
+    // build_repo_index_eager should handle no-commit repos gracefully
+    // (either return None or return a valid index)
+    let index = scm.build_repo_index_eager();
+
+    // Whether it returns Some or None, it should not panic.
+    // If it returns Some, the hashes should be reasonable.
+    if let Some(ref idx) = index {
+        let pkg = turbopath::AnchoredSystemPathBuf::from_raw("pkg-a").unwrap();
+        let hashes = scm
+            .get_package_file_hashes::<&str>(&root, &pkg, &[], false, None, Some(idx))
+            .unwrap();
+        // With no commits, git has no HEAD, so behavior depends on
+        // whether the index has been populated by `git add`.
+        // The key property: it should not crash.
+        let _ = hashes;
+    }
+
+    drop(tmp);
+}
+
+#[test]
+fn test_index_equivalence_many_packages_mixed_state() {
+    // 6 packages with different states, verifying all produce correct hashes.
+    let repo = TestRepo::new();
+
+    for i in 1..=6 {
+        repo.create_file(&format!("pkg-{}/src/index.ts", i), &format!("pkg {}", i));
+        repo.create_file(&format!("pkg-{}/package.json", i), "{}");
+    }
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // pkg-1: clean
+    // pkg-2: unstaged modification
+    repo.create_file("pkg-2/src/index.ts", "modified");
+    // pkg-3: staged modification
+    repo.create_file("pkg-3/src/index.ts", "staged");
+    repo.stage_file("pkg-3/src/index.ts");
+    // pkg-4: untracked file added
+    repo.create_file("pkg-4/src/new.ts", "new");
+    // pkg-5: file deleted
+    repo.delete_file("pkg-5/src/index.ts");
+    // pkg-6: staged new file + untracked file
+    repo.create_file("pkg-6/src/staged-new.ts", "staged new");
+    repo.stage_file("pkg-6/src/staged-new.ts");
+    repo.create_file("pkg-6/src/untracked.ts", "untracked");
+
+    for i in 1..=6 {
+        let pkg = format!("pkg-{}", i);
+        let index_hashes = repo.get_hashes(&pkg);
+        let no_index_hashes = repo.get_hashes_no_index(&pkg);
+        assert_eq!(
+            index_hashes, no_index_hashes,
+            "{}: mixed state equivalence failed",
+            pkg
+        );
+    }
+}
+
+// Category 8: Subprocess index equivalence tests
+//
+// These tests verify that build_repo_index_from_subprocesses produces
+// identical per-package hashes as the gix-index path, across all the
+// edge cases from Category 7.
+
+#[test]
+fn test_subprocess_index_matches_gix_clean_repo() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/src/index.ts", "b");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    let gix_index = repo.build_repo_index();
+    let sub_index = repo.build_subprocess_index();
+
+    for pkg in &["pkg-a", "pkg-b"] {
+        let gix_h = repo.get_hashes_with_index(pkg, &gix_index);
+        let sub_h = repo.get_hashes_with_index(pkg, &sub_index);
+        let no_h = repo.get_hashes_no_index(pkg);
+        assert_eq!(gix_h, sub_h, "{}: subprocess must match gix", pkg);
+        assert_eq!(gix_h, no_h, "{}: both must match no-index", pkg);
+    }
+}
+
+#[test]
+fn test_subprocess_index_with_staged_changes() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "original");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("pkg-a/src/index.ts", "modified and staged");
+    repo.stage_file("pkg-a/src/index.ts");
+
+    let gix_hashes = repo.get_hashes("pkg-a");
+    let sub_index = repo.build_subprocess_index();
+    let sub_hashes = repo.get_hashes_with_index("pkg-a", &sub_index);
+    let no_index_hashes = repo.get_hashes_no_index("pkg-a");
+
+    assert_eq!(
+        sub_hashes, no_index_hashes,
+        "subprocess must match no-index for staged files"
+    );
+    assert_eq!(
+        gix_hashes, no_index_hashes,
+        "gix must match no-index for staged files"
+    );
+}
+
+#[test]
+fn test_subprocess_index_with_deleted_and_modified() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/src/helper.ts", "helper");
+    repo.create_file("pkg-b/src/index.ts", "b");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    repo.delete_file("pkg-a/src/helper.ts");
+    repo.create_file("pkg-b/src/index.ts", "b modified");
+
+    let sub_index = repo.build_subprocess_index();
+
+    for pkg in &["pkg-a", "pkg-b"] {
+        let sub_h = repo.get_hashes_with_index(pkg, &sub_index);
+        let no_h = repo.get_hashes_no_index(pkg);
+        assert_eq!(sub_h, no_h, "{}: subprocess must match no-index", pkg);
+    }
+
+    let a = repo.get_hashes_with_index("pkg-a", &sub_index);
+    assert!(
+        !a.contains_key(&path("src/helper.ts")),
+        "deleted file excluded"
+    );
+    assert!(
+        a.contains_key(&path("src/index.ts")),
+        "surviving file present"
+    );
+}
+
+#[test]
+fn test_subprocess_index_with_untracked_and_gitignore() {
+    let repo = TestRepo::new();
+
+    repo.create_gitignore(".gitignore", "*.log\nnode_modules/\ndist/\n");
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("pkg-a/src/new.ts", "new");
+    repo.create_file("pkg-a/debug.log", "log");
+    repo.create_file("pkg-a/node_modules/dep/index.js", "dep");
+    repo.create_file("pkg-a/dist/out.js", "out");
+
+    let sub_index = repo.build_subprocess_index();
+    let sub_h = repo.get_hashes_with_index("pkg-a", &sub_index);
+    let no_h = repo.get_hashes_no_index("pkg-a");
+
+    assert_eq!(sub_h, no_h, "subprocess must match no-index with gitignore");
+    assert!(
+        sub_h.contains_key(&path("src/new.ts")),
+        "untracked included"
+    );
+    assert!(
+        !sub_h.contains_key(&path("debug.log")),
+        "gitignored excluded"
+    );
+    assert!(
+        !sub_h.contains_key(&path("node_modules/dep/index.js")),
+        "node_modules excluded"
+    );
+    assert!(!sub_h.contains_key(&path("dist/out.js")), "dist excluded");
+}
+
+#[test]
+fn test_subprocess_index_comprehensive_mixed_state() {
+    let repo = TestRepo::new();
+
+    repo.create_gitignore(".gitignore", "*.log\n");
+    for i in 1..=6 {
+        repo.create_file(&format!("pkg-{}/src/index.ts", i), &format!("pkg {}", i));
+        repo.create_file(&format!("pkg-{}/package.json", i), "{}");
+    }
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // pkg-1: clean
+    // pkg-2: unstaged modification
+    repo.create_file("pkg-2/src/index.ts", "modified");
+    // pkg-3: staged modification
+    repo.create_file("pkg-3/src/index.ts", "staged");
+    repo.stage_file("pkg-3/src/index.ts");
+    // pkg-4: untracked + gitignored
+    repo.create_file("pkg-4/src/new.ts", "new");
+    repo.create_file("pkg-4/debug.log", "log");
+    // pkg-5: deleted
+    repo.delete_file("pkg-5/src/index.ts");
+    // pkg-6: staged new + untracked
+    repo.create_file("pkg-6/src/staged-new.ts", "staged new");
+    repo.stage_file("pkg-6/src/staged-new.ts");
+    repo.create_file("pkg-6/src/untracked.ts", "untracked");
+
+    let sub_index = repo.build_subprocess_index();
+
+    for i in 1..=6 {
+        let pkg = format!("pkg-{}", i);
+        let sub_h = repo.get_hashes_with_index(&pkg, &sub_index);
+        let no_h = repo.get_hashes_no_index(&pkg);
+        assert_eq!(
+            sub_h, no_h,
+            "{}: subprocess comprehensive equivalence failed",
+            pkg
+        );
+    }
 }

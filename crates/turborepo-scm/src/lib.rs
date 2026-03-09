@@ -402,6 +402,28 @@ impl SCM {
         }
     }
 
+    /// Build the full repo index (tracked + untracked) using three parallel git
+    /// subprocesses. Faster than gix-index + filesystem walk for large repos.
+    pub fn build_repo_index_from_subprocesses(&self) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new_from_subprocesses(git) {
+                Ok(index) => {
+                    debug!("repo git index built from subprocesses");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index from subprocesses: {}. Will hash \
+                         per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
     pub fn populate_repo_index_untracked(
         &self,
         repo_index: &mut RepoGitIndex,

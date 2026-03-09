@@ -174,6 +174,55 @@ impl RepoGitIndex {
         })
     }
 
+    /// Build the index by running three git subprocesses in parallel:
+    /// `git ls-tree -r HEAD` (blob OIDs), `git diff-index HEAD`
+    /// (modified/deleted), and `git ls-files --others` (untracked). This is
+    /// faster than `new_from_gix_index`
+    /// + filesystem walk because git's internal implementations are highly
+    ///   optimized.
+    #[tracing::instrument(skip(git))]
+    pub fn new_from_subprocesses(git: &GitRepo) -> Result<Self, Error> {
+        use std::thread;
+
+        let git1 = git.clone();
+        let git2 = git.clone();
+        let git3 = git.clone();
+
+        let ls_tree_handle = thread::spawn(move || git1.git_ls_tree_repo_root_sorted());
+        let diff_index_handle = thread::spawn(move || git2.git_diff_index_repo_root());
+        let ls_files_handle = thread::spawn(move || git3.git_ls_files_untracked());
+
+        let ls_tree_hashes = ls_tree_handle
+            .join()
+            .map_err(|_| Error::git_error("git ls-tree thread panicked"))??;
+        let mut status_entries = diff_index_handle
+            .join()
+            .map_err(|_| Error::git_error("git diff-index thread panicked"))??;
+        let untracked_files = ls_files_handle
+            .join()
+            .map_err(|_| Error::git_error("git ls-files thread panicked"))??;
+
+        for path in untracked_files {
+            status_entries.push(RepoStatusEntry {
+                path,
+                is_delete: false,
+            });
+        }
+        status_entries.sort_by(|a, b| a.path.cmp(&b.path));
+
+        debug!(
+            "built repo git index (subprocesses): clean_count={}, status_count={}",
+            ls_tree_hashes.len(),
+            status_entries.len(),
+        );
+
+        Ok(Self {
+            ls_tree_hashes,
+            status_entries,
+            untracked_entries_populated: true,
+        })
+    }
+
     #[tracing::instrument(skip(self, git))]
     pub fn populate_all_untracked(&mut self, git: &GitRepo) -> Result<(), Error> {
         self.populate_untracked(git, None)
