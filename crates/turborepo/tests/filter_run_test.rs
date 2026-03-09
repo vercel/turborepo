@@ -70,3 +70,94 @@ fn test_filter_nonexistent_package_errors() {
         "expected package not found error: {stderr}"
     );
 }
+
+#[test]
+fn test_exclude_only_filter_includes_root_tasks() {
+    // Regression test for https://github.com/vercel/turborepo/issues/8672
+    // When using an exclude-only filter like --filter=!my-app, root tasks
+    // defined with //#task syntax should still be included.
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    // Replace root package.json "something" script with a non-recursive command
+    // (the default script calls "turbo run build" which triggers recursion detection)
+    let pkg_json_path = tempdir.path().join("package.json");
+    let pkg_json = r#"{
+  "name": "monorepo",
+  "scripts": {
+    "something": "echo root-task-executed"
+  },
+  "packageManager": "npm@10.5.0",
+  "workspaces": [
+    "apps/**",
+    "packages/**"
+  ]
+}"#;
+    fs::write(&pkg_json_path, pkg_json).unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "fix root script", "--quiet", "--allow-empty"],
+    );
+
+    // Use --dry=json to check which packages are in scope
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "something", "--filter=!my-app", "--dry=json"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "dry run failed: stdout={stdout}, stderr={stderr}"
+    );
+    // The root task //#something should be in scope even with exclude-only filter
+    assert!(
+        stdout.contains("//#something"),
+        "root task //#something should be in scope with exclude-only filter: {stdout}"
+    );
+}
+
+#[test]
+fn test_no_filter_includes_root_tasks() {
+    // Verify that root tasks work without any filter (baseline behavior)
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    // Replace root package.json "something" script with a non-recursive command
+    let pkg_json_path = tempdir.path().join("package.json");
+    let pkg_json = r#"{
+  "name": "monorepo",
+  "scripts": {
+    "something": "echo root-task-executed"
+  },
+  "packageManager": "npm@10.5.0",
+  "workspaces": [
+    "apps/**",
+    "packages/**"
+  ]
+}"#;
+    fs::write(&pkg_json_path, pkg_json).unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(
+        tempdir.path(),
+        &["commit", "-m", "fix root script", "--quiet", "--allow-empty"],
+    );
+
+    // Use --dry=json to check scope without executing tasks
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "something", "--dry=json"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "dry run failed: stdout={stdout}, stderr={stderr}"
+    );
+    // The root task //#something should appear in the dry run output
+    assert!(
+        stdout.contains("//#something"),
+        "root task //#something should be in scope without filter: {stdout}"
+    );
+}

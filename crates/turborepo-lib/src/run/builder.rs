@@ -204,7 +204,27 @@ impl RunBuilder {
             root_turbo_json,
         )?;
 
-        if is_all_packages {
+        // When using exclude-only filters (e.g. --filter=!docs), the semantic is
+        // "all packages minus the excluded ones". Root tasks should still be
+        // included in this case, just as they are when no filter is specified.
+        let filters = opts.scope_opts.get_filters();
+        let has_exclude_only_filters = !filters.is_empty()
+            && filters.iter().all(|f| f.starts_with('!'));
+
+        // Include root tasks when either no filter is specified (is_all_packages)
+        // or when only exclude filters are used and the root is not explicitly
+        // excluded by the filter.
+        let should_include_root_tasks = is_all_packages
+            || (has_exclude_only_filters
+                && !filtered_pkgs.contains_key(&PackageName::Root)
+                && !filters.iter().any(|f| {
+                    // Check if any exclude filter explicitly targets the root
+                    // package (e.g. --filter=!//). The root package name is "//".
+                    let pattern = f.strip_prefix('!').unwrap_or(f);
+                    pattern == PackageName::Root.as_ref()
+                }));
+
+        if should_include_root_tasks {
             for target in opts.run_opts.tasks.iter() {
                 let mut task_name = TaskName::from(target.as_str());
                 // If it's not a package task, we convert to a root task
@@ -222,7 +242,9 @@ impl RunBuilder {
                     break;
                 }
             }
+        }
 
+        if is_all_packages {
             // When all tasks use package#task syntax, we can narrow the package
             // set to only the referenced packages rather than the entire monorepo.
             let task_names: Vec<TaskName> = opts
