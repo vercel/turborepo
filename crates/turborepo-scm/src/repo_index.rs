@@ -21,6 +21,18 @@ pub struct RepoGitIndex {
 }
 
 impl RepoGitIndex {
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(
+        ls_tree_hashes: SortedGitHashes,
+        status_entries: Vec<RepoStatusEntry>,
+    ) -> Self {
+        Self {
+            ls_tree_hashes,
+            status_entries,
+            untracked_entries_populated: true,
+        }
+    }
+
     #[tracing::instrument(skip(git))]
     pub fn new(git: &GitRepo) -> Result<Self, Error> {
         let mut index = Self::new_tracked(git)?;
@@ -171,6 +183,117 @@ impl RepoGitIndex {
             ls_tree_hashes,
             status_entries,
             untracked_entries_populated: false,
+        })
+    }
+
+    /// Build the index from parallel git subprocesses + a race for untracked
+    /// file discovery.
+    ///
+    /// Runs four operations concurrently:
+    /// - `git ls-tree -r HEAD` for committed blob OIDs
+    /// - `git diff-index HEAD` for modified/deleted files
+    /// - `walk_candidate_files` (8-thread ignore-crate walk)
+    /// - `git ls-files --others` (single-threaded git subprocess)
+    ///
+    /// The two untracked approaches race. On macOS, the multi-threaded walk
+    /// typically wins (~440ms vs ~530ms). On Linux, the git subprocess wins
+    /// (~230ms vs ~470ms). Using whichever finishes first guarantees no
+    /// regressions on any platform.
+    #[tracing::instrument(skip(git, prefixes))]
+    pub fn new_from_subprocess_and_walk(
+        git: &GitRepo,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Result<Self, Error> {
+        use std::{sync::mpsc, thread};
+
+        enum UntrackedResult {
+            /// Direct untracked file list from `git ls-files --others`
+            LsFiles(Result<Vec<RelativeUnixPathBuf>, Error>),
+            /// All candidate files (tracked + untracked) from the walk;
+            /// must be filtered against ls_tree to find untracked
+            Walk(Result<Vec<RelativeUnixPathBuf>, Error>),
+        }
+
+        let git1 = git.clone();
+        let git2 = git.clone();
+        let git3 = git.clone();
+        let walk_root = git.root.as_std_path().to_path_buf();
+        let walk_prefixes: Vec<_> = prefixes.to_vec();
+
+        let ls_tree_handle = thread::spawn(move || git1.git_ls_tree_repo_root_sorted());
+        let diff_index_handle = thread::spawn(move || git2.git_diff_index_repo_root());
+
+        // Race: spawn both untracked discovery methods, use whichever
+        // finishes first.
+        let (untracked_tx, untracked_rx) = mpsc::channel();
+
+        let tx1 = untracked_tx.clone();
+        let _ls_files_handle = thread::spawn(move || {
+            let result = git3.git_ls_files_untracked();
+            let _ = tx1.send(UntrackedResult::LsFiles(result));
+        });
+
+        let tx2 = untracked_tx;
+        let _walk_handle = thread::spawn(move || {
+            let result = walk_candidate_files(&walk_root, Some(&walk_prefixes));
+            let _ = tx2.send(UntrackedResult::Walk(result));
+        });
+
+        let ls_tree_hashes = ls_tree_handle
+            .join()
+            .map_err(|_| Error::git_error("git ls-tree thread panicked"))??;
+        let mut status_entries = diff_index_handle
+            .join()
+            .map_err(|_| Error::git_error("git diff-index thread panicked"))??;
+
+        // Use whichever untracked result arrives first.
+        let untracked_winner = untracked_rx
+            .recv()
+            .map_err(|_| Error::git_error("both untracked discovery threads failed"))?;
+
+        match untracked_winner {
+            UntrackedResult::LsFiles(result) => {
+                let untracked_files = result?;
+                debug!(
+                    "untracked race winner: git ls-files ({} files)",
+                    untracked_files.len()
+                );
+                for path in untracked_files {
+                    status_entries.push(RepoStatusEntry {
+                        path,
+                        is_delete: false,
+                    });
+                }
+            }
+            UntrackedResult::Walk(result) => {
+                let candidates = result?;
+                debug!(
+                    "untracked race winner: walk ({} candidates)",
+                    candidates.len()
+                );
+                let untracked =
+                    filter_untracked_from_candidates(candidates, &ls_tree_hashes, &status_entries);
+                for path in untracked {
+                    status_entries.push(RepoStatusEntry {
+                        path,
+                        is_delete: false,
+                    });
+                }
+            }
+        }
+
+        status_entries.sort_by(|a, b| a.path.cmp(&b.path));
+
+        debug!(
+            "built repo git index (subprocess + walk race): clean_count={}, status_count={}",
+            ls_tree_hashes.len(),
+            status_entries.len(),
+        );
+
+        Ok(Self {
+            ls_tree_hashes,
+            status_entries,
+            untracked_entries_populated: true,
         })
     }
 

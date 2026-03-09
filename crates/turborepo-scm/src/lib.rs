@@ -402,6 +402,34 @@ impl SCM {
         }
     }
 
+    /// Build the full repo index (tracked + untracked) using parallel git
+    /// subprocesses for the tracked index, and a race between
+    /// `walk_candidate_files` and `git ls-files --others` for untracked
+    /// discovery. The race ensures optimal performance on both macOS
+    /// (where the walk wins) and Linux (where ls-files wins).
+    pub fn build_repo_index_from_subprocesses(
+        &self,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new_from_subprocess_and_walk(git, prefixes) {
+                Ok(index) => {
+                    debug!("repo git index built from subprocess + walk race");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index from subprocesses: {}. Will hash \
+                         per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
     pub fn populate_repo_index_untracked(
         &self,
         repo_index: &mut RepoGitIndex,
