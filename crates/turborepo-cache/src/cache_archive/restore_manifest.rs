@@ -97,6 +97,27 @@ impl RestoreManifest {
         Ok(())
     }
 
+    /// Check every file in the manifest against disk. If ALL match,
+    /// return the list of file paths (suitable for returning from fetch
+    /// without opening the tar). Returns None if any file is stale.
+    pub fn validate_all(
+        &self,
+        anchor: &AbsoluteSystemPath,
+    ) -> Option<Vec<turbopath::AnchoredSystemPathBuf>> {
+        let mut paths = Vec::with_capacity(self.files.len());
+        for rel_path in self.files.keys() {
+            let Ok(anchored) = turbopath::AnchoredSystemPathBuf::from_raw(rel_path) else {
+                return None;
+            };
+            let disk_path = anchor.resolve(&anchored);
+            if !self.file_matches(rel_path, &disk_path) {
+                return None;
+            }
+            paths.push(anchored);
+        }
+        Some(paths)
+    }
+
     pub fn read(path: &AbsoluteSystemPath) -> Option<Self> {
         let contents = std::fs::read_to_string(path.as_path()).ok()?;
         serde_json::from_str(&contents).ok()
