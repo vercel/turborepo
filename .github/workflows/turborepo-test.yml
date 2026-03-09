@@ -226,7 +226,11 @@ jobs:
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on macos
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
+    name: Rust testing on macos (partition ${{ matrix.partition }}/2)
     env:
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
@@ -277,7 +281,7 @@ jobs:
       - name: Run tests
         timeout-minutes: 45
         run: |
-          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/2
         shell: bash
 
   rust_test_windows:
@@ -345,7 +349,11 @@ jobs:
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on ubuntu
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
+    name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
     env:
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
@@ -404,7 +412,8 @@ jobs:
           eval $(cargo llvm-cov show-env --export-prefix)
           cargo nextest run \
             --archive-file cli/nextest-archive-cov.tar.zst \
-            --no-fail-fast
+            --no-fail-fast \
+            --partition hash:${{ matrix.partition }}/2
           cargo llvm-cov report \
             --lcov \
             --output-path coverage.lcov
@@ -414,7 +423,7 @@ jobs:
         if: ${{ hashFiles('coverage.lcov') != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
+          name: coverage-${{ matrix.partition }}
           path: coverage.lcov
           retention-days: 1
 
@@ -437,12 +446,19 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Download coverage artifact
+      - name: Download coverage artifacts
         id: download-coverage
         uses: actions/download-artifact@v4
         continue-on-error: true
         with:
-          name: coverage
+          pattern: coverage-*
+          path: coverage-parts
+
+      - name: Merge coverage files
+        if: ${{ steps.download-coverage.outcome == 'success' }}
+        run: |
+          sudo apt-get install -y lcov
+          lcov $(find coverage-parts -name '*.lcov' -printf '-a %p ') -o coverage.lcov
 
       - name: Transform coverage
         if: ${{ steps.download-coverage.outcome == 'success' && !github.event.pull_request.head.repo.fork }}
