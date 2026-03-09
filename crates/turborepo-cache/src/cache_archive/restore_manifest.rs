@@ -12,6 +12,10 @@ use crate::CacheError;
 pub struct RestoreManifest {
     /// path (relative to anchor) -> (size_bytes, mtime_nanos, mode)
     pub files: HashMap<String, FileEntry>,
+    /// Insertion-order list of paths so validate_all can return files in
+    /// the same order the archive was originally built.
+    #[serde(default)]
+    pub order: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -19,6 +23,8 @@ pub struct FileEntry {
     pub size: u64,
     pub mtime_nanos: i128,
     pub mode: u32,
+    #[serde(default)]
+    pub is_dir: bool,
 }
 
 impl RestoreManifest {
@@ -38,6 +44,10 @@ impl RestoreManifest {
         let Ok(meta) = disk_path.symlink_metadata() else {
             return false;
         };
+
+        if expected.is_dir {
+            return meta.is_dir();
+        }
 
         if !meta.is_file() {
             return false;
@@ -86,15 +96,61 @@ impl RestoreManifest {
         #[cfg(not(unix))]
         let mode = 0o644;
 
+        self.order.push(path.clone());
         self.files.insert(
             path,
             FileEntry {
                 size: meta.len(),
                 mtime_nanos,
                 mode,
+                is_dir: false,
             },
         );
         Ok(())
+    }
+
+    /// Record a directory entry in the manifest.
+    pub fn record_dir(&mut self, path: String) {
+        self.order.push(path.clone());
+        self.files.insert(
+            path,
+            FileEntry {
+                size: 0,
+                mtime_nanos: 0,
+                mode: 0,
+                is_dir: true,
+            },
+        );
+    }
+
+    /// Check every file in the manifest against disk. If ALL match,
+    /// return the list of file paths (suitable for returning from fetch
+    /// without opening the tar). Returns None if any file is stale.
+    pub fn validate_all(
+        &self,
+        anchor: &AbsoluteSystemPath,
+    ) -> Option<Vec<turbopath::AnchoredSystemPathBuf>> {
+        // Use the order vec when present so the returned list matches
+        // the original archive order. Fall back to HashMap keys for
+        // manifests written before order tracking was added.
+        let keys: Vec<&str> = if self.order.len() == self.files.len() {
+            self.order.iter().map(|s| s.as_str()).collect()
+        } else {
+            self.files.keys().map(|s| s.as_str()).collect()
+        };
+
+        let mut paths = Vec::with_capacity(keys.len());
+        for rel_path in keys {
+            let Ok(anchored) = turbopath::AnchoredSystemPathBuf::from_raw(rel_path) else {
+                return None;
+            };
+            let disk_path = anchor.resolve(&anchored);
+            if !self.file_matches(rel_path, &disk_path) {
+                return None;
+            }
+            paths.push(anchored);
+        }
+        Some(paths)
     }
 
     pub fn read(path: &AbsoluteSystemPath) -> Option<Self> {
