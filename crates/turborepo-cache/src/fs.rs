@@ -196,14 +196,13 @@ impl FSCache {
             cache_item.add_file(anchor, file)?;
 
             let source_path = anchor.resolve(file);
-            // Only record regular files in the manifest (not dirs/symlinks)
-            if source_path
-                .symlink_metadata()
-                .map(|m| m.is_file())
-                .unwrap_or(false)
-            {
-                let unix_path = file.to_unix();
-                let _ = manifest.record_file(unix_path.as_str().to_owned(), &source_path);
+            let unix_path = file.to_unix();
+            if let Ok(m) = source_path.symlink_metadata() {
+                if m.is_file() {
+                    let _ = manifest.record_file(unix_path.as_str().to_owned(), &source_path);
+                } else if m.is_dir() {
+                    manifest.record_dir(unix_path.as_str().to_owned());
+                }
             }
         }
 
