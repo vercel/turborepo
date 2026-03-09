@@ -1,5 +1,3 @@
-1
-
 # Turborepo Codemods
 
 Turborepo provides Codemod transformations to help upgrade your Turborepo codebase.
