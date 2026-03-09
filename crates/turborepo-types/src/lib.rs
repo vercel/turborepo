@@ -409,6 +409,10 @@ pub struct RunCacheOpts {
     /// complete successfully. Controlled by the `errorsOnlyShowHash` future
     /// flag.
     pub errors_only_show_hash: bool,
+    /// When true, always write `.turbo/turbo-<task>.log` files even when
+    /// caching is disabled for a task. Set when `--summarize` is enabled so
+    /// that the run summary always has log files to reference.
+    pub always_write_log_file: bool,
 }
 
 /// Options for scope resolution.

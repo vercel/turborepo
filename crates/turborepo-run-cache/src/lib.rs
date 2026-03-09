@@ -111,6 +111,10 @@ pub struct RunCache {
     /// complete successfully. Controlled by the `errorsOnlyShowHash` future
     /// flag.
     errors_only_show_hash: bool,
+    /// When true, always write `.turbo/turbo-<task>.log` files even when
+    /// caching is disabled for a task. Set when `--summarize` is enabled so
+    /// that the run summary always has log files to reference.
+    always_write_log_file: bool,
 }
 
 /// Trait used to output cache information to user
@@ -145,6 +149,7 @@ impl RunCache {
             output_watcher,
             ui,
             errors_only_show_hash: run_cache_opts.errors_only_show_hash,
+            always_write_log_file: run_cache_opts.always_write_log_file,
         }
     }
 
@@ -263,7 +268,9 @@ impl TaskCache {
     pub fn output_writer<W: Write>(&self, writer: W) -> Result<LogWriter<W>, Error> {
         let mut log_writer = LogWriter::default();
 
-        if !self.caching_disabled && !self.run_cache.writes_disabled {
+        if (!self.caching_disabled && !self.run_cache.writes_disabled)
+            || self.run_cache.always_write_log_file
+        {
             log_writer.with_log_file(&self.log_file_path)?;
         }
 
