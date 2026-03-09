@@ -12,7 +12,7 @@
 
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
-use crate::{GitHashes, RepoGitIndex, SCM, test_utils};
+use crate::{GitHashes, RepoGitIndex, SCM, test_utils, walk_candidate_files};
 
 fn path(s: &str) -> RelativeUnixPathBuf {
     RelativeUnixPathBuf::new(s).unwrap()
@@ -59,6 +59,23 @@ impl TestRepo {
         self.scm()
             .build_repo_index_eager()
             .expect("failed to build repo index")
+    }
+
+    fn build_split_repo_index(&self, prefixes: &[&str]) -> RepoGitIndex {
+        let scm = self.scm();
+        let prefix_paths = prefixes
+            .iter()
+            .map(|prefix| path(prefix))
+            .collect::<Vec<_>>();
+
+        let candidates = walk_candidate_files(self.root.as_std_path(), Some(&prefix_paths))
+            .expect("walk candidates failed");
+
+        let mut index = scm
+            .build_tracked_repo_index_eager()
+            .expect("failed to build tracked repo index");
+        index.populate_untracked_from_candidates(candidates);
+        index
     }
 
     fn build_scoped_repo_index(&self, prefixes: &[&str]) -> RepoGitIndex {
@@ -1419,6 +1436,157 @@ fn test_superset_walk_untracked_in_other_pkg_does_not_affect_queried_pkg() {
     let pkg_b_hashes = repo.get_hashes_with_index("pkg-b", &superset_v2);
     assert!(pkg_b_hashes.contains_key(&path("extra4.ts")));
     assert!(pkg_b_hashes.contains_key(&path("extra5.ts")));
+}
+
+// Category 6: Split walk/filter regression tests
+//
+// These tests validate that the two-phase approach (walk_candidate_files
+// followed by populate_untracked_from_candidates) produces identical
+// results to the original single-pass find_untracked_files.
+
+#[test]
+fn test_split_walk_matches_original_path() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "a code");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/src/index.ts", "b code");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("pkg-a/untracked.ts", "new a");
+    repo.create_file("pkg-b/untracked.ts", "new b");
+
+    let original = repo.build_scoped_repo_index(&["pkg-a", "pkg-b"]);
+    let split = repo.build_split_repo_index(&["pkg-a", "pkg-b"]);
+
+    let orig_a = repo.get_hashes_with_index("pkg-a", &original);
+    let split_a = repo.get_hashes_with_index("pkg-a", &split);
+    assert_eq!(orig_a, split_a, "pkg-a: split walk must match original");
+
+    let orig_b = repo.get_hashes_with_index("pkg-b", &original);
+    let split_b = repo.get_hashes_with_index("pkg-b", &split);
+    assert_eq!(orig_b, split_b, "pkg-b: split walk must match original");
+
+    let no_idx_a = repo.get_hashes_no_index("pkg-a");
+    let no_idx_b = repo.get_hashes_no_index("pkg-b");
+    assert_eq!(split_a, no_idx_a, "pkg-a: split vs no-index");
+    assert_eq!(split_b, no_idx_b, "pkg-b: split vs no-index");
+}
+
+#[test]
+fn test_split_walk_respects_gitignore() {
+    let repo = TestRepo::new();
+
+    repo.create_gitignore(".gitignore", "*.log\nbuild/\nnode_modules/\n");
+    repo.create_gitignore("pkg-b/.gitignore", "tmp/\n");
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/src/index.ts", "b");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("pkg-a/debug.log", "log");
+    repo.create_file("pkg-a/build/out.js", "out");
+    repo.create_file("pkg-a/node_modules/dep/index.js", "dep");
+    repo.create_file("pkg-b/tmp/cache.dat", "cache");
+    repo.create_file("pkg-b/build/out.js", "out");
+    repo.create_file("pkg-a/new.ts", "new");
+    repo.create_file("pkg-b/new.ts", "new");
+
+    let original = repo.build_scoped_repo_index(&["pkg-a", "pkg-b"]);
+    let split = repo.build_split_repo_index(&["pkg-a", "pkg-b"]);
+
+    let orig_a = repo.get_hashes_with_index("pkg-a", &original);
+    let split_a = repo.get_hashes_with_index("pkg-a", &split);
+    assert_eq!(
+        orig_a, split_a,
+        "pkg-a: split must match original with gitignore"
+    );
+    assert!(split_a.contains_key(&path("new.ts")));
+    assert!(!split_a.contains_key(&path("debug.log")));
+    assert!(!split_a.contains_key(&path("build/out.js")));
+    assert!(!split_a.contains_key(&path("node_modules/dep/index.js")));
+
+    let orig_b = repo.get_hashes_with_index("pkg-b", &original);
+    let split_b = repo.get_hashes_with_index("pkg-b", &split);
+    assert_eq!(
+        orig_b, split_b,
+        "pkg-b: split must match original with gitignore"
+    );
+    assert!(split_b.contains_key(&path("new.ts")));
+    assert!(!split_b.contains_key(&path("tmp/cache.dat")));
+}
+
+#[test]
+fn test_split_walk_with_untracked_gitignore() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    repo.create_gitignore("pkg-a/.gitignore", "generated/\n");
+    repo.create_file("pkg-a/generated/output.js", "out");
+    repo.create_file("pkg-a/new.ts", "new");
+
+    let original = repo.build_scoped_repo_index(&["pkg-a"]);
+    let split = repo.build_split_repo_index(&["pkg-a"]);
+
+    let orig_a = repo.get_hashes_with_index("pkg-a", &original);
+    let split_a = repo.get_hashes_with_index("pkg-a", &split);
+
+    assert!(split_a.contains_key(&path("new.ts")));
+    assert!(orig_a.contains_key(&path("new.ts")));
+    assert!(
+        !split_a.contains_key(&path("generated/output.js")),
+        "split walk should respect untracked .gitignore"
+    );
+    assert!(
+        !orig_a.contains_key(&path("generated/output.js")),
+        "original walk should respect untracked .gitignore"
+    );
+    assert!(split_a.contains_key(&path(".gitignore")));
+    assert!(orig_a.contains_key(&path(".gitignore")));
+}
+
+#[test]
+fn test_split_walk_nested_gitignore_scoping() {
+    let repo = TestRepo::new();
+
+    repo.create_gitignore(".gitignore", "*.log\n");
+    repo.create_gitignore("pkg-a/.gitignore", "output/\n");
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/src/index.ts", "b");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("pkg-a/output/bundle.js", "a bundle");
+    repo.create_file("pkg-b/output/bundle.js", "b bundle");
+
+    let split = repo.build_split_repo_index(&["pkg-a", "pkg-b"]);
+
+    let split_a = repo.get_hashes_with_index("pkg-a", &split);
+    assert!(
+        !split_a.contains_key(&path("output/bundle.js")),
+        "pkg-a output/ should be ignored by pkg-a/.gitignore"
+    );
+
+    let split_b = repo.get_hashes_with_index("pkg-b", &split);
+    assert!(
+        split_b.contains_key(&path("output/bundle.js")),
+        "pkg-b output/ should NOT be ignored — the output/ rule is scoped to pkg-a"
+    );
+
+    let no_idx_a = repo.get_hashes_no_index("pkg-a");
+    let no_idx_b = repo.get_hashes_no_index("pkg-b");
+    assert_eq!(split_a, no_idx_a, "pkg-a split vs no-index");
+    assert_eq!(split_b, no_idx_b, "pkg-b split vs no-index");
 }
 
 #[test]

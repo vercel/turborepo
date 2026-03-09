@@ -179,6 +179,41 @@ impl RepoGitIndex {
         self.populate_untracked(git, None)
     }
 
+    /// Populate untracked entries from pre-walked candidate files.
+    ///
+    /// This is the fast path used when the filesystem walk ran in parallel
+    /// with index construction. The candidates are filtered against the
+    /// tracked index to identify truly untracked files.
+    pub fn populate_untracked_from_candidates(&mut self, candidates: Vec<RelativeUnixPathBuf>) {
+        if self.untracked_entries_populated {
+            return;
+        }
+
+        let before_status_count = self.status_entries.len();
+        let untracked = filter_untracked_from_candidates(
+            candidates,
+            &self.ls_tree_hashes,
+            &self.status_entries,
+        );
+        for path in untracked {
+            self.status_entries.push(RepoStatusEntry {
+                path,
+                is_delete: false,
+            });
+        }
+
+        self.status_entries.sort_by(|a, b| a.path.cmp(&b.path));
+        self.untracked_entries_populated = true;
+
+        debug!(
+            "populated repo git index from pre-walked candidates: added_count={}, status_count={}",
+            self.status_entries
+                .len()
+                .saturating_sub(before_status_count),
+            self.status_entries.len(),
+        );
+    }
+
     #[tracing::instrument(skip(self, git, prefixes))]
     pub fn populate_untracked_for_prefixes(
         &mut self,
@@ -343,6 +378,163 @@ impl RepoGitIndex {
 
         (known_hashes, to_hash)
     }
+}
+
+/// Walk the working tree to collect candidate files (all non-gitignored
+/// files within scope). This is the I/O-bound phase that can run without
+/// the git index.
+///
+/// Uses the `ignore` crate's native gitignore support to read .gitignore
+/// files from disk as the walker descends. This matches standard git
+/// behavior and handles tracked, untracked, and nested .gitignore files.
+///
+/// Returns all candidate paths relative to `git_root`. The caller must
+/// filter these against the tracked index to identify truly untracked files.
+#[tracing::instrument(skip(git_root, prefixes))]
+pub fn walk_candidate_files(
+    git_root: &std::path::Path,
+    prefixes: Option<&[RelativeUnixPathBuf]>,
+) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+    use std::sync::mpsc;
+
+    use ignore::WalkBuilder;
+
+    let root = std::sync::Arc::new(git_root.to_path_buf());
+    let scope = std::sync::Arc::new(UntrackedScope::new(prefixes));
+
+    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
+
+    let walker = WalkBuilder::new(root.as_path())
+        .follow_links(false)
+        .git_ignore(true)
+        .git_exclude(true)
+        .git_global(true)
+        .require_git(false)
+        .ignore(false)
+        .parents(false)
+        .hidden(false)
+        .filter_entry({
+            let root = root.clone();
+            let scope = scope.clone();
+            move |entry| {
+                if entry.file_name() == ".git" {
+                    return false;
+                }
+                let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
+                let path = entry.path();
+
+                let rel_path = match path.strip_prefix(root.as_path()) {
+                    Ok(rel) => rel,
+                    Err(_) => return false,
+                };
+                #[cfg(windows)]
+                let rel_path_owned = rel_path.to_string_lossy().replace('\\', "/");
+                #[cfg(windows)]
+                let rel_path = rel_path_owned.as_str();
+                #[cfg(not(windows))]
+                let rel_path = match rel_path.to_str() {
+                    Some(rel) => rel,
+                    None => return false,
+                };
+
+                if is_dir {
+                    scope.should_visit_dir(rel_path)
+                } else {
+                    scope.should_consider_file(rel_path, entry.file_name() == ".gitignore")
+                }
+            }
+        })
+        .threads(rayon::current_num_threads().min(8))
+        .build_parallel();
+
+    struct FlushOnDrop {
+        buf: Vec<RelativeUnixPathBuf>,
+        tx: mpsc::Sender<Vec<RelativeUnixPathBuf>>,
+    }
+
+    impl Drop for FlushOnDrop {
+        fn drop(&mut self) {
+            if !self.buf.is_empty() {
+                let batch = std::mem::take(&mut self.buf);
+                let _ = self.tx.send(batch);
+            }
+        }
+    }
+
+    walker.run(|| {
+        let root = root.clone();
+        let mut guard = FlushOnDrop {
+            buf: Vec::new(),
+            tx: tx.clone(),
+        };
+
+        Box::new(move |entry| {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => return ignore::WalkState::Continue,
+            };
+
+            if entry.file_type().is_some_and(|ft| ft.is_dir()) {
+                return ignore::WalkState::Continue;
+            }
+            if entry.file_type().is_some_and(|ft| ft.is_symlink()) {
+                return ignore::WalkState::Continue;
+            }
+
+            let abs_path = entry.into_path();
+            let rel_path = match abs_path.strip_prefix(root.as_path()) {
+                Ok(rel) => rel,
+                Err(_) => return ignore::WalkState::Continue,
+            };
+
+            let unix_str = match rel_path.to_str() {
+                Some(s) => s,
+                None => return ignore::WalkState::Continue,
+            };
+
+            #[cfg(windows)]
+            let unix_str_owned = unix_str.replace('\\', "/");
+            #[cfg(windows)]
+            let unix_str: &str = &unix_str_owned;
+
+            if let Ok(path) = RelativeUnixPathBuf::new(unix_str) {
+                guard.buf.push(path);
+            }
+
+            ignore::WalkState::Continue
+        })
+    });
+    drop(tx);
+
+    let mut candidates: Vec<RelativeUnixPathBuf> = Vec::new();
+    for batch in rx.iter() {
+        candidates.extend(batch);
+    }
+
+    Ok(candidates)
+}
+
+/// Filter pre-walked candidate files against the git index to identify
+/// truly untracked files. This is the CPU-bound phase that runs after
+/// the tracked index is ready.
+fn filter_untracked_from_candidates(
+    candidates: Vec<RelativeUnixPathBuf>,
+    ls_tree_hashes: &SortedGitHashes,
+    status_entries: &[RepoStatusEntry],
+) -> Vec<RelativeUnixPathBuf> {
+    candidates
+        .into_iter()
+        .filter(|path| {
+            let s = path.as_str();
+            let in_ls_tree = ls_tree_hashes
+                .binary_search_by(|(p, _)| p.as_str().cmp(s))
+                .is_ok();
+            let in_status = status_entries
+                .binary_search_by(|e| e.path.as_str().cmp(s))
+                .is_ok();
+            !in_ls_tree && !in_status
+        })
+        .collect()
 }
 
 /// Walk the working tree to find untracked files (files on disk that are

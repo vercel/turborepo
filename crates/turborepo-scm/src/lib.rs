@@ -34,7 +34,7 @@ mod git_index_regression_tests;
 #[cfg(test)]
 mod test_utils;
 
-pub use repo_index::RepoGitIndex;
+pub use repo_index::{RepoGitIndex, walk_candidate_files};
 pub use turborepo_hash::OidHash;
 pub use worktree::WorktreeInfo;
 
@@ -309,6 +309,13 @@ impl SCM {
 
     pub fn is_manual(&self) -> bool {
         matches!(self, SCM::Manual)
+    }
+
+    pub fn git_root(&self) -> Option<&AbsoluteSystemPath> {
+        match self {
+            SCM::Git(git) => Some(&git.root),
+            SCM::Manual => None,
+        }
     }
 
     /// Build a repo-wide git index that caches `git ls-tree` and `git status`
