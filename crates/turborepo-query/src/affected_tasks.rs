@@ -1,9 +1,14 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    sync::Arc,
+};
 
+use petgraph::Direction;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_engine::TaskNode;
 use turborepo_repository::change_mapper::{AllPackageChangeReason, PackageInclusionReason};
 use turborepo_task_id::TaskId;
+// Program trait provides is_match() on wax::Glob
 use wax::Program;
 
 use crate::{Error, QueryRun};
@@ -19,6 +24,10 @@ pub enum TaskChangeReason {
         task_name: String,
         package_name: String,
     },
+    /// A package-level dependency changed. Unlike `DependencyTaskChanged`,
+    /// there is no specific upstream task — the package graph edge triggered
+    /// this.
+    PackageDependencyChanged { package_name: String },
     /// A global file (package.json, turbo.json, etc.) changed, affecting all
     /// tasks.
     GlobalFileChanged { file_path: String },
@@ -35,12 +44,30 @@ pub struct AffectedTask {
     pub reason: TaskChangeReason,
 }
 
+/// Pre-compiled glob patterns for efficient matching against many files.
+struct CompiledGlobs {
+    inclusions: Vec<wax::Glob<'static>>,
+    exclusions: Vec<wax::Glob<'static>>,
+    default: bool,
+    has_traversal_globs: bool,
+}
+
 /// Computes which tasks are affected by changes between two git refs.
 ///
-/// This walks the task graph (not just the package graph) and checks each
-/// task's specific `inputs` configuration against the changed files. A task
-/// is only reported as affected if its inputs actually changed, or if one
-/// of its upstream task dependencies is affected.
+/// # Algorithm
+///
+/// 1. **All-packages check**: If `calculate_affected_packages` reports a global
+///    change (lockfile, global dep, missing git ref), every task in the engine
+///    is returned immediately with the corresponding reason.
+///
+/// 2. **Direct input matching**: For each affected package, each task's
+///    `inputs` globs are checked against the changed files. Only tasks whose
+///    inputs actually match a changed file are marked affected. Tasks without a
+///    definition are conservatively included.
+///
+/// 3. **Graph propagation**: BFS from directly affected tasks through the task
+///    dependency graph in O(V + E). If task A depends on task B and B is
+///    affected, A is marked affected with a `DependencyTaskChanged` reason.
 pub fn calculate_affected_tasks(
     run: &Arc<dyn QueryRun>,
     base: Option<String>,
@@ -111,8 +138,8 @@ pub fn calculate_affected_tasks(
 
     let pkg_dep_graph = run.pkg_dep_graph();
 
-    // Phase 1: Direct task affectedness — check each task's inputs against changed
-    // files
+    // Phase 1: Direct task affectedness — check each task's inputs against
+    // changed files.
     let mut affected: HashMap<TaskId<'static>, TaskChangeReason> = HashMap::new();
 
     for (pkg_name, reason) in &affected_packages {
@@ -121,20 +148,19 @@ pub fn calculate_affected_tasks(
         };
         let pkg_path = pkg_info.package_path();
         let pkg_unix_path = pkg_path.to_unix();
+        let pkg_prefix = pkg_unix_path.to_string();
 
         // Get files that changed within this package's directory
         let pkg_changed_files: Vec<&AnchoredSystemPathBuf> = changed_files
             .iter()
             .filter(|f| {
                 let file_str = f.to_unix().to_string();
-                let pkg_str = pkg_unix_path.to_string();
-                if pkg_str.is_empty() {
-                    // Root package — all non-package files are relevant.
-                    // The engine only includes tasks actually in the graph,
-                    // so this is safe.
+                if pkg_prefix.is_empty() {
+                    // Root package — all files are potentially relevant.
+                    // The task's input globs will filter further.
                     true
                 } else {
-                    file_str.starts_with(&format!("{pkg_str}/"))
+                    file_str.starts_with(&format!("{pkg_prefix}/"))
                 }
             })
             .collect();
@@ -149,146 +175,134 @@ pub fn calculate_affected_tasks(
                 continue;
             }
 
-            let task_def = engine.task_definition(task_id);
-
-            match reason {
-                PackageInclusionReason::FileChanged { file } => {
-                    if let Some(def) = task_def {
-                        if file_matches_task_inputs(file, &pkg_unix_path, &def.inputs) {
-                            affected.insert(
-                                task_id.clone(),
-                                TaskChangeReason::FileChanged {
-                                    file_path: file.to_string(),
-                                },
-                            );
-                        }
-                    } else {
-                        // No task definition means we can't check inputs; assume affected
+            // Check all changed files in this package against the task's input
+            // globs. This handles all PackageInclusionReason variants uniformly:
+            // regardless of why the package was included, a task is only
+            // directly affected if its inputs actually changed.
+            if let Some(def) = engine.task_definition(task_id) {
+                let compiled = compile_globs(&def.inputs);
+                for file in &pkg_changed_files {
+                    if file_matches_compiled_inputs(file, &pkg_unix_path, &compiled) {
                         affected.insert(
                             task_id.clone(),
                             TaskChangeReason::FileChanged {
                                 file_path: file.to_string(),
                             },
                         );
+                        break;
                     }
                 }
-                PackageInclusionReason::DependencyChanged { .. }
-                | PackageInclusionReason::DependentChanged { .. }
-                | PackageInclusionReason::LockfileChanged { .. }
-                | PackageInclusionReason::ConservativeRootLockfileChanged
-                | PackageInclusionReason::InFilteredDirectory { .. }
-                | PackageInclusionReason::IncludedByFilter { .. }
-                | PackageInclusionReason::RootTask { .. } => {
-                    // These reasons mean the package is affected but we need to check
-                    // if this specific task's inputs actually changed by looking at
-                    // all changed files for this package.
-                    if let Some(def) = task_def {
-                        for file in &pkg_changed_files {
-                            if file_matches_task_inputs(file, &pkg_unix_path, &def.inputs) {
-                                affected
-                                    .insert(task_id.clone(), reason_from_package_reason(reason));
-                                break;
-                            }
-                        }
-                    } else {
-                        // No task definition — conservatively mark as affected
-                        affected.insert(task_id.clone(), reason_from_package_reason(reason));
-                    }
-                }
-                PackageInclusionReason::All(_) => {
-                    unreachable!("all-packages case handled above")
-                }
+            } else {
+                // No task definition — conservatively mark as affected
+                affected.insert(task_id.clone(), reason_from_package_reason(reason));
             }
         }
     }
 
-    // Phase 2: Propagate through the task dependency graph.
-    // If task A depends on task B and B is affected, A is also affected.
-    // We do a reverse topological walk so dependencies are processed before
-    // dependents.
-    let mut propagated: HashMap<TaskId<'static>, TaskChangeReason> = HashMap::new();
-    propagated.extend(affected.iter().map(|(k, v)| (k.clone(), v.clone())));
+    // Phase 2: Propagate through the task dependency graph via BFS.
+    // If task B depends on task A and A is affected, B is also affected.
+    // Single-pass BFS from seed tasks in the Incoming direction is O(V + E).
+    let task_graph = engine.task_graph();
+    let task_lookup = engine.task_lookup();
 
-    // Keep propagating until stable
-    let mut changed = true;
-    while changed {
-        changed = false;
-        for task_id in engine.task_ids() {
-            if propagated.contains_key(task_id) {
+    let mut affected_indices: HashSet<petgraph::graph::NodeIndex> = HashSet::new();
+    let mut queue: VecDeque<petgraph::graph::NodeIndex> = VecDeque::new();
+
+    for task_id in affected.keys() {
+        if let Some(&idx) = task_lookup.get(task_id) {
+            affected_indices.insert(idx);
+            queue.push_back(idx);
+        }
+    }
+
+    while let Some(idx) = queue.pop_front() {
+        // Incoming neighbors = tasks that depend on this task
+        for dependent_idx in task_graph.neighbors_directed(idx, Direction::Incoming) {
+            if !affected_indices.insert(dependent_idx) {
                 continue;
             }
+            queue.push_back(dependent_idx);
 
-            // Check if any dependency of this task is affected
-            if let Some(deps) = engine.dependencies(task_id) {
-                for dep in deps {
-                    if let TaskNode::Task(dep_id) = dep {
-                        if propagated.contains_key(dep_id) {
-                            propagated.insert(
-                                task_id.clone(),
-                                TaskChangeReason::DependencyTaskChanged {
-                                    task_name: dep_id.task().to_string(),
-                                    package_name: dep_id.package().to_string(),
-                                },
-                            );
-                            changed = true;
-                            break;
-                        }
-                    }
-                }
+            if let (Some(TaskNode::Task(dependent_id)), Some(TaskNode::Task(cause_id))) = (
+                task_graph.node_weight(dependent_idx),
+                task_graph.node_weight(idx),
+            ) {
+                affected.insert(
+                    dependent_id.clone(),
+                    TaskChangeReason::DependencyTaskChanged {
+                        task_name: cause_id.task().to_string(),
+                        package_name: cause_id.package().to_string(),
+                    },
+                );
             }
         }
     }
 
-    Ok(propagated
+    Ok(affected
         .into_iter()
         .map(|(task_id, reason)| AffectedTask { task_id, reason })
         .collect())
 }
 
-/// Checks whether a changed file matches a task's input configuration.
-///
-/// The file path is repo-root-relative (an `AnchoredSystemPathBuf`).
-/// The task inputs have globs that are package-relative, with `$TURBO_ROOT$`
-/// references already resolved to relative paths like `../../jest.config.js`.
-fn file_matches_task_inputs(
+/// Pre-compiles a task's input globs for efficient matching against many files.
+fn compile_globs(inputs: &turborepo_types::TaskInputs) -> CompiledGlobs {
+    let mut inclusions = Vec::new();
+    let mut exclusions = Vec::new();
+    let mut has_traversal_globs = false;
+
+    for glob_str in &inputs.globs {
+        if let Some(stripped) = glob_str.strip_prefix('!') {
+            if stripped.starts_with("../") {
+                has_traversal_globs = true;
+            }
+            if let Ok(glob) = wax::Glob::new(stripped) {
+                exclusions.push(glob.into_owned());
+            }
+        } else {
+            if glob_str.starts_with("../") {
+                has_traversal_globs = true;
+            }
+            if let Ok(glob) = wax::Glob::new(glob_str) {
+                inclusions.push(glob.into_owned());
+            }
+        }
+    }
+
+    CompiledGlobs {
+        inclusions,
+        exclusions,
+        default: inputs.default,
+        has_traversal_globs,
+    }
+}
+
+/// Checks whether a changed file matches pre-compiled task input globs.
+fn file_matches_compiled_inputs(
     file: &AnchoredSystemPathBuf,
     package_unix_path: &RelativeUnixPathBuf,
-    inputs: &turborepo_types::TaskInputs,
+    compiled: &CompiledGlobs,
 ) -> bool {
     let file_unix = file.to_unix().to_string();
     let pkg_prefix = package_unix_path.to_string();
 
-    // Make file relative to the package directory for matching
     let file_relative_to_pkg = if pkg_prefix.is_empty() {
         file_unix.clone()
     } else if let Some(stripped) = file_unix.strip_prefix(&format!("{pkg_prefix}/")) {
         stripped.to_string()
     } else {
-        // File is not inside this package directory. It could still match
-        // a $TURBO_ROOT$ glob that traverses up (e.g., "../../jest.config.js").
-        // We'll check against the full package-relative path interpretation.
-        // For $TURBO_ROOT$ globs, the resolved path is relative to the package dir
-        // (e.g., "../../jest.config.js"). The file is relative to repo root.
-        // We need to check if any glob matches the file when interpreted from
-        // the package's perspective.
-        //
-        // Construct the relative path from the package to this file:
-        // If package is at "services/my-svc" and file is "jest.config.js",
-        // then relative path from package to file is "../../jest.config.js".
-        // This matches "$TURBO_ROOT$/jest.config.js" which resolves to
-        // "../../jest.config.js" for a package at depth 2.
-        //
-        // For simplicity and correctness, we check all globs against both
-        // the package-relative path and a constructed relative path.
         String::new()
     };
 
-    let (inclusions, exclusions) = partition_globs(&inputs.globs);
-
-    // For files outside the package dir, check if any glob with path
-    // traversal (../) could match
+    // For files outside the package dir, only check if there are globs
+    // with path traversal (../) that could reach outside the package.
+    // These come from $TURBO_ROOT$ references resolved to relative paths
+    // like "../../jest.config.js". Without such globs, a file in a sibling
+    // package should never match.
     if file_relative_to_pkg.is_empty() && !pkg_prefix.is_empty() {
-        // Build relative path from package to the file
+        if !compiled.has_traversal_globs {
+            return false;
+        }
+
         let depth = pkg_prefix.matches('/').count() + 1;
         let mut relative = String::new();
         for _ in 0..depth {
@@ -296,24 +310,77 @@ fn file_matches_task_inputs(
         }
         relative.push_str(&file_unix);
 
-        return check_file_against_globs(&relative, &inclusions, &exclusions, inputs.default);
+        return check_compiled_globs(
+            &relative,
+            &compiled.inclusions,
+            &compiled.exclusions,
+            compiled.default,
+        );
     }
 
-    check_file_against_globs(
+    check_compiled_globs(
         &file_relative_to_pkg,
-        &inclusions,
-        &exclusions,
-        inputs.default,
+        &compiled.inclusions,
+        &compiled.exclusions,
+        compiled.default,
     )
 }
 
+fn check_compiled_globs(
+    file_path: &str,
+    inclusions: &[wax::Glob<'static>],
+    exclusions: &[wax::Glob<'static>],
+    default: bool,
+) -> bool {
+    for pattern in exclusions {
+        if pattern.is_match(file_path) {
+            return false;
+        }
+    }
+
+    if default {
+        return true;
+    }
+
+    if inclusions.is_empty() && exclusions.is_empty() {
+        return true;
+    }
+
+    for pattern in inclusions {
+        if pattern.is_match(file_path) {
+            return true;
+        }
+    }
+
+    false
+}
+
+/// Checks whether a changed file matches a task's input configuration.
+///
+/// This compiles globs on each call — use `file_matches_compiled_inputs` with
+/// `compile_globs` in hot loops to avoid repeated compilation.
+///
+/// Note: This is intentionally a separate implementation from the input
+/// matching in `turborepo-task-hash`. That system walks the filesystem for
+/// cache hashing. Here we check a pre-computed set of changed files from SCM,
+/// which only needs to know whether *any* changed file matches.
+#[cfg(test)]
+fn file_matches_task_inputs(
+    file: &AnchoredSystemPathBuf,
+    package_unix_path: &RelativeUnixPathBuf,
+    inputs: &turborepo_types::TaskInputs,
+) -> bool {
+    let compiled = compile_globs(inputs);
+    file_matches_compiled_inputs(file, package_unix_path, &compiled)
+}
+
+#[cfg(test)]
 fn check_file_against_globs(
     file_path: &str,
     inclusions: &[&str],
     exclusions: &[&str],
     default: bool,
 ) -> bool {
-    // Check exclusions first — if file matches any exclusion, it's not an input
     for pattern in exclusions {
         if glob_matches(pattern, file_path) {
             return false;
@@ -321,19 +388,13 @@ fn check_file_against_globs(
     }
 
     if default {
-        // $TURBO_DEFAULT$ means "all git-tracked files" are included.
-        // If we got past exclusions, the file is an input.
         return true;
     }
 
-    // No $TURBO_DEFAULT$ — but if there are no globs at all, the task has
-    // no inputs configuration, which means "all files are inputs" (the
-    // default behavior when no `inputs` key is in turbo.json).
     if inclusions.is_empty() && exclusions.is_empty() {
         return true;
     }
 
-    // Explicit inclusion globs — file must match one of them
     for pattern in inclusions {
         if glob_matches(pattern, file_path) {
             return true;
@@ -343,6 +404,7 @@ fn check_file_against_globs(
     false
 }
 
+#[cfg(test)]
 fn partition_globs<'a>(globs: &'a [String]) -> (Vec<&'a str>, Vec<&'a str>) {
     let mut inclusions = Vec::new();
     let mut exclusions = Vec::new();
@@ -356,9 +418,8 @@ fn partition_globs<'a>(globs: &'a [String]) -> (Vec<&'a str>, Vec<&'a str>) {
     (inclusions, exclusions)
 }
 
+#[cfg(test)]
 fn glob_matches(pattern: &str, path: &str) -> bool {
-    // Use wax for glob matching. If the pattern fails to compile,
-    // conservatively return false (don't match).
     wax::Glob::new(pattern)
         .map(|glob| glob.is_match(path))
         .unwrap_or(false)
@@ -367,14 +428,12 @@ fn glob_matches(pattern: &str, path: &str) -> bool {
 fn reason_from_package_reason(reason: &PackageInclusionReason) -> TaskChangeReason {
     match reason {
         PackageInclusionReason::DependencyChanged { dependency } => {
-            TaskChangeReason::DependencyTaskChanged {
-                task_name: String::new(),
+            TaskChangeReason::PackageDependencyChanged {
                 package_name: dependency.to_string(),
             }
         }
         PackageInclusionReason::DependentChanged { dependent } => {
-            TaskChangeReason::DependencyTaskChanged {
-                task_name: String::new(),
+            TaskChangeReason::PackageDependencyChanged {
                 package_name: dependent.to_string(),
             }
         }
@@ -403,5 +462,230 @@ fn reason_from_package_reason(reason: &PackageInclusionReason) -> TaskChangeReas
         PackageInclusionReason::All(_) => {
             unreachable!("All case handled separately")
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
+    use turborepo_types::TaskInputs;
+
+    use super::{
+        check_file_against_globs, file_matches_task_inputs, glob_matches, partition_globs,
+    };
+
+    // ── glob_matches ──
+
+    #[test]
+    fn glob_matches_simple_extension() {
+        assert!(glob_matches("**/*.ts", "src/index.ts"));
+        assert!(glob_matches("**/*.ts", "deeply/nested/file.ts"));
+        assert!(!glob_matches("**/*.ts", "src/index.js"));
+    }
+
+    #[test]
+    fn glob_matches_exact_file() {
+        assert!(glob_matches("README.md", "README.md"));
+        assert!(!glob_matches("README.md", "src/README.md"));
+    }
+
+    #[test]
+    fn glob_matches_double_star() {
+        assert!(glob_matches("**/*.md", "README.md"));
+        assert!(glob_matches("**/*.md", "docs/guide.md"));
+        assert!(!glob_matches("**/*.md", "src/index.ts"));
+    }
+
+    #[test]
+    fn glob_matches_invalid_pattern_returns_false() {
+        // Invalid glob patterns should not panic, just return false
+        assert!(!glob_matches("[invalid", "anything"));
+    }
+
+    // ── partition_globs ──
+
+    #[test]
+    fn partition_splits_inclusions_and_exclusions() {
+        let globs = vec![
+            "**/*.ts".to_string(),
+            "!**/*.test.ts".to_string(),
+            "!**/*.md".to_string(),
+            "src/**".to_string(),
+        ];
+        let (inc, exc) = partition_globs(&globs);
+        assert_eq!(inc, vec!["**/*.ts", "src/**"]);
+        assert_eq!(exc, vec!["**/*.test.ts", "**/*.md"]);
+    }
+
+    #[test]
+    fn partition_empty_input() {
+        let globs: Vec<String> = vec![];
+        let (inc, exc) = partition_globs(&globs);
+        assert!(inc.is_empty());
+        assert!(exc.is_empty());
+    }
+
+    // ── check_file_against_globs ──
+
+    #[test]
+    fn default_true_includes_all_files() {
+        assert!(check_file_against_globs("src/index.ts", &[], &[], true));
+        assert!(check_file_against_globs("README.md", &[], &[], true));
+    }
+
+    #[test]
+    fn default_true_respects_exclusions() {
+        assert!(!check_file_against_globs(
+            "README.md",
+            &[],
+            &["**/*.md"],
+            true
+        ));
+        assert!(check_file_against_globs(
+            "src/index.ts",
+            &[],
+            &["**/*.md"],
+            true
+        ));
+    }
+
+    #[test]
+    fn default_true_with_multiple_exclusions() {
+        let exc = &["**/*.md", "**/*.test.ts"];
+        assert!(!check_file_against_globs("README.md", &[], exc, true));
+        assert!(!check_file_against_globs("src/foo.test.ts", &[], exc, true));
+        assert!(check_file_against_globs("src/foo.ts", &[], exc, true));
+    }
+
+    #[test]
+    fn no_default_no_globs_means_all_inputs() {
+        // No $TURBO_DEFAULT$ and no explicit globs means the task had no inputs
+        // configuration at all — treat everything as an input.
+        assert!(check_file_against_globs("anything.ts", &[], &[], false));
+    }
+
+    #[test]
+    fn no_default_with_inclusions() {
+        let inc = &["src/**/*.ts"];
+        assert!(check_file_against_globs("src/index.ts", inc, &[], false));
+        assert!(!check_file_against_globs("README.md", inc, &[], false));
+    }
+
+    #[test]
+    fn no_default_inclusion_with_exclusion() {
+        let inc = &["**/*.ts"];
+        let exc = &["**/*.test.ts"];
+        assert!(check_file_against_globs("src/index.ts", inc, exc, false));
+        assert!(!check_file_against_globs(
+            "src/index.test.ts",
+            inc,
+            exc,
+            false
+        ));
+    }
+
+    // ── file_matches_task_inputs ──
+
+    fn anchored(s: &str) -> AnchoredSystemPathBuf {
+        AnchoredSystemPathBuf::from_raw(s).unwrap()
+    }
+
+    fn pkg_path(s: &str) -> RelativeUnixPathBuf {
+        RelativeUnixPathBuf::new(s.to_string()).unwrap()
+    }
+
+    #[test]
+    fn file_in_package_with_default_inputs() {
+        let file = anchored("packages/lib-a/src/index.ts");
+        let pkg = pkg_path("packages/lib-a");
+        let inputs = TaskInputs {
+            globs: vec![],
+            default: true,
+        };
+        assert!(file_matches_task_inputs(&file, &pkg, &inputs));
+    }
+
+    #[test]
+    fn file_in_package_excluded_by_glob() {
+        let file = anchored("packages/lib-a/README.md");
+        let pkg = pkg_path("packages/lib-a");
+        let inputs = TaskInputs {
+            globs: vec!["!**/*.md".to_string()],
+            default: true,
+        };
+        assert!(!file_matches_task_inputs(&file, &pkg, &inputs));
+    }
+
+    #[test]
+    fn file_in_package_not_excluded() {
+        let file = anchored("packages/lib-a/src/index.ts");
+        let pkg = pkg_path("packages/lib-a");
+        let inputs = TaskInputs {
+            globs: vec!["!**/*.md".to_string()],
+            default: true,
+        };
+        assert!(file_matches_task_inputs(&file, &pkg, &inputs));
+    }
+
+    #[test]
+    fn file_outside_package_no_match() {
+        // A file in a sibling package should not match unless there's a
+        // $TURBO_ROOT$ glob that traverses up
+        let file = anchored("packages/lib-b/src/index.ts");
+        let pkg = pkg_path("packages/lib-a");
+        let inputs = TaskInputs {
+            globs: vec![],
+            default: true,
+        };
+        // File is not inside packages/lib-a, so it doesn't match
+        assert!(!file_matches_task_inputs(&file, &pkg, &inputs));
+    }
+
+    #[test]
+    fn turbo_root_glob_matches_root_file() {
+        // When turbo.json has $TURBO_ROOT$/jest.config.js as a task input,
+        // it gets resolved to ../../jest.config.js for a package at depth 2.
+        let file = anchored("jest.config.js");
+        let pkg = pkg_path("packages/lib-a");
+        let inputs = TaskInputs {
+            globs: vec!["../../jest.config.js".to_string()],
+            default: true,
+        };
+        assert!(file_matches_task_inputs(&file, &pkg, &inputs));
+    }
+
+    #[test]
+    fn no_inputs_config_matches_everything() {
+        // Default TaskInputs (no inputs key in turbo.json)
+        let file = anchored("packages/lib-a/anything.txt");
+        let pkg = pkg_path("packages/lib-a");
+        let inputs = TaskInputs::default();
+        assert!(file_matches_task_inputs(&file, &pkg, &inputs));
+    }
+
+    #[test]
+    fn multiple_exclusions_all_respected() {
+        let file_md = anchored("packages/lib-a/README.md");
+        let file_test = anchored("packages/lib-a/foo.test.ts");
+        let file_src = anchored("packages/lib-a/src/index.ts");
+        let pkg = pkg_path("packages/lib-a");
+        let inputs = TaskInputs {
+            globs: vec!["!**/*.md".to_string(), "!**/*.test.ts".to_string()],
+            default: true,
+        };
+        assert!(!file_matches_task_inputs(&file_md, &pkg, &inputs));
+        assert!(!file_matches_task_inputs(&file_test, &pkg, &inputs));
+        assert!(file_matches_task_inputs(&file_src, &pkg, &inputs));
+    }
+
+    #[test]
+    fn root_package_file_matches() {
+        let file = anchored("scripts/check.sh");
+        let pkg = pkg_path("");
+        let inputs = TaskInputs {
+            globs: vec![],
+            default: true,
+        };
+        assert!(file_matches_task_inputs(&file, &pkg, &inputs));
     }
 }

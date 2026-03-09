@@ -561,10 +561,16 @@ struct TaskAllChanged {
     description: String,
 }
 
+#[derive(SimpleObject)]
+struct TaskPackageDependencyChanged {
+    package_name: String,
+}
+
 #[derive(Union)]
 enum TaskChangeReason {
     TaskFileChanged(TaskFileChanged),
     TaskDependencyTaskChanged(TaskDependencyTaskChanged),
+    TaskPackageDependencyChanged(TaskPackageDependencyChanged),
     TaskGlobalFileChanged(TaskGlobalFileChanged),
     TaskGlobalDepsChanged(TaskGlobalDepsChanged),
     TaskAllChanged(TaskAllChanged),
@@ -745,6 +751,11 @@ fn convert_task_change_reason(reason: affected_tasks::TaskChangeReason) -> TaskC
             task_name,
             package_name,
         }),
+        affected_tasks::TaskChangeReason::PackageDependencyChanged { package_name } => {
+            TaskChangeReason::TaskPackageDependencyChanged(TaskPackageDependencyChanged {
+                package_name,
+            })
+        }
         affected_tasks::TaskChangeReason::GlobalFileChanged { file_path } => {
             TaskChangeReason::TaskGlobalFileChanged(TaskGlobalFileChanged { file_path })
         }
