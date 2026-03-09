@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 
+pub mod affected_tasks;
 mod boundaries;
 mod external_package;
 mod file;
@@ -195,6 +196,7 @@ impl RepositoryQuery {
 #[graphql(concrete(name = "RepositoryTasks", params(task::RepositoryTask)))]
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
+#[graphql(concrete(name = "ChangedTasks", params(ChangedTask)))]
 #[graphql(concrete(name = "Files", params(file::File)))]
 #[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
 #[graphql(concrete(name = "Diagnostics", params(Diagnostic)))]
@@ -533,6 +535,55 @@ struct ChangedPackage {
     package: Package,
 }
 
+#[derive(SimpleObject)]
+struct TaskFileChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskDependencyTaskChanged {
+    task_name: String,
+    package_name: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskGlobalFileChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskGlobalDepsChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskAllChanged {
+    description: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskPackageDependencyChanged {
+    package_name: String,
+}
+
+#[derive(Union)]
+#[allow(clippy::enum_variant_names)]
+enum TaskChangeReason {
+    TaskFileChanged(TaskFileChanged),
+    TaskDependencyTaskChanged(TaskDependencyTaskChanged),
+    TaskPackageDependencyChanged(TaskPackageDependencyChanged),
+    TaskGlobalFileChanged(TaskGlobalFileChanged),
+    TaskGlobalDepsChanged(TaskGlobalDepsChanged),
+    TaskAllChanged(TaskAllChanged),
+}
+
+#[derive(SimpleObject)]
+struct ChangedTask {
+    reason: TaskChangeReason,
+    #[graphql(flatten)]
+    task: task::RepositoryTask,
+}
+
 #[Object]
 impl RepositoryQuery {
     async fn affected_packages(
@@ -561,6 +612,49 @@ impl RepositoryQuery {
 
         packages.sort_by(|a, b| a.package.get_name().cmp(b.package.get_name()));
         Ok(packages)
+    }
+
+    /// Gets a list of tasks that are affected by changes between two git refs.
+    ///
+    /// Unlike `affectedPackages` which operates at the package level,
+    /// `affectedTasks` checks each task's specific `inputs` configuration
+    /// against the changed files and walks the task dependency graph.
+    /// A task is only reported as affected if its inputs actually changed,
+    /// or if an upstream task dependency is affected.
+    ///
+    /// Use the `tasks` parameter to filter to specific task names (e.g.
+    /// `["test", "typecheck"]`). When omitted, all affected tasks are returned.
+    async fn affected_tasks(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+        #[graphql(desc = "Filter to specific task names (e.g. [\"test\", \"typecheck\"])")]
+        tasks: Option<Vec<String>>,
+    ) -> Result<Array<ChangedTask>, Error> {
+        let results = affected_tasks::calculate_affected_tasks(&self.run, base, head)?;
+
+        let mut changed_tasks: Array<ChangedTask> = results
+            .into_iter()
+            .filter(|at| {
+                tasks
+                    .as_ref()
+                    .is_none_or(|names| names.iter().any(|n| n == at.task_id.task()))
+            })
+            .map(|at| {
+                let task = task::RepositoryTask::new(&at.task_id, &self.run)?;
+                let reason = convert_task_change_reason(at.reason);
+                Ok(ChangedTask { reason, task })
+            })
+            .collect::<Result<Array<_>, Error>>()?;
+
+        changed_tasks.sort_by(|a, b| {
+            a.task
+                .package
+                .get_name()
+                .cmp(b.task.package.get_name())
+                .then_with(|| a.task.name.cmp(&b.task.name))
+        });
+        Ok(changed_tasks)
     }
 
     /// Gets a single package by name
@@ -643,6 +737,35 @@ impl RepositoryQuery {
             .collect::<Array<_>>();
         packages.sort_by_key(|pkg| pkg.human_name());
         Ok(packages)
+    }
+}
+
+fn convert_task_change_reason(reason: affected_tasks::TaskChangeReason) -> TaskChangeReason {
+    match reason {
+        affected_tasks::TaskChangeReason::FileChanged { file_path } => {
+            TaskChangeReason::TaskFileChanged(TaskFileChanged { file_path })
+        }
+        affected_tasks::TaskChangeReason::DependencyTaskChanged {
+            task_name,
+            package_name,
+        } => TaskChangeReason::TaskDependencyTaskChanged(TaskDependencyTaskChanged {
+            task_name,
+            package_name,
+        }),
+        affected_tasks::TaskChangeReason::PackageDependencyChanged { package_name } => {
+            TaskChangeReason::TaskPackageDependencyChanged(TaskPackageDependencyChanged {
+                package_name,
+            })
+        }
+        affected_tasks::TaskChangeReason::GlobalFileChanged { file_path } => {
+            TaskChangeReason::TaskGlobalFileChanged(TaskGlobalFileChanged { file_path })
+        }
+        affected_tasks::TaskChangeReason::GlobalDepsChanged { file_path } => {
+            TaskChangeReason::TaskGlobalDepsChanged(TaskGlobalDepsChanged { file_path })
+        }
+        affected_tasks::TaskChangeReason::AllTasksChanged { description } => {
+            TaskChangeReason::TaskAllChanged(TaskAllChanged { description })
+        }
     }
 }
 
