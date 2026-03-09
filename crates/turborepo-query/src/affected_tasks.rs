@@ -205,8 +205,9 @@ pub fn calculate_affected_tasks(
     let task_graph = engine.task_graph();
     let task_lookup = engine.task_lookup();
 
-    let mut affected_indices: HashSet<petgraph::graph::NodeIndex> = HashSet::new();
-    let mut queue: VecDeque<petgraph::graph::NodeIndex> = VecDeque::new();
+    let mut affected_indices: HashSet<petgraph::graph::NodeIndex> =
+        HashSet::with_capacity(affected.len());
+    let mut queue: VecDeque<petgraph::graph::NodeIndex> = VecDeque::with_capacity(affected.len());
 
     for task_id in affected.keys() {
         if let Some(&idx) = task_lookup.get(task_id) {
@@ -405,7 +406,7 @@ fn check_file_against_globs(
 }
 
 #[cfg(test)]
-fn partition_globs<'a>(globs: &'a [String]) -> (Vec<&'a str>, Vec<&'a str>) {
+fn partition_globs(globs: &[String]) -> (Vec<&str>, Vec<&str>) {
     let mut inclusions = Vec::new();
     let mut exclusions = Vec::new();
     for glob in globs {

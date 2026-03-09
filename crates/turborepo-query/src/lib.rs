@@ -567,6 +567,7 @@ struct TaskPackageDependencyChanged {
 }
 
 #[derive(Union)]
+#[allow(clippy::enum_variant_names)]
 enum TaskChangeReason {
     TaskFileChanged(TaskFileChanged),
     TaskDependencyTaskChanged(TaskDependencyTaskChanged),
