@@ -95,37 +95,6 @@ importers:
         specifier: ^5.5.4
         version: 5.9.3
 
-  apps/coverage-reporter:
-    dependencies:
-      '@vercel/blob':
-        specifier: ^2.0.1
-        version: 2.2.0
-      next:
-        specifier: 16.1.5
-        version: 16.1.5(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      react:
-        specifier: ^19.0.0
-        version: 19.2.4
-      react-dom:
-        specifier: ^19.0.0
-        version: 19.2.4(react@19.2.4)
-      recharts:
-        specifier: ^3.7.0
-        version: 3.7.0(@types/react@19.2.13)(react-dom@19.2.4(react@19.2.4))(react-is@18.3.1)(react@19.2.4)(redux@5.0.1)
-    devDependencies:
-      '@types/node':
-        specifier: ^22.15.3
-        version: 22.15.3
-      '@types/react':
-        specifier: ^19.0.0
-        version: 19.2.13
-      '@types/react-dom':
-        specifier: ^19.0.0
-        version: 19.2.3(@types/react@19.2.13)
-      typescript:
-        specifier: ^5.5.4
-        version: 5.9.3
-
   apps/docs:
     dependencies:
       '@ai-sdk/react':
@@ -4569,10 +4538,6 @@ packages:
         optional: true
       vue-router:
         optional: true
-
-  '@vercel/blob@2.2.0':
-    resolution: {integrity: sha512-h9ruqqTyAlLrmLIT55NUDnfc889feZnQXWOBxpXrAiAzWKmHqIokLchuMBKFsT9MDV/jM0HRQlvlTyubMHrOKA==}
-    engines: {node: '>=20.0.0'}
 
   '@vercel/blob@2.3.0-512846a-20260206231709':
     resolution: {integrity: sha512-mN5srAvYjTu0eXJBFuVLwe/xaZVx5XUK7U+EHel92H0jM/XJ83w1J1OWKAl1Yfw+hk5c7U23/lY58OJCsC+MgQ==}
@@ -12405,14 +12370,6 @@ snapshots:
     optionalDependencies:
       next: 16.1.5(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       react: 19.2.4
-
-  '@vercel/blob@2.2.0':
-    dependencies:
-      async-retry: 1.3.3
-      is-buffer: 2.0.5
-      is-node-process: 1.2.0
-      throttleit: 2.1.0
-      undici: 6.23.0
 
   '@vercel/blob@2.3.0-512846a-20260206231709':
     dependencies:
