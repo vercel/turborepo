@@ -101,9 +101,9 @@ Register the scripts to Turborepo as [Root Tasks](/docs/crafting-your-repository
 You can now run `turbo run lint` to lint your entire repository.
 
 <Callout type="warn" title="Type-aware linting">
-  If you enable [type-aware linting rules](https://oxc.rs/docs/guide/usage/linter/config#type-aware-linting) in oxlint, the linter needs TypeScript type information to work correctly. This means any dependencies that must be built before type-checking (such as internal packages in your monorepo) also need to be built before linting.
+  If you enable [type-aware linting rules](https://oxc.rs/docs/guide/usage/linter/config#type-aware-linting) in oxlint, the linter needs TypeScript type information to work correctly. This means any dependencies that must be built before type-checking (such as [Compiled Packages](/docs/core-concepts/internal-packages#compiled-packages) in your monorepo) also need to be built before linting.
 
-Run your builds before linting in CI:
+For example, to build Compiled Packages before running formatting and linting:
 
 ```bash title="Terminal"
 turbo run build --filter=./packages/* && turbo run lint

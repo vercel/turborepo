@@ -83,6 +83,37 @@ impl FSCache {
             .cache_directory
             .join_component(&format!("{hash}.tar.zst"));
 
+        // Check if the archive exists before doing any work.
+        if !cache_path.as_path().exists() {
+            self.log_fetch(analytics::CacheEvent::Miss, hash, 0);
+            return Ok(None);
+        }
+
+        let manifest_path = self
+            .cache_directory
+            .join_component(&format!("{hash}-manifest.json"));
+
+        // Fast path: if a manifest exists and ALL files on disk still match,
+        // skip opening/decompressing the tar entirely.
+        if let Some(manifest) = crate::cache_archive::RestoreManifest::read(&manifest_path)
+            && let Some(file_list) = manifest.validate_all(anchor)
+        {
+            let meta = CacheMetadata::read(
+                &self
+                    .cache_directory
+                    .join_component(&format!("{hash}-meta.json")),
+            )?;
+            self.log_fetch(analytics::CacheEvent::Hit, hash, meta.duration);
+            return Ok(Some((
+                CacheHitMetadata {
+                    time_saved: meta.duration,
+                    source: CacheSource::Local,
+                },
+                file_list,
+            )));
+        }
+
+        // Slow path: decompress and extract the archive.
         let mut cache_reader = match CacheReader::open(&cache_path) {
             Ok(reader) => reader,
             Err(CacheError::IO(ref e, _)) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -92,15 +123,8 @@ impl FSCache {
             Err(e) => return Err(e),
         };
 
-        let manifest_path = self
-            .cache_directory
-            .join_component(&format!("{hash}-manifest.json"));
-        let previous_manifest = crate::cache_archive::RestoreManifest::read(&manifest_path);
+        let (restored_files, new_manifest) = cache_reader.restore(anchor, None)?;
 
-        let (restored_files, new_manifest) =
-            cache_reader.restore(anchor, previous_manifest.as_ref())?;
-
-        // Write manifest asynchronously so cache misses pay zero overhead.
         let manifest_path_owned = manifest_path.to_owned();
         std::thread::spawn(move || {
             let _ = new_manifest.write_atomic(&manifest_path_owned);
@@ -166,13 +190,31 @@ impl FSCache {
             .join_component(&format!("{hash}.tar.zst"));
 
         let mut cache_item = CacheWriter::create(&cache_path)?;
+        let mut manifest = crate::cache_archive::RestoreManifest::new();
 
         for file in files {
             cache_item.add_file(anchor, file)?;
+
+            let source_path = anchor.resolve(file);
+            let unix_path = file.to_unix();
+            if let Ok(m) = source_path.symlink_metadata() {
+                if m.is_file() {
+                    let _ = manifest.record_file(unix_path.as_str().to_owned(), &source_path);
+                } else if m.is_dir() {
+                    manifest.record_dir(unix_path.as_str().to_owned());
+                }
+            }
         }
 
         // Finish the archive (performs atomic rename from temp to final path)
         cache_item.finish()?;
+
+        // Write manifest alongside the archive so the first fetch() can
+        // skip decompression when outputs are still on disk.
+        let manifest_path = self
+            .cache_directory
+            .join_component(&format!("{hash}-manifest.json"));
+        let _ = manifest.write_atomic(&manifest_path);
 
         // Write metadata file atomically using write-to-temp-then-rename pattern
         let metadata_path = self
