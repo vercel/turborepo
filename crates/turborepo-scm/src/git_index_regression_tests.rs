@@ -61,11 +61,32 @@ impl TestRepo {
             .expect("failed to build repo index")
     }
 
+    fn build_scoped_repo_index(&self, prefixes: &[&str]) -> RepoGitIndex {
+        let scm = self.scm();
+        let mut index = scm
+            .build_tracked_repo_index_eager()
+            .expect("failed to build tracked repo index");
+        let prefixes = prefixes
+            .iter()
+            .map(|prefix| path(prefix))
+            .collect::<Vec<_>>();
+        scm.populate_repo_index_untracked(&mut index, &prefixes)
+            .expect("failed to scope repo index");
+        index
+    }
+
     fn get_hashes(&self, package_path: &str) -> GitHashes {
         let scm = self.scm();
         let pkg = AnchoredSystemPathBuf::from_raw(package_path).unwrap();
         let index = self.build_repo_index();
         scm.get_package_file_hashes::<&str>(&self.root, &pkg, &[], false, None, Some(&index))
+            .unwrap()
+    }
+
+    fn get_hashes_with_index(&self, package_path: &str, index: &RepoGitIndex) -> GitHashes {
+        let scm = self.scm();
+        let pkg = AnchoredSystemPathBuf::from_raw(package_path).unwrap();
+        scm.get_package_file_hashes::<&str>(&self.root, &pkg, &[], false, None, Some(index))
             .unwrap()
     }
 
@@ -94,6 +115,18 @@ impl TestRepo {
             Some(&index),
         )
         .unwrap()
+    }
+
+    fn get_hashes_with_inputs_no_index(
+        &self,
+        package_path: &str,
+        inputs: &[&str],
+        include_default_files: bool,
+    ) -> GitHashes {
+        let scm = self.scm();
+        let pkg = AnchoredSystemPathBuf::from_raw(package_path).unwrap();
+        scm.get_package_file_hashes(&self.root, &pkg, inputs, include_default_files, None, None)
+            .unwrap()
     }
 }
 
@@ -220,6 +253,59 @@ fn test_untracked_files_detected() {
     assert_eq!(hashes.len(), 3);
     assert!(hashes.contains_key(&path("untracked.ts")));
     assert!(hashes.contains_key(&path("committed.ts")));
+}
+
+#[test]
+fn test_scoped_untracked_files_only_include_selected_package() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/committed.ts", "committed a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/committed.ts", "committed b");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("pkg-a/untracked-a.ts", "new a");
+    repo.create_file("pkg-b/untracked-b.ts", "new b");
+
+    let index = repo.build_scoped_repo_index(&["pkg-a"]);
+
+    let pkg_a_hashes = repo.get_hashes_with_index("pkg-a", &index);
+    let pkg_a_no_index = repo.get_hashes_no_index("pkg-a");
+    assert_eq!(pkg_a_hashes, pkg_a_no_index);
+    assert!(pkg_a_hashes.contains_key(&path("untracked-a.ts")));
+
+    let pkg_b_hashes = repo.get_hashes_with_index("pkg-b", &index);
+    assert!(
+        !pkg_b_hashes.contains_key(&path("untracked-b.ts")),
+        "scoped repo index should not include untracked files for packages outside the selected \
+         scope"
+    );
+}
+
+#[test]
+fn test_scoped_untracked_files_respect_ancestor_gitignore() {
+    let repo = TestRepo::new();
+
+    repo.create_file("apps/web/src/index.ts", "code");
+    repo.create_file("apps/web/package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("apps/.gitignore", "ignored.ts\n");
+    repo.create_file("apps/web/keep.ts", "keep");
+    repo.create_file("apps/web/ignored.ts", "ignore");
+
+    let index = repo.build_scoped_repo_index(&["apps/web"]);
+
+    let hashes = repo.get_hashes_with_index("apps/web", &index);
+    assert!(hashes.contains_key(&path("keep.ts")));
+    assert!(
+        !hashes.contains_key(&path("ignored.ts")),
+        "ancestor .gitignore files discovered during the scoped walk should still apply"
+    );
+
+    let hashes_no_index = repo.get_hashes_no_index("apps/web");
+    assert_eq!(hashes, hashes_no_index);
 }
 
 #[test]
@@ -658,6 +744,26 @@ fn test_inputs_explicit_include_finds_gitignored_files() {
     let hashes = repo.get_hashes_with_inputs("my-pkg", &["**/*-file"], false);
 
     assert!(hashes.contains_key(&path("dir/ignored-file")));
+}
+
+#[test]
+fn test_inputs_without_defaults_match_no_index_for_tracked_and_parent_files() {
+    let repo = TestRepo::new();
+
+    repo.create_file("my-pkg/committed-file", "committed");
+    repo.create_file("my-pkg/package.json", "{}");
+    repo.create_file("new-root-file", "root");
+    repo.commit_all();
+
+    repo.create_file("my-pkg/uncommitted-file", "new");
+
+    let with_index = repo.get_hashes_with_inputs("my-pkg", &["../**/*-file"], false);
+    let without_index = repo.get_hashes_with_inputs_no_index("my-pkg", &["../**/*-file"], false);
+
+    assert_eq!(with_index, without_index);
+    assert!(with_index.contains_key(&path("committed-file")));
+    assert!(with_index.contains_key(&path("uncommitted-file")));
+    assert!(with_index.contains_key(&path("../new-root-file")));
 }
 
 #[test]
@@ -1106,6 +1212,213 @@ fn test_untracked_detection_equivalence_comprehensive() {
         !ui.contains_key(&path("storybook-static/index.html")),
         "gitignored by nested .gitignore"
     );
+}
+
+// Category 5: Superset-prefix regression tests
+//
+// These tests validate that using a superset of package prefixes for the
+// untracked file walk (all packages vs. only filtered packages) produces
+// identical per-package hashes. This is the core correctness property
+// needed for the optimization that moves `find_untracked_files` earlier
+// in the critical path by using all-package prefixes before filter resolution.
+
+#[test]
+fn test_superset_prefixes_produce_same_hashes_as_scoped_prefixes() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "a code");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/src/index.ts", "b code");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.create_file("pkg-c/src/index.ts", "c code");
+    repo.create_file("pkg-c/package.json", "{}");
+    repo.create_file("pkg-d/src/index.ts", "d code");
+    repo.create_file("pkg-d/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // Add untracked files in every package
+    repo.create_file("pkg-a/untracked-a.ts", "new a");
+    repo.create_file("pkg-b/untracked-b.ts", "new b");
+    repo.create_file("pkg-c/untracked-c.ts", "new c");
+    repo.create_file("pkg-d/untracked-d.ts", "new d");
+
+    // Scoped index: only pkg-a and pkg-b (current behavior when filtered)
+    let scoped_index = repo.build_scoped_repo_index(&["pkg-a", "pkg-b"]);
+
+    // Superset index: all packages (proposed behavior)
+    let superset_index = repo.build_scoped_repo_index(&["pkg-a", "pkg-b", "pkg-c", "pkg-d"]);
+
+    // Per-package hashes for the "filtered" packages must be identical
+    let scoped_a = repo.get_hashes_with_index("pkg-a", &scoped_index);
+    let superset_a = repo.get_hashes_with_index("pkg-a", &superset_index);
+    assert_eq!(
+        scoped_a, superset_a,
+        "pkg-a hashes differ between scoped and superset"
+    );
+
+    let scoped_b = repo.get_hashes_with_index("pkg-b", &scoped_index);
+    let superset_b = repo.get_hashes_with_index("pkg-b", &superset_index);
+    assert_eq!(
+        scoped_b, superset_b,
+        "pkg-b hashes differ between scoped and superset"
+    );
+
+    // Superset also correctly includes untracked files for the extra packages
+    let superset_c = repo.get_hashes_with_index("pkg-c", &superset_index);
+    assert!(superset_c.contains_key(&path("untracked-c.ts")));
+    let superset_d = repo.get_hashes_with_index("pkg-d", &superset_index);
+    assert!(superset_d.contains_key(&path("untracked-d.ts")));
+
+    // Verify against no-index (subprocess) path for full equivalence
+    let no_index_a = repo.get_hashes_no_index("pkg-a");
+    let no_index_b = repo.get_hashes_no_index("pkg-b");
+    assert_eq!(
+        superset_a, no_index_a,
+        "pkg-a superset vs no-index mismatch"
+    );
+    assert_eq!(
+        superset_b, no_index_b,
+        "pkg-b superset vs no-index mismatch"
+    );
+}
+
+#[test]
+fn test_superset_prefixes_with_gitignore_produce_same_hashes() {
+    let repo = TestRepo::new();
+
+    repo.create_gitignore(".gitignore", "*.log\nbuild/\n");
+    repo.create_gitignore("pkg-b/.gitignore", "tmp/\n");
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/src/index.ts", "b");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.create_file("pkg-c/src/index.ts", "c");
+    repo.create_file("pkg-c/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // Untracked files — some should be ignored
+    repo.create_file("pkg-a/new.ts", "new");
+    repo.create_file("pkg-a/debug.log", "log"); // gitignored by root
+    repo.create_file("pkg-b/new.ts", "new");
+    repo.create_file("pkg-b/tmp/cache.dat", "cache"); // gitignored by pkg-b
+    repo.create_file("pkg-b/build/out.js", "out"); // gitignored by root
+    repo.create_file("pkg-c/new.ts", "new");
+
+    let scoped = repo.build_scoped_repo_index(&["pkg-a", "pkg-b"]);
+    let superset = repo.build_scoped_repo_index(&["pkg-a", "pkg-b", "pkg-c"]);
+
+    let scoped_a = repo.get_hashes_with_index("pkg-a", &scoped);
+    let superset_a = repo.get_hashes_with_index("pkg-a", &superset);
+    assert_eq!(
+        scoped_a, superset_a,
+        "pkg-a with gitignore: scoped vs superset"
+    );
+    assert!(
+        !scoped_a.contains_key(&path("debug.log")),
+        "log file should be gitignored"
+    );
+    assert!(scoped_a.contains_key(&path("new.ts")));
+
+    let scoped_b = repo.get_hashes_with_index("pkg-b", &scoped);
+    let superset_b = repo.get_hashes_with_index("pkg-b", &superset);
+    assert_eq!(
+        scoped_b, superset_b,
+        "pkg-b with gitignore: scoped vs superset"
+    );
+    assert!(
+        !scoped_b.contains_key(&path("tmp/cache.dat")),
+        "tmp should be gitignored"
+    );
+    assert!(
+        !scoped_b.contains_key(&path("build/out.js")),
+        "build should be gitignored"
+    );
+}
+
+#[test]
+fn test_populate_untracked_idempotent() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/index.ts", "a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/index.ts", "b");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.commit_all();
+
+    repo.create_file("pkg-a/new-a.ts", "new a");
+    repo.create_file("pkg-b/new-b.ts", "new b");
+
+    let scm = repo.scm();
+    let mut index = scm
+        .build_tracked_repo_index_eager()
+        .expect("failed to build tracked repo index");
+
+    // First population with pkg-a prefix
+    let prefixes_a = vec![path("pkg-a")];
+    scm.populate_repo_index_untracked(&mut index, &prefixes_a)
+        .expect("first populate failed");
+
+    let hashes_after_first = repo.get_hashes_with_index("pkg-a", &index);
+    assert!(hashes_after_first.contains_key(&path("new-a.ts")));
+
+    // Second population with different prefixes — should be a no-op
+    let prefixes_both = vec![path("pkg-a"), path("pkg-b")];
+    scm.populate_repo_index_untracked(&mut index, &prefixes_both)
+        .expect("second populate failed");
+
+    // pkg-a hashes unchanged after second call
+    let hashes_after_second = repo.get_hashes_with_index("pkg-a", &index);
+    assert_eq!(
+        hashes_after_first, hashes_after_second,
+        "idempotent: pkg-a hashes should not change after second populate"
+    );
+
+    // pkg-b untracked file was NOT picked up (second call was a no-op)
+    let pkg_b_hashes = repo.get_hashes_with_index("pkg-b", &index);
+    assert!(
+        !pkg_b_hashes.contains_key(&path("new-b.ts")),
+        "second populate should be a no-op due to idempotency flag"
+    );
+}
+
+#[test]
+fn test_superset_walk_untracked_in_other_pkg_does_not_affect_queried_pkg() {
+    let repo = TestRepo::new();
+
+    repo.create_file("pkg-a/src/index.ts", "a");
+    repo.create_file("pkg-a/package.json", "{}");
+    repo.create_file("pkg-b/src/index.ts", "b");
+    repo.create_file("pkg-b/package.json", "{}");
+    repo.create_file("package.json", "{}");
+    repo.commit_all();
+
+    // pkg-a has no untracked files; pkg-b has many
+    repo.create_file("pkg-b/extra1.ts", "1");
+    repo.create_file("pkg-b/extra2.ts", "2");
+    repo.create_file("pkg-b/extra3.ts", "3");
+    repo.create_file("pkg-b/sub/deep.ts", "deep");
+
+    let superset = repo.build_scoped_repo_index(&["pkg-a", "pkg-b"]);
+    let pkg_a_hashes_v1 = repo.get_hashes_with_index("pkg-a", &superset);
+
+    // Now add even more untracked files to pkg-b
+    repo.create_file("pkg-b/extra4.ts", "4");
+    repo.create_file("pkg-b/extra5.ts", "5");
+
+    let superset_v2 = repo.build_scoped_repo_index(&["pkg-a", "pkg-b"]);
+    let pkg_a_hashes_v2 = repo.get_hashes_with_index("pkg-a", &superset_v2);
+
+    assert_eq!(
+        pkg_a_hashes_v1, pkg_a_hashes_v2,
+        "pkg-a hashes must be stable regardless of untracked files in pkg-b"
+    );
+
+    // pkg-b should correctly reflect the new files
+    let pkg_b_hashes = repo.get_hashes_with_index("pkg-b", &superset_v2);
+    assert!(pkg_b_hashes.contains_key(&path("extra4.ts")));
+    assert!(pkg_b_hashes.contains_key(&path("extra5.ts")));
 }
 
 #[test]
