@@ -92,7 +92,19 @@ impl FSCache {
             Err(e) => return Err(e),
         };
 
-        let restored_files = cache_reader.restore(anchor)?;
+        let manifest_path = self
+            .cache_directory
+            .join_component(&format!("{hash}-manifest.json"));
+        let previous_manifest = crate::cache_archive::RestoreManifest::read(&manifest_path);
+
+        let (restored_files, new_manifest) =
+            cache_reader.restore(anchor, previous_manifest.as_ref())?;
+
+        // Write manifest asynchronously so cache misses pay zero overhead.
+        let manifest_path_owned = manifest_path.to_owned();
+        std::thread::spawn(move || {
+            let _ = new_manifest.write_atomic(&manifest_path_owned);
+        });
 
         let meta = CacheMetadata::read(
             &self

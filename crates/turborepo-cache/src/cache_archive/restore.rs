@@ -9,6 +9,7 @@ use crate::{
     CacheError,
     cache_archive::{
         restore_directory::{CachedDirTree, restore_directory},
+        restore_manifest::RestoreManifest,
         restore_regular::restore_regular,
         restore_symlink::{
             canonicalize_linkname, restore_symlink, restore_symlink_allow_missing_target,
@@ -32,6 +33,7 @@ impl<'a> CacheReader<'a> {
     }
 
     pub fn open(path: &AbsoluteSystemPathBuf) -> Result<Self, CacheError> {
+        let _span = tracing::info_span!("cache_reader_open").entered();
         let file = path.open()?;
         let is_compressed = path.extension() == Some("zst");
 
@@ -61,29 +63,25 @@ impl<'a> CacheReader<'a> {
     pub fn restore(
         &mut self,
         anchor: &AbsoluteSystemPath,
-    ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
+        previous_manifest: Option<&RestoreManifest>,
+    ) -> Result<(Vec<AnchoredSystemPathBuf>, RestoreManifest), CacheError> {
+        let _span = tracing::info_span!("cache_reader_restore").entered();
         let mut restored = Vec::new();
+        let mut new_manifest = RestoreManifest::new();
         anchor.create_dir_all()?;
 
-        // We're going to make the following two assumptions here for "fast"
-        // path restoration:
-        // - All directories are enumerated in the `tar`.
-        // - The contents of the tar are enumerated depth-first.
-        //
-        // This allows us to avoid:
-        // - Attempts at recursive creation of directories.
-        // - Repetitive `lstat` on restore of a file.
-        //
-        // Violating these assumptions won't cause things to break but we're
-        // only going to maintain an `lstat` cache for the current tree.
-        // If you violate these assumptions and the current cache does
-        // not apply for your path, it will clobber and re-start from the common
-        // shared prefix.
         let dir_cache = CachedDirTree::new(anchor.to_owned());
         let mut tr = tar::Archive::new(&mut self.reader);
 
-        Self::restore_entries(&mut tr, &mut restored, dir_cache, anchor)?;
-        Ok(restored)
+        Self::restore_entries(
+            &mut tr,
+            &mut restored,
+            dir_cache,
+            anchor,
+            previous_manifest,
+            &mut new_manifest,
+        )?;
+        Ok((restored, new_manifest))
     }
 
     fn restore_entries<T: Read>(
@@ -91,19 +89,27 @@ impl<'a> CacheReader<'a> {
         restored: &mut Vec<AnchoredSystemPathBuf>,
         mut dir_cache: CachedDirTree,
         anchor: &AbsoluteSystemPath,
+        previous_manifest: Option<&RestoreManifest>,
+        new_manifest: &mut RestoreManifest,
     ) -> Result<(), CacheError> {
-        // On first attempt to restore it's possible that a link target doesn't exist.
-        // Save them and topologically sort them.
         let mut symlinks = Vec::new();
 
         for entry in tr.entries()? {
             let mut entry = entry?;
-            match restore_entry(&mut dir_cache, anchor, &mut entry) {
+            let entry_type = entry.header().entry_type();
+            match restore_entry(&mut dir_cache, anchor, &mut entry, previous_manifest) {
                 Err(CacheError::LinkTargetDoesNotExist(_, _)) => {
                     symlinks.push(entry);
                 }
                 Err(e) => return Err(e),
-                Ok(restored_path) => restored.push(restored_path),
+                Ok(restored_path) => {
+                    if entry_type == tar::EntryType::Regular {
+                        let resolved = anchor.resolve(&restored_path);
+                        let _ =
+                            new_manifest.record_file(restored_path.as_str().to_owned(), &resolved);
+                    }
+                    restored.push(restored_path);
+                }
             }
         }
 
@@ -165,12 +171,13 @@ fn restore_entry<T: Read>(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     entry: &mut Entry<T>,
+    manifest: Option<&RestoreManifest>,
 ) -> Result<AnchoredSystemPathBuf, CacheError> {
     let header = entry.header();
 
     match header.entry_type() {
         tar::EntryType::Directory => restore_directory(dir_cache, anchor, entry),
-        tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry),
+        tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry, manifest),
         tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry),
         ty => Err(CacheError::RestoreUnsupportedFileType(
             ty,
@@ -456,7 +463,7 @@ mod tests {
             let output_dir = tempdir()?;
             let output_dir_path = output_dir.path().to_string_lossy();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
-            let result = cache_reader.restore(anchor);
+            let result = cache_reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err());
             assert_eq!(
                 result.unwrap_err().to_string(),
@@ -479,7 +486,7 @@ mod tests {
             let output_dir = tempdir()?;
             let output_dir_path = output_dir.path().to_string_lossy();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
-            let result = cache_reader.restore(anchor);
+            let result = cache_reader.restore(anchor, None).map(|(f, _)| f);
             #[cfg(windows)]
             {
                 assert!(result.is_err());
@@ -995,7 +1002,10 @@ mod tests {
 
                 let mut cache_reader = CacheReader::open(&archive_path)?;
 
-                match (cache_reader.restore(anchor), &test.expected_output) {
+                match (
+                    cache_reader.restore(anchor, None).map(|(f, _)| f),
+                    &test.expected_output,
+                ) {
                     (Ok(restored_files), Err(expected_error)) => {
                         panic!("expected error: {expected_error:?}, received {restored_files:?}");
                     }
@@ -1058,7 +1068,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(
                 result.is_err(),
                 "absolute path /etc/passwd should be rejected"
@@ -1081,7 +1091,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(
                 result.is_err(),
                 "absolute directory path should be rejected"
@@ -1099,7 +1109,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "root path should be rejected");
 
             Ok(())
@@ -1115,7 +1125,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "deep absolute path should be rejected");
 
             Ok(())
@@ -1134,7 +1144,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let _ = reader.restore(anchor);
+            let _ = reader.restore(anchor, None).map(|(f, _)| f);
 
             assert!(
                 !evil_file.exists(),
@@ -1157,7 +1167,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "../escape should be rejected");
 
             Ok(())
@@ -1173,7 +1183,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(
                 result.is_err(),
                 "path with excessive ../ components should be rejected"
@@ -1191,7 +1201,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "./../escape should be rejected");
 
             Ok(())
@@ -1206,7 +1216,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "'.' path should be rejected");
 
             Ok(())
@@ -1221,7 +1231,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "'..' path should be rejected");
 
             Ok(())
@@ -1245,7 +1255,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             // Fullwidth dots are not ASCII dots so this won't form a real
             // traversal. The key assertion is no file escapes the anchor.
             if result.is_ok() {
@@ -1272,7 +1282,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             if result.is_ok() {
                 let parent_escape = output_dir.path().parent().unwrap().join("escape");
                 assert!(
@@ -1310,7 +1320,7 @@ mod tests {
             // On macOS (HFS+), NFC and NFD paths resolve to the same file.
             // On Linux (ext4), they are distinct. Either behavior is acceptable
             // as long as we don't crash or escape the anchor.
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             if let Err(e) = &result {
                 let err_str = e.to_string();
                 assert!(
@@ -1350,7 +1360,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let _ = reader.restore(anchor);
+            let _ = reader.restore(anchor, None).map(|(f, _)| f);
 
             // The only thing that matters is /etc/passwd wasn't overwritten
             assert!(
@@ -1378,7 +1388,7 @@ mod tests {
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
             // We don't necessarily reject bidi characters, but must not escape
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             if result.is_ok() {
                 let parent = output_dir.path().parent().unwrap();
                 for entry in fs::read_dir(parent)? {
@@ -1426,7 +1436,7 @@ mod tests {
 
             // On Unix this should succeed; on Windows it may fail due to MAX_PATH.
             // Either way, no panic or escape should occur.
-            let _ = reader.restore(anchor);
+            let _ = reader.restore(anchor, None).map(|(f, _)| f);
 
             Ok(())
         }
@@ -1463,7 +1473,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(
                 result.is_ok(),
                 "deeply nested path should restore successfully"
@@ -1511,7 +1521,7 @@ mod tests {
 
             // May fail with IO error due to path length limits,
             // but should not panic or cause undefined behavior
-            let _ = reader.restore(anchor);
+            let _ = reader.restore(anchor, None).map(|(f, _)| f);
 
             Ok(())
         }
@@ -1557,14 +1567,14 @@ mod tests {
                 b1.wait();
                 let mut reader = CacheReader::from_reader(&tar1[..], false).unwrap();
                 let anchor = AbsoluteSystemPath::new(&anchor1).unwrap();
-                reader.restore(anchor)
+                reader.restore(anchor, None).map(|(f, _)| f)
             });
 
             let h2 = thread::spawn(move || {
                 b2.wait();
                 let mut reader = CacheReader::from_reader(&tar2[..], false).unwrap();
                 let anchor = AbsoluteSystemPath::new(&anchor2).unwrap();
-                reader.restore(anchor)
+                reader.restore(anchor, None).map(|(f, _)| f)
             });
 
             let r1 = h1.join().expect("thread 1 panicked");
@@ -1618,14 +1628,14 @@ mod tests {
                 b1.wait();
                 let mut reader = CacheReader::from_reader(&attacker_tar[..], false).unwrap();
                 let anchor = AbsoluteSystemPath::new(&anchor1).unwrap();
-                let _ = reader.restore(anchor);
+                let _ = reader.restore(anchor, None).map(|(f, _)| f);
             });
 
             let h2 = thread::spawn(move || {
                 b2.wait();
                 let mut reader = CacheReader::from_reader(&victim_tar[..], false).unwrap();
                 let anchor = AbsoluteSystemPath::new(&anchor2).unwrap();
-                let _ = reader.restore(anchor);
+                let _ = reader.restore(anchor, None).map(|(f, _)| f);
             });
 
             h1.join().expect("attacker thread panicked");
@@ -1671,7 +1681,7 @@ mod tests {
                     b.wait();
                     let mut reader = CacheReader::from_reader(&tar[..], false).unwrap();
                     let anchor = AbsoluteSystemPath::new(&anchor_str).unwrap();
-                    reader.restore(anchor)
+                    reader.restore(anchor, None).map(|(f, _)| f)
                 }));
             }
 
@@ -1712,7 +1722,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "empty path should be rejected");
 
             Ok(())
@@ -1727,7 +1737,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "double slash in path should be rejected");
 
             Ok(())
@@ -1753,7 +1763,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "symlink without target should be rejected");
 
             Ok(())
@@ -1778,7 +1788,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "hardlink entry type should be rejected");
             let err = result.unwrap_err().to_string();
             assert!(
@@ -1809,7 +1819,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(
                 result.is_err(),
                 "character device entry type should be rejected"
@@ -1838,7 +1848,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(
                 result.is_err(),
                 "block device entry type should be rejected"
@@ -1857,7 +1867,7 @@ mod tests {
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
             // Should not panic
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(
                 result.is_err() || result.unwrap().is_empty(),
                 "garbage data should produce error or empty result"
@@ -1879,7 +1889,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "truncated tar should produce an error");
 
             Ok(())
@@ -1946,7 +1956,7 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            let result = reader.restore(anchor);
+            let result = reader.restore(anchor, None).map(|(f, _)| f);
             assert!(result.is_err(), "archive with malicious entry should fail");
 
             let parent = output_dir.path().parent().unwrap();
