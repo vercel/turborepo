@@ -261,19 +261,12 @@ impl RunBuilder {
         );
         let start_at = Local::now();
 
-        let (tracked_index_tx, tracked_index_rx) =
-            tokio::sync::oneshot::channel::<(SCM, Option<turborepo_scm::RepoGitIndex>)>();
         let scm_task = {
             let repo_root = self.repo_root.clone();
             let git_root = self.opts.git_root.clone();
-            tokio::task::spawn_blocking(move || {
-                let scm = match git_root {
-                    Some(root) => SCM::new_with_git_root(&repo_root, root),
-                    None => SCM::new(&repo_root),
-                };
-                let repo_index = scm.build_tracked_repo_index_eager();
-                let _ = tracked_index_tx.send((scm.clone(), repo_index));
-                scm
+            tokio::task::spawn_blocking(move || match git_root {
+                Some(root) => SCM::new_with_git_root(&repo_root, root),
+                None => SCM::new(&repo_root),
             })
         };
         let package_json_path = self.repo_root.join_component("package.json");
@@ -349,38 +342,22 @@ impl RunBuilder {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
-        // Spawn the untracked-file walk as soon as the package graph is ready.
-        // We use all-package prefixes (superset of any filtered selection) so
-        // the walk can start before filter resolution. Per-package hash queries
-        // use binary-search range scoping, so extra untracked files outside a
-        // queried package are never returned.
+        // Build the repo index using parallel git subprocesses for the tracked
+        // index (ls-tree + diff-index) and a race between walk_candidate_files
+        // and git ls-files for untracked discovery. The race ensures optimal
+        // performance: the walk wins on macOS, ls-files wins on Linux.
         let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph);
+        let scm = scm_task
+            .instrument(tracing::info_span!("scm_task_await"))
+            .await
+            .expect("detecting scm panicked");
         let repo_index_task = if all_prefixes.is_empty() {
             None
         } else {
-            Some(tokio::task::spawn(async move {
-                let (scm, tracked_index) = match tracked_index_rx.await {
-                    Ok(pair) => pair,
-                    Err(_) => return None,
-                };
-                let tracked_index = tracked_index?;
-                tokio::task::spawn_blocking(move || {
-                    let _span = tracing::info_span!("repo_index_scope_untracked").entered();
-                    let mut repo_index = tracked_index;
-                    match scm.populate_repo_index_untracked(&mut repo_index, &all_prefixes) {
-                        Ok(()) => Some(repo_index),
-                        Err(err) => {
-                            tracing::debug!(
-                                "failed to scope repo git index with untracked files: {}. Will \
-                                 hash per-package.",
-                                err,
-                            );
-                            None
-                        }
-                    }
-                })
-                .await
-                .ok()?
+            let scm = scm.clone();
+            Some(tokio::task::spawn_blocking(move || {
+                let _span = tracing::info_span!("build_repo_index_subprocesses").entered();
+                scm.build_repo_index_from_subprocesses(&all_prefixes)
             }))
         };
         let micro_frontend_configs = {
@@ -492,13 +469,6 @@ impl RunBuilder {
             let _span = tracing::info_span!("turbo_json_preload").entered();
             turbo_json_loader.preload_all();
         }
-
-        // Await the SCM background task. The tracked index was already
-        // forwarded to the untracked walk via oneshot channel above.
-        let scm = scm_task
-            .instrument(tracing::info_span!("scm_task_await"))
-            .await
-            .expect("detecting scm panicked");
 
         let filtered_pkgs = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();

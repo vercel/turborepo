@@ -371,7 +371,8 @@ impl HTTPCache {
         body: &[u8],
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut cache_reader = CacheReader::from_reader(body, true)?;
-        cache_reader.restore(root)
+        let (files, _manifest) = cache_reader.restore(root, None)?;
+        Ok(files)
     }
 
     fn convert_api_error(hash: &str, err: turborepo_api_client::Error) -> CacheError {

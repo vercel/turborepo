@@ -21,6 +21,18 @@ pub struct RepoGitIndex {
 }
 
 impl RepoGitIndex {
+    #[cfg(test)]
+    pub(crate) fn new_for_testing(
+        ls_tree_hashes: SortedGitHashes,
+        status_entries: Vec<RepoStatusEntry>,
+    ) -> Self {
+        Self {
+            ls_tree_hashes,
+            status_entries,
+            untracked_entries_populated: true,
+        }
+    }
+
     #[tracing::instrument(skip(git))]
     pub fn new(git: &GitRepo) -> Result<Self, Error> {
         let mut index = Self::new_tracked(git)?;
@@ -174,9 +186,155 @@ impl RepoGitIndex {
         })
     }
 
+    /// Build the index from parallel git subprocesses + a race for untracked
+    /// file discovery.
+    ///
+    /// Runs four operations concurrently:
+    /// - `git ls-tree -r HEAD` for committed blob OIDs
+    /// - `git diff-index HEAD` for modified/deleted files
+    /// - `walk_candidate_files` (8-thread ignore-crate walk)
+    /// - `git ls-files --others` (single-threaded git subprocess)
+    ///
+    /// The two untracked approaches race. On macOS, the multi-threaded walk
+    /// typically wins (~440ms vs ~530ms). On Linux, the git subprocess wins
+    /// (~230ms vs ~470ms). Using whichever finishes first guarantees no
+    /// regressions on any platform.
+    #[tracing::instrument(skip(git, prefixes))]
+    pub fn new_from_subprocess_and_walk(
+        git: &GitRepo,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Result<Self, Error> {
+        use std::{sync::mpsc, thread};
+
+        enum UntrackedResult {
+            /// Direct untracked file list from `git ls-files --others`
+            LsFiles(Result<Vec<RelativeUnixPathBuf>, Error>),
+            /// All candidate files (tracked + untracked) from the walk;
+            /// must be filtered against ls_tree to find untracked
+            Walk(Result<Vec<RelativeUnixPathBuf>, Error>),
+        }
+
+        let git1 = git.clone();
+        let git2 = git.clone();
+        let git3 = git.clone();
+        let walk_root = git.root.as_std_path().to_path_buf();
+        let walk_prefixes: Vec<_> = prefixes.to_vec();
+
+        let ls_tree_handle = thread::spawn(move || git1.git_ls_tree_repo_root_sorted());
+        let diff_index_handle = thread::spawn(move || git2.git_diff_index_repo_root());
+
+        // Race: spawn both untracked discovery methods, use whichever
+        // finishes first.
+        let (untracked_tx, untracked_rx) = mpsc::channel();
+
+        let tx1 = untracked_tx.clone();
+        let _ls_files_handle = thread::spawn(move || {
+            let result = git3.git_ls_files_untracked();
+            let _ = tx1.send(UntrackedResult::LsFiles(result));
+        });
+
+        let tx2 = untracked_tx;
+        let _walk_handle = thread::spawn(move || {
+            let result = walk_candidate_files(&walk_root, Some(&walk_prefixes));
+            let _ = tx2.send(UntrackedResult::Walk(result));
+        });
+
+        let ls_tree_hashes = ls_tree_handle
+            .join()
+            .map_err(|_| Error::git_error("git ls-tree thread panicked"))??;
+        let mut status_entries = diff_index_handle
+            .join()
+            .map_err(|_| Error::git_error("git diff-index thread panicked"))??;
+
+        // Use whichever untracked result arrives first.
+        let untracked_winner = untracked_rx
+            .recv()
+            .map_err(|_| Error::git_error("both untracked discovery threads failed"))?;
+
+        match untracked_winner {
+            UntrackedResult::LsFiles(result) => {
+                let untracked_files = result?;
+                debug!(
+                    "untracked race winner: git ls-files ({} files)",
+                    untracked_files.len()
+                );
+                for path in untracked_files {
+                    status_entries.push(RepoStatusEntry {
+                        path,
+                        is_delete: false,
+                    });
+                }
+            }
+            UntrackedResult::Walk(result) => {
+                let candidates = result?;
+                debug!(
+                    "untracked race winner: walk ({} candidates)",
+                    candidates.len()
+                );
+                let untracked =
+                    filter_untracked_from_candidates(candidates, &ls_tree_hashes, &status_entries);
+                for path in untracked {
+                    status_entries.push(RepoStatusEntry {
+                        path,
+                        is_delete: false,
+                    });
+                }
+            }
+        }
+
+        status_entries.sort_by(|a, b| a.path.cmp(&b.path));
+
+        debug!(
+            "built repo git index (subprocess + walk race): clean_count={}, status_count={}",
+            ls_tree_hashes.len(),
+            status_entries.len(),
+        );
+
+        Ok(Self {
+            ls_tree_hashes,
+            status_entries,
+            untracked_entries_populated: true,
+        })
+    }
+
     #[tracing::instrument(skip(self, git))]
     pub fn populate_all_untracked(&mut self, git: &GitRepo) -> Result<(), Error> {
         self.populate_untracked(git, None)
+    }
+
+    /// Populate untracked entries from pre-walked candidate files.
+    ///
+    /// This is the fast path used when the filesystem walk ran in parallel
+    /// with index construction. The candidates are filtered against the
+    /// tracked index to identify truly untracked files.
+    pub fn populate_untracked_from_candidates(&mut self, candidates: Vec<RelativeUnixPathBuf>) {
+        if self.untracked_entries_populated {
+            return;
+        }
+
+        let before_status_count = self.status_entries.len();
+        let untracked = filter_untracked_from_candidates(
+            candidates,
+            &self.ls_tree_hashes,
+            &self.status_entries,
+        );
+        for path in untracked {
+            self.status_entries.push(RepoStatusEntry {
+                path,
+                is_delete: false,
+            });
+        }
+
+        self.status_entries.sort_by(|a, b| a.path.cmp(&b.path));
+        self.untracked_entries_populated = true;
+
+        debug!(
+            "populated repo git index from pre-walked candidates: added_count={}, status_count={}",
+            self.status_entries
+                .len()
+                .saturating_sub(before_status_count),
+            self.status_entries.len(),
+        );
     }
 
     #[tracing::instrument(skip(self, git, prefixes))]
@@ -343,6 +501,163 @@ impl RepoGitIndex {
 
         (known_hashes, to_hash)
     }
+}
+
+/// Walk the working tree to collect candidate files (all non-gitignored
+/// files within scope). This is the I/O-bound phase that can run without
+/// the git index.
+///
+/// Uses the `ignore` crate's native gitignore support to read .gitignore
+/// files from disk as the walker descends. This matches standard git
+/// behavior and handles tracked, untracked, and nested .gitignore files.
+///
+/// Returns all candidate paths relative to `git_root`. The caller must
+/// filter these against the tracked index to identify truly untracked files.
+#[tracing::instrument(skip(git_root, prefixes))]
+pub fn walk_candidate_files(
+    git_root: &std::path::Path,
+    prefixes: Option<&[RelativeUnixPathBuf]>,
+) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+    use std::sync::mpsc;
+
+    use ignore::WalkBuilder;
+
+    let root = std::sync::Arc::new(git_root.to_path_buf());
+    let scope = std::sync::Arc::new(UntrackedScope::new(prefixes));
+
+    let (tx, rx) = mpsc::channel::<Vec<RelativeUnixPathBuf>>();
+
+    let walker = WalkBuilder::new(root.as_path())
+        .follow_links(false)
+        .git_ignore(true)
+        .git_exclude(true)
+        .git_global(true)
+        .require_git(false)
+        .ignore(false)
+        .parents(false)
+        .hidden(false)
+        .filter_entry({
+            let root = root.clone();
+            let scope = scope.clone();
+            move |entry| {
+                if entry.file_name() == ".git" {
+                    return false;
+                }
+                let is_dir = entry.file_type().is_some_and(|ft| ft.is_dir());
+                let path = entry.path();
+
+                let rel_path = match path.strip_prefix(root.as_path()) {
+                    Ok(rel) => rel,
+                    Err(_) => return false,
+                };
+                #[cfg(windows)]
+                let rel_path_owned = rel_path.to_string_lossy().replace('\\', "/");
+                #[cfg(windows)]
+                let rel_path = rel_path_owned.as_str();
+                #[cfg(not(windows))]
+                let rel_path = match rel_path.to_str() {
+                    Some(rel) => rel,
+                    None => return false,
+                };
+
+                if is_dir {
+                    scope.should_visit_dir(rel_path)
+                } else {
+                    scope.should_consider_file(rel_path, entry.file_name() == ".gitignore")
+                }
+            }
+        })
+        .threads(rayon::current_num_threads().min(8))
+        .build_parallel();
+
+    struct FlushOnDrop {
+        buf: Vec<RelativeUnixPathBuf>,
+        tx: mpsc::Sender<Vec<RelativeUnixPathBuf>>,
+    }
+
+    impl Drop for FlushOnDrop {
+        fn drop(&mut self) {
+            if !self.buf.is_empty() {
+                let batch = std::mem::take(&mut self.buf);
+                let _ = self.tx.send(batch);
+            }
+        }
+    }
+
+    walker.run(|| {
+        let root = root.clone();
+        let mut guard = FlushOnDrop {
+            buf: Vec::new(),
+            tx: tx.clone(),
+        };
+
+        Box::new(move |entry| {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => return ignore::WalkState::Continue,
+            };
+
+            if entry.file_type().is_some_and(|ft| ft.is_dir()) {
+                return ignore::WalkState::Continue;
+            }
+            if entry.file_type().is_some_and(|ft| ft.is_symlink()) {
+                return ignore::WalkState::Continue;
+            }
+
+            let abs_path = entry.into_path();
+            let rel_path = match abs_path.strip_prefix(root.as_path()) {
+                Ok(rel) => rel,
+                Err(_) => return ignore::WalkState::Continue,
+            };
+
+            let unix_str = match rel_path.to_str() {
+                Some(s) => s,
+                None => return ignore::WalkState::Continue,
+            };
+
+            #[cfg(windows)]
+            let unix_str_owned = unix_str.replace('\\', "/");
+            #[cfg(windows)]
+            let unix_str: &str = &unix_str_owned;
+
+            if let Ok(path) = RelativeUnixPathBuf::new(unix_str) {
+                guard.buf.push(path);
+            }
+
+            ignore::WalkState::Continue
+        })
+    });
+    drop(tx);
+
+    let mut candidates: Vec<RelativeUnixPathBuf> = Vec::new();
+    for batch in rx.iter() {
+        candidates.extend(batch);
+    }
+
+    Ok(candidates)
+}
+
+/// Filter pre-walked candidate files against the git index to identify
+/// truly untracked files. This is the CPU-bound phase that runs after
+/// the tracked index is ready.
+fn filter_untracked_from_candidates(
+    candidates: Vec<RelativeUnixPathBuf>,
+    ls_tree_hashes: &SortedGitHashes,
+    status_entries: &[RepoStatusEntry],
+) -> Vec<RelativeUnixPathBuf> {
+    candidates
+        .into_iter()
+        .filter(|path| {
+            let s = path.as_str();
+            let in_ls_tree = ls_tree_hashes
+                .binary_search_by(|(p, _)| p.as_str().cmp(s))
+                .is_ok();
+            let in_status = status_entries
+                .binary_search_by(|e| e.path.as_str().cmp(s))
+                .is_ok();
+            !in_ls_tree && !in_status
+        })
+        .collect()
 }
 
 /// Walk the working tree to find untracked files (files on disk that are

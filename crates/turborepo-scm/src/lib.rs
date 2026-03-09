@@ -34,7 +34,7 @@ mod git_index_regression_tests;
 #[cfg(test)]
 mod test_utils;
 
-pub use repo_index::RepoGitIndex;
+pub use repo_index::{RepoGitIndex, walk_candidate_files};
 pub use turborepo_hash::OidHash;
 pub use worktree::WorktreeInfo;
 
@@ -311,6 +311,13 @@ impl SCM {
         matches!(self, SCM::Manual)
     }
 
+    pub fn git_root(&self) -> Option<&AbsoluteSystemPath> {
+        match self {
+            SCM::Git(git) => Some(&git.root),
+            SCM::Manual => None,
+        }
+    }
+
     /// Build a repo-wide git index that caches `git ls-tree` and `git status`
     /// results. Returns `None` for manual SCM mode or when the package count
     /// is too small to benefit. Callers should build this once before parallel
@@ -385,6 +392,34 @@ impl SCM {
                 Err(e) => {
                     debug!(
                         "failed to build tracked repo git index eagerly: {}. Will hash \
+                         per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build the full repo index (tracked + untracked) using parallel git
+    /// subprocesses for the tracked index, and a race between
+    /// `walk_candidate_files` and `git ls-files --others` for untracked
+    /// discovery. The race ensures optimal performance on both macOS
+    /// (where the walk wins) and Linux (where ls-files wins).
+    pub fn build_repo_index_from_subprocesses(
+        &self,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new_from_subprocess_and_walk(git, prefixes) {
+                Ok(index) => {
+                    debug!("repo git index built from subprocess + walk race");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index from subprocesses: {}. Will hash \
                          per-package.",
                         e,
                     );
