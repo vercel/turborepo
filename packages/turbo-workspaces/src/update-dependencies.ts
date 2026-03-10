@@ -1,7 +1,14 @@
 import path from "node:path";
 import fs from "fs-extra";
 import picocolors from "picocolors";
-import type { DependencyList, DependencyGroups } from "@turbo/utils";
+type DependencyList = Record<string, string>;
+
+interface DependencyGroups {
+  dependencies?: DependencyList;
+  devDependencies?: DependencyList;
+  peerDependencies?: DependencyList;
+  optionalDependencies?: DependencyList;
+}
 import type {
   Project,
   Workspace,

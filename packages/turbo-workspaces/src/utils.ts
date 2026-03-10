@@ -9,8 +9,25 @@ import {
 } from "fs-extra";
 import { sync as globSync } from "fast-glob";
 import yaml from "js-yaml";
-import type { PackageJson, PackageManager } from "@turbo/utils";
-import type { Project, Workspace, WorkspaceInfo, Options } from "./types";
+import type {
+  PackageManager,
+  Project,
+  Workspace,
+  WorkspaceInfo,
+  Options
+} from "./types";
+
+interface PackageJson {
+  name: string;
+  version: string;
+  description?: string;
+  packageManager?: string;
+  workspaces?: Array<string> | { packages?: Array<string> };
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+}
 import { ConvertError } from "./errors";
 
 // adapted from https://github.com/nodejs/corepack/blob/cae770694e62f15fed33dd8023649d77d96023c1/sources/specUtils.ts#L14
