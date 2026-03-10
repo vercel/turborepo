@@ -35,4 +35,11 @@ export type {
   TurboConfigs,
   WorkspaceConfig
 } from "./get-turbo-configs";
-export * from "./types";
+export type {
+  PackageManager,
+  ExitCode,
+  DependencyList,
+  DependencyGroups,
+  PackageJson,
+  PNPMWorkspaceConfig
+} from "./types";
