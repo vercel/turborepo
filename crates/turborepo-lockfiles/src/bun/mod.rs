@@ -887,15 +887,20 @@ impl BunLockfile {
 
             let ident = PackageIdent::parse(&entry.ident);
             if ident.is_workspace() {
-                // Workspace entries: [ident, info] — bun requires the info
-                // object even when empty
+                // Workspace entries: [ident] when no info, [ident, info]
+                // when there are dependencies. Bun omits the info object
+                // entirely for workspace mappings with no dependencies.
                 let ident_json = serde_json::to_string(&entry.ident)?;
-                let info_json =
-                    serde_json::to_string(&entry.info.as_ref().unwrap_or(&PackageInfo::default()))?;
-                let info_json_spaced = self.format_info_json(&info_json);
-                output.push_str(&format!(
-                    "    \"{key}\": [{ident_json}, {info_json_spaced}],"
-                ));
+                let has_info = entry.info.as_ref().is_some_and(|i| !i.is_empty());
+                if has_info {
+                    let info_json = serde_json::to_string(&entry.info.as_ref().unwrap())?;
+                    let info_json_spaced = self.format_info_json(&info_json);
+                    output.push_str(&format!(
+                        "    \"{key}\": [{ident_json}, {info_json_spaced}],"
+                    ));
+                } else {
+                    output.push_str(&format!("    \"{key}\": [{ident_json}],"));
+                }
             } else if ident.is_local_package() {
                 // file:, link:, and tarball entries: [ident, info] — 2 elements
                 let ident_json = serde_json::to_string(&entry.ident)?;
@@ -1397,6 +1402,19 @@ impl BunLockfile {
                     // Format: "storybook@workspace:apps/storybook" -> workspace path is
                     // "apps/storybook"
                     if let Some(workspace_path) = ident.workspace_path() {
+                        // Ensure transitive workspace dependencies are in the
+                        // pruned set. The initial pruned_data.workspaces only
+                        // contains the root and target workspaces, but
+                        // workspaces depended on transitively must also be
+                        // included.
+                        if !pruned_data.workspaces.contains_key(workspace_path)
+                            && let Some(ws_entry) = self.data.workspaces.get(workspace_path)
+                        {
+                            pruned_data
+                                .workspaces
+                                .insert(workspace_path.to_string(), ws_entry.clone());
+                        }
+
                         // Check if this workspace is in the pruned set
                         if pruned_data.workspaces.contains_key(workspace_path) {
                             // This workspace IS in the pruned set - keep the mapping as-is
@@ -1406,8 +1424,9 @@ impl BunLockfile {
                             continue;
                         }
 
-                        // This workspace is NOT in the pruned set
-                        // Try to find the actual npm package entry instead
+                        // This workspace is NOT in the pruned set (doesn't
+                        // exist in the original data either). Try to find the
+                        // actual npm package entry instead.
                         // Get the workspace name (last component of path)
                         let workspace_name = workspace_path
                             .split('/')
@@ -1872,6 +1891,15 @@ impl PackageEntry {
 }
 
 impl PackageInfo {
+    pub fn is_empty(&self) -> bool {
+        self.dependencies.is_empty()
+            && self.dev_dependencies.is_empty()
+            && self.optional_dependencies.is_empty()
+            && self.peer_dependencies.is_empty()
+            && self.optional_peers.is_empty()
+            && self.other.is_empty()
+    }
+
     pub fn all_dependencies(&self) -> impl Iterator<Item = (&str, &str)> {
         [
             self.dependencies.iter(),
