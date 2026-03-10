@@ -31,7 +31,7 @@
     "oxlint": "^1.49.0",
     "semver": "7.5.2",
     "typescript": "5.5.4",
-    "ultracite": "7.2.3"
+    "ultracite": "7.2.5"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,mdx,mjs,yml,yaml,css,json,jsonc}": "oxfmt --no-error-on-unmatched-pattern",
@@ -43,8 +43,22 @@
   "packageManager": "pnpm@10.28.0",
   "pnpm": {
     "overrides": {
-      "fast-xml-parser": ">=5.3.4",
-      "lodash-es": ">=4.17.23"
+      "basic-ftp": ">=5.2.0",
+      "bunchee>rollup": ">=4.59.0",
+      "fast-xml-parser": ">=5.3.8",
+      "glob@7>minimatch": "3.1.4",
+      "lodash-es": ">=4.17.23",
+      "multimatch>minimatch": "3.1.4",
+      "test-exclude>minimatch": "3.1.4",
+      "tmp": ">=0.2.4",
+      "tsdown>diff": ">=8.0.3",
+      "valibot": ">=1.2.0",
+      "vscode-languageclient>minimatch": "5.1.9"
+    },
+    "auditConfig": {
+      "ignoreCves": [
+        "GHSA-6cpc-mj5c-m9rq"
+      ]
     }
   }
 }
