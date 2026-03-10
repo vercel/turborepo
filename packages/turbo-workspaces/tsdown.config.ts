@@ -5,6 +5,7 @@ export default defineConfig({
   format: ["cjs", "esm"],
   dts: false,
   minify: true,
+  noExternal: ["fs-extra"],
   outExtensions: ({ format }) => ({
     js: format === "cjs" ? ".js" : ".mjs"
   })
