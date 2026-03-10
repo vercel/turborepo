@@ -426,6 +426,7 @@ jobs:
         with:
           name: turbo-gen-binaries
           path: packages/turbo-gen/dist/turbo-gen-*
+          if-no-files-found: error
 
   npm-publish:
     name: "Publish To NPM"

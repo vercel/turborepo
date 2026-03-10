@@ -6,6 +6,7 @@ export default defineConfig({
   entry: ["src/types.ts"],
   format: ["cjs"],
   dts: true,
+  clean: false,
   outExtensions: () => ({
     js: ".js",
     dts: ".ts"
