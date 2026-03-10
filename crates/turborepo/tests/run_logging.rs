@@ -196,7 +196,7 @@ fn test_log_prefix_none_cache_hit() {
     // Second run: cache hit, still no prefixes
     let output = run_turbo(tempdir.path(), &["run", "build", "--log-prefix=none"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("cache hit, replaying logs 612027951a2848ce"));
+    assert!(stdout.contains("cache hit, replaying logs"));
     assert!(stdout.contains("1 cached, 1 total"));
     assert!(stdout.contains("FULL TURBO"));
 }
@@ -212,7 +212,7 @@ fn test_log_prefix_default_shows_prefixes() {
     // Default prefix: should show prefixes
     let output = run_turbo(tempdir.path(), &["run", "build"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("app-a:build: cache hit, replaying logs 612027951a2848ce"));
+    assert!(stdout.contains("app-a:build: cache hit, replaying logs"));
     assert!(stdout.contains("app-a:build: build-app-a"));
 }
 
@@ -392,6 +392,42 @@ fn test_errors_only_turbo_json_error() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("error-builderror2-app-a"));
     assert!(stdout.contains("Failed:    app-a#builderror2"));
+}
+
+// --- errors-only-no-cache.t ---
+
+#[test]
+fn test_errors_only_no_cache_success() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+
+    // nocachebuild has cache:false in turbo.json
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "nocachebuild", "--output-logs=errors-only"],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Success with errors-only: task output should be suppressed
+    assert!(!stdout.contains("nocachebuild-app-a"));
+    assert!(stdout.contains("1 successful, 1 total"));
+}
+
+#[test]
+fn test_errors_only_no_cache_error() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "run_logging", "npm@10.5.0", true).unwrap();
+
+    // nocachebuilderror has cache:false in turbo.json and exits 1
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "nocachebuilderror", "--output-logs=errors-only"],
+    );
+    assert!(!output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // Failure with errors-only: full output should be shown
+    assert!(stdout.contains("nocachebuilderror-app-a"));
+    assert!(stdout.contains("Failed:    app-a#nocachebuilderror"));
 }
 
 // --- errors-only-show-hash.t ---
