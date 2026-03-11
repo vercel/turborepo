@@ -5,6 +5,7 @@ use itertools::Itertools;
 use miette::{NamedSource, SourceSpan};
 use oxc_ast::ast::Comment;
 use oxc_span::Span;
+use tracing::debug;
 use turbo_trace::ImportType;
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, PathRelation, RelativeUnixPath};
 use turborepo_errors::Spanned;
@@ -80,18 +81,23 @@ impl<'a> DependencyLocations<'a> {
 }
 
 /// Checks if the given import can be resolved as a tsconfig path alias via the
-/// resolver, e.g. `@/types/foo` -> `./src/foo` or `features/foo` -> `./src/features/foo`,
-/// and if so, checks the resolved path against package boundaries.
+/// resolver, e.g. `@/types/foo` -> `./src/foo` or `features/foo` ->
+/// `./src/features/foo`, and if so, checks the resolved path against package
+/// boundaries.
 ///
-/// Only called for package-name-shaped imports (after `is_potential_package_name` guard
-/// in `check_import`). This allows tsconfig `paths` entries that shadow package-name-shaped
-/// specifiers to be recognised as local imports instead of being incorrectly flagged as
-/// undeclared dependencies.
+/// Only called for package-name-shaped imports (after
+/// `is_potential_package_name` guard in `check_import`). This allows tsconfig
+/// `paths` entries that shadow package-name-shaped specifiers to be recognised
+/// as local imports instead of being incorrectly flagged as undeclared
+/// dependencies.
 ///
-/// Returns `Ok(true)` if the import was resolved as a local tsconfig path alias.
-/// Returns `Ok(false)` if the resolver found a real npm package (has a package.json),
-/// could not resolve the import, or the import is relative — the caller should then
-/// fall through to `check_package_import`.
+/// Returns `Ok(true)` if the import was resolved as a tsconfig path alias
+/// (local or cross-package — the latter produces an `ImportLeavesPackage`
+/// diagnostic via [`check_file_import`]).
+///
+/// Returns `Ok(false)` if the resolved path goes through `node_modules` (a
+/// real npm package) or if the resolver could not resolve the import. The
+/// caller should then fall through to `check_package_import`.
 #[allow(clippy::too_many_arguments)]
 fn check_import_as_tsconfig_path_alias(
     resolver: &Resolver,
@@ -103,10 +109,7 @@ fn check_import_as_tsconfig_path_alias(
     import: &str,
     result: &mut BoundariesResult,
 ) -> Result<bool, Error> {
-    // Skip relative imports — those are always resolved as file imports elsewhere.
-    // Package-name-shaped imports are intentionally tried here so that tsconfig
-    // `paths` aliases (e.g. `features/*` → `./src/features/*`) are resolved before
-    // we check them against declared package dependencies.
+    // Safety guard — relative imports are resolved as file imports elsewhere.
     if import.starts_with('.') {
         return Ok(false);
     }
@@ -115,15 +118,15 @@ fn check_import_as_tsconfig_path_alias(
 
     match resolver.resolve(dir, import) {
         Ok(resolution) => {
-            // If the resolved path goes through node_modules, the import resolved to
-            // a real npm package rather than a tsconfig path alias pointing to a local
-            // file.  Return false so the caller falls through to `check_package_import`.
+            // If the resolved path goes through node_modules, the import
+            // resolved to a real npm package rather than a tsconfig path alias
+            // pointing to a local file.  Return false so the caller falls
+            // through to `check_package_import`.
             //
-            // We intentionally do NOT use `resolution.package_json().is_some()` here
-            // because oxc_resolver may return a package.json for any file inside a
-            // package directory — including files that are local tsconfig path alias
-            // targets.  Checking for `node_modules` in the resolved path is the
-            // canonical way to distinguish npm packages from local source files.
+            // We intentionally do NOT use `resolution.package_json().is_some()`
+            // because the resolver may return a package.json for any file
+            // inside a directory that has one — including local tsconfig alias
+            // targets.
             let path = resolution.path();
             if path.components().any(|c| c.as_os_str() == "node_modules") {
                 return Ok(false);
@@ -146,10 +149,40 @@ fn check_import_as_tsconfig_path_alias(
             )?);
             Ok(true)
         }
-        Err(_) => Ok(false),
+        // Expected resolution failures — the import isn't a tsconfig alias.
+        Err(
+            ResolveError::NotFound(_)
+            | ResolveError::MatchedAliasNotFound(_, _)
+            | ResolveError::Builtin { .. }
+            | ResolveError::Ignored(_)
+            | ResolveError::Specifier(_),
+        ) => Ok(false),
+        // Unexpected errors (I/O, broken tsconfig, etc.) — log for debugging
+        // but still fall through to check_package_import.
+        Err(e) => {
+            debug!(
+                import = %import,
+                error = %e,
+                "tsconfig path alias resolution failed unexpectedly, \
+                 falling through to package import check"
+            );
+            Ok(false)
+        }
     }
 }
 
+/// Validates a single import statement against package boundaries.
+///
+/// Dispatches to one of three paths:
+/// 1. Relative imports (`./`, `../`) — validates the resolved path stays within
+///    the package via [`check_file_import`].
+/// 2. Package-name-shaped imports — first tries
+///    [`check_import_as_tsconfig_path_alias`] (resolves tsconfig `paths`
+///    entries), then falls through to [`check_package_import`] (validates the
+///    import is a declared dependency).
+/// 3. Everything else — skipped (no diagnostic).
+///
+/// Respects `@boundaries-ignore` comments placed above the import statement.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn check_import(
     comments: &[Comment],
@@ -247,6 +280,10 @@ pub(crate) fn check_import(
     Ok(())
 }
 
+/// Checks whether a resolved file import stays within the package boundary.
+///
+/// Returns `Some(BoundariesDiagnostic::ImportLeavesPackage)` if the resolved
+/// path falls outside `package_path`, `None` otherwise.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn check_file_import(
     file_path: &AbsoluteSystemPath,
@@ -286,6 +323,11 @@ pub(crate) fn check_file_import(
     }
 }
 
+/// Extracts the npm package name from an import specifier.
+///
+/// For scoped packages (`@scope/name/path`), returns `@scope/name`.
+/// For unscoped packages (`name/path`), returns `name`.
+/// For bare imports without subpaths, returns the import as-is.
 pub(crate) fn get_package_name(import: &str) -> String {
     if import.starts_with("@") {
         import.split('/').take(2).join("/")
@@ -513,7 +555,9 @@ mod test {
     #[test]
     fn tsconfig_alias_resolves_package_name_shaped_path_alias() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
+        // Canonicalize to match the resolver's symlink-resolved paths
+        // (e.g. /tmp → /private/tmp on macOS).
+        let root = tmp.path().canonicalize().unwrap();
 
         // Mimic a tsconfig that maps `*` to `./src/*`, turning bare specifiers
         // like `features/feature-a` into local imports.
@@ -561,24 +605,27 @@ mod test {
             resolved,
             "features/feature-a with a tsconfig `*` alias should be resolved as a local import"
         );
-        // The resolved path is inside the package root, so no boundary violation
         assert!(
             result.diagnostics.is_empty(),
             "expected no boundary violations for a locally-aliased import"
         );
+        assert!(result.warnings.is_empty(), "expected no warnings");
     }
+
     /// Regression test: a tsconfig path alias must still be resolved as a local
     /// import even when the package root contains a `package.json` file.
     ///
     /// Previously, using `resolution.package_json().is_some()` caused the check
-    /// to incorrectly treat tsconfig aliases as npm packages in any real project
-    /// that has a `package.json` in its root directory.
+    /// to incorrectly treat tsconfig aliases as npm packages in any real
+    /// project that has a `package.json` in its root directory.
     #[test]
     fn tsconfig_alias_resolves_with_package_json_present() {
         let tmp = tempfile::tempdir().unwrap();
-        let root = tmp.path();
+        // Canonicalize to match the resolver's symlink-resolved paths
+        // (e.g. /tmp → /private/tmp on macOS).
+        let root = tmp.path().canonicalize().unwrap();
 
-        // Create a package.json so oxc_resolver can find it during resolution
+        // Create a package.json so unrs_resolver can find it during resolution
         std::fs::write(
             root.join("package.json"),
             r#"{ "name": "test-pkg", "version": "1.0.0" }"#,
@@ -621,11 +668,133 @@ mod test {
 
         assert!(
             resolved,
-            "@/utils/helper should be resolved as a tsconfig path alias even when package.json is present"
+            "@/utils/helper should be resolved as a tsconfig path alias even when package.json is \
+             present"
         );
         assert!(
             result.diagnostics.is_empty(),
             "expected no boundary violations for a locally-aliased import"
+        );
+        assert!(result.warnings.is_empty(), "expected no warnings");
+    }
+
+    /// When the resolver resolves an import to a path inside `node_modules`,
+    /// the function must return `false` so the caller falls through to
+    /// `check_package_import` for dependency-declaration validation.
+    #[test]
+    fn tsconfig_alias_check_returns_false_for_node_modules_resolution() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Wildcard alias that could match anything
+        let tsconfig = root.join("tsconfig.json");
+        std::fs::write(
+            &tsconfig,
+            r#"{ "compilerOptions": { "paths": { "*": ["./src/*"] } } }"#,
+        )
+        .unwrap();
+
+        // Create a real node_modules package so the resolver can find it
+        std::fs::create_dir_all(root.join("node_modules").join("some-pkg")).unwrap();
+        std::fs::write(
+            root.join("node_modules").join("some-pkg").join("index.js"),
+            "module.exports = {};",
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("node_modules")
+                .join("some-pkg")
+                .join("package.json"),
+            r#"{ "name": "some-pkg", "main": "index.js" }"#,
+        )
+        .unwrap();
+
+        let file_content = r#"import { x } from "some-pkg";"#;
+        std::fs::write(root.join("index.ts"), file_content).unwrap();
+
+        let package_root = AbsoluteSystemPath::new(root.to_str().unwrap()).unwrap();
+        let tsconfig_path = AbsoluteSystemPath::new(tsconfig.to_str().unwrap()).unwrap();
+        let file_path = package_root.join_component("index.ts");
+        let package_name = PackageName::from("test-pkg");
+        let span = SourceSpan::new(0.into(), 0);
+        let mut result = BoundariesResult::default();
+
+        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+
+        let resolved = check_import_as_tsconfig_path_alias(
+            &resolver,
+            &package_name,
+            package_root,
+            span,
+            &file_path,
+            file_content,
+            "some-pkg",
+            &mut result,
+        )
+        .unwrap();
+
+        assert!(
+            !resolved,
+            "import resolving to node_modules must not be treated as a tsconfig alias"
+        );
+        assert!(result.diagnostics.is_empty());
+    }
+
+    /// A tsconfig alias that resolves to a file outside the package root should
+    /// still be treated as a resolved alias (returns `true`), but produce an
+    /// `ImportLeavesPackage` diagnostic.
+    #[test]
+    fn tsconfig_alias_flags_boundary_violation_for_out_of_package_resolution() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+
+        // Shared file outside the package root
+        let shared_dir = root.join("shared");
+        std::fs::create_dir_all(&shared_dir).unwrap();
+        std::fs::write(shared_dir.join("utils.ts"), "export const x = 1;").unwrap();
+
+        // Package directory with a tsconfig alias pointing outside
+        let pkg_dir = root.join("packages").join("my-app");
+        std::fs::create_dir_all(&pkg_dir).unwrap();
+
+        let tsconfig = pkg_dir.join("tsconfig.json");
+        std::fs::write(
+            &tsconfig,
+            r#"{ "compilerOptions": { "paths": { "@shared/*": ["../../shared/*"] } } }"#,
+        )
+        .unwrap();
+
+        let file_content = r#"import { x } from "@shared/utils";"#;
+        std::fs::write(pkg_dir.join("index.ts"), file_content).unwrap();
+
+        let package_root = AbsoluteSystemPath::new(pkg_dir.to_str().unwrap()).unwrap();
+        let tsconfig_path = AbsoluteSystemPath::new(tsconfig.to_str().unwrap()).unwrap();
+        let file_path = package_root.join_component("index.ts");
+        let package_name = PackageName::from("my-app");
+        let span = SourceSpan::new(0.into(), 0);
+        let mut result = BoundariesResult::default();
+
+        let resolver = Tracer::create_resolver(Some(tsconfig_path));
+
+        let resolved = check_import_as_tsconfig_path_alias(
+            &resolver,
+            &package_name,
+            package_root,
+            span,
+            &file_path,
+            file_content,
+            "@shared/utils",
+            &mut result,
+        )
+        .unwrap();
+
+        assert!(
+            resolved,
+            "@shared/utils should be resolved as a tsconfig path alias"
+        );
+        assert!(
+            !result.diagnostics.is_empty(),
+            "expected an ImportLeavesPackage diagnostic for an out-of-package alias"
         );
     }
 }
