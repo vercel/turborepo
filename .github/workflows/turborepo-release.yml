@@ -534,6 +534,23 @@ jobs:
       - name: Create and push release tag
         run: cd cli && make create-release-tag
 
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.stage.outputs.version }}
+          PREVIOUS_TAG: ${{ needs.stage.outputs.previous-tag }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [[ "$VERSION" == *"-canary."* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          gh release create "v${VERSION}" \
+            --title "Turborepo v${VERSION}" \
+            --generate-notes \
+            --notes-start-tag "${PREVIOUS_TAG}" \
+            $PRERELEASE_FLAG
+
   alias-versioned-docs:
     name: "Alias Versioned Docs"
     runs-on: ubuntu-latest

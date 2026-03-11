@@ -2,10 +2,13 @@ name: Update examples to latest
 
 on:
   workflow_dispatch:
+  release:
+    types: [published]
 
 jobs:
   update-examples-pr:
     name: "Update examples PR"
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
