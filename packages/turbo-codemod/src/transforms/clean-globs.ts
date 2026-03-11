@@ -46,6 +46,10 @@ export function transformer({
 }
 
 function migrateConfig(config: SchemaV1) {
+  if (!config.pipeline) {
+    return config;
+  }
+
   const mapGlob = (glob: string) => fixGlobPattern(glob);
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     taskDef.inputs = taskDef.inputs?.map(mapGlob);
