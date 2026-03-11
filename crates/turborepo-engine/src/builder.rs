@@ -194,7 +194,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 // - A task from the non-root workspace (i.e. tasks from every other workspace)
                 // - A task that we *know* is rootEnabled task (in which case, the root
                 //   workspace is acceptable)
-                if !matches!(workspace, PackageName::Root) || self.root_enabled_tasks.contains(task)
+                if !matches!(workspace, PackageName::Root)
+                    || self
+                        .root_enabled_tasks
+                        .contains(&TaskName::from(task.task()))
                 {
                     let task_id = task.to(task_id);
                     traversal_queue.push_back(task_id);
@@ -4565,6 +4568,101 @@ mod test {
             .with_tasks(vec![
                 Spanned::new(TaskName::from("app1#build")),
                 Spanned::new(TaskName::from("rootlint")),
+            ])
+            .with_root_tasks(vec![TaskName::from("//#rootlint")])
+            .with_workspaces(vec![
+                PackageName::Root,
+                PackageName::from("app1"),
+                PackageName::from("app2"),
+                PackageName::from("libA"),
+            ])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "app1#build" => ["libA#build"],
+            "libA#build" => ["___ROOT___"],
+            "//#rootlint" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_root_task_with_double_slash_hash_cli_syntax() {
+        // Regression test for https://github.com/vercel/turborepo/issues/12239
+        // Running `turbo run //#root-level-call` (with the //#  prefix on the CLI task)
+        // must execute the root task. Previously, the root_enabled_tasks comparison
+        // failed because it compared the package-qualified TaskName against the
+        // stripped version stored in root_enabled_tasks.
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => [],
+                "app2" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "//#root-level-call": {},
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+
+        // The key difference from the existing test: the CLI task uses
+        // "//#root-level-call" syntax (with the //#  prefix), not just
+        // "root-level-call".
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("//#root-level-call"))))
+            .with_root_tasks(vec![TaskName::from("//#root-level-call")])
+            .with_workspaces(vec![PackageName::Root])
+            .build()
+            .unwrap();
+
+        let expected = deps! {
+            "//#root-level-call" => ["___ROOT___"]
+        };
+        assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_root_task_double_slash_hash_mixed_with_package_task() {
+        // Verify that `//#roottask` syntax works alongside `package#task` syntax.
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "app1" => ["libA"],
+                "app2" => [],
+                "libA" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                    "//#rootlint": {},
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(vec![
+                Spanned::new(TaskName::from("app1#build")),
+                Spanned::new(TaskName::from("//#rootlint")),
             ])
             .with_root_tasks(vec![TaskName::from("//#rootlint")])
             .with_workspaces(vec![
