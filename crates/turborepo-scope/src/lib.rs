@@ -29,20 +29,14 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
-// Re-export ScopeOpts for backwards compatibility
-pub use turborepo_types::ScopeOpts;
+pub use turborepo_types::{FilterMode, ScopeOpts};
 
 /// Resolve which packages should be included in the run based on scope options.
 ///
-/// # Arguments
-/// * `opts` - Scope resolution options
-/// * `turbo_root` - The root of the turbo repository
-/// * `pkg_graph` - The package graph
-/// * `scm` - Source control manager for change detection
-/// * `global_deps` - Global dependencies from turbo.json
-///
-/// # Returns
-/// Tuple of (packages with inclusion reasons, is_all_packages flag)
+/// Returns the filtered package set alongside a [`FilterMode`] that
+/// describes how the filter was classified (all packages, exclude-only,
+/// or explicit selection). The caller uses `FilterMode` to decide
+/// whether root tasks should be injected.
 #[tracing::instrument(skip(opts, pkg_graph, scm))]
 pub fn resolve_packages(
     opts: &ScopeOpts,
@@ -50,11 +44,11 @@ pub fn resolve_packages(
     pkg_graph: &PackageGraph,
     scm: &SCM,
     global_deps: &[String],
-) -> Result<(HashMap<PackageName, PackageInclusionReason>, bool), ResolutionError> {
+) -> Result<(HashMap<PackageName, PackageInclusionReason>, FilterMode), ResolutionError> {
     let pkg_inference = opts.pkg_inference_root.as_ref().map(|pkg_inference_path| {
         PackageInference::calculate(turbo_root, pkg_inference_path, pkg_graph)
     });
 
     FilterResolver::new(opts, pkg_graph, turbo_root, pkg_inference, scm, global_deps)?
-        .resolve(&opts.affected_range, &opts.get_filters())
+        .resolve(&opts.affected_range, opts.get_filters())
 }
