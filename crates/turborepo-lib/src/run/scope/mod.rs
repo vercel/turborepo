@@ -11,8 +11,7 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
-// Re-export modules and types from turborepo-scope crate for backward compatibility
-pub use turborepo_scope::{filter::ResolutionError, target_selector, ScopeOpts};
+pub use turborepo_scope::{filter::ResolutionError, target_selector, FilterMode, ScopeOpts};
 
 use crate::turbo_json::TurboJson;
 
@@ -26,8 +25,7 @@ pub fn resolve_packages(
     pkg_graph: &PackageGraph,
     scm: &SCM,
     root_turbo_json: &TurboJson,
-) -> Result<(HashMap<PackageName, PackageInclusionReason>, bool), ResolutionError> {
-    // Delegate to turborepo-scope, passing global_deps from turbo.json
+) -> Result<(HashMap<PackageName, PackageInclusionReason>, FilterMode), ResolutionError> {
     turborepo_scope::resolve_packages(
         opts,
         turbo_root,

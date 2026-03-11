@@ -189,6 +189,22 @@ impl RunBuilder {
         prefixes
     }
 
+    /// Resolve the set of packages that should participate in this run.
+    ///
+    /// Starts with the result of scope resolution (which handles `--filter`
+    /// and `--affected`), then layers on root-task inclusion:
+    ///
+    /// - **No filter** (`AllPackages`): root tasks defined in `turbo.json` are
+    ///   included automatically.
+    /// - **Exclude-only** (`ExcludeOnly`): semantically "all packages minus
+    ///   excluded ones" — root tasks are still included unless the root package
+    ///   itself was explicitly excluded (e.g. `--filter=!//`).
+    /// - **Explicit selection** (`ExplicitSelection`): the user opted into
+    ///   specific packages — root tasks are not auto-injected.
+    ///
+    /// When `AllPackages` is active and every requested task uses
+    /// `package#task` syntax, the set is narrowed to only the referenced
+    /// packages.
     pub fn calculate_filtered_packages(
         repo_root: &AbsoluteSystemPath,
         opts: &Opts,
@@ -196,7 +212,7 @@ impl RunBuilder {
         scm: &SCM,
         root_turbo_json: &TurboJson,
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, Error> {
-        let (mut filtered_pkgs, is_all_packages) = scope::resolve_packages(
+        let (mut filtered_pkgs, filter_mode) = scope::resolve_packages(
             &opts.scope_opts,
             repo_root,
             pkg_dep_graph,
@@ -204,10 +220,15 @@ impl RunBuilder {
             root_turbo_json,
         )?;
 
-        if is_all_packages {
+        let should_include_root_tasks = match filter_mode {
+            scope::FilterMode::AllPackages => true,
+            scope::FilterMode::ExcludeOnly { root_excluded } => !root_excluded,
+            scope::FilterMode::ExplicitSelection => false,
+        };
+
+        if should_include_root_tasks {
             for target in opts.run_opts.tasks.iter() {
                 let mut task_name = TaskName::from(target.as_str());
-                // If it's not a package task, we convert to a root task
                 if !task_name.is_package_task() {
                     task_name = task_name.into_root_task()
                 }
@@ -222,7 +243,9 @@ impl RunBuilder {
                     break;
                 }
             }
+        }
 
+        if matches!(filter_mode, scope::FilterMode::AllPackages) {
             // When all tasks use package#task syntax, we can narrow the package
             // set to only the referenced packages rather than the entire monorepo.
             let task_names: Vec<TaskName> = opts
@@ -240,7 +263,7 @@ impl RunBuilder {
                     .collect();
                 filtered_pkgs.retain(|pkg, _| target_packages.contains(pkg));
             }
-        };
+        }
 
         Ok(filtered_pkgs)
     }
