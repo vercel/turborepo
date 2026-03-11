@@ -316,7 +316,7 @@ impl TaskTracker<()> {
                 state: None,
             })
             .await
-            .expect("execution summary state thread finished");
+            .ok();
         TaskTracker {
             sender,
             started_at,
@@ -339,7 +339,7 @@ impl TaskTracker<()> {
                 }),
             })
             .await
-            .expect("execution summary state thread finished")
+            .ok();
     }
 }
 
@@ -374,7 +374,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
                 state: Some(state),
             })
             .await
-            .expect("summary state thread finished");
+            .ok();
         execution
     }
 
@@ -403,7 +403,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
                 state: Some(state),
             })
             .await
-            .expect("summary state thread finished");
+            .ok();
         execution
     }
 
@@ -436,7 +436,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
                 state: Some(state),
             })
             .await
-            .expect("summary state thread finished");
+            .ok();
         execution
     }
 }
@@ -637,5 +637,78 @@ mod test {
         assert_eq!(summary.failed, 2);
         assert_eq!(summary.cached, 5);
         assert_eq!(summary.exit_code, 1);
+    }
+
+    // Regression tests for https://github.com/vercel/turborepo/issues/11527
+    //
+    // The crash occurs when a TaskTracker tries to send to the state thread
+    // after its receiver has been dropped (e.g. during tokio runtime shutdown).
+    // These tests verify that every send site handles a dead receiver
+    // gracefully instead of panicking.
+    //
+    // We construct trackers with an already-closed channel to guarantee the
+    // send path hits Err(SendError) — the exact condition from the bug.
+
+    fn tracker_with_dead_channel() -> TaskTracker<()> {
+        let (sender, receiver) = mpsc::channel::<Message>(1);
+        drop(receiver);
+        TaskTracker {
+            sender,
+            started_at: (),
+            task_id: TaskId::new("pkg", "build"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_start_with_dead_receiver() {
+        let tracker = tracker_with_dead_channel();
+        // start() sends Event::Building — must not panic
+        tracker.start().await;
+    }
+
+    #[tokio::test]
+    async fn test_dry_run_with_dead_receiver() {
+        let tracker = tracker_with_dead_channel();
+        // dry_run() sends Event::Canceled — must not panic
+        tracker.dry_run().await;
+    }
+
+    #[tokio::test]
+    async fn test_cached_with_dead_receiver() {
+        let (sender, receiver) = mpsc::channel::<Message>(1);
+        drop(receiver);
+        let tracker: TaskTracker<DateTime<Local>> = TaskTracker {
+            sender,
+            started_at: Local::now(),
+            task_id: TaskId::new("pkg", "build"),
+        };
+        // cached() sends Event::Cached — must not panic
+        tracker.cached().await;
+    }
+
+    #[tokio::test]
+    async fn test_build_succeeded_with_dead_receiver() {
+        let (sender, receiver) = mpsc::channel::<Message>(1);
+        drop(receiver);
+        let tracker: TaskTracker<DateTime<Local>> = TaskTracker {
+            sender,
+            started_at: Local::now(),
+            task_id: TaskId::new("pkg", "build"),
+        };
+        // build_succeeded() sends Event::Built — must not panic
+        tracker.build_succeeded(0).await;
+    }
+
+    #[tokio::test]
+    async fn test_build_failed_with_dead_receiver() {
+        let (sender, receiver) = mpsc::channel::<Message>(1);
+        drop(receiver);
+        let tracker: TaskTracker<DateTime<Local>> = TaskTracker {
+            sender,
+            started_at: Local::now(),
+            task_id: TaskId::new("pkg", "build"),
+        };
+        // build_failed() sends Event::BuildFailed — must not panic
+        tracker.build_failed(Some(1), "error").await;
     }
 }
