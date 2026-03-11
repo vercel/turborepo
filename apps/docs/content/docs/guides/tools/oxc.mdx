@@ -12,14 +12,6 @@ related:
 ---
 
 import { CreateTurboCallout } from "./create-turbo-callout.tsx";
-import { CopyPrompt } from "@/components/copy-prompt";
-
-<CopyPrompt
-  title="Set up Oxc tools in a Turborepo"
-  prompt={
-    "Set up oxlint and oxfmt in this Turborepo.\n1) Install the tools\n2) Create scripts\n3) Set up turbo.json tasks\n\nWalk me through each step."
-  }
-/>
 
 [Oxc](https://oxc.rs/) is a collection of high-performance JavaScript and TypeScript tools written in Rust, including [oxlint](https://oxc.rs/docs/guide/usage/linter) (a fast linter) and [oxfmt](https://oxc.rs/docs/guide/usage/formatter) (a fast formatter).
 
@@ -107,6 +99,19 @@ Register the scripts to Turborepo as [Root Tasks](/docs/crafting-your-repository
 ```
 
 You can now run `turbo run lint` to lint your entire repository.
+
+<Callout type="warn" title="Type-aware linting">
+  If you enable [type-aware linting rules](https://oxc.rs/docs/guide/usage/linter/config#type-aware-linting) in oxlint, the linter needs TypeScript type information to work correctly. This means any dependencies that must be built before type-checking (such as [Compiled Packages](/docs/core-concepts/internal-packages#compiled-packages) in your monorepo) also need to be built before linting.
+
+For example, to build Compiled Packages before running formatting and linting:
+
+```bash title="Terminal"
+turbo run build --filter=./packages/* && turbo run lint
+```
+
+Alternatively, you can switch to per-package lint tasks with `dependsOn: ["^build"]` to let Turborepo handle the ordering for you.
+
+</Callout>
 
 ## Setting up oxfmt
 
@@ -218,6 +223,7 @@ For repositories using both tools, you can orchestrate them with a unified quali
     },
     "//#format": {},
     "//#format:fix": {
+      "dependsOn": ["//#lint:fix"],
       "cache": false
     }
   }
@@ -226,5 +232,5 @@ For repositories using both tools, you can orchestrate them with a unified quali
 
 With this configuration:
 
-- Run `turbo run quality` to check both linting and formatting
-- Run `turbo run quality:fix` to fix both linting and formatting issues
+- Run `turbo run quality` to check both linting and formatting in parallel (safe because neither modifies files)
+- Run `turbo run quality:fix` to fix both linting and formatting issues, with formatting running after lint fixes to avoid file write race conditions

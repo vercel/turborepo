@@ -231,6 +231,25 @@ With this flag enabled, successful tasks will show messages like:
 }
 ```
 
+#### `longerSignatureKey`
+
+Default: `false`
+
+Enforce a minimum length of 32 bytes for the `TURBO_REMOTE_CACHE_SIGNATURE_KEY` environment variable when [`remoteCache.signature`](#signature) is enabled. HMAC-SHA256 accepts any key length, but keys shorter than 32 bytes significantly weaken the signature, making brute-force tag collision feasible.
+
+When this flag is enabled and the key is too short, Turborepo will fail immediately at the start of the run with an error message indicating the key length and the minimum requirement.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "longerSignatureKey": true,
+  },
+  "remoteCache": {
+    "signature": true,
+  },
+}
+```
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"
@@ -791,6 +810,10 @@ Enables signature verification for requests to the remote cache.
 When `true`, Turborepo will sign every uploaded artifact using the value of the environment variable `TURBO_REMOTE_CACHE_SIGNATURE_KEY`.
 Turborepo will reject any downloaded artifacts that have an invalid signature or are missing a signature.
 
+<Callout type="warn">
+  Enable [`futureFlags.longerSignatureKey`](#longersignaturekey) to enforce a minimum key length of 32 bytes. Short keys weaken the HMAC-SHA256 signature and will be rejected in a future major version.
+</Callout>
+
 ### `preflight`
 
 Default: `false`
@@ -892,8 +915,12 @@ The `experimentalObservability` configuration requires `futureFlags.experimental
       "metrics": {
         "runSummary": true,
         "taskDetails": false,
+        "runAttributes": {
+          "id": false,
+          "scmRevision": false
+        },
         "taskAttributes": {
-          "id": true,
+          "id": false,
           "hashes": false
         }
       },
@@ -990,6 +1017,14 @@ Optional resource attributes to attach to all exported metrics. These help ident
 
 Control which metric groups are exported.
 
+<Callout type="info">
+  Some metric attributes have **unbounded cardinality** — their unique values
+  grow without limit (e.g., a unique run ID per invocation, a unique hash per
+  input change). Backends like Datadog charge per unique metric series, so these
+  attributes are disabled by default and can be opted into via `runAttributes`
+  and `taskAttributes`.
+</Callout>
+
 ##### `metrics.runSummary`
 
 Default: `true`
@@ -999,7 +1034,7 @@ Export run-level metrics:
 - Run duration
 - Tasks attempted, failed, and cached
 - Exit code
-- SCM branch and revision
+- SCM branch
 
 ##### `metrics.taskDetails`
 
@@ -1009,8 +1044,23 @@ Export per-task metrics:
 
 - Task execution duration
 - Cache hit/miss status and source
-- Cache time saved
 - Task identifiers (task ID, package, hash)
+
+##### `metrics.runAttributes`
+
+Control which run attributes are included in run-level metrics. These options only take effect when `runSummary` is enabled.
+
+###### `runAttributes.id`
+
+Default: `false`
+
+Include the `turbo.run.id` attribute on run-level metrics. Each Turborepo invocation generates a unique run ID, so enabling this increases metric cardinality.
+
+###### `runAttributes.scmRevision`
+
+Default: `false`
+
+Include the `turbo.scm.revision` attribute (full Git SHA) on run-level metrics. Each commit produces a unique value, so enabling this increases metric cardinality.
 
 ##### `metrics.taskAttributes`
 
@@ -1020,13 +1070,13 @@ Control which task attributes are included in per-task metrics. These options on
 
 Default: `false`
 
-Include the task ID attribute on per-task metrics.
+Include the `turbo.task.id` attribute (`package#task`) on per-task metrics.
 
 ###### `taskAttributes.hashes`
 
 Default: `false`
 
-Include task hash attributes on per-task metrics.
+Include the `turbo.task.hash` and `turbo.task.external_inputs_hash` attributes on per-task metrics. These are content hashes that change whenever task inputs change, so enabling this increases metric cardinality.
 
 #### `experimentalObservability.otel.useRemoteCacheToken`
 

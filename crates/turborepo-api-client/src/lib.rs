@@ -27,9 +27,11 @@ pub use crate::error::{Error, Result};
 pub mod analytics;
 mod error;
 mod retry;
+mod shared_http_client;
 pub mod telemetry;
 
 pub use bytes::Bytes;
+pub use shared_http_client::SharedHttpClient;
 pub use tokio_stream::Stream;
 
 static AUTHORIZATION_REGEX: LazyLock<Regex> =
@@ -607,7 +609,30 @@ impl APIClient {
     /// resulting client.
     #[tracing::instrument(skip_all)]
     pub fn build_http_client(connect_timeout: Option<Duration>) -> Result<reqwest::Client> {
+        Self::build_http_client_with_native_roots(connect_timeout, true)
+    }
+
+    /// Builds an HTTP client using only the bundled Mozilla CA bundle
+    /// (webpki-roots). This is instant (~0ms) because no system Keychain
+    /// access is needed. Sufficient for all standard HTTPS connections.
+    #[tracing::instrument(skip_all)]
+    pub fn build_http_client_webpki_only(
+        connect_timeout: Option<Duration>,
+    ) -> Result<reqwest::Client> {
+        Self::build_http_client_with_native_roots(connect_timeout, false)
+    }
+
+    fn build_http_client_with_native_roots(
+        connect_timeout: Option<Duration>,
+        #[allow(unused_variables)] native_roots: bool,
+    ) -> Result<reqwest::Client> {
         let mut builder = reqwest::Client::builder();
+        #[cfg(feature = "rustls-tls")]
+        {
+            builder = builder
+                .tls_built_in_webpki_certs(true)
+                .tls_built_in_native_certs(native_roots);
+        }
         if let Some(dur) = connect_timeout {
             builder = builder.connect_timeout(dur);
         }

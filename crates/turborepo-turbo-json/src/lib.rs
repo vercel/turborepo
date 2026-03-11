@@ -279,6 +279,11 @@ impl TurboJson {
 
         let with_tasks = task_definition.as_inner_mut().with.get_or_insert_default();
 
+        if !with_tasks.iter().any(|t| t.as_str() == "$TURBO_EXTENDS$") {
+            with_tasks.push(Spanned::new(UnescapedString::from(
+                "$TURBO_EXTENDS$".to_string(),
+            )));
+        }
         with_tasks.push(Spanned::new(UnescapedString::from(with.to_string())))
     }
 
@@ -512,13 +517,16 @@ mod tests {
     #[test]
     fn test_with_sibling_empty() {
         let mut json = TurboJson::default();
-        json.with_task(TaskName::from("dev"), &TaskName::from("api#server"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("sibling-task"));
         let dev_task = json.tasks.get(&TaskName::from("dev"));
         assert!(dev_task.is_some());
         let dev_task = dev_task.unwrap().as_inner();
         assert_eq!(
             dev_task.with.as_ref().unwrap().as_slice(),
-            &[Spanned::new(UnescapedString::from("api#server"))]
+            &[
+                Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                Spanned::new(UnescapedString::from("sibling-task")),
+            ]
         );
     }
 
@@ -532,14 +540,83 @@ mod tests {
                 ..Default::default()
             }),
         );
-        json.with_task(TaskName::from("dev"), &TaskName::from("api#server"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("sibling-task"));
         let dev_task = json.tasks.get(&TaskName::from("dev"));
         assert!(dev_task.is_some());
         let dev_task = dev_task.unwrap().as_inner();
         assert_eq!(dev_task.persistent, Some(Spanned::new(true)));
         assert_eq!(
             dev_task.with.as_ref().unwrap().as_slice(),
-            &[Spanned::new(UnescapedString::from("api#server"))]
+            &[
+                Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                Spanned::new(UnescapedString::from("sibling-task")),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_with_task_includes_turbo_extends_only_once() {
+        let mut json = TurboJson::default();
+        json.with_task(TaskName::from("dev"), &TaskName::from("sibling-a"));
+        json.with_task(TaskName::from("dev"), &TaskName::from("sibling-b"));
+        let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
+        let with = dev_task.with.as_ref().unwrap();
+        assert_eq!(
+            with.as_slice(),
+            &[
+                Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                Spanned::new(UnescapedString::from("sibling-a")),
+                Spanned::new(UnescapedString::from("sibling-b")),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_with_task_preserves_user_configured_with() {
+        let mut json = TurboJson::default();
+        json.tasks.insert(
+            TaskName::from("dev"),
+            Spanned::new(RawTaskDefinition {
+                with: Some(vec![Spanned::new(UnescapedString::from("existing-task"))]),
+                ..Default::default()
+            }),
+        );
+        json.with_task(TaskName::from("dev"), &TaskName::from("injected-task"));
+        let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
+        let with = dev_task.with.as_ref().unwrap();
+        assert_eq!(
+            with.as_slice(),
+            &[
+                Spanned::new(UnescapedString::from("existing-task")),
+                Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                Spanned::new(UnescapedString::from("injected-task")),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_with_task_respects_existing_turbo_extends() {
+        let mut json = TurboJson::default();
+        json.tasks.insert(
+            TaskName::from("dev"),
+            Spanned::new(RawTaskDefinition {
+                with: Some(vec![
+                    Spanned::new(UnescapedString::from("existing-task")),
+                    Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                ]),
+                ..Default::default()
+            }),
+        );
+        json.with_task(TaskName::from("dev"), &TaskName::from("injected-task"));
+        let dev_task = json.tasks.get(&TaskName::from("dev")).unwrap().as_inner();
+        let with = dev_task.with.as_ref().unwrap();
+        assert_eq!(
+            with.as_slice(),
+            &[
+                Spanned::new(UnescapedString::from("existing-task")),
+                Spanned::new(UnescapedString::from("$TURBO_EXTENDS$")),
+                Spanned::new(UnescapedString::from("injected-task")),
+            ]
         );
     }
 
@@ -630,6 +707,33 @@ mod tests {
         let turbo_json = TurboJson::try_from(raw_turbo_json);
         assert!(turbo_json.is_ok());
         assert!(turbo_json.unwrap().future_flags.errors_only_show_hash);
+    }
+
+    #[test]
+    fn test_deserialize_future_flags_longer_signature_key() {
+        let json = r#"{
+            "tasks": {
+                "build": {}
+            },
+            "futureFlags": {
+                "longerSignatureKey": true
+            }
+        }"#;
+
+        let deserialized_result = deserialize_from_json_str(
+            json,
+            JsonParserOptions::default().with_allow_comments(),
+            "turbo.json",
+        );
+        let raw_turbo_json: RawTurboJson = deserialized_result.into_deserialized().unwrap();
+
+        assert!(raw_turbo_json.future_flags.is_some());
+        let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
+        assert!(future_flags.as_inner().longer_signature_key);
+
+        let turbo_json = TurboJson::try_from(raw_turbo_json);
+        assert!(turbo_json.is_ok());
+        assert!(turbo_json.unwrap().future_flags.longer_signature_key);
     }
 
     #[test]

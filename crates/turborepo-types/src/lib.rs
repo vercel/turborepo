@@ -425,10 +425,34 @@ pub struct ScopeOpts {
 }
 
 impl ScopeOpts {
-    /// Get the filter patterns.
-    pub fn get_filters(&self) -> Vec<String> {
-        self.filter_patterns.clone()
+    /// Returns the raw `--filter` patterns as provided on the CLI.
+    ///
+    /// Strings may include `!` prefixes for exclusion and other filter
+    /// microsyntax (e.g., `{dir}`, `[gitref]`, `...`). Use
+    /// `TargetSelector::from_str` for structured parsing.
+    pub fn get_filters(&self) -> &[String] {
+        &self.filter_patterns
     }
+}
+
+/// How packages were resolved by the scope filter.
+///
+/// Returned alongside the filtered package set from `resolve_packages`
+/// so the caller can decide whether to inject root tasks without
+/// re-parsing raw filter strings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FilterMode {
+    /// No filter was specified — all workspace packages selected.
+    AllPackages,
+    /// Only exclude filters were used (e.g. `--filter=!docs`).
+    /// Semantically equivalent to "all packages minus the excluded ones".
+    ///
+    /// `root_excluded` is true when any exclude selector targets the root
+    /// package (e.g. `--filter=!//` or `--filter=!{.}`).
+    ExcludeOnly { root_excluded: bool },
+    /// Include filters were present (possibly with excludes too),
+    /// or package inference / --affected was active.
+    ExplicitSelection,
 }
 
 /// Projection of run options that only includes information necessary to

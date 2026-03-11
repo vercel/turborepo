@@ -238,6 +238,44 @@ impl TurboSubscriber {
     }
 }
 
+/// Injects process-level metadata events (version, platform, CPU count) into
+/// a Chrome trace file. Call after `flush_chrome_tracing` and before any
+/// post-processing that reads the trace.
+pub fn inject_trace_metadata(trace_path: &Path, version: &str) -> std::io::Result<()> {
+    use std::io::Write;
+
+    let contents = std::fs::read(trace_path)?;
+
+    // The trace file is a JSON array: [\n{event},\n{event},\n...\n]
+    // Find the first newline after '[' to insert metadata events.
+    let insert_pos = contents
+        .iter()
+        .position(|&b| b == b'\n')
+        .map(|p| p + 1)
+        .unwrap_or(1);
+
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+
+    let metadata = format!(
+        "{{\"ph\":\"M\",\"pid\":1,\"name\":\"process_name\",\"args\":{{\"name\":\"turbo \
+         {version}\"}}}},\n{{\"ph\":\"M\",\"pid\":1,\"name\":\"process_labels\",\"args\":{{\"\
+         labels\":\"{platform}, {cpus} CPUs\"}}}},\n",
+        version = version,
+        platform = std::env::consts::OS,
+        cpus = cpus,
+    );
+
+    let mut file = std::fs::File::create(trace_path)?;
+    file.write_all(&contents[..insert_pos])?;
+    file.write_all(metadata.as_bytes())?;
+    file.write_all(&contents[insert_pos..])?;
+    file.flush()?;
+
+    Ok(())
+}
+
 impl Drop for TurboSubscriber {
     fn drop(&mut self) {
         // drop the guard so that the non-blocking file writer stops

@@ -214,7 +214,7 @@ System environment variables are always overridden by flag values provided direc
         <code>TURBO_REMOTE_CACHE_SIGNATURE_KEY</code>
       </td>
       <td>
-        Sign artifacts with a secret key. For more information, visit [the Artifact Integrity section](/docs/core-concepts/remote-caching#artifact-integrity-and-authenticity-verification).
+        Sign artifacts with a secret key. Must be at least 32 bytes when [`futureFlags.longerSignatureKey`](/docs/reference/configuration#longersignaturekey) is enabled. For more information, visit [the Artifact Integrity section](/docs/core-concepts/remote-caching#artifact-integrity-and-authenticity-verification).
       </td>
     </tr>
     <tr id="turbo_remote_cache_timeout">

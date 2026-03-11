@@ -286,7 +286,7 @@ impl NpmLockfile {
                 continue;
             }
             let pkg_name = &key[idx + "/node_modules/".len()..];
-            if pkg_name.is_empty() {
+            if pkg_name.is_empty() || pkg_name.contains("/node_modules/") {
                 continue;
             }
             let hoisted_key = format!("node_modules/{pkg_name}");
@@ -513,6 +513,84 @@ mod test {
 
         for (key, dep, expected) in &tests {
             assert_eq!(&NpmLockfile::possible_npm_deps(key, dep), expected);
+        }
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12139
+    // When a workspace has deeply nested deps (e.g.
+    // packages/pkg1/node_modules/parent/node_modules/child), rehoist_packages
+    // must not double-process them. The parent entry's sub-dep relocation
+    // already handles moving children; individually rehoisting a child would
+    // delete the entry that was just relocated.
+    #[test]
+    fn test_subgraph_preserves_deeply_nested_workspace_deps() {
+        let json = r#"{
+            "lockfileVersion": 3,
+            "requires": true,
+            "packages": {
+                "": {
+                    "name": "monorepo",
+                    "workspaces": ["packages/*"]
+                },
+                "node_modules/pkg1": {
+                    "resolved": "packages/pkg1",
+                    "link": true
+                },
+                "packages/pkg1": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "parent": "2.0.0"
+                    }
+                },
+                "packages/pkg1/node_modules/parent": {
+                    "version": "2.0.0",
+                    "dependencies": {
+                        "child-a": "^1.0.0",
+                        "child-b": "^1.0.0"
+                    }
+                },
+                "packages/pkg1/node_modules/parent/node_modules/child-a": {
+                    "version": "1.0.0"
+                },
+                "packages/pkg1/node_modules/parent/node_modules/child-b": {
+                    "version": "1.0.0",
+                    "dependencies": {
+                        "grandchild": "^1.0.0"
+                    }
+                },
+                "packages/pkg1/node_modules/parent/node_modules/child-b/node_modules/grandchild": {
+                    "version": "1.0.0"
+                }
+            }
+        }"#;
+
+        let lockfile = NpmLockfile::load(json.as_bytes()).unwrap();
+
+        let workspace_packages = vec!["packages/pkg1".to_string()];
+        let packages = vec![
+            "packages/pkg1/node_modules/parent".to_string(),
+            "packages/pkg1/node_modules/parent/node_modules/child-a".to_string(),
+            "packages/pkg1/node_modules/parent/node_modules/child-b".to_string(),
+            "packages/pkg1/node_modules/parent/node_modules/child-b/node_modules/grandchild"
+                .to_string(),
+        ];
+
+        let pruned = lockfile.subgraph(&workspace_packages, &packages).unwrap();
+        let encoded = pruned.encode().unwrap();
+        let reparsed: NpmLockfile = NpmLockfile::load(&encoded).unwrap();
+
+        // parent and all its nested children must survive rehoisting
+        let expected_keys = [
+            "node_modules/parent",
+            "node_modules/parent/node_modules/child-a",
+            "node_modules/parent/node_modules/child-b",
+            "node_modules/parent/node_modules/child-b/node_modules/grandchild",
+        ];
+        for key in expected_keys {
+            assert!(
+                reparsed.packages.contains_key(key),
+                "pruned lockfile is missing {key:?} — deeply nested deps were dropped"
+            );
         }
     }
 

@@ -23,7 +23,7 @@ use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_api_client::APIAuth;
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_proxy::ProxyServer;
@@ -63,7 +63,6 @@ pub struct Run {
     run_telemetry: GenericEventBuilder,
     repo_root: AbsoluteSystemPathBuf,
     opts: Arc<Opts>,
-    api_client: APIClient,
     api_auth: Option<APIAuth>,
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
@@ -79,6 +78,7 @@ pub struct Run {
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: Arc<Option<RepoGitIndex>>,
     observability_handle: Option<ObservabilityHandle>,
+    pub(crate) query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
@@ -265,9 +265,13 @@ impl Run {
         }
     }
     fn start_web_ui(self: &Arc<Self>) -> WuiResult {
+        let Some(query_server) = self.query_server.clone() else {
+            tracing::warn!("Web UI requires a query server implementation");
+            return Ok(None);
+        };
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone()));
+        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone(), query_server));
 
         Ok(Some((WebUISender { tx }, handle)))
     }
@@ -663,6 +667,8 @@ impl Run {
 
         drop(_hash_scope_span);
 
+        let _setup_span = tracing::debug_span!("post_hashing_setup").entered();
+
         let package_inputs_hashes = file_hash_result.expect("file hash task did not complete")?;
         let root_internal_dependencies_hash =
             internal_deps_result.expect("internal deps task did not complete")?;
@@ -713,6 +719,8 @@ impl Run {
             Vendor::get_user(),
             self.observability_handle.clone(),
         );
+
+        drop(_setup_span);
 
         let mut visitor = Visitor::new(
             self.pkg_dep_graph.clone(),
@@ -865,7 +873,7 @@ impl turborepo_engine::ChildProcess for SharedChildWrapper {
     }
 }
 
-impl turborepo_query::QueryRun for Run {
+impl turborepo_query_api::QueryRun for Run {
     fn version(&self) -> &'static str {
         self.version
     }
@@ -901,7 +909,7 @@ impl turborepo_query::QueryRun for Run {
             turborepo_repository::package_graph::PackageName,
             turborepo_repository::change_mapper::PackageInclusionReason,
         >,
-        turborepo_query::AffectedPackagesError,
+        turborepo_query_api::AffectedPackagesError,
     > {
         let mut opts = self.opts.as_ref().clone();
         opts.scope_opts.affected_range = Some((base, head));
@@ -912,7 +920,29 @@ impl turborepo_query::QueryRun for Run {
             &self.scm,
             &self.root_turbo_json,
         )
-        .map_err(|e| turborepo_query::AffectedPackagesError::Other(Box::new(e)))
+        .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))
+    }
+
+    fn changed_files(
+        &self,
+        base: Option<&str>,
+        head: Option<&str>,
+    ) -> Result<
+        std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+        turborepo_query_api::AffectedPackagesError,
+    > {
+        match self
+            .scm
+            .changed_files(&self.repo_root, base, head, true, true, true)
+            .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))?
+        {
+            Ok(files) => Ok(files),
+            Err(_invalid_range) => {
+                // If git range is invalid, return empty set — the affected packages
+                // computation will handle reporting all-packages-changed separately.
+                Ok(std::collections::HashSet::new())
+            }
+        }
     }
 
     fn check_boundaries(

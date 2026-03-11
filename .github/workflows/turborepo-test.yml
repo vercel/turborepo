@@ -220,14 +220,17 @@ jobs:
           turbo run build:test-archive --filter=@turbo/cli
         shell: bash
 
-  rust_test_macos:
+  build_rust_test_macos:
     runs-on: macos-latest-xlarge
     timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on macos
+    name: Build test artifacts (macos)
     env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
       RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
@@ -248,9 +251,6 @@ jobs:
           node-version: "18.20.2"
           package-install: "false"
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
@@ -262,12 +262,50 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Build and cache test archive
+      - name: Build and archive test binaries
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
           turbo run build:test-archive --filter=@turbo/cli
+        shell: bash
+
+  rust_test_macos:
+    runs-on: macos-latest-xlarge
+    timeout-minutes: 45
+    needs:
+      - find-changes
+      - build_rust_test_macos
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
+    name: Rust testing on macos (partition ${{ matrix.partition }}/2)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
+          package-install: "false"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Restore test archive from cache
+        run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -277,7 +315,7 @@ jobs:
       - name: Run tests
         timeout-minutes: 45
         run: |
-          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/2
         shell: bash
 
   rust_test_windows:
@@ -285,7 +323,7 @@ jobs:
       fail-fast: false
       matrix:
         partition: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    runs-on: windows-latest-8-core-oss
+    runs-on: windows-latest
     timeout-minutes: 45
     needs:
       - find-changes
@@ -293,15 +331,6 @@ jobs:
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
     name: Rust testing on windows (partition ${{ matrix.partition }}/10)
     steps:
-      - name: Install git (Windows larger runners)
-        shell: cmd
-        run: |
-          curl -L -o "%TEMP%\mingit.zip" "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/MinGit-2.47.1.2-64-bit.zip"
-          mkdir "%ProgramFiles%\Git"
-          tar -xf "%TEMP%\mingit.zip" -C "%ProgramFiles%\Git"
-          del "%ProgramFiles%\Git\etc\gitconfig"
-          echo %ProgramFiles%\Git\cmd>> "%GITHUB_PATH%"
-
       - name: Set git to use LF line endings
         run: |
           git config --global core.autocrlf false
@@ -315,8 +344,10 @@ jobs:
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
           node-version: "18.20.2"
-          capnproto: "false"
+          capnproto: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
+          rust: ${{ github.event.pull_request.head.repo.fork && 'true' || 'false' }}
           package-install: "false"
+          rust-cache: "false"
 
       - name: Install Bun
         uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
@@ -341,17 +372,22 @@ jobs:
       - name: Run tests
         timeout-minutes: 45
         run: |
-          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/10 --workspace-remap "$GITHUB_WORKSPACE"
         shell: bash
+        env:
+          INSTA_WORKSPACE_ROOT: ${{ github.workspace }}
 
-  rust_test_ubuntu:
+  build_rust_test_ubuntu:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs:
       - find-changes
     if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    name: Rust testing on ubuntu
+    name: Build test artifacts (ubuntu)
     env:
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_CACHE: remote:rw
       SCCACHE_BUCKET: turborepo-sccache
       SCCACHE_REGION: us-east-2
       RUSTC_WRAPPER: ${{ !github.event.pull_request.head.repo.fork && 'sccache' || '' }}
@@ -372,9 +408,6 @@ jobs:
           node-version: "18.20.2"
           package-install: "false"
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
-
       - name: Run sccache-cache
         uses: mozilla-actions/sccache-action@v0.0.6
 
@@ -383,144 +416,71 @@ jobs:
         with:
           tool: nextest
 
-      - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-llvm-cov
-
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      - name: Build coverage-instrumented test archive
+      - name: Build and archive test binaries
         run: |
           if [ -z "${RUSTC_WRAPPER}" ]; then
             unset RUSTC_WRAPPER
           fi
-          turbo run build:test-archive-cov --filter=@turbo/cli
+          turbo run build:test-archive --filter=@turbo/cli
+        shell: bash
+
+  rust_test_ubuntu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs:
+      - find-changes
+      - build_rust_test_ubuntu
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2]
+    name: Rust testing on ubuntu (partition ${{ matrix.partition }}/2)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+          node-version: "18.20.2"
+          package-install: "false"
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@4bc047ad259df6fc24a6c9b0f9a0cb08cf17fbe5 # v2.0.1
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@44c6d64aa62cd779e873306675c7a58e86d6d532
+        with:
+          tool: nextest
+
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Restore test archive from cache
+        run: turbo run build:test-archive --filter=@turbo/cli
         shell: bash
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM }}
           TURBO_CACHE: remote:rw
 
-      - name: Run tests and generate coverage
+      - name: Run tests
         timeout-minutes: 45
         run: |
-          eval $(cargo llvm-cov show-env --export-prefix)
-          cargo nextest run \
-            --archive-file cli/nextest-archive-cov.tar.zst \
-            --no-fail-fast
-          cargo llvm-cov report \
-            --lcov \
-            --output-path coverage.lcov
+          cargo nextest run --archive-file cli/nextest-archive.tar.zst --no-fail-fast --partition hash:${{ matrix.partition }}/2
         shell: bash
-
-      - name: Upload coverage artifact
-        if: ${{ hashFiles('coverage.lcov') != '' }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage
-          path: coverage.lcov
-          retention-days: 1
-
-  coverage_report:
-    name: Coverage Report
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    needs:
-      - find-changes
-      - rust_test_ubuntu
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && needs.find-changes.outputs.rust == 'true' }}
-    env:
-      COVERAGE_API_URL: ${{ secrets.COVERAGE_API_URL }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Download coverage artifact
-        id: download-coverage
-        uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: coverage
-
-      - name: Transform coverage
-        if: ${{ steps.download-coverage.outcome == 'success' && !github.event.pull_request.head.repo.fork }}
-        run: |
-          SAFE_BRANCH=$(echo "$BRANCH" | sed 's/[^a-zA-Z0-9_-]/_/g')
-
-          node scripts/transform-coverage.js coverage.lcov coverage-transformed.json >> "$GITHUB_ENV"
-
-          npx vercel blob put coverage-transformed.json --pathname="coverage/commits/${SHA}.json" \
-            --token "${BLOB_READ_WRITE_TOKEN}"
-
-          npx vercel blob put coverage-transformed.json --pathname="coverage/branches/${SAFE_BRANCH}/${TIMESTAMP}.json" \
-            --token "${BLOB_READ_WRITE_TOKEN}"
-
-          echo "Uploaded coverage for ${SHA} on branch ${BRANCH}"
-        env:
-          SHA: ${{ github.sha }}
-          BRANCH: ${{ github.head_ref || github.ref_name }}
-          TIMESTAMP: ${{ github.event.head_commit.timestamp || github.event.pull_request.updated_at }}
-          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
-
-      - name: Comment on PR
-        if: steps.download-coverage.outcome == 'success' && github.event_name == 'pull_request' && env.COVERAGE_API_URL != '' && !github.event.pull_request.head.repo.fork
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const lines = parseFloat(process.env.COVERAGE_LINES) || 0;
-            const functions = parseFloat(process.env.COVERAGE_FUNCTIONS) || 0;
-            const branches = parseFloat(process.env.COVERAGE_BRANCHES) || 0;
-
-            const body = `## Coverage Report
-
-            | Metric | Coverage |
-            |--------|----------|
-            | Lines | ${lines.toFixed(2)}% |
-            | Functions | ${functions.toFixed(2)}% |
-            | Branches | ${branches.toFixed(2)}% |
-
-            [View full report](${process.env.COVERAGE_API_URL}/commits/${{ github.sha }})
-            `;
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-            });
-
-            const botComment = comments.find(c =>
-              c.user.type === 'Bot' && c.body.includes('## Coverage Report')
-            );
-
-            if (botComment) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: botComment.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body,
-              });
-            }
 
   check-examples:
     name: Check examples
     timeout-minutes: 40
     needs:
       - find-changes
-    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' }}
+    if: ${{ needs.find-changes.outputs.is-release-pr != 'true' && !github.event.pull_request.head.repo.fork }}
     runs-on: ubuntu-latest
     env:
       TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -651,11 +611,12 @@ jobs:
     needs:
       - find-changes
       - turbo_types_check
+      - build_rust_test_macos
       - build_rust_test_windows
+      - build_rust_test_ubuntu
       - rust_test_macos
       - rust_test_windows
       - rust_test_ubuntu
-      - coverage_report
       - check-examples
       - check-lockfiles
       - js_native_packages
@@ -682,11 +643,12 @@ jobs:
           }
 
           subjob ${{needs.turbo_types_check.result}}
+          subjob ${{needs.build_rust_test_macos.result}}
           subjob ${{needs.build_rust_test_windows.result}}
+          subjob ${{needs.build_rust_test_ubuntu.result}}
           subjob ${{needs.rust_test_macos.result}}
           subjob ${{needs.rust_test_windows.result}}
           subjob ${{needs.rust_test_ubuntu.result}}
-          subjob ${{needs.coverage_report.result}}
           subjob ${{needs.check-examples.result}}
           subjob ${{needs.check-lockfiles.result}}
           subjob ${{needs.js_native_packages.result}}

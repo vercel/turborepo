@@ -2152,8 +2152,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be4136b2a15dd319360be1c07d9933517ccf0be8f16bf62a3bee4f0d618df427"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -2163,9 +2165,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73fea8450eea4bac3940448fb7ae50d91f034f941199fcd9d909a5a07aa455f0"
 dependencies = [
  "cfg-if",
+ "js-sys",
  "libc",
  "r-efi",
  "wasi 0.14.2+wasi-0.2.4",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -3390,6 +3394,12 @@ checksum = "a1dc47f592c06f33f8e3aea9591776ec7c9f9e4124778ff8a3c3b87159f7e593"
 dependencies = [
  "hashbrown 0.16.1",
 ]
+
+[[package]]
+name = "lru-slab"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "112b39cec0b298b6c1999fee3e31427f74f676e4cb9879ed1a121b43661a4154"
 
 [[package]]
 name = "lsp-types"
@@ -5007,19 +5017,23 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.8"
+version = "0.11.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fadfaed2cd7f389d0161bb73eeb07b7b78f8691047a6f3e73caaeae55310a4a6"
+checksum = "434b42fec591c96ef50e21e886936e66d3cc3f737104fdb9b737c40ffb94c098"
 dependencies = [
  "bytes",
- "rand 0.8.5",
+ "getrandom 0.3.2",
+ "lru-slab",
+ "rand 0.9.1",
  "ring",
  "rustc-hash 2.0.0",
  "rustls",
+ "rustls-pki-types",
  "slab",
- "thiserror 1.0.63",
+ "thiserror 2.0.18",
  "tinyvec",
  "tracing",
+ "web-time",
 ]
 
 [[package]]
@@ -5478,6 +5492,7 @@ version = "1.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "be040f8b0a225e40375822a563fa9524378b9d63112f53e19ffff34df5d33fdd"
 dependencies = [
+ "web-time",
  "zeroize",
 ]
 
@@ -7097,6 +7112,10 @@ dependencies = [
  "serde_json",
  "tempfile",
  "turborepo-lib",
+ "turborepo-query",
+ "turborepo-query-api",
+ "turborepo-signals",
+ "turborepo-ui",
  "which",
 ]
 
@@ -7158,6 +7177,13 @@ dependencies = [
  "thiserror 2.0.18",
  "turborepo-unescape",
  "wax",
+]
+
+[[package]]
+name = "turborepo-ai-agents"
+version = "0.1.0"
+dependencies = [
+ "test-case",
 ]
 
 [[package]]
@@ -7661,6 +7687,7 @@ dependencies = [
  "tracing-test",
  "turbo-updater",
  "turbopath",
+ "turborepo-ai-agents",
  "turborepo-analytics",
  "turborepo-api-client",
  "turborepo-auth",
@@ -7689,7 +7716,7 @@ dependencies = [
  "turborepo-otel",
  "turborepo-process",
  "turborepo-profile-md",
- "turborepo-query",
+ "turborepo-query-api",
  "turborepo-repository",
  "turborepo-run-cache",
  "turborepo-run-summary",
@@ -7885,6 +7912,7 @@ dependencies = [
  "turborepo-engine",
  "turborepo-errors",
  "turborepo-lockfiles",
+ "turborepo-query-api",
  "turborepo-repository",
  "turborepo-scm",
  "turborepo-scope",
@@ -7893,7 +7921,26 @@ dependencies = [
  "turborepo-turbo-json",
  "turborepo-types",
  "turborepo-ui",
+ "wax",
  "webbrowser",
+]
+
+[[package]]
+name = "turborepo-query-api"
+version = "0.1.0"
+dependencies = [
+ "miette",
+ "thiserror 2.0.18",
+ "turbopath",
+ "turborepo-boundaries",
+ "turborepo-engine",
+ "turborepo-repository",
+ "turborepo-scm",
+ "turborepo-scope",
+ "turborepo-signals",
+ "turborepo-turbo-json",
+ "turborepo-types",
+ "turborepo-ui",
 ]
 
 [[package]]
@@ -7948,7 +7995,6 @@ dependencies = [
  "tracing",
  "turbopath",
  "turborepo-cache",
- "turborepo-daemon",
  "turborepo-hash",
  "turborepo-repository",
  "turborepo-scm",
@@ -8180,6 +8226,7 @@ dependencies = [
  "tokio",
  "tracing",
  "turbopath",
+ "turborepo-ai-agents",
  "turborepo-api-client",
  "turborepo-ci",
  "turborepo-dirs",

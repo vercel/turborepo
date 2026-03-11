@@ -10,8 +10,20 @@ use crate::Error;
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
-pub struct ExperimentalOtelTaskAttributesOptions {
+pub struct ExperimentalOtelRunAttributesOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub id: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scm_revision: Option<bool>,
+}
+
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
+#[merge(strategy = merge::option::overwrite_none)]
+#[serde(rename_all = "camelCase")]
+pub struct ExperimentalOtelTaskAttributesOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub hashes: Option<bool>,
 }
 
@@ -19,8 +31,13 @@ pub struct ExperimentalOtelTaskAttributesOptions {
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelMetricsOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub run_summary: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub task_details: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub run_attributes: Option<ExperimentalOtelRunAttributesOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub task_attributes: Option<ExperimentalOtelTaskAttributesOptions>,
 }
 
@@ -28,14 +45,23 @@ pub struct ExperimentalOtelMetricsOptions {
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalOtelOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub protocol: Option<ExperimentalOtelProtocol>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub endpoint: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub headers: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub timeout_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub interval_ms: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub resource: Option<BTreeMap<String, String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub metrics: Option<ExperimentalOtelMetricsOptions>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub use_remote_cache_token: Option<bool>,
 }
 
@@ -55,6 +81,10 @@ impl ExperimentalOtelOptions {
                 .map(|m| {
                     m.run_summary.is_none()
                         && m.task_details.is_none()
+                        && m.run_attributes
+                            .as_ref()
+                            .map(|a| a.id.is_none() && a.scm_revision.is_none())
+                            .unwrap_or(true)
                         && m.task_attributes
                             .as_ref()
                             .map(|a| a.id.is_none() && a.hashes.is_none())
@@ -141,6 +171,32 @@ impl ExperimentalOtelOptions {
             "experimental_otel_metrics_task_details",
             "TURBO_EXPERIMENTAL_OTEL_METRICS_TASK_DETAILS",
             |metrics, value| metrics.task_details = Some(value),
+            &mut options,
+        )?;
+
+        touched |= set_metric_flag(
+            map,
+            "experimental_otel_metrics_run_attributes_id",
+            "TURBO_EXPERIMENTAL_OTEL_METRICS_RUN_ATTRIBUTES_ID",
+            |metrics, value| {
+                metrics
+                    .run_attributes
+                    .get_or_insert_with(ExperimentalOtelRunAttributesOptions::default)
+                    .id = Some(value)
+            },
+            &mut options,
+        )?;
+
+        touched |= set_metric_flag(
+            map,
+            "experimental_otel_metrics_run_attributes_scm_revision",
+            "TURBO_EXPERIMENTAL_OTEL_METRICS_RUN_ATTRIBUTES_SCM_REVISION",
+            |metrics, value| {
+                metrics
+                    .run_attributes
+                    .get_or_insert_with(ExperimentalOtelRunAttributesOptions::default)
+                    .scm_revision = Some(value)
+            },
             &mut options,
         )?;
 
@@ -502,6 +558,26 @@ mod tests {
     }
 
     #[test]
+    fn test_from_env_map_metrics_run_attributes_id() {
+        let map = build_env_map(&[("experimental_otel_metrics_run_attributes_id", "0")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        let attrs = metrics.run_attributes.unwrap();
+        assert_eq!(attrs.id, Some(false));
+    }
+
+    #[test]
+    fn test_from_env_map_metrics_run_attributes_scm_revision() {
+        let map = build_env_map(&[("experimental_otel_metrics_run_attributes_scm_revision", "1")]);
+        let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
+        assert!(result.is_some());
+        let metrics = result.unwrap().metrics.unwrap();
+        let attrs = metrics.run_attributes.unwrap();
+        assert_eq!(attrs.scm_revision, Some(true));
+    }
+
+    #[test]
     fn test_from_env_map_metrics_task_attributes_id() {
         let map = build_env_map(&[("experimental_otel_metrics_task_attributes_id", "1")]);
         let result = ExperimentalOtelOptions::from_env_map(&map).unwrap();
@@ -686,11 +762,29 @@ mod tests {
     }
 
     #[test]
+    fn test_is_empty_with_run_attributes() {
+        let opts = ExperimentalOtelOptions {
+            metrics: Some(ExperimentalOtelMetricsOptions {
+                run_summary: None,
+                task_details: None,
+                run_attributes: Some(ExperimentalOtelRunAttributesOptions {
+                    id: Some(false),
+                    scm_revision: None,
+                }),
+                task_attributes: None,
+            }),
+            ..Default::default()
+        };
+        assert!(!opts.is_empty());
+    }
+
+    #[test]
     fn test_is_empty_with_task_attributes() {
         let opts = ExperimentalOtelOptions {
             metrics: Some(ExperimentalOtelMetricsOptions {
                 run_summary: None,
                 task_details: None,
+                run_attributes: None,
                 task_attributes: Some(ExperimentalOtelTaskAttributesOptions {
                     id: Some(true),
                     hashes: None,

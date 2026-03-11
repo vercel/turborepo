@@ -1,0 +1,22 @@
+[package]
+name = "turborepo-query-api"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+
+[dependencies]
+miette = { workspace = true }
+thiserror = { workspace = true }
+turbopath = { workspace = true }
+turborepo-boundaries = { workspace = true }
+turborepo-engine = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-scm = { workspace = true }
+turborepo-scope = { workspace = true }
+turborepo-signals = { workspace = true }
+turborepo-turbo-json = { workspace = true }
+turborepo-types = { workspace = true }
+turborepo-ui = { workspace = true }
+
+[lints]
+workspace = true

@@ -33,6 +33,28 @@ describe("clean-globs", () => {
     `);
   });
 
+  it("handles missing pipeline key without crashing", () => {
+    const { root } = useFixture({
+      fixture: "no-pipeline"
+    });
+
+    const result = transformer({
+      root,
+      options: { force: false, dryRun: false, print: false }
+    });
+
+    expect(result.fatalError).toBeUndefined();
+    expect(result.changes).toMatchInlineSnapshot(`
+      {
+        "turbo.json": {
+          "action": "unchanged",
+          "additions": 0,
+          "deletions": 0,
+        },
+      }
+    `);
+  });
+
   it("collapses back-to-back doublestars", () => {
     const badGlobPatterns = [
       ["../../app-store/**/**", "../../app-store/**"],

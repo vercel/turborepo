@@ -1,4 +1,4 @@
-use std::{env, ffi::OsString, fmt, io, mem, process};
+use std::{env, ffi::OsString, fmt, io, mem, process, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -7,7 +7,7 @@ pub use error::Error;
 use serde::Serialize;
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_api_client::{APIClient, AnonAPIClient};
+use turborepo_api_client::SharedHttpClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
@@ -1142,38 +1142,23 @@ impl RunArgs {
     }
 }
 
-#[tracing::instrument(skip_all)]
-fn initialize_telemetry_client(
-    http_client: &reqwest::Client,
-    color_config: ColorConfig,
-    version: &str,
-) -> Option<TelemetryHandle> {
-    let anonymous_api_client = AnonAPIClient::new_with_client(
-        http_client.clone(),
-        "https://telemetry.vercel.com",
-        version,
-    );
-    match init_telemetry(anonymous_api_client, color_config) {
-        Ok(h) => Some(h),
-        Err(error) => {
-            debug!("failed to start telemetry: {:?}", error);
-            None
-        }
-    }
-}
-
 fn initialize_deferred_telemetry_client(
-    http_client_cell: std::sync::Arc<tokio::sync::OnceCell<reqwest::Client>>,
+    http_client: SharedHttpClient,
     color_config: ColorConfig,
     version: &str,
 ) -> Option<TelemetryHandle> {
     let deferred_client = turborepo_api_client::telemetry::DeferredTelemetryClient::new(
-        http_client_cell,
+        http_client.clone(),
         "https://telemetry.vercel.com",
         version,
     );
     match init_telemetry(deferred_client, color_config) {
-        Ok(h) => Some(h),
+        Ok((handle, enabled)) => {
+            if enabled {
+                http_client.activate();
+            }
+            Some(handle)
+        }
         Err(error) => {
             debug!("failed to start telemetry: {:?}", error);
             None
@@ -1320,28 +1305,10 @@ pub async fn run(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
     color_config: ColorConfig,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 ) -> Result<i32, Error> {
     let _cli_run_span = tracing::info_span!("cli_run").entered();
-
-    // Spawn TLS initialization on a background thread immediately.
-    // This takes ~100ms (loading root certificates, TLS backend init)
-    // and runs fully in the background. Neither telemetry nor the run
-    // path block on it — the HTTP client is resolved lazily when the
-    // first network request is actually needed.
-    let http_client_cell = std::sync::Arc::new(tokio::sync::OnceCell::<reqwest::Client>::new());
-    {
-        let cell = http_client_cell.clone();
-        tokio::task::spawn(async move {
-            if let Ok(Ok(client)) = tokio::task::spawn_blocking(|| {
-                let _span = tracing::info_span!("http_client_init").entered();
-                APIClient::build_http_client(None)
-            })
-            .await
-            {
-                cell.set(client).ok();
-            }
-        });
-    }
+    let http_client = SharedHttpClient::new();
 
     let mut cli_args = {
         let _span = tracing::info_span!("cli_arg_parsing").entered();
@@ -1349,12 +1316,12 @@ pub async fn run(
     };
     let version = get_version();
 
-    // Initialize telemetry immediately with a deferred HTTP client.
-    // Events are queued to a channel from the start; the actual HTTP
-    // client is only resolved when the worker flushes its first batch.
+    // Initialize telemetry immediately so events are captured from startup.
+    // The shared HTTP client is only activated if telemetry is actually
+    // enabled for this invocation.
     let telemetry_handle = {
         let _span = tracing::info_span!("telemetry_init").entered();
-        initialize_deferred_telemetry_client(http_client_cell.clone(), color_config, version)
+        initialize_deferred_telemetry_client(http_client.clone(), color_config, version)
     };
 
     if should_print_version() {
@@ -1394,6 +1361,7 @@ pub async fn run(
     // track system info
     root_telemetry.track_platform(TurboState::platform_name());
     root_telemetry.track_version(TurboState::version());
+    root_telemetry.track_ai_agent(turborepo_ai_agents::get_agent());
     root_telemetry.track_cpus(
         std::thread::available_parallelism()
             .map(|n| n.get())
@@ -1648,7 +1616,7 @@ pub async fn run(
             }
 
             run_args.track(&event);
-            let exit_code = run::run(base, event, http_client_cell)
+            let exit_code = run::run(base, event, http_client, query_server.clone())
                 .await
                 .inspect(|code| {
                     if *code != 0 {
@@ -1660,6 +1628,12 @@ pub async fn run(
             // flush and generate the markdown summary.
             if let Some(file_path) = logger.chrome_tracing_file() {
                 let _ = logger.flush_chrome_tracing();
+
+                if let Err(e) =
+                    crate::tracing::inject_trace_metadata(std::path::Path::new(&file_path), version)
+                {
+                    warn!("Failed to inject trace metadata: {e}");
+                }
 
                 let md_path = format!("{file_path}.md");
                 if let Err(e) = turborepo_profile_md::trace_to_markdown(
@@ -1677,6 +1651,9 @@ pub async fn run(
             variables,
             schema,
         } => {
+            let Some(ref query_server) = query_server else {
+                return Err(error::Error::QueryNotAvailable);
+            };
             warn!("query command is experimental and may change in the future");
             let query = query.clone();
             let variables = variables.clone();
@@ -1687,7 +1664,15 @@ pub async fn run(
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            let query = query::run(base, event, query, variables.as_deref(), schema).await?;
+            let query = query::run(
+                base,
+                event,
+                query,
+                variables.as_deref(),
+                schema,
+                query_server.as_ref(),
+            )
+            .await?;
 
             Ok(query)
         }
@@ -1705,13 +1690,21 @@ pub async fn run(
                 return Ok(1);
             }
 
-            let mut client = WatchClient::new(base, *experimental_write_cache, event).await?;
-            if let Err(e) = client.start().await {
-                client.shutdown().await;
-                return Err(e.into());
+            let mut client =
+                WatchClient::new(base, *experimental_write_cache, event, query_server.clone())
+                    .await?;
+            match client.start().await {
+                Ok(()) => {}
+                Err(crate::run::watch::Error::SignalInterrupt) => {
+                    // Normal shutdown via Ctrl+C — not an error.
+                }
+                Err(e) => {
+                    client.shutdown().await;
+                    return Err(e.into());
+                }
             }
-            // We only exit if we get a signal, so we return a non-zero exit code
-            return Ok(1);
+            client.shutdown().await;
+            return Ok(0);
         }
         Command::Prune {
             scope,

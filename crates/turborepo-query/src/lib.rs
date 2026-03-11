@@ -1,5 +1,6 @@
 #![allow(clippy::result_large_err)]
 
+pub mod affected_tasks;
 mod boundaries;
 mod external_package;
 mod file;
@@ -9,10 +10,8 @@ mod server;
 mod task;
 
 use std::{
-    collections::HashMap,
     io,
     ops::{Deref, DerefMut},
-    pin::Pin,
     sync::Arc,
 };
 
@@ -23,96 +22,84 @@ use itertools::Itertools;
 use package::Package;
 use package_graph::{Edge, PackageGraph};
 pub use server::run_server;
-use thiserror::Error;
 use tokio::select;
 use turbo_trace::TraceError;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_boundaries::BoundariesResult;
-use turborepo_engine::Built;
+pub use turborepo_query_api::{
+    AffectedPackagesError, BoundariesFuture, QueryErrorLocation, QueryResult, QueryRun,
+    SCHEMA_QUERY,
+};
 use turborepo_repository::{
     change_mapper::{AllPackageChangeReason, PackageInclusionReason},
     package_graph::PackageName,
 };
 use turborepo_signals::SignalHandler;
-use turborepo_types::TaskDefinition;
 
-type BoundariesFuture<'a> = Pin<
-    Box<
-        dyn std::future::Future<Output = Result<BoundariesResult, turborepo_boundaries::Error>>
-            + Send
-            + 'a,
-    >,
->;
-
-/// The interface that the query layer requires from a "run" context.
-///
-/// This trait decouples the GraphQL query layer from the concrete `Run` type
-/// in turborepo-lib, allowing the heavy async-graphql/axum/oxc dependencies
-/// to compile in a separate crate.
-///
-/// Object-safe so it can be used via `Arc<dyn QueryRun>`.
-pub trait QueryRun: Send + Sync + 'static {
-    fn version(&self) -> &'static str;
-    fn repo_root(&self) -> &turbopath::AbsoluteSystemPath;
-    fn pkg_dep_graph(&self) -> &turborepo_repository::package_graph::PackageGraph;
-    fn engine(&self) -> &turborepo_engine::Engine<Built, TaskDefinition>;
-    fn scm(&self) -> &turborepo_scm::SCM;
-    fn root_turbo_json(&self) -> &turborepo_turbo_json::TurboJson;
-
-    /// Calculate the set of affected packages given optional base/head git
-    /// refs.
-    ///
-    /// This encapsulates the scope resolution and filtering logic that lives
-    /// in the run builder, keeping `Opts` and `RunBuilder` out of the query
-    /// crate's dependency graph.
-    fn calculate_affected_packages(
-        &self,
-        base: Option<String>,
-        head: Option<String>,
-    ) -> Result<HashMap<PackageName, PackageInclusionReason>, AffectedPackagesError>;
-
-    /// Check package boundary rules across all filtered packages.
-    fn check_boundaries(&self, show_progress: bool) -> BoundariesFuture<'_>;
-}
-
-#[derive(Debug, Error)]
-pub enum AffectedPackagesError {
-    #[error(transparent)]
-    Resolution(#[from] turborepo_scope::filter::ResolutionError),
-    #[error("{0}")]
-    Other(Box<dyn std::error::Error + Send + Sync>),
-}
-
-#[derive(Error, Debug, miette::Diagnostic)]
+#[derive(thiserror::Error, Debug, miette::Diagnostic)]
 pub enum Error {
+    /// Errors that have a direct equivalent in `turborepo_query_api::Error`.
+    /// Using `#[from]` on the API error avoids duplicating variants.
     #[error(transparent)]
-    Boundaries(#[from] turborepo_boundaries::Error),
+    #[diagnostic(transparent)]
+    Api(#[from] turborepo_query_api::Error),
     #[error("Failed to get file dependencies")]
     Trace(#[related] Vec<TraceError>),
     #[error("No signal handler.")]
     NoSignalHandler,
     #[error("File `{0}` not found.")]
     FileNotFound(String),
-    #[error("Failed to start GraphQL server.")]
-    Server(#[from] io::Error),
     #[error("Package not found: {0}")]
     PackageNotFound(PackageName),
     #[error("Failed to serialize result: {0}")]
     Serde(#[from] serde_json::Error),
-    #[error("Failed to calculate affected packages: {0}")]
-    AffectedPackages(#[from] AffectedPackagesError),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Path(#[from] turbopath::PathError),
-    #[error(transparent)]
-    UI(#[from] turborepo_ui::Error),
-    #[error(transparent)]
-    #[diagnostic(transparent)]
-    Resolution(#[from] turborepo_scope::filter::ResolutionError),
     #[error("Failed to parse file: {0}")]
     Parse(String),
-    #[error(transparent)]
-    SignalListener(#[from] turborepo_signals::listeners::Error),
+}
+
+// Conversions from constituent error types into Error via the Api variant.
+impl From<turborepo_boundaries::Error> for Error {
+    fn from(e: turborepo_boundaries::Error) -> Self {
+        Error::Api(e.into())
+    }
+}
+impl From<io::Error> for Error {
+    fn from(e: io::Error) -> Self {
+        Error::Api(e.into())
+    }
+}
+impl From<turbopath::PathError> for Error {
+    fn from(e: turbopath::PathError) -> Self {
+        Error::Api(e.into())
+    }
+}
+impl From<turborepo_ui::Error> for Error {
+    fn from(e: turborepo_ui::Error) -> Self {
+        Error::Api(e.into())
+    }
+}
+impl From<AffectedPackagesError> for Error {
+    fn from(e: AffectedPackagesError) -> Self {
+        Error::Api(e.into())
+    }
+}
+impl From<turborepo_scope::filter::ResolutionError> for Error {
+    fn from(e: turborepo_scope::filter::ResolutionError) -> Self {
+        Error::Api(e.into())
+    }
+}
+impl From<turborepo_signals::listeners::Error> for Error {
+    fn from(e: turborepo_signals::listeners::Error) -> Self {
+        Error::Api(e.into())
+    }
+}
+
+impl From<Error> for turborepo_query_api::Error {
+    fn from(err: Error) -> Self {
+        match err {
+            Error::Api(e) => e,
+            other => turborepo_query_api::Error::Query(Box::new(other)),
+        }
+    }
 }
 
 pub struct RepositoryQuery {
@@ -209,6 +196,7 @@ impl RepositoryQuery {
 #[graphql(concrete(name = "RepositoryTasks", params(task::RepositoryTask)))]
 #[graphql(concrete(name = "Packages", params(Package)))]
 #[graphql(concrete(name = "ChangedPackages", params(ChangedPackage)))]
+#[graphql(concrete(name = "ChangedTasks", params(ChangedTask)))]
 #[graphql(concrete(name = "Files", params(file::File)))]
 #[graphql(concrete(name = "ExternalPackages", params(ExternalPackage)))]
 #[graphql(concrete(name = "Diagnostics", params(Diagnostic)))]
@@ -547,6 +535,55 @@ struct ChangedPackage {
     package: Package,
 }
 
+#[derive(SimpleObject)]
+struct TaskFileChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskDependencyTaskChanged {
+    task_name: String,
+    package_name: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskGlobalFileChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskGlobalDepsChanged {
+    file_path: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskAllChanged {
+    description: String,
+}
+
+#[derive(SimpleObject)]
+struct TaskPackageDependencyChanged {
+    package_name: String,
+}
+
+#[derive(Union)]
+#[allow(clippy::enum_variant_names)]
+enum TaskChangeReason {
+    TaskFileChanged(TaskFileChanged),
+    TaskDependencyTaskChanged(TaskDependencyTaskChanged),
+    TaskPackageDependencyChanged(TaskPackageDependencyChanged),
+    TaskGlobalFileChanged(TaskGlobalFileChanged),
+    TaskGlobalDepsChanged(TaskGlobalDepsChanged),
+    TaskAllChanged(TaskAllChanged),
+}
+
+#[derive(SimpleObject)]
+struct ChangedTask {
+    reason: TaskChangeReason,
+    #[graphql(flatten)]
+    task: task::RepositoryTask,
+}
+
 #[Object]
 impl RepositoryQuery {
     async fn affected_packages(
@@ -577,6 +614,49 @@ impl RepositoryQuery {
         Ok(packages)
     }
 
+    /// Gets a list of tasks that are affected by changes between two git refs.
+    ///
+    /// Unlike `affectedPackages` which operates at the package level,
+    /// `affectedTasks` checks each task's specific `inputs` configuration
+    /// against the changed files and walks the task dependency graph.
+    /// A task is only reported as affected if its inputs actually changed,
+    /// or if an upstream task dependency is affected.
+    ///
+    /// Use the `tasks` parameter to filter to specific task names (e.g.
+    /// `["test", "typecheck"]`). When omitted, all affected tasks are returned.
+    async fn affected_tasks(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+        #[graphql(desc = "Filter to specific task names (e.g. [\"test\", \"typecheck\"])")]
+        tasks: Option<Vec<String>>,
+    ) -> Result<Array<ChangedTask>, Error> {
+        let results = affected_tasks::calculate_affected_tasks(&self.run, base, head)?;
+
+        let mut changed_tasks: Array<ChangedTask> = results
+            .into_iter()
+            .filter(|at| {
+                tasks
+                    .as_ref()
+                    .is_none_or(|names| names.iter().any(|n| n == at.task_id.task()))
+            })
+            .map(|at| {
+                let task = task::RepositoryTask::new(&at.task_id, &self.run)?;
+                let reason = convert_task_change_reason(at.reason);
+                Ok(ChangedTask { reason, task })
+            })
+            .collect::<Result<Array<_>, Error>>()?;
+
+        changed_tasks.sort_by(|a, b| {
+            a.task
+                .package
+                .get_name()
+                .cmp(b.task.package.get_name())
+                .then_with(|| a.task.name.cmp(&b.task.name))
+        });
+        Ok(changed_tasks)
+    }
+
     /// Gets a single package by name
     async fn package(&self, name: String) -> Result<Package, Error> {
         let name = PackageName::from(name);
@@ -594,9 +674,13 @@ impl RepositoryQuery {
                 .diagnostics
                 .into_iter()
                 .map(|b| b.into())
-                .sorted_by(|a: &Diagnostic, b: &Diagnostic| a.message.cmp(&b.message))
+                .sorted_by(|a: &Diagnostic, b: &Diagnostic| {
+                    a.message
+                        .cmp(&b.message)
+                        .then_with(|| a.import.cmp(&b.import))
+                })
                 .collect()),
-            Err(err) => Err(Error::Boundaries(err)),
+            Err(err) => Err(err.into()),
         }
     }
 
@@ -656,6 +740,35 @@ impl RepositoryQuery {
     }
 }
 
+fn convert_task_change_reason(reason: affected_tasks::TaskChangeReason) -> TaskChangeReason {
+    match reason {
+        affected_tasks::TaskChangeReason::FileChanged { file_path } => {
+            TaskChangeReason::TaskFileChanged(TaskFileChanged { file_path })
+        }
+        affected_tasks::TaskChangeReason::DependencyTaskChanged {
+            task_name,
+            package_name,
+        } => TaskChangeReason::TaskDependencyTaskChanged(TaskDependencyTaskChanged {
+            task_name,
+            package_name,
+        }),
+        affected_tasks::TaskChangeReason::PackageDependencyChanged { package_name } => {
+            TaskChangeReason::TaskPackageDependencyChanged(TaskPackageDependencyChanged {
+                package_name,
+            })
+        }
+        affected_tasks::TaskChangeReason::GlobalFileChanged { file_path } => {
+            TaskChangeReason::TaskGlobalFileChanged(TaskGlobalFileChanged { file_path })
+        }
+        affected_tasks::TaskChangeReason::GlobalDepsChanged { file_path } => {
+            TaskChangeReason::TaskGlobalDepsChanged(TaskGlobalDepsChanged { file_path })
+        }
+        affected_tasks::TaskChangeReason::AllTasksChanged { description } => {
+            TaskChangeReason::TaskAllChanged(TaskAllChanged { description })
+        }
+    }
+}
+
 pub async fn graphiql() -> impl IntoResponse {
     response::Html(
         GraphiQLSource::build()
@@ -693,126 +806,6 @@ pub struct Diagnostic {
     pub end: Option<usize>,
 }
 
-/// An error with source location information from a GraphQL query.
-pub struct QueryErrorLocation {
-    pub message: String,
-    pub line: usize,
-    pub column: usize,
-}
-
-/// The result of executing a GraphQL query.
-pub struct QueryResult {
-    pub result_json: String,
-    pub errors: Vec<QueryErrorLocation>,
-}
-
-/// The standard GraphQL introspection query used by `turbo query --schema`.
-pub const SCHEMA_QUERY: &str = "query IntrospectionQuery {
-  __schema {
-    queryType {
-      name
-    }
-    mutationType {
-      name
-    }
-    subscriptionType {
-      name
-    }
-    types {
-      ...FullType
-    }
-    directives {
-      name
-      description
-      locations
-      args {
-        ...InputValue
-      }
-    }
-  }
-}
-
-fragment FullType on __Type {
-  kind
-  name
-  description
-  fields(includeDeprecated: true) {
-    name
-    description
-    args {
-      ...InputValue
-    }
-    type {
-      ...TypeRef
-    }
-    isDeprecated
-    deprecationReason
-  }
-  inputFields {
-    ...InputValue
-  }
-  interfaces {
-    ...TypeRef
-  }
-  enumValues(includeDeprecated: true) {
-    name
-    description
-    isDeprecated
-    deprecationReason
-  }
-  possibleTypes {
-    ...TypeRef
-  }
-}
-
-fragment InputValue on __InputValue {
-  name
-  description
-  type {
-    ...TypeRef
-  }
-  defaultValue
-}
-
-fragment TypeRef on __Type {
-  kind
-  name
-  ofType {
-    kind
-    name
-    ofType {
-      kind
-      name
-      ofType {
-        kind
-        name
-        ofType {
-          kind
-          name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-              ofType {
-                kind
-                name
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-}";
-
-/// Execute a GraphQL query against the repository and return the result as
-/// JSON.
-///
-/// This is the high-level entry point that hides the `async-graphql` schema
-/// machinery from callers. `variables_json` is an optional raw JSON string
-/// for query variables.
 pub async fn execute_query(
     run: Arc<dyn QueryRun>,
     query: &str,

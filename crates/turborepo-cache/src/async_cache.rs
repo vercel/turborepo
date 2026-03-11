@@ -37,7 +37,7 @@ impl AsyncCache {
     pub fn new(
         opts: &CacheOpts,
         repo_root: &AbsoluteSystemPath,
-        api_client: APIClient,
+        api_client: Option<APIClient>,
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
     ) -> Result<AsyncCache, CacheError> {
@@ -202,7 +202,10 @@ impl AsyncCache {
             .send(WorkerRequest::Shutdown(closing_tx, closed_tx))
             .await
             .map_err(|_| CacheError::CacheShuttingDown)?;
-        Ok((closing_rx.await.unwrap(), closed_rx)) // todo
+        closing_rx
+            .await
+            .map(|status| (status, closed_rx))
+            .map_err(|_| CacheError::CacheShuttingDown)
     }
 
     /// Shut down the cache, waiting for all workers to finish writing.
@@ -279,6 +282,7 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 
@@ -294,7 +298,8 @@ mod tests {
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
+        let async_cache =
+            AsyncCache::new(&opts, &repo_root_path, Some(api_client), api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -368,24 +373,16 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 
-        // Initialize client with invalid API url to ensure that we don't hit the
-        // network
-        let api_client = APIClient::new(
-            "http://example.com",
-            Some(Duration::from_secs(200)),
-            None,
-            "2.0.0",
-            true,
-        )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
+        let async_cache = AsyncCache::new(&opts, &repo_root_path, None, api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -444,6 +441,71 @@ mod tests {
         Ok(())
     }
 
+    #[tokio::test]
+    async fn test_local_only_cache_does_not_require_api_client() -> Result<()> {
+        let test_case = get_test_cases().into_iter().next().unwrap();
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        test_case.initialize(&repo_root_path)?;
+
+        let hash = format!("{}-local-only", test_case.hash);
+        let opts = CacheOpts {
+            cache_dir: Utf8PathBuf::from(".turbo/cache"),
+            cache: CacheConfig {
+                local: CacheActions {
+                    read: true,
+                    write: true,
+                },
+                remote: CacheActions {
+                    read: false,
+                    write: false,
+                },
+            },
+            workers: 1,
+            remote_cache_opts: Some(RemoteCacheOpts {
+                unused_team_id: Some("my-team".to_string()),
+                signature: false,
+                enforce_signature_key_length: false,
+            }),
+        };
+
+        let api_auth = Some(APIAuth {
+            team_id: Some("my-team-id".to_string()),
+            token: SecretString::new("my-token".to_string()),
+            team_slug: None,
+        });
+        let async_cache = AsyncCache::new(&opts, &repo_root_path, None, api_auth, None)?;
+
+        assert_matches!(async_cache.exists(&hash).await, Ok(None));
+
+        async_cache
+            .put(
+                repo_root_path.clone(),
+                hash.clone(),
+                test_case
+                    .files
+                    .iter()
+                    .map(|f| f.path().to_owned())
+                    .collect(),
+                test_case.duration,
+            )
+            .await?;
+
+        async_cache.wait().await?;
+
+        assert_eq!(
+            async_cache.exists(&hash).await?,
+            Some(CacheHitMetadata {
+                source: CacheSource::Local,
+                time_saved: test_case.duration,
+            })
+        );
+
+        async_cache.shutdown().await?;
+
+        Ok(())
+    }
+
     async fn round_trip_test_with_both_caches(test_case: &TestCase, port: u16) -> Result<()> {
         let repo_root = tempdir()?;
         let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
@@ -467,6 +529,7 @@ mod tests {
             remote_cache_opts: Some(RemoteCacheOpts {
                 unused_team_id: Some("my-team".to_string()),
                 signature: false,
+                enforce_signature_key_length: false,
             }),
         };
 
@@ -482,7 +545,8 @@ mod tests {
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache = AsyncCache::new(&opts, &repo_root_path, api_client, api_auth, None)?;
+        let async_cache =
+            AsyncCache::new(&opts, &repo_root_path, Some(api_client), api_auth, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;

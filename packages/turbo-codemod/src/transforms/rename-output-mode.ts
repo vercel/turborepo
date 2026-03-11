@@ -6,6 +6,7 @@ import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
 import { loadTurboJson } from "../utils/load-turbo-json";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
 const TRANSFORMER = "rename-output-mode";
@@ -14,6 +15,10 @@ const DESCRIPTION =
 const INTRODUCED_IN = "2.0.0-canary.0";
 
 function migrateConfig(config: SchemaV1) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     if (Object.hasOwn(taskDef, "outputMode")) {
       (taskDef as PipelineV2).outputLogs = taskDef.outputMode;

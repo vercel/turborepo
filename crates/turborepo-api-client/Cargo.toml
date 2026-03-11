@@ -7,7 +7,10 @@ license = "MIT"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 native-tls = ["reqwest/native-tls"]
-rustls-tls = ["reqwest/rustls-tls-native-roots"]
+rustls-tls = [
+  "reqwest/rustls-tls-native-roots",
+  "reqwest/rustls-tls-webpki-roots",
+]
 
 [dev-dependencies]
 anyhow = { workspace = true }

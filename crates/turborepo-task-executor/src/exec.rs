@@ -107,8 +107,10 @@ pub enum ExecOutcome {
 pub enum SuccessOutcome {
     /// Task output was restored from cache
     CacheHit,
-    /// Task was executed
+    /// Task was executed and outputs are safe to cache
     Run,
+    /// Task was executed but log flush failed, so outputs should not be cached
+    RunOutputError,
 }
 
 /// Internal errors that can occur during task execution.
@@ -257,9 +259,10 @@ where
     ///
     /// This is the main entry point for task execution. It:
     /// 1. Starts tracking
-    /// 2. Executes the task (checking cache, running process, saving outputs)
+    /// 2. Executes the task (checking cache, running process)
     /// 3. Reports the outcome via the callback
-    /// 4. Updates the tracker
+    /// 4. Saves outputs to cache (off the critical path)
+    /// 5. Updates the tracker
     pub async fn execute<O: Write>(
         &mut self,
         parent_span_id: Option<tracing::Id>,
@@ -269,6 +272,7 @@ where
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<(), InternalError> {
         let tracker: TaskTracker<chrono::DateTime<chrono::Local>> = tracker.start().await;
+        let task_start = Instant::now();
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         span.follows_from(parent_span_id);
 
@@ -276,6 +280,7 @@ where
             .execute_inner(&output_client, telemetry)
             .instrument(span)
             .await;
+        let task_duration = task_start.elapsed();
 
         // If the task resulted in an error, do not group in order to better highlight
         // the error.
@@ -311,13 +316,38 @@ where
             }
         }
 
+        // Cache save runs after the callback so dependent tasks can start
+        // while we walk the filesystem and write to cache.
+        if let Ok(ExecOutcome::Success(SuccessOutcome::Run)) = &result
+            && self
+                .task_access
+                .can_cache(&self.task_hash, &self.task_id_for_display)
+                .unwrap_or(true)
+        {
+            if let Err(e) = self
+                .task_cache
+                .save_outputs(task_duration, telemetry)
+                .instrument(tracing::info_span!("cache_save", task = %self.task_id))
+                .await
+            {
+                error!("error caching output: {e}");
+            } else {
+                self.hash_tracker.insert_expanded_outputs(
+                    self.task_id.clone(),
+                    self.task_cache.expanded_outputs().to_vec(),
+                );
+            }
+        }
+
         // Tracker bookkeeping happens after the callback so dependents
         // can start while we update summaries.
         match result {
             Ok(ExecOutcome::Success(outcome)) => {
                 match outcome {
                     SuccessOutcome::CacheHit => tracker.cached().await,
-                    SuccessOutcome::Run => tracker.build_succeeded(0).await,
+                    SuccessOutcome::Run | SuccessOutcome::RunOutputError => {
+                        tracker.build_succeeded(0).await
+                    }
                 };
             }
             Ok(ExecOutcome::Task { exit_code, message }) => {
@@ -366,7 +396,6 @@ where
         output_client: &TaskOutput<O>,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
-        let task_start = Instant::now();
         let mut prefixed_ui = self.prefixed_ui(output_client);
 
         if self.ui_mode.has_sender()
@@ -475,35 +504,17 @@ where
                 return Err(InternalError::UnknownChildExit);
             }
         };
-        let task_duration = task_start.elapsed();
-
         match exit_status {
             ChildExit::Finished(Some(0)) => {
-                // Attempt to flush stdout_writer and log any errors encountered
+                // Cache save is deferred to execute() so the callback can
+                // fire first, unblocking dependent tasks while the globwalk
+                // and cache write proceed in the background.
                 if let Err(e) = stdout_writer.flush() {
                     error!("{e}");
-                } else if self
-                    .task_access
-                    .can_cache(&self.task_hash, &self.task_id_for_display)
-                    .unwrap_or(true)
-                {
-                    if let Err(e) = self
-                        .task_cache
-                        .save_outputs(task_duration, telemetry)
-                        .instrument(tracing::info_span!("cache_save", task = %self.task_id))
-                        .await
-                    {
-                        error!("error caching output: {e}");
-                        return Err(e.into());
-                    } else {
-                        self.hash_tracker.insert_expanded_outputs(
-                            self.task_id.clone(),
-                            self.task_cache.expanded_outputs().to_vec(),
-                        );
-                    }
+                    Ok(ExecOutcome::Success(SuccessOutcome::RunOutputError))
+                } else {
+                    Ok(ExecOutcome::Success(SuccessOutcome::Run))
                 }
-
-                Ok(ExecOutcome::Success(SuccessOutcome::Run))
             }
             ChildExit::Finished(Some(code)) => {
                 if let Err(e) = stdout_writer.flush() {

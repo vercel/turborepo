@@ -17,7 +17,7 @@ A run consists of the following steps:
 
 ## Entry Point
 
-- **CLI Entry**: `crates/turborepo/src/main.rs` - Thin wrapper that calls `turborepo_lib::main`
+- **CLI Entry**: `crates/turborepo/src/main.rs` - Constructs `TurboQueryServer` (the concrete `QueryServer` implementation) and passes it to `turborepo_lib::main`
 - **Command Handler**: `crates/turborepo-lib/src/commands/run.rs` - Entry point for the run command, sets up signal handling and UI
 - **Main Logic**: `crates/turborepo-lib/src/run/mod.rs` - Core run implementation
 
@@ -29,8 +29,16 @@ A run consists of the following steps:
 
 - Package discovery and lockfile analysis
 - Task filtering based on arguments (task names and `--filter`)
+- Root task scoping via `FilterMode` (from `turborepo-types`): when no filter
+  or only exclude filters are active, root tasks defined in `turbo.json` are
+  auto-included. Explicit include filters or `--affected` suppress root task
+  injection. See `calculate_filtered_packages` and `FilterMode`.
 - Task graph construction and validation
 - Cache setup (local and remote)
+- Activating shared HTTP client initialization once telemetry, remote cache, or
+  linked analytics are known to be needed
+- Building a tracked repo index eagerly, then augmenting it with scoped
+  untracked-file discovery once the selected package set is known
 - Producing a final `Run` struct ready for execution
 
 ### 2. Package Graph (`crates/turborepo-repository/src/package_graph/`)
@@ -121,6 +129,37 @@ Multi-layered caching system:
 - `RunCache`: High-level cache coordination
 - `TaskCache`: Individual task cache management
 - `AsyncCache`: Handles async cache operations. Supports both local filesystem and remote HTTP caches
+- `SharedHttpClient`: Process-wide lazy/activatable `reqwest::Client`
+  initialization shared by telemetry and remote-cache consumers
+
+#### Shared HTTP Client Initialization
+
+Network consumers do not construct an HTTP client speculatively at process
+startup. Instead:
+
+1. The CLI and run builder determine whether telemetry, remote cache, or linked
+   analytics will actually need networking for the current invocation
+2. Once that need is known, they activate shared client initialization
+   immediately so TLS setup overlaps with other startup work
+3. Telemetry flushes and remote-cache operations both reuse the same initialized
+   `reqwest::Client`
+
+This avoids paying client/TLS setup on invocations with no network use while
+still warming the client before the first network request in the common case.
+
+#### Two-Stage Repo Index Construction
+
+`turbo run` builds SCM state in two stages:
+
+1. A background startup task reads `.git/index` and records committed blob IDs
+   plus modified/deleted tracked files for the whole repo
+2. After package filtering finishes, Turborepo computes the package roots it
+   actually needs for hashing and augments that tracked index with untracked
+   files only for those prefixes
+
+This keeps the cheap tracked-index work overlapped with other startup work while
+avoiding a repo-wide untracked walk when only a subset of packages will be
+hashed.
 
 #### Worktree Cache Sharing
 
@@ -160,6 +199,9 @@ Creates a "content identifier" for a specific task depending on current state of
 - **Global Hash**: Package manager lockfile, global dependencies, environment variables
 - **Task Hash**: Task definition, package dependencies, input files, environment variables
 - **File Hashing**: Uses git for tracking file changes efficiently
+- **Explicit Inputs**: When tasks use custom `inputs`, glob matches still walk the
+  filesystem, but clean tracked matches reuse blob OIDs from the repo index
+  instead of re-hashing file contents
 
 #### Hash Calculation
 
@@ -192,6 +234,27 @@ The summary module is responsible for any time of summary:
 
 - Stitches together result from visitor and the task tracker
 - Constructs final summary depending on user ask e.g. `--dry=json`/`--summarize`
+
+### 8. Query Subsystem
+
+The query subsystem powers `turbo query` (GraphQL introspection of the
+package/task graph) and the Web UI mode (`--ui=web`).
+
+**Crate layout:**
+
+- `turborepo-query-api` — Trait definitions (`QueryServer`, `QueryRun`) and
+  shared error/result types.  `turborepo-lib` depends on this thin interface
+  crate instead of the heavy implementation.
+- `turborepo-query` — GraphQL implementation using async-graphql, axum, and
+  oxc.  Implements the resolvers and HTTP server.
+- `turborepo/src/main.rs` — Wires the two halves together via `TurboQueryServer`,
+  which implements `QueryServer` by delegating to `turborepo-query`.
+
+**Data flow:** `main()` constructs `Arc<TurboQueryServer>` → passes to
+`turborepo_lib::main` → threaded through `shim` → `cli::run` →
+`commands::run` → `RunBuilder` → `Run`.  The `Run` struct stores the
+`query_server` and uses it in `start_web_ui()` and the `turbo query`
+command handler.
 
 ## Data Flow Overview
 
@@ -314,7 +377,7 @@ The system uses a two-layer design:
 
 Observability is configured via `experimentalObservability.otel` in `turbo.json`:
 
-```json
+```jsonc
 {
   "futureFlags": {
     "experimentalObservability": true
@@ -329,7 +392,15 @@ Observability is configured via `experimentalObservability.otel` in `turbo.json`
       },
       "metrics": {
         "runSummary": true,
-        "taskDetails": true
+        "taskDetails": true,
+        "runAttributes": {
+          "id": false,        // turbo.run.id — unbounded cardinality
+          "scmRevision": false // turbo.scm.revision — unbounded cardinality
+        },
+        "taskAttributes": {
+          "id": false,    // turbo.task.id
+          "hashes": false // turbo.task.hash, turbo.task.external_inputs_hash — unbounded
+        }
       }
     }
   }
@@ -346,6 +417,8 @@ Configuration can also be set via environment variables (`TURBO_EXPERIMENTAL_OTE
 - `turbo.run.tasks.cached` - Cache hit counter
 - `turbo.task.duration_ms` - Per-task duration histogram (when `taskDetails` enabled)
 - `turbo.task.cache.events` - Per-task cache events (when `taskDetails` enabled)
+
+Attributes with unbounded cardinality (unique run IDs, Git SHAs, content hashes) are gated behind `runAttributes` and `taskAttributes` config flags, all defaulting to `false`. See the `Metric Attributes and Cardinality` section in `crates/turborepo-otel/src/lib.rs` for the full attribute inventory.
 
 #### Data Flow
 

@@ -50,13 +50,14 @@ pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
 
 pub use experimental_otel::{
     ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
-    ExperimentalOtelTaskAttributesOptions,
+    ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
 };
 
 #[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
 #[merge(strategy = merge::option::overwrite_none)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalObservabilityOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub otel: Option<ExperimentalOtelOptions>,
 }
 
@@ -849,6 +850,7 @@ mod test {
                     metrics: Some(ExperimentalOtelMetricsOptions {
                         run_summary: Some(false),
                         task_details: Some(false),
+                        run_attributes: None,
                         task_attributes: None,
                     }),
                     ..Default::default()
@@ -1152,6 +1154,30 @@ mod test {
         assert!(
             linked_result.is_shared_worktree,
             "Linked worktree should be marked as shared"
+        );
+    }
+
+    #[test]
+    fn test_no_update_notifier_from_turbo_json_full_build() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{"noUpdateNotifier": true}"#)
+            .unwrap();
+
+        let builder = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions::default(),
+            global_config_path: None,
+            environment: Some(HashMap::default()),
+        };
+
+        let config = builder.build().unwrap();
+        assert!(
+            config.no_update_notifier(),
+            "noUpdateNotifier from turbo.json should be respected"
         );
     }
 }

@@ -5,7 +5,7 @@ use std::path::Path;
 use common::{run_turbo, setup};
 
 fn fixture_configs_dir() -> std::path::PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+    common::manifest_dir()
         .join("../../turborepo-tests/integration/tests/edit-turbo-json/fixture-configs")
 }
 

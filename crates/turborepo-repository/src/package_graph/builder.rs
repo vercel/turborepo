@@ -19,7 +19,7 @@ use crate::{
         PackageDiscoveryBuilder,
     },
     package_json::PackageJson,
-    package_manager::PackageManager,
+    package_manager::{PackageManager, pnpm::PnpmCatalogs},
 };
 
 pub struct PackageGraphBuilder<'a, T> {
@@ -183,20 +183,7 @@ where
             true => Ok(state.build_single_package_graph().await?),
             false => {
                 let state = state.parse_package_jsons().await?;
-
-                // If we started a lockfile read, collect the result before
-                // entering resolve_lockfile so it becomes a cache hit.
-                let state = if let Some(handle) = lockfile_future {
-                    if let Ok(Some(lockfile)) = handle.await {
-                        state.with_lockfile(lockfile)
-                    } else {
-                        state
-                    }
-                } else {
-                    state
-                };
-
-                let state = state.resolve_lockfile().await?;
+                let state = state.resolve_lockfile(lockfile_future).await?;
                 Ok(state.build_inner().await?)
             }
         }
@@ -428,11 +415,6 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
 }
 
 impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
-    fn with_lockfile(mut self, lockfile: Box<dyn Lockfile>) -> Self {
-        self.lockfile = Some(lockfile);
-        self
-    }
-
     #[tracing::instrument(skip(self))]
     fn connect_internal_dependencies(
         &mut self,
@@ -443,6 +425,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         // Without hoisting, the par_iter below would redundantly read the
         // same file N times (once per workspace).
         let link_workspace_packages = package_manager.link_workspace_packages(self.repo_root);
+        let catalogs = package_manager.read_catalogs(self.repo_root);
         // Resolve internal vs external dependencies in parallel. Each
         // Dependencies::new call is read-only on the workspaces map
         // so this is safe. Graph mutation stays sequential below.
@@ -460,6 +443,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
                             link_workspace_packages,
                             entry.package_json.all_dependencies(),
                             &path_index,
+                            catalogs.as_ref(),
                         ),
                     )
                 })
@@ -520,8 +504,11 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
         }
     }
 
-    #[tracing::instrument(skip(self))]
-    async fn resolve_lockfile(mut self) -> Result<BuildState<'a, ResolvedLockfile, T>, Error> {
+    #[tracing::instrument(skip(self, lockfile_future))]
+    async fn resolve_lockfile(
+        mut self,
+        lockfile_future: Option<tokio::task::JoinHandle<Option<Box<dyn Lockfile>>>>,
+    ) -> Result<BuildState<'a, ResolvedLockfile, T>, Error> {
         // Since we've already performed package discovery, this should just be a cache
         // hit
         let package_manager = self
@@ -530,6 +517,12 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             .await?
             .package_manager;
         self.connect_internal_dependencies(&package_manager)?;
+
+        if let Some(handle) = lockfile_future
+            && let Ok(Some(lockfile)) = handle.await
+        {
+            self.lockfile = Some(lockfile);
+        }
 
         let lockfile = match self.populate_lockfile().await {
             Ok(lockfile) => Some(lockfile),
@@ -658,6 +651,7 @@ impl Dependencies {
         link_workspace_packages: bool,
         dependencies: I,
         path_index: &WorkspacePathIndex<'_>,
+        catalogs: Option<&PnpmCatalogs>,
     ) -> Self {
         let resolved_workspace_json_path = repo_root.resolve(workspace_json_path);
         let workspace_dir = resolved_workspace_json_path
@@ -671,6 +665,7 @@ impl Dependencies {
             workspaces,
             link_workspace_packages,
             path_index,
+            catalogs,
         );
         for (name, version) in dependencies.into_iter() {
             if let Some(workspace) = splitter.is_internal(name, version) {

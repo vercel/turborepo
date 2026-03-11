@@ -144,6 +144,41 @@
     "vitest/prefer-import-in-mock": "off",
     "jest/prefer-lowercase-title": "off",
     "unicorn/prefer-string-slice": "off",
-    "typescript/ban-tslint-comment": "off"
-  }
+    "typescript/ban-tslint-comment": "off",
+    "unicorn/prefer-module": "off",
+    "unicorn/prefer-ternary": "off"
+  },
+  "overrides": [
+    {
+      "files": [
+        "**/*.{test,spec}.{ts,tsx,js,jsx}",
+        "**/__tests__/**/*.{ts,tsx,js,jsx}"
+      ],
+      "plugins": ["jest", "vitest"],
+      "rules": {
+        "jest/consistent-test-it": "off",
+        "jest/max-expects": "off",
+        "jest/no-conditional-expect": "off",
+        "jest/no-conditional-in-test": "off",
+        "jest/no-confusing-set-timeout": "off",
+        "jest/no-done-callback": "off",
+        "jest/no-hooks": "off",
+        "jest/no-untyped-mock-factory": "off",
+        "jest/prefer-called-with": "off",
+        "jest/prefer-each": "off",
+        "jest/prefer-lowercase-title": "off",
+        "jest/prefer-strict-equal": "off",
+        "jest/prefer-to-be": "off",
+        "jest/require-hook": "off",
+        "jest/require-top-level-describe": "off",
+        "jest/valid-title": "off",
+        "vitest/no-import-node-test": "off",
+        "vitest/prefer-called-once": "off",
+        "vitest/prefer-describe-function-title": "off",
+        "vitest/prefer-import-in-mock": "off",
+        "vitest/prefer-to-be-falsy": "off",
+        "vitest/prefer-to-be-truthy": "off"
+      }
+    }
+  ]
 }

@@ -34,7 +34,7 @@ mod git_index_regression_tests;
 #[cfg(test)]
 mod test_utils;
 
-pub use repo_index::RepoGitIndex;
+pub use repo_index::{RepoGitIndex, walk_candidate_files};
 pub use turborepo_hash::OidHash;
 pub use worktree::WorktreeInfo;
 
@@ -311,6 +311,13 @@ impl SCM {
         matches!(self, SCM::Manual)
     }
 
+    pub fn git_root(&self) -> Option<&AbsoluteSystemPath> {
+        match self {
+            SCM::Git(git) => Some(&git.root),
+            SCM::Manual => None,
+        }
+    }
+
     /// Build a repo-wide git index that caches `git ls-tree` and `git status`
     /// results. Returns `None` for manual SCM mode or when the package count
     /// is too small to benefit. Callers should build this once before parallel
@@ -367,6 +374,70 @@ impl SCM {
                 }
             },
             SCM::Manual => None,
+        }
+    }
+
+    /// Build only the tracked portion of the repo index.
+    ///
+    /// This is intended for speculative startup work on the `turbo run` path.
+    /// Untracked-file discovery can be layered on later once the selected
+    /// package set is known.
+    pub fn build_tracked_repo_index_eager(&self) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new_tracked(git) {
+                Ok(index) => {
+                    debug!("tracked repo git index built eagerly");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build tracked repo git index eagerly: {}. Will hash \
+                         per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    /// Build the full repo index (tracked + untracked) using parallel git
+    /// subprocesses for the tracked index, and a race between
+    /// `walk_candidate_files` and `git ls-files --others` for untracked
+    /// discovery. The race ensures optimal performance on both macOS
+    /// (where the walk wins) and Linux (where ls-files wins).
+    pub fn build_repo_index_from_subprocesses(
+        &self,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => match RepoGitIndex::new_from_subprocess_and_walk(git, prefixes) {
+                Ok(index) => {
+                    debug!("repo git index built from subprocess + walk race");
+                    Some(index)
+                }
+                Err(e) => {
+                    debug!(
+                        "failed to build repo git index from subprocesses: {}. Will hash \
+                         per-package.",
+                        e,
+                    );
+                    None
+                }
+            },
+            SCM::Manual => None,
+        }
+    }
+
+    pub fn populate_repo_index_untracked(
+        &self,
+        repo_index: &mut RepoGitIndex,
+        prefixes: &[RelativeUnixPathBuf],
+    ) -> Result<(), Error> {
+        match self {
+            SCM::Git(git) => repo_index.populate_untracked_for_prefixes(git, prefixes),
+            SCM::Manual => Ok(()),
         }
     }
 }

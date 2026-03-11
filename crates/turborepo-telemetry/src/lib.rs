@@ -15,7 +15,6 @@ use std::{sync::OnceLock, time::Duration};
 
 use config::{ConfigError, TelemetryConfig};
 use events::TelemetryEvent;
-use futures::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
 use tokio::{
     select,
@@ -80,21 +79,21 @@ fn init(
     mut config: TelemetryConfig,
     client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
     color_config: ColorConfig,
-) -> Result<(TelemetryHandle, TelemetrySender), Box<dyn std::error::Error>> {
+) -> Result<(TelemetryHandle, TelemetrySender, bool), Box<dyn std::error::Error>> {
     let (tx, rx) = mpsc::unbounded_channel();
     let (cancel_tx, cancel_rx) = oneshot::channel();
     config.show_alert(color_config);
+    let enabled = config.is_enabled();
 
     let session_id = Uuid::new_v4();
     let worker = Worker {
         rx,
         buffer: Vec::new(),
-        senders: FuturesUnordered::new(),
         exit_ch: cancel_tx,
         client,
         session_id: session_id.to_string(),
         telemetry_id: config.get_id().to_string(),
-        enabled: config.is_enabled(),
+        enabled,
         color_config,
     };
     let handle = worker.start();
@@ -105,7 +104,7 @@ fn init(
     };
 
     // return
-    Ok((telemetry_handle, tx))
+    Ok((telemetry_handle, tx, enabled))
 }
 
 /// Starts the `Worker` on a separate tokio thread. Returns an `TelemetrySender`
@@ -117,16 +116,16 @@ fn init(
 pub fn init_telemetry(
     client: impl telemetry::TelemetryClient + Clone + Send + Sync + 'static,
     color_config: ColorConfig,
-) -> Result<TelemetryHandle, Box<dyn std::error::Error>> {
+) -> Result<(TelemetryHandle, bool), Box<dyn std::error::Error>> {
     // make sure we're not already initialized
     if SENDER_INSTANCE.get().is_some() {
         debug!("telemetry already initialized");
         return Err(Box::new(Error::AlreadyInitialized()));
     }
     let config = TelemetryConfig::with_default_config_path()?;
-    let (handle, sender) = init(config, client, color_config)?;
+    let (handle, sender, enabled) = init(config, client, color_config)?;
     SENDER_INSTANCE.set(sender).unwrap();
-    Ok(handle)
+    Ok((handle, enabled))
 }
 
 impl TelemetryHandle {
@@ -151,7 +150,6 @@ impl TelemetryHandle {
 struct Worker<C> {
     rx: mpsc::UnboundedReceiver<TelemetryEvent>,
     buffer: Vec<TelemetryEvent>,
-    senders: FuturesUnordered<JoinHandle<()>>,
     // Used to cancel the worker
     exit_ch: oneshot::Sender<()>,
     client: C,
@@ -193,11 +191,6 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
                 }
             }
             self.flush_events();
-            while let Some(result) = self.senders.next().await {
-                if let Err(err) = result {
-                    debug!("failed to send telemetry event. error: {}", err)
-                }
-            }
         })
     }
 
@@ -205,10 +198,7 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
         if !self.buffer.is_empty() {
             let events = std::mem::take(&mut self.buffer);
             let num_events = events.len();
-            let handle = self.send_events(events);
-            if let Some(handle) = handle {
-                self.senders.push(handle);
-            }
+            self.send_events(events);
             trace!(
                 "Flushed telemetry event queue (num_events={:?})",
                 num_events
@@ -216,9 +206,9 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
         }
     }
 
-    fn send_events(&self, events: Vec<TelemetryEvent>) -> Option<JoinHandle<()>> {
+    fn send_events(&self, events: Vec<TelemetryEvent>) {
         if !self.enabled {
-            return None;
+            return;
         }
 
         if config::is_debug() {
@@ -236,7 +226,7 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
         let client = self.client.clone();
         let session_id = self.session_id.clone();
         let telemetry_id = self.telemetry_id.clone();
-        Some(tokio::spawn(async move {
+        tokio::spawn(async move {
             if let Ok(Err(err)) = tokio::time::timeout(
                 REQUEST_TIMEOUT,
                 client.record_telemetry(events, telemetry_id.as_str(), session_id.as_str()),
@@ -245,7 +235,7 @@ impl<C: telemetry::TelemetryClient + Clone + Send + Sync + 'static> Worker<C> {
             {
                 debug!("failed to record cache usage telemetry. error: {}", err)
             }
-        }))
+        });
     }
 }
 
@@ -345,7 +335,7 @@ mod tests {
 
         let result = init(config, client.clone(), ColorConfig::new(false));
 
-        let (telemetry_handle, telemetry_sender) = result.unwrap();
+        let (telemetry_handle, telemetry_sender, _) = result.unwrap();
 
         for _ in 0..2 {
             telemetry_sender
@@ -385,7 +375,7 @@ mod tests {
 
         let result = init(config, client.clone(), ColorConfig::new(false));
 
-        let (telemetry_handle, telemetry_sender) = result.unwrap();
+        let (telemetry_handle, telemetry_sender, _) = result.unwrap();
 
         for _ in 0..12 {
             telemetry_sender
@@ -416,6 +406,50 @@ mod tests {
         drop(telemetry_handle);
     }
 
+    #[derive(Clone)]
+    struct SlowClient;
+
+    impl TelemetryClient for SlowClient {
+        async fn record_telemetry(
+            &self,
+            _events: Vec<TelemetryEvent>,
+            _telemetry_id: &str,
+            _session_id: &str,
+        ) -> Result<(), turborepo_api_client::Error> {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_close_does_not_block_on_slow_client() {
+        let (_tmp, temp_dir) = temp_dir();
+        let config =
+            TelemetryConfig::new(temp_dir.join_components(&["turborepo", "telemetry.json"]))
+                .unwrap();
+
+        let result = init(config, SlowClient, ColorConfig::new(false));
+        let (telemetry_handle, telemetry_sender, _) = result.unwrap();
+
+        for _ in 0..2 {
+            telemetry_sender
+                .send(TelemetryEvent::Generic(TelemetryGenericEvent {
+                    id: "id".to_string(),
+                    key: "key".to_string(),
+                    value: "value".to_string(),
+                    parent_id: None,
+                }))
+                .unwrap();
+        }
+        drop(telemetry_sender);
+
+        // close() should return near-instantly even though the client takes 5s
+        tokio::time::timeout(Duration::from_millis(200), telemetry_handle.close())
+            .await
+            .expect("close() blocked waiting for slow HTTP response")
+            .expect("worker panicked");
+    }
+
     #[tokio::test]
     async fn test_closing() {
         let (_tmp, temp_dir) = temp_dir();
@@ -431,7 +465,7 @@ mod tests {
 
         let result = init(config, client.clone(), ColorConfig::new(false));
 
-        let (telemetry_handle, telemetry_sender) = result.unwrap();
+        let (telemetry_handle, telemetry_sender, _) = result.unwrap();
 
         for _ in 0..2 {
             telemetry_sender

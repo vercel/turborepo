@@ -1,10 +1,9 @@
-use std::{future::Future, sync::Arc};
+use std::future::Future;
 
 use reqwest::Method;
-use tokio::sync::OnceCell;
 use turborepo_vercel_api::telemetry::TelemetryEvent;
 
-use crate::{APIClient, AnonAPIClient, Error, build_user_agent, retry};
+use crate::{AnonAPIClient, Error, SharedHttpClient, build_user_agent, retry};
 
 const TELEMETRY_ENDPOINT: &str = "/api/turborepo/v1/events";
 
@@ -43,24 +42,16 @@ impl TelemetryClient for AnonAPIClient {
     }
 }
 
-/// A telemetry client backed by an HTTP client that initializes on a
-/// background thread. TLS initialization (~100ms) starts as early as
-/// possible via `spawn_blocking`; this client shares the `OnceCell` that
-/// the background task writes to. By the time telemetry flushes its
-/// first batch, TLS init has almost certainly already completed.
+/// A telemetry client backed by the shared on-demand HTTP client.
 #[derive(Clone)]
 pub struct DeferredTelemetryClient {
-    http_client: Arc<OnceCell<reqwest::Client>>,
+    http_client: SharedHttpClient,
     base_url: String,
     user_agent: String,
 }
 
 impl DeferredTelemetryClient {
-    pub fn new(
-        http_client: Arc<OnceCell<reqwest::Client>>,
-        base_url: impl Into<String>,
-        version: &str,
-    ) -> Self {
+    pub fn new(http_client: SharedHttpClient, base_url: impl Into<String>, version: &str) -> Self {
         Self {
             http_client,
             base_url: base_url.into(),
@@ -76,20 +67,7 @@ impl TelemetryClient for DeferredTelemetryClient {
         telemetry_id: &str,
         session_id: &str,
     ) -> Result<(), Error> {
-        // Fast path: background TLS init already completed.
-        // Slow path: initialize inline, but if the runtime is shutting down
-        // the spawn_blocking task will be cancelled — return an error instead
-        // of panicking. Telemetry is never worth crashing over.
-        let maybe_client;
-        let client = match self.http_client.get() {
-            Some(client) => client,
-            None => {
-                maybe_client = tokio::task::spawn_blocking(|| APIClient::build_http_client(None))
-                    .await
-                    .map_err(|_| Error::HttpClientCancelled)??;
-                &maybe_client
-            }
-        };
+        let client = self.http_client.get_or_init().await?;
 
         let url = format!("{}{}", self.base_url, TELEMETRY_ENDPOINT);
         let telemetry_request = client

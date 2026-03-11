@@ -117,6 +117,13 @@ fn metrics_config(
 ) -> turborepo_otel::MetricsConfig {
     let run_summary = options.and_then(|opts| opts.run_summary).unwrap_or(true);
     let task_details = options.and_then(|opts| opts.task_details).unwrap_or(false);
+    let run_attributes = options
+        .and_then(|opts| opts.run_attributes.as_ref())
+        .map(|attrs| turborepo_otel::RunAttributesConfig {
+            id: attrs.id.unwrap_or(false),
+            scm_revision: attrs.scm_revision.unwrap_or(false),
+        })
+        .unwrap_or_default();
     let task_attributes = options
         .and_then(|opts| opts.task_attributes.as_ref())
         .map(|attrs| turborepo_otel::TaskAttributesConfig {
@@ -127,6 +134,7 @@ fn metrics_config(
     turborepo_otel::MetricsConfig {
         run_summary,
         task_details,
+        run_attributes,
         task_attributes,
     }
 }
@@ -180,13 +188,6 @@ fn build_task_payload(task: &TaskSummary) -> TaskMetricsPayload {
         .cache
         .cache_source_label()
         .map(|label| label.to_string());
-    let cache_time_saved_ms = match cache_status {
-        TaskCacheStatus::Hit => {
-            let saved = task.shared.cache.time_saved();
-            (saved > 0).then_some(saved)
-        }
-        TaskCacheStatus::Miss => None,
-    };
 
     TaskMetricsPayload {
         task_id: task.task_id.to_string(),
@@ -200,7 +201,6 @@ fn build_task_payload(task: &TaskSummary) -> TaskMetricsPayload {
         duration_ms,
         cache_status,
         cache_source,
-        cache_time_saved_ms,
         exit_code,
     }
 }
@@ -224,6 +224,7 @@ mod tests {
             metrics: turborepo_otel::MetricsConfig {
                 run_summary: true,
                 task_details: false,
+                run_attributes: turborepo_otel::RunAttributesConfig::default(),
                 task_attributes: turborepo_otel::TaskAttributesConfig::default(),
             },
         }
@@ -290,6 +291,8 @@ mod tests {
         assert!(config.resource_attributes.is_empty());
         assert!(config.metrics.run_summary);
         assert!(!config.metrics.task_details);
+        assert!(!config.metrics.run_attributes.id);
+        assert!(!config.metrics.run_attributes.scm_revision);
         assert!(!config.metrics.task_attributes.id);
         assert!(!config.metrics.task_attributes.hashes);
     }
@@ -311,6 +314,7 @@ mod tests {
             metrics: Some(ExperimentalOtelMetricsOptions {
                 run_summary: Some(false),
                 task_details: Some(true),
+                run_attributes: None,
                 task_attributes: None,
             }),
             ..Default::default()
@@ -342,12 +346,18 @@ mod tests {
         fn expected_metrics(
             run_summary: bool,
             task_details: bool,
+            run_id: bool,
+            run_scm_revision: bool,
             task_id: bool,
             task_hashes: bool,
         ) -> turborepo_otel::MetricsConfig {
             turborepo_otel::MetricsConfig {
                 run_summary,
                 task_details,
+                run_attributes: turborepo_otel::RunAttributesConfig {
+                    id: run_id,
+                    scm_revision: run_scm_revision,
+                },
                 task_attributes: turborepo_otel::TaskAttributesConfig {
                     id: task_id,
                     hashes: task_hashes,
@@ -359,40 +369,44 @@ mod tests {
             MetricsCase {
                 name: "defaults",
                 options: None,
-                expected: expected_metrics(true, false, false, false),
+                expected: expected_metrics(true, false, false, false, false, false),
             },
             MetricsCase {
                 name: "both overridden",
                 options: Some(ExperimentalOtelMetricsOptions {
                     run_summary: Some(false),
                     task_details: Some(true),
+                    run_attributes: None,
                     task_attributes: None,
                 }),
-                expected: expected_metrics(false, true, false, false),
+                expected: expected_metrics(false, true, false, false, false, false),
             },
             MetricsCase {
                 name: "only run_summary overridden",
                 options: Some(ExperimentalOtelMetricsOptions {
                     run_summary: Some(false),
                     task_details: None,
+                    run_attributes: None,
                     task_attributes: None,
                 }),
-                expected: expected_metrics(false, false, false, false),
+                expected: expected_metrics(false, false, false, false, false, false),
             },
             MetricsCase {
                 name: "only task_details overridden",
                 options: Some(ExperimentalOtelMetricsOptions {
                     run_summary: None,
                     task_details: Some(true),
+                    run_attributes: None,
                     task_attributes: None,
                 }),
-                expected: expected_metrics(true, true, false, false),
+                expected: expected_metrics(true, true, false, false, false, false),
             },
             MetricsCase {
                 name: "task_attributes overridden",
                 options: Some(ExperimentalOtelMetricsOptions {
                     run_summary: None,
                     task_details: None,
+                    run_attributes: None,
                     task_attributes: Some(
                         turborepo_config::ExperimentalOtelTaskAttributesOptions {
                             id: Some(true),
@@ -400,7 +414,33 @@ mod tests {
                         },
                     ),
                 }),
-                expected: expected_metrics(true, false, true, true),
+                expected: expected_metrics(true, false, false, false, true, true),
+            },
+            MetricsCase {
+                name: "run_attributes.id enabled",
+                options: Some(ExperimentalOtelMetricsOptions {
+                    run_summary: None,
+                    task_details: None,
+                    run_attributes: Some(turborepo_config::ExperimentalOtelRunAttributesOptions {
+                        id: Some(true),
+                        scm_revision: None,
+                    }),
+                    task_attributes: None,
+                }),
+                expected: expected_metrics(true, false, true, false, false, false),
+            },
+            MetricsCase {
+                name: "run_attributes fully enabled",
+                options: Some(ExperimentalOtelMetricsOptions {
+                    run_summary: None,
+                    task_details: None,
+                    run_attributes: Some(turborepo_config::ExperimentalOtelRunAttributesOptions {
+                        id: Some(true),
+                        scm_revision: Some(true),
+                    }),
+                    task_attributes: None,
+                }),
+                expected: expected_metrics(true, false, true, true, false, false),
             },
         ];
 

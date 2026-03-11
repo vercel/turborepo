@@ -461,9 +461,11 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
         let unused_remote_cache_opts_team_id =
             inputs.config.team_id().map(|team_id| team_id.to_string());
         let signature = inputs.config.signature();
+        let enforce_signature_key_length = inputs.config.future_flags().longer_signature_key;
         let remote_cache_opts = Some(RemoteCacheOpts::new(
             unused_remote_cache_opts_team_id,
             signature,
+            enforce_signature_key_length,
         ));
 
         let cache_opts = CacheOpts {
