@@ -226,6 +226,15 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   longerSignatureKey?: boolean;
+  /**
+   * Use task-level `inputs` globs to determine which tasks are affected by
+   * changed files when running with `--affected`. When enabled, only tasks
+   * whose declared inputs match the changed files are selected, rather than
+   * selecting all tasks in changed packages.
+   *
+   * @defaultValue `false`
+   */
+  affectedUsingTaskInputs?: boolean;
 }
 
 export interface Pipeline {

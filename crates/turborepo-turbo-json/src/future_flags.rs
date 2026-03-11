@@ -10,6 +10,7 @@
 //! ```json
 //! {
 //!   "futureFlags": {
+//!     "affectedUsingTaskInputs": true
 //!   }
 //! }
 //! ```
@@ -53,6 +54,12 @@ pub struct FutureFlags {
     /// brute-force tag collision feasible.
     #[serde(default)]
     pub longer_signature_key: bool,
+    /// Use task-level `inputs` globs to determine which tasks are affected by
+    /// changed files when running with `--affected`. When enabled, only tasks
+    /// whose declared inputs match the changed files are selected, rather than
+    /// selecting all tasks in changed packages.
+    #[serde(default)]
+    pub affected_using_task_inputs: bool,
 }
 
 impl TS for FutureFlags {
@@ -65,25 +72,25 @@ impl TS for FutureFlags {
 
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean }"
+         boolean, affectedUsingTaskInputs?: boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean }"
+         boolean, affectedUsingTaskInputs?: boolean }"
             .to_string()
     }
 
     fn decl() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
-         longerSignatureKey?: boolean };"
+         longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean };"
             .to_string()
     }
 
     fn decl_concrete() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
-         longerSignatureKey?: boolean };"
+         longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean };"
             .to_string()
     }
 

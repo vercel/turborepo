@@ -504,19 +504,31 @@ impl RunBuilder {
             )?
         };
 
-        let task_access = {
-            let _span = tracing::info_span!("task_access_setup").entered();
-            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
-            ta.restore_config().await;
-            ta
-        };
-
         let mut engine = self.build_engine(
             &pkg_dep_graph,
             &root_turbo_json,
             filtered_pkgs.keys(),
             &turbo_json_loader,
         )?;
+
+        let use_task_level_affected = self.opts.scope_opts.affected_range.is_some()
+            && self.opts.future_flags.affected_using_task_inputs;
+
+        if use_task_level_affected {
+            self.filter_engine_to_affected_tasks(
+                &mut engine,
+                &pkg_dep_graph,
+                &root_turbo_json,
+                &scm,
+            )?;
+        }
+
+        let task_access = {
+            let _span = tracing::info_span!("task_access_setup").entered();
+            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
+            ta.restore_config().await;
+            ta
+        };
 
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
@@ -526,6 +538,14 @@ impl RunBuilder {
                 filtered_pkgs.keys(),
                 &turbo_json_loader,
             )?;
+            if use_task_level_affected {
+                self.filter_engine_to_affected_tasks(
+                    &mut engine,
+                    &pkg_dep_graph,
+                    &root_turbo_json,
+                    &scm,
+                )?;
+            }
         }
 
         let should_print_prelude = self
@@ -603,6 +623,54 @@ impl RunBuilder {
             },
             analytics_handle,
         ))
+    }
+
+    /// Filters the engine in place to only tasks whose declared `inputs`
+    /// globs match the changed files (plus their transitive dependents).
+    /// Called after the engine is built via the normal scope resolution path.
+    #[tracing::instrument(skip_all)]
+    fn filter_engine_to_affected_tasks(
+        &self,
+        engine: &mut Engine,
+        pkg_dep_graph: &PackageGraph,
+        root_turbo_json: &TurboJson,
+        scm: &SCM,
+    ) -> Result<(), Error> {
+        let (from_ref, to_ref) = self
+            .opts
+            .scope_opts
+            .affected_range
+            .as_ref()
+            .expect("caller verified affected_range is Some");
+        let maybe_changed_files = scm.changed_files(
+            &self.repo_root,
+            from_ref.as_deref(),
+            to_ref.as_deref(),
+            true,
+            true,
+            true,
+        )?;
+
+        if let Ok(changed_files) = maybe_changed_files {
+            let total_tasks = engine.task_ids().count();
+            let affected_tasks = crate::task_change_detector::affected_task_ids(
+                engine,
+                pkg_dep_graph,
+                &changed_files,
+                &root_turbo_json.global_deps,
+            );
+            tracing::info!(
+                total_tasks,
+                affected_tasks = affected_tasks.len(),
+                changed_files = changed_files.len(),
+                "task-level affected detection complete"
+            );
+            engine.retain_affected_tasks(&affected_tasks);
+        } else {
+            tracing::warn!("SCM returned invalid change set; skipping task-level filtering");
+        }
+
+        Ok(())
     }
 
     #[tracing::instrument(skip_all)]

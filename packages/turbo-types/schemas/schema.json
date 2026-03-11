@@ -257,6 +257,11 @@
       "description": "Opt into breaking changes prior to major releases, experimental features, and beta features.\n\nNote: Currently all previous future flags (turboExtendsKeyword, nonRootExtends) have been graduated and are now enabled by default.",
       "type": "object",
       "properties": {
+        "affectedUsingTaskInputs": {
+          "description": "When enabled, `--affected` uses task-level input detection instead of package-level filtering. This also enables task-level `turbo watch` restarts and removes the \"Packages in scope\" run prelude.",
+          "default": false,
+          "type": "boolean"
+        },
         "errorsOnlyShowHash": {
           "description": "When using `outputLogs: \"errors-only\"`, show task hashes when tasks complete successfully. This provides visibility into which tasks are running without showing full output logs.",
           "default": false,

@@ -15,6 +15,7 @@
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
 pub mod secret;
+pub mod task_input_matching;
 use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
 
 use biome_deserialize_macros::Deserializable;

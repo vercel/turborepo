@@ -27,6 +27,7 @@ mod package_changes_watcher;
 mod panic_handler;
 mod run;
 mod shim;
+mod task_change_detector;
 mod task_graph;
 mod task_hash;
 mod tracing;
