@@ -5,6 +5,7 @@ import type { TransformerArgs, Transformer } from "../types";
 import type { TransformerResults } from "../runner";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import { loadTurboJson } from "../utils/load-turbo-json";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
 const TRANSFORMER = "clean-globs";
@@ -46,6 +47,10 @@ export function transformer({
 }
 
 function migrateConfig(config: SchemaV1) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   const mapGlob = (glob: string) => fixGlobPattern(glob);
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     taskDef.inputs = taskDef.inputs?.map(mapGlob);
