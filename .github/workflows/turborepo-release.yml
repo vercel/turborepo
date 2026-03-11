@@ -534,6 +534,28 @@ jobs:
       - name: Create and push release tag
         run: cd cli && make create-release-tag
 
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.stage.outputs.version }}
+          PREVIOUS_TAG: ${{ needs.stage.outputs.previous-tag }}
+        run: |
+          PRERELEASE_FLAG=""
+          if [[ "$VERSION" == *"-canary."* ]]; then
+            PRERELEASE_FLAG="--prerelease"
+          fi
+
+          NOTES_START_TAG_FLAG=""
+          if [ -n "$PREVIOUS_TAG" ]; then
+            NOTES_START_TAG_FLAG="--notes-start-tag ${PREVIOUS_TAG}"
+          fi
+
+          gh release create "v${VERSION}" \
+            --title "Turborepo v${VERSION}" \
+            --generate-notes \
+            $NOTES_START_TAG_FLAG \
+            $PRERELEASE_FLAG
+
   alias-versioned-docs:
     name: "Alias Versioned Docs"
     runs-on: ubuntu-latest
@@ -615,6 +637,13 @@ jobs:
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL }}
+
+  update-examples:
+    name: "Update Examples"
+    needs: [stage, create-release-tag]
+    if: ${{ always() && needs.create-release-tag.result == 'success' && !contains(needs.stage.outputs.version, '-canary.') }}
+    uses: ./.github/workflows/update-examples-on-release.yml
+    secrets: inherit
 
   create-release-pr:
     name: "Create Release PR"
