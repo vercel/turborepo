@@ -402,7 +402,9 @@ impl AuthTokens {
         let status = response.status();
 
         if !status.is_success() {
-            return Err(Error::FailedToGetToken);
+            return Err(Error::TokenRefreshFailed {
+                status: status.as_u16(),
+            });
         }
 
         let response_text = response.text().await?;

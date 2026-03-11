@@ -18,9 +18,10 @@ use crate::Error;
 
 const DEFAULT_VERCEL_ISSUER: &str = "https://vercel.com";
 pub const VERCEL_CLI_CLIENT_ID: &str = "cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp";
-// Request `openid` (ID token) and `offline_access` (refresh token) scopes.
-// `offline_access` is required for the refresh token flow in lib.rs.
-const DEVICE_FLOW_SCOPE: &str = "openid offline_access";
+// Only request `offline_access` (refresh token). We intentionally do not
+// request `openid` because we don't use or validate the id_token — user
+// identity is verified independently via the `get_user` API call.
+const DEVICE_FLOW_SCOPE: &str = "offline_access";
 // Per-request timeout for token polling. If the server doesn't respond
 // within this window, we back off (doubling the interval).
 const DEVICE_TOKEN_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
@@ -43,10 +44,10 @@ pub struct AuthorizationServerMetadata {
 #[serde(rename_all = "snake_case")]
 pub struct DeviceAuthorizationResponse {
     pub device_code: String,
-    /// The short code the user enters at the verification URI. Retained for
-    /// protocol completeness — we display the full `verification_uri_complete`
-    /// URL instead, which embeds the code.
-    #[allow(dead_code)]
+    /// The short code the user must confirm at the verification URI.
+    /// Per RFC 8628 §3.3 the user code MUST be displayed so users can verify
+    /// it matches what the authorization server shows — this is an
+    /// anti-phishing measure.
     pub user_code: String,
     pub verification_uri: String,
     /// Per RFC 8628 §3.2 this is OPTIONAL, but Vercel always provides it.
@@ -124,20 +125,25 @@ fn truncate(s: &str, max: usize) -> &str {
 
 /// Derive the OIDC issuer URL from a login URL.
 /// If the login URL is a Vercel-hosted URL (contains "vercel.com"),
-/// use the default Vercel issuer. Otherwise fall back to the scheme + host
+/// use the default Vercel issuer. Otherwise fall back to `https://` + host
 /// of the login URL to support self-hosted/enterprise deployments.
-fn issuer_from_login_url(login_url: &str) -> String {
+/// Non-HTTPS schemes are rejected to prevent token exchange over plaintext.
+fn issuer_from_login_url(login_url: &str) -> Result<String, Error> {
     if login_url.contains("vercel.com") {
-        return DEFAULT_VERCEL_ISSUER.to_string();
+        return Ok(DEFAULT_VERCEL_ISSUER.to_string());
     }
     if let Ok(parsed) = Url::parse(login_url) {
-        format!(
-            "{}://{}",
-            parsed.scheme(),
+        if parsed.scheme() != "https" {
+            return Err(Error::DiscoveryFailed {
+                message: format!("login URL must use https://, got {}://", parsed.scheme()),
+            });
+        }
+        Ok(format!(
+            "https://{}",
             parsed.host_str().unwrap_or("vercel.com")
-        )
+        ))
     } else {
-        DEFAULT_VERCEL_ISSUER.to_string()
+        Ok(DEFAULT_VERCEL_ISSUER.to_string())
     }
 }
 
@@ -190,7 +196,7 @@ pub async fn discover(
     client: &reqwest::Client,
     login_url: &str,
 ) -> Result<AuthorizationServerMetadata, Error> {
-    let issuer = issuer_from_login_url(login_url);
+    let issuer = issuer_from_login_url(login_url)?;
     let url = format!("{issuer}/.well-known/openid-configuration");
     let response = client
         .get(&url)
@@ -404,7 +410,7 @@ mod tests {
             token_type: "Bearer".to_string(),
             expires_in: 3600,
             refresh_token: Some("super-secret-refresh-token".to_string()),
-            scope: Some("openid".to_string()),
+            scope: Some("offline_access".to_string()),
         };
         let debug = format!("{:?}", ts);
         assert!(
@@ -423,11 +429,11 @@ mod tests {
     #[test]
     fn test_issuer_from_login_url_vercel() {
         assert_eq!(
-            issuer_from_login_url("https://vercel.com/api"),
+            issuer_from_login_url("https://vercel.com/api").unwrap(),
             "https://vercel.com"
         );
         assert_eq!(
-            issuer_from_login_url("https://api.vercel.com"),
+            issuer_from_login_url("https://api.vercel.com").unwrap(),
             "https://vercel.com"
         );
     }
@@ -435,14 +441,23 @@ mod tests {
     #[test]
     fn test_issuer_from_login_url_self_hosted() {
         assert_eq!(
-            issuer_from_login_url("https://my-company.example.com/api"),
+            issuer_from_login_url("https://my-company.example.com/api").unwrap(),
             "https://my-company.example.com"
         );
     }
 
     #[test]
+    fn test_issuer_from_login_url_rejects_http() {
+        let result = issuer_from_login_url("http://my-company.example.com/api");
+        assert!(result.is_err());
+    }
+
+    #[test]
     fn test_issuer_from_login_url_fallback() {
-        assert_eq!(issuer_from_login_url("not-a-url"), "https://vercel.com");
+        assert_eq!(
+            issuer_from_login_url("not-a-url").unwrap(),
+            "https://vercel.com"
+        );
     }
 
     #[test]
@@ -463,14 +478,14 @@ mod tests {
             "token_type": "Bearer",
             "expires_in": 3600,
             "refresh_token": "ref_xyz",
-            "scope": "openid offline_access"
+            "scope": "offline_access"
         }"#;
         let ts: TokenSet = serde_json::from_str(json).unwrap();
         assert_eq!(ts.access_token, "tok_abc");
         assert_eq!(ts.token_type, "Bearer");
         assert_eq!(ts.expires_in, 3600);
         assert_eq!(ts.refresh_token.as_deref(), Some("ref_xyz"));
-        assert_eq!(ts.scope.as_deref(), Some("openid offline_access"));
+        assert_eq!(ts.scope.as_deref(), Some("offline_access"));
     }
 
     #[test]
@@ -554,6 +569,25 @@ mod tests {
             introspection_endpoint: "https://vercel.com/api/introspect".to_string(),
         };
         assert!(validate_endpoint_origins(&metadata).is_err());
+    }
+
+    #[test]
+    fn test_validate_endpoint_origins_rejects_suffix_match() {
+        // Verify that the subdomain check uses a proper domain boundary (the
+        // leading `.`), so `el.com` and `notvercel.com` don't pass for issuer
+        // `vercel.com`.
+        let make = |ep_host: &str| AuthorizationServerMetadata {
+            issuer: "https://vercel.com".to_string(),
+            device_authorization_endpoint: format!("https://{ep_host}/api/device"),
+            token_endpoint: "https://vercel.com/api/token".to_string(),
+            revocation_endpoint: "https://vercel.com/api/revoke".to_string(),
+            introspection_endpoint: "https://vercel.com/api/introspect".to_string(),
+        };
+        assert!(validate_endpoint_origins(&make("el.com")).is_err());
+        assert!(validate_endpoint_origins(&make("notvercel.com")).is_err());
+        assert!(validate_endpoint_origins(&make("evil-vercel.com")).is_err());
+        // But a proper subdomain should pass
+        assert!(validate_endpoint_origins(&make("api.vercel.com")).is_ok());
     }
 
     #[test]

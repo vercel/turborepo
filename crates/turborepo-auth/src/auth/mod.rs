@@ -10,6 +10,10 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::ColorConfig;
 
+pub(crate) fn is_vercel(login_url: &str) -> bool {
+    login_url.contains("vercel.com")
+}
+
 const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
 const VERCEL_TOKEN_FILE: &str = "auth.json";
 
@@ -107,6 +111,7 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
+    use super::is_vercel;
     use crate::{AuthTokens, Token, current_unix_time_secs};
 
     // Mock the turborepo_dirs functions for testing
@@ -294,6 +299,15 @@ mod tests {
         );
 
         // Non-expired legacy tokens should be returned as-is
+    }
+
+    #[test]
+    fn test_is_vercel() {
+        assert!(is_vercel("https://vercel.com"));
+        assert!(is_vercel("https://api.vercel.com"));
+        assert!(is_vercel("https://vercel.com/api"));
+        assert!(!is_vercel("https://my-cache.example.com"));
+        assert!(!is_vercel("http://localhost:3000"));
     }
 
     #[tokio::test]

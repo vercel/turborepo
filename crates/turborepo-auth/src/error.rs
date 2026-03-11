@@ -19,8 +19,20 @@ pub enum Error {
          situations like using a `data:` URL."
     )]
     LoginUrlCannotBeABase { value: String },
-    #[error("failed to get token")]
-    FailedToGetToken,
+    #[error("login callback listener failed: {0}")]
+    CallbackListenerFailed(#[source] io::Error),
+    #[error("login callback timed out waiting for browser redirect")]
+    CallbackTimeout,
+    #[error("login callback task panicked or was cancelled")]
+    CallbackTaskFailed,
+    #[error("CSRF state parameter mismatch on SSO redirect")]
+    CsrfStateMismatch,
+    #[error("login callback returned an error from the remote server")]
+    LoginCallbackError,
+    #[error("login callback redirect did not include a token")]
+    TokenMissingFromCallback,
+    #[error("token refresh failed with HTTP {status}")]
+    TokenRefreshFailed { status: u16 },
     #[error("failed to fetch user: {0}")]
     FailedToFetchUser(#[source] turborepo_api_client::Error),
     #[error("url is invalid: {0}")]

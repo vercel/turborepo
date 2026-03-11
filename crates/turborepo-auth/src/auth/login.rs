@@ -12,6 +12,7 @@ use url::Url;
 
 use crate::{
     LoginOptions, Token,
+    auth::is_vercel,
     device_flow::{self, TokenSet},
     error, ui,
 };
@@ -19,10 +20,6 @@ use crate::{
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
 const DEFAULT_PORT: u16 = 9789;
 const LOGIN_REDIRECT_TIMEOUT: Duration = Duration::from_secs(300);
-
-fn is_vercel(login_url: &str) -> bool {
-    login_url.contains("vercel.com")
-}
 
 /// Login returns a `(Token, Option<TokenSet>)`. If a token is already present,
 /// we do not overwrite it and instead log that we found an existing token.
@@ -123,9 +120,12 @@ async fn login_vercel_device_flow<T: Client>(
         .as_deref()
         .unwrap_or(&device_auth.verification_uri);
 
+    // RFC 8628 §3.3: the user code MUST be displayed so users can verify
+    // it matches what the authorization server shows (anti-phishing).
     println!(
-        "\n  Visit {}",
-        color_config.apply(BOLD.apply_to(verification_url))
+        "\n  Visit {} and confirm code {}",
+        color_config.apply(BOLD.apply_to(&device_auth.verification_uri)),
+        color_config.apply(BOLD.apply_to(&device_auth.user_code))
     );
 
     if !cfg!(test) {
@@ -168,7 +168,7 @@ async fn login_redirect<T: Client>(
     port: u16,
 ) -> Result<(Token, Option<TokenSet>), Error> {
     let listener = TcpListener::bind(format!("{DEFAULT_HOST_NAME}:{port}"))
-        .map_err(|_| error::Error::FailedToGetToken)?;
+        .map_err(error::Error::CallbackListenerFailed)?;
     let port = listener.local_addr().unwrap().port();
     let redirect_url = format!("http://{DEFAULT_HOST_NAME}:{port}");
 
@@ -208,7 +208,7 @@ async fn login_redirect<T: Client>(
     let token_string =
         tokio::task::spawn_blocking(move || wait_for_login_redirect(listener, &success_redirect))
             .await
-            .map_err(|_| Error::FailedToGetToken)??;
+            .map_err(|_| Error::CallbackTaskFailed)??;
 
     spinner.finish_and_clear();
 
@@ -224,45 +224,74 @@ async fn login_redirect<T: Client>(
     Ok((Token::new(token_string), None))
 }
 
-/// Accept a single HTTP request on the listener, extract the `token` query
-/// parameter, send a redirect response to the success URL, and return the
-/// token string.
+/// Accept HTTP requests on the listener until one carries a `token` query
+/// parameter. Browsers may send preflight, favicon, or other auxiliary
+/// requests before the real redirect arrives — looping prevents those from
+/// consuming the single-shot listener.
 fn wait_for_login_redirect(listener: TcpListener, success_redirect: &str) -> Result<String, Error> {
-    let (stream, _) = listener.accept().map_err(|_| Error::FailedToGetToken)?;
-    stream
-        .set_read_timeout(Some(LOGIN_REDIRECT_TIMEOUT))
-        .map_err(|_| Error::FailedToGetToken)?;
+    listener
+        .set_nonblocking(false)
+        .map_err(Error::CallbackListenerFailed)?;
 
-    let mut reader =
-        std::io::BufReader::new(stream.try_clone().map_err(|_| Error::FailedToGetToken)?);
-    let mut request_line = String::new();
-    reader
-        .by_ref()
-        .take(8192)
-        .read_line(&mut request_line)
-        .map_err(|_| Error::FailedToGetToken)?;
+    let deadline = std::time::Instant::now() + LOGIN_REDIRECT_TIMEOUT;
 
-    let path = request_line
-        .split_whitespace()
-        .nth(1)
-        .ok_or(Error::FailedToGetToken)?;
+    loop {
+        let remaining = deadline
+            .checked_duration_since(std::time::Instant::now())
+            .ok_or(Error::CallbackTimeout)?;
 
-    let url =
-        Url::parse(&format!("http://localhost{path}")).map_err(|_| Error::FailedToGetToken)?;
+        listener
+            .set_nonblocking(false)
+            .map_err(Error::CallbackListenerFailed)?;
 
-    let params: std::collections::HashMap<String, String> = url
-        .query_pairs()
-        .map(|(k, v)| (k.to_string(), v.to_string()))
-        .collect();
+        let (stream, _) = listener.accept().map_err(Error::CallbackListenerFailed)?;
+        stream
+            .set_read_timeout(Some(remaining))
+            .map_err(Error::CallbackListenerFailed)?;
 
-    let response =
-        format!("HTTP/1.1 302 Found\r\nLocation: {success_redirect}\r\nConnection: close\r\n\r\n");
-    let mut write_stream = stream;
-    if let Err(e) = write_stream.write_all(response.as_bytes()) {
-        warn!("Failed to send redirect to browser: {e}");
+        let mut reader =
+            std::io::BufReader::new(stream.try_clone().map_err(Error::CallbackListenerFailed)?);
+        let mut request_line = String::new();
+        if reader
+            .by_ref()
+            .take(8192)
+            .read_line(&mut request_line)
+            .is_err()
+        {
+            continue;
+        }
+
+        let path = match request_line.split_whitespace().nth(1) {
+            Some(p) => p.to_string(),
+            None => continue,
+        };
+
+        let url = match Url::parse(&format!("http://localhost{path}")) {
+            Ok(u) => u,
+            Err(_) => continue,
+        };
+
+        let params: std::collections::HashMap<String, String> = url
+            .query_pairs()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+        if let Some(token) = params.get("token").cloned() {
+            let response = format!(
+                "HTTP/1.1 302 Found\r\nLocation: {success_redirect}\r\nConnection: close\r\n\r\n"
+            );
+            let mut write_stream = stream;
+            if let Err(e) = write_stream.write_all(response.as_bytes()) {
+                warn!("Failed to send redirect to browser: {e}");
+            }
+            return Ok(token);
+        }
+
+        // Not the request we're looking for — send a minimal response and
+        // keep listening.
+        let mut write_stream = stream;
+        let _ = write_stream.write_all(b"HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
     }
-
-    params.get("token").cloned().ok_or(Error::FailedToGetToken)
 }
 
 #[cfg(test)]
@@ -509,27 +538,27 @@ mod tests {
     }
 
     #[test]
-    fn test_wait_for_login_redirect_missing_token() {
+    fn test_wait_for_login_redirect_skips_non_token_requests() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
 
         let handle = std::thread::spawn(move || {
+            // First: a request without a token (e.g. favicon). Listener should
+            // respond with 204 and keep waiting.
             let mut stream = std::net::TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
-            let request = "GET /?other=value HTTP/1.1\r\nHost: localhost\r\n\r\n";
+            let request = "GET /favicon.ico HTTP/1.1\r\nHost: localhost\r\n\r\n";
+            stream.write_all(request.as_bytes()).unwrap();
+            let mut buf = [0u8; 256];
+            let _ = std::io::Read::read(&mut stream, &mut buf);
+
+            // Second: the real callback with a token.
+            let mut stream = std::net::TcpStream::connect(format!("127.0.0.1:{port}")).unwrap();
+            let request = "GET /?token=my-login-token HTTP/1.1\r\nHost: localhost\r\n\r\n";
             stream.write_all(request.as_bytes()).unwrap();
         });
 
         let result = wait_for_login_redirect(listener, "https://example.com/turborepo/success");
         handle.join().unwrap();
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_is_vercel() {
-        assert!(is_vercel("https://vercel.com"));
-        assert!(is_vercel("https://api.vercel.com"));
-        assert!(is_vercel("https://vercel.com/api"));
-        assert!(!is_vercel("https://my-cache.example.com"));
-        assert!(!is_vercel("http://localhost:3000"));
+        assert_eq!(result.unwrap(), "my-login-token");
     }
 }
