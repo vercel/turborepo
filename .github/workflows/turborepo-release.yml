@@ -701,7 +701,6 @@ jobs:
       [
         stage,
         build-rust,
-        build-gen,
         js-smoke-test,
         npm-publish,
         create-release-tag,
@@ -713,7 +712,6 @@ jobs:
         && needs.stage.result == 'success'
         && (
           needs.build-rust.result == 'failure'
-          || needs.build-gen.result == 'failure'
           || needs.js-smoke-test.result == 'failure'
           || needs.npm-publish.result == 'failure'
           || needs.create-release-tag.result == 'failure'
