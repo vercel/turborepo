@@ -333,11 +333,9 @@ impl BoundariesChecker {
     /// Returns `true` if the import specifier looks like it could be an npm
     /// package name (e.g. `react`, `@scope/pkg`, `lodash/fp`).
     ///
-    /// Note: tsconfig `paths` aliases like `features/*` pass this check when
-    /// `features` is a valid npm package name. This is intentional —
-    /// [`imports::check_import_as_tsconfig_path_alias`] runs first for these
-    /// imports to resolve them locally before falling through to dependency
-    /// validation.
+    /// Used in [`imports::check_import`] to decide whether a non-relative
+    /// import that didn't resolve as a tsconfig alias should be checked
+    /// against declared dependencies.
     fn is_potential_package_name(import: &str) -> bool {
         let base = imports::get_package_name(import);
         PACKAGE_NAME_REGEX.is_match(&base)

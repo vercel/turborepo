@@ -85,11 +85,10 @@ impl<'a> DependencyLocations<'a> {
 /// `./src/features/foo`, and if so, checks the resolved path against package
 /// boundaries.
 ///
-/// Only called for package-name-shaped imports (after
-/// `is_potential_package_name` guard in `check_import`). This allows tsconfig
-/// `paths` entries that shadow package-name-shaped specifiers to be recognised
-/// as local imports instead of being incorrectly flagged as undeclared
-/// dependencies.
+/// Called for all non-relative imports in `check_import`. This allows tsconfig
+/// `paths` entries — whether they shadow package-name-shaped specifiers or use
+/// non-package-name patterns like `!` or `@/foo` — to be recognised as local
+/// imports instead of being incorrectly flagged as undeclared dependencies.
 ///
 /// Returns `Ok(true)` if the import was resolved as a tsconfig path alias
 /// (local or cross-package — the latter produces an `ImportLeavesPackage`
@@ -122,14 +121,22 @@ fn check_import_as_tsconfig_path_alias(
             // resolved to a real npm package rather than a tsconfig path alias
             // pointing to a local file.  Return false so the caller falls
             // through to `check_package_import`.
-            //
-            // We intentionally do NOT use `resolution.package_json().is_some()`
-            // because the resolver may return a package.json for any file
-            // inside a directory that has one — including local tsconfig alias
-            // targets.
             let path = resolution.path();
             if path.components().any(|c| c.as_os_str() == "node_modules") {
                 return Ok(false);
+            }
+            // Workspace packages are symlinked in node_modules, so the
+            // resolved path won't contain `node_modules` after symlink
+            // resolution. Detect these by checking if the resolution's
+            // package.json name matches the import's package name — if so,
+            // the resolver found the actual package, not a tsconfig alias.
+            if BoundariesChecker::is_potential_package_name(import) {
+                let import_pkg_name = get_package_name(import);
+                if let Some(pkg_json) = resolution.package_json()
+                    && pkg_json.name() == Some(import_pkg_name.as_str())
+                {
+                    return Ok(false);
+                }
             }
             let Some(utf8_path) = Utf8Path::from_path(path) else {
                 result.diagnostics.push(BoundariesDiagnostic::InvalidPath {
@@ -176,11 +183,12 @@ fn check_import_as_tsconfig_path_alias(
 /// Dispatches to one of three paths:
 /// 1. Relative imports (`./`, `../`) — validates the resolved path stays within
 ///    the package via [`check_file_import`].
-/// 2. Package-name-shaped imports — first tries
-///    [`check_import_as_tsconfig_path_alias`] (resolves tsconfig `paths`
-///    entries), then falls through to [`check_package_import`] (validates the
-///    import is a declared dependency).
-/// 3. Everything else — skipped (no diagnostic).
+/// 2. Non-relative imports — first tries
+///    [`check_import_as_tsconfig_path_alias`] to resolve tsconfig `paths`
+///    entries, then for package-name-shaped imports falls through to
+///    [`check_package_import`] (validates the import is a declared dependency).
+/// 3. Non-relative, non-package-name imports that don't resolve as tsconfig
+///    aliases — skipped (no diagnostic).
 ///
 /// Respects `@boundaries-ignore` comments placed above the import statement.
 #[allow(clippy::too_many_arguments)]
@@ -228,8 +236,8 @@ pub(crate) fn check_import(
 
     let span = SourceSpan::new(start.into(), end - start);
 
-    // We have a file import
     let check_result = if import.starts_with(".") {
+        // Relative file import
         let import_path = RelativeUnixPath::new(import)?;
         let dir_path = file_path
             .parent()
@@ -244,12 +252,11 @@ pub(crate) fn check_import(
             span,
             file_content,
         )?
-    } else if BoundariesChecker::is_potential_package_name(import) {
-        // For package-name-shaped imports, first check whether the import resolves
-        // as a tsconfig path alias (e.g. `features/*` → `./src/features/*`).
-        // If so, validate the resolved path against package boundaries.
-        // Only if the resolver does not find a tsconfig alias do we fall through
-        // to the ordinary dependency-declaration check.
+    } else {
+        // Non-relative import: try tsconfig alias resolution first. This
+        // handles both package-name-shaped imports (where the alias may
+        // shadow a package name) and non-package-name imports (like `!` or
+        // `@/foo`) that can only be tsconfig aliases.
         if check_import_as_tsconfig_path_alias(
             resolver,
             package_name,
@@ -262,17 +269,19 @@ pub(crate) fn check_import(
         )? {
             return Ok(());
         }
-        check_package_import(
-            import,
-            *import_type,
-            span,
-            file_path,
-            file_content,
-            dependency_locations,
-            resolver,
-        )
-    } else {
-        None
+        if BoundariesChecker::is_potential_package_name(import) {
+            check_package_import(
+                import,
+                *import_type,
+                span,
+                file_path,
+                file_content,
+                dependency_locations,
+                resolver,
+            )
+        } else {
+            None
+        }
     };
 
     result.diagnostics.extend(check_result);
@@ -682,8 +691,9 @@ mod test {
     fn tsconfig_alias_resolves_package_name_shaped_path_alias() {
         let tmp = tempfile::tempdir().unwrap();
         // Canonicalize to match the resolver's symlink-resolved paths
-        // (e.g. /tmp → /private/tmp on macOS).
-        let root = tmp.path().canonicalize().unwrap();
+        // (e.g. /tmp → /private/tmp on macOS). Uses dunce to avoid
+        // \\?\ prefix on Windows which breaks path comparison.
+        let root = dunce::canonicalize(tmp.path()).unwrap();
 
         // Mimic a tsconfig that maps `*` to `./src/*`, turning bare specifiers
         // like `features/feature-a` into local imports.
@@ -748,8 +758,9 @@ mod test {
     fn tsconfig_alias_resolves_with_package_json_present() {
         let tmp = tempfile::tempdir().unwrap();
         // Canonicalize to match the resolver's symlink-resolved paths
-        // (e.g. /tmp → /private/tmp on macOS).
-        let root = tmp.path().canonicalize().unwrap();
+        // (e.g. /tmp → /private/tmp on macOS). Uses dunce to avoid
+        // \\?\ prefix on Windows which breaks path comparison.
+        let root = dunce::canonicalize(tmp.path()).unwrap();
 
         // Create a package.json so unrs_resolver can find it during resolution
         std::fs::write(
