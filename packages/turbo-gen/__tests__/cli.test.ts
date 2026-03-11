@@ -4,27 +4,15 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-const BINARY = path.resolve(__dirname, "..", "dist", "turbo-gen");
-const SHIM = path.resolve(__dirname, "..", "bin", "turbo-gen");
-const binaryExists = fs.existsSync(BINARY);
+const CLI = path.resolve(__dirname, "..", "dist", "cli.js");
+const cliExists = fs.existsSync(CLI);
 
-function bin(args: string[], cwd?: string): string {
+function run(args: string[], cwd?: string): string {
   const escaped = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
-  return execSync(`'${BINARY}' ${escaped}`, {
+  return execSync(`node '${CLI}' ${escaped}`, {
     cwd: cwd ?? os.tmpdir(),
-    timeout: 15000,
+    timeout: 30000,
     encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"]
-  });
-}
-
-function shim(args: string[], cwd?: string): string {
-  const escaped = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
-  return execSync(`'${SHIM}' ${escaped}`, {
-    cwd: cwd ?? os.tmpdir(),
-    timeout: 15000,
-    encoding: "utf-8",
-    env: { ...process.env, TURBO_GEN_BINARY_PATH: BINARY },
     stdio: ["pipe", "pipe", "pipe"]
   });
 }
@@ -60,6 +48,7 @@ function createProject(
   }
 }
 
+// TypeScript config (works for .ts and .mts)
 const TS_CONFIG = (name: string) => `
 export default function generator(plop: any): void {
   plop.setGenerator("${name}", {
@@ -70,6 +59,7 @@ export default function generator(plop: any): void {
 }
 `;
 
+// CJS config (works for .js without "type":"module" and .cjs)
 const JS_CJS_CONFIG = (name: string) => `
 module.exports = function generator(plop) {
   plop.setGenerator("${name}", {
@@ -78,6 +68,17 @@ module.exports = function generator(plop) {
     actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
   });
 };
+`;
+
+// ESM config (works for .mjs and .js with "type":"module")
+const JS_ESM_CONFIG = (name: string) => `
+export default function generator(plop) {
+  plop.setGenerator("${name}", {
+    description: "${name}",
+    prompts: [],
+    actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
+  });
+}
 `;
 
 // Config that imports an external npm package from the project's node_modules.
@@ -93,10 +94,10 @@ export default function generator(plop: any): void {
 }
 `;
 
-// Config that imports @inquirer/prompts, which is bundled in the compiled
-// binary but NOT installed in the user's node_modules.
+// Config that imports @inquirer/prompts, which is a dependency of @turbo/gen
+// but NOT installed in the user's node_modules.
 // Regression test for https://github.com/vercel/turborepo/issues/11855
-const TS_CONFIG_WITH_BINARY_MODULE_IMPORT = (name: string) => `
+const TS_CONFIG_WITH_CLI_MODULE_IMPORT = (name: string) => `
 import { Separator } from "@inquirer/prompts";
 
 const sep = new Separator();
@@ -104,6 +105,25 @@ const sep = new Separator();
 export default function generator(plop: any): void {
   plop.setGenerator("${name}", {
     description: "${name}",
+    prompts: [],
+    actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
+  });
+}
+`;
+
+// Config that imports BOTH an external npm package AND @inquirer/prompts
+// (which is NOT installed in the user's project). This is the realistic case:
+// a user installs a helper like slugify and also uses @inquirer/prompts
+// features in the same config file.
+const TS_CONFIG_WITH_EXTERNAL_AND_CLI_MODULE = (name: string) => `
+import { helper } from "test-external-pkg";
+import { Separator } from "@inquirer/prompts";
+
+const sep = new Separator();
+
+export default function generator(plop: any): void {
+  plop.setGenerator("${name}", {
+    description: helper("${name}"),
     prompts: [],
     actions: [{ type: "add", path: "out/${name}.md", template: "# ${name}" }]
   });
@@ -150,12 +170,12 @@ function createFakePackage(
   fs.writeFileSync(path.join(pkgDir, "index.js"), code);
 }
 
-// Skip the entire suite if the binary hasn't been built.
+// Skip the entire suite if the CLI hasn't been built.
 // Unit tests (raw.test.ts) always run; these are integration tests
 // that require `pnpm --filter @turbo/gen run build` first.
-const describeIfBinary = binaryExists ? describe : describe.skip;
+const describeIfBuilt = cliExists ? describe : describe.skip;
 
-describeIfBinary("compiled binary", () => {
+describeIfBuilt("@turbo/gen CLI", () => {
   let tmpDir: string;
 
   beforeAll(() => {
@@ -168,38 +188,20 @@ describeIfBinary("compiled binary", () => {
 
   describe("cli basics", () => {
     it("--version returns the package version", () => {
-      const out = bin(["--version"]);
+      const out = run(["--version"]);
       expect(out.trim()).toMatch(/^\d+\.\d+\.\d+/);
     });
 
     it("--help lists commands", () => {
-      const out = bin(["--help"]);
+      const out = run(["--help"]);
       expect(out).toContain("Extend your Turborepo");
       expect(out).toContain("run");
       expect(out).toContain("workspace");
     });
   });
 
-  describe("shim", () => {
-    it("resolves via TURBO_GEN_BINARY_PATH", () => {
-      const out = shim(["--version"]);
-      expect(out.trim()).toMatch(/^\d+\.\d+\.\d+/);
-    });
-
-    it("exits with clear error on bad TURBO_GEN_BINARY_PATH", () => {
-      expect(() =>
-        execSync(`'${SHIM}' --version`, {
-          encoding: "utf-8",
-          env: {
-            ...process.env,
-            TURBO_GEN_BINARY_PATH: "/nonexistent/turbo-gen"
-          },
-          stdio: ["pipe", "pipe", "pipe"]
-        })
-      ).toThrow(/TURBO_GEN_BINARY_PATH/);
-    });
-  });
-
+  // ESM/CJS config loading matrix — covers every realistic combination of
+  // project "type" field, config file extension, and module syntax.
   describe.each([
     {
       label: 'CJS project + .ts config ("type":"commonjs")',
@@ -249,12 +251,50 @@ describeIfBinary("compiled binary", () => {
       configFile: "config.cjs",
       configContent: JS_CJS_CONFIG,
       generatorPkgType: undefined
+    },
+    // .mjs configs (ESM syntax)
+    {
+      label: 'ESM project + .mjs config ("type":"module")',
+      type: "module" as const,
+      configFile: "config.mjs",
+      configContent: JS_ESM_CONFIG,
+      generatorPkgType: undefined
+    },
+    {
+      label: "No type field + .mjs config",
+      type: undefined,
+      configFile: "config.mjs",
+      configContent: JS_ESM_CONFIG,
+      generatorPkgType: undefined
+    },
+    // .mts configs (TypeScript + ESM syntax)
+    {
+      label: 'CJS project + .mts config ("type":"commonjs")',
+      type: "commonjs" as const,
+      configFile: "config.mts",
+      configContent: TS_CONFIG,
+      generatorPkgType: undefined
+    },
+    {
+      label: 'ESM project + .mts config ("type":"module")',
+      type: "module" as const,
+      configFile: "config.mts",
+      configContent: TS_CONFIG,
+      generatorPkgType: undefined
+    },
+    // .js with ESM syntax in "type":"module" project
+    {
+      label:
+        'ESM project + .js ESM config ("type":"module", no gen dir override)',
+      type: "module" as const,
+      configFile: "config.js",
+      configContent: JS_ESM_CONFIG,
+      generatorPkgType: undefined
     }
   ])(
     "$label",
     ({ label, type, configFile, configContent, generatorPkgType }) => {
       let projectDir: string;
-      // Derive a unique name from the full label to avoid collisions
       const genName = label
         .replace(/[^a-zA-Z0-9]+/g, "-")
         .toLowerCase()
@@ -272,13 +312,12 @@ describeIfBinary("compiled binary", () => {
       });
 
       it("loads the generator and runs actions", () => {
-        // Clean output from any prior run
         fs.rmSync(path.join(projectDir, "out"), {
           recursive: true,
           force: true
         });
 
-        bin(
+        run(
           [
             "raw",
             "run",
@@ -309,7 +348,6 @@ describeIfBinary("compiled binary", () => {
         configContent: TS_CONFIG_WITH_EXTERNAL_IMPORT(genName),
         generatorPkgType: "commonjs"
       });
-      // Install a fake package in node_modules
       createFakePackage(
         projectDir,
         "test-external-pkg",
@@ -323,7 +361,7 @@ describeIfBinary("compiled binary", () => {
         force: true
       });
 
-      bin(
+      run(
         [
           "raw",
           "run",
@@ -343,31 +381,80 @@ describeIfBinary("compiled binary", () => {
   });
 
   // Regression test for https://github.com/vercel/turborepo/issues/11855
-  // @inquirer/prompts is bundled in the binary but NOT in the test project's
-  // node_modules, which is the exact scenario from the bug report.
-  describe("config importing binary-bundled modules (@inquirer/prompts)", () => {
+  // @inquirer/prompts is a dependency of @turbo/gen but NOT in the test
+  // project's node_modules — the CLI's resolve fallback must find it.
+  describe("config importing CLI-provided modules (@inquirer/prompts)", () => {
     let projectDir: string;
-    const genName = "binary-module-test";
+    const genName = "cli-module-test";
 
     beforeAll(() => {
-      projectDir = path.join(tmpDir, "binary-module-import");
+      projectDir = path.join(tmpDir, "cli-module-import");
       fs.mkdirSync(projectDir, { recursive: true });
       createProject(projectDir, {
         type: "commonjs",
         configFile: "config.ts",
-        configContent: TS_CONFIG_WITH_BINARY_MODULE_IMPORT(genName),
+        configContent: TS_CONFIG_WITH_CLI_MODULE_IMPORT(genName),
         generatorPkgType: "commonjs"
       });
       // Intentionally NO node_modules/@inquirer/prompts on disk
     });
 
-    it("resolves @inquirer/prompts from the compiled binary", () => {
+    it("resolves @inquirer/prompts from @turbo/gen dependencies", () => {
       fs.rmSync(path.join(projectDir, "out"), {
         recursive: true,
         force: true
       });
 
-      bin(
+      run(
+        [
+          "raw",
+          "run",
+          "--json",
+          JSON.stringify({
+            root: projectDir,
+            generator_name: genName
+          })
+        ],
+        projectDir
+      );
+
+      const outFile = path.join(projectDir, "out", `${genName}.md`);
+      expect(fs.existsSync(outFile)).toBe(true);
+      expect(fs.readFileSync(outFile, "utf-8")).toContain(`# ${genName}`);
+    });
+  });
+
+  // Combined test: external npm package + CLI-provided module in the same config.
+  // This is the most realistic scenario — a user has a helper dep installed AND
+  // uses @inquirer/prompts features, all in one config file.
+  describe("config importing external package AND @inquirer/prompts together", () => {
+    let projectDir: string;
+    const genName = "combined-import-test";
+
+    beforeAll(() => {
+      projectDir = path.join(tmpDir, "combined-import");
+      fs.mkdirSync(projectDir, { recursive: true });
+      createProject(projectDir, {
+        type: "commonjs",
+        configFile: "config.ts",
+        configContent: TS_CONFIG_WITH_EXTERNAL_AND_CLI_MODULE(genName),
+        generatorPkgType: "commonjs"
+      });
+      createFakePackage(
+        projectDir,
+        "test-external-pkg",
+        'module.exports.helper = function(name) { return name + " via external"; };'
+      );
+      // Intentionally NO @inquirer/prompts in this project's node_modules
+    });
+
+    it("resolves both the npm package and @inquirer/prompts", () => {
+      fs.rmSync(path.join(projectDir, "out"), {
+        recursive: true,
+        force: true
+      });
+
+      run(
         [
           "raw",
           "run",
@@ -402,14 +489,12 @@ describeIfBinary("compiled binary", () => {
         configContent: TS_CONFIG_WITH_SUB_GENERATOR(genName),
         generatorPkgType: "commonjs"
       });
-      // Create the sub-generator file in a subdirectory
       const subGenDir = path.join(projectDir, "turbo", "generators", "sub-gen");
       fs.mkdirSync(subGenDir, { recursive: true });
       fs.writeFileSync(
         path.join(subGenDir, "generator.ts"),
         TS_SUB_GENERATOR(genName)
       );
-      // Install the package at the PROJECT ROOT, not next to the sub-generator
       createFakePackage(
         projectDir,
         "test-external-pkg",
@@ -423,7 +508,7 @@ describeIfBinary("compiled binary", () => {
         force: true
       });
 
-      bin(
+      run(
         [
           "raw",
           "run",
@@ -457,9 +542,7 @@ describeIfBinary("compiled binary", () => {
     });
 
     it("exits cleanly on SIGINT without ExitPromptError stack trace", (done) => {
-      // Use `run` (not `raw run`) so the binary enters the interactive
-      // prompt, then send SIGINT to simulate Ctrl+C.
-      const child = spawn(BINARY, ["run"], {
+      const child = spawn("node", [CLI, "run"], {
         cwd: projectDir,
         stdio: ["pipe", "pipe", "pipe"],
         env: { ...process.env }
@@ -470,7 +553,6 @@ describeIfBinary("compiled binary", () => {
         stderr += data.toString();
       });
 
-      // Wait briefly for the prompt to appear, then send SIGINT
       setTimeout(() => child.kill("SIGINT"), 500);
 
       child.on("close", () => {
@@ -496,30 +578,7 @@ describeIfBinary("compiled binary", () => {
     });
 
     it("raw run dispatches to the correct generator", () => {
-      bin(
-        [
-          "raw",
-          "run",
-          "--json",
-          JSON.stringify({
-            root: projectDir,
-            generator_name: "raw-handoff"
-          })
-        ],
-        projectDir
-      );
-
-      const outFile = path.join(projectDir, "out", "raw-handoff.md");
-      expect(fs.existsSync(outFile)).toBe(true);
-    });
-
-    it("raw run via shim produces identical output", () => {
-      fs.rmSync(path.join(projectDir, "out"), {
-        recursive: true,
-        force: true
-      });
-
-      shim(
+      run(
         [
           "raw",
           "run",
@@ -538,7 +597,7 @@ describeIfBinary("compiled binary", () => {
 
     it("raw workspace does not crash with module errors", () => {
       try {
-        bin(
+        run(
           [
             "raw",
             "workspace",

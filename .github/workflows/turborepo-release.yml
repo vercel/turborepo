@@ -389,52 +389,13 @@ jobs:
         # --ignore: false positive from workspace directory "cli/" matching npm package "cli"
         run: pnpm audit --prod --audit-level low --ignore GHSA-6cpc-mj5c-m9rq
 
-  build-gen:
-    name: "Build @turbo/gen Binaries"
-    needs: [stage]
-    if: ${{ always() && needs.stage.result == 'success' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.stage.outputs.stage-branch }}
-
-      - uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
-          extra-flags: "--no-frozen-lockfile"
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Install Global Turbo
-        uses: ./.github/actions/install-global-turbo
-        with:
-          turbo-version: ${{ inputs.ci-tag-override || '' }}
-
-      - name: Build @turbo/gen (dependencies + embedded templates)
-        run: turbo run build --filter=@turbo/gen
-
-      - name: Cross-compile @turbo/gen for all platforms
-        run: pnpm --filter @turbo/gen run build:all
-
-      - name: Upload gen binaries
-        uses: actions/upload-artifact@v4
-        with:
-          name: turbo-gen-binaries
-          path: packages/turbo-gen/dist/turbo-gen-*
-          if-no-files-found: error
-
   npm-publish:
     name: "Publish To NPM"
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # TODO: Add rust-smoke-test back to needs and if-condition when re-enabled.
-    needs: [stage, build-rust, build-gen, js-smoke-test]
-    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.build-gen.result == 'success' && needs.js-smoke-test.result == 'success' }}
+    needs: [stage, build-rust, js-smoke-test]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -444,11 +405,6 @@ jobs:
         with:
           enable-corepack: false
           extra-flags: "--no-frozen-lockfile"
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
@@ -465,12 +421,6 @@ jobs:
         with:
           path: rust-artifacts
 
-      - name: Download @turbo/gen binaries
-        uses: actions/download-artifact@v4
-        with:
-          name: turbo-gen-binaries
-          path: gen-binaries
-
       - name: Move Rust artifacts into place
         run: |
           mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
@@ -479,15 +429,6 @@ jobs:
           mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-x64
           mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-x64
           mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-x64
-
-      - name: Move @turbo/gen binaries into place
-        run: |
-          mkdir -p cli/dist-gen-darwin-arm64 cli/dist-gen-darwin-x64 cli/dist-gen-linux-x64 cli/dist-gen-linux-arm64 cli/dist-gen-windows-x64
-          cp gen-binaries/turbo-gen-darwin-arm64 cli/dist-gen-darwin-arm64/turbo-gen
-          cp gen-binaries/turbo-gen-darwin-x64 cli/dist-gen-darwin-x64/turbo-gen
-          cp gen-binaries/turbo-gen-linux-x64 cli/dist-gen-linux-x64/turbo-gen
-          cp gen-binaries/turbo-gen-linux-arm64 cli/dist-gen-linux-arm64/turbo-gen
-          cp gen-binaries/turbo-gen-windows-x64.exe cli/dist-gen-windows-x64/turbo-gen.exe
 
       - name: Ensure npm version
         run: npm install -g npm@11.5.1
@@ -499,14 +440,6 @@ jobs:
             SKIP_FLAG="--skip-publish"
           fi
           cd cli && make publish-turbo SKIP_PUBLISH=$SKIP_FLAG
-
-      - name: Publish @turbo/gen platform packages
-        run: |
-          SKIP_FLAG=""
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
-            SKIP_FLAG="--skip-publish"
-          fi
-          cd cli && pnpm exec turboreleaser gen --version-path ../version.txt $SKIP_FLAG
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts

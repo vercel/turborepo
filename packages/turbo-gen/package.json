@@ -12,27 +12,23 @@
     "url": "git+https://github.com/vercel/turborepo.git",
     "directory": "packages/turbo-gen"
   },
-  "bin": "bin/turbo-gen",
+  "bin": "dist/cli.js",
   "files": [
-    "bin",
-    "dist/types.d.ts",
-    "dist/types.js"
+    "dist"
   ],
   "types": "dist/types.d.ts",
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "postversion": "node bump-version.js",
-    "build": "bun run scripts/build.ts",
-    "build:all": "bun run scripts/build.ts --all-platforms",
-    "build:embed": "bun run scripts/embed-templates.ts",
+    "build": "tsdown",
+    "build:embed": "node scripts/embed-templates.mjs",
     "test": "jest",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
     "@inquirer/prompts": "^7.10.1",
-    "node-plop": "0.32.3"
+    "esbuild": "^0.25.0"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "0.18.2",
@@ -48,20 +44,13 @@
     "fs-extra": "10.1.0",
     "jest": "30.2.0",
     "minimatch": "9.0.7",
+    "node-plop": "0.32.3",
     "picocolors": "1.0.1",
     "proxy-agent": "6.5.0",
     "ts-jest": "29.4.6",
-    "ts-node": "10.9.2",
     "tsdown": "0.12.0",
     "typescript": "5.5.4",
     "update-check": "1.5.4",
     "validate-npm-package-name": "5.0.0"
-  },
-  "optionalDependencies": {
-    "@turbo/gen-darwin-64": "2.8.16",
-    "@turbo/gen-darwin-arm64": "2.8.16",
-    "@turbo/gen-linux-64": "2.8.16",
-    "@turbo/gen-linux-arm64": "2.8.16",
-    "@turbo/gen-windows-64": "2.8.16"
   }
 }
