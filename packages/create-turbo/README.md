@@ -1,5 +1,3 @@
-1
-
 # Welcome to Turborepo
 
 [Turborepo](https://turborepo.dev) is a high-performance monorepo build-system for modern JavaScript and TypeScript codebases.
