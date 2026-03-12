@@ -9,7 +9,7 @@
         "FLAGS",
         "FLAGS_SECRET"
       ],
-      "inputs": ["$TURBO_DEFAULT$", "content/**"],
+      "inputs": ["$TURBO_EXTENDS$", "content/**"],
       "outputs": [".next/**", "!.next/cache/**"],
       "dependsOn": ["^build", "schema", "collect-examples-data"]
     },
@@ -26,7 +26,8 @@
     },
 
     "collect-examples-data": {
-      "cache": false
+      "cache": false,
+      "inputs": ["$TURBO_DEFAULT$", "!README.md"]
     },
     "check-links": {
       "inputs": ["content/**/*.mdx", "../../link-checker/src/**"],
