@@ -250,6 +250,36 @@ When this flag is enabled and the key is too short, Turborepo will fail immediat
 }
 ```
 
+#### `affectedUsingTaskInputs`
+
+Default: `false`
+
+Use task-level [`inputs`](#inputs) globs to determine which tasks are affected by changed files when running with [`--affected`](/docs/reference/run#--affected). When enabled, only tasks whose declared `inputs` match the changed files are selected, rather than selecting all tasks in changed packages.
+
+Without this flag, `--affected` operates at the **package level**: if any file in a package changed, all tasks in that package are selected. With this flag, `--affected` operates at the **task level**: a task is only selected if the changed files match its `inputs` configuration.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "affectedUsingTaskInputs": true,
+  },
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "!README.md"],
+    },
+  },
+}
+```
+
+In this example, if only `README.md` changed in a package, `build` would not run because it excludes `README.md` from its inputs.
+
+<Callout type="info">
+  Changes to root configuration files (`package.json`, `turbo.json`,
+  `turbo.jsonc`), the package manager lockfile, or
+  [`globalDependencies`](#globaldependencies) will always cause all tasks to be
+  selected, regardless of individual task `inputs`.
+</Callout>
+
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 
 ```jsonc title="./apps/web/turbo.json"
@@ -811,7 +841,9 @@ When `true`, Turborepo will sign every uploaded artifact using the value of the 
 Turborepo will reject any downloaded artifacts that have an invalid signature or are missing a signature.
 
 <Callout type="warn">
-  Enable [`futureFlags.longerSignatureKey`](#longersignaturekey) to enforce a minimum key length of 32 bytes. Short keys weaken the HMAC-SHA256 signature and will be rejected in a future major version.
+  Enable [`futureFlags.longerSignatureKey`](#longersignaturekey) to enforce a
+  minimum key length of 32 bytes. Short keys weaken the HMAC-SHA256 signature
+  and will be rejected in a future major version.
 </Callout>
 
 ### `preflight`
@@ -866,8 +898,8 @@ Future flags allow you to opt-in to experimental features before they become the
 ```jsonc title="./turbo.json"
 {
   "futureFlags": {
-    "experimentalObservability": true
-  }
+    "experimentalObservability": true,
+  },
 }
 ```
 
@@ -897,7 +929,7 @@ The `experimentalObservability` configuration requires `futureFlags.experimental
 ```jsonc title="./turbo.json"
 {
   "futureFlags": {
-    "experimentalObservability": true
+    "experimentalObservability": true,
   },
   "experimentalObservability": {
     "otel": {
@@ -905,28 +937,28 @@ The `experimentalObservability` configuration requires `futureFlags.experimental
       "protocol": "grpc",
       "endpoint": "https://api.datadoghq.com/api/v2/otlp",
       "headers": {
-        "X-Custom-Header": "value"
+        "X-Custom-Header": "value",
       },
       "timeoutMs": 10000,
       "intervalMs": 15000,
       "resource": {
-        "service.name": "turborepo"
+        "service.name": "turborepo",
       },
       "metrics": {
         "runSummary": true,
         "taskDetails": false,
         "runAttributes": {
           "id": false,
-          "scmRevision": false
+          "scmRevision": false,
         },
         "taskAttributes": {
           "id": false,
-          "hashes": false
-        }
+          "hashes": false,
+        },
       },
-      "useRemoteCacheToken": true
-    }
-  }
+      "useRemoteCacheToken": true,
+    },
+  },
 }
 ```
 
@@ -970,17 +1002,17 @@ Optional HTTP headers to include with export requests. Useful for authentication
   "experimentalObservability": {
     "otel": {
       "headers": {
-        "X-Custom-Header": "value"
-      }
-    }
-  }
+        "X-Custom-Header": "value",
+      },
+    },
+  },
 }
 ```
 
 <Callout type="warn">
   Avoid storing tokens or API keys in `turbo.json`. `turbo.json` is often
-  committed to source control, so prefer environment variables or your CI
-  secret manager for sensitive header values.
+  committed to source control, so prefer environment variables or your CI secret
+  manager for sensitive header values.
 </Callout>
 
 #### `experimentalObservability.otel.timeoutMs`
@@ -1006,10 +1038,10 @@ Optional resource attributes to attach to all exported metrics. These help ident
       "resource": {
         "service.name": "turborepo",
         "service.namespace": "ci",
-        "deployment.environment": "production"
-      }
-    }
-  }
+        "deployment.environment": "production",
+      },
+    },
+  },
 }
 ```
 
