@@ -7718,6 +7718,7 @@ dependencies = [
  "turborepo-process",
  "turborepo-profile-md",
  "turborepo-query-api",
+ "turborepo-rayon-compat",
  "turborepo-repository",
  "turborepo-run-cache",
  "turborepo-run-summary",
@@ -7945,6 +7946,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-rayon-compat"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "turborepo-repository"
 version = "0.1.0"
 dependencies = [
@@ -7979,6 +7989,7 @@ dependencies = [
  "turborepo-errors",
  "turborepo-graph-utils",
  "turborepo-lockfiles",
+ "turborepo-rayon-compat",
  "turborepo-unescape",
  "wax",
  "which",
@@ -8029,6 +8040,7 @@ dependencies = [
  "turborepo-hash",
  "turborepo-lockfiles",
  "turborepo-otel",
+ "turborepo-rayon-compat",
  "turborepo-repository",
  "turborepo-scm",
  "turborepo-task-id",

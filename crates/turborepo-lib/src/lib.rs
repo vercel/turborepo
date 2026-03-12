@@ -25,6 +25,7 @@ mod microfrontends;
 mod opts;
 mod package_changes_watcher;
 mod panic_handler;
+mod rayon_compat;
 mod run;
 mod shim;
 mod task_graph;
