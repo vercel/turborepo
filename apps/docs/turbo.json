@@ -9,7 +9,7 @@
         "FLAGS",
         "FLAGS_SECRET"
       ],
-      "inputs": ["$TURBO_EXTENDS$", "content/**"],
+      "inputs": ["$TURBO_DEFAULT$", "content/**"],
       "outputs": [".next/**", "!.next/cache/**"],
       "dependsOn": ["^build", "schema", "collect-examples-data"]
     },
