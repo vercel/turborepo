@@ -62,7 +62,7 @@
       "outputs": ["dist/**/*"]
     },
     "build": {
-      "inputs": ["!README.md"],
+      "inputs": ["$TURBO_DEFAULT$", "!README.md"],
       "outputs": [
         "dist/**/*",
         ".next/**/*",
