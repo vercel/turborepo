@@ -256,7 +256,7 @@ When this flag is enabled and the key is too short, Turborepo will fail immediat
 }
 ```
 
-#### `affectedUsingTaskInputs`
+#### `affectedUsingTaskInputs` <ExperimentalBadge>Pre-release</ExperimentalBadge>
 
 Default: `false`
 
@@ -284,6 +284,36 @@ In this example, if only `README.md` changed in a package, `build` would not run
   `turbo.jsonc`), the package manager lockfile, or
   [`globalDependencies`](#globaldependencies) will always cause all tasks to be
   selected, regardless of individual task `inputs`.
+</Callout>
+
+#### `watchUsingTaskInputs` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+Default: `false`
+
+Use task-level [`inputs`](#inputs) globs to determine which tasks to re-run when files change in `turbo watch`. When enabled, only tasks whose declared `inputs` match the changed files are re-executed, rather than re-running all tasks in changed packages.
+
+Without this flag, `turbo watch` operates at the **package level**: if any file in a package changes, all tasks in that package are re-run. With this flag, `turbo watch` operates at the **task level**: a task is only re-run if the changed files match its `inputs` configuration.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "watchUsingTaskInputs": true,
+  },
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "!README.md"],
+    },
+  },
+}
+```
+
+In this example, editing `README.md` in a package would not trigger a `build` re-run because it is excluded from the task's inputs. Editing `src/index.ts` would trigger it because it matches `$TURBO_DEFAULT$`.
+
+<Callout type="info">
+  Changes to root configuration files (`package.json`, `turbo.json`,
+  `turbo.jsonc`), the package manager lockfile, or
+  [`globalDependencies`](#globaldependencies) will always cause all tasks to be
+  re-run, regardless of individual task `inputs`.
 </Callout>
 
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>

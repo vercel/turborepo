@@ -719,7 +719,7 @@ impl<W: PackageChangesWatcher + 'static> proto::turbod_server::Turbod for TurboG
                         let _ = tx.send(Ok(event)).await;
                         break;
                     }
-                    Ok(PackageChangeEvent::Package { name }) => {
+                    Ok(PackageChangeEvent::Package { name, .. }) => {
                         let event = proto::PackageChangeEvent {
                             event: Some(proto::package_change_event::Event::PackageChanged(
                                 proto::PackageChanged {
@@ -1069,7 +1069,7 @@ mod test {
                         let _ = tx.send(Ok(event)).await;
                         break;
                     }
-                    Ok(PackageChangeEvent::Package { name }) => {
+                    Ok(PackageChangeEvent::Package { name, .. }) => {
                         let event = crate::proto::PackageChangeEvent {
                             event: Some(crate::proto::package_change_event::Event::PackageChanged(
                                 crate::proto::PackageChanged {

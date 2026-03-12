@@ -34,12 +34,14 @@ mod default_timeout_layer;
 pub mod endpoint;
 mod server;
 
+use std::{collections::HashSet, sync::Arc};
+
 pub use client::{DaemonClient, DaemonError};
 pub use connector::{DaemonConnector, DaemonConnectorError};
 pub use server::{CloseReason, FileWatching, TurboGrpcService};
 use sha2::{Digest, Sha256};
 use tokio::sync::broadcast;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_repository::package_graph::PackageName;
 
 /// Trait for watching package changes. Implemented by consumers who need
@@ -64,8 +66,16 @@ pub struct PackageChangesWatcherArgs {
 /// Events that indicate package changes in the repository.
 #[derive(Clone, Debug)]
 pub enum PackageChangeEvent {
-    /// A specific package has changed
-    Package { name: PackageName },
+    /// A specific package has changed.
+    ///
+    /// `changed_files` contains the repo-relative paths that triggered this
+    /// event. Shared via `Arc` so broadcast clones are cheap. When file-level
+    /// information is unavailable (e.g. daemon gRPC), this will be an empty
+    /// set.
+    Package {
+        name: PackageName,
+        changed_files: Arc<HashSet<AnchoredSystemPathBuf>>,
+    },
     /// All packages need to be rediscovered
     Rediscover,
 }
