@@ -594,29 +594,37 @@ fn watch_edit_during_build_triggers_rebuild() {
     let (_tempdir, test_dir) = setup_slow_build_test();
     let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
 
-    // Wait for the initial build to start (marker appears)
+    // Wait for both initial builds to complete. Since turbo.json has no
+    // dependsOn, a and b build independently — b's fast build may finish
+    // before a's slow build.
     wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
 
-    // While the slow build is still running (3s), edit package b's source.
-    // Package b's build is fast, but the watch coordinator waits for all
-    // active runs to finish before processing new events.
+    // Let the watcher fully settle after the initial build. The daemon's
+    // file watcher, hash watcher, and package changes watcher all process
+    // events asynchronously.
+    std::thread::sleep(Duration::from_secs(2));
+
+    let a_before = marker_count(&test_dir, "a");
     let b_before = marker_count(&test_dir, "b");
-    let src_file = test_dir.join("packages/b/src.js");
-    fs::write(
-        &src_file,
-        "module.exports = { b: 'edited-during-build' };\n",
-    )
-    .unwrap();
+
+    // Trigger a new slow build of `a` so we have a known in-progress build.
+    let src_a = test_dir.join("packages/a/src.js");
+    fs::write(&src_a, "module.exports = { a: 'trigger-slow-rebuild' };\n").unwrap();
     common::git(&test_dir, &["add", "."]);
     common::git(
         &test_dir,
-        &["commit", "-m", "edit b during slow build", "--quiet"],
+        &["commit", "-m", "trigger slow rebuild of a", "--quiet"],
     );
 
-    // Wait for b to rebuild. The edit should not be lost — after the slow
-    // build completes and the system processes accumulated events, b should
-    // rebuild.
-    let b_after = wait_for_markers(&test_dir, "b", b_before + 1, Duration::from_secs(30));
+    // Wait for a's slow rebuild to start (marker is written at the
+    // beginning of the 3-second build).
+    wait_for_markers(&test_dir, "a", a_before + 1, Duration::from_secs(30));
+
+    // While a's slow build is still running, edit package b's source.
+    // Retry up to 3 times: on macOS, FSEvents can occasionally coalesce
+    // or delay events for files in temp directories.
+    let b_after = retry_file_change(&test_dir, "b", b_before, 3);
 
     drop(guard);
 
