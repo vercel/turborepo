@@ -80,15 +80,18 @@ export async function create(
 
   const { packageManager, skipInstall, skipTransforms, git } = opts;
 
-  const [online, availablePackageManagers] = await Promise.all([
+  const [onlineStatus, availablePackageManagers] = await Promise.all([
     isOnline(),
     getAvailablePackageManagers()
   ]);
 
-  if (!online) {
+  if (!onlineStatus.online) {
     error(
       "You appear to be offline. Please check your network connection and try again."
     );
+    for (const reason of onlineStatus.reasons) {
+      warn(reason);
+    }
     process.exit(1);
   }
   const { root, projectName } = await prompts.directory({ dir: directory });

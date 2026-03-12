@@ -2,10 +2,17 @@ import { execSync } from "node:child_process";
 import dns from "node:dns";
 
 const DNS_TIMEOUT = 5000;
+const DNS_HOST = "github.com";
+
+type DnsResult = "resolved" | "timeout" | "error";
+
+export type OnlineStatus =
+  | { online: true }
+  | { online: false; reasons: string[] };
 
 function getProxy(): string | undefined {
-  if (process.env.https_proxy) {
-    return process.env.https_proxy;
+  if (process.env.https_proxy || process.env.HTTPS_PROXY) {
+    return process.env.https_proxy || process.env.HTTPS_PROXY;
   }
 
   try {
@@ -23,15 +30,14 @@ function getProxy(): string | undefined {
 function dnsLookupWithTimeout(
   hostname: string,
   timeout: number
-): Promise<boolean> {
+): Promise<DnsResult> {
   return new Promise((resolve) => {
-    // Guard variable to prevent double-resolution from late DNS callbacks
     let settled = false;
 
     const timeoutId = setTimeout(() => {
       if (!settled) {
         settled = true;
-        resolve(false);
+        resolve("timeout");
       }
     }, timeout);
 
@@ -39,35 +45,52 @@ function dnsLookupWithTimeout(
       if (!settled) {
         settled = true;
         clearTimeout(timeoutId);
-        resolve(err === null);
+        resolve(err === null ? "resolved" : "error");
       }
     });
   });
 }
 
-export async function isOnline(): Promise<boolean> {
-  const registryOnline = await dnsLookupWithTimeout(
-    "registry.yarnpkg.com",
-    DNS_TIMEOUT
-  );
-  if (registryOnline) {
-    return true;
+function describeDnsFailure(hostname: string, result: DnsResult): string {
+  if (result === "timeout") {
+    return `DNS lookup for "${hostname}" timed out after ${DNS_TIMEOUT / 1000}s`;
   }
+  return `DNS lookup for "${hostname}" failed`;
+}
+
+export async function isOnline(): Promise<OnlineStatus> {
+  const dnsResult = await dnsLookupWithTimeout(DNS_HOST, DNS_TIMEOUT);
+  if (dnsResult === "resolved") {
+    return { online: true };
+  }
+
+  const reasons: string[] = [describeDnsFailure(DNS_HOST, dnsResult)];
 
   const proxy = getProxy();
   if (!proxy) {
-    return false;
+    reasons.push("No HTTPS proxy was detected as a fallback.");
+    return { online: false, reasons };
   }
 
   let hostname: string | undefined;
   try {
     ({ hostname } = new URL(proxy));
   } catch {
-    return false;
+    reasons.push(`HTTPS proxy "${proxy}" was detected but has an invalid URL.`);
+    return { online: false, reasons };
   }
   if (!hostname) {
-    return false;
+    reasons.push(`HTTPS proxy "${proxy}" was detected but has no hostname.`);
+    return { online: false, reasons };
   }
 
-  return dnsLookupWithTimeout(hostname, DNS_TIMEOUT);
+  const proxyResult = await dnsLookupWithTimeout(hostname, DNS_TIMEOUT);
+  if (proxyResult === "resolved") {
+    return { online: true };
+  }
+
+  reasons.push(
+    `HTTPS proxy "${proxy}" was detected but ${describeDnsFailure(hostname, proxyResult).toLowerCase()}.`
+  );
+  return { online: false, reasons };
 }
