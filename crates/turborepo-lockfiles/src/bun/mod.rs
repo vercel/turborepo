@@ -887,15 +887,20 @@ impl BunLockfile {
 
             let ident = PackageIdent::parse(&entry.ident);
             if ident.is_workspace() {
-                // Workspace entries: [ident, info] — bun requires the info
-                // object even when empty
+                // Workspace entries: [ident] when no info, [ident, info]
+                // when there are dependencies. Bun omits the info object
+                // entirely for workspace mappings with no dependencies.
                 let ident_json = serde_json::to_string(&entry.ident)?;
-                let info_json =
-                    serde_json::to_string(&entry.info.as_ref().unwrap_or(&PackageInfo::default()))?;
-                let info_json_spaced = self.format_info_json(&info_json);
-                output.push_str(&format!(
-                    "    \"{key}\": [{ident_json}, {info_json_spaced}],"
-                ));
+                let has_info = entry.info.as_ref().is_some_and(|i| !i.is_empty());
+                if has_info {
+                    let info_json = serde_json::to_string(&entry.info.as_ref().unwrap())?;
+                    let info_json_spaced = self.format_info_json(&info_json);
+                    output.push_str(&format!(
+                        "    \"{key}\": [{ident_json}, {info_json_spaced}],"
+                    ));
+                } else {
+                    output.push_str(&format!("    \"{key}\": [{ident_json}],"));
+                }
             } else if ident.is_local_package() {
                 // file:, link:, and tarball entries: [ident, info] — 2 elements
                 let ident_json = serde_json::to_string(&entry.ident)?;
@@ -1397,6 +1402,19 @@ impl BunLockfile {
                     // Format: "storybook@workspace:apps/storybook" -> workspace path is
                     // "apps/storybook"
                     if let Some(workspace_path) = ident.workspace_path() {
+                        // Ensure transitive workspace dependencies are in the
+                        // pruned set. The initial pruned_data.workspaces only
+                        // contains the root and target workspaces, but
+                        // workspaces depended on transitively must also be
+                        // included.
+                        if !pruned_data.workspaces.contains_key(workspace_path)
+                            && let Some(ws_entry) = self.data.workspaces.get(workspace_path)
+                        {
+                            pruned_data
+                                .workspaces
+                                .insert(workspace_path.to_string(), ws_entry.clone());
+                        }
+
                         // Check if this workspace is in the pruned set
                         if pruned_data.workspaces.contains_key(workspace_path) {
                             // This workspace IS in the pruned set - keep the mapping as-is
@@ -1406,8 +1424,9 @@ impl BunLockfile {
                             continue;
                         }
 
-                        // This workspace is NOT in the pruned set
-                        // Try to find the actual npm package entry instead
+                        // This workspace is NOT in the pruned set (doesn't
+                        // exist in the original data either). Try to find the
+                        // actual npm package entry instead.
                         // Get the workspace name (last component of path)
                         let workspace_name = workspace_path
                             .split('/')
@@ -1660,6 +1679,75 @@ impl BunLockfile {
             Err(_e) => {}
         }
 
+        // NESTED KEY PROMOTION: In bun lockfiles, nested entries like
+        // "accepts/negotiator" only exist as overrides of a hoisted top-level
+        // entry ("negotiator"). When pruning removes the hoisted version but
+        // keeps a nested version, we must promote the nested entry to top-level
+        // to maintain a valid lockfile structure that bun's --frozen-lockfile
+        // accepts.
+        loop {
+            let top_level_pkg_names: HashSet<String> = pruned_data
+                .packages
+                .iter()
+                .filter(|(key, _)| PackageKey::parse(key).parent().is_none())
+                .filter_map(|(_, entry)| {
+                    let ident = PackageIdent::parse(&entry.ident);
+                    if !ident.is_workspace() {
+                        Some(ident.name().to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Find the first nested entry (by sorted key order) whose package
+            // name has no top-level entry. We promote one package per iteration
+            // because promotion renames children, which may expose further
+            // entries that need promotion.
+            let mut sorted_pkg_keys: Vec<_> = pruned_data.packages.keys().cloned().collect();
+            sorted_pkg_keys.sort();
+
+            let mut promote_target: Option<(String, String)> = None; // (pkg_name, old_key)
+            for key in &sorted_pkg_keys {
+                if PackageKey::parse(key).parent().is_none() {
+                    continue;
+                }
+
+                let entry = &pruned_data.packages[key];
+                let ident = PackageIdent::parse(&entry.ident);
+                if ident.is_workspace() {
+                    continue;
+                }
+
+                let pkg_name = ident.name().to_string();
+                if !top_level_pkg_names.contains(&pkg_name) {
+                    promote_target = Some((pkg_name, key.clone()));
+                    break;
+                }
+            }
+
+            let Some((pkg_name, old_key)) = promote_target else {
+                break;
+            };
+
+            // Rename the entry and all its children
+            let old_prefix = format!("{old_key}/");
+            let new_prefix = format!("{pkg_name}/");
+            let mut renames: Vec<(String, String)> = vec![(old_key, pkg_name)];
+            for key in &sorted_pkg_keys {
+                if key.starts_with(&old_prefix) {
+                    let new_key = format!("{new_prefix}{}", &key[old_prefix.len()..]);
+                    renames.push((key.clone(), new_key));
+                }
+            }
+
+            for (old, new) in renames {
+                if let Some(entry) = pruned_data.packages.remove(&old) {
+                    pruned_data.packages.insert(new, entry);
+                }
+            }
+        }
+
         // After pruning, some packages may have required peer dependencies that
         // are no longer present in the pruned set (e.g. expo-network is provided
         // by mobile workspaces that were pruned away). Bun refuses to parse a
@@ -1803,6 +1891,15 @@ impl PackageEntry {
 }
 
 impl PackageInfo {
+    pub fn is_empty(&self) -> bool {
+        self.dependencies.is_empty()
+            && self.dev_dependencies.is_empty()
+            && self.optional_dependencies.is_empty()
+            && self.peer_dependencies.is_empty()
+            && self.optional_peers.is_empty()
+            && self.other.is_empty()
+    }
+
     pub fn all_dependencies(&self) -> impl Iterator<Item = (&str, &str)> {
         [
             self.dependencies.iter(),
@@ -3066,6 +3163,196 @@ mod test {
             .unwrap()
             .expect("should resolve chalk");
         assert_eq!(chalk_dep.key, "chalk@2.4.2");
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12156
+    // When pruning removes the hoisted version of a package but keeps a nested
+    // version, the nested entry must be promoted to top-level so that bun's
+    // --frozen-lockfile doesn't reject the structural change.
+    #[test]
+    fn test_nested_entries_promoted_when_hoisted_version_pruned() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-monorepo",
+                    "dependencies": {
+                        "typescript": "^5.0.0"
+                    }
+                },
+                "apps/web": {
+                    "name": "web",
+                    "dependencies": {
+                        "express": "^4.18.0"
+                    },
+                    "peerDependencies": {
+                        "typescript": "^5"
+                    }
+                },
+                "apps/admin": {
+                    "name": "admin",
+                    "dependencies": {
+                        "compression": "^1.8.0"
+                    },
+                    "peerDependencies": {
+                        "typescript": "^5"
+                    }
+                }
+            },
+            "packages": {
+                "accepts": ["accepts@1.3.8", "", { "dependencies": { "mime-types": "~2.1.34", "negotiator": "0.6.3" } }, "sha512-accepts"],
+                "admin": ["admin@workspace:apps/admin"],
+                "body-parser": ["body-parser@1.20.3", "", { "dependencies": { "debug": "2.6.9", "depd": "2.0.0" } }, "sha512-bp"],
+                "bytes": ["bytes@3.1.2", "", {}, "sha512-bytes"],
+                "compressible": ["compressible@2.0.18", "", { "dependencies": { "mime-db": "~1.52.0" } }, "sha512-compress"],
+                "compression": ["compression@1.8.1", "", { "dependencies": { "bytes": "3.1.2", "compressible": "~2.0.18", "debug": "2.6.9", "negotiator": "~0.6.4", "on-headers": "~1.1.0", "safe-buffer": "5.2.1", "vary": "~1.1.2" } }, "sha512-compression"],
+                "debug": ["debug@2.6.9", "", { "dependencies": { "ms": "2.0.0" } }, "sha512-debug"],
+                "depd": ["depd@2.0.0", "", {}, "sha512-depd"],
+                "express": ["express@4.21.2", "", { "dependencies": { "accepts": "~1.3.8", "body-parser": "1.20.3" } }, "sha512-express"],
+                "mime-db": ["mime-db@1.52.0", "", {}, "sha512-mimedb"],
+                "mime-types": ["mime-types@2.1.35", "", { "dependencies": { "mime-db": "1.52.0" } }, "sha512-mimetypes"],
+                "ms": ["ms@2.0.0", "", {}, "sha512-ms"],
+                "negotiator": ["negotiator@0.6.4", "", {}, "sha512-neg064"],
+                "on-headers": ["on-headers@1.1.0", "", {}, "sha512-onh"],
+                "safe-buffer": ["safe-buffer@5.2.1", "", {}, "sha512-sb"],
+                "typescript": ["typescript@5.9.3", "", {}, "sha512-ts"],
+                "vary": ["vary@1.1.2", "", {}, "sha512-vary"],
+                "web": ["web@workspace:apps/web"],
+                "accepts/negotiator": ["negotiator@0.6.3", "", {}, "sha512-neg063"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        // Prune for apps/web only. The transitive closure includes
+        // negotiator@0.6.3 (via accepts) but NOT negotiator@0.6.4 (only
+        // needed by compression, which is in apps/admin).
+        let mut web_deps = std::collections::HashMap::new();
+        web_deps.insert("express".to_string(), "^4.18.0".to_string());
+        let closure = crate::transitive_closure(&lockfile, "apps/web", web_deps, false).unwrap();
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+        let subgraph = lockfile
+            .subgraph(&["apps/web".into()], &package_idents)
+            .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+        let pruned =
+            BunLockfile::from_str(&encoded_str).expect("pruned lockfile should be parseable");
+
+        // The nested entry "accepts/negotiator" should be promoted to
+        // "negotiator" since the hoisted negotiator@0.6.4 was pruned.
+        assert!(
+            pruned.data.packages.contains_key("negotiator"),
+            "negotiator should exist as a top-level entry after promotion"
+        );
+        assert!(
+            !pruned.data.packages.contains_key("accepts/negotiator"),
+            "nested accepts/negotiator should have been promoted to top-level"
+        );
+        assert_eq!(
+            pruned.data.packages["negotiator"].ident, "negotiator@0.6.3",
+            "promoted entry should have the correct ident"
+        );
+    }
+
+    // Test nested key promotion with deeply nested chains
+    #[test]
+    fn test_nested_promotion_deep_chain() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "deep-chain-test",
+                    "dependencies": {}
+                },
+                "apps/web": {
+                    "name": "web",
+                    "dependencies": {
+                        "express-winston": "4.2.0"
+                    }
+                },
+                "apps/other": {
+                    "name": "other",
+                    "dependencies": {
+                        "ansi-styles": "4.3.0",
+                        "color-convert": "2.0.1"
+                    }
+                }
+            },
+            "packages": {
+                "ansi-styles": ["ansi-styles@4.3.0", "", { "dependencies": { "color-convert": "^2.0.1" } }, "sha512-as4"],
+                "chalk": ["chalk@2.4.2", "", { "dependencies": { "ansi-styles": "^3.2.1" } }, "sha512-chalk"],
+                "color-convert": ["color-convert@2.0.1", "", { "dependencies": { "color-name": "~1.1.4" } }, "sha512-cc2"],
+                "color-name": ["color-name@2.1.0", "", {}, "sha512-cn2"],
+                "express-winston": ["express-winston@4.2.0", "", { "dependencies": { "chalk": "^2.4.2" } }, "sha512-ew"],
+                "other": ["other@workspace:apps/other"],
+                "web": ["web@workspace:apps/web"],
+                "chalk/ansi-styles": ["ansi-styles@3.2.1", "", { "dependencies": { "color-convert": "^1.9.0" } }, "sha512-as3"],
+                "chalk/ansi-styles/color-convert": ["color-convert@1.9.3", "", { "dependencies": { "color-name": "1.1.3" } }, "sha512-cc1"],
+                "chalk/ansi-styles/color-convert/color-name": ["color-name@1.1.3", "", {}, "sha512-cn113"],
+                "color-convert/color-name": ["color-name@1.1.4", "", {}, "sha512-cn114"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        // Prune for apps/web. The transitive closure includes chalk ->
+        // chalk/ansi-styles -> chalk/ansi-styles/color-convert ->
+        // chalk/ansi-styles/color-convert/color-name but NOT the hoisted
+        // ansi-styles@4.3.0, color-convert@2.0.1, or color-name@2.1.0.
+        let mut web_deps = std::collections::HashMap::new();
+        web_deps.insert("express-winston".to_string(), "4.2.0".to_string());
+        let closure = crate::transitive_closure(&lockfile, "apps/web", web_deps, false).unwrap();
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+        let subgraph = lockfile
+            .subgraph(&["apps/web".into()], &package_idents)
+            .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+        let pruned =
+            BunLockfile::from_str(&encoded_str).expect("pruned lockfile should be parseable");
+
+        // After promotion, deeply nested entries should be flattened.
+        // "chalk/ansi-styles" → "ansi-styles" (promoted, children renamed)
+        // "ansi-styles/color-convert" → "color-convert" (promoted, children renamed)
+        // "color-convert/color-name" → "color-name" (promoted)
+        assert!(
+            pruned.data.packages.contains_key("ansi-styles"),
+            "ansi-styles should be promoted to top-level"
+        );
+        assert!(
+            pruned.data.packages.contains_key("color-convert"),
+            "color-convert should be promoted to top-level"
+        );
+        assert!(
+            pruned.data.packages.contains_key("color-name"),
+            "color-name should be promoted to top-level"
+        );
+
+        // No nested keys should remain for these packages
+        assert!(
+            !pruned.data.packages.contains_key("chalk/ansi-styles"),
+            "chalk/ansi-styles should have been promoted"
+        );
+
+        // Verify idents
+        assert_eq!(
+            pruned.data.packages["ansi-styles"].ident,
+            "ansi-styles@3.2.1"
+        );
+        assert_eq!(
+            pruned.data.packages["color-convert"].ident,
+            "color-convert@1.9.3"
+        );
+        assert_eq!(pruned.data.packages["color-name"].ident, "color-name@1.1.3");
     }
 
     // Regression test for https://github.com/vercel/turborepo/issues/11701

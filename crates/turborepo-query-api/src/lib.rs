@@ -21,9 +21,16 @@
 //! still realized because the heavy async-graphql/axum/oxc stack in
 //! `turborepo-query` doesn't need to compile for `turborepo-lib`.
 
-use std::{collections::HashMap, future::Future, io, pin::Pin, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    future::Future,
+    io,
+    pin::Pin,
+    sync::Arc,
+};
 
 use thiserror::Error;
+use turbopath::AnchoredSystemPathBuf;
 use turborepo_boundaries::BoundariesResult;
 use turborepo_engine::Built;
 use turborepo_repository::{change_mapper::PackageInclusionReason, package_graph::PackageName};
@@ -55,6 +62,14 @@ pub trait QueryRun: Send + Sync + 'static {
         base: Option<String>,
         head: Option<String>,
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, AffectedPackagesError>;
+
+    /// Returns the set of files that changed between two git refs.
+    /// Used by `affectedTasks` to match changed files against task input globs.
+    fn changed_files(
+        &self,
+        base: Option<&str>,
+        head: Option<&str>,
+    ) -> Result<HashSet<AnchoredSystemPathBuf>, AffectedPackagesError>;
 
     fn check_boundaries(&self, show_progress: bool) -> BoundariesFuture<'_>;
 }

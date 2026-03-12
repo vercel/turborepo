@@ -183,7 +183,8 @@ jobs:
         uses: ./.github/actions/setup-node
 
       - name: Run pnpm audit
-        run: pnpm audit --prod --audit-level low
+        # --ignore: false positive from workspace directory "cli/" matching npm package "cli"
+        run: pnpm audit --prod --audit-level low --ignore GHSA-6cpc-mj5c-m9rq
 
   cleanup:
     name: Cleanup

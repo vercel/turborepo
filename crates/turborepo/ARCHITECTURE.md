@@ -29,6 +29,10 @@ A run consists of the following steps:
 
 - Package discovery and lockfile analysis
 - Task filtering based on arguments (task names and `--filter`)
+- Root task scoping via `FilterMode` (from `turborepo-types`): when no filter
+  or only exclude filters are active, root tasks defined in `turbo.json` are
+  auto-included. Explicit include filters or `--affected` suppress root task
+  injection. See `calculate_filtered_packages` and `FilterMode`.
 - Task graph construction and validation
 - Cache setup (local and remote)
 - Activating shared HTTP client initialization once telemetry, remote cache, or

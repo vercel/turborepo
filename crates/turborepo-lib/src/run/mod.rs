@@ -923,6 +923,28 @@ impl turborepo_query_api::QueryRun for Run {
         .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))
     }
 
+    fn changed_files(
+        &self,
+        base: Option<&str>,
+        head: Option<&str>,
+    ) -> Result<
+        std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+        turborepo_query_api::AffectedPackagesError,
+    > {
+        match self
+            .scm
+            .changed_files(&self.repo_root, base, head, true, true, true)
+            .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))?
+        {
+            Ok(files) => Ok(files),
+            Err(_invalid_range) => {
+                // If git range is invalid, return empty set — the affected packages
+                // computation will handle reporting all-packages-changed separately.
+                Ok(std::collections::HashSet::new())
+            }
+        }
+    }
+
     fn check_boundaries(
         &self,
         show_progress: bool,

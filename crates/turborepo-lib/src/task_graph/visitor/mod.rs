@@ -340,6 +340,13 @@ impl<'a> Visitor<'a> {
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine)?;
         let cached_vendor_behavior = Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
 
+        // Errors from the dispatch loop are captured here rather than returned
+        // immediately. This ensures we always drain the FuturesUnordered below,
+        // so that every spawned task's TaskTracker is consumed before the
+        // ExecutionTracker is dropped. Without this, orphaned TaskTrackers can
+        // panic with SendError during shutdown.
+        let mut dispatch_error: Option<Error> = None;
+
         loop {
             let message = node_stream
                 .recv()
@@ -353,13 +360,13 @@ impl<'a> Visitor<'a> {
             let crate::engine::Message { info, callback } = message;
             let package_name = PackageName::from(info.package());
 
-            let workspace_info =
-                self.package_graph
-                    .package_info(&package_name)
-                    .ok_or_else(|| Error::MissingPackage {
-                        package_name: package_name.clone(),
-                        task_id: info.clone(),
-                    })?;
+            let Some(workspace_info) = self.package_graph.package_info(&package_name) else {
+                dispatch_error = Some(Error::MissingPackage {
+                    package_name: package_name.clone(),
+                    task_id: info.clone(),
+                });
+                break;
+            };
 
             let command = workspace_info.package_json.scripts.get(info.task());
 
@@ -371,24 +378,28 @@ impl<'a> Visitor<'a> {
                     package_task_event.track_error(TrackedErrors::RecursiveError);
                     let (span, text) = cmd.span_and_text("package.json");
 
-                    return Err(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
+                    dispatch_error = Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
                         span,
                         text,
                     })));
+                    break;
                 }
                 _ => (),
             }
 
-            let task_definition = engine
-                .task_definition(&info)
-                .ok_or(Error::MissingDefinition)?;
+            let Some(task_definition) = engine.task_definition(&info) else {
+                dispatch_error = Some(Error::MissingDefinition);
+                break;
+            };
 
             // Move pre-computed hash and env out of the map — each task is
             // dispatched exactly once, so remove avoids cloning the env map.
-            let (task_hash, execution_env) =
-                precomputed.remove(&info).ok_or(Error::MissingDefinition)?;
+            let Some((task_hash, execution_env)) = precomputed.remove(&info) else {
+                dispatch_error = Some(Error::MissingDefinition);
+                break;
+            };
 
             debug!("task {} hash is {}", info, task_hash);
 
@@ -429,14 +440,20 @@ impl<'a> Visitor<'a> {
 
                     let exec_context = {
                         let _span = tracing::info_span!("exec_context_new").entered();
-                        factory.exec_context(
+                        match factory.exec_context(
                             info.clone(),
                             task_hash,
                             task_cache,
                             execution_env,
                             takes_input,
                             self.task_access.clone(),
-                        )?
+                        ) {
+                            Ok(ctx) => ctx,
+                            Err(e) => {
+                                dispatch_error = Some(e);
+                                break;
+                            }
+                        }
                     };
                     let Some(mut exec_context) = exec_context else {
                         continue;
@@ -460,9 +477,17 @@ impl<'a> Visitor<'a> {
             }
         }
 
-        // Wait for the engine task to finish and for all of our tasks to finish
-        engine_handle.await.expect("engine execution panicked")?;
-        // This will poll the futures until they are all completed
+        // Close the receiver so the engine can finish if we broke out early.
+        // Without this, the engine would block trying to send the next task.
+        drop(node_stream);
+
+        // Always wait for the engine, even after a dispatch error. If we broke
+        // early the engine will see the closed channel and return
+        // Err(ExecuteError::Visitor), which is expected — not a real error.
+        let engine_result = engine_handle.await.expect("engine execution panicked");
+
+        // Always drain spawned tasks so every TaskTracker is consumed before
+        // the ExecutionTracker is dropped.
         let mut internal_errors = Vec::new();
         while let Some(result) = tasks.next().await {
             if let Err(e) = result.unwrap_or_else(|e| panic!("task executor panicked: {e}")) {
@@ -476,6 +501,14 @@ impl<'a> Visitor<'a> {
                 handle.stop().await;
             }
         }
+
+        // Propagate the dispatch error first — the engine error is an expected
+        // consequence of us closing the channel early, not a root cause.
+        if let Some(err) = dispatch_error {
+            return Err(err);
+        }
+
+        engine_result?;
 
         if !internal_errors.is_empty() {
             return Err(Error::InternalErrors(

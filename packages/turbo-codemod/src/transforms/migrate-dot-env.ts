@@ -88,10 +88,12 @@ export function transformer({
   const workspaceConfigs = getTurboConfigs(root);
   for (const workspaceConfig of workspaceConfigs) {
     const { config, turboConfigPath: filePath } = workspaceConfig;
-    runner.modifyFile({
-      filePath,
-      after: migrateConfig(config)
-    });
+    if ("pipeline" in config || "tasks" in config) {
+      runner.modifyFile({
+        filePath,
+        after: migrateConfig(config)
+      });
+    }
   }
 
   return runner.finish();

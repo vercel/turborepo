@@ -1,26 +1,15 @@
 import path from "node:path";
-import { builtinModules } from "node:module";
+import { createRequire } from "node:module";
 import fs from "fs-extra";
 import type { Project } from "@turbo/workspaces";
 import type { NodePlopAPI, PlopGenerator } from "node-plop";
-import nodePlopModule from "node-plop";
-import * as inquirerPrompts from "@inquirer/prompts";
+import nodePlop from "node-plop";
+import { Separator } from "@inquirer/prompts";
 import { searchUp, getTurboConfigs, logger } from "@turbo/utils";
+import { build as esbuild } from "esbuild";
 import { GeneratorError } from "./error";
 
-const { Separator } = inquirerPrompts;
-
-// Bun's require() of CJS modules with Babel interop wraps exports differently
-const nodePlop = (
-  typeof nodePlopModule === "function"
-    ? nodePlopModule
-    : (nodePlopModule as { default: typeof nodePlopModule }).default
-) as (
-  plopfilePath: string,
-  cfg?: { destBasePath?: string; force?: boolean }
-) => NodePlopAPI | Promise<NodePlopAPI>;
-
-const SUPPORTED_CONFIG_EXTENSIONS = ["ts", "js", "cjs"];
+const SUPPORTED_CONFIG_EXTENSIONS = ["ts", "js", "cjs", "mts", "mjs"];
 const TURBO_GENERATOR_DIRECTORY = path.join("turbo", "generators");
 
 const SUPPORTED_WORKSPACE_GENERATOR_CONFIGS = SUPPORTED_CONFIG_EXTENSIONS.map(
@@ -44,8 +33,6 @@ export async function getPlop({
   project: Project;
   configPath?: string;
 }): Promise<NodePlopAPI | undefined> {
-  // Bun handles TypeScript transpilation natively -- no tsx registration needed.
-
   const workspaceConfigs = getWorkspaceGeneratorConfigs({ project });
   let plop: NodePlopAPI | undefined;
 
@@ -221,56 +208,74 @@ function injectTurborepoData({
   };
 }
 
-// In standalone Bun-compiled binaries, node-plop's require() cannot resolve
-// npm packages from dynamically loaded config files because the binary's module
-// resolution doesn't see the project's node_modules. We use Bun.build() at
-// runtime to bundle the user's config into a single CJS file before node-plop
-// loads it.
-//
-// A subtlety: packages that the binary itself bundles (like @inquirer/prompts)
-// won't exist on disk in the user's project. A Bun.build() plugin intercepts
-// these unresolvable bare specifiers and redirects them to a globalThis
-// registry where the binary's own module references are stored at runtime.
+// node-plop uses require() to load config files, which can't handle TypeScript
+// or ESM syntax. We use esbuild at runtime to bundle the user's config into a
+// single CJS file before node-plop loads it. esbuild handles TS transpilation
+// and ESM-to-CJS conversion transparently.
 const bundled = new Set<string>();
 
-// Modules bundled in the compiled binary that user configs may import.
-// These are registered on globalThis before bundling so the generated CJS
-// code can access them without require() (which can't resolve from the
-// binary's virtual filesystem).
-const BINARY_MODULES: Record<string, unknown> = {
-  "@inquirer/prompts": inquirerPrompts
-};
+// Modules provided by @turbo/gen that user configs may import without
+// installing themselves (backward compat). When esbuild can't resolve these
+// from the user's project, we resolve them from @turbo/gen's own node_modules.
+const CLI_PROVIDED_MODULES = ["@inquirer/prompts"];
+
+// Resolve the directory containing @turbo/gen's own node_modules so we can
+// use it as a fallback resolution path for CLI-provided modules.
+function getOwnNodeModulesDirs(): Array<string> {
+  const dirs: Array<string> = [];
+  try {
+    const ownRequire = createRequire(__filename);
+    const ownPkgPath = ownRequire.resolve("@inquirer/prompts");
+    // Walk up from the resolved path to find the node_modules directory
+    let dir = path.dirname(ownPkgPath);
+    while (dir !== path.dirname(dir)) {
+      if (path.basename(dir) === "node_modules") {
+        dirs.push(dir);
+        break;
+      }
+      dir = path.dirname(dir);
+    }
+  } catch {
+    // If we can't resolve our own deps, the fallback won't work but
+    // the user's own node_modules might still have what's needed.
+  }
+  return dirs;
+}
 
 async function bundleConfigForLoading(configPath: string): Promise<string> {
-  const BunAPI = (globalThis as unknown as { Bun?: { build: Function } }).Bun;
-  if (!BunAPI?.build) return configPath;
+  const outName = path
+    .basename(configPath)
+    .replace(/\.(ts|js|cjs|mts|mjs)$/, ".turbo-gen-bundled.cjs");
+  const outDir = path.dirname(configPath);
+  const outPath = path.join(outDir, outName);
 
   try {
-    const outName = path
-      .basename(configPath)
-      .replace(/\.(ts|js|cjs)$/, ".turbo-gen-bundled.cjs");
-    const outDir = path.dirname(configPath);
-    const outPath = path.join(outDir, outName);
+    const ownNodeModules = getOwnNodeModulesDirs();
 
-    // Expose binary-bundled modules on globalThis so the generated CJS code
-    // can reference them without going through require().
-    const g = globalThis as unknown as Record<string, unknown>;
-    g.__turboGenModules = BINARY_MODULES;
-
-    const result = await BunAPI.build({
-      entrypoints: [configPath],
-      outdir: outDir,
-      naming: outName,
-      target: "bun",
+    const result = await esbuild({
+      entryPoints: [configPath],
+      outfile: outPath,
+      bundle: true,
       format: "cjs",
-      plugins: [binaryResolvePlugin(configPath)]
+      platform: "node",
+      // Fallback resolution: if a bare specifier isn't found in the user's
+      // project, check @turbo/gen's own node_modules (for @inquirer/prompts
+      // and other CLI-provided modules).
+      nodePaths: ownNodeModules,
+      plugins: [cliProvidedModulesPlugin(configPath)],
+      logLevel: "silent",
+      // node-plop loads config files via `await import()`. For CJS files,
+      // Node wraps module.exports as the default export. esbuild's CJS output
+      // for ESM sources produces `{ __esModule: true, default: fn }`, which
+      // causes double-wrapping: `{ default: { __esModule: true, default: fn } }`.
+      // This footer unwraps the __esModule pattern so module.exports is the
+      // function itself, making `import().default` resolve correctly.
+      footer: {
+        js: `if(module.exports&&module.exports.__esModule&&typeof module.exports.default==="function"){module.exports=module.exports.default;}`
+      }
     });
 
-    if (
-      !result.success ||
-      !result.outputs ||
-      (result.outputs as Array<unknown>).length === 0
-    ) {
+    if (result.errors.length > 0) {
       return configPath;
     }
 
@@ -281,118 +286,60 @@ async function bundleConfigForLoading(configPath: string): Promise<string> {
   }
 }
 
-// Node builtins (with and without the "node:" prefix).
-const NODE_BUILTINS = new Set<string>(builtinModules);
-for (const m of builtinModules) {
-  NODE_BUILTINS.add(`node:${m}`);
-}
-
-// Resolve a bare package specifier by walking up the directory tree.
-// Inside a Bun compiled binary, createRequire().resolve() doesn't
-// walk node_modules ancestors reliably, so we manually locate the
-// package directory and read its package.json to find the entry point.
-function resolvePackage(
-  specifier: string,
-  fromDir: string
-): string | undefined {
-  if (NODE_BUILTINS.has(specifier)) {
-    return specifier;
-  }
-
-  // Extract the package name from the specifier (handles scoped packages
-  // like @foo/bar and deep imports like foo/lib/thing).
-  let packageName: string;
-  let subpath: string | undefined;
-  if (specifier.startsWith("@")) {
-    const parts = specifier.split("/");
-    packageName = parts.slice(0, 2).join("/");
-    if (parts.length > 2) subpath = parts.slice(2).join("/");
-  } else {
-    const parts = specifier.split("/");
-    packageName = parts[0];
-    if (parts.length > 1) subpath = parts.slice(1).join("/");
-  }
-
-  // Walk up directories looking for node_modules/<packageName>
-  let dir = fromDir;
-  while (true) {
-    const candidate = path.join(dir, "node_modules", packageName);
-    if (fs.existsSync(candidate)) {
-      if (subpath) {
-        return path.join(candidate, subpath);
-      }
-      // Read the package's package.json to find the correct entry point.
-      const pkgJsonPath = path.join(candidate, "package.json");
-      if (fs.existsSync(pkgJsonPath)) {
-        try {
-          const pkg = fs.readJsonSync(pkgJsonPath) as Record<string, unknown>;
-          const main = (pkg.main as string) || "index.js";
-          return path.join(candidate, main);
-        } catch {
-          return path.join(candidate, "index.js");
-        }
-      }
-      return path.join(candidate, "index.js");
-    }
-    const parent = path.dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-
-  return undefined;
-}
-
-// Bun.build() plugin: when the user's config imports a bare specifier that
-// can't be resolved from disk (the project's node_modules), check if it's a
-// module the binary ships. If so, redirect to a virtual module that reads
-// from the globalThis.__turboGenModules registry at runtime.
-function binaryResolvePlugin(configPath: string) {
+// esbuild plugin: for CLI-provided modules that can't be resolved from the
+// user's project, try resolving from @turbo/gen's own dependency tree.
+// This maintains backward compat for configs that import @inquirer/prompts
+// without installing it themselves.
+function cliProvidedModulesPlugin(configPath: string) {
   return {
-    name: "turbo-gen-binary-resolve",
+    name: "turbo-gen-cli-provided",
     setup(build: {
       onResolve: (
         opts: { filter: RegExp },
         cb: (args: {
           path: string;
           resolveDir?: string;
+          kind?: string;
         }) =>
-          | { path: string; namespace?: string; external?: boolean }
+          | { path: string; external?: boolean }
           | undefined
-      ) => void;
-      onLoad: (
-        opts: { filter: RegExp; namespace: string },
-        cb: (args: { path: string }) => { contents: string; loader: string }
+          | Promise<{ path: string; external?: boolean } | undefined>
       ) => void;
     }) {
       build.onResolve({ filter: /^[^./]/ }, (args) => {
-        const resolveDir = args.resolveDir || path.dirname(configPath);
-        const resolved = resolvePackage(args.path, resolveDir);
-        if (resolved) {
-          if (path.isAbsolute(resolved)) {
-            // Found on disk — give Bun the absolute path directly so it
-            // doesn't need to resolve the bare specifier itself (which
-            // fails inside the compiled binary).
+        // Extract the package name from the specifier
+        let packageName: string;
+        if (args.path.startsWith("@")) {
+          const parts = args.path.split("/");
+          packageName = parts.slice(0, 2).join("/");
+        } else {
+          packageName = args.path.split("/")[0];
+        }
+
+        if (!CLI_PROVIDED_MODULES.includes(packageName)) {
+          return undefined;
+        }
+
+        // Only intervene if esbuild's native resolution would fail.
+        // Try to resolve from the user's project first.
+        try {
+          const userRequire = createRequire(
+            args.resolveDir ? path.join(args.resolveDir, "_") : configPath
+          );
+          userRequire.resolve(args.path);
+          // Found in user's project — let esbuild handle it normally.
+          return undefined;
+        } catch {
+          // Not in user's project. Resolve from @turbo/gen's deps.
+          try {
+            const ownRequire = createRequire(__filename);
+            const resolved = ownRequire.resolve(args.path);
             return { path: resolved };
+          } catch {
+            return undefined;
           }
-          // Node builtin (e.g. "fs", "node:path") — mark external so
-          // the require() is preserved in the bundled output.
-          return { path: resolved, external: true };
         }
-
-        // Not on disk — redirect to virtual namespace if the binary has it
-        if (args.path in BINARY_MODULES) {
-          return { path: args.path, namespace: "turbo-gen-builtin" };
-        }
-        return undefined;
       });
-
-      build.onLoad(
-        { filter: /.*/, namespace: "turbo-gen-builtin" },
-        (args) => ({
-          contents: `module.exports = globalThis.__turboGenModules[${JSON.stringify(args.path)}];`,
-          loader: "js"
-        })
-      );
     }
   };
 }

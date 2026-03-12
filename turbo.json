@@ -39,7 +39,9 @@
     "//#quality": {
       "dependsOn": ["//#lint", "//#format", "//#check:toml", "docs#lint"]
     },
-    "//#lint": {},
+    "//#lint": {
+      "inputs": ["!pnpm-lock.yaml"]
+    },
     "//#lint:fix": {},
     "//#format": {},
     "//#format:fix": {},
@@ -68,7 +70,6 @@
       "dependsOn": ["^build"]
     },
     "build:test-archive": {},
-    "build:test-archive-cov": {},
     "package-checks": {
       "dependsOn": ["package:types"]
     },

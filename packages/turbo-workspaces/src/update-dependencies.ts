@@ -1,7 +1,6 @@
 import path from "node:path";
 import fs from "fs-extra";
 import picocolors from "picocolors";
-import type { DependencyList, DependencyGroups } from "@turbo/utils";
 import type {
   Project,
   Workspace,
@@ -10,6 +9,15 @@ import type {
 } from "./types";
 import type { Logger } from "./logger";
 import { getPackageJson } from "./utils";
+
+type DependencyList = Record<string, string>;
+
+interface DependencyGroups {
+  dependencies?: DependencyList;
+  devDependencies?: DependencyList;
+  peerDependencies?: DependencyList;
+  optionalDependencies?: DependencyList;
+}
 
 function updateDependencyList({
   dependencyList,

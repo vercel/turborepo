@@ -31,7 +31,7 @@
     "oxlint": "^1.49.0",
     "semver": "7.5.2",
     "typescript": "5.5.4",
-    "ultracite": "7.2.3"
+    "ultracite": "7.2.5"
   },
   "lint-staged": {
     "*.{js,jsx,ts,tsx,md,mdx,mjs,yml,yaml,css,json,jsonc}": "oxfmt --no-error-on-unmatched-pattern",
@@ -40,11 +40,5 @@
   "engines": {
     "node": "22.x"
   },
-  "packageManager": "pnpm@10.28.0",
-  "pnpm": {
-    "overrides": {
-      "fast-xml-parser": ">=5.3.4",
-      "lodash-es": ">=4.17.23"
-    }
-  }
+  "packageManager": "pnpm@10.28.0"
 }

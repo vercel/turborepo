@@ -6,13 +6,18 @@ import type { Transformer, TransformerArgs } from "../types";
 import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { TransformerResults } from "../runner";
 import { loadTurboJson } from "../utils/load-turbo-json";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
 const TRANSFORMER = "rename-pipeline";
 const DESCRIPTION = 'Rename the "pipeline" key to "tasks" in `turbo.json`';
 const INTRODUCED_IN = "2.0.0-canary.0";
 
-function migrateConfig(config: SchemaV1): SchemaV2 {
+function migrateConfig(config: SchemaV1): SchemaV2 | SchemaV1 {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   const { pipeline, ...rest } = config;
 
   return { ...rest, tasks: pipeline };
