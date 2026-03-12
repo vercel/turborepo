@@ -488,10 +488,10 @@ impl RunBuilder {
             let _span = tracing::info_span!("env_infer").entered();
             EnvironmentVariableMap::infer()
         };
-        {
+        crate::rayon_compat::block_in_place(|| {
             let _span = tracing::info_span!("turbo_json_preload").entered();
             turbo_json_loader.preload_all();
-        }
+        });
 
         let filtered_pkgs = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();

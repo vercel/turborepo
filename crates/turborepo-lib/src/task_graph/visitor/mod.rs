@@ -149,7 +149,9 @@ impl<'a> Visitor<'a> {
                 global_env_patterns,
             );
 
-            task_hasher.precompute_external_deps_hashes(package_graph.packages());
+            crate::rayon_compat::block_in_place(|| {
+                task_hasher.precompute_external_deps_hashes(package_graph.packages());
+            });
 
             let sink = Self::sink(run_opts);
             let color_cache = ColorSelector::default();
@@ -321,10 +323,10 @@ impl<'a> Visitor<'a> {
         // task's dependency hashes are available before it is hashed.
         // This replaces the per-task serial hashing that was inside the
         // dispatch loop.
-        let mut precomputed = {
+        let mut precomputed = crate::rayon_compat::block_in_place(|| {
             let _span = tracing::info_span!("precompute_task_hashes").entered();
-            self.precompute_task_hashes(&engine, telemetry)?
-        };
+            self.precompute_task_hashes(&engine, telemetry)
+        })?;
 
         let concurrency = self.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);

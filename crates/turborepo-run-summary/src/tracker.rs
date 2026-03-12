@@ -160,7 +160,7 @@ impl RunTracker {
 
         // Build task summaries in parallel — each task_summary call is read-only
         // on the engine, hash tracker, and package graph.
-        let tasks = {
+        let tasks = turborepo_rayon_compat::block_in_place(|| {
             use rayon::prelude::*;
             let results: Vec<Result<TaskSummary, crate::task_factory::Error>> = summary_state
                 .tasks
@@ -172,8 +172,8 @@ impl RunTracker {
                 .collect();
             results
                 .into_iter()
-                .collect::<Result<Vec<_>, crate::task_factory::Error>>()?
-        };
+                .collect::<Result<Vec<_>, crate::task_factory::Error>>()
+        })?;
         let execution_summary = ExecutionSummary::new(
             self.synthesized_command.clone(),
             summary_state,

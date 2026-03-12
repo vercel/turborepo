@@ -618,50 +618,53 @@ impl Run {
         let mut global_file_result = None;
 
         let _hash_scope_span = tracing::info_span!("hash_scope").entered();
-        rayon::scope(|s| {
-            s.spawn(|_| {
-                let _span = tracing::info_span!("calculate_file_hashes_task").entered();
-                let needs_expanded = self.opts.run_opts.dry_run.is_some()
-                    || self.opts.run_opts.summarize
-                    || self.observability_handle.is_some();
-                file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
-                    &self.scm,
-                    self.engine.tasks(),
-                    workspaces,
-                    self.engine.task_definitions(),
-                    &self.repo_root,
-                    &self.run_telemetry,
-                    repo_index,
-                    needs_expanded,
-                ));
-            });
-            s.spawn(|_| {
-                let _span = tracing::info_span!("get_internal_deps_hash_task").entered();
-                internal_deps_result = Some(
-                    internal_dep_paths
-                        .map(|dep_paths| {
-                            get_internal_deps_hash(
-                                &self.scm,
-                                &self.repo_root,
-                                dep_paths,
-                                repo_index,
-                            )
-                        })
-                        .transpose(),
-                );
-            });
-            s.spawn(|_| {
-                let _span = tracing::info_span!("collect_global_file_hash_inputs_task").entered();
-                global_file_result = Some(collect_global_file_hash_inputs(
-                    root_workspace,
-                    &self.repo_root,
-                    self.pkg_dep_graph.package_manager(),
-                    self.pkg_dep_graph.lockfile(),
-                    &self.root_turbo_json.global_deps,
-                    &self.env_at_execution_start,
-                    &self.root_turbo_json.global_env,
-                    &self.scm,
-                ));
+        crate::rayon_compat::block_in_place(|| {
+            rayon::scope(|s| {
+                s.spawn(|_| {
+                    let _span = tracing::info_span!("calculate_file_hashes_task").entered();
+                    let needs_expanded = self.opts.run_opts.dry_run.is_some()
+                        || self.opts.run_opts.summarize
+                        || self.observability_handle.is_some();
+                    file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
+                        &self.scm,
+                        self.engine.tasks(),
+                        workspaces,
+                        self.engine.task_definitions(),
+                        &self.repo_root,
+                        &self.run_telemetry,
+                        repo_index,
+                        needs_expanded,
+                    ));
+                });
+                s.spawn(|_| {
+                    let _span = tracing::info_span!("get_internal_deps_hash_task").entered();
+                    internal_deps_result = Some(
+                        internal_dep_paths
+                            .map(|dep_paths| {
+                                get_internal_deps_hash(
+                                    &self.scm,
+                                    &self.repo_root,
+                                    dep_paths,
+                                    repo_index,
+                                )
+                            })
+                            .transpose(),
+                    );
+                });
+                s.spawn(|_| {
+                    let _span =
+                        tracing::info_span!("collect_global_file_hash_inputs_task").entered();
+                    global_file_result = Some(collect_global_file_hash_inputs(
+                        root_workspace,
+                        &self.repo_root,
+                        self.pkg_dep_graph.package_manager(),
+                        self.pkg_dep_graph.lockfile(),
+                        &self.root_turbo_json.global_deps,
+                        &self.env_at_execution_start,
+                        &self.root_turbo_json.global_env,
+                        &self.scm,
+                    ));
+                });
             });
         });
 

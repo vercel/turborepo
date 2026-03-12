@@ -1,48 +1,15 @@
-use std::{
-    any::Any,
-    borrow::Cow,
-    collections::{BTreeMap, HashMap},
-};
+use std::{any::Any, borrow::Cow, collections::BTreeMap};
 
 use semver::Version;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use turbopath::RelativeUnixPathBuf;
 
 use super::{Error, LockfileVersion, SupportedLockfileVersion, dep_path::DepPath};
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
-type Packages = HashMap<String, PackageSnapshot>;
-type Snapshots = HashMap<String, PackageSnapshotV7>;
-
-fn serialize_optional_hashmap_as_sorted<S, V>(
-    value: &Option<HashMap<String, V>>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-    V: Serialize,
-{
-    match value {
-        Some(map) => {
-            let sorted: BTreeMap<_, _> = map.iter().collect();
-            sorted.serialize(serializer)
-        }
-        None => serializer.serialize_none(),
-    }
-}
-
-fn serialize_hashmap_as_sorted<S, V>(
-    value: &HashMap<String, V>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-    V: Serialize,
-{
-    let sorted: BTreeMap<_, _> = value.iter().collect();
-    sorted.serialize(serializer)
-}
+type Packages = BTreeMap<String, PackageSnapshot>;
+type Snapshots = BTreeMap<String, PackageSnapshotV7>;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -68,20 +35,13 @@ pub struct PnpmLockfile {
     package_extensions_checksum: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     patched_dependencies: Option<Map<String, PatchFile>>,
-    #[serde(serialize_with = "serialize_hashmap_as_sorted")]
-    importers: HashMap<String, ProjectSnapshot>,
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        serialize_with = "serialize_optional_hashmap_as_sorted"
-    )]
+    importers: BTreeMap<String, ProjectSnapshot>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     packages: Option<Packages>,
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        serialize_with = "serialize_optional_hashmap_as_sorted"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     snapshots: Option<Snapshots>,
     #[serde(skip)]
-    dependency_index: HashMap<String, HashMap<String, String>>,
+    dependency_index: BTreeMap<String, BTreeMap<String, String>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
 }
@@ -257,7 +217,7 @@ impl PnpmLockfile {
 
             // Merge packages
             if let Some(ws_packages) = ws_lockfile.packages {
-                let packages = self.packages.get_or_insert_with(HashMap::new);
+                let packages = self.packages.get_or_insert_with(BTreeMap::new);
                 for (key, pkg) in ws_packages {
                     packages.entry(key).or_insert(pkg);
                 }
@@ -265,7 +225,7 @@ impl PnpmLockfile {
 
             // Merge snapshots
             if let Some(ws_snapshots) = ws_lockfile.snapshots {
-                let snapshots = self.snapshots.get_or_insert_with(HashMap::new);
+                let snapshots = self.snapshots.get_or_insert_with(BTreeMap::new);
                 for (key, snap) in ws_snapshots {
                     snapshots.entry(key).or_insert(snap);
                 }
@@ -279,9 +239,7 @@ impl PnpmLockfile {
     }
 
     fn build_dependency_index(&mut self) {
-        let snapshot_count = self.snapshots.as_ref().map_or(0, HashMap::len);
-        let package_count = self.packages.as_ref().map_or(0, HashMap::len);
-        let mut index = HashMap::with_capacity(snapshot_count + package_count);
+        let mut index = BTreeMap::new();
         if let Some(snapshots) = &self.snapshots {
             for (key, snapshot) in snapshots {
                 index.insert(key.clone(), snapshot.dependencies());
@@ -480,9 +438,9 @@ impl PnpmLockfile {
         &self,
         packages: &[String],
     ) -> Result<(Packages, Option<Snapshots>), crate::Error> {
-        let mut pruned_packages = HashMap::new();
+        let mut pruned_packages = BTreeMap::new();
         if let Some(snapshots) = self.snapshots.as_ref() {
-            let mut pruned_snapshots = HashMap::new();
+            let mut pruned_snapshots = BTreeMap::new();
             for package in packages {
                 let entry = snapshots
                     .get(package.as_str())
@@ -575,8 +533,10 @@ impl crate::Lockfile for PnpmLockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::borrow::Cow<'_, std::collections::HashMap<String, String>>>, crate::Error>
-    {
+    ) -> Result<
+        Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>,
+        crate::Error,
+    > {
         Ok(self
             .dependency_index
             .get(key)
@@ -588,7 +548,7 @@ impl crate::Lockfile for PnpmLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn crate::Lockfile>, crate::Error> {
-        let importers: HashMap<_, _> = self
+        let importers: BTreeMap<_, _> = self
             .importers
             .iter()
             .filter(|(key, _)| key.as_str() == "." || workspace_packages.contains(key))
@@ -691,7 +651,7 @@ impl crate::Lockfile for PnpmLockfile {
             package_extensions_checksum: self.package_extensions_checksum.clone(),
             patched_dependencies: patches,
             snapshots: pruned_snapshots,
-            dependency_index: HashMap::new(),
+            dependency_index: BTreeMap::new(),
             time: None,
             settings: self.settings.clone(),
             pnpmfile_checksum: self.pnpmfile_checksum.clone(),
@@ -828,10 +788,8 @@ impl Dependency {
 }
 
 impl PackageSnapshotV7 {
-    pub fn dependencies(&self) -> HashMap<String, String> {
-        let dependency_count = self.dependencies.as_ref().map_or(0, Map::len)
-            + self.optional_dependencies.as_ref().map_or(0, Map::len);
-        let mut combined = HashMap::with_capacity(dependency_count);
+    pub fn dependencies(&self) -> BTreeMap<String, String> {
+        let mut combined = BTreeMap::new();
 
         if let Some(dependencies) = &self.dependencies {
             combined.extend(
@@ -868,6 +826,8 @@ pub fn pnpm_global_change(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
+
     use pretty_assertions::assert_eq;
 
     use super::*;
@@ -1418,5 +1378,470 @@ snapshots:
         // The importer for apps/my-app should retain dependenciesMeta
         let importer = pruned_lockfile.importers.get("apps/my-app").unwrap();
         assert!(importer.dependencies_meta.is_some());
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/12252
+    ///
+    /// The Lockfile trait returns `HashMap<String, String>` from
+    /// `all_dependencies`, and `PackageSnapshotV7::dependencies()` converts
+    /// deterministic BTreeMap data into a HashMap. This test asserts that the
+    /// dependency maps used in the transitive closure walk are
+    /// deterministically ordered (i.e. BTreeMap), so that the walk and
+    /// hashing are reproducible across process invocations regardless of
+    /// HashMap's per-process random seed.
+    ///
+    /// With HashMap, the `dependency_index` values have random iteration
+    /// order. When these feed into `resolve_deps` → `resolve_package` via the
+    /// shared `DashMap` resolve cache in `all_transitive_closures`, different
+    /// iteration orders in parallel threads can race to populate cache entries,
+    /// producing different `Package` values and thus different hashes.
+    #[test]
+    fn test_dependency_index_is_deterministically_ordered() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    dependencies:
+      express:
+        specifier: 4.18.2
+        version: 4.18.2
+
+packages:
+
+  express@4.18.2:
+    resolution: {integrity: sha512-aaa}
+
+  body-parser@1.20.1:
+    resolution: {integrity: sha512-bbb}
+
+  content-type@1.0.5:
+    resolution: {integrity: sha512-ccc}
+
+  cookie@0.5.0:
+    resolution: {integrity: sha512-ddd}
+
+  debug@4.3.4:
+    resolution: {integrity: sha512-eee}
+
+  etag@1.8.1:
+    resolution: {integrity: sha512-fff}
+
+  finalhandler@1.2.0:
+    resolution: {integrity: sha512-ggg}
+
+  ms@2.1.3:
+    resolution: {integrity: sha512-hhh}
+
+  qs@6.11.0:
+    resolution: {integrity: sha512-iii}
+
+  raw-body@2.5.1:
+    resolution: {integrity: sha512-jjj}
+
+  safe-buffer@5.2.1:
+    resolution: {integrity: sha512-kkk}
+
+  type-is@1.6.18:
+    resolution: {integrity: sha512-lll}
+
+  mime-types@2.1.35:
+    resolution: {integrity: sha512-mmm}
+
+  mime-db@1.52.0:
+    resolution: {integrity: sha512-nnn}
+
+  depd@2.0.0:
+    resolution: {integrity: sha512-ooo}
+
+  destroy@1.2.0:
+    resolution: {integrity: sha512-ppp}
+
+snapshots:
+
+  express@4.18.2:
+    dependencies:
+      body-parser: 1.20.1
+      content-type: 1.0.5
+      cookie: 0.5.0
+      debug: 4.3.4
+      etag: 1.8.1
+      finalhandler: 1.2.0
+      qs: 6.11.0
+      type-is: 1.6.18
+    optionalDependencies:
+      safe-buffer: 5.2.1
+      depd: 2.0.0
+      destroy: 1.2.0
+
+  body-parser@1.20.1:
+    dependencies:
+      content-type: 1.0.5
+      debug: 4.3.4
+      raw-body: 2.5.1
+      type-is: 1.6.18
+      qs: 6.11.0
+
+  content-type@1.0.5: {}
+  cookie@0.5.0: {}
+
+  debug@4.3.4:
+    dependencies:
+      ms: 2.1.3
+
+  etag@1.8.1: {}
+  finalhandler@1.2.0:
+    dependencies:
+      debug: 4.3.4
+
+  ms@2.1.3: {}
+  qs@6.11.0: {}
+
+  raw-body@2.5.1:
+    dependencies:
+      depd: 2.0.0
+
+  safe-buffer@5.2.1: {}
+
+  type-is@1.6.18:
+    dependencies:
+      mime-types: 2.1.35
+
+  mime-types@2.1.35:
+    dependencies:
+      mime-db: 1.52.0
+
+  mime-db@1.52.0: {}
+  depd@2.0.0: {}
+  destroy@1.2.0: {}
+"#;
+
+        // Parse the lockfile multiple times — each parse creates HashMaps
+        // with fresh RandomState seeds. Collect the iteration order of the
+        // dependency_index entries to verify determinism.
+        let mut seen_orders = std::collections::HashSet::new();
+        for _ in 0..50 {
+            let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+            // express@4.18.2 merges 8 dependencies + 3 optionalDependencies
+            // into a single map via PackageSnapshotV7::dependencies().
+            // If this map is a HashMap, its iteration order varies per instance.
+            let deps = lockfile
+                .all_dependencies("express@4.18.2")
+                .unwrap()
+                .expect("express should have dependencies");
+            let order: Vec<String> = deps.keys().cloned().collect();
+            seen_orders.insert(order);
+        }
+
+        // With BTreeMap the iteration order is always sorted, so there is
+        // exactly 1 distinct order. With HashMap there are typically many.
+        assert_eq!(
+            seen_orders.len(),
+            1,
+            "dependency iteration order must be deterministic (found {} distinct orderings). This \
+             causes non-deterministic hashOfExternalDependencies across turbo invocations.",
+            seen_orders.len()
+        );
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/12252
+    ///
+    /// End-to-end: parse the same lockfile bytes multiple times and assert
+    /// that all_transitive_closures produces identical results every time.
+    #[test]
+    fn test_transitive_closure_deterministic_across_parses() {
+        let yaml = r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  apps/web:
+    dependencies:
+      react:
+        specifier: 18.2.0
+        version: 18.2.0
+      react-dom:
+        specifier: 18.2.0
+        version: 18.2.0(react@18.2.0)
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+      express:
+        specifier: 4.18.2
+        version: 4.18.2
+      axios:
+        specifier: 1.6.0
+        version: 1.6.0
+      zod:
+        specifier: 3.22.0
+        version: 3.22.0
+      dayjs:
+        specifier: 1.11.10
+        version: 1.11.10
+      uuid:
+        specifier: 9.0.0
+        version: 9.0.0
+      chalk:
+        specifier: 5.3.0
+        version: 5.3.0
+      commander:
+        specifier: 11.1.0
+        version: 11.1.0
+
+  packages/ui:
+    dependencies:
+      react:
+        specifier: 18.2.0
+        version: 18.2.0
+      classnames:
+        specifier: 2.3.2
+        version: 2.3.2
+      lodash:
+        specifier: 4.17.21
+        version: 4.17.21
+      tslib:
+        specifier: 2.6.2
+        version: 2.6.2
+      prop-types:
+        specifier: 15.8.1
+        version: 15.8.1
+      csstype:
+        specifier: 3.1.2
+        version: 3.1.2
+
+packages:
+
+  react@18.2.0:
+    resolution: {integrity: sha512-aaa}
+
+  react-dom@18.2.0:
+    resolution: {integrity: sha512-bbb}
+
+  lodash@4.17.21:
+    resolution: {integrity: sha512-ccc}
+
+  express@4.18.2:
+    resolution: {integrity: sha512-ddd}
+
+  axios@1.6.0:
+    resolution: {integrity: sha512-eee}
+
+  zod@3.22.0:
+    resolution: {integrity: sha512-fff}
+
+  dayjs@1.11.10:
+    resolution: {integrity: sha512-ggg}
+
+  uuid@9.0.0:
+    resolution: {integrity: sha512-hhh}
+
+  chalk@5.3.0:
+    resolution: {integrity: sha512-iii}
+
+  commander@11.1.0:
+    resolution: {integrity: sha512-jjj}
+
+  classnames@2.3.2:
+    resolution: {integrity: sha512-kkk}
+
+  tslib@2.6.2:
+    resolution: {integrity: sha512-lll}
+
+  prop-types@15.8.1:
+    resolution: {integrity: sha512-mmm}
+
+  csstype@3.1.2:
+    resolution: {integrity: sha512-nnn}
+
+  loose-envify@1.4.0:
+    resolution: {integrity: sha512-ooo}
+
+  js-tokens@4.0.0:
+    resolution: {integrity: sha512-ppp}
+
+  scheduler@0.23.0:
+    resolution: {integrity: sha512-qqq}
+
+  object-assign@4.1.1:
+    resolution: {integrity: sha512-rrr}
+
+  react-is@16.13.1:
+    resolution: {integrity: sha512-sss}
+
+  follow-redirects@1.15.3:
+    resolution: {integrity: sha512-ttt}
+
+  body-parser@1.20.1:
+    resolution: {integrity: sha512-uuu}
+
+  content-type@1.0.5:
+    resolution: {integrity: sha512-vvv}
+
+  cookie@0.5.0:
+    resolution: {integrity: sha512-www}
+
+  debug@4.3.4:
+    resolution: {integrity: sha512-xxx}
+
+  ms@2.1.3:
+    resolution: {integrity: sha512-yyy}
+
+  form-data@4.0.0:
+    resolution: {integrity: sha512-zzz}
+
+  mime-types@2.1.35:
+    resolution: {integrity: sha512-aab}
+
+  mime-db@1.52.0:
+    resolution: {integrity: sha512-aac}
+
+  proxy-from-env@1.1.0:
+    resolution: {integrity: sha512-aad}
+
+snapshots:
+
+  react@18.2.0: {}
+
+  react-dom@18.2.0(react@18.2.0):
+    dependencies:
+      react: 18.2.0
+      loose-envify: 1.4.0
+      scheduler: 0.23.0
+
+  lodash@4.17.21: {}
+
+  express@4.18.2:
+    dependencies:
+      body-parser: 1.20.1
+      content-type: 1.0.5
+      cookie: 0.5.0
+      debug: 4.3.4
+
+  axios@1.6.0:
+    dependencies:
+      follow-redirects: 1.15.3
+      form-data: 4.0.0
+      proxy-from-env: 1.1.0
+
+  zod@3.22.0: {}
+
+  dayjs@1.11.10: {}
+
+  uuid@9.0.0: {}
+
+  chalk@5.3.0: {}
+
+  commander@11.1.0: {}
+
+  classnames@2.3.2: {}
+
+  tslib@2.6.2: {}
+
+  prop-types@15.8.1:
+    dependencies:
+      loose-envify: 1.4.0
+      object-assign: 4.1.1
+      react-is: 16.13.1
+
+  csstype@3.1.2: {}
+
+  loose-envify@1.4.0:
+    dependencies:
+      js-tokens: 4.0.0
+
+  js-tokens@4.0.0: {}
+
+  scheduler@0.23.0:
+    dependencies:
+      loose-envify: 1.4.0
+
+  object-assign@4.1.1: {}
+
+  react-is@16.13.1: {}
+
+  follow-redirects@1.15.3: {}
+
+  body-parser@1.20.1:
+    dependencies:
+      content-type: 1.0.5
+      debug: 4.3.4
+
+  content-type@1.0.5: {}
+
+  cookie@0.5.0: {}
+
+  debug@4.3.4:
+    dependencies:
+      ms: 2.1.3
+
+  ms@2.1.3: {}
+
+  form-data@4.0.0:
+    dependencies:
+      mime-types: 2.1.35
+
+  mime-types@2.1.35:
+    dependencies:
+      mime-db: 1.52.0
+
+  mime-db@1.52.0: {}
+
+  proxy-from-env@1.1.0: {}
+"#;
+
+        let iterations = 20;
+        let mut all_closures = Vec::with_capacity(iterations);
+
+        for _ in 0..iterations {
+            let lockfile = PnpmLockfile::from_bytes(yaml.as_bytes()).unwrap();
+
+            let mut workspaces = HashMap::new();
+            let web_deps: BTreeMap<String, String> = [
+                ("react", "18.2.0"),
+                ("react-dom", "18.2.0"),
+                ("lodash", "4.17.21"),
+                ("express", "4.18.2"),
+                ("axios", "1.6.0"),
+                ("zod", "3.22.0"),
+                ("dayjs", "1.11.10"),
+                ("uuid", "9.0.0"),
+                ("chalk", "5.3.0"),
+                ("commander", "11.1.0"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+            let ui_deps: BTreeMap<String, String> = [
+                ("react", "18.2.0"),
+                ("classnames", "2.3.2"),
+                ("lodash", "4.17.21"),
+                ("tslib", "2.6.2"),
+                ("prop-types", "15.8.1"),
+                ("csstype", "3.1.2"),
+            ]
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
+
+            workspaces.insert("apps/web".to_string(), web_deps);
+            workspaces.insert("packages/ui".to_string(), ui_deps);
+
+            let closures = crate::all_transitive_closures(&lockfile, workspaces, false).unwrap();
+            all_closures.push(closures);
+        }
+
+        let first = &all_closures[0];
+        for (i, closure) in all_closures.iter().enumerate().skip(1) {
+            assert_eq!(
+                first, closure,
+                "transitive closure differed between parse 0 and parse {i} (non-deterministic \
+                 HashMap iteration order)"
+            );
+        }
     }
 }
