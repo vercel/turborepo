@@ -7,7 +7,6 @@ use petgraph::Direction;
 use turborepo_engine::TaskNode;
 use turborepo_repository::change_mapper::{AllPackageChangeReason, PackageInclusionReason};
 use turborepo_task_id::TaskId;
-use turborepo_types::task_input_matching::{compile_globs, file_matches_compiled_inputs_path};
 
 use crate::{Error, QueryRun};
 
@@ -129,55 +128,15 @@ pub fn calculate_affected_tasks(
     let pkg_dep_graph = run.pkg_dep_graph();
 
     // Phase 1: Direct task affectedness — check each task's inputs against
-    // changed files.
-    let mut affected: HashMap<TaskId<'static>, TaskChangeReason> = HashMap::new();
-
-    for (pkg_name, reason) in &affected_packages {
-        let Some(pkg_info) = pkg_dep_graph.package_info(pkg_name) else {
-            continue;
-        };
-        let pkg_path = pkg_info.package_path();
-        let pkg_unix_path = pkg_path.to_unix();
-
-        // Check all changed files against each task's inputs. We pass the
-        // full changed_files set (not pre-filtered to the package directory)
-        // so that cross-package inputs from $TURBO_ROOT$ expansion
-        // (e.g. "../../jest.config.js") are matched correctly, consistent
-        // with the `turbo run --affected` path in task_change_detector.rs.
-        //
-        // TODO: This outer loop only visits tasks in *affected packages*.
-        // A task in a non-affected package that has $TURBO_ROOT$ inputs
-        // pointing to a changed file will be missed here but caught by
-        // the `turbo run --affected` path (which checks all tasks).
-        // Unify by iterating all engine tasks regardless of package.
-        for task_id in engine.task_ids() {
-            if task_id.package() != pkg_name.as_str() {
-                continue;
-            }
-
-            if affected.contains_key(task_id) {
-                continue;
-            }
-
-            if let Some(def) = engine.task_definition(task_id) {
-                let compiled = compile_globs(&def.inputs);
-                for file in &changed_files {
-                    if file_matches_compiled_inputs_path(file, &pkg_unix_path, &compiled) {
-                        affected.insert(
-                            task_id.clone(),
-                            TaskChangeReason::FileChanged {
-                                file_path: file.to_string(),
-                            },
-                        );
-                        break;
-                    }
-                }
-            } else {
-                // No task definition — conservatively mark as affected
-                affected.insert(task_id.clone(), reason_from_package_reason(reason));
-            }
-        }
-    }
+    // changed files. Uses the shared matching function that iterates ALL
+    // engine tasks regardless of package, so tasks with $TURBO_ROOT$ inputs
+    // in non-affected packages are correctly detected.
+    let matched =
+        turborepo_engine::match_tasks_against_changed_files(engine, pkg_dep_graph, &changed_files);
+    let mut affected: HashMap<TaskId<'static>, TaskChangeReason> = matched
+        .into_iter()
+        .map(|(task_id, file_path)| (task_id, TaskChangeReason::FileChanged { file_path }))
+        .collect();
 
     // Phase 2: Propagate through the task dependency graph via BFS.
     // If task B depends on task A and A is affected, B is also affected.
@@ -225,42 +184,203 @@ pub fn calculate_affected_tasks(
         .collect())
 }
 
-fn reason_from_package_reason(reason: &PackageInclusionReason) -> TaskChangeReason {
-    match reason {
-        PackageInclusionReason::DependencyChanged { dependency } => {
-            TaskChangeReason::PackageDependencyChanged {
-                package_name: dependency.to_string(),
-            }
+#[cfg(test)]
+mod tests {
+    use std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
+    };
+
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turborepo_engine::Building;
+    use turborepo_query_api::{AffectedPackagesError, BoundariesFuture};
+    use turborepo_repository::{
+        change_mapper::PackageInclusionReason,
+        discovery::{DiscoveryResponse, PackageDiscovery},
+        package_graph::{PackageGraph, PackageName},
+        package_json::PackageJson,
+        package_manager::PackageManager,
+    };
+    use turborepo_scm::SCM;
+    use turborepo_task_id::TaskId;
+    use turborepo_turbo_json::TurboJson;
+    use turborepo_types::{TaskDefinition, TaskInputs};
+
+    use super::*;
+    use crate::QueryRun;
+
+    struct MockDiscovery;
+
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            Ok(DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![],
+            })
         }
-        PackageInclusionReason::DependentChanged { dependent } => {
-            TaskChangeReason::PackageDependencyChanged {
-                package_name: dependent.to_string(),
-            }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            self.discover_packages().await
         }
-        PackageInclusionReason::LockfileChanged { .. } => TaskChangeReason::AllTasksChanged {
-            description: "lockfile changed".to_string(),
-        },
-        PackageInclusionReason::ConservativeRootLockfileChanged => {
-            TaskChangeReason::AllTasksChanged {
-                description: "root lockfile changed".to_string(),
-            }
+    }
+
+    async fn make_pkg_graph(repo_root: &AbsoluteSystemPath, packages: &[&str]) -> PackageGraph {
+        let mut pkgs = HashMap::new();
+        for name in packages {
+            let path = repo_root.join_components(&["packages", name, "package.json"]);
+            let pkg = PackageJson {
+                name: Some(turborepo_errors::Spanned::new(name.to_string())),
+                ..Default::default()
+            };
+            pkgs.insert(path, pkg);
         }
-        PackageInclusionReason::FileChanged { file } => TaskChangeReason::FileChanged {
-            file_path: file.to_string(),
-        },
-        PackageInclusionReason::InFilteredDirectory { directory } => {
-            TaskChangeReason::AllTasksChanged {
-                description: format!("in filtered directory: {directory}"),
-            }
+        PackageGraph::builder(repo_root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(pkgs))
+            .build()
+            .await
+            .unwrap()
+    }
+
+    fn make_engine(
+        tasks: &[(TaskId<'static>, TaskDefinition)],
+    ) -> turborepo_engine::Engine<turborepo_engine::Built, TaskDefinition> {
+        let mut engine: turborepo_engine::Engine<Building, TaskDefinition> =
+            turborepo_engine::Engine::new();
+        for (task_id, def) in tasks {
+            engine.get_index(task_id);
+            engine.add_definition(task_id.clone(), def.clone());
         }
-        PackageInclusionReason::IncludedByFilter { filters } => TaskChangeReason::AllTasksChanged {
-            description: format!("included by filter: {}", filters.join(", ")),
-        },
-        PackageInclusionReason::RootTask { task } => TaskChangeReason::AllTasksChanged {
-            description: format!("root task: {task}"),
-        },
-        PackageInclusionReason::All(_) => {
-            unreachable!("All case handled separately")
+        engine.seal()
+    }
+
+    struct MockQueryRun {
+        engine: turborepo_engine::Engine<turborepo_engine::Built, TaskDefinition>,
+        pkg_dep_graph: PackageGraph,
+        affected_packages: HashMap<PackageName, PackageInclusionReason>,
+        changed_files: HashSet<AnchoredSystemPathBuf>,
+        #[allow(dead_code)]
+        repo_root: AbsoluteSystemPathBuf,
+    }
+
+    impl QueryRun for MockQueryRun {
+        fn version(&self) -> &'static str {
+            "test"
         }
+
+        fn repo_root(&self) -> &AbsoluteSystemPath {
+            &self.repo_root
+        }
+
+        fn pkg_dep_graph(&self) -> &PackageGraph {
+            &self.pkg_dep_graph
+        }
+
+        fn engine(&self) -> &turborepo_engine::Engine<turborepo_engine::Built, TaskDefinition> {
+            &self.engine
+        }
+
+        fn scm(&self) -> &SCM {
+            unimplemented!("not needed for affected_tasks tests")
+        }
+
+        fn root_turbo_json(&self) -> &TurboJson {
+            unimplemented!("not needed for affected_tasks tests")
+        }
+
+        fn calculate_affected_packages(
+            &self,
+            _base: Option<String>,
+            _head: Option<String>,
+        ) -> Result<HashMap<PackageName, PackageInclusionReason>, AffectedPackagesError> {
+            Ok(self.affected_packages.clone())
+        }
+
+        fn changed_files(
+            &self,
+            _base: Option<&str>,
+            _head: Option<&str>,
+        ) -> Result<HashSet<AnchoredSystemPathBuf>, AffectedPackagesError> {
+            Ok(self.changed_files.clone())
+        }
+
+        fn check_boundaries(&self, _show_progress: bool) -> BoundariesFuture<'_> {
+            unimplemented!("not needed for affected_tasks tests")
+        }
+    }
+
+    /// Regression test: a task in a non-affected package that has
+    /// $TURBO_ROOT$ inputs (resolved to ../../ paths) pointing to a changed
+    /// root file should be detected as affected.
+    ///
+    /// The `turbo run --affected` path (task_change_detector.rs) iterates
+    /// ALL engine tasks and catches this. The query path must do the same.
+    #[tokio::test]
+    async fn turbo_root_input_in_non_affected_package_is_detected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "lib-b"]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let b_build = TaskId::new("lib-b", "build");
+
+        let engine = make_engine(&[
+            // lib-a: default inputs (matches files in packages/lib-a/**)
+            (a_build.clone(), TaskDefinition::default()),
+            // lib-b: has a $TURBO_ROOT$ input that resolved to ../../config.txt
+            (
+                b_build.clone(),
+                TaskDefinition {
+                    inputs: TaskInputs {
+                        globs: vec!["../../config.txt".to_string()],
+                        default: true,
+                    },
+                    ..Default::default()
+                },
+            ),
+        ]);
+
+        // Only lib-a is in the affected packages set (a source file changed).
+        // lib-b is NOT affected at the package level.
+        let mut affected_packages = HashMap::new();
+        affected_packages.insert(
+            PackageName::from("lib-a"),
+            PackageInclusionReason::FileChanged {
+                file: AnchoredSystemPathBuf::from_raw("packages/lib-a/src/index.ts").unwrap(),
+            },
+        );
+
+        // Changed files: a root-level config file AND a file in lib-a.
+        let changed_files: HashSet<AnchoredSystemPathBuf> =
+            ["config.txt", "packages/lib-a/src/index.ts"]
+                .iter()
+                .map(|f| AnchoredSystemPathBuf::from_raw(f).unwrap())
+                .collect();
+
+        let mock: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            engine,
+            pkg_dep_graph: pkg_graph,
+            affected_packages,
+            changed_files,
+            repo_root: root.to_owned(),
+        });
+
+        let result = calculate_affected_tasks(&mock, None, None).unwrap();
+
+        let affected_ids: HashSet<_> = result.iter().map(|at| at.task_id.clone()).collect();
+
+        assert!(
+            affected_ids.contains(&a_build),
+            "lib-a#build should be affected (source file changed)"
+        );
+        assert!(
+            affected_ids.contains(&b_build),
+            "lib-b#build should be affected ($TURBO_ROOT$ input config.txt changed), but the \
+             query path only visited tasks in affected packages and missed it"
+        );
     }
 }

@@ -8,6 +8,7 @@
 // errors are already established patterns in the codebase
 #![allow(clippy::result_large_err)]
 
+pub mod affected;
 mod builder;
 mod builder_error;
 mod builder_errors;
@@ -24,6 +25,7 @@ use std::{
     fmt,
 };
 
+pub use affected::match_tasks_against_changed_files;
 pub use builder::{EngineBuilder, TaskInheritanceResolver, ValidationMode};
 pub use builder_error::Error as BuilderError;
 pub use builder_errors::{
