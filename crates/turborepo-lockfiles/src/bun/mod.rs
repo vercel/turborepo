@@ -88,7 +88,12 @@
 //! - [`PackageEntry`]: External package representation
 //! - [`LockfileVersion`]: Version enum for format compatibility
 
-use std::{any::Any, collections::HashMap, str::FromStr, sync::OnceLock};
+use std::{
+    any::Any,
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+    sync::OnceLock,
+};
 
 use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
@@ -588,8 +593,10 @@ impl Lockfile for BunLockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::borrow::Cow<'_, std::collections::HashMap<String, String>>>, crate::Error>
-    {
+    ) -> Result<
+        Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>,
+        crate::Error,
+    > {
         let entry_key = self
             .key_to_entry
             .get(key)
@@ -600,7 +607,7 @@ impl Lockfile for BunLockfile {
             .get(entry_key)
             .ok_or_else(|| crate::Error::MissingPackage(key.into()))?;
 
-        let mut deps = HashMap::new();
+        let mut deps = std::collections::BTreeMap::new();
 
         let Some(info) = &entry.info else {
             return Ok(Some(std::borrow::Cow::Owned(deps)));
@@ -1612,11 +1619,11 @@ impl BunLockfile {
         };
 
         // Collect workspace dependencies
-        let workspace_deps: HashMap<String, HashMap<String, String>> = pruned_data
+        let workspace_deps: HashMap<String, BTreeMap<String, String>> = pruned_data
             .workspaces
             .iter()
             .map(|(ws_path, ws_entry)| {
-                let mut deps = HashMap::new();
+                let mut deps = BTreeMap::new();
                 if let Some(d) = &ws_entry.dependencies {
                     deps.extend(d.clone());
                 }
@@ -2534,7 +2541,7 @@ mod test {
         let lockfile = BunLockfile::from_str(&contents).unwrap();
 
         // Simulate what turbo prune would call: Get transitive closure first
-        let unresolved_deps: std::collections::HashMap<String, String> =
+        let unresolved_deps: std::collections::BTreeMap<String, String> =
             [("@hookform/resolvers".to_string(), "^5.0.1".to_string())]
                 .into_iter()
                 .collect();
@@ -3094,7 +3101,7 @@ mod test {
         let lockfile = BunLockfile::from_str(&contents).unwrap();
 
         // Compute transitive closure for app1 (simulating turbo prune --scope=app1)
-        let mut app1_deps = std::collections::HashMap::new();
+        let mut app1_deps = std::collections::BTreeMap::new();
         app1_deps.insert("color".to_string(), "^5.0.3".to_string());
         app1_deps.insert("express-winston".to_string(), "4.2.0".to_string());
 
@@ -3229,7 +3236,7 @@ mod test {
         // Prune for apps/web only. The transitive closure includes
         // negotiator@0.6.3 (via accepts) but NOT negotiator@0.6.4 (only
         // needed by compression, which is in apps/admin).
-        let mut web_deps = std::collections::HashMap::new();
+        let mut web_deps = std::collections::BTreeMap::new();
         web_deps.insert("express".to_string(), "^4.18.0".to_string());
         let closure = crate::transitive_closure(&lockfile, "apps/web", web_deps, false).unwrap();
         let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
@@ -3306,7 +3313,7 @@ mod test {
         // chalk/ansi-styles -> chalk/ansi-styles/color-convert ->
         // chalk/ansi-styles/color-convert/color-name but NOT the hoisted
         // ansi-styles@4.3.0, color-convert@2.0.1, or color-name@2.1.0.
-        let mut web_deps = std::collections::HashMap::new();
+        let mut web_deps = std::collections::BTreeMap::new();
         web_deps.insert("express-winston".to_string(), "4.2.0".to_string());
         let closure = crate::transitive_closure(&lockfile, "apps/web", web_deps, false).unwrap();
         let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
@@ -3406,7 +3413,7 @@ mod test {
         );
 
         // Prune to just the api workspace
-        let mut api_deps = std::collections::HashMap::new();
+        let mut api_deps = std::collections::BTreeMap::new();
         api_deps.insert(
             "@api/sdk".to_string(),
             "file:apps/api/.api/apis/sdk".to_string(),

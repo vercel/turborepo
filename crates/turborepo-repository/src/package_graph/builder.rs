@@ -564,7 +564,9 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
 }
 
 impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
-    fn all_external_dependencies(&self) -> Result<HashMap<String, HashMap<String, String>>, Error> {
+    fn all_external_dependencies(
+        &self,
+    ) -> Result<HashMap<String, BTreeMap<String, String>>, Error> {
         self.workspaces
             .values()
             .map(|entry| {

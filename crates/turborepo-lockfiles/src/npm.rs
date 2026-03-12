@@ -153,12 +153,13 @@ impl Lockfile for NpmLockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::borrow::Cow<'_, HashMap<String, String>>>, Error> {
+    ) -> Result<Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>, Error>
+    {
         let Some(pkg) = self.packages.get(key) else {
             return Ok(None);
         };
 
-        let mut deps = HashMap::new();
+        let mut deps = std::collections::BTreeMap::new();
         let mut buf = String::new();
         for name in pkg.dep_keys() {
             if let Some((resolved_key, version)) = self.find_dep_in_lockfile(key, name, &mut buf)? {
