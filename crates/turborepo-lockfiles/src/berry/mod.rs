@@ -558,15 +558,17 @@ impl Lockfile for BerryLockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::borrow::Cow<'_, std::collections::HashMap<String, String>>>, crate::Error>
-    {
+    ) -> Result<
+        Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>,
+        crate::Error,
+    > {
         let locator = Locator::try_from(key).map_err(Error::from)?;
 
         let Some(package) = self.locator_package.get(&locator) else {
             return Ok(None);
         };
 
-        let mut map = HashMap::new();
+        let mut map = std::collections::BTreeMap::new();
         for (name, version) in package.dependencies.iter().flatten() {
             let mut dependency = Descriptor::new(name, version.as_ref()).unwrap();
             for (resolution, reference) in &self.overrides {
