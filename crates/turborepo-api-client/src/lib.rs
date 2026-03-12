@@ -649,23 +649,22 @@ impl APIClient {
 
     /// Creates a request builder with the standard API timeout applied.
     fn api_request(&self, method: Method, url: impl reqwest::IntoUrl) -> RequestBuilder {
-        let builder = self.client.request(method, url);
-        match self.timeout {
-            Some(dur) => builder.timeout(dur),
-            None => builder,
+        let mut builder = self.client.request(method, url);
+        if let Some(dur) = self.timeout {
+            builder = builder.timeout(dur);
         }
+        add_ai_agent_header(builder)
     }
 
     /// Creates a request builder with upload timeout semantics:
     /// connect_timeout is set on the shared client, and the total
     /// request timeout uses upload_timeout (falling back to api timeout).
     fn upload_request(&self, method: Method, url: impl reqwest::IntoUrl) -> RequestBuilder {
-        let builder = self.client.request(method, url);
-        let effective_timeout = self.upload_timeout.or(self.timeout);
-        match effective_timeout {
-            Some(dur) => builder.timeout(dur),
-            None => builder,
+        let mut builder = self.client.request(method, url);
+        if let Some(dur) = self.upload_timeout.or(self.timeout) {
+            builder = builder.timeout(dur);
         }
+        add_ai_agent_header(builder)
     }
 
     #[tracing::instrument(skip_all)]
@@ -844,6 +843,13 @@ impl AnonAPIClient {
             base_url: base_url.as_ref().to_string(),
             user_agent,
         }
+    }
+}
+
+pub(crate) fn add_ai_agent_header(builder: RequestBuilder) -> RequestBuilder {
+    match turborepo_ai_agents::get_agent() {
+        Some(agent) => builder.header("x-ai-agent", agent),
+        None => builder,
     }
 }
 

@@ -3,7 +3,7 @@ use std::future::Future;
 use reqwest::Method;
 use turborepo_vercel_api::telemetry::TelemetryEvent;
 
-use crate::{AnonAPIClient, Error, SharedHttpClient, build_user_agent, retry};
+use crate::{AnonAPIClient, Error, SharedHttpClient, add_ai_agent_header, build_user_agent, retry};
 
 const TELEMETRY_ENDPOINT: &str = "/api/turborepo/v1/events";
 
@@ -24,14 +24,15 @@ impl TelemetryClient for AnonAPIClient {
         session_id: &str,
     ) -> Result<(), Error> {
         let url = self.make_url(TELEMETRY_ENDPOINT);
-        let telemetry_request = self
-            .client
-            .request(Method::POST, url)
-            .header("User-Agent", self.user_agent.clone())
-            .header("Content-Type", "application/json")
-            .header("x-turbo-telemetry-id", telemetry_id)
-            .header("x-turbo-session-id", session_id)
-            .json(&events);
+        let telemetry_request = add_ai_agent_header(
+            self.client
+                .request(Method::POST, url)
+                .header("User-Agent", self.user_agent.clone())
+                .header("Content-Type", "application/json")
+                .header("x-turbo-telemetry-id", telemetry_id)
+                .header("x-turbo-session-id", session_id)
+                .json(&events),
+        );
 
         retry::make_retryable_request(telemetry_request, retry::RetryStrategy::Timeout)
             .await?
@@ -70,13 +71,15 @@ impl TelemetryClient for DeferredTelemetryClient {
         let client = self.http_client.get_or_init().await?;
 
         let url = format!("{}{}", self.base_url, TELEMETRY_ENDPOINT);
-        let telemetry_request = client
-            .request(Method::POST, url)
-            .header("User-Agent", self.user_agent.clone())
-            .header("Content-Type", "application/json")
-            .header("x-turbo-telemetry-id", telemetry_id)
-            .header("x-turbo-session-id", session_id)
-            .json(&events);
+        let telemetry_request = add_ai_agent_header(
+            client
+                .request(Method::POST, url)
+                .header("User-Agent", self.user_agent.clone())
+                .header("Content-Type", "application/json")
+                .header("x-turbo-telemetry-id", telemetry_id)
+                .header("x-turbo-session-id", session_id)
+                .json(&events),
+        );
 
         retry::make_retryable_request(telemetry_request, retry::RetryStrategy::Timeout)
             .await?
