@@ -66,6 +66,10 @@ pub struct RunBuilder {
     // that trigger the file watcher, causing an infinite rebuild loop.
     output_watcher: Option<Arc<dyn turborepo_run_cache::OutputWatcher>>,
     query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+    // In watch mode with `watchUsingTaskInputs`, the file watcher provides
+    // the set of changed files that triggered the rebuild. Used to filter
+    // the engine down to only tasks whose declared inputs match.
+    changed_files_for_watch: Option<HashSet<turbopath::AnchoredSystemPathBuf>>,
 }
 
 impl RunBuilder {
@@ -105,6 +109,7 @@ impl RunBuilder {
             add_all_tasks: false,
             output_watcher: None,
             query_server: None,
+            changed_files_for_watch: None,
         })
     }
 
@@ -128,6 +133,11 @@ impl RunBuilder {
 
     pub fn hide_prelude(mut self) -> Self {
         self.should_print_prelude_override = Some(false);
+        self
+    }
+
+    pub fn with_changed_files(mut self, files: HashSet<turbopath::AnchoredSystemPathBuf>) -> Self {
+        self.changed_files_for_watch = Some(files);
         self
     }
 
@@ -719,10 +729,55 @@ impl RunBuilder {
 
         let mut engine = builder.build()?;
 
+        // In watch mode with the future flag, filter the engine to only tasks
+        // whose declared inputs match the changed files.
+        //
+        // When active, this REPLACES create_engine_for_subgraph because:
+        // 1. retain_affected_tasks already selects the correct tasks + dependents
+        // 2. The entrypoint packages (from file watcher events) may not overlap with
+        //    the affected tasks (e.g. a $TURBO_ROOT$ input in another package)
+        // 3. retain_affected_tasks requires the Root sentinel node, which
+        //    create_engine_for_subgraph removes
+        let watch_task_filtered = if let Some(ref changed_files) = self.changed_files_for_watch {
+            if self.opts.future_flags.watch_using_task_inputs && !changed_files.is_empty() {
+                // Only consider files that still exist on disk. Editor temp
+                // files (vim 4913, *~ backups, etc.) are created and deleted
+                // within the same watcher batch. The hash algorithm only sees
+                // files that exist, so input matching should too.
+                let existing_files: std::collections::HashSet<_> = changed_files
+                    .iter()
+                    .filter(|f| self.repo_root.resolve(f).exists())
+                    .cloned()
+                    .collect();
+
+                let total_tasks = engine.task_ids().count();
+                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                    &engine,
+                    pkg_dep_graph,
+                    &existing_files,
+                    root_turbo_json.global_deps.as_slice(),
+                );
+                tracing::info!(
+                    total_tasks,
+                    affected_tasks = affected_tasks.len(),
+                    changed_files = existing_files.len(),
+                    "watch task-level input filtering complete"
+                );
+                engine = engine.retain_affected_tasks(&affected_tasks);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
         // If we have an initial task, we prune out the engine to only
         // tasks that are reachable from that initial task.
-        if let Some(entrypoint_packages) = &self.entrypoint_packages {
-            engine = engine.create_engine_for_subgraph(entrypoint_packages);
+        if !watch_task_filtered {
+            if let Some(entrypoint_packages) = &self.entrypoint_packages {
+                engine = engine.create_engine_for_subgraph(entrypoint_packages);
+            }
         }
 
         if !self.opts.run_opts.parallel && self.should_validate_engine {

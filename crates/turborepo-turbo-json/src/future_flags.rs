@@ -60,6 +60,12 @@ pub struct FutureFlags {
     /// selecting all tasks in changed packages.
     #[serde(default)]
     pub affected_using_task_inputs: bool,
+    /// Use task-level `inputs` globs to determine which tasks to re-run when
+    /// files change in `turbo watch`. When enabled, only tasks whose declared
+    /// inputs match the changed files are re-executed, rather than re-running
+    /// all tasks in changed packages.
+    #[serde(default)]
+    pub watch_using_task_inputs: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and
@@ -75,25 +81,27 @@ impl TS for FutureFlags {
 
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean }"
+         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean }"
+         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean }"
             .to_string()
     }
 
     fn decl() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
-         longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean };"
+         longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
+         boolean };"
             .to_string()
     }
 
     fn decl_concrete() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
-         longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean };"
+         longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
+         boolean };"
             .to_string()
     }
 

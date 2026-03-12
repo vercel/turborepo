@@ -141,8 +141,10 @@ enum FileChangeAction {
     /// `ConfigChanged` so callers can log at the appropriate severity.
     MapperFailed,
     /// Files changed that map to specific packages (after gitignore
-    /// and .git filtering, before watched-package filtering)
-    PackagesChanged(PackageChanges),
+    /// and .git filtering, before watched-package filtering).
+    /// The second field carries the filtered file set for task-level
+    /// input matching in watch mode.
+    PackagesChanged(PackageChanges, HashSet<AnchoredSystemPathBuf>),
     /// All changed files were filtered out (gitignored, .git, etc.)
     NoRelevantChanges,
 }
@@ -194,8 +196,8 @@ fn classify_changed_files(
         return FileChangeAction::NoRelevantChanges;
     }
 
-    match change_mapper.changed_packages(changed_files, LockfileContents::Unchanged) {
-        Ok(changes) => FileChangeAction::PackagesChanged(changes),
+    match change_mapper.changed_packages(changed_files.clone(), LockfileContents::Unchanged) {
+        Ok(changes) => FileChangeAction::PackagesChanged(changes, changed_files),
         Err(err) => {
             tracing::warn!(
                 ?err,
@@ -543,10 +545,13 @@ impl Subscriber {
                     FileChangeAction::NoRelevantChanges => {
                         continue;
                     }
-                    FileChangeAction::PackagesChanged(PackageChanges::All(_)) => {
+                    FileChangeAction::PackagesChanged(PackageChanges::All(_), _) => {
                         rediscover!(self, repo_state, root_gitignore, change_mapper);
                     }
-                    FileChangeAction::PackagesChanged(PackageChanges::Some(filtered_pkgs)) => {
+                    FileChangeAction::PackagesChanged(
+                        PackageChanges::Some(filtered_pkgs),
+                        changed_files,
+                    ) => {
                         let mut filtered_pkgs: HashSet<WorkspacePackage> =
                             filtered_pkgs.into_keys().collect();
                         // Only propagate root package changes when the config defines
@@ -561,11 +566,13 @@ impl Subscriber {
                             }
                         }
 
+                        let changed_files = Arc::new(changed_files);
                         for pkg in filtered_pkgs {
                             if !self.is_same_hash(&pkg, &mut package_file_hashes).await {
                                 let _ = self.package_change_events_tx.send(
                                     PackageChangeEvent::Package {
                                         name: pkg.name.clone(),
+                                        changed_files: changed_files.clone(),
                                     },
                                 );
                             }
@@ -846,7 +853,7 @@ mod test {
         assert!(
             matches!(
                 action,
-                FileChangeAction::PackagesChanged(PackageChanges::Some(_))
+                FileChangeAction::PackagesChanged(PackageChanges::Some(_), _)
             ),
             "expected PackagesChanged(Some) for .gitignore in trie, got {action:?}"
         );
@@ -868,7 +875,7 @@ mod test {
 
         let action = f.classify(&trie, &["node_modules/"], None);
         match action {
-            FileChangeAction::PackagesChanged(PackageChanges::Some(pkgs)) => {
+            FileChangeAction::PackagesChanged(PackageChanges::Some(pkgs), _) => {
                 let pkg_names: HashSet<_> = pkgs.keys().map(|p| p.name.to_string()).collect();
                 assert!(
                     pkg_names.contains("a"),
@@ -943,7 +950,7 @@ mod test {
 
         let action = f.classify(&trie, &["node_modules/"], None);
         match action {
-            FileChangeAction::PackagesChanged(PackageChanges::Some(pkgs)) => {
+            FileChangeAction::PackagesChanged(PackageChanges::Some(pkgs), _) => {
                 let pkg_names: HashSet<_> = pkgs.keys().map(|p| p.name.to_string()).collect();
                 assert!(
                     pkg_names.contains("a"),
@@ -970,7 +977,7 @@ mod test {
         let action = f.classify(&trie, &[], None);
         assert!(matches!(
             action,
-            FileChangeAction::PackagesChanged(PackageChanges::Some(_))
+            FileChangeAction::PackagesChanged(PackageChanges::Some(_), _)
         ));
     }
 
@@ -990,7 +997,7 @@ mod test {
 
         let action = f.classify(&trie, &[], None);
         assert!(
-            matches!(action, FileChangeAction::PackagesChanged(_)),
+            matches!(action, FileChangeAction::PackagesChanged(_, _)),
             "expected PackagesChanged for lockfile change, got {action:?}"
         );
     }
@@ -1246,7 +1253,7 @@ mod test {
         let action = classify_changed_files(&trie, &repo_root, &gitignore, None, &change_mapper);
 
         match &action {
-            FileChangeAction::PackagesChanged(PackageChanges::Some(pkgs)) => {
+            FileChangeAction::PackagesChanged(PackageChanges::Some(pkgs), _) => {
                 let names: Vec<_> = pkgs.keys().map(|p| p.name.to_string()).collect();
                 assert!(names.contains(&"a".to_string()), "got {:?}", names);
             }
