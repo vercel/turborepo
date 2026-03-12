@@ -824,15 +824,16 @@ pub async fn run_app(
 }
 
 /// Check if an event indicates we need to start rendering the TUI.
-/// We start rendering when we receive a cache miss, meaning a task will
-/// actually run.
+/// We start rendering when we receive a cache miss (meaning a task will
+/// actually run) or when tasks are updated (which only happens in watch mode,
+/// where the TUI must always render so the user can see status and interact).
 fn should_start_terminal(event: &Event) -> bool {
     matches!(
         event,
         Event::Status {
             result: CacheResult::Miss,
             ..
-        }
+        } | Event::UpdateTasks { .. }
     )
 }
 
@@ -2235,6 +2236,19 @@ mod test {
     }
 
     #[test]
+    fn test_should_start_terminal_on_update_tasks() {
+        // UpdateTasks should trigger terminal start (this event is only sent
+        // in watch mode, where the TUI must always render)
+        let update_event = Event::UpdateTasks {
+            tasks: vec!["task-a".to_string()],
+        };
+        assert!(
+            super::should_start_terminal(&update_event),
+            "terminal should start on UpdateTasks event (watch mode)"
+        );
+    }
+
+    #[test]
     fn test_should_not_start_terminal_on_other_events() {
         // Other events should NOT trigger terminal start
         let start_event = Event::StartTask {
@@ -2473,6 +2487,67 @@ mod test {
             app.tasks_by_status.finished.len(),
             0,
             "task should no longer be in finished"
+        );
+
+        Ok(())
+    }
+
+    /// Regression test for watch mode hanging when all tasks hit cache.
+    ///
+    /// Before the fix, `should_start_terminal` only matched
+    /// `CacheResult::Miss`. In watch mode the TUI is never stopped between
+    /// runs, so when every task was a cache hit the terminal was never
+    /// initialized and the user saw a blank screen with a cursor (appearing
+    /// to hang). The fix makes `should_start_terminal` also match
+    /// `UpdateTasks` (only sent in watch mode) so the TUI always renders.
+    ///
+    /// This test replays the exact event sequence that watch mode produces when
+    /// all tasks hit cache, verifying:
+    /// 1. `should_start_terminal` fires on the `UpdateTasks` event
+    /// 2. The app correctly processes all subsequent cache-hit events
+    /// 3. The app is NOT marked done (watch mode keeps running)
+    #[test]
+    fn test_watch_mode_all_cache_hits_does_not_hang() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let tasks = vec!["build#app-a".to_string(), "build#app-b".to_string()];
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            tasks.clone(),
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Simulate the watch mode event sequence for an all-cache-hit run.
+        // In watch mode, execute_run sends UpdateTasks before spawning the run.
+        let update_event = Event::UpdateTasks {
+            tasks: tasks.clone(),
+        };
+        assert!(
+            super::should_start_terminal(&update_event),
+            "UpdateTasks must trigger terminal initialization in watch mode"
+        );
+
+        // The run proceeds: each task gets StartTask, Status(Hit), EndTask(CacheHit).
+        for task in &tasks {
+            app.start_task(task, OutputLogs::Full)?;
+            app.set_status(task.clone(), "cached".to_string(), CacheResult::Hit)?;
+            app.finish_task(task, TaskResult::CacheHit)?;
+        }
+
+        // All tasks finished with cache hits
+        assert_eq!(app.tasks_by_status.finished.len(), 2);
+        assert_eq!(app.tasks_by_status.running.len(), 0);
+
+        // In watch mode, the TUI must NOT be marked done after a run completes
+        // (the visitor skips sending Event::Stop when is_watch=true).
+        assert!(
+            !app.done,
+            "app must not be done after a watch run completes — it waits for file changes"
         );
 
         Ok(())
