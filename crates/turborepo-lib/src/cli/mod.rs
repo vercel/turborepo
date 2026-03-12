@@ -425,6 +425,15 @@ impl Args {
             }
         }
 
+        if let Some(Command::Prune { ref scope, .. }) = clap_args.command {
+            if scope.is_some() {
+                warn!(
+                    "--scope is deprecated and will be removed in a future major version. Use \
+                     positional arguments instead (e.g. `turbo prune web`)"
+                );
+            }
+        }
+
         clap_args
     }
 
@@ -727,6 +736,8 @@ pub enum Command {
     Info,
     /// Prepare a subset of your monorepo.
     Prune {
+        /// DEPRECATED: Use positional arguments instead
+        /// (e.g. `turbo prune web`)
         #[clap(hide = true, long)]
         scope: Option<Vec<String>>,
         /// Workspaces that should be included in the subset
