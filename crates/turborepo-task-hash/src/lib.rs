@@ -33,7 +33,7 @@ use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{generic::GenericEventBuilder, task::PackageTaskEventBuilder};
 use turborepo_types::{
     EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
-    TaskDefinitionHashInfo, TaskInputs,
+    TaskDefinitionHashInfo,
 };
 
 #[derive(Debug, Error)]
@@ -75,6 +75,43 @@ pub struct PackageInputsHashes {
     expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,
 }
 
+/// Translates root-relative global dep globs into package-relative globs.
+///
+/// For a package at `packages/foo`, the glob `config.json` becomes
+/// `../../config.json`. A negated glob `!config.json` becomes
+/// `!../../config.json`. For the root package (empty path), globs pass
+/// through unchanged.
+pub fn translate_global_globs_for_package(
+    global_globs: &[String],
+    package_path: &AnchoredSystemPath,
+) -> Vec<String> {
+    if global_globs.is_empty() {
+        return Vec::new();
+    }
+
+    let path_str = package_path.as_str();
+    if path_str.is_empty() {
+        return global_globs.to_vec();
+    }
+
+    // Count path components to build the "../.." prefix
+    let depth = path_str.split(std::path::MAIN_SEPARATOR).count();
+    let prefix: String = (0..depth)
+        .map(|i| if i == 0 { ".." } else { "/.." })
+        .collect();
+
+    global_globs
+        .iter()
+        .map(|glob| {
+            if let Some(without_neg) = glob.strip_prefix('!') {
+                format!("!{prefix}/{without_neg}")
+            } else {
+                format!("{prefix}/{glob}")
+            }
+        })
+        .collect()
+}
+
 impl PackageInputsHashes {
     #[tracing::instrument(skip(
         all_tasks,
@@ -94,6 +131,7 @@ impl PackageInputsHashes {
         _telemetry: &GenericEventBuilder,
         pre_built_index: Option<&RepoGitIndex>,
         needs_expanded_hashes: bool,
+        global_input_globs: &[String],
     ) -> Result<PackageInputsHashes, Error>
     where
         T: TaskDefinitionHashInfo + Sync,
@@ -116,7 +154,8 @@ impl PackageInputsHashes {
         struct TaskInfo<'b> {
             task_id: TaskId<'static>,
             package_path: &'b AnchoredSystemPath,
-            inputs: &'b TaskInputs,
+            globs: Vec<String>,
+            default: bool,
         }
 
         let mut task_infos = Vec::new();
@@ -136,10 +175,24 @@ impl PackageInputsHashes {
                 .parent()
                 .unwrap_or_else(|| AnchoredSystemPath::new("").unwrap());
             let inputs = task_definition.inputs();
+
+            // When globalInputsAsTaskInputs is enabled, prepend translated
+            // global dep globs to each task's input globs so that tasks can
+            // negate specific global inputs.
+            let globs = if global_input_globs.is_empty() {
+                inputs.globs.clone()
+            } else {
+                let mut translated =
+                    translate_global_globs_for_package(global_input_globs, package_path);
+                translated.extend(inputs.globs.iter().cloned());
+                translated
+            };
+
             task_infos.push(TaskInfo {
                 task_id: task_id.clone(),
                 package_path,
-                inputs,
+                globs,
+                default: inputs.default,
             });
         }
 
@@ -152,8 +205,8 @@ impl PackageInputsHashes {
         for info in &task_infos {
             let key: HashKey = (
                 info.package_path.to_owned(),
-                info.inputs.globs.clone(),
-                info.inputs.default,
+                info.globs.clone(),
+                info.default,
             );
             let idx = match key_indices.entry(key) {
                 std::collections::hash_map::Entry::Occupied(e) => *e.get(),
@@ -1075,5 +1128,55 @@ mod test {
         // But expanded inputs must return None, not panic
         assert!(tracker.get_expanded_inputs(&task_id).is_none());
         assert!(HashTrackerInfo::expanded_inputs(&tracker, &task_id).is_none());
+    }
+
+    #[test]
+    fn test_translate_global_globs_for_nested_package() {
+        let package_path = AnchoredSystemPath::new("packages/foo").unwrap();
+        let globs = vec!["config.json".to_string(), "!secret.txt".to_string()];
+
+        let result = translate_global_globs_for_package(&globs, package_path);
+
+        assert_eq!(result, vec!["../../config.json", "!../../secret.txt"]);
+    }
+
+    #[test]
+    fn test_translate_global_globs_for_root_package() {
+        let package_path = AnchoredSystemPath::new("").unwrap();
+        let globs = vec!["config.json".to_string(), "!secret.txt".to_string()];
+
+        let result = translate_global_globs_for_package(&globs, package_path);
+
+        assert_eq!(result, vec!["config.json", "!secret.txt"]);
+    }
+
+    #[test]
+    fn test_translate_global_globs_for_deeply_nested_package() {
+        let package_path = AnchoredSystemPath::new("packages/deeply/nested").unwrap();
+        let globs = vec!["dir/file.txt".to_string()];
+
+        let result = translate_global_globs_for_package(&globs, package_path);
+
+        assert_eq!(result, vec!["../../../dir/file.txt"]);
+    }
+
+    #[test]
+    fn test_translate_global_globs_with_wildcards() {
+        let package_path = AnchoredSystemPath::new("apps/web").unwrap();
+        let globs = vec!["config/**".to_string(), "!config/**/*.md".to_string()];
+
+        let result = translate_global_globs_for_package(&globs, package_path);
+
+        assert_eq!(result, vec!["../../config/**", "!../../config/**/*.md"]);
+    }
+
+    #[test]
+    fn test_translate_global_globs_empty() {
+        let package_path = AnchoredSystemPath::new("packages/foo").unwrap();
+        let globs: Vec<String> = vec![];
+
+        let result = translate_global_globs_for_package(&globs, package_path);
+
+        assert!(result.is_empty());
     }
 }

@@ -709,6 +709,15 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   longerSignatureKey?: boolean;
+  /**
+   * Treat `globalDependencies` as implicit task inputs prepended to every
+   * task's input globs instead of folding them into the global hash. This
+   * allows individual tasks to negate specific global inputs via
+   * `inputs: ["!$TURBO_ROOT$/some-global-file.txt"]`.
+   *
+   * @defaultValue `false`
+   */
+  globalInputsAsTaskInputs?: boolean;
 }
 
 "#
