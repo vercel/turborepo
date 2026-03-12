@@ -207,6 +207,12 @@ Enable experimental features that will become the default behavior in future ver
   Configuration](/docs/reference/package-configurations).
 </Callout>
 
+<Callout type="warn">
+  Changing any future flag will affect the [global
+  hash](/docs/crafting-your-repository/caching#global-hash-inputs), causing all
+  tasks to miss cache on the next run.
+</Callout>
+
 #### `errorsOnlyShowHash`
 
 Default: `false`
