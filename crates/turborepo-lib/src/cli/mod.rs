@@ -39,6 +39,56 @@ pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
 // Default value for the --cache-workers argument
 const DEFAULT_NUM_WORKERS: u32 = 10;
+
+/// Returns a scaled thread count for rayon's global pool based on
+/// available CPU cores, capped at
+/// [`crate::rayon_compat::MAX_RAYON_THREADS`].
+///
+/// See [`init_rayon_pool`] and <https://github.com/vercel/turborepo/issues/12251>
+fn rayon_pool_size() -> usize {
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    crate::rayon_compat::scale_thread_count(cpus)
+}
+
+/// Explicitly initialize rayon's global thread pool early so we control
+/// its size and initialization timing.
+///
+/// If `RAYON_NUM_THREADS` is set, its value is still clamped to
+/// [`crate::rayon_compat::MAX_RAYON_THREADS`] to prevent the known
+/// deadlock on high-core-count machines.
+fn init_rayon_pool() {
+    let pool_size = match std::env::var("RAYON_NUM_THREADS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
+        Some(user_val) => {
+            let clamped = crate::rayon_compat::scale_thread_count(user_val);
+            if clamped < user_val {
+                tracing::debug!(
+                    requested = user_val,
+                    clamped,
+                    max = crate::rayon_compat::MAX_RAYON_THREADS,
+                    "RAYON_NUM_THREADS exceeds safe limit, clamping"
+                );
+            }
+            clamped
+        }
+        None => rayon_pool_size(),
+    };
+
+    tracing::info!(
+        rayon_pool_size = pool_size,
+        "initializing rayon global pool"
+    );
+
+    let builder = rayon::ThreadPoolBuilder::new().num_threads(pool_size);
+    if let Err(e) = builder.build_global() {
+        tracing::warn!("rayon global pool already initialized: {e}");
+    }
+}
+
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
@@ -1291,17 +1341,34 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
 ///
 /// # Arguments
 ///
-/// * `repo_state`: If we have done repository inference and NOT executed
-/// local turbo, such as in the case where `TURBO_BINARY_PATH` is set,
-/// we use it here to modify clap's arguments.
+/// * `repo_state`: If we have done repository inference and NOT executed local
+///   turbo, such as in the case where `TURBO_BINARY_PATH` is set, we use it
+///   here to modify clap's arguments.
 /// * `logger`: The logger to use for the run.
 /// * `color_config`: The color configuration to use for the run, i.e. whether
 ///   we should colorize output.
 ///
-/// returns: Result<Payload, Error>
-#[tokio::main]
+/// returns: Result<i32, Error>
+pub fn run(
+    repo_state: Option<RepoState>,
+    logger: &TurboSubscriber,
+    color_config: ColorConfig,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+) -> Result<i32, Error> {
+    // Initialize rayon's global pool before the tokio runtime so we
+    // control thread count and avoid lazy initialization during a hot path.
+    init_rayon_pool();
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime");
+
+    runtime.block_on(run_main(repo_state, logger, color_config, query_server))
+}
+
 #[tracing::instrument(skip_all)]
-pub async fn run(
+async fn run_main(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
     color_config: ColorConfig,
