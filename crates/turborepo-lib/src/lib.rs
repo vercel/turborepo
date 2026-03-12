@@ -28,6 +28,7 @@ mod panic_handler;
 mod rayon_compat;
 mod run;
 mod shim;
+mod task_change_detector;
 mod task_graph;
 mod task_hash;
 mod tracing;

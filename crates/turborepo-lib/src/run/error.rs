@@ -61,4 +61,6 @@ pub enum Error {
     Proxy(String),
     #[error(transparent)]
     ApiClient(#[from] turborepo_api_client::Error),
+    #[error(transparent)]
+    Scm(#[from] turborepo_scm::Error),
 }

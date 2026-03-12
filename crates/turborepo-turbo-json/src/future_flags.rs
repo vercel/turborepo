@@ -10,6 +10,7 @@
 //! ```json
 //! {
 //!   "futureFlags": {
+//!     "affectedUsingTaskInputs": true
 //!   }
 //! }
 //! ```
@@ -53,8 +54,17 @@ pub struct FutureFlags {
     /// brute-force tag collision feasible.
     #[serde(default)]
     pub longer_signature_key: bool,
+    /// Use task-level `inputs` globs to determine which tasks are affected by
+    /// changed files when running with `--affected`. When enabled, only tasks
+    /// whose declared inputs match the changed files are selected, rather than
+    /// selecting all tasks in changed packages.
+    #[serde(default)]
+    pub affected_using_task_inputs: bool,
 }
 
+// Manual TS impl because #[derive(TS)] conflicts with the Iterable and
+// Deserializable derives. Each new field must be added to inline(),
+// inline_flattened(), decl(), and decl_concrete() below.
 impl TS for FutureFlags {
     type WithoutGenerics = Self;
     type OptionInnerType = Self;
@@ -65,25 +75,25 @@ impl TS for FutureFlags {
 
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean }"
+         boolean, affectedUsingTaskInputs?: boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean }"
+         boolean, affectedUsingTaskInputs?: boolean }"
             .to_string()
     }
 
     fn decl() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
-         longerSignatureKey?: boolean };"
+         longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean };"
             .to_string()
     }
 
     fn decl_concrete() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
-         longerSignatureKey?: boolean };"
+         longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean };"
             .to_string()
     }
 
