@@ -514,15 +514,6 @@ impl RunBuilder {
         let use_task_level_affected = self.opts.scope_opts.affected_range.is_some()
             && self.opts.future_flags.affected_using_task_inputs;
 
-        if use_task_level_affected {
-            self.filter_engine_to_affected_tasks(
-                &mut engine,
-                &pkg_dep_graph,
-                &root_turbo_json,
-                &scm,
-            )?;
-        }
-
         let task_access = {
             let _span = tracing::info_span!("task_access_setup").entered();
             let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
@@ -530,6 +521,9 @@ impl RunBuilder {
             ta
         };
 
+        // --parallel removes inter-package dependencies from the package graph,
+        // requiring a fresh engine build. Affected filtering runs once afterward
+        // rather than on both engines to avoid a redundant SCM query.
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
             engine = self.build_engine(
@@ -538,14 +532,15 @@ impl RunBuilder {
                 filtered_pkgs.keys(),
                 &turbo_json_loader,
             )?;
-            if use_task_level_affected {
-                self.filter_engine_to_affected_tasks(
-                    &mut engine,
-                    &pkg_dep_graph,
-                    &root_turbo_json,
-                    &scm,
-                )?;
-            }
+        }
+
+        if use_task_level_affected {
+            engine = self.filter_engine_to_affected_tasks(
+                engine,
+                &pkg_dep_graph,
+                &root_turbo_json,
+                &scm,
+            )?;
         }
 
         let should_print_prelude = self
@@ -625,17 +620,24 @@ impl RunBuilder {
         ))
     }
 
-    /// Filters the engine in place to only tasks whose declared `inputs`
+    /// Returns a new engine containing only tasks whose declared `inputs`
     /// globs match the changed files (plus their transitive dependents).
     /// Called after the engine is built via the normal scope resolution path.
+    ///
+    /// `scm.changed_files()` returns a `Result<Result<..>>`: the outer error
+    /// is an SCM communication failure (propagated via `?`), the inner error
+    /// means the change set couldn't be computed (e.g. invalid ref, shallow
+    /// clone). In the inner-error case, filtering is skipped and all tasks
+    /// run — a fail-open to prevent `--affected` from silently dropping tasks
+    /// when git state is ambiguous.
     #[tracing::instrument(skip_all)]
     fn filter_engine_to_affected_tasks(
         &self,
-        engine: &mut Engine,
+        engine: Engine,
         pkg_dep_graph: &PackageGraph,
         root_turbo_json: &TurboJson,
         scm: &SCM,
-    ) -> Result<(), Error> {
+    ) -> Result<Engine, Error> {
         let (from_ref, to_ref) = self
             .opts
             .scope_opts
@@ -651,26 +653,36 @@ impl RunBuilder {
             true,
         )?;
 
-        if let Ok(changed_files) = maybe_changed_files {
-            let total_tasks = engine.task_ids().count();
-            let affected_tasks = crate::task_change_detector::affected_task_ids(
-                engine,
-                pkg_dep_graph,
-                &changed_files,
-                &root_turbo_json.global_deps,
-            );
-            tracing::info!(
-                total_tasks,
-                affected_tasks = affected_tasks.len(),
-                changed_files = changed_files.len(),
-                "task-level affected detection complete"
-            );
-            engine.retain_affected_tasks(&affected_tasks);
-        } else {
-            tracing::warn!("SCM returned invalid change set; skipping task-level filtering");
+        match maybe_changed_files {
+            Ok(changed_files) => {
+                let total_tasks = engine.task_ids().count();
+                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                    &engine,
+                    pkg_dep_graph,
+                    &changed_files,
+                    &root_turbo_json.global_deps,
+                );
+                tracing::info!(
+                    total_tasks,
+                    affected_tasks = affected_tasks.len(),
+                    changed_files = changed_files.len(),
+                    "task-level affected detection complete"
+                );
+                Ok(engine.retain_affected_tasks(&affected_tasks))
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = ?e,
+                    "SCM returned invalid change set; skipping task-level filtering"
+                );
+                eprintln!(
+                    "WARNING: --affected could not determine changed files ({:?}). All tasks will \
+                     run. Check your git fetch depth.",
+                    e
+                );
+                Ok(engine)
+            }
         }
-
-        Ok(())
     }
 
     #[tracing::instrument(skip_all)]

@@ -18,8 +18,12 @@ use wax::Program;
 
 use crate::engine::Engine;
 
-// Root-level files that always trigger a full rebuild when changed.
-// Lockfile detection is handled separately via the package manager.
+/// Root-level files that always trigger a full rebuild when changed.
+///
+/// - `package.json`: workspace topology or root dependency changes
+/// - `turbo.json`/`turbo.jsonc`: task definitions, global deps, pipelines
+///
+/// Lockfile changes are detected separately via the package manager.
 const DEFAULT_GLOBAL_DEPS: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
 
 /// Determines which tasks are directly affected by the given set of changed
@@ -29,6 +33,8 @@ const DEFAULT_GLOBAL_DEPS: &[&str] = &["package.json", "turbo.json", "turbo.json
 /// Checks all tasks against all changed files regardless of package boundaries.
 /// This is what makes cross-package inputs (`$TURBO_ROOT$/schema/api.json`)
 /// work correctly.
+///
+/// Returns an empty set when no files have changed.
 ///
 /// # Global changes
 ///
@@ -40,6 +46,10 @@ const DEFAULT_GLOBAL_DEPS: &[&str] = &["package.json", "turbo.json", "turbo.json
 /// Invalid glob patterns in task `inputs` are logged at `warn` level and
 /// skipped. If the SCM range is invalid, the caller should handle the
 /// fallback (typically running all tasks).
+#[tracing::instrument(skip(engine, pkg_dep_graph, changed_files), fields(
+    file_count = changed_files.len(),
+    global_deps = global_deps.len(),
+))]
 pub fn affected_task_ids(
     engine: &Engine,
     pkg_dep_graph: &PackageGraph,
@@ -52,8 +62,16 @@ pub fn affected_task_ids(
 
     let mut affected = HashSet::new();
 
+    // Pre-convert all file paths to Unix strings once, avoiding repeated
+    // allocation in the O(tasks × files) inner loop.
+    let changed_unix: Vec<String> = changed_files
+        .iter()
+        .map(|f| f.to_unix().to_string())
+        .collect();
+
     // Compile globs once per unique (package_path, inputs) pair.
-    let mut compiled_cache: HashMap<(String, TaskInputsKey), _> = HashMap::new();
+    // Uses owned TaskInputs as key since it derives Hash.
+    let mut compiled_cache: HashMap<(String, TaskInputs), _> = HashMap::new();
 
     for task_id in engine.task_ids() {
         let pkg_name = PackageName::from(task_id.package());
@@ -61,6 +79,7 @@ pub fn affected_task_ids(
             continue;
         };
         let pkg_unix = pkg_dir.to_unix();
+        let pkg_str = pkg_unix.to_string();
 
         let default_inputs = DEFAULT_TASK_INPUTS;
         let inputs = engine
@@ -68,13 +87,19 @@ pub fn affected_task_ids(
             .map(|def| &def.inputs)
             .unwrap_or(&default_inputs);
 
-        let cache_key = (pkg_unix.to_string(), TaskInputsKey::from(inputs));
+        let cache_key = (pkg_str.clone(), inputs.clone());
         let compiled = compiled_cache
             .entry(cache_key)
             .or_insert_with(|| compile_globs(inputs));
 
-        for file in changed_files {
-            if file_matches_compiled_inputs(file, &pkg_unix, compiled) {
+        let pkg_prefix_slash = if pkg_str.is_empty() {
+            String::new()
+        } else {
+            format!("{pkg_str}/")
+        };
+
+        for file_unix in &changed_unix {
+            if file_matches_compiled_inputs(file_unix, &pkg_str, &pkg_prefix_slash, compiled) {
                 affected.insert(task_id.clone());
                 break;
             }
@@ -140,21 +165,6 @@ fn is_global_change(
     }
 
     false
-}
-
-#[derive(Hash, Eq, PartialEq)]
-struct TaskInputsKey {
-    globs: Vec<String>,
-    default: bool,
-}
-
-impl From<&TaskInputs> for TaskInputsKey {
-    fn from(inputs: &TaskInputs) -> Self {
-        Self {
-            globs: inputs.globs.clone(),
-            default: inputs.default,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -492,5 +502,66 @@ mod tests {
             3,
             "all tasks should match .ts source: {result:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn global_turbo_jsonc_change_returns_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let engine = make_engine(&[(a_build.clone(), default_def())], &[]);
+
+        let result = affected_task_ids(&engine, &pkg_graph, &changed(&["turbo.jsonc"]), &[]);
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&a_build));
+    }
+
+    #[tokio::test]
+    async fn task_without_definition_uses_default_inputs() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+
+        // Register the task in the graph but do NOT add a definition.
+        let mut engine: Engine<Building> = Engine::new();
+        let a_build = TaskId::new("lib-a", "build");
+        engine.get_index(&a_build);
+        let engine = engine.seal();
+
+        // A file in the package should match via DEFAULT_TASK_INPUTS.
+        let result = affected_task_ids(
+            &engine,
+            &pkg_graph,
+            &changed(&["packages/lib-a/src/index.ts"]),
+            &[],
+        );
+        assert_eq!(
+            result.len(),
+            1,
+            "task with no definition should use default inputs: {result:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_global_dep_glob_is_skipped() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let engine = make_engine(&[(a_build.clone(), default_def())], &[]);
+
+        // Invalid glob is skipped, valid glob still works.
+        let global_deps = vec!["[invalid".to_string(), "config/*.yaml".to_string()];
+        let result = affected_task_ids(
+            &engine,
+            &pkg_graph,
+            &changed(&["config/ci.yaml"]),
+            &global_deps,
+        );
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&a_build));
     }
 }

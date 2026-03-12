@@ -34,12 +34,31 @@ A run consists of the following steps:
   auto-included. Explicit include filters or `--affected` suppress root task
   injection. See `calculate_filtered_packages` and `FilterMode`.
 - Task graph construction and validation
+- Task-level affected detection (see below)
 - Cache setup (local and remote)
 - Activating shared HTTP client initialization once telemetry, remote cache, or
   linked analytics are known to be needed
 - Building a tracked repo index eagerly, then augmenting it with scoped
   untracked-file discovery once the selected package set is known
 - Producing a final `Run` struct ready for execution
+
+#### Task-Level Affected Detection
+
+When the `affectedUsingTaskInputs` future flag is enabled and `--affected` is
+active, the run builder applies a second filtering pass after engine
+construction:
+
+1. **File change detection**: SCM provides the set of changed files between refs
+2. **Task input matching** (`turborepo-types/src/task_input_matching.rs`): Each
+   task's `inputs` globs are compiled and checked against the changed files.
+   Shared with `turbo query { affectedTasks }`.
+3. **Task change detection** (`turborepo-lib/src/task_change_detector.rs`):
+   Determines directly affected tasks, handling global deps and per-task inputs
+4. **Engine pruning** (`Engine::retain_affected_tasks`): Returns a new engine
+   containing only directly affected tasks plus their transitive dependents
+
+This differs from the default `--affected` behavior which operates at the
+package level (all tasks in changed packages run).
 
 ### 2. Package Graph (`crates/turborepo-repository/src/package_graph/`)
 

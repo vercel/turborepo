@@ -4,11 +4,10 @@ use std::{
 };
 
 use petgraph::Direction;
-use turbopath::AnchoredSystemPathBuf;
 use turborepo_engine::TaskNode;
 use turborepo_repository::change_mapper::{AllPackageChangeReason, PackageInclusionReason};
 use turborepo_task_id::TaskId;
-use turborepo_types::task_input_matching::{compile_globs, file_matches_compiled_inputs};
+use turborepo_types::task_input_matching::{compile_globs, file_matches_compiled_inputs_path};
 
 use crate::{Error, QueryRun};
 
@@ -139,30 +138,18 @@ pub fn calculate_affected_tasks(
         };
         let pkg_path = pkg_info.package_path();
         let pkg_unix_path = pkg_path.to_unix();
-        let pkg_prefix = pkg_unix_path.to_string();
 
-        // TODO: This pre-filters changed files to only those within the package
-        // directory, which means cross-package inputs from $TURBO_ROOT$ expansion
-        // (e.g. "../../jest.config.js") won't match files outside the package.
-        // The `turbo run --affected` path in task_change_detector.rs correctly
-        // checks all changed files against all tasks. These two paths should be
-        // unified so `turbo query { affectedTasks }` and `turbo run --affected`
-        // produce consistent results.
-        let pkg_changed_files: Vec<&AnchoredSystemPathBuf> = changed_files
-            .iter()
-            .filter(|f| {
-                let file_str = f.to_unix().to_string();
-                if pkg_prefix.is_empty() {
-                    // Root package — all files are potentially relevant.
-                    // The task's input globs will filter further.
-                    true
-                } else {
-                    file_str.starts_with(&format!("{pkg_prefix}/"))
-                }
-            })
-            .collect();
-
-        // For each task this package has in the engine
+        // Check all changed files against each task's inputs. We pass the
+        // full changed_files set (not pre-filtered to the package directory)
+        // so that cross-package inputs from $TURBO_ROOT$ expansion
+        // (e.g. "../../jest.config.js") are matched correctly, consistent
+        // with the `turbo run --affected` path in task_change_detector.rs.
+        //
+        // TODO: This outer loop only visits tasks in *affected packages*.
+        // A task in a non-affected package that has $TURBO_ROOT$ inputs
+        // pointing to a changed file will be missed here but caught by
+        // the `turbo run --affected` path (which checks all tasks).
+        // Unify by iterating all engine tasks regardless of package.
         for task_id in engine.task_ids() {
             if task_id.package() != pkg_name.as_str() {
                 continue;
@@ -172,14 +159,10 @@ pub fn calculate_affected_tasks(
                 continue;
             }
 
-            // Check all changed files in this package against the task's input
-            // globs. This handles all PackageInclusionReason variants uniformly:
-            // regardless of why the package was included, a task is only
-            // directly affected if its inputs actually changed.
             if let Some(def) = engine.task_definition(task_id) {
                 let compiled = compile_globs(&def.inputs);
-                for file in &pkg_changed_files {
-                    if file_matches_compiled_inputs(file, &pkg_unix_path, &compiled) {
+                for file in &changed_files {
+                    if file_matches_compiled_inputs_path(file, &pkg_unix_path, &compiled) {
                         affected.insert(
                             task_id.clone(),
                             TaskChangeReason::FileChanged {

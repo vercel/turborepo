@@ -62,6 +62,9 @@ pub struct FutureFlags {
     pub affected_using_task_inputs: bool,
 }
 
+// Manual TS impl because #[derive(TS)] conflicts with the Iterable and
+// Deserializable derives. Each new field must be added to inline(),
+// inline_flattened(), decl(), and decl_concrete() below.
 impl TS for FutureFlags {
     type WithoutGenerics = Self;
     type OptionInnerType = Self;

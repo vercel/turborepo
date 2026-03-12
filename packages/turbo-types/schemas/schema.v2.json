@@ -258,7 +258,7 @@
       "type": "object",
       "properties": {
         "affectedUsingTaskInputs": {
-          "description": "When enabled, `--affected` uses task-level input detection instead of package-level filtering. This also enables task-level `turbo watch` restarts and removes the \"Packages in scope\" run prelude.",
+          "description": "Use task-level `inputs` globs to determine which tasks are affected by changed files when running with `--affected`. When enabled, only tasks whose declared inputs match the changed files are selected, rather than selecting all tasks in changed packages.",
           "default": false,
           "type": "boolean"
         },
