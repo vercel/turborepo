@@ -2,7 +2,7 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{git, run_turbo, run_turbo_with_env, setup};
+use common::{git, run_turbo, run_turbo_with_env, setup, turbo_output_filters};
 
 fn setup_affected(dir: &std::path::Path) {
     setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", true).unwrap();
@@ -962,4 +962,23 @@ fn test_task_level_affected_global_file_runs_everything() {
         "global change should affect many tasks, got {}: {task_ids:?}",
         task_ids.len()
     );
+}
+
+#[test]
+fn test_affected_with_nonexistent_task_errors() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "foobarbaz", "--affected", "--log-order", "grouped"],
+    );
+    assert!(
+        !output.status.success(),
+        "expected failure for non-existent task with --affected"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    insta::with_settings!({ filters => turbo_output_filters() }, {
+        insta::assert_snapshot!("affected_nonexistent_task", stderr.to_string());
+    });
 }
