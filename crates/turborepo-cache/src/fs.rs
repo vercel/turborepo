@@ -8,19 +8,24 @@ use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{analytics, analytics::AnalyticsEvent};
 
 use crate::{
-    CacheError, CacheHitMetadata, CacheSource,
+    CacheError, CacheHitMetadata, CacheScmState, CacheSource,
     cache_archive::{CacheReader, CacheWriter},
 };
 
 pub struct FSCache {
     cache_directory: AbsoluteSystemPathBuf,
     analytics_recorder: Option<AnalyticsSender>,
+    scm_state: Option<CacheScmState>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct CacheMetadata {
     hash: String,
     duration: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    sha: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    dirty_hash: Option<String>,
 }
 
 impl CacheMetadata {
@@ -43,6 +48,7 @@ impl FSCache {
         cache_dir: &Utf8Path,
         repo_root: &AbsoluteSystemPath,
         analytics_recorder: Option<AnalyticsSender>,
+        scm_state: Option<CacheScmState>,
     ) -> Result<Self, CacheError> {
         debug!(
             "FSCache::new called with cache_dir={}, repo_root={}",
@@ -55,6 +61,7 @@ impl FSCache {
         Ok(FSCache {
             cache_directory,
             analytics_recorder,
+            scm_state,
         })
     }
 
@@ -224,6 +231,8 @@ impl FSCache {
         let meta = CacheMetadata {
             hash: hash.to_string(),
             duration,
+            sha: self.scm_state.as_ref().and_then(|s| s.sha.clone()),
+            dirty_hash: self.scm_state.as_ref().and_then(|s| s.dirty_hash.clone()),
         };
 
         let meta_json = serde_json::to_string(&meta)
@@ -304,6 +313,7 @@ mod test {
             Utf8Path::new(""),
             repo_root_path,
             Some(analytics_sender.clone()),
+            None,
         )?;
 
         let expected_miss = cache.fetch(repo_root_path, test_case.hash)?;
@@ -359,9 +369,9 @@ mod test {
         let duration = 100;
 
         // Create multiple caches pointing to the same directory
-        let cache1 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
-        let cache2 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
-        let cache3 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache1 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let cache2 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let cache3 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
 
         // Perform concurrent writes
         let handle1 = {
@@ -386,7 +396,7 @@ mod test {
         let _ = handle3.await?;
 
         // The cache should be readable
-        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
         let result = cache.fetch(repo_root_path, hash)?;
         assert!(
             result.is_some(),
@@ -413,15 +423,15 @@ mod test {
         let duration = 100;
 
         // First write to establish the cache
-        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
         cache.put(repo_root_path, hash, &files, duration)?;
 
         // Update the source file
         test_file.create_with_contents("updated content")?;
 
         // Perform concurrent read and write
-        let cache_write = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
-        let cache_read = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache_write = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let cache_read = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
 
         let write_handle = {
             let files = files.clone();
@@ -463,13 +473,13 @@ mod test {
         let duration = 100;
 
         // Write to cache first
-        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
         cache.put(repo_root_path, hash, &files, duration)?;
 
         // Perform concurrent reads
         let mut handles = Vec::new();
         for _ in 0..10 {
-            let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+            let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
             let repo_root = repo_root_path.to_owned();
             handles.push(tokio::spawn(async move { cache.fetch(&repo_root, hash) }));
         }
@@ -500,9 +510,9 @@ mod test {
         let duration = 100;
 
         // Perform concurrent writes
-        let cache1 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
-        let cache2 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
-        let cache3 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache1 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let cache2 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let cache3 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
 
         let handle1 = {
             let files = files.clone();

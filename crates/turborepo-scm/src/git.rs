@@ -47,6 +47,17 @@ impl SCM {
         }
     }
 
+    /// Compute a hash that summarizes all uncommitted changes in the working
+    /// tree: staged changes, unstaged changes, and untracked files.
+    /// Returns `None` for manual SCM mode, when git is unavailable, or when
+    /// the working tree is clean.
+    pub fn get_dirty_hash(&self) -> Option<String> {
+        match self {
+            Self::Git(git) => git.get_dirty_hash(),
+            Self::Manual => None,
+        }
+    }
+
     /// get the actual changed files between two git refs
     pub fn changed_files(
         &self,
@@ -192,6 +203,35 @@ impl GitRepo {
         let output = self.execute_git_command(&["rev-parse", "HEAD"], "")?;
         let output = String::from_utf8(output)?;
         Ok(output.trim().to_owned())
+    }
+
+    /// Compute a hash summarizing all uncommitted state in the working tree.
+    /// Uses `git status --porcelain -z` (which files are dirty/untracked) and
+    /// `git diff HEAD` (the actual content changes for tracked files) as inputs
+    /// to a SHA-256 hash. Returns `None` if the working tree is clean.
+    fn get_dirty_hash(&self) -> Option<String> {
+        use sha2::{Digest, Sha256};
+
+        // Get the porcelain status (covers staged, unstaged, and untracked files)
+        let status_output = self
+            .execute_git_command(&["status", "--porcelain", "-z"], "")
+            .ok()?;
+
+        // If status is empty, the working tree is clean
+        if status_output.is_empty() {
+            return None;
+        }
+
+        let mut hasher = Sha256::new();
+        hasher.update(&status_output);
+
+        // Also include the actual diff of tracked changes for content-sensitivity
+        if let Ok(diff_output) = self.execute_git_command(&["diff", "HEAD"], "") {
+            hasher.update(&diff_output);
+        }
+
+        let hash = hasher.finalize();
+        Some(format!("{hash:x}"))
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables

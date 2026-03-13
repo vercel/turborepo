@@ -9,7 +9,7 @@ use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{
-    CacheConfig, CacheError, CacheHitMetadata, CacheOpts,
+    CacheConfig, CacheError, CacheHitMetadata, CacheOpts, CacheScmState,
     fs::FSCache,
     http::{HTTPCache, UploadMap},
 };
@@ -36,6 +36,7 @@ impl CacheMultiplexer {
         api_client: Option<APIClient>,
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
+        scm_state: Option<CacheScmState>,
     ) -> Result<Self, CacheError> {
         let use_fs_cache = opts.cache.local.should_use();
         let use_http_cache = opts.cache.remote.should_use();
@@ -52,7 +53,7 @@ impl CacheMultiplexer {
             opts.cache_dir, repo_root
         );
         let fs_cache = use_fs_cache
-            .then(|| FSCache::new(&opts.cache_dir, repo_root, analytics_recorder.clone()))
+            .then(|| FSCache::new(&opts.cache_dir, repo_root, analytics_recorder.clone(), scm_state))
             .transpose()?;
 
         let http_cache = if use_http_cache {
