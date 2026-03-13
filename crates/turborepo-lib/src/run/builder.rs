@@ -699,11 +699,13 @@ impl RunBuilder {
                     error = ?e,
                     "SCM returned invalid change set; skipping task-level filtering"
                 );
-                eprintln!(
-                    "WARNING: --affected could not determine changed files ({:?}). All tasks will \
-                     run. Check your git fetch depth.",
-                    e
-                );
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo("scm"),
+                    "--affected could not determine changed files. All tasks will run. Check your \
+                     git fetch depth.",
+                )
+                .field("error", format!("{e:?}"))
+                .emit();
                 Ok(engine)
             }
         }
