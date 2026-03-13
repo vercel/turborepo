@@ -773,7 +773,10 @@ pub enum Command {
     },
     /// Query your monorepo using GraphQL. If no query is provided, spins up a
     /// GraphQL server with GraphiQL.
+    #[command(args_conflicts_with_subcommands = true)]
     Query {
+        #[clap(subcommand)]
+        subcommand: Option<QuerySubcommand>,
         /// Pass variables to the query via a JSON file
         #[clap(short = 'V', long, requires = "query")]
         variables: Option<Utf8PathBuf>,
@@ -863,6 +866,33 @@ pub enum GenerateCommand {
     Workspace(GenerateWorkspaceArgs),
     #[clap(name = "run", alias = "r")]
     Run(GeneratorCustomArgs),
+}
+
+#[derive(Subcommand, Clone, Debug, PartialEq)]
+pub enum QuerySubcommand {
+    /// Check which packages or tasks are affected by changes between two git
+    /// refs
+    Affected(AffectedArgs),
+}
+
+#[derive(clap::Args, Clone, Debug, PartialEq)]
+pub struct AffectedArgs {
+    /// Return affected packages instead of tasks. Optionally filter by name.
+    /// When combined with --tasks, returns affected tasks that match both
+    /// the task name and package filters.
+    #[clap(long, num_args = 0..)]
+    pub packages: Option<Vec<String>>,
+    /// Filter to specific task names (e.g. build, test).
+    /// When combined with --packages, returns affected tasks that match both
+    /// the task name and package filters.
+    #[clap(long, num_args = 0..)]
+    pub tasks: Option<Vec<String>>,
+    /// Base git ref for comparison
+    #[clap(long)]
+    pub base: Option<String>,
+    /// Head git ref for comparison
+    #[clap(long)]
+    pub head: Option<String>,
 }
 
 fn validate_graph_extension(s: &str) -> Result<String, String> {
@@ -1725,6 +1755,7 @@ async fn run_main(
             Ok(exit_code)
         }
         Command::Query {
+            subcommand,
             query,
             variables,
             schema,
@@ -1733,6 +1764,7 @@ async fn run_main(
                 return Err(error::Error::QueryNotAvailable);
             };
             warn!("query command is experimental and may change in the future");
+            let subcommand = subcommand.clone();
             let query = query.clone();
             let variables = variables.clone();
             let schema = *schema;
@@ -1745,6 +1777,7 @@ async fn run_main(
             let query = query::run(
                 base,
                 event,
+                subcommand,
                 query,
                 variables.as_deref(),
                 schema,
@@ -3625,5 +3658,167 @@ mod test {
             let err = cli.unwrap_err();
             assert_snapshot!(args.join("-").as_str(), err);
         }
+    }
+
+    #[test]
+    fn test_query_affected_no_args() {
+        let args = Args::try_parse_from(["turbo", "query", "affected"]).unwrap();
+        assert_eq!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(super::AffectedArgs {
+                    packages: None,
+                    tasks: None,
+                    base: None,
+                    head: None,
+                })),
+                query: None,
+                variables: None,
+                schema: false,
+            })
+        );
+    }
+
+    #[test]
+    fn test_query_affected_bare_packages_flag() {
+        let args = Args::try_parse_from(["turbo", "query", "affected", "--packages"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec![])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_packages() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--packages", "web"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec!["web".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_multiple_packages() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--packages", "web", "docs"])
+                .unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec!["web".to_string(), "docs".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_bare_tasks_flag() {
+        let args = Args::try_parse_from(["turbo", "query", "affected", "--tasks"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.tasks == Some(vec![])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_tasks() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--tasks", "build"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.tasks == Some(vec!["build".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_base_head() {
+        let args = Args::try_parse_from([
+            "turbo", "query", "affected", "--base", "main", "--head", "HEAD",
+        ])
+        .unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.base == Some("main".to_string()) && a.head == Some("HEAD".to_string())
+        );
+    }
+
+    #[test]
+    fn test_query_affected_combined_packages_and_tasks() {
+        let args = Args::try_parse_from([
+            "turbo",
+            "query",
+            "affected",
+            "--packages",
+            "web",
+            "--tasks",
+            "build",
+        ])
+        .unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec!["web".to_string()])
+                && a.tasks == Some(vec!["build".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_combined_bare_packages_and_bare_tasks() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--packages", "--tasks"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec![]) && a.tasks == Some(vec![])
+        );
+    }
+
+    #[test]
+    fn test_query_raw_graphql_still_works() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "{ packages { items { name } } }"]).unwrap();
+        assert_eq!(
+            args.command,
+            Some(Command::Query {
+                subcommand: None,
+                query: Some("{ packages { items { name } } }".to_string()),
+                variables: None,
+                schema: false,
+            })
+        );
+    }
+
+    #[test]
+    fn test_query_schema_still_works() {
+        let args = Args::try_parse_from(["turbo", "query", "--schema"]).unwrap();
+        assert_eq!(
+            args.command,
+            Some(Command::Query {
+                subcommand: None,
+                query: None,
+                variables: None,
+                schema: true,
+            })
+        );
     }
 }
