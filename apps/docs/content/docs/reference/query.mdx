@@ -4,6 +4,9 @@ description: API reference for the `turbo query` command
 product: turborepo
 type: reference
 summary: All flags and options for the `turbo query` command that runs GraphQL queries against your monorepo.
+related:
+  - /docs/crafting-your-repository/upgrading
+  - /docs/reference/system-environment-variables
 ---
 
 import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
@@ -32,4 +35,119 @@ When passed a file path, the command will read the file and run the query.
 
 ```bash title="Terminal"
 turbo query query.gql
+```
+
+## Shorthands
+
+Shorthands generate GraphQL queries for common operations so you don't need to write them by hand. The JSON output is identical to what you'd get from a raw query.
+
+### `affected`
+
+Check which packages or tasks are affected by changes between two git refs.
+
+```bash title="Terminal"
+turbo query affected [flags]
+```
+
+With no flags, returns all affected tasks:
+
+```bash title="Terminal"
+turbo query affected
+```
+
+```json title="Output"
+{
+  "data": {
+    "affectedTasks": {
+      "items": [
+        {
+          "name": "build",
+          "fullName": "web#build",
+          "package": { "name": "web" },
+          "reason": { "__typename": "TaskFileChanged" }
+        }
+      ],
+      "length": 1
+    }
+  }
+}
+```
+
+Task-level detection is more precise than package-level. A task is only reported as affected if its configured [`inputs`](/docs/reference/configuration#inputs) match a changed file, or if an upstream task dependency is affected.
+
+#### `--tasks`
+
+Filter to specific task names. With no values, returns all affected tasks (same as bare `turbo query affected`).
+
+```bash title="Terminal"
+turbo query affected --tasks
+turbo query affected --tasks build
+turbo query affected --tasks build test
+```
+
+#### `--packages`
+
+Without `--tasks`, returns affected packages instead of tasks. With no values, returns all affected packages. With values, filters to the named packages.
+
+When combined with `--tasks`, both filters apply (intersection) — only tasks matching the task name **and** belonging to the named packages are returned. This lets you check whether a specific task in a specific package changed:
+
+```bash title="Terminal"
+turbo query affected --tasks build --packages web
+```
+
+```bash title="Terminal"
+turbo query affected --packages
+turbo query affected --packages web
+turbo query affected --packages web docs
+```
+
+```json title="Output"
+{
+  "data": {
+    "affectedPackages": {
+      "items": [
+        { "name": "web", "path": "apps/web", "reason": { "__typename": "FileChanged" } }
+      ],
+      "length": 1
+    }
+  }
+}
+```
+
+#### `--base`
+
+Base git ref for comparison. Defaults to the auto-detected base (e.g. `GITHUB_BASE_REF` on GitHub Actions, or the merge-base with `main`).
+
+Can also be set with the `TURBO_SCM_BASE` environment variable.
+
+```bash title="Terminal"
+turbo query affected --base main
+```
+
+#### `--head`
+
+Head git ref for comparison. Defaults to `HEAD`.
+
+Can also be set with the `TURBO_SCM_HEAD` environment variable.
+
+```bash title="Terminal"
+turbo query affected --head my-branch
+```
+
+## Flags
+
+### `--schema`
+
+Output the GraphQL introspection schema. Cannot be used with a query argument.
+
+```bash title="Terminal"
+turbo query --schema
+```
+
+### `--variables` (`-V`)
+
+Path to a JSON file containing query variables. Requires a query argument.
+
+```bash title="Terminal"
+turbo query query.gql --variables vars.json
 ```

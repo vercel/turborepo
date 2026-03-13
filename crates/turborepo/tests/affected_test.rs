@@ -982,3 +982,155 @@ fn test_affected_with_nonexistent_task_errors() {
         insta::assert_snapshot!("affected_nonexistent_task", stderr.to_string());
     });
 }
+
+// -- turbo query affected shorthand tests --
+
+#[test]
+fn test_query_affected_shorthand_no_args() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    // Default (no flags) returns affected tasks
+    let output = run_turbo(tempdir.path(), &["query", "affected"]);
+    assert!(output.status.success(), "query affected should succeed");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "should have affected tasks");
+    let names: Vec<&str> = items
+        .iter()
+        .map(|i| i["fullName"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.iter().any(|n| n.contains("my-app")),
+        "my-app tasks should be affected: {names:?}"
+    );
+}
+
+#[test]
+fn test_query_affected_shorthand_bare_packages() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    // --packages with no value returns all affected packages
+    let output = run_turbo(tempdir.path(), &["query", "affected", "--packages"]);
+    assert!(
+        output.status.success(),
+        "query affected --packages should succeed"
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedPackages"]["items"]
+        .as_array()
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["name"], "my-app");
+    assert_eq!(items[0]["reason"]["__typename"], "FileChanged");
+    assert!(items[0]["path"].is_string(), "should include path field");
+}
+
+#[test]
+fn test_query_affected_shorthand_with_packages() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("packages/util/new.js"), "foo").unwrap();
+
+    // Filter to only "util" — should exclude "my-app" (which is a dependent)
+    let output = run_turbo(tempdir.path(), &["query", "affected", "--packages", "util"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedPackages"]["items"]
+        .as_array()
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["name"], "util");
+}
+
+#[test]
+fn test_query_affected_shorthand_nothing_affected() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // No file changes — nothing should be affected
+    let output = run_turbo(tempdir.path(), &["query", "affected"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let length = json["data"]["affectedTasks"]["length"].as_i64().unwrap();
+    assert_eq!(length, 0, "nothing should be affected on a clean branch");
+}
+
+#[test]
+fn test_query_affected_shorthand_with_tasks() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    let output = run_turbo(tempdir.path(), &["query", "affected", "--tasks", "build"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "build task should be affected");
+    let names: Vec<&str> = items
+        .iter()
+        .map(|i| i["fullName"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.iter().any(|n| n.contains("my-app")),
+        "my-app#build should be in affected tasks: {names:?}"
+    );
+}
+
+#[test]
+fn test_query_affected_shorthand_with_base_head() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "add file", "--quiet"]);
+
+    // With --base=HEAD, no uncommitted changes → nothing affected
+    let output = run_turbo(tempdir.path(), &["query", "affected", "--base", "HEAD"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let length = json["data"]["affectedTasks"]["length"].as_i64().unwrap();
+    assert_eq!(length, 0, "base=HEAD should show no changes: {}", json);
+}
+
+#[test]
+fn test_query_affected_shorthand_combined_packages_and_tasks() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    // --tasks build --packages my-app → intersection: tasks named "build" AND in
+    // package "my-app"
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "affected",
+            "--tasks",
+            "build",
+            "--packages",
+            "my-app",
+        ],
+    );
+    assert!(output.status.success(), "combined query should succeed");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "should have affected tasks: {json}");
+    let full_names: Vec<&str> = items
+        .iter()
+        .map(|i| i["fullName"].as_str().unwrap())
+        .collect();
+    assert!(
+        full_names.contains(&"my-app#build"),
+        "my-app#build should be in results: {full_names:?}"
+    );
+}
