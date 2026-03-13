@@ -346,7 +346,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Remote,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -429,7 +431,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Local,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -507,6 +511,8 @@ mod tests {
             Some(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -599,7 +605,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Local,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -613,7 +621,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Remote,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 

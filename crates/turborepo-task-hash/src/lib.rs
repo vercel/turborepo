@@ -651,7 +651,7 @@ impl TaskHashTracker {
 
     pub fn cache_status(&self, task_id: &TaskId) -> Option<CacheHitMetadata> {
         let state = self.state.read().expect("hash tracker rwlock poisoned");
-        state.package_task_cache.get(task_id).copied()
+        state.package_task_cache.get(task_id).cloned()
     }
 
     pub fn insert_cache_status(&self, task_id: TaskId<'static>, cache_status: CacheHitMetadata) {
@@ -693,6 +693,8 @@ impl HashTrackerInfo for TaskHashTracker {
                 local,
                 remote,
                 time_saved: status.time_saved,
+                sha: status.sha,
+                dirty_hash: status.dirty_hash,
             }
         })
     }

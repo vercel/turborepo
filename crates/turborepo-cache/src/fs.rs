@@ -115,6 +115,8 @@ impl FSCache {
                 CacheHitMetadata {
                     time_saved: meta.duration,
                     source: CacheSource::Local,
+                    sha: meta.sha,
+                    dirty_hash: meta.dirty_hash,
                 },
                 file_list,
             )));
@@ -149,6 +151,8 @@ impl FSCache {
             CacheHitMetadata {
                 time_saved: meta.duration,
                 source: CacheSource::Local,
+                sha: meta.sha,
+                dirty_hash: meta.dirty_hash,
             },
             restored_files,
         )))
@@ -171,16 +175,21 @@ impl FSCache {
         buf.truncate(prefix_len);
         buf.push_str("-meta.json");
 
-        let duration = CacheMetadata::read(
+        let meta = CacheMetadata::read(
             &AbsoluteSystemPathBuf::try_from(buf.as_str())
                 .map_err(|_| CacheError::ConfigCacheInvalidBase)?,
-        )
-        .map(|meta| meta.duration)
-        .unwrap_or(0);
+        );
+
+        let (duration, sha, dirty_hash) = match meta {
+            Ok(m) => (m.duration, m.sha, m.dirty_hash),
+            Err(_) => (0, None, None),
+        };
 
         Ok(Some(CacheHitMetadata {
             time_saved: duration,
             source: CacheSource::Local,
+            sha,
+            dirty_hash,
         }))
     }
 
@@ -332,7 +341,9 @@ mod test {
             status,
             CacheHitMetadata {
                 time_saved: test_case.duration,
-                source: CacheSource::Local
+                source: CacheSource::Local,
+                sha: None,
+                dirty_hash: None,
             }
         );
 

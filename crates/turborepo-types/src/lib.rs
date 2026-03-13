@@ -1096,6 +1096,10 @@ pub struct HashTrackerCacheHitMetadata {
     pub remote: bool,
     /// Time saved by the cache hit in milliseconds
     pub time_saved: u64,
+    /// The HEAD commit SHA that produced this cache entry
+    pub sha: Option<String>,
+    /// A hash of uncommitted changes when this cache entry was produced
+    pub dirty_hash: Option<String>,
 }
 
 /// Trait for types that provide task definition information needed for hashing.

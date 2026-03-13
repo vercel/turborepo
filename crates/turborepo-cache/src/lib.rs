@@ -132,10 +132,12 @@ pub enum CacheSource {
     Remote,
 }
 
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CacheHitMetadata {
     pub source: CacheSource,
     pub time_saved: u64,
+    pub sha: Option<String>,
+    pub dirty_hash: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
