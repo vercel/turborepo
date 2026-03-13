@@ -275,6 +275,20 @@ impl RunBuilder {
             }
         }
 
+        // Packages referenced by `pkg#task` CLI args are direct task graph
+        // entry points regardless of --filter. Add them to filtered_pkgs so
+        // the engine builder iterates their workspace.
+        for task_str in &opts.run_opts.tasks {
+            let task_name = TaskName::from(task_str.as_str());
+            if let Some(pkg) = task_name.package() {
+                filtered_pkgs.entry(PackageName::from(pkg)).or_insert(
+                    PackageInclusionReason::IncludedByFilter {
+                        filters: vec![task_str.clone()],
+                    },
+                );
+            }
+        }
+
         Ok(filtered_pkgs)
     }
 
