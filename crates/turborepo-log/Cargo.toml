@@ -1,0 +1,13 @@
+[package]
+name = "turborepo-log"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "User-facing logging interface for Turborepo"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
