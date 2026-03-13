@@ -10,7 +10,7 @@ use tracing::Instrument;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient, SharedHttpClient};
-use turborepo_cache::AsyncCache;
+use turborepo_cache::{AsyncCache, CacheScmState};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -66,6 +66,10 @@ pub struct RunBuilder {
     // that trigger the file watcher, causing an infinite rebuild loop.
     output_watcher: Option<Arc<dyn turborepo_run_cache::OutputWatcher>>,
     query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+    // In watch mode with `watchUsingTaskInputs`, the file watcher provides
+    // the set of changed files that triggered the rebuild. Used to filter
+    // the engine down to only tasks whose declared inputs match.
+    changed_files_for_watch: Option<HashSet<turbopath::AnchoredSystemPathBuf>>,
 }
 
 impl RunBuilder {
@@ -105,6 +109,7 @@ impl RunBuilder {
             add_all_tasks: false,
             output_watcher: None,
             query_server: None,
+            changed_files_for_watch: None,
         })
     }
 
@@ -128,6 +133,11 @@ impl RunBuilder {
 
     pub fn hide_prelude(mut self) -> Self {
         self.should_print_prelude_override = Some(false);
+        self
+    }
+
+    pub fn with_changed_files(mut self, files: HashSet<turbopath::AnchoredSystemPathBuf>) -> Self {
+        self.changed_files_for_watch = Some(files);
         self
     }
 
@@ -262,6 +272,20 @@ impl RunBuilder {
                     .filter_map(|t| t.package().map(PackageName::from))
                     .collect();
                 filtered_pkgs.retain(|pkg, _| target_packages.contains(pkg));
+            }
+        }
+
+        // Packages referenced by `pkg#task` CLI args are direct task graph
+        // entry points regardless of --filter. Add them to filtered_pkgs so
+        // the engine builder iterates their workspace.
+        for task_str in &opts.run_opts.tasks {
+            let task_name = TaskName::from(task_str.as_str());
+            if let Some(pkg) = task_name.package() {
+                filtered_pkgs.entry(PackageName::from(pkg)).or_insert(
+                    PackageInclusionReason::IncludedByFilter {
+                        filters: vec![task_str.clone()],
+                    },
+                );
             }
         }
 
@@ -419,14 +443,31 @@ impl RunBuilder {
             })
             .unzip();
 
+        let scm_state_task = {
+            let scm = scm.clone();
+            let repo_root = self.repo_root.clone();
+            tokio::task::spawn_blocking(move || {
+                let _span = tracing::info_span!("capture_scm_state").entered();
+                let sha = scm.get_current_sha(&repo_root).ok();
+                let dirty_hash = scm.get_dirty_hash();
+                if sha.is_some() || dirty_hash.is_some() {
+                    Some(CacheScmState { sha, dirty_hash })
+                } else {
+                    None
+                }
+            })
+        };
+
         let async_cache = {
             let _span = tracing::info_span!("async_cache_new").entered();
+            let scm_state = scm_state_task.await.expect("scm state capture panicked");
             AsyncCache::new(
                 &self.opts.cache_opts,
                 &self.repo_root,
                 api_client.clone(),
                 self.api_auth.clone(),
                 analytics_sender,
+                scm_state,
             )?
         };
 
@@ -488,10 +529,10 @@ impl RunBuilder {
             let _span = tracing::info_span!("env_infer").entered();
             EnvironmentVariableMap::infer()
         };
-        {
+        crate::rayon_compat::block_in_place(|| {
             let _span = tracing::info_span!("turbo_json_preload").entered();
             turbo_json_loader.preload_all();
-        }
+        });
 
         let filtered_pkgs = {
             let _span = tracing::info_span!("calculate_filtered_packages").entered();
@@ -504,13 +545,6 @@ impl RunBuilder {
             )?
         };
 
-        let task_access = {
-            let _span = tracing::info_span!("task_access_setup").entered();
-            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
-            ta.restore_config().await;
-            ta
-        };
-
         let mut engine = self.build_engine(
             &pkg_dep_graph,
             &root_turbo_json,
@@ -518,6 +552,19 @@ impl RunBuilder {
             &turbo_json_loader,
         )?;
 
+        let use_task_level_affected = self.opts.scope_opts.affected_range.is_some()
+            && self.opts.future_flags.affected_using_task_inputs;
+
+        let task_access = {
+            let _span = tracing::info_span!("task_access_setup").entered();
+            let ta = TaskAccess::new(self.repo_root.clone(), async_cache.clone(), &scm);
+            ta.restore_config().await;
+            ta
+        };
+
+        // --parallel removes inter-package dependencies from the package graph,
+        // requiring a fresh engine build. Affected filtering runs once afterward
+        // rather than on both engines to avoid a redundant SCM query.
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
             engine = self.build_engine(
@@ -525,6 +572,15 @@ impl RunBuilder {
                 &root_turbo_json,
                 filtered_pkgs.keys(),
                 &turbo_json_loader,
+            )?;
+        }
+
+        if use_task_level_affected {
+            engine = self.filter_engine_to_affected_tasks(
+                engine,
+                &pkg_dep_graph,
+                &root_turbo_json,
+                &scm,
             )?;
         }
 
@@ -605,6 +661,73 @@ impl RunBuilder {
         ))
     }
 
+    /// Returns a new engine containing only tasks whose declared `inputs`
+    /// globs match the changed files (plus their transitive dependents).
+    /// Called after the engine is built via the normal scope resolution path.
+    ///
+    /// `scm.changed_files()` returns a `Result<Result<..>>`: the outer error
+    /// is an SCM communication failure (propagated via `?`), the inner error
+    /// means the change set couldn't be computed (e.g. invalid ref, shallow
+    /// clone). In the inner-error case, filtering is skipped and all tasks
+    /// run — a fail-open to prevent `--affected` from silently dropping tasks
+    /// when git state is ambiguous.
+    #[tracing::instrument(skip_all)]
+    fn filter_engine_to_affected_tasks(
+        &self,
+        engine: Engine,
+        pkg_dep_graph: &PackageGraph,
+        root_turbo_json: &TurboJson,
+        scm: &SCM,
+    ) -> Result<Engine, Error> {
+        let (from_ref, to_ref) = self
+            .opts
+            .scope_opts
+            .affected_range
+            .as_ref()
+            .expect("caller verified affected_range is Some");
+        let maybe_changed_files = scm.changed_files(
+            &self.repo_root,
+            from_ref.as_deref(),
+            to_ref.as_deref(),
+            true,
+            true,
+            true,
+        )?;
+
+        match maybe_changed_files {
+            Ok(changed_files) => {
+                let total_tasks = engine.task_ids().count();
+                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                    &engine,
+                    pkg_dep_graph,
+                    &changed_files,
+                    &root_turbo_json.global_deps,
+                );
+                tracing::info!(
+                    total_tasks,
+                    affected_tasks = affected_tasks.len(),
+                    changed_files = changed_files.len(),
+                    "task-level affected detection complete"
+                );
+                Ok(engine.retain_affected_tasks(&affected_tasks))
+            }
+            Err(e) => {
+                tracing::warn!(
+                    error = ?e,
+                    "SCM returned invalid change set; skipping task-level filtering"
+                );
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo("scm"),
+                    "--affected could not determine changed files. All tasks will run. Check your \
+                     git fetch depth.",
+                )
+                .field("error", format!("{e:?}"))
+                .emit();
+                Ok(engine)
+            }
+        }
+    }
+
     #[tracing::instrument(skip_all)]
     fn build_engine<'a>(
         &self,
@@ -639,10 +762,55 @@ impl RunBuilder {
 
         let mut engine = builder.build()?;
 
+        // In watch mode with the future flag, filter the engine to only tasks
+        // whose declared inputs match the changed files.
+        //
+        // When active, this REPLACES create_engine_for_subgraph because:
+        // 1. retain_affected_tasks already selects the correct tasks + dependents
+        // 2. The entrypoint packages (from file watcher events) may not overlap with
+        //    the affected tasks (e.g. a $TURBO_ROOT$ input in another package)
+        // 3. retain_affected_tasks requires the Root sentinel node, which
+        //    create_engine_for_subgraph removes
+        let watch_task_filtered = if let Some(ref changed_files) = self.changed_files_for_watch {
+            if self.opts.future_flags.watch_using_task_inputs && !changed_files.is_empty() {
+                // Only consider files that still exist on disk. Editor temp
+                // files (vim 4913, *~ backups, etc.) are created and deleted
+                // within the same watcher batch. The hash algorithm only sees
+                // files that exist, so input matching should too.
+                let existing_files: std::collections::HashSet<_> = changed_files
+                    .iter()
+                    .filter(|f| self.repo_root.resolve(f).exists())
+                    .cloned()
+                    .collect();
+
+                let total_tasks = engine.task_ids().count();
+                let affected_tasks = crate::task_change_detector::affected_task_ids(
+                    &engine,
+                    pkg_dep_graph,
+                    &existing_files,
+                    root_turbo_json.global_deps.as_slice(),
+                );
+                tracing::info!(
+                    total_tasks,
+                    affected_tasks = affected_tasks.len(),
+                    changed_files = existing_files.len(),
+                    "watch task-level input filtering complete"
+                );
+                engine = engine.retain_affected_tasks(&affected_tasks);
+                true
+            } else {
+                false
+            }
+        } else {
+            false
+        };
+
         // If we have an initial task, we prune out the engine to only
         // tasks that are reachable from that initial task.
-        if let Some(entrypoint_packages) = &self.entrypoint_packages {
-            engine = engine.create_engine_for_subgraph(entrypoint_packages);
+        if !watch_task_filtered {
+            if let Some(entrypoint_packages) = &self.entrypoint_packages {
+                engine = engine.create_engine_for_subgraph(entrypoint_packages);
+            }
         }
 
         if !self.opts.run_opts.parallel && self.should_validate_engine {

@@ -8,6 +8,7 @@
 // errors are already established patterns in the codebase
 #![allow(clippy::result_large_err)]
 
+pub mod affected;
 mod builder;
 mod builder_error;
 mod builder_errors;
@@ -24,6 +25,7 @@ use std::{
     fmt,
 };
 
+pub use affected::match_tasks_against_changed_files;
 pub use builder::{EngineBuilder, TaskInheritanceResolver, ValidationMode};
 pub use builder_error::Error as BuilderError;
 pub use builder_errors::{
@@ -302,6 +304,87 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             // We've filtered out persistent tasks
             has_non_interruptible_tasks: false,
         }
+    }
+
+    /// Returns a new engine containing only the given directly affected tasks
+    /// and their transitive dependents. Used for task-level `--affected`
+    /// detection: the caller determines which tasks' `inputs` match the changed
+    /// files, then this method expands that set to include downstream tasks and
+    /// prunes everything else.
+    ///
+    /// This consumes and returns a new engine rather than mutating in place,
+    /// consistent with `create_engine_for_subgraph` and the sealed typestate
+    /// contract. Must be called during build, before the engine is shared
+    /// via `Arc` or handed to the executor.
+    pub fn retain_affected_tasks(mut self, affected_tasks: &HashSet<TaskId>) -> Self {
+        let entrypoint_indices: Vec<_> = affected_tasks
+            .iter()
+            .filter_map(|task_id| self.task_lookup.get(task_id))
+            .copied()
+            .collect();
+
+        let mut reachable = HashSet::new();
+        reachable.insert(self.root_index);
+        depth_first_search(Reversed(&self.task_graph), entrypoint_indices, |event| {
+            if let DfsEvent::Discover(n, _) = event {
+                reachable.insert(n);
+            }
+        });
+
+        self.task_graph = self.task_graph.filter_map(
+            |node_idx, node| {
+                if reachable.contains(&node_idx) {
+                    Some(node.clone())
+                } else {
+                    None
+                }
+            },
+            |_, _| Some(()),
+        );
+
+        // Rebuild all metadata from the pruned graph. root_index is recovered
+        // during the task_lookup rebuild to avoid a separate linear scan.
+        let mut new_root_index = None;
+        self.task_lookup = self
+            .task_graph
+            .node_indices()
+            .filter_map(|index| {
+                match self
+                    .task_graph
+                    .node_weight(index)
+                    .expect("node index should be present")
+                {
+                    TaskNode::Root => {
+                        new_root_index = Some(index);
+                        None
+                    }
+                    TaskNode::Task(task) => Some((task.clone(), index)),
+                }
+            })
+            .collect();
+        self.root_index = new_root_index.expect("root node should be present");
+
+        self.task_definitions
+            .retain(|id, _| self.task_lookup.contains_key(id));
+        self.task_locations
+            .retain(|id, _| self.task_lookup.contains_key(id));
+
+        self.package_tasks =
+            self.task_lookup
+                .iter()
+                .fold(HashMap::new(), |mut acc, (task_id, &idx)| {
+                    acc.entry(PackageName::from(task_id.package()))
+                        .or_default()
+                        .push(idx);
+                    acc
+                });
+
+        self.has_non_interruptible_tasks = self
+            .task_definitions
+            .values()
+            .any(|def| def.persistent() && !def.interruptible());
+
+        self
     }
 
     /// Creates an `Engine` with only interruptible tasks, i.e. non-persistent
@@ -669,6 +752,268 @@ mod task_error_tests {
         let warning = warning.unwrap();
         assert_eq!(warning.task_id(), "a-task");
         assert_eq!(warning.missing_platform_env(), &["MY_VAR".to_owned()]);
+    }
+}
+
+#[cfg(test)]
+mod affected_tasks_tests {
+    use std::collections::HashSet;
+
+    use super::*;
+
+    /// Builds a linear chain: a#build ← b#build ← c#build
+    /// (b depends on a, c depends on b)
+    fn build_linear_engine() -> Engine {
+        let mut engine: Engine<Building> = Engine::new();
+
+        let a = TaskId::new("a", "build");
+        let b = TaskId::new("b", "build");
+        let c = TaskId::new("c", "build");
+
+        let a_idx = engine.get_index(&a);
+        let b_idx = engine.get_index(&b);
+        let c_idx = engine.get_index(&c);
+
+        engine.add_definition(a.clone(), TaskInfo::default());
+        engine.add_definition(b.clone(), TaskInfo::default());
+        engine.add_definition(c.clone(), TaskInfo::default());
+
+        // b depends on a, c depends on b
+        engine.task_graph_mut().add_edge(b_idx, a_idx, ());
+        engine.task_graph_mut().add_edge(c_idx, b_idx, ());
+
+        engine.connect_to_root(&a);
+
+        engine.seal()
+    }
+
+    fn task_ids_set(engine: &Engine) -> HashSet<TaskId<'static>> {
+        engine.task_ids().cloned().collect()
+    }
+
+    #[test]
+    fn empty_affected_returns_root_only() {
+        let engine = build_linear_engine();
+        let engine = engine.retain_affected_tasks(&HashSet::new());
+
+        assert!(
+            task_ids_set(&engine).is_empty(),
+            "empty affected set should produce an engine with no tasks"
+        );
+        assert!(
+            engine.tasks().any(|n| *n == TaskNode::Root),
+            "root node must always be present"
+        );
+    }
+
+    #[test]
+    fn affected_leaf_includes_all_dependents() {
+        let engine = build_linear_engine();
+        let affected: HashSet<_> = [TaskId::new("a", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+
+        let ids = task_ids_set(&engine);
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains(&TaskId::new("a", "build")));
+        assert!(ids.contains(&TaskId::new("b", "build")));
+        assert!(ids.contains(&TaskId::new("c", "build")));
+    }
+
+    #[test]
+    fn affected_terminal_includes_only_itself() {
+        let engine = build_linear_engine();
+        let affected: HashSet<_> = [TaskId::new("c", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+
+        let ids = task_ids_set(&engine);
+        assert_eq!(ids.len(), 1);
+        assert!(ids.contains(&TaskId::new("c", "build")));
+    }
+
+    #[test]
+    fn affected_middle_includes_downstream() {
+        let engine = build_linear_engine();
+        let affected: HashSet<_> = [TaskId::new("b", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+
+        let ids = task_ids_set(&engine);
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&TaskId::new("b", "build")));
+        assert!(ids.contains(&TaskId::new("c", "build")));
+    }
+
+    #[test]
+    fn metadata_pruned_to_surviving_tasks() {
+        let engine = build_linear_engine();
+        let affected: HashSet<_> = [TaskId::new("c", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+
+        assert!(engine.task_definition(&TaskId::new("c", "build")).is_some());
+        assert!(engine.task_definition(&TaskId::new("a", "build")).is_none());
+        assert!(engine.task_definition(&TaskId::new("b", "build")).is_none());
+    }
+
+    #[test]
+    fn unrelated_task_excluded() {
+        let mut engine: Engine<Building> = Engine::new();
+
+        let a = TaskId::new("a", "build");
+        let b = TaskId::new("b", "build");
+        let x = TaskId::new("x", "build");
+
+        let a_idx = engine.get_index(&a);
+        let b_idx = engine.get_index(&b);
+        engine.get_index(&x);
+
+        engine.add_definition(a.clone(), TaskInfo::default());
+        engine.add_definition(b.clone(), TaskInfo::default());
+        engine.add_definition(x.clone(), TaskInfo::default());
+
+        engine.task_graph_mut().add_edge(b_idx, a_idx, ());
+        engine.connect_to_root(&a);
+        engine.connect_to_root(&x);
+
+        let engine = engine.seal();
+        let affected: HashSet<_> = [TaskId::new("a", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+
+        let ids = task_ids_set(&engine);
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&TaskId::new("a", "build")));
+        assert!(ids.contains(&TaskId::new("b", "build")));
+        assert!(!ids.contains(&TaskId::new("x", "build")));
+    }
+
+    #[test]
+    fn nonexistent_task_id_ignored() {
+        let engine = build_linear_engine();
+        let affected: HashSet<_> = [TaskId::new("nonexistent", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+
+        assert!(
+            task_ids_set(&engine).is_empty(),
+            "nonexistent task should produce empty engine"
+        );
+    }
+
+    #[test]
+    fn has_non_interruptible_tracks_pruned_state() {
+        let mut engine: Engine<Building> = Engine::new();
+
+        let a = TaskId::new("a", "build");
+        let b = TaskId::new("b", "dev");
+
+        engine.get_index(&a);
+        engine.get_index(&b);
+
+        engine.add_definition(a.clone(), TaskInfo::default());
+        engine.add_definition(
+            b.clone(),
+            TaskInfo {
+                persistent: true,
+                interruptible: false,
+                ..Default::default()
+            },
+        );
+
+        engine.connect_to_root(&a);
+        engine.connect_to_root(&b);
+
+        let engine = engine.seal();
+        assert!(engine.has_non_interruptible_tasks);
+
+        let affected: HashSet<_> = [TaskId::new("a", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+        assert!(
+            !engine.has_non_interruptible_tasks,
+            "filtered engine should not have non-interruptible tasks"
+        );
+    }
+
+    /// Diamond graph: a → b, a → c, b → d, c → d
+    /// Tests that multi-path reachability is handled correctly.
+    #[test]
+    fn diamond_graph_affected_at_root() {
+        let mut engine: Engine<Building> = Engine::new();
+
+        let a = TaskId::new("a", "build");
+        let b = TaskId::new("b", "build");
+        let c = TaskId::new("c", "build");
+        let d = TaskId::new("d", "build");
+
+        let a_idx = engine.get_index(&a);
+        let b_idx = engine.get_index(&b);
+        let c_idx = engine.get_index(&c);
+        let d_idx = engine.get_index(&d);
+
+        engine.add_definition(a.clone(), TaskInfo::default());
+        engine.add_definition(b.clone(), TaskInfo::default());
+        engine.add_definition(c.clone(), TaskInfo::default());
+        engine.add_definition(d.clone(), TaskInfo::default());
+
+        // b depends on a, c depends on a, d depends on b and c
+        engine.task_graph_mut().add_edge(b_idx, a_idx, ());
+        engine.task_graph_mut().add_edge(c_idx, a_idx, ());
+        engine.task_graph_mut().add_edge(d_idx, b_idx, ());
+        engine.task_graph_mut().add_edge(d_idx, c_idx, ());
+        engine.connect_to_root(&a);
+
+        let engine = engine.seal();
+        let affected: HashSet<_> = [TaskId::new("a", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+
+        let ids = task_ids_set(&engine);
+        assert_eq!(ids.len(), 4, "all diamond tasks should survive: {ids:?}");
+    }
+
+    #[test]
+    fn diamond_graph_affected_at_branch() {
+        let mut engine: Engine<Building> = Engine::new();
+
+        let a = TaskId::new("a", "build");
+        let b = TaskId::new("b", "build");
+        let c = TaskId::new("c", "build");
+        let d = TaskId::new("d", "build");
+
+        let a_idx = engine.get_index(&a);
+        let b_idx = engine.get_index(&b);
+        let c_idx = engine.get_index(&c);
+        let d_idx = engine.get_index(&d);
+
+        engine.add_definition(a.clone(), TaskInfo::default());
+        engine.add_definition(b.clone(), TaskInfo::default());
+        engine.add_definition(c.clone(), TaskInfo::default());
+        engine.add_definition(d.clone(), TaskInfo::default());
+
+        engine.task_graph_mut().add_edge(b_idx, a_idx, ());
+        engine.task_graph_mut().add_edge(c_idx, a_idx, ());
+        engine.task_graph_mut().add_edge(d_idx, b_idx, ());
+        engine.task_graph_mut().add_edge(d_idx, c_idx, ());
+        engine.connect_to_root(&a);
+
+        let engine = engine.seal();
+        // Only b is affected — d depends on b, so d is included. a and c are not.
+        let affected: HashSet<_> = [TaskId::new("b", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+
+        let ids = task_ids_set(&engine);
+        assert_eq!(ids.len(), 2, "b and d should survive: {ids:?}");
+        assert!(ids.contains(&TaskId::new("b", "build")));
+        assert!(ids.contains(&TaskId::new("d", "build")));
+    }
+
+    #[test]
+    fn retain_is_idempotent() {
+        let engine = build_linear_engine();
+        let affected: HashSet<_> = [TaskId::new("b", "build")].into_iter().collect();
+        let engine = engine.retain_affected_tasks(&affected);
+        let ids_first = task_ids_set(&engine);
+
+        // Second call with same affected set should be idempotent.
+        let engine = engine.retain_affected_tasks(&affected);
+        let ids_second = task_ids_set(&engine);
+
+        assert_eq!(ids_first, ids_second, "retain should be idempotent");
     }
 }
 

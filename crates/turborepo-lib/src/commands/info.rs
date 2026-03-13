@@ -1,4 +1,4 @@
-use std::{env, io, path::Path};
+use std::{env, io, path::Path, process};
 
 use sysinfo::{System, SystemExt};
 use thiserror::Error;
@@ -62,6 +62,20 @@ pub async fn run(base: CommandBase) {
     );
     println!();
 
+    let node_version = process::Command::new("node")
+        .arg("--version")
+        .output()
+        .ok()
+        .and_then(|output| {
+            output
+                .status
+                .success()
+                .then(|| String::from_utf8(output.stdout).ok())
+                .flatten()
+                .map(|v| v.trim().to_owned())
+        })
+        .unwrap_or_else(|| "Not found".to_owned());
+
     println!("Environment:");
     println!("   CI: {:#?}", turborepo_ci::Vendor::get_name());
     println!(
@@ -86,5 +100,6 @@ pub async fn run(base: CommandBase) {
         env::var("SHELL").unwrap_or_else(|_| "unknown".to_owned())
     );
     println!("   stdin: {}", turborepo_ci::is_ci());
+    println!("   Node.js version: {node_version}");
     println!();
 }

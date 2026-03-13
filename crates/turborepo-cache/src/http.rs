@@ -256,6 +256,8 @@ impl HTTPCache {
         Ok(Some(CacheHitMetadata {
             source: CacheSource::Remote,
             time_saved: duration,
+            sha: None,
+            dirty_hash: None,
         }))
     }
 
@@ -356,6 +358,8 @@ impl HTTPCache {
             CacheHitMetadata {
                 source: CacheSource::Remote,
                 time_saved: duration,
+                sha: None,
+                dirty_hash: None,
             },
             files,
         )))

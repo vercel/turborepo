@@ -22,7 +22,7 @@ mod yarn1;
 use std::{
     any::Any,
     borrow::Cow,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
 };
 
 pub use berry::{Error as BerryError, *};
@@ -37,7 +37,7 @@ use turbopath::RelativeUnixPathBuf;
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
 type ResolveCache = DashMap<String, Option<Package>>;
-type DepsCache = DashMap<String, Option<HashMap<String, String>>>;
+type DepsCache = DashMap<String, Option<BTreeMap<String, String>>>;
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
@@ -76,7 +76,7 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<Cow<'_, HashMap<String, String>>>, Error>;
+    ) -> Result<Option<Cow<'_, BTreeMap<String, String>>>, Error>;
 
     /// Given a list of workspace packages and external packages that are
     /// dependencies of the workspace packages, produce a lockfile that only
@@ -130,7 +130,7 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
 /// version) and calculates the transitive closures for all of them
 pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     lockfile: &L,
-    workspaces: HashMap<String, HashMap<String, String>>,
+    workspaces: HashMap<String, BTreeMap<String, String>>,
     ignore_missing_packages: bool,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
     let resolve_cache: ResolveCache = DashMap::new();
@@ -155,7 +155,7 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
 pub fn transitive_closure<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,
-    unresolved_deps: HashMap<String, String>,
+    unresolved_deps: BTreeMap<String, String>,
     ignore_missing_packages: bool,
 ) -> Result<HashSet<Package>, Error> {
     let resolve_cache: ResolveCache = DashMap::new();
@@ -173,7 +173,7 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
 fn transitive_closure_cached<L: Lockfile + ?Sized>(
     lockfile: &L,
     workspace_path: &str,
-    unresolved_deps: HashMap<String, String>,
+    unresolved_deps: BTreeMap<String, String>,
     ignore_missing_packages: bool,
     resolve_cache: &ResolveCache,
     deps_cache: &DepsCache,
@@ -221,20 +221,21 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
 
     fn resolve_deps(
         &mut self,
-        unresolved_deps: &HashMap<String, String>,
+        unresolved_deps: &BTreeMap<String, String>,
         ignore_missing_packages: bool,
-        is_workspace_root_deps: bool,
+        _is_workspace_root_deps: bool,
     ) -> Result<Vec<Package>, Error> {
         let mut newly_resolved = Vec::new();
 
         for (name, specifier) in unresolved_deps {
-            // For direct workspace dependencies, include workspace_path in the cache key
-            // since resolution depends on the workspace's importer entry.
-            // For transitive sub-dependencies, the resolution is workspace-independent
-            // (the version is already a resolved lockfile key), so we omit workspace_path
-            // to enable cross-workspace cache sharing.
-            let wp = is_workspace_root_deps.then_some(self.workspace_path);
-            self.make_cache_key(wp, name, specifier);
+            // Always include workspace_path in the cache key because
+            // resolve_package() receives it and some lockfile implementations
+            // (e.g. Bun) use it for workspace-scoped resolution even for
+            // transitive dependencies. Without this, parallel workspace
+            // processing in all_transitive_closures() can produce
+            // non-deterministic results when one workspace's cached resolution
+            // is incorrectly reused by another workspace.
+            self.make_cache_key(Some(self.workspace_path), name, specifier);
 
             let pkg = match self.resolve_cache.get(self.key_buf.as_str()) {
                 Some(cached) => cached.clone(),
@@ -267,7 +268,7 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
 
     fn walk(
         &mut self,
-        unresolved_deps: &HashMap<String, String>,
+        unresolved_deps: &BTreeMap<String, String>,
         resolved_deps: &mut HashSet<Package>,
         ignore_missing_packages: bool,
         is_workspace_root_deps: bool,

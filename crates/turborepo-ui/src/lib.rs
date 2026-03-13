@@ -10,7 +10,9 @@ mod logs;
 mod output;
 mod prefixed;
 pub mod sender;
+mod terminal_sink;
 pub mod tui;
+mod tui_sink;
 pub mod wui;
 
 use std::{borrow::Cow, env, f64::consts::PI, io::IsTerminal, sync::LazyLock, time::Duration};
@@ -25,7 +27,9 @@ pub use crate::{
     logs::{LogWriter, replay_logs, replay_logs_with_crlf},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
+    terminal_sink::TerminalSink,
     tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_on_panic},
+    tui_sink::TuiSink,
 };
 
 // Re-export documentation for panic handler integration:

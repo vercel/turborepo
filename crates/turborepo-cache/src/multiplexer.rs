@@ -9,7 +9,7 @@ use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{
-    CacheConfig, CacheError, CacheHitMetadata, CacheOpts,
+    CacheConfig, CacheError, CacheHitMetadata, CacheOpts, CacheScmState,
     fs::FSCache,
     http::{HTTPCache, UploadMap},
 };
@@ -36,6 +36,7 @@ impl CacheMultiplexer {
         api_client: Option<APIClient>,
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
+        scm_state: Option<CacheScmState>,
     ) -> Result<Self, CacheError> {
         let use_fs_cache = opts.cache.local.should_use();
         let use_http_cache = opts.cache.remote.should_use();
@@ -52,7 +53,14 @@ impl CacheMultiplexer {
             opts.cache_dir, repo_root
         );
         let fs_cache = use_fs_cache
-            .then(|| FSCache::new(&opts.cache_dir, repo_root, analytics_recorder.clone()))
+            .then(|| {
+                FSCache::new(
+                    &opts.cache_dir,
+                    repo_root,
+                    analytics_recorder.clone(),
+                    scm_state,
+                )
+            })
             .transpose()?;
 
         let http_cache = if use_http_cache {
@@ -161,8 +169,7 @@ impl CacheMultiplexer {
 
         if self.cache_config.remote.read
             && let Some(http) = self.get_http_cache()
-            && let Ok(Some((CacheHitMetadata { source, time_saved }, files))) =
-                http.fetch(key).await
+            && let Ok(Some((hit_metadata, files))) = http.fetch(key).await
         {
             // Store this into fs cache. We can ignore errors here because we know
             // we have previously successfully stored in HTTP cache, and so the overall
@@ -171,10 +178,10 @@ impl CacheMultiplexer {
             if self.cache_config.local.write
                 && let Some(fs) = &self.fs
             {
-                let _ = fs.put(anchor, key, &files, time_saved);
+                let _ = fs.put(anchor, key, &files, hit_metadata.time_saved);
             }
 
-            return Ok(Some((CacheHitMetadata { source, time_saved }, files)));
+            return Ok(Some((hit_metadata, files)));
         }
 
         Ok(None)

@@ -7219,6 +7219,7 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "tracing",
+ "turborepo-ai-agents",
  "turborepo-ci",
  "turborepo-types",
  "turborepo-vercel-api",
@@ -7248,6 +7249,7 @@ dependencies = [
  "tokio",
  "tracing",
  "turbopath",
+ "turborepo-ai-agents",
  "turborepo-api-client",
  "turborepo-dirs",
  "turborepo-ui",
@@ -7712,12 +7714,14 @@ dependencies = [
  "turborepo-hash",
  "turborepo-json-rewrite",
  "turborepo-lockfiles",
+ "turborepo-log",
  "turborepo-microfrontends",
  "turborepo-microfrontends-proxy",
  "turborepo-otel",
  "turborepo-process",
  "turborepo-profile-md",
  "turborepo-query-api",
+ "turborepo-rayon-compat",
  "turborepo-repository",
  "turborepo-run-cache",
  "turborepo-run-summary",
@@ -7766,6 +7770,14 @@ dependencies = [
  "tracing",
  "turbopath",
  "turborepo-errors",
+]
+
+[[package]]
+name = "turborepo-log"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -7903,6 +7915,7 @@ dependencies = [
  "petgraph 0.8.3",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 2.0.18",
  "tokio",
  "tower-http 0.5.2",
@@ -7945,6 +7958,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-rayon-compat"
+version = "0.1.0"
+dependencies = [
+ "rayon",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "turborepo-repository"
 version = "0.1.0"
 dependencies = [
@@ -7979,6 +8001,7 @@ dependencies = [
  "turborepo-errors",
  "turborepo-graph-utils",
  "turborepo-lockfiles",
+ "turborepo-rayon-compat",
  "turborepo-unescape",
  "wax",
  "which",
@@ -8029,6 +8052,7 @@ dependencies = [
  "turborepo-hash",
  "turborepo-lockfiles",
  "turborepo-otel",
+ "turborepo-rayon-compat",
  "turborepo-repository",
  "turborepo-scm",
  "turborepo-task-id",
@@ -8065,6 +8089,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha1",
+ "sha2",
  "tempfile",
  "test-case",
  "thiserror 2.0.18",
@@ -8285,10 +8310,12 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "tracing",
  "ts-rs",
  "turbopath",
  "turborepo-errors",
  "turborepo-task-id",
+ "wax",
 ]
 
 [[package]]
@@ -8320,6 +8347,7 @@ dependencies = [
  "tui-term",
  "turbopath",
  "turborepo-ci",
+ "turborepo-log",
  "turborepo-types",
  "turborepo-vt100",
  "which",

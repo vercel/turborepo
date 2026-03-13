@@ -88,7 +88,12 @@
 //! - [`PackageEntry`]: External package representation
 //! - [`LockfileVersion`]: Version enum for format compatibility
 
-use std::{any::Any, collections::HashMap, str::FromStr, sync::OnceLock};
+use std::{
+    any::Any,
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+    sync::OnceLock,
+};
 
 use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
@@ -588,8 +593,10 @@ impl Lockfile for BunLockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::borrow::Cow<'_, std::collections::HashMap<String, String>>>, crate::Error>
-    {
+    ) -> Result<
+        Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>,
+        crate::Error,
+    > {
         let entry_key = self
             .key_to_entry
             .get(key)
@@ -600,7 +607,7 @@ impl Lockfile for BunLockfile {
             .get(entry_key)
             .ok_or_else(|| crate::Error::MissingPackage(key.into()))?;
 
-        let mut deps = HashMap::new();
+        let mut deps = std::collections::BTreeMap::new();
 
         let Some(info) = &entry.info else {
             return Ok(Some(std::borrow::Cow::Owned(deps)));
@@ -1612,11 +1619,11 @@ impl BunLockfile {
         };
 
         // Collect workspace dependencies
-        let workspace_deps: HashMap<String, HashMap<String, String>> = pruned_data
+        let workspace_deps: HashMap<String, BTreeMap<String, String>> = pruned_data
             .workspaces
             .iter()
             .map(|(ws_path, ws_entry)| {
-                let mut deps = HashMap::new();
+                let mut deps = BTreeMap::new();
                 if let Some(d) = &ws_entry.dependencies {
                     deps.extend(d.clone());
                 }
@@ -2534,7 +2541,7 @@ mod test {
         let lockfile = BunLockfile::from_str(&contents).unwrap();
 
         // Simulate what turbo prune would call: Get transitive closure first
-        let unresolved_deps: std::collections::HashMap<String, String> =
+        let unresolved_deps: std::collections::BTreeMap<String, String> =
             [("@hookform/resolvers".to_string(), "^5.0.1".to_string())]
                 .into_iter()
                 .collect();
@@ -3094,7 +3101,7 @@ mod test {
         let lockfile = BunLockfile::from_str(&contents).unwrap();
 
         // Compute transitive closure for app1 (simulating turbo prune --scope=app1)
-        let mut app1_deps = std::collections::HashMap::new();
+        let mut app1_deps = std::collections::BTreeMap::new();
         app1_deps.insert("color".to_string(), "^5.0.3".to_string());
         app1_deps.insert("express-winston".to_string(), "4.2.0".to_string());
 
@@ -3229,7 +3236,7 @@ mod test {
         // Prune for apps/web only. The transitive closure includes
         // negotiator@0.6.3 (via accepts) but NOT negotiator@0.6.4 (only
         // needed by compression, which is in apps/admin).
-        let mut web_deps = std::collections::HashMap::new();
+        let mut web_deps = std::collections::BTreeMap::new();
         web_deps.insert("express".to_string(), "^4.18.0".to_string());
         let closure = crate::transitive_closure(&lockfile, "apps/web", web_deps, false).unwrap();
         let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
@@ -3306,7 +3313,7 @@ mod test {
         // chalk/ansi-styles -> chalk/ansi-styles/color-convert ->
         // chalk/ansi-styles/color-convert/color-name but NOT the hoisted
         // ansi-styles@4.3.0, color-convert@2.0.1, or color-name@2.1.0.
-        let mut web_deps = std::collections::HashMap::new();
+        let mut web_deps = std::collections::BTreeMap::new();
         web_deps.insert("express-winston".to_string(), "4.2.0".to_string());
         let closure = crate::transitive_closure(&lockfile, "apps/web", web_deps, false).unwrap();
         let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
@@ -3406,7 +3413,7 @@ mod test {
         );
 
         // Prune to just the api workspace
-        let mut api_deps = std::collections::HashMap::new();
+        let mut api_deps = std::collections::BTreeMap::new();
         api_deps.insert(
             "@api/sdk".to_string(),
             "file:apps/api/.api/apis/sdk".to_string(),
@@ -3490,5 +3497,86 @@ mod test {
             !encoded_str.contains(r#""my-local-pkg@link:../../local-pkg", """#),
             "link: entry should not have empty registry string inserted"
         );
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12252
+    // When two workspaces have workspace-scoped entries for the same package
+    // at different versions, and a shared transitive dependency references that
+    // package with a wide semver range, the transitive closure must resolve
+    // to the correct workspace-scoped version for each workspace — not whichever
+    // version happened to be cached first during parallel processing.
+    #[test]
+    fn test_all_transitive_closures_deterministic_with_workspace_scoped_packages() {
+        use std::collections::{BTreeMap, HashMap, HashSet};
+
+        let lockfile_content = r#"{
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": { "name": "test-monorepo" },
+                "apps/app-a": {
+                    "name": "app-a",
+                    "dependencies": { "shared": "^1.0.0" }
+                },
+                "apps/app-b": {
+                    "name": "app-b",
+                    "dependencies": { "shared": "^1.0.0" }
+                }
+            },
+            "packages": {
+                "app-a": ["app-a@workspace:apps/app-a"],
+                "app-b": ["app-b@workspace:apps/app-b"],
+                "shared": ["shared@1.0.0", "", {
+                    "dependencies": { "lib": ">=1.0.0" }
+                }, "sha512-shared"],
+                "lib": ["lib@2.0.0", "", {}, "sha512-lib2"],
+                "app-a/lib": ["lib@2.0.0", "", {}, "sha512-lib2"],
+                "app-b/lib": ["lib@1.0.0", "", {}, "sha512-lib1"]
+            }
+        }"#;
+
+        let lockfile = BunLockfile::from_str(lockfile_content).unwrap();
+
+        let mut workspaces = HashMap::new();
+        workspaces.insert(
+            "apps/app-a".to_string(),
+            BTreeMap::from([("shared".to_string(), "^1.0.0".to_string())]),
+        );
+        workspaces.insert(
+            "apps/app-b".to_string(),
+            BTreeMap::from([("shared".to_string(), "^1.0.0".to_string())]),
+        );
+
+        // Run multiple times to catch race-condition-driven non-determinism.
+        // Before the fix, the result would vary depending on which workspace
+        // populated the shared resolve cache first.
+        let mut prev_app_a: Option<HashSet<crate::Package>> = None;
+        let mut prev_app_b: Option<HashSet<crate::Package>> = None;
+
+        for _ in 0..50 {
+            let result =
+                crate::all_transitive_closures(&lockfile, workspaces.clone(), false).unwrap();
+
+            let app_a_pkgs = result.get("apps/app-a").unwrap();
+            let app_b_pkgs = result.get("apps/app-b").unwrap();
+
+            assert!(
+                app_a_pkgs.iter().any(|p| p.key == "lib@2.0.0"),
+                "app-a should have lib@2.0.0 via workspace-scoped resolution"
+            );
+            assert!(
+                app_b_pkgs.iter().any(|p| p.key == "lib@1.0.0"),
+                "app-b should have lib@1.0.0 via workspace-scoped resolution"
+            );
+
+            if let Some(ref prev) = prev_app_a {
+                assert_eq!(app_a_pkgs, prev, "app-a closure changed between runs");
+            }
+            if let Some(ref prev) = prev_app_b {
+                assert_eq!(app_b_pkgs, prev, "app-b closure changed between runs");
+            }
+
+            prev_app_a = Some(app_a_pkgs.clone());
+            prev_app_b = Some(app_b_pkgs.clone());
+        }
     }
 }

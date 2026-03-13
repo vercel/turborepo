@@ -1,8 +1,8 @@
 mod common;
 
-use std::fs;
+use std::{fs, path::Path};
 
-use common::{git, run_turbo, run_turbo_with_env, setup};
+use common::{git, run_turbo, run_turbo_with_env, setup, turbo_output_filters};
 
 fn setup_affected(dir: &std::path::Path) {
     setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", true).unwrap();
@@ -672,5 +672,465 @@ fn test_affected_tasks_with_explicit_base() {
     assert_eq!(
         json["data"]["affectedTasks"]["length"], 0,
         "base=HEAD with no uncommitted changes should show 0 affected tasks"
+    );
+}
+
+// ── turbo run --affected + affectedUsingTaskInputs future flag ──
+
+const TURBO_JSON_WITH_TASK_INPUTS_FLAG: &str = r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md", "!**/*.test.ts"]
+    }
+  },
+  "futureFlags": {
+    "affectedUsingTaskInputs": true
+  }
+}
+"#;
+
+/// Sets up the `affected_tasks_inputs` fixture with the
+/// `affectedUsingTaskInputs` future flag enabled.
+fn setup_task_level_affected(dir: &Path) {
+    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", true).unwrap();
+    // Enable the future flag before branching so it's on main.
+    fs::write(dir.join("turbo.json"), TURBO_JSON_WITH_TASK_INPUTS_FLAG).unwrap();
+    git(dir, &["add", "."]);
+    git(
+        dir,
+        &["commit", "-m", "enable task-level affected", "--quiet"],
+    );
+    git(dir, &["checkout", "-b", "my-branch"]);
+}
+
+#[test]
+fn test_task_level_affected_no_changes() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "test",
+            "typecheck",
+            "--affected",
+            "--log-order",
+            "grouped",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("0 successful, 0 total"),
+        "no changes → no tasks should run: {stdout}"
+    );
+}
+
+#[test]
+fn test_task_level_affected_source_file_change() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    // Change a .ts source file in lib-a. All three tasks (build, test,
+    // typecheck) should be affected since .ts matches default inputs and
+    // isn't excluded by any of them.
+    fs::write(
+        tempdir.path().join("packages/lib-a/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "test",
+            "typecheck",
+            "--affected",
+            "--dry=json",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
+
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    let task_ids: Vec<&str> = tasks
+        .iter()
+        .map(|t| t["taskId"].as_str().unwrap())
+        .collect();
+
+    // lib-a's build, test, and typecheck should all be affected
+    assert!(
+        task_ids.contains(&"lib-a#build"),
+        "lib-a#build should be affected: {task_ids:?}"
+    );
+    assert!(
+        task_ids.contains(&"lib-a#test"),
+        "lib-a#test should be affected: {task_ids:?}"
+    );
+    assert!(
+        task_ids.contains(&"lib-a#typecheck"),
+        "lib-a#typecheck should be affected: {task_ids:?}"
+    );
+
+    // app-a depends on ^build so its tasks should also be affected
+    assert!(
+        task_ids.contains(&"app-a#build"),
+        "app-a#build should be affected via ^build: {task_ids:?}"
+    );
+}
+
+#[test]
+fn test_task_level_affected_md_excludes_test_and_typecheck() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    // Change only a .md file in lib-a. The test task excludes *.md and the
+    // typecheck task excludes *.md. Only build (default inputs) should be
+    // directly affected in lib-a.
+    fs::write(
+        tempdir.path().join("packages/lib-a/README.md"),
+        "# updated docs",
+    )
+    .unwrap();
+
+    // Use --dry=json to inspect exactly which tasks are planned
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "test",
+            "typecheck",
+            "--affected",
+            "--dry=json",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
+
+    let tasks = json["tasks"]
+        .as_array()
+        .expect("tasks array in dry run JSON");
+    let task_ids: Vec<&str> = tasks
+        .iter()
+        .map(|t| t["taskId"].as_str().unwrap())
+        .collect();
+
+    // lib-a#build should be affected (default inputs match .md)
+    assert!(
+        task_ids.contains(&"lib-a#build"),
+        "lib-a#build should be affected by .md change: {task_ids:?}"
+    );
+
+    // lib-a#test should NOT be affected (inputs exclude *.md)
+    assert!(
+        !task_ids.contains(&"lib-a#test"),
+        "lib-a#test should NOT be affected by .md change (excluded by inputs): {task_ids:?}"
+    );
+
+    // lib-a#typecheck should NOT be affected (inputs exclude *.md)
+    assert!(
+        !task_ids.contains(&"lib-a#typecheck"),
+        "lib-a#typecheck should NOT be affected by .md change (excluded by inputs): {task_ids:?}"
+    );
+
+    // app-a tasks should be affected via dependency propagation from lib-a#build
+    assert!(
+        task_ids.contains(&"app-a#build"),
+        "app-a#build should be affected via ^build from lib-a: {task_ids:?}"
+    );
+}
+
+#[test]
+fn test_task_level_affected_test_file_excludes_typecheck() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    // Change only a .test.ts file. typecheck excludes both *.md and *.test.ts.
+    fs::write(
+        tempdir.path().join("packages/lib-a/index.test.ts"),
+        "// updated test",
+    )
+    .unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "test",
+            "typecheck",
+            "--affected",
+            "--dry=json",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
+
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    let task_ids: Vec<&str> = tasks
+        .iter()
+        .map(|t| t["taskId"].as_str().unwrap())
+        .collect();
+
+    // build and test should be affected (default inputs / test includes .test.ts)
+    assert!(
+        task_ids.contains(&"lib-a#build"),
+        "lib-a#build should be affected by .test.ts change: {task_ids:?}"
+    );
+    assert!(
+        task_ids.contains(&"lib-a#test"),
+        "lib-a#test should be affected by .test.ts change: {task_ids:?}"
+    );
+
+    // typecheck should NOT be affected (excludes *.test.ts)
+    assert!(
+        !task_ids.contains(&"lib-a#typecheck"),
+        "lib-a#typecheck should NOT be affected by .test.ts change (excluded): {task_ids:?}"
+    );
+}
+
+#[test]
+fn test_task_level_affected_global_file_runs_everything() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_task_level_affected(tempdir.path());
+
+    // Change root package.json — a default global dependency.
+    let root_pkg = tempdir.path().join("package.json");
+    let contents = fs::read_to_string(&root_pkg).unwrap();
+    let mut pkg: serde_json::Value = serde_json::from_str(&contents).unwrap();
+    pkg["description"] = serde_json::Value::String("changed".to_string());
+    fs::write(&root_pkg, serde_json::to_string_pretty(&pkg).unwrap()).unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "run",
+            "build",
+            "test",
+            "typecheck",
+            "--affected",
+            "--dry=json",
+        ],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
+
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    let task_ids: Vec<&str> = tasks
+        .iter()
+        .map(|t| t["taskId"].as_str().unwrap())
+        .collect();
+
+    // All tasks in both packages should be affected when a global file changes.
+    assert!(
+        task_ids.contains(&"lib-a#build"),
+        "global change should affect all tasks: {task_ids:?}"
+    );
+    assert!(
+        task_ids.contains(&"lib-a#test"),
+        "global change should affect all tasks: {task_ids:?}"
+    );
+    assert!(
+        task_ids.contains(&"app-a#build"),
+        "global change should affect all tasks: {task_ids:?}"
+    );
+    assert!(
+        task_ids.len() >= 4,
+        "global change should affect many tasks, got {}: {task_ids:?}",
+        task_ids.len()
+    );
+}
+
+#[test]
+fn test_affected_with_nonexistent_task_errors() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "foobarbaz", "--affected", "--log-order", "grouped"],
+    );
+    assert!(
+        !output.status.success(),
+        "expected failure for non-existent task with --affected"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    insta::with_settings!({ filters => turbo_output_filters() }, {
+        insta::assert_snapshot!("affected_nonexistent_task", stderr.to_string());
+    });
+}
+
+// -- turbo query affected shorthand tests --
+
+#[test]
+fn test_query_affected_shorthand_no_args() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    // Default (no flags) returns affected tasks
+    let output = run_turbo(tempdir.path(), &["query", "affected"]);
+    assert!(output.status.success(), "query affected should succeed");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "should have affected tasks");
+    let names: Vec<&str> = items
+        .iter()
+        .map(|i| i["fullName"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.iter().any(|n| n.contains("my-app")),
+        "my-app tasks should be affected: {names:?}"
+    );
+}
+
+#[test]
+fn test_query_affected_shorthand_bare_packages() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    // --packages with no value returns all affected packages
+    let output = run_turbo(tempdir.path(), &["query", "affected", "--packages"]);
+    assert!(
+        output.status.success(),
+        "query affected --packages should succeed"
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedPackages"]["items"]
+        .as_array()
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["name"], "my-app");
+    assert_eq!(items[0]["reason"]["__typename"], "FileChanged");
+    assert!(items[0]["path"].is_string(), "should include path field");
+}
+
+#[test]
+fn test_query_affected_shorthand_with_packages() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("packages/util/new.js"), "foo").unwrap();
+
+    // Filter to only "util" — should exclude "my-app" (which is a dependent)
+    let output = run_turbo(tempdir.path(), &["query", "affected", "--packages", "util"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedPackages"]["items"]
+        .as_array()
+        .unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["name"], "util");
+}
+
+#[test]
+fn test_query_affected_shorthand_nothing_affected() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // No file changes — nothing should be affected
+    let output = run_turbo(tempdir.path(), &["query", "affected"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let length = json["data"]["affectedTasks"]["length"].as_i64().unwrap();
+    assert_eq!(length, 0, "nothing should be affected on a clean branch");
+}
+
+#[test]
+fn test_query_affected_shorthand_with_tasks() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    let output = run_turbo(tempdir.path(), &["query", "affected", "--tasks", "build"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "build task should be affected");
+    let names: Vec<&str> = items
+        .iter()
+        .map(|i| i["fullName"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.iter().any(|n| n.contains("my-app")),
+        "my-app#build should be in affected tasks: {names:?}"
+    );
+}
+
+#[test]
+fn test_query_affected_shorthand_with_base_head() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-m", "add file", "--quiet"]);
+
+    // With --base=HEAD, no uncommitted changes → nothing affected
+    let output = run_turbo(tempdir.path(), &["query", "affected", "--base", "HEAD"]);
+    assert!(output.status.success());
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let length = json["data"]["affectedTasks"]["length"].as_i64().unwrap();
+    assert_eq!(length, 0, "base=HEAD should show no changes: {}", json);
+}
+
+#[test]
+fn test_query_affected_shorthand_combined_packages_and_tasks() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    // --tasks build --packages my-app → intersection: tasks named "build" AND in
+    // package "my-app"
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "affected",
+            "--tasks",
+            "build",
+            "--packages",
+            "my-app",
+        ],
+    );
+    assert!(output.status.success(), "combined query should succeed");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert!(!items.is_empty(), "should have affected tasks: {json}");
+    let full_names: Vec<&str> = items
+        .iter()
+        .map(|i| i["fullName"].as_str().unwrap())
+        .collect();
+    assert!(
+        full_names.contains(&"my-app#build"),
+        "my-app#build should be in results: {full_names:?}"
     );
 }

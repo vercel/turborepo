@@ -2081,7 +2081,7 @@ expression: query_output
             },
             {
               "name": "affectedTasks",
-              "description": "Gets a list of tasks that are affected by changes between two git refs.\n\nUnlike `affectedPackages` which operates at the package level,\n`affectedTasks` checks each task's specific `inputs` configuration\nagainst the changed files and walks the task dependency graph.\nA task is only reported as affected if its inputs actually changed,\nor if an upstream task dependency is affected.\n\nUse the `tasks` parameter to filter to specific task names (e.g.\n`[\"test\", \"typecheck\"]`). When omitted, all affected tasks are returned.",
+              "description": "Gets a list of tasks that are affected by changes between two git refs.\n\nUnlike `affectedPackages` which operates at the package level,\n`affectedTasks` checks each task's specific `inputs` configuration\nagainst the changed files and walks the task dependency graph.\nA task is only reported as affected if its inputs actually changed,\nor if an upstream task dependency is affected.\n\nUse the `tasks` parameter to filter to specific task names (e.g.\n`[\"test\", \"typecheck\"]`). Use `filter` to filter by package (same\npredicates as `affectedPackages`). When both are provided, a task\nmust match both filters to be included (intersection).",
               "args": [
                 {
                   "name": "base",
@@ -2118,6 +2118,16 @@ expression: query_output
                         "ofType": null
                       }
                     }
+                  },
+                  "defaultValue": null
+                },
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "PackagePredicate",
+                    "ofType": null
                   },
                   "defaultValue": null
                 }

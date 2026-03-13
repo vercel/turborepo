@@ -15,6 +15,7 @@
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
 pub mod secret;
+pub mod task_input_matching;
 use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
 
 use biome_deserialize_macros::Deserializable;
@@ -440,6 +441,9 @@ impl ScopeOpts {
 /// Returned alongside the filtered package set from `resolve_packages`
 /// so the caller can decide whether to inject root tasks without
 /// re-parsing raw filter strings.
+///
+/// See `RunBuilder::calculate_filtered_packages` in `turborepo-lib` for
+/// how these variants control root task injection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FilterMode {
     /// No filter was specified — all workspace packages selected.
@@ -514,7 +518,15 @@ pub struct TaskOutputs {
 ///
 /// Contains glob patterns for files that the task depends on, and a flag
 /// indicating whether to include default inputs ($TURBO_DEFAULT$).
-#[derive(Debug, PartialEq, Clone, Eq, Default)]
+///
+/// # Affected detection semantics
+///
+/// When both `globs` is empty and `default` is false (which is what
+/// `Default::default()` produces, representing either `inputs: []` or a
+/// missing `inputs` key), affected detection treats all files in the
+/// package as inputs. This matches turbo's existing hashing behavior
+/// where an omitted `inputs` key means "hash everything."
+#[derive(Debug, PartialEq, Clone, Eq, Hash, Default)]
 pub struct TaskInputs {
     /// Glob patterns for input files
     pub globs: Vec<String>,
@@ -1084,6 +1096,10 @@ pub struct HashTrackerCacheHitMetadata {
     pub remote: bool,
     /// Time saved by the cache hit in milliseconds
     pub time_saved: u64,
+    /// The HEAD commit SHA that produced this cache entry
+    pub sha: Option<String>,
+    /// A hash of uncommitted changes when this cache entry was produced
+    pub dirty_hash: Option<String>,
 }
 
 /// Trait for types that provide task definition information needed for hashing.

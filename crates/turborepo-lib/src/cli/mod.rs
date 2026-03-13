@@ -39,6 +39,56 @@ pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
 // Default value for the --cache-workers argument
 const DEFAULT_NUM_WORKERS: u32 = 10;
+
+/// Returns a scaled thread count for rayon's global pool based on
+/// available CPU cores, capped at
+/// [`crate::rayon_compat::MAX_RAYON_THREADS`].
+///
+/// See [`init_rayon_pool`] and <https://github.com/vercel/turborepo/issues/12251>
+fn rayon_pool_size() -> usize {
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    crate::rayon_compat::scale_thread_count(cpus)
+}
+
+/// Explicitly initialize rayon's global thread pool early so we control
+/// its size and initialization timing.
+///
+/// If `RAYON_NUM_THREADS` is set, its value is still clamped to
+/// [`crate::rayon_compat::MAX_RAYON_THREADS`] to prevent the known
+/// deadlock on high-core-count machines.
+fn init_rayon_pool() {
+    let pool_size = match std::env::var("RAYON_NUM_THREADS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
+        Some(user_val) => {
+            let clamped = crate::rayon_compat::scale_thread_count(user_val);
+            if clamped < user_val {
+                tracing::debug!(
+                    requested = user_val,
+                    clamped,
+                    max = crate::rayon_compat::MAX_RAYON_THREADS,
+                    "RAYON_NUM_THREADS exceeds safe limit, clamping"
+                );
+            }
+            clamped
+        }
+        None => rayon_pool_size(),
+    };
+
+    tracing::info!(
+        rayon_pool_size = pool_size,
+        "initializing rayon global pool"
+    );
+
+    let builder = rayon::ThreadPoolBuilder::new().num_threads(pool_size);
+    if let Err(e) = builder.build_global() {
+        tracing::warn!("rayon global pool already initialized: {e}");
+    }
+}
+
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
@@ -375,6 +425,15 @@ impl Args {
             }
         }
 
+        if let Some(Command::Prune { ref scope, .. }) = clap_args.command {
+            if scope.is_some() {
+                warn!(
+                    "--scope is deprecated and will be removed in a future major version. Use \
+                     positional arguments instead (e.g. `turbo prune web`)"
+                );
+            }
+        }
+
         clap_args
     }
 
@@ -677,6 +736,8 @@ pub enum Command {
     Info,
     /// Prepare a subset of your monorepo.
     Prune {
+        /// DEPRECATED: Use positional arguments instead
+        /// (e.g. `turbo prune web`)
         #[clap(hide = true, long)]
         scope: Option<Vec<String>>,
         /// Workspaces that should be included in the subset
@@ -712,7 +773,10 @@ pub enum Command {
     },
     /// Query your monorepo using GraphQL. If no query is provided, spins up a
     /// GraphQL server with GraphiQL.
+    #[command(args_conflicts_with_subcommands = true)]
     Query {
+        #[clap(subcommand)]
+        subcommand: Option<QuerySubcommand>,
         /// Pass variables to the query via a JSON file
         #[clap(short = 'V', long, requires = "query")]
         variables: Option<Utf8PathBuf>,
@@ -802,6 +866,33 @@ pub enum GenerateCommand {
     Workspace(GenerateWorkspaceArgs),
     #[clap(name = "run", alias = "r")]
     Run(GeneratorCustomArgs),
+}
+
+#[derive(Subcommand, Clone, Debug, PartialEq)]
+pub enum QuerySubcommand {
+    /// Check which packages or tasks are affected by changes between two git
+    /// refs
+    Affected(AffectedArgs),
+}
+
+#[derive(clap::Args, Clone, Debug, PartialEq)]
+pub struct AffectedArgs {
+    /// Return affected packages instead of tasks. Optionally filter by name.
+    /// When combined with --tasks, returns affected tasks that match both
+    /// the task name and package filters.
+    #[clap(long, num_args = 0..)]
+    pub packages: Option<Vec<String>>,
+    /// Filter to specific task names (e.g. build, test).
+    /// When combined with --packages, returns affected tasks that match both
+    /// the task name and package filters.
+    #[clap(long, num_args = 0..)]
+    pub tasks: Option<Vec<String>>,
+    /// Base git ref for comparison
+    #[clap(long)]
+    pub base: Option<String>,
+    /// Head git ref for comparison
+    #[clap(long)]
+    pub head: Option<String>,
 }
 
 fn validate_graph_extension(s: &str) -> Result<String, String> {
@@ -1291,17 +1382,34 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
 ///
 /// # Arguments
 ///
-/// * `repo_state`: If we have done repository inference and NOT executed
-/// local turbo, such as in the case where `TURBO_BINARY_PATH` is set,
-/// we use it here to modify clap's arguments.
+/// * `repo_state`: If we have done repository inference and NOT executed local
+///   turbo, such as in the case where `TURBO_BINARY_PATH` is set, we use it
+///   here to modify clap's arguments.
 /// * `logger`: The logger to use for the run.
 /// * `color_config`: The color configuration to use for the run, i.e. whether
 ///   we should colorize output.
 ///
-/// returns: Result<Payload, Error>
-#[tokio::main]
+/// returns: Result<i32, Error>
+pub fn run(
+    repo_state: Option<RepoState>,
+    logger: &TurboSubscriber,
+    color_config: ColorConfig,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+) -> Result<i32, Error> {
+    // Initialize rayon's global pool before the tokio runtime so we
+    // control thread count and avoid lazy initialization during a hot path.
+    init_rayon_pool();
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime");
+
+    runtime.block_on(run_main(repo_state, logger, color_config, query_server))
+}
+
 #[tracing::instrument(skip_all)]
-pub async fn run(
+async fn run_main(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
     color_config: ColorConfig,
@@ -1647,6 +1755,7 @@ pub async fn run(
             Ok(exit_code)
         }
         Command::Query {
+            subcommand,
             query,
             variables,
             schema,
@@ -1655,6 +1764,7 @@ pub async fn run(
                 return Err(error::Error::QueryNotAvailable);
             };
             warn!("query command is experimental and may change in the future");
+            let subcommand = subcommand.clone();
             let query = query.clone();
             let variables = variables.clone();
             let schema = *schema;
@@ -1667,6 +1777,7 @@ pub async fn run(
             let query = query::run(
                 base,
                 event,
+                subcommand,
                 query,
                 variables.as_deref(),
                 schema,
@@ -3547,5 +3658,167 @@ mod test {
             let err = cli.unwrap_err();
             assert_snapshot!(args.join("-").as_str(), err);
         }
+    }
+
+    #[test]
+    fn test_query_affected_no_args() {
+        let args = Args::try_parse_from(["turbo", "query", "affected"]).unwrap();
+        assert_eq!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(super::AffectedArgs {
+                    packages: None,
+                    tasks: None,
+                    base: None,
+                    head: None,
+                })),
+                query: None,
+                variables: None,
+                schema: false,
+            })
+        );
+    }
+
+    #[test]
+    fn test_query_affected_bare_packages_flag() {
+        let args = Args::try_parse_from(["turbo", "query", "affected", "--packages"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec![])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_packages() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--packages", "web"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec!["web".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_multiple_packages() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--packages", "web", "docs"])
+                .unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec!["web".to_string(), "docs".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_bare_tasks_flag() {
+        let args = Args::try_parse_from(["turbo", "query", "affected", "--tasks"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.tasks == Some(vec![])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_tasks() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--tasks", "build"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.tasks == Some(vec!["build".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_base_head() {
+        let args = Args::try_parse_from([
+            "turbo", "query", "affected", "--base", "main", "--head", "HEAD",
+        ])
+        .unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.base == Some("main".to_string()) && a.head == Some("HEAD".to_string())
+        );
+    }
+
+    #[test]
+    fn test_query_affected_combined_packages_and_tasks() {
+        let args = Args::try_parse_from([
+            "turbo",
+            "query",
+            "affected",
+            "--packages",
+            "web",
+            "--tasks",
+            "build",
+        ])
+        .unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec!["web".to_string()])
+                && a.tasks == Some(vec!["build".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_combined_bare_packages_and_bare_tasks() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--packages", "--tasks"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec![]) && a.tasks == Some(vec![])
+        );
+    }
+
+    #[test]
+    fn test_query_raw_graphql_still_works() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "{ packages { items { name } } }"]).unwrap();
+        assert_eq!(
+            args.command,
+            Some(Command::Query {
+                subcommand: None,
+                query: Some("{ packages { items { name } } }".to_string()),
+                variables: None,
+                schema: false,
+            })
+        );
+    }
+
+    #[test]
+    fn test_query_schema_still_works() {
+        let args = Args::try_parse_from(["turbo", "query", "--schema"]).unwrap();
+        assert_eq!(
+            args.command,
+            Some(Command::Query {
+                subcommand: None,
+                query: None,
+                variables: None,
+                schema: true,
+            })
+        );
     }
 }

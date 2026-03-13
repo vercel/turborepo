@@ -8,7 +8,8 @@ use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{
-    CacheError, CacheHitMetadata, CacheOpts, http::UploadMap, multiplexer::CacheMultiplexer,
+    CacheError, CacheHitMetadata, CacheOpts, CacheScmState, http::UploadMap,
+    multiplexer::CacheMultiplexer,
 };
 
 const WARNING_CUTOFF: u8 = 4;
@@ -40,6 +41,7 @@ impl AsyncCache {
         api_client: Option<APIClient>,
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
+        scm_state: Option<CacheScmState>,
     ) -> Result<AsyncCache, CacheError> {
         let max_workers = opts.workers.try_into().expect("usize is smaller than u32");
         let real_cache = Arc::new(CacheMultiplexer::new(
@@ -48,6 +50,7 @@ impl AsyncCache {
             api_client,
             api_auth,
             analytics_recorder,
+            scm_state,
         )?);
         // Buffer up to max_workers requests so that callers don't block
         // waiting for a semaphore permit inside the worker loop. The
@@ -298,8 +301,14 @@ mod tests {
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache =
-            AsyncCache::new(&opts, &repo_root_path, Some(api_client), api_auth, None)?;
+        let async_cache = AsyncCache::new(
+            &opts,
+            &repo_root_path,
+            Some(api_client),
+            api_auth,
+            None,
+            None,
+        )?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -337,7 +346,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Remote,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -382,7 +393,7 @@ mod tests {
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache = AsyncCache::new(&opts, &repo_root_path, None, api_auth, None)?;
+        let async_cache = AsyncCache::new(&opts, &repo_root_path, None, api_auth, None, None)?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -420,7 +431,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Local,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -474,7 +487,7 @@ mod tests {
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache = AsyncCache::new(&opts, &repo_root_path, None, api_auth, None)?;
+        let async_cache = AsyncCache::new(&opts, &repo_root_path, None, api_auth, None, None)?;
 
         assert_matches!(async_cache.exists(&hash).await, Ok(None));
 
@@ -498,6 +511,8 @@ mod tests {
             Some(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -545,8 +560,14 @@ mod tests {
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache =
-            AsyncCache::new(&opts, &repo_root_path, Some(api_client), api_auth, None)?;
+        let async_cache = AsyncCache::new(
+            &opts,
+            &repo_root_path,
+            Some(api_client),
+            api_auth,
+            None,
+            None,
+        )?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -584,7 +605,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Local,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 
@@ -598,7 +621,9 @@ mod tests {
             response,
             Some(CacheHitMetadata {
                 source: CacheSource::Remote,
-                time_saved: test_case.duration
+                time_saved: test_case.duration,
+                sha: None,
+                dirty_hash: None,
             })
         );
 

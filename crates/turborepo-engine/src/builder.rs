@@ -136,13 +136,6 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
     }
 
     pub fn build(mut self) -> Result<Engine<crate::Built, TaskDefinition>, BuilderError> {
-        // If there are no affected packages, we don't need to go through all this work
-        // we can just exit early.
-        // TODO(mehulkar): but we still need to validate bad task names?
-        if self.workspaces.is_empty() {
-            return Ok(Engine::default().seal());
-        }
-
         let turbo_json_loader = self
             .turbo_json_loader
             .take()
@@ -1233,8 +1226,10 @@ mod test {
         fn all_dependencies(
             &self,
             _key: &str,
-        ) -> Result<Option<std::borrow::Cow<'_, HashMap<String, String>>>, turborepo_lockfiles::Error>
-        {
+        ) -> Result<
+            Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>,
+            turborepo_lockfiles::Error,
+        > {
             unreachable!()
         }
 
@@ -4680,5 +4675,75 @@ mod test {
             "//#rootlint" => ["___ROOT___"]
         };
         assert_eq!(all_dependencies(&engine), expected);
+    }
+
+    #[test]
+    fn test_empty_workspaces_with_invalid_task_errors() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "a" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": {},
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+
+        let result = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("foobarbaz"))))
+            .with_workspaces(vec![])
+            .build();
+
+        assert!(
+            matches!(result, Err(BuilderError::MissingTasks(_))),
+            "expected MissingTasks error for non-existent task with empty workspaces, got: \
+             {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_empty_workspaces_with_valid_task_succeeds() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "a" => []
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": {},
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![])
+            .build()
+            .unwrap();
+
+        assert!(
+            engine.task_ids().count() == 0,
+            "expected empty engine when workspaces is empty but task is valid"
+        );
     }
 }

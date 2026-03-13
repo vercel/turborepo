@@ -71,6 +71,8 @@ TURBO_SCM_BASE=development turbo run build --affected
 TURBO_SCM_HEAD=your-branch turbo run build --affected
 ```
 
+By default, `--affected` operates at the package level: if any file in a package changed, all of its tasks are selected. Enable [`futureFlags.affectedUsingTaskInputs`](/docs/reference/configuration#affectedusingtaskinputs) to filter at the task level using each task's [`inputs`](/docs/reference/configuration#inputs) globs instead.
+
 ### `--cache <options>`
 
 Default: `local:rw,remote:rw`

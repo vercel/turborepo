@@ -418,6 +418,8 @@ impl TaskCache {
             Some(CacheHitMetadata {
                 source: CacheSource::Local,
                 time_saved: 0,
+                sha: None,
+                dirty_hash: None,
             })
         };
 

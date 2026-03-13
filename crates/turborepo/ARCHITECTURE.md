@@ -34,12 +34,31 @@ A run consists of the following steps:
   auto-included. Explicit include filters or `--affected` suppress root task
   injection. See `calculate_filtered_packages` and `FilterMode`.
 - Task graph construction and validation
+- Task-level affected detection (see below)
 - Cache setup (local and remote)
 - Activating shared HTTP client initialization once telemetry, remote cache, or
   linked analytics are known to be needed
 - Building a tracked repo index eagerly, then augmenting it with scoped
   untracked-file discovery once the selected package set is known
 - Producing a final `Run` struct ready for execution
+
+#### Task-Level Affected Detection
+
+When the `affectedUsingTaskInputs` future flag is enabled and `--affected` is
+active, the run builder applies a second filtering pass after engine
+construction:
+
+1. **File change detection**: SCM provides the set of changed files between refs
+2. **Task input matching** (`turborepo-types/src/task_input_matching.rs`): Each
+   task's `inputs` globs are compiled and checked against the changed files.
+   Shared with `turbo query { affectedTasks }`.
+3. **Task change detection** (`turborepo-lib/src/task_change_detector.rs`):
+   Determines directly affected tasks, handling global deps and per-task inputs
+4. **Engine pruning** (`Engine::retain_affected_tasks`): Returns a new engine
+   containing only directly affected tasks plus their transitive dependents
+
+This differs from the default `--affected` behavior which operates at the
+package level (all tasks in changed packages run).
 
 ### 2. Package Graph (`crates/turborepo-repository/src/package_graph/`)
 
@@ -429,4 +448,45 @@ RunSummary.finish()
   │     └── Record via OpenTelemetry instruments
   └── observability::Handle.shutdown()
         └── Flush pending metrics to backend
+```
+
+### 9. User-Facing Logging (`crates/turborepo-log/`)
+
+Structured event system for messages intended for end users (warnings,
+errors, informational output). Distinct from `tracing`, which remains
+for developer diagnostics.
+
+#### Key Types
+
+- `Logger` — Dispatches events to registered sinks. Set globally via
+  `init()` (once, at startup) or used directly via `Logger::handle()`
+  for testing.
+- `LogHandle` — Source-scoped handle for emitting events. Created via
+  `log()` (global) or `Logger::handle()` (specific logger). Resolves
+  the global logger at `.emit()` time, not at handle or builder
+  creation time — handles and builders created before `init()` work
+  once the global logger is set.
+- `LogSink` — Trait for event destinations. Built-in sinks:
+  `CollectorSink` (in-memory buffer for post-run summaries) and
+  `FileSink` (newline-delimited JSON with optional size limiting).
+- `LogEvent` — Structured event with level, source, message, typed
+  fields, and timestamp.
+
+#### Relationship to `turborepo-ui`
+
+`turborepo-ui` handles terminal rendering (TUI, console formatting).
+`turborepo-log` handles structured event capture and dispatch. A
+terminal sink in `turborepo-ui` can implement `LogSink` to bridge
+events into the rendering pipeline. `turborepo-log` intentionally has
+no dependency on `turborepo-ui` — it sits at the bottom of the
+dependency graph.
+
+#### Data Flow
+
+```
+Subsystem / Task Executor
+  └── LogHandle.warn("msg").field("k", v).emit()
+        └── Logger.emit(&event)
+              ├── CollectorSink → in-memory buffer → post-run summary
+              └── FileSink → JSONL file → external tooling
 ```

@@ -623,29 +623,36 @@ impl RepositoryQuery {
     /// or if an upstream task dependency is affected.
     ///
     /// Use the `tasks` parameter to filter to specific task names (e.g.
-    /// `["test", "typecheck"]`). When omitted, all affected tasks are returned.
+    /// `["test", "typecheck"]`). Use `filter` to filter by package (same
+    /// predicates as `affectedPackages`). When both are provided, a task
+    /// must match both filters to be included (intersection).
     async fn affected_tasks(
         &self,
         base: Option<String>,
         head: Option<String>,
         #[graphql(desc = "Filter to specific task names (e.g. [\"test\", \"typecheck\"])")]
         tasks: Option<Vec<String>>,
+        filter: Option<PackagePredicate>,
     ) -> Result<Array<ChangedTask>, Error> {
         let results = affected_tasks::calculate_affected_tasks(&self.run, base, head)?;
 
         let mut changed_tasks: Array<ChangedTask> = results
             .into_iter()
-            .filter(|at| {
-                tasks
-                    .as_ref()
-                    .is_none_or(|names| names.iter().any(|n| n == at.task_id.task()))
-            })
             .map(|at| {
                 let task = task::RepositoryTask::new(&at.task_id, &self.run)?;
                 let reason = convert_task_change_reason(at.reason);
                 Ok(ChangedTask { reason, task })
             })
-            .collect::<Result<Array<_>, Error>>()?;
+            .collect::<Result<Vec<_>, Error>>()?
+            .into_iter()
+            .filter(|ct| {
+                let task_ok = tasks.as_ref().is_none_or(|names| {
+                    names.is_empty() || names.iter().any(|n| n.as_str() == ct.task.name)
+                });
+                let package_ok = filter.as_ref().is_none_or(|f| f.check(&ct.task.package));
+                task_ok && package_ok
+            })
+            .collect();
 
         changed_tasks.sort_by(|a, b| {
             a.task

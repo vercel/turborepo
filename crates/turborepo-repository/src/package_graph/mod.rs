@@ -474,7 +474,7 @@ impl PackageGraph {
                     )
                 })
             })
-            .collect::<HashMap<_, HashMap<_, _>>>();
+            .collect::<HashMap<_, BTreeMap<_, _>>>();
 
         // We're comparing to a previous lockfile, it's possible that a package was
         // added and thus won't exist in the previous lockfile. In that case,
@@ -827,7 +827,7 @@ mod test {
             &self,
             key: &str,
         ) -> std::result::Result<
-            Option<std::borrow::Cow<'_, HashMap<String, String>>>,
+            Option<std::borrow::Cow<'_, BTreeMap<String, String>>>,
             turborepo_lockfiles::Error,
         > {
             match key {

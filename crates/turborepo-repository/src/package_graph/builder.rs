@@ -326,7 +326,7 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
                 let workspace_paths: Vec<_> =
                     self.package_discovery.discover_packages().await?.workspaces;
 
-                let results: Vec<_> = {
+                let results: Vec<_> = turborepo_rayon_compat::block_in_place(|| {
                     use rayon::prelude::*;
                     workspace_paths
                         .into_par_iter()
@@ -334,8 +334,8 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedPackageManager, T> {
                             let json = PackageJson::load(&path.package_json)?;
                             Ok((path.package_json, json))
                         })
-                        .collect::<Result<Vec<_>, Error>>()?
-                };
+                        .collect::<Result<Vec<_>, Error>>()
+                })?;
 
                 let mut jsons = HashMap::with_capacity(results.len());
                 for (path, json) in results {
@@ -516,7 +516,9 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
             .discover_packages()
             .await?
             .package_manager;
-        self.connect_internal_dependencies(&package_manager)?;
+        turborepo_rayon_compat::block_in_place(|| {
+            self.connect_internal_dependencies(&package_manager)
+        })?;
 
         if let Some(handle) = lockfile_future
             && let Ok(Some(lockfile)) = handle.await
@@ -564,7 +566,9 @@ impl<'a, T: PackageDiscovery> BuildState<'a, ResolvedWorkspaces, T> {
 }
 
 impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
-    fn all_external_dependencies(&self) -> Result<HashMap<String, HashMap<String, String>>, Error> {
+    fn all_external_dependencies(
+        &self,
+    ) -> Result<HashMap<String, BTreeMap<String, String>>, Error> {
         self.workspaces
             .values()
             .map(|entry| {
@@ -609,7 +613,9 @@ impl<T: PackageDiscovery> BuildState<'_, ResolvedLockfile, T> {
 
     #[tracing::instrument(skip(self))]
     async fn build_inner(mut self) -> Result<PackageGraph, discovery::Error> {
-        if let Err(e) = self.populate_transitive_dependencies() {
+        if let Err(e) =
+            turborepo_rayon_compat::block_in_place(|| self.populate_transitive_dependencies())
+        {
             warn!("Unable to calculate transitive closures: {}", e);
         }
         let package_manager = self

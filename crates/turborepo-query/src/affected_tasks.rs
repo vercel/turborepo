@@ -4,12 +4,9 @@ use std::{
 };
 
 use petgraph::Direction;
-use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_engine::TaskNode;
 use turborepo_repository::change_mapper::{AllPackageChangeReason, PackageInclusionReason};
 use turborepo_task_id::TaskId;
-// Program trait provides is_match() on wax::Glob
-use wax::Program;
 
 use crate::{Error, QueryRun};
 
@@ -42,14 +39,6 @@ pub enum TaskChangeReason {
 pub struct AffectedTask {
     pub task_id: TaskId<'static>,
     pub reason: TaskChangeReason,
-}
-
-/// Pre-compiled glob patterns for efficient matching against many files.
-struct CompiledGlobs {
-    inclusions: Vec<wax::Glob<'static>>,
-    exclusions: Vec<wax::Glob<'static>>,
-    default: bool,
-    has_traversal_globs: bool,
 }
 
 /// Computes which tasks are affected by changes between two git refs.
@@ -139,65 +128,15 @@ pub fn calculate_affected_tasks(
     let pkg_dep_graph = run.pkg_dep_graph();
 
     // Phase 1: Direct task affectedness — check each task's inputs against
-    // changed files.
-    let mut affected: HashMap<TaskId<'static>, TaskChangeReason> = HashMap::new();
-
-    for (pkg_name, reason) in &affected_packages {
-        let Some(pkg_info) = pkg_dep_graph.package_info(pkg_name) else {
-            continue;
-        };
-        let pkg_path = pkg_info.package_path();
-        let pkg_unix_path = pkg_path.to_unix();
-        let pkg_prefix = pkg_unix_path.to_string();
-
-        // Get files that changed within this package's directory
-        let pkg_changed_files: Vec<&AnchoredSystemPathBuf> = changed_files
-            .iter()
-            .filter(|f| {
-                let file_str = f.to_unix().to_string();
-                if pkg_prefix.is_empty() {
-                    // Root package — all files are potentially relevant.
-                    // The task's input globs will filter further.
-                    true
-                } else {
-                    file_str.starts_with(&format!("{pkg_prefix}/"))
-                }
-            })
-            .collect();
-
-        // For each task this package has in the engine
-        for task_id in engine.task_ids() {
-            if task_id.package() != pkg_name.as_str() {
-                continue;
-            }
-
-            if affected.contains_key(task_id) {
-                continue;
-            }
-
-            // Check all changed files in this package against the task's input
-            // globs. This handles all PackageInclusionReason variants uniformly:
-            // regardless of why the package was included, a task is only
-            // directly affected if its inputs actually changed.
-            if let Some(def) = engine.task_definition(task_id) {
-                let compiled = compile_globs(&def.inputs);
-                for file in &pkg_changed_files {
-                    if file_matches_compiled_inputs(file, &pkg_unix_path, &compiled) {
-                        affected.insert(
-                            task_id.clone(),
-                            TaskChangeReason::FileChanged {
-                                file_path: file.to_string(),
-                            },
-                        );
-                        break;
-                    }
-                }
-            } else {
-                // No task definition — conservatively mark as affected
-                affected.insert(task_id.clone(), reason_from_package_reason(reason));
-            }
-        }
-    }
+    // changed files. Uses the shared matching function that iterates ALL
+    // engine tasks regardless of package, so tasks with $TURBO_ROOT$ inputs
+    // in non-affected packages are correctly detected.
+    let matched =
+        turborepo_engine::match_tasks_against_changed_files(engine, pkg_dep_graph, &changed_files);
+    let mut affected: HashMap<TaskId<'static>, TaskChangeReason> = matched
+        .into_iter()
+        .map(|(task_id, file_path)| (task_id, TaskChangeReason::FileChanged { file_path }))
+        .collect();
 
     // Phase 2: Propagate through the task dependency graph via BFS.
     // If task B depends on task A and A is affected, B is also affected.
@@ -245,448 +184,203 @@ pub fn calculate_affected_tasks(
         .collect())
 }
 
-/// Pre-compiles a task's input globs for efficient matching against many files.
-fn compile_globs(inputs: &turborepo_types::TaskInputs) -> CompiledGlobs {
-    let mut inclusions = Vec::new();
-    let mut exclusions = Vec::new();
-    let mut has_traversal_globs = false;
-
-    for glob_str in &inputs.globs {
-        if let Some(stripped) = glob_str.strip_prefix('!') {
-            if stripped.starts_with("../") {
-                has_traversal_globs = true;
-            }
-            if let Ok(glob) = wax::Glob::new(stripped) {
-                exclusions.push(glob.into_owned());
-            }
-        } else {
-            if glob_str.starts_with("../") {
-                has_traversal_globs = true;
-            }
-            if let Ok(glob) = wax::Glob::new(glob_str) {
-                inclusions.push(glob.into_owned());
-            }
-        }
-    }
-
-    CompiledGlobs {
-        inclusions,
-        exclusions,
-        default: inputs.default,
-        has_traversal_globs,
-    }
-}
-
-/// Checks whether a changed file matches pre-compiled task input globs.
-fn file_matches_compiled_inputs(
-    file: &AnchoredSystemPathBuf,
-    package_unix_path: &RelativeUnixPathBuf,
-    compiled: &CompiledGlobs,
-) -> bool {
-    let file_unix = file.to_unix().to_string();
-    let pkg_prefix = package_unix_path.to_string();
-
-    let file_relative_to_pkg = if pkg_prefix.is_empty() {
-        file_unix.clone()
-    } else if let Some(stripped) = file_unix.strip_prefix(&format!("{pkg_prefix}/")) {
-        stripped.to_string()
-    } else {
-        String::new()
-    };
-
-    // For files outside the package dir, only check if there are globs
-    // with path traversal (../) that could reach outside the package.
-    // These come from $TURBO_ROOT$ references resolved to relative paths
-    // like "../../jest.config.js". Without such globs, a file in a sibling
-    // package should never match.
-    if file_relative_to_pkg.is_empty() && !pkg_prefix.is_empty() {
-        if !compiled.has_traversal_globs {
-            return false;
-        }
-
-        let depth = pkg_prefix.matches('/').count() + 1;
-        let mut relative = String::new();
-        for _ in 0..depth {
-            relative.push_str("../");
-        }
-        relative.push_str(&file_unix);
-
-        return check_compiled_globs(
-            &relative,
-            &compiled.inclusions,
-            &compiled.exclusions,
-            compiled.default,
-        );
-    }
-
-    check_compiled_globs(
-        &file_relative_to_pkg,
-        &compiled.inclusions,
-        &compiled.exclusions,
-        compiled.default,
-    )
-}
-
-fn check_compiled_globs(
-    file_path: &str,
-    inclusions: &[wax::Glob<'static>],
-    exclusions: &[wax::Glob<'static>],
-    default: bool,
-) -> bool {
-    for pattern in exclusions {
-        if pattern.is_match(file_path) {
-            return false;
-        }
-    }
-
-    if default {
-        return true;
-    }
-
-    if inclusions.is_empty() && exclusions.is_empty() {
-        return true;
-    }
-
-    for pattern in inclusions {
-        if pattern.is_match(file_path) {
-            return true;
-        }
-    }
-
-    false
-}
-
-/// Checks whether a changed file matches a task's input configuration.
-///
-/// This compiles globs on each call — use `file_matches_compiled_inputs` with
-/// `compile_globs` in hot loops to avoid repeated compilation.
-///
-/// Note: This is intentionally a separate implementation from the input
-/// matching in `turborepo-task-hash`. That system walks the filesystem for
-/// cache hashing. Here we check a pre-computed set of changed files from SCM,
-/// which only needs to know whether *any* changed file matches.
-#[cfg(test)]
-fn file_matches_task_inputs(
-    file: &AnchoredSystemPathBuf,
-    package_unix_path: &RelativeUnixPathBuf,
-    inputs: &turborepo_types::TaskInputs,
-) -> bool {
-    let compiled = compile_globs(inputs);
-    file_matches_compiled_inputs(file, package_unix_path, &compiled)
-}
-
-#[cfg(test)]
-fn check_file_against_globs(
-    file_path: &str,
-    inclusions: &[&str],
-    exclusions: &[&str],
-    default: bool,
-) -> bool {
-    for pattern in exclusions {
-        if glob_matches(pattern, file_path) {
-            return false;
-        }
-    }
-
-    if default {
-        return true;
-    }
-
-    if inclusions.is_empty() && exclusions.is_empty() {
-        return true;
-    }
-
-    for pattern in inclusions {
-        if glob_matches(pattern, file_path) {
-            return true;
-        }
-    }
-
-    false
-}
-
-#[cfg(test)]
-fn partition_globs(globs: &[String]) -> (Vec<&str>, Vec<&str>) {
-    let mut inclusions = Vec::new();
-    let mut exclusions = Vec::new();
-    for glob in globs {
-        if let Some(stripped) = glob.strip_prefix('!') {
-            exclusions.push(stripped);
-        } else {
-            inclusions.push(glob.as_str());
-        }
-    }
-    (inclusions, exclusions)
-}
-
-#[cfg(test)]
-fn glob_matches(pattern: &str, path: &str) -> bool {
-    wax::Glob::new(pattern)
-        .map(|glob| glob.is_match(path))
-        .unwrap_or(false)
-}
-
-fn reason_from_package_reason(reason: &PackageInclusionReason) -> TaskChangeReason {
-    match reason {
-        PackageInclusionReason::DependencyChanged { dependency } => {
-            TaskChangeReason::PackageDependencyChanged {
-                package_name: dependency.to_string(),
-            }
-        }
-        PackageInclusionReason::DependentChanged { dependent } => {
-            TaskChangeReason::PackageDependencyChanged {
-                package_name: dependent.to_string(),
-            }
-        }
-        PackageInclusionReason::LockfileChanged { .. } => TaskChangeReason::AllTasksChanged {
-            description: "lockfile changed".to_string(),
-        },
-        PackageInclusionReason::ConservativeRootLockfileChanged => {
-            TaskChangeReason::AllTasksChanged {
-                description: "root lockfile changed".to_string(),
-            }
-        }
-        PackageInclusionReason::FileChanged { file } => TaskChangeReason::FileChanged {
-            file_path: file.to_string(),
-        },
-        PackageInclusionReason::InFilteredDirectory { directory } => {
-            TaskChangeReason::AllTasksChanged {
-                description: format!("in filtered directory: {directory}"),
-            }
-        }
-        PackageInclusionReason::IncludedByFilter { filters } => TaskChangeReason::AllTasksChanged {
-            description: format!("included by filter: {}", filters.join(", ")),
-        },
-        PackageInclusionReason::RootTask { task } => TaskChangeReason::AllTasksChanged {
-            description: format!("root task: {task}"),
-        },
-        PackageInclusionReason::All(_) => {
-            unreachable!("All case handled separately")
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
-    use turborepo_types::TaskInputs;
-
-    use super::{
-        check_file_against_globs, file_matches_task_inputs, glob_matches, partition_globs,
+    use std::{
+        collections::{HashMap, HashSet},
+        sync::Arc,
     };
 
-    // ── glob_matches ──
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turborepo_engine::Building;
+    use turborepo_query_api::{AffectedPackagesError, BoundariesFuture};
+    use turborepo_repository::{
+        change_mapper::PackageInclusionReason,
+        discovery::{DiscoveryResponse, PackageDiscovery},
+        package_graph::{PackageGraph, PackageName},
+        package_json::PackageJson,
+        package_manager::PackageManager,
+    };
+    use turborepo_scm::SCM;
+    use turborepo_task_id::TaskId;
+    use turborepo_turbo_json::TurboJson;
+    use turborepo_types::{TaskDefinition, TaskInputs};
 
-    #[test]
-    fn glob_matches_simple_extension() {
-        assert!(glob_matches("**/*.ts", "src/index.ts"));
-        assert!(glob_matches("**/*.ts", "deeply/nested/file.ts"));
-        assert!(!glob_matches("**/*.ts", "src/index.js"));
+    use super::*;
+    use crate::QueryRun;
+
+    struct MockDiscovery;
+
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            Ok(DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            self.discover_packages().await
+        }
     }
 
-    #[test]
-    fn glob_matches_exact_file() {
-        assert!(glob_matches("README.md", "README.md"));
-        assert!(!glob_matches("README.md", "src/README.md"));
+    async fn make_pkg_graph(repo_root: &AbsoluteSystemPath, packages: &[&str]) -> PackageGraph {
+        let mut pkgs = HashMap::new();
+        for name in packages {
+            let path = repo_root.join_components(&["packages", name, "package.json"]);
+            let pkg = PackageJson {
+                name: Some(turborepo_errors::Spanned::new(name.to_string())),
+                ..Default::default()
+            };
+            pkgs.insert(path, pkg);
+        }
+        PackageGraph::builder(repo_root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(pkgs))
+            .build()
+            .await
+            .unwrap()
     }
 
-    #[test]
-    fn glob_matches_double_star() {
-        assert!(glob_matches("**/*.md", "README.md"));
-        assert!(glob_matches("**/*.md", "docs/guide.md"));
-        assert!(!glob_matches("**/*.md", "src/index.ts"));
+    fn make_engine(
+        tasks: &[(TaskId<'static>, TaskDefinition)],
+    ) -> turborepo_engine::Engine<turborepo_engine::Built, TaskDefinition> {
+        let mut engine: turborepo_engine::Engine<Building, TaskDefinition> =
+            turborepo_engine::Engine::new();
+        for (task_id, def) in tasks {
+            engine.get_index(task_id);
+            engine.add_definition(task_id.clone(), def.clone());
+        }
+        engine.seal()
     }
 
-    #[test]
-    fn glob_matches_invalid_pattern_returns_false() {
-        // Invalid glob patterns should not panic, just return false
-        assert!(!glob_matches("[invalid", "anything"));
+    struct MockQueryRun {
+        engine: turborepo_engine::Engine<turborepo_engine::Built, TaskDefinition>,
+        pkg_dep_graph: PackageGraph,
+        affected_packages: HashMap<PackageName, PackageInclusionReason>,
+        changed_files: HashSet<AnchoredSystemPathBuf>,
+        #[allow(dead_code)]
+        repo_root: AbsoluteSystemPathBuf,
     }
 
-    // ── partition_globs ──
+    impl QueryRun for MockQueryRun {
+        fn version(&self) -> &'static str {
+            "test"
+        }
 
-    #[test]
-    fn partition_splits_inclusions_and_exclusions() {
-        let globs = vec![
-            "**/*.ts".to_string(),
-            "!**/*.test.ts".to_string(),
-            "!**/*.md".to_string(),
-            "src/**".to_string(),
-        ];
-        let (inc, exc) = partition_globs(&globs);
-        assert_eq!(inc, vec!["**/*.ts", "src/**"]);
-        assert_eq!(exc, vec!["**/*.test.ts", "**/*.md"]);
+        fn repo_root(&self) -> &AbsoluteSystemPath {
+            &self.repo_root
+        }
+
+        fn pkg_dep_graph(&self) -> &PackageGraph {
+            &self.pkg_dep_graph
+        }
+
+        fn engine(&self) -> &turborepo_engine::Engine<turborepo_engine::Built, TaskDefinition> {
+            &self.engine
+        }
+
+        fn scm(&self) -> &SCM {
+            unimplemented!("not needed for affected_tasks tests")
+        }
+
+        fn root_turbo_json(&self) -> &TurboJson {
+            unimplemented!("not needed for affected_tasks tests")
+        }
+
+        fn calculate_affected_packages(
+            &self,
+            _base: Option<String>,
+            _head: Option<String>,
+        ) -> Result<HashMap<PackageName, PackageInclusionReason>, AffectedPackagesError> {
+            Ok(self.affected_packages.clone())
+        }
+
+        fn changed_files(
+            &self,
+            _base: Option<&str>,
+            _head: Option<&str>,
+        ) -> Result<HashSet<AnchoredSystemPathBuf>, AffectedPackagesError> {
+            Ok(self.changed_files.clone())
+        }
+
+        fn check_boundaries(&self, _show_progress: bool) -> BoundariesFuture<'_> {
+            unimplemented!("not needed for affected_tasks tests")
+        }
     }
 
-    #[test]
-    fn partition_empty_input() {
-        let globs: Vec<String> = vec![];
-        let (inc, exc) = partition_globs(&globs);
-        assert!(inc.is_empty());
-        assert!(exc.is_empty());
-    }
+    /// Regression test: a task in a non-affected package that has
+    /// $TURBO_ROOT$ inputs (resolved to ../../ paths) pointing to a changed
+    /// root file should be detected as affected.
+    ///
+    /// The `turbo run --affected` path (task_change_detector.rs) iterates
+    /// ALL engine tasks and catches this. The query path must do the same.
+    #[tokio::test]
+    async fn turbo_root_input_in_non_affected_package_is_detected() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "lib-b"]).await;
 
-    // ── check_file_against_globs ──
+        let a_build = TaskId::new("lib-a", "build");
+        let b_build = TaskId::new("lib-b", "build");
 
-    #[test]
-    fn default_true_includes_all_files() {
-        assert!(check_file_against_globs("src/index.ts", &[], &[], true));
-        assert!(check_file_against_globs("README.md", &[], &[], true));
-    }
+        let engine = make_engine(&[
+            // lib-a: default inputs (matches files in packages/lib-a/**)
+            (a_build.clone(), TaskDefinition::default()),
+            // lib-b: has a $TURBO_ROOT$ input that resolved to ../../config.txt
+            (
+                b_build.clone(),
+                TaskDefinition {
+                    inputs: TaskInputs {
+                        globs: vec!["../../config.txt".to_string()],
+                        default: true,
+                    },
+                    ..Default::default()
+                },
+            ),
+        ]);
 
-    #[test]
-    fn default_true_respects_exclusions() {
-        assert!(!check_file_against_globs(
-            "README.md",
-            &[],
-            &["**/*.md"],
-            true
-        ));
-        assert!(check_file_against_globs(
-            "src/index.ts",
-            &[],
-            &["**/*.md"],
-            true
-        ));
-    }
+        // Only lib-a is in the affected packages set (a source file changed).
+        // lib-b is NOT affected at the package level.
+        let mut affected_packages = HashMap::new();
+        affected_packages.insert(
+            PackageName::from("lib-a"),
+            PackageInclusionReason::FileChanged {
+                file: AnchoredSystemPathBuf::from_raw("packages/lib-a/src/index.ts").unwrap(),
+            },
+        );
 
-    #[test]
-    fn default_true_with_multiple_exclusions() {
-        let exc = &["**/*.md", "**/*.test.ts"];
-        assert!(!check_file_against_globs("README.md", &[], exc, true));
-        assert!(!check_file_against_globs("src/foo.test.ts", &[], exc, true));
-        assert!(check_file_against_globs("src/foo.ts", &[], exc, true));
-    }
+        // Changed files: a root-level config file AND a file in lib-a.
+        let changed_files: HashSet<AnchoredSystemPathBuf> =
+            ["config.txt", "packages/lib-a/src/index.ts"]
+                .iter()
+                .map(|f| AnchoredSystemPathBuf::from_raw(f).unwrap())
+                .collect();
 
-    #[test]
-    fn no_default_no_globs_means_all_inputs() {
-        // No $TURBO_DEFAULT$ and no explicit globs means the task had no inputs
-        // configuration at all — treat everything as an input.
-        assert!(check_file_against_globs("anything.ts", &[], &[], false));
-    }
+        let mock: Arc<dyn QueryRun> = Arc::new(MockQueryRun {
+            engine,
+            pkg_dep_graph: pkg_graph,
+            affected_packages,
+            changed_files,
+            repo_root: root.to_owned(),
+        });
 
-    #[test]
-    fn no_default_with_inclusions() {
-        let inc = &["src/**/*.ts"];
-        assert!(check_file_against_globs("src/index.ts", inc, &[], false));
-        assert!(!check_file_against_globs("README.md", inc, &[], false));
-    }
+        let result = calculate_affected_tasks(&mock, None, None).unwrap();
 
-    #[test]
-    fn no_default_inclusion_with_exclusion() {
-        let inc = &["**/*.ts"];
-        let exc = &["**/*.test.ts"];
-        assert!(check_file_against_globs("src/index.ts", inc, exc, false));
-        assert!(!check_file_against_globs(
-            "src/index.test.ts",
-            inc,
-            exc,
-            false
-        ));
-    }
+        let affected_ids: HashSet<_> = result.iter().map(|at| at.task_id.clone()).collect();
 
-    // ── file_matches_task_inputs ──
-
-    fn anchored(s: &str) -> AnchoredSystemPathBuf {
-        AnchoredSystemPathBuf::from_raw(s).unwrap()
-    }
-
-    fn pkg_path(s: &str) -> RelativeUnixPathBuf {
-        RelativeUnixPathBuf::new(s.to_string()).unwrap()
-    }
-
-    #[test]
-    fn file_in_package_with_default_inputs() {
-        let file = anchored("packages/lib-a/src/index.ts");
-        let pkg = pkg_path("packages/lib-a");
-        let inputs = TaskInputs {
-            globs: vec![],
-            default: true,
-        };
-        assert!(file_matches_task_inputs(&file, &pkg, &inputs));
-    }
-
-    #[test]
-    fn file_in_package_excluded_by_glob() {
-        let file = anchored("packages/lib-a/README.md");
-        let pkg = pkg_path("packages/lib-a");
-        let inputs = TaskInputs {
-            globs: vec!["!**/*.md".to_string()],
-            default: true,
-        };
-        assert!(!file_matches_task_inputs(&file, &pkg, &inputs));
-    }
-
-    #[test]
-    fn file_in_package_not_excluded() {
-        let file = anchored("packages/lib-a/src/index.ts");
-        let pkg = pkg_path("packages/lib-a");
-        let inputs = TaskInputs {
-            globs: vec!["!**/*.md".to_string()],
-            default: true,
-        };
-        assert!(file_matches_task_inputs(&file, &pkg, &inputs));
-    }
-
-    #[test]
-    fn file_outside_package_no_match() {
-        // A file in a sibling package should not match unless there's a
-        // $TURBO_ROOT$ glob that traverses up
-        let file = anchored("packages/lib-b/src/index.ts");
-        let pkg = pkg_path("packages/lib-a");
-        let inputs = TaskInputs {
-            globs: vec![],
-            default: true,
-        };
-        // File is not inside packages/lib-a, so it doesn't match
-        assert!(!file_matches_task_inputs(&file, &pkg, &inputs));
-    }
-
-    #[test]
-    fn turbo_root_glob_matches_root_file() {
-        // When turbo.json has $TURBO_ROOT$/jest.config.js as a task input,
-        // it gets resolved to ../../jest.config.js for a package at depth 2.
-        let file = anchored("jest.config.js");
-        let pkg = pkg_path("packages/lib-a");
-        let inputs = TaskInputs {
-            globs: vec!["../../jest.config.js".to_string()],
-            default: true,
-        };
-        assert!(file_matches_task_inputs(&file, &pkg, &inputs));
-    }
-
-    #[test]
-    fn no_inputs_config_matches_everything() {
-        // Default TaskInputs (no inputs key in turbo.json)
-        let file = anchored("packages/lib-a/anything.txt");
-        let pkg = pkg_path("packages/lib-a");
-        let inputs = TaskInputs::default();
-        assert!(file_matches_task_inputs(&file, &pkg, &inputs));
-    }
-
-    #[test]
-    fn multiple_exclusions_all_respected() {
-        let file_md = anchored("packages/lib-a/README.md");
-        let file_test = anchored("packages/lib-a/foo.test.ts");
-        let file_src = anchored("packages/lib-a/src/index.ts");
-        let pkg = pkg_path("packages/lib-a");
-        let inputs = TaskInputs {
-            globs: vec!["!**/*.md".to_string(), "!**/*.test.ts".to_string()],
-            default: true,
-        };
-        assert!(!file_matches_task_inputs(&file_md, &pkg, &inputs));
-        assert!(!file_matches_task_inputs(&file_test, &pkg, &inputs));
-        assert!(file_matches_task_inputs(&file_src, &pkg, &inputs));
-    }
-
-    #[test]
-    fn root_package_file_matches() {
-        let file = anchored("scripts/check.sh");
-        let pkg = pkg_path("");
-        let inputs = TaskInputs {
-            globs: vec![],
-            default: true,
-        };
-        assert!(file_matches_task_inputs(&file, &pkg, &inputs));
+        assert!(
+            affected_ids.contains(&a_build),
+            "lib-a#build should be affected (source file changed)"
+        );
+        assert!(
+            affected_ids.contains(&b_build),
+            "lib-b#build should be affected ($TURBO_ROOT$ input config.txt changed), but the \
+             query path only visited tasks in affected packages and missed it"
+        );
     }
 }

@@ -106,16 +106,38 @@ impl From<turborepo_api_client::Error> for CacheError {
     }
 }
 
+/// Git state captured once at the beginning of a `turbo run`.
+/// Stored in each task's `-meta.json` sidecar so that cache entries
+/// can be traced back to the commit (and working-tree state) that
+/// produced them.
+///
+/// Because this is a snapshot from run start, it may become stale for
+/// tasks that execute later in a long-running build.
+///
+/// Currently only written to the local filesystem cache's `-meta.json`
+/// sidecar. Remote cache entries do not include SCM state.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CacheScmState {
+    /// The HEAD commit SHA, if available.
+    pub sha: Option<String>,
+    /// A hash summarizing all uncommitted changes (staged, unstaged,
+    /// and untracked files). `None` when the working tree is clean or
+    /// when git is unavailable.
+    pub dirty_hash: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum CacheSource {
     Local,
     Remote,
 }
 
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CacheHitMetadata {
     pub source: CacheSource,
     pub time_saved: u64,
+    pub sha: Option<String>,
+    pub dirty_hash: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
