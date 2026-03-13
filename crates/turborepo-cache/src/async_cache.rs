@@ -301,8 +301,14 @@ mod tests {
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache =
-            AsyncCache::new(&opts, &repo_root_path, Some(api_client), api_auth, None, None)?;
+        let async_cache = AsyncCache::new(
+            &opts,
+            &repo_root_path,
+            Some(api_client),
+            api_auth,
+            None,
+            None,
+        )?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -548,8 +554,14 @@ mod tests {
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache =
-            AsyncCache::new(&opts, &repo_root_path, Some(api_client), api_auth, None, None)?;
+        let async_cache = AsyncCache::new(
+            &opts,
+            &repo_root_path,
+            Some(api_client),
+            api_auth,
+            None,
+            None,
+        )?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;

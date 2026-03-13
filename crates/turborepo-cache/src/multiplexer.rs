@@ -53,7 +53,14 @@ impl CacheMultiplexer {
             opts.cache_dir, repo_root
         );
         let fs_cache = use_fs_cache
-            .then(|| FSCache::new(&opts.cache_dir, repo_root, analytics_recorder.clone(), scm_state))
+            .then(|| {
+                FSCache::new(
+                    &opts.cache_dir,
+                    repo_root,
+                    analytics_recorder.clone(),
+                    scm_state,
+                )
+            })
             .transpose()?;
 
         let http_cache = if use_http_cache {
