@@ -449,3 +449,44 @@ RunSummary.finish()
   └── observability::Handle.shutdown()
         └── Flush pending metrics to backend
 ```
+
+### 9. User-Facing Logging (`crates/turborepo-log/`)
+
+Structured event system for messages intended for end users (warnings,
+errors, informational output). Distinct from `tracing`, which remains
+for developer diagnostics.
+
+#### Key Types
+
+- `Logger` — Dispatches events to registered sinks. Set globally via
+  `init()` (once, at startup) or used directly via `Logger::handle()`
+  for testing.
+- `LogHandle` — Source-scoped handle for emitting events. Created via
+  `log()` (global) or `Logger::handle()` (specific logger). Resolves
+  the global logger at `.emit()` time, not at handle or builder
+  creation time — handles and builders created before `init()` work
+  once the global logger is set.
+- `LogSink` — Trait for event destinations. Built-in sinks:
+  `CollectorSink` (in-memory buffer for post-run summaries) and
+  `FileSink` (newline-delimited JSON with optional size limiting).
+- `LogEvent` — Structured event with level, source, message, typed
+  fields, and timestamp.
+
+#### Relationship to `turborepo-ui`
+
+`turborepo-ui` handles terminal rendering (TUI, console formatting).
+`turborepo-log` handles structured event capture and dispatch. A
+terminal sink in `turborepo-ui` can implement `LogSink` to bridge
+events into the rendering pipeline. `turborepo-log` intentionally has
+no dependency on `turborepo-ui` — it sits at the bottom of the
+dependency graph.
+
+#### Data Flow
+
+```
+Subsystem / Task Executor
+  └── LogHandle.warn("msg").field("k", v).emit()
+        └── Logger.emit(&event)
+              ├── CollectorSink → in-memory buffer → post-run summary
+              └── FileSink → JSONL file → external tooling
+```
