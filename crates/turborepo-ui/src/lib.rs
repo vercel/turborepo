@@ -10,6 +10,7 @@ mod logs;
 mod output;
 mod prefixed;
 pub mod sender;
+mod terminal_sink;
 pub mod tui;
 pub mod wui;
 
@@ -25,6 +26,7 @@ pub use crate::{
     logs::{LogWriter, replay_logs, replay_logs_with_crlf},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
+    terminal_sink::TerminalSink,
     tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_on_panic},
 };
 
