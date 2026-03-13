@@ -429,17 +429,24 @@ impl RunBuilder {
             })
             .unzip();
 
-        let async_cache = {
-            let _span = tracing::info_span!("async_cache_new").entered();
-            let scm_state = {
-                let (_, sha) = scm.get_current_branch_and_sha(&self.repo_root);
+        let scm_state_task = {
+            let scm = scm.clone();
+            let repo_root = self.repo_root.clone();
+            tokio::task::spawn_blocking(move || {
+                let _span = tracing::info_span!("capture_scm_state").entered();
+                let sha = scm.get_current_sha(&repo_root).ok();
                 let dirty_hash = scm.get_dirty_hash();
                 if sha.is_some() || dirty_hash.is_some() {
                     Some(CacheScmState { sha, dirty_hash })
                 } else {
                     None
                 }
-            };
+            })
+        };
+
+        let async_cache = {
+            let _span = tracing::info_span!("async_cache_new").entered();
+            let scm_state = scm_state_task.await.expect("scm state capture panicked");
             AsyncCache::new(
                 &self.opts.cache_opts,
                 &self.repo_root,

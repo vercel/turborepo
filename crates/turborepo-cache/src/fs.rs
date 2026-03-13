@@ -22,9 +22,9 @@ pub struct FSCache {
 struct CacheMetadata {
     hash: String,
     duration: u64,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     sha: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     dirty_hash: Option<String>,
 }
 
@@ -563,5 +563,81 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fs_cache_writes_scm_metadata() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+
+        let test_file = repo_root_path.join_component("test.txt");
+        test_file.create_with_contents("content")?;
+
+        let scm_state = Some(CacheScmState {
+            sha: Some("abc123def456".to_string()),
+            dirty_hash: Some("fedcba654321".to_string()),
+        });
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, scm_state)?;
+        let files = vec![AnchoredSystemPathBuf::from_raw("test.txt")?];
+        cache.put(repo_root_path, "scm-test-hash", &files, 42)?;
+
+        let meta_path = repo_root_path
+            .join_component("cache")
+            .join_component("scm-test-hash-meta.json");
+        let meta_json: serde_json::Value = serde_json::from_str(&meta_path.read_to_string()?)?;
+        assert_eq!(meta_json["sha"], "abc123def456");
+        assert_eq!(meta_json["dirty_hash"], "fedcba654321");
+        assert_eq!(meta_json["duration"], 42);
+        assert_eq!(meta_json["hash"], "scm-test-hash");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fs_cache_writes_null_scm_fields_when_none() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+
+        let test_file = repo_root_path.join_component("test.txt");
+        test_file.create_with_contents("content")?;
+
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let files = vec![AnchoredSystemPathBuf::from_raw("test.txt")?];
+        cache.put(repo_root_path, "no-scm-hash", &files, 10)?;
+
+        let meta_path = repo_root_path
+            .join_component("cache")
+            .join_component("no-scm-hash-meta.json");
+        let meta_json: serde_json::Value = serde_json::from_str(&meta_path.read_to_string()?)?;
+        assert_eq!(meta_json["sha"], serde_json::Value::Null);
+        assert_eq!(meta_json["dirty_hash"], serde_json::Value::Null);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_metadata_deserializes_without_scm_fields() {
+        let old_json = r#"{"hash":"abc123","duration":100}"#;
+        let meta: CacheMetadata = serde_json::from_str(old_json).unwrap();
+        assert_eq!(meta.hash, "abc123");
+        assert_eq!(meta.duration, 100);
+        assert!(meta.sha.is_none());
+        assert!(meta.dirty_hash.is_none());
+    }
+
+    #[test]
+    fn test_cache_metadata_round_trips_with_scm_fields() {
+        let meta = CacheMetadata {
+            hash: "abc".to_string(),
+            duration: 99,
+            sha: Some("deadbeef".to_string()),
+            dirty_hash: Some("cafebabe".to_string()),
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        let deserialized: CacheMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.sha, Some("deadbeef".to_string()));
+        assert_eq!(deserialized.dirty_hash, Some("cafebabe".to_string()));
+        assert_eq!(deserialized.hash, "abc");
+        assert_eq!(deserialized.duration, 99);
     }
 }
