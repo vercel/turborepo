@@ -65,6 +65,7 @@ pub struct App<W> {
     preferences: PreferenceLoader,
     scrollback_len: u64,
     scroll_momentum: ScrollMomentum,
+    log_events: Vec<turborepo_log::LogEvent>,
 }
 
 impl<W> App<W> {
@@ -121,6 +122,7 @@ impl<W> App<W> {
             preferences,
             scrollback_len,
             scroll_momentum: ScrollMomentum::new(),
+            log_events: Vec::new(),
         }
     }
 
@@ -1042,6 +1044,9 @@ fn update(
     event: Event,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
+        Event::LogEvent(log_event) => {
+            app.log_events.push(log_event);
+        }
         Event::StartTask { task, output_logs } => {
             app.start_task(&task, output_logs)?;
         }
@@ -2549,6 +2554,36 @@ mod test {
             !app.done,
             "app must not be done after a watch run completes — it waits for file changes"
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_log_event_reaches_app() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Box<dyn io::Write + Send>> = App::new(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        assert!(app.log_events.is_empty());
+
+        let event = turborepo_log::LogEvent::new(
+            turborepo_log::Level::Warn,
+            turborepo_log::Source::turbo("scm"),
+            "something went wrong",
+        );
+        update(&mut app, Event::LogEvent(event))?;
+
+        assert_eq!(app.log_events.len(), 1);
+        assert_eq!(app.log_events[0].message(), "something went wrong");
+        assert_eq!(app.log_events[0].level(), turborepo_log::Level::Warn);
 
         Ok(())
     }
