@@ -169,8 +169,7 @@ impl CacheMultiplexer {
 
         if self.cache_config.remote.read
             && let Some(http) = self.get_http_cache()
-            && let Ok(Some((CacheHitMetadata { source, time_saved }, files))) =
-                http.fetch(key).await
+            && let Ok(Some((hit_metadata, files))) = http.fetch(key).await
         {
             // Store this into fs cache. We can ignore errors here because we know
             // we have previously successfully stored in HTTP cache, and so the overall
@@ -179,10 +178,10 @@ impl CacheMultiplexer {
             if self.cache_config.local.write
                 && let Some(fs) = &self.fs
             {
-                let _ = fs.put(anchor, key, &files, time_saved);
+                let _ = fs.put(anchor, key, &files, hit_metadata.time_saved);
             }
 
-            return Ok(Some((CacheHitMetadata { source, time_saved }, files)));
+            return Ok(Some((hit_metadata, files)));
         }
 
         Ok(None)
