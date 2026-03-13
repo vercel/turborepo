@@ -223,18 +223,19 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
         &mut self,
         unresolved_deps: &BTreeMap<String, String>,
         ignore_missing_packages: bool,
-        is_workspace_root_deps: bool,
+        _is_workspace_root_deps: bool,
     ) -> Result<Vec<Package>, Error> {
         let mut newly_resolved = Vec::new();
 
         for (name, specifier) in unresolved_deps {
-            // For direct workspace dependencies, include workspace_path in the cache key
-            // since resolution depends on the workspace's importer entry.
-            // For transitive sub-dependencies, the resolution is workspace-independent
-            // (the version is already a resolved lockfile key), so we omit workspace_path
-            // to enable cross-workspace cache sharing.
-            let wp = is_workspace_root_deps.then_some(self.workspace_path);
-            self.make_cache_key(wp, name, specifier);
+            // Always include workspace_path in the cache key because
+            // resolve_package() receives it and some lockfile implementations
+            // (e.g. Bun) use it for workspace-scoped resolution even for
+            // transitive dependencies. Without this, parallel workspace
+            // processing in all_transitive_closures() can produce
+            // non-deterministic results when one workspace's cached resolution
+            // is incorrectly reused by another workspace.
+            self.make_cache_key(Some(self.workspace_path), name, specifier);
 
             let pkg = match self.resolve_cache.get(self.key_buf.as_str()) {
                 Some(cached) => cached.clone(),

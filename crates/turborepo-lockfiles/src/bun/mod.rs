@@ -3498,4 +3498,85 @@ mod test {
             "link: entry should not have empty registry string inserted"
         );
     }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12252
+    // When two workspaces have workspace-scoped entries for the same package
+    // at different versions, and a shared transitive dependency references that
+    // package with a wide semver range, the transitive closure must resolve
+    // to the correct workspace-scoped version for each workspace — not whichever
+    // version happened to be cached first during parallel processing.
+    #[test]
+    fn test_all_transitive_closures_deterministic_with_workspace_scoped_packages() {
+        use std::collections::{BTreeMap, HashMap, HashSet};
+
+        let lockfile_content = r#"{
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": { "name": "test-monorepo" },
+                "apps/app-a": {
+                    "name": "app-a",
+                    "dependencies": { "shared": "^1.0.0" }
+                },
+                "apps/app-b": {
+                    "name": "app-b",
+                    "dependencies": { "shared": "^1.0.0" }
+                }
+            },
+            "packages": {
+                "app-a": ["app-a@workspace:apps/app-a"],
+                "app-b": ["app-b@workspace:apps/app-b"],
+                "shared": ["shared@1.0.0", "", {
+                    "dependencies": { "lib": ">=1.0.0" }
+                }, "sha512-shared"],
+                "lib": ["lib@2.0.0", "", {}, "sha512-lib2"],
+                "app-a/lib": ["lib@2.0.0", "", {}, "sha512-lib2"],
+                "app-b/lib": ["lib@1.0.0", "", {}, "sha512-lib1"]
+            }
+        }"#;
+
+        let lockfile = BunLockfile::from_str(lockfile_content).unwrap();
+
+        let mut workspaces = HashMap::new();
+        workspaces.insert(
+            "apps/app-a".to_string(),
+            BTreeMap::from([("shared".to_string(), "^1.0.0".to_string())]),
+        );
+        workspaces.insert(
+            "apps/app-b".to_string(),
+            BTreeMap::from([("shared".to_string(), "^1.0.0".to_string())]),
+        );
+
+        // Run multiple times to catch race-condition-driven non-determinism.
+        // Before the fix, the result would vary depending on which workspace
+        // populated the shared resolve cache first.
+        let mut prev_app_a: Option<HashSet<crate::Package>> = None;
+        let mut prev_app_b: Option<HashSet<crate::Package>> = None;
+
+        for _ in 0..50 {
+            let result =
+                crate::all_transitive_closures(&lockfile, workspaces.clone(), false).unwrap();
+
+            let app_a_pkgs = result.get("apps/app-a").unwrap();
+            let app_b_pkgs = result.get("apps/app-b").unwrap();
+
+            assert!(
+                app_a_pkgs.iter().any(|p| p.key == "lib@2.0.0"),
+                "app-a should have lib@2.0.0 via workspace-scoped resolution"
+            );
+            assert!(
+                app_b_pkgs.iter().any(|p| p.key == "lib@1.0.0"),
+                "app-b should have lib@1.0.0 via workspace-scoped resolution"
+            );
+
+            if let Some(ref prev) = prev_app_a {
+                assert_eq!(app_a_pkgs, prev, "app-a closure changed between runs");
+            }
+            if let Some(ref prev) = prev_app_b {
+                assert_eq!(app_b_pkgs, prev, "app-b closure changed between runs");
+            }
+
+            prev_app_a = Some(app_a_pkgs.clone());
+            prev_app_b = Some(app_b_pkgs.clone());
+        }
+    }
 }
