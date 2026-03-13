@@ -89,9 +89,7 @@ export async function create(
     error(
       "You appear to be offline. Please check your network connection and try again."
     );
-    for (const reason of onlineStatus.reasons) {
-      warn(reason);
-    }
+    warn(onlineStatus.reason);
     process.exit(1);
   }
   const { root, projectName } = await prompts.directory({ dir: directory });
