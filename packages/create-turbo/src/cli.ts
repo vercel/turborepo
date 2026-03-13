@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 
-import http from "node:http";
-import https from "node:https";
 import picocolors from "picocolors";
-//
 import { Command, Option } from "commander";
 import { logger, createNotifyUpdate } from "@turbo/utils";
 import {
@@ -11,7 +8,6 @@ import {
   initTelemetry,
   withTelemetryCommand
 } from "@turbo/telemetry";
-import { ProxyAgent } from "proxy-agent";
 import cliPkg from "../package.json";
 import { create } from "./commands";
 
@@ -19,11 +15,6 @@ const notifyUpdate = createNotifyUpdate({ packageInfo: cliPkg });
 
 // Global telemetry client
 let telemetryClient: CreateTurboTelemetry | undefined;
-
-// Support http proxy vars
-const agent = new ProxyAgent();
-http.globalAgent = agent;
-https.globalAgent = agent;
 
 const createTurboCli = new Command();
 
