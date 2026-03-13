@@ -14,7 +14,6 @@ import {
   logger
 } from "@turbo/utils";
 import { tryGitInit, removeGitDirectory } from "../../utils/git";
-import { isOnline } from "../../utils/is-online";
 import { transforms } from "../../transforms";
 import { TransformError } from "../../transforms/errors";
 import { isDefaultExample } from "../../utils/is-default-example";
@@ -80,18 +79,8 @@ export async function create(
 
   const { packageManager, skipInstall, skipTransforms, git } = opts;
 
-  const [onlineStatus, availablePackageManagers] = await Promise.all([
-    isOnline(),
-    getAvailablePackageManagers()
-  ]);
+  const availablePackageManagers = await getAvailablePackageManagers();
 
-  if (!onlineStatus.online) {
-    error(
-      "You appear to be offline. Please check your network connection and try again."
-    );
-    warn(onlineStatus.reason);
-    process.exit(1);
-  }
   const { root, projectName } = await prompts.directory({ dir: directory });
   const relativeProjectDir = path.relative(process.cwd(), root);
   const projectDirIsCurrentDir = relativeProjectDir === "";
