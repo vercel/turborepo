@@ -57,8 +57,10 @@ async function generateNativePackage({
   await copyFromTemplate("LICENSE");
 
   console.log("Generating package.json...");
-  const packageJson = {
-    name: `${packagePrefix}-${os}-${archToHuman[arch]}`,
+  const isScoped = packagePrefix.startsWith("@");
+  const separator = isScoped ? "/" : "-";
+  const packageJson: Record<string, unknown> = {
+    name: `${packagePrefix}${separator}${os}-${archToHuman[arch]}`,
     version,
     description:
       description ||
@@ -71,6 +73,9 @@ async function generateNativePackage({
     cpu: [arch],
     preferUnplugged: true
   };
+  if (isScoped) {
+    packageJson.publishConfig = { access: "public" };
+  }
   await writeFile(
     path.join(outputDir, "package.json"),
     JSON.stringify(packageJson, null, 2)

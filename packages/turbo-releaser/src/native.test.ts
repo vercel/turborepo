@@ -25,7 +25,12 @@ describe("generateNativePackage", () => {
 
     const platform: Platform = { os: "darwin", arch: "x64" };
     const version = "1.0.0";
-    await native.generateNativePackage({ platform, version, outputDir });
+    await native.generateNativePackage({
+      platform,
+      version,
+      outputDir,
+      packagePrefix: "@turbo"
+    });
 
     // Assert rm was called correctly
     assert.equal(mockRm.mock.calls.length, 1);
@@ -66,8 +71,9 @@ describe("generateNativePackage", () => {
       description: string;
       os: Array<string>;
       cpu: Array<string>;
+      publishConfig: { access: string };
     };
-    assert.equal(packageJson.name, `turbo-darwin-${native.archToHuman.x64}`);
+    assert.equal(packageJson.name, `@turbo/darwin-${native.archToHuman.x64}`);
     assert.equal(packageJson.version, version);
     assert.equal(
       packageJson.description,
@@ -75,6 +81,7 @@ describe("generateNativePackage", () => {
     );
     assert.deepEqual(packageJson.os, ["darwin"]);
     assert.deepEqual(packageJson.cpu, ["x64"]);
+    assert.deepEqual(packageJson.publishConfig, { access: "public" });
   });
 
   it("should handle Windows platform correctly", async (t) => {
@@ -95,7 +102,8 @@ describe("generateNativePackage", () => {
     await native.generateNativePackage({
       platform: { os: "windows", arch: "x64" },
       version: "1.0.0",
-      outputDir
+      outputDir,
+      packagePrefix: "@turbo"
     });
 
     assert.equal(mockCopyFile.mock.calls.length, 3);
@@ -123,7 +131,8 @@ describe("generateNativePackage", () => {
       native.generateNativePackage({
         platform: { os: "linux", arch: "x64" },
         version: "1.2.0",
-        outputDir
+        outputDir,
+        packagePrefix: "@turbo"
       }),
       { message: "Failed to remove directory" }
     );
