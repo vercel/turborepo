@@ -8,19 +8,24 @@ use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{analytics, analytics::AnalyticsEvent};
 
 use crate::{
-    CacheError, CacheHitMetadata, CacheSource,
+    CacheError, CacheHitMetadata, CacheScmState, CacheSource,
     cache_archive::{CacheReader, CacheWriter},
 };
 
 pub struct FSCache {
     cache_directory: AbsoluteSystemPathBuf,
     analytics_recorder: Option<AnalyticsSender>,
+    scm_state: Option<CacheScmState>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct CacheMetadata {
     hash: String,
     duration: u64,
+    #[serde(default)]
+    sha: Option<String>,
+    #[serde(default)]
+    dirty_hash: Option<String>,
 }
 
 impl CacheMetadata {
@@ -43,6 +48,7 @@ impl FSCache {
         cache_dir: &Utf8Path,
         repo_root: &AbsoluteSystemPath,
         analytics_recorder: Option<AnalyticsSender>,
+        scm_state: Option<CacheScmState>,
     ) -> Result<Self, CacheError> {
         debug!(
             "FSCache::new called with cache_dir={}, repo_root={}",
@@ -55,6 +61,7 @@ impl FSCache {
         Ok(FSCache {
             cache_directory,
             analytics_recorder,
+            scm_state,
         })
     }
 
@@ -224,6 +231,8 @@ impl FSCache {
         let meta = CacheMetadata {
             hash: hash.to_string(),
             duration,
+            sha: self.scm_state.as_ref().and_then(|s| s.sha.clone()),
+            dirty_hash: self.scm_state.as_ref().and_then(|s| s.dirty_hash.clone()),
         };
 
         let meta_json = serde_json::to_string(&meta)
@@ -304,6 +313,7 @@ mod test {
             Utf8Path::new(""),
             repo_root_path,
             Some(analytics_sender.clone()),
+            None,
         )?;
 
         let expected_miss = cache.fetch(repo_root_path, test_case.hash)?;
@@ -359,9 +369,9 @@ mod test {
         let duration = 100;
 
         // Create multiple caches pointing to the same directory
-        let cache1 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
-        let cache2 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
-        let cache3 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache1 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let cache2 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let cache3 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
 
         // Perform concurrent writes
         let handle1 = {
@@ -386,7 +396,7 @@ mod test {
         let _ = handle3.await?;
 
         // The cache should be readable
-        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
         let result = cache.fetch(repo_root_path, hash)?;
         assert!(
             result.is_some(),
@@ -413,15 +423,15 @@ mod test {
         let duration = 100;
 
         // First write to establish the cache
-        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
         cache.put(repo_root_path, hash, &files, duration)?;
 
         // Update the source file
         test_file.create_with_contents("updated content")?;
 
         // Perform concurrent read and write
-        let cache_write = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
-        let cache_read = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache_write = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let cache_read = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
 
         let write_handle = {
             let files = files.clone();
@@ -463,13 +473,13 @@ mod test {
         let duration = 100;
 
         // Write to cache first
-        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
         cache.put(repo_root_path, hash, &files, duration)?;
 
         // Perform concurrent reads
         let mut handles = Vec::new();
         for _ in 0..10 {
-            let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+            let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
             let repo_root = repo_root_path.to_owned();
             handles.push(tokio::spawn(async move { cache.fetch(&repo_root, hash) }));
         }
@@ -500,9 +510,9 @@ mod test {
         let duration = 100;
 
         // Perform concurrent writes
-        let cache1 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
-        let cache2 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
-        let cache3 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None)?;
+        let cache1 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let cache2 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let cache3 = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
 
         let handle1 = {
             let files = files.clone();
@@ -553,5 +563,81 @@ mod test {
         );
 
         Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fs_cache_writes_scm_metadata() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+
+        let test_file = repo_root_path.join_component("test.txt");
+        test_file.create_with_contents("content")?;
+
+        let scm_state = Some(CacheScmState {
+            sha: Some("abc123def456".to_string()),
+            dirty_hash: Some("fedcba654321".to_string()),
+        });
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, scm_state)?;
+        let files = vec![AnchoredSystemPathBuf::from_raw("test.txt")?];
+        cache.put(repo_root_path, "scm-test-hash", &files, 42)?;
+
+        let meta_path = repo_root_path
+            .join_component("cache")
+            .join_component("scm-test-hash-meta.json");
+        let meta_json: serde_json::Value = serde_json::from_str(&meta_path.read_to_string()?)?;
+        assert_eq!(meta_json["sha"], "abc123def456");
+        assert_eq!(meta_json["dirty_hash"], "fedcba654321");
+        assert_eq!(meta_json["duration"], 42);
+        assert_eq!(meta_json["hash"], "scm-test-hash");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fs_cache_writes_null_scm_fields_when_none() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+
+        let test_file = repo_root_path.join_component("test.txt");
+        test_file.create_with_contents("content")?;
+
+        let cache = FSCache::new(Utf8Path::new("cache"), repo_root_path, None, None)?;
+        let files = vec![AnchoredSystemPathBuf::from_raw("test.txt")?];
+        cache.put(repo_root_path, "no-scm-hash", &files, 10)?;
+
+        let meta_path = repo_root_path
+            .join_component("cache")
+            .join_component("no-scm-hash-meta.json");
+        let meta_json: serde_json::Value = serde_json::from_str(&meta_path.read_to_string()?)?;
+        assert_eq!(meta_json["sha"], serde_json::Value::Null);
+        assert_eq!(meta_json["dirty_hash"], serde_json::Value::Null);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_cache_metadata_deserializes_without_scm_fields() {
+        let old_json = r#"{"hash":"abc123","duration":100}"#;
+        let meta: CacheMetadata = serde_json::from_str(old_json).unwrap();
+        assert_eq!(meta.hash, "abc123");
+        assert_eq!(meta.duration, 100);
+        assert!(meta.sha.is_none());
+        assert!(meta.dirty_hash.is_none());
+    }
+
+    #[test]
+    fn test_cache_metadata_round_trips_with_scm_fields() {
+        let meta = CacheMetadata {
+            hash: "abc".to_string(),
+            duration: 99,
+            sha: Some("deadbeef".to_string()),
+            dirty_hash: Some("cafebabe".to_string()),
+        };
+        let json = serde_json::to_string(&meta).unwrap();
+        let deserialized: CacheMetadata = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.sha, Some("deadbeef".to_string()));
+        assert_eq!(deserialized.dirty_hash, Some("cafebabe".to_string()));
+        assert_eq!(deserialized.hash, "abc");
+        assert_eq!(deserialized.duration, 99);
     }
 }

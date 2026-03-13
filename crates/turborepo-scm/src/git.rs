@@ -47,6 +47,17 @@ impl SCM {
         }
     }
 
+    /// Compute a hash that summarizes all uncommitted changes in the working
+    /// tree: staged changes, unstaged changes, and untracked files.
+    /// Returns `None` for manual SCM mode, when the working tree is clean,
+    /// or when a git command fails (errors are logged as warnings).
+    pub fn get_dirty_hash(&self) -> Option<String> {
+        match self {
+            Self::Git(git) => git.get_dirty_hash(),
+            Self::Manual => None,
+        }
+    }
+
     /// get the actual changed files between two git refs
     pub fn changed_files(
         &self,
@@ -192,6 +203,79 @@ impl GitRepo {
         let output = self.execute_git_command(&["rev-parse", "HEAD"], "")?;
         let output = String::from_utf8(output)?;
         Ok(output.trim().to_owned())
+    }
+
+    /// Compute a hash summarizing all uncommitted state in the working tree.
+    /// Uses `git status --porcelain -z` (which files are dirty/untracked) and
+    /// `git diff HEAD` (the actual content changes for tracked files) as inputs
+    /// to a SHA-256 hash. Returns `None` if the working tree is clean or if
+    /// git commands fail (with a warning logged).
+    ///
+    /// The diff output is streamed through the hasher to avoid buffering
+    /// arbitrarily large diffs into memory. `--no-ext-diff` and `--no-binary`
+    /// ensure deterministic, bounded output regardless of user git config.
+    ///
+    /// Note: content of untracked files (not yet `git add`ed) is not included
+    /// in the diff — only their filenames from `git status` contribute.
+    fn get_dirty_hash(&self) -> Option<String> {
+        use std::{io::Read, process::Stdio};
+
+        use sha2::{Digest, Sha256};
+
+        let status_output = match self.execute_git_command(&["status", "--porcelain", "-z"], "") {
+            Ok(output) => output,
+            Err(e) => {
+                warn!("failed to get git status for dirty hash: {e}");
+                return None;
+            }
+        };
+
+        if status_output.is_empty() {
+            return None;
+        }
+
+        let mut hasher = Sha256::new();
+        hasher.update(&status_output);
+
+        // Stream `git diff HEAD` through the hasher instead of buffering the
+        // entire output. --no-ext-diff prevents external diff drivers from
+        // producing non-deterministic output, --no-color ensures consistent
+        // formatting regardless of git config.
+        match Command::new(self.bin.as_std_path())
+            .args(["diff", "HEAD", "--no-ext-diff", "--no-color"])
+            .current_dir(&self.root)
+            .env("GIT_OPTIONAL_LOCKS", "0")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(mut child) => {
+                if let Some(stdout) = child.stdout.take() {
+                    let mut reader = std::io::BufReader::new(stdout);
+                    let mut buf = [0u8; 65536];
+                    loop {
+                        match reader.read(&mut buf) {
+                            Ok(0) => break,
+                            Ok(n) => hasher.update(&buf[..n]),
+                            Err(e) => {
+                                warn!("error reading git diff output: {e}");
+                                break;
+                            }
+                        }
+                    }
+                }
+                if let Ok(status) = child.wait()
+                    && !status.success()
+                {
+                    warn!("git diff exited with non-zero status: {status}");
+                }
+            }
+            Err(e) => {
+                warn!("failed to spawn git diff for dirty hash: {e}");
+            }
+        }
+
+        Some(hex::encode(hasher.finalize()))
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
@@ -1406,5 +1490,102 @@ mod tests {
         let actual = github_event.get_parent_ref_of_first_commit();
 
         assert_eq!(None, actual);
+    }
+
+    #[test]
+    fn test_dirty_hash_clean_tree_returns_none() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        assert_eq!(scm.get_dirty_hash(), None);
+    }
+
+    #[test]
+    fn test_dirty_hash_unstaged_changes() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "modified").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        assert!(scm.get_dirty_hash().is_some());
+    }
+
+    #[test]
+    fn test_dirty_hash_staged_changes() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "staged content").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        assert!(scm.get_dirty_hash().is_some());
+    }
+
+    #[test]
+    fn test_dirty_hash_untracked_file() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(repo_root.path().join("untracked.txt"), "new file").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        assert!(scm.get_dirty_hash().is_some());
+    }
+
+    #[test]
+    fn test_dirty_hash_deterministic() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "dirty").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let hash1 = scm.get_dirty_hash();
+        let hash2 = scm.get_dirty_hash();
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_dirty_hash_different_content_produces_different_hash() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "content A").unwrap();
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let hash_a = scm.get_dirty_hash();
+
+        fs::write(&file, "content B").unwrap();
+        let hash_b = scm.get_dirty_hash();
+
+        assert_ne!(
+            hash_a, hash_b,
+            "different content should produce different hashes"
+        );
+    }
+
+    #[test]
+    fn test_dirty_hash_manual_scm_returns_none() {
+        assert_eq!(SCM::Manual.get_dirty_hash(), None);
     }
 }
