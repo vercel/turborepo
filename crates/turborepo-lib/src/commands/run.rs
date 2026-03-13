@@ -6,7 +6,7 @@ use turborepo_log::{sinks::collector::CollectorSink, Logger};
 use turborepo_query_api::QueryServer;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{sender::UISender, TerminalSink};
+use turborepo_ui::{sender::UISender, TerminalSink, TuiSink};
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder};
 
@@ -21,8 +21,13 @@ pub async fn run(
     let handler = SignalHandler::new(signal);
 
     let collector = Arc::new(CollectorSink::new());
-    let terminal = TerminalSink::new(base.color_config);
-    let _ = turborepo_log::init(Logger::new(vec![Box::new(collector), Box::new(terminal)]));
+    let terminal = Arc::new(TerminalSink::new(base.color_config));
+    let tui_sink = Arc::new(TuiSink::new());
+    let _ = turborepo_log::init(Logger::new(vec![
+        Box::new(collector),
+        Box::new(terminal.clone()),
+        Box::new(tui_sink.clone()),
+    ]));
 
     let mut run_builder = {
         let _span = tracing::info_span!("run_builder_new").entered();
@@ -42,6 +47,11 @@ pub async fn run(
             let _span = tracing::info_span!("start_ui").entered();
             run.start_ui()?.unzip()
         };
+
+        if let Some(UISender::Tui(ref tui_sender)) = sender {
+            tui_sink.connect(tui_sender.clone());
+            terminal.disable();
+        }
 
         let result = run.run(sender.clone(), false).await;
 

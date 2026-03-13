@@ -1,4 +1,7 @@
-use std::io::{self, Write};
+use std::{
+    io::{self, Write},
+    sync::atomic::{AtomicBool, Ordering},
+};
 
 use turborepo_log::{Level, LogEvent, LogSink};
 
@@ -9,18 +12,35 @@ use crate::ColorConfig;
 /// This is the primary sink for user-facing messages during `turbo run`.
 /// It formats events to stderr using the same color conventions as the
 /// rest of turborepo's terminal output.
+///
+/// When the TUI is active it owns the terminal, so stderr writes would
+/// corrupt the display. Call [`disable()`](Self::disable) to suppress
+/// output once the TUI takes over.
 pub struct TerminalSink {
     color_config: ColorConfig,
+    active: AtomicBool,
 }
 
 impl TerminalSink {
     pub fn new(color_config: ColorConfig) -> Self {
-        Self { color_config }
+        Self {
+            color_config,
+            active: AtomicBool::new(true),
+        }
+    }
+
+    /// Stop emitting to stderr. Intended to be called when the TUI
+    /// connects and takes ownership of the terminal.
+    pub fn disable(&self) {
+        self.active.store(false, Ordering::Relaxed);
     }
 }
 
 impl LogSink for TerminalSink {
     fn emit(&self, event: &LogEvent) {
+        if !self.active.load(Ordering::Relaxed) {
+            return;
+        }
         let stderr = io::stderr();
         let mut handle = stderr.lock();
 
@@ -95,5 +115,28 @@ mod tests {
         let handle = logger.handle(Source::turbo("test"));
         handle.warn("no color here").emit();
         assert_eq!(collector.events().len(), 1);
+    }
+
+    #[test]
+    fn disable_suppresses_emit() {
+        // TerminalSink behind Arc so disable() and emit() share the same AtomicBool.
+        let sink = Arc::new(TerminalSink::new(ColorConfig::new(true)));
+        let collector = Arc::new(CollectorSink::new());
+        let logger = Arc::new(Logger::new(vec![
+            Box::new(sink.clone()),
+            Box::new(collector.clone()),
+        ]));
+
+        let handle = logger.handle(Source::turbo("test"));
+        handle.warn("before disable").emit();
+
+        sink.disable();
+        // This event still reaches the collector (it's a separate sink)
+        // but TerminalSink should skip its stderr write.
+        handle.warn("after disable").emit();
+
+        // Both events reached the collector, confirming the logger still
+        // dispatches. TerminalSink's disable only affects its own output.
+        assert_eq!(collector.events().len(), 2);
     }
 }
