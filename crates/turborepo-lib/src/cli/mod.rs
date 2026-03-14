@@ -1625,13 +1625,21 @@ async fn run_main(
             target,
         } => {
             if target.is_some() {
-                warn!("`--target` flag is deprecated and does not do anything")
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo("cli"),
+                    "`--target` flag is deprecated and does not do anything",
+                )
+                .emit();
             }
             let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
             event.track_call();
 
             if cli_args.team.is_some() {
-                warn!("team flag does not set the scope for linking. Use --scope instead.");
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo("cli"),
+                    "team flag does not set the scope for linking. Use --scope instead.",
+                )
+                .emit();
             }
 
             if cli_args.test_run {
@@ -1688,7 +1696,11 @@ async fn run_main(
         }
         Command::Unlink { target } => {
             if target.is_some() {
-                warn!("`--target` flag is deprecated and does not do anything");
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo("cli"),
+                    "`--target` flag is deprecated and does not do anything",
+                )
+                .emit();
             }
 
             let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
@@ -1763,7 +1775,11 @@ async fn run_main(
             let Some(ref query_server) = query_server else {
                 return Err(error::Error::QueryNotAvailable);
             };
-            warn!("query command is experimental and may change in the future");
+            turborepo_log::warn(
+                turborepo_log::Source::turbo("cli"),
+                "query command is experimental and may change in the future",
+            )
+            .emit();
             let subcommand = subcommand.clone();
             let query = query.clone();
             let variables = variables.clone();

@@ -17,6 +17,7 @@ tokio = { workspace = true, features = ["sync", "time", "rt"] }
 tracing = { workspace = true }
 turbopath = { workspace = true }
 turborepo-cache = { workspace = true }
+turborepo-log = { path = "../turborepo-log" }
 turborepo-ci = { workspace = true }
 turborepo-config = { path = "../turborepo-config" }
 turborepo-env = { workspace = true }

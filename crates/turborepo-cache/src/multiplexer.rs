@@ -45,7 +45,11 @@ impl CacheMultiplexer {
         // configure yourself out of having a cache. We should tell you about it
         // but we shouldn't fail your build for that reason.
         if !use_fs_cache && !use_http_cache {
-            warn!("no caches are enabled");
+            turborepo_log::warn(
+                turborepo_log::Source::turbo("cache"),
+                "no caches are enabled",
+            )
+            .emit();
         }
 
         debug!(
@@ -127,8 +131,11 @@ impl CacheMultiplexer {
                         .should_print_skipping_remote_put
                         .load(Ordering::Relaxed)
                     {
-                        // Warn once per build, not per task
-                        warn!("Remote cache is read-only, skipping upload");
+                        turborepo_log::warn(
+                            turborepo_log::Source::turbo("cache"),
+                            "Remote cache is read-only, skipping upload",
+                        )
+                        .emit();
                         self.should_print_skipping_remote_put
                             .store(false, Ordering::Relaxed);
                     }

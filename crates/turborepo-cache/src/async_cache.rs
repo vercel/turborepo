@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex, atomic::AtomicU8};
 
 use futures::{StreamExt, stream::FuturesUnordered};
 use tokio::sync::{Semaphore, mpsc, oneshot};
-use tracing::{Instrument, Level, warn};
+use tracing::{Instrument, Level};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
@@ -90,7 +90,11 @@ impl AsyncCache {
                                             num_warnings + 1,
                                             std::sync::atomic::Ordering::Release,
                                         );
-                                        warn!("{err}");
+                                        turborepo_log::warn(
+                                            turborepo_log::Source::turbo("cache"),
+                                            format!("{err}"),
+                                        )
+                                        .emit();
                                     }
                                 }
                                 // Release permit once we're done with the write
