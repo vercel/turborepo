@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
 use tracing::error;
 use turborepo_api_client::SharedHttpClient;
@@ -29,6 +29,11 @@ pub async fn run(
         Box::new(tui_sink.clone()),
     ]));
 
+    if let Ok(message) = env::var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) {
+        turborepo_log::warn(turborepo_log::Source::turbo("shim"), message).emit();
+        unsafe { env::remove_var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) };
+    }
+
     let mut run_builder = {
         let _span = tracing::info_span!("run_builder_new").entered();
         RunBuilder::new(base, Some(http_client))?
@@ -43,6 +48,11 @@ pub async fn run(
             (Arc::new(run), analytics_handle)
         };
 
+        // Disable TerminalSink before start_ui() so log events emitted
+        // during the prelude don't write to stderr and corrupt the TUI.
+        // The prelude's cprint! calls still reach stdout for stream mode.
+        terminal.disable();
+
         let (sender, handle) = {
             let _span = tracing::info_span!("start_ui").entered();
             run.start_ui()?.unzip()
@@ -50,7 +60,8 @@ pub async fn run(
 
         if let Some(UISender::Tui(ref tui_sender)) = sender {
             tui_sink.connect(tui_sender.clone());
-            terminal.disable();
+        } else {
+            terminal.enable();
         }
 
         let result = run.run(sender.clone(), false).await;

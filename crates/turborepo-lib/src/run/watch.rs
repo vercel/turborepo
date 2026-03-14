@@ -1,5 +1,6 @@
 use std::{
     collections::HashSet,
+    env,
     ops::DerefMut as _,
     sync::{Arc, Mutex},
     time::Duration,
@@ -19,12 +20,13 @@ use turborepo_filewatch::{
     cookies::CookieWriter, globwatcher::GlobWatcher, hash_watcher::HashWatcher,
     package_watcher::PackageWatcher, FileSystemWatcher,
 };
+use turborepo_log::{sinks::collector::CollectorSink, Logger};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_scm::SCM;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::sender::UISender;
+use turborepo_ui::{sender::UISender, TerminalSink, TuiSink};
 
 use crate::{
     commands::CommandBase,
@@ -285,7 +287,29 @@ impl WatchClient {
 
         let watched_packages = run.get_relevant_packages();
 
+        let collector = Arc::new(CollectorSink::new());
+        let terminal = Arc::new(TerminalSink::new(base.color_config));
+        let tui_sink = Arc::new(TuiSink::new());
+        let _ = turborepo_log::init(Logger::new(vec![
+            Box::new(collector),
+            Box::new(terminal.clone()),
+            Box::new(tui_sink.clone()),
+        ]));
+
+        if let Ok(message) = env::var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) {
+            turborepo_log::warn(turborepo_log::Source::turbo("shim"), message).emit();
+            unsafe { env::remove_var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) };
+        }
+
+        terminal.disable();
+
         let (ui_sender, ui_handle) = run.start_ui()?.unzip();
+
+        if let Some(UISender::Tui(ref tui_sender)) = ui_sender {
+            tui_sink.connect(tui_sender.clone());
+        } else {
+            terminal.enable();
+        }
 
         Ok(Self {
             base,

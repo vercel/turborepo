@@ -34,6 +34,12 @@ impl TerminalSink {
     pub fn disable(&self) {
         self.active.store(false, Ordering::Relaxed);
     }
+
+    /// Resume emitting to stderr. Called when the TUI was expected
+    /// but didn't start (e.g. terminal too small, no tasks).
+    pub fn enable(&self) {
+        self.active.store(true, Ordering::Relaxed);
+    }
 }
 
 impl LogSink for TerminalSink {
