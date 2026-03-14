@@ -15,6 +15,7 @@ pub struct InputOptions<'a> {
     pub focus: &'a LayoutSections,
     pub has_selection: bool,
     pub is_help_popup_open: bool,
+    pub is_log_panel_open: bool,
 }
 
 pub fn start_crossterm_stream(tx: mpsc::Sender<crossterm::event::Event>) -> Option<JoinHandle<()>> {
@@ -94,6 +95,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
             })
         }
         KeyCode::Esc if options.is_help_popup_open => Some(Event::ToggleHelpPopup),
+        KeyCode::Esc if options.is_log_panel_open => Some(Event::ToggleLogPanel),
         KeyCode::Esc if matches!(options.focus, LayoutSections::Search { .. }) => {
             Some(Event::SearchExit {
                 restore_scroll: true,
@@ -124,6 +126,7 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
             Some(Event::SearchEnterChar(c))
         }
         // Fall through if we aren't in interactive mode
+        KeyCode::Char('l') => Some(Event::ToggleLogPanel),
         KeyCode::Char('h') => Some(Event::ToggleSidebar),
         KeyCode::Char('u') => Some(Event::ScrollUp),
         KeyCode::Char('d') => Some(Event::ScrollDown),
@@ -466,6 +469,7 @@ mod test {
             focus: search(),
             has_selection: false,
             is_help_popup_open: false,
+            is_log_panel_open: false,
         }
     }
 

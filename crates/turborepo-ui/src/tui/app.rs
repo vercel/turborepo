@@ -66,6 +66,7 @@ pub struct App<W> {
     scrollback_len: u64,
     scroll_momentum: ScrollMomentum,
     log_events: Vec<turborepo_log::LogEvent>,
+    showing_log_panel: bool,
 }
 
 impl<W> App<W> {
@@ -123,6 +124,7 @@ impl<W> App<W> {
             scrollback_len,
             scroll_momentum: ScrollMomentum::new(),
             log_events: Vec::new(),
+            showing_log_panel: false,
         }
     }
 
@@ -146,6 +148,7 @@ impl<W> App<W> {
             focus: &self.section_focus,
             has_selection,
             is_help_popup_open: self.showing_help_popup,
+            is_log_panel_open: self.showing_log_panel,
         })
     }
 
@@ -1135,6 +1138,9 @@ fn update(
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
         }
+        Event::ToggleLogPanel => {
+            app.showing_log_panel = !app.showing_log_panel;
+        }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
         }
@@ -1217,8 +1223,12 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     if app.showing_help_popup {
         let area = popup_area(*f.buffer_mut().area());
         let area = area.intersection(*f.buffer_mut().area());
-        f.render_widget(Clear, area); // Clears background underneath popup
+        f.render_widget(Clear, area);
         f.render_widget(popup(area), area);
+    }
+
+    if app.showing_log_panel {
+        super::log_panel::render_log_panel(f, &app.log_events);
     }
 }
 

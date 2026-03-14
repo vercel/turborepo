@@ -30,6 +30,9 @@ use crate::{
 };
 
 const TURBO_GLOBAL_WARNING_DISABLED: &str = "TURBO_GLOBAL_WARNING_DISABLED";
+/// Set by the shim when running as global turbo so the CLI can
+/// re-emit the warning through `turborepo_log` after logger init.
+pub const GLOBAL_WARNING_ENV_VAR: &str = "__TURBO_GLOBAL_WARNING";
 
 /// Environment variable name for the invocation directory.
 /// This is set by the shim to communicate the original invocation directory
@@ -357,20 +360,24 @@ where
             });
 
         if should_warn_on_global {
-            if let Some(declared_version) = declared_version {
-                warn!(
+            let message = if let Some(declared_version) = declared_version {
+                format!(
                     "No locally installed `turbo` found in your repository. Using globally \
                      installed version ({version}), which can cause unexpected \
                      behavior.\n\nInstalling the version in your repository ({declared_version}) \
                      before calling `turbo` will result in more predictable behavior across \
                      environments."
-                );
+                )
             } else {
-                warn!(
+                format!(
                     "No locally installed `turbo` found in your repository. Using globally \
                      installed version ({version}). Using a specified version in your repository \
                      will result in more predictable behavior."
-                );
+                )
+            };
+            debug!(%message, "global turbo warning");
+            unsafe {
+                env::set_var(GLOBAL_WARNING_ENV_VAR, &message);
             }
         }
         run_cli(runtime, Some(repo_state), ui)

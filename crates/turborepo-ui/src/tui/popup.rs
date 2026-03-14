@@ -7,6 +7,7 @@ use ratatui::{
 };
 
 const BIND_LIST: &[&str] = [
+    "l       - Toggle log panel",
     "m       - Toggle this help popup",
     "↑ or k  - Select previous task",
     "↓ or j  - Select next task",

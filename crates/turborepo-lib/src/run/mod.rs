@@ -95,6 +95,12 @@ impl Run {
         if self.opts.run_opts.single_package {
             cprint!(self.color_config, GREY, "{}", "• Running");
             cprint!(self.color_config, BOLD_GREY, " {}\n", targets_list);
+
+            turborepo_log::info(
+                turborepo_log::Source::turbo("run"),
+                format!("Running {targets_list}"),
+            )
+            .emit();
         } else {
             let mut packages = self
                 .filtered_pkgs
@@ -102,11 +108,12 @@ impl Run {
                 .map(|workspace_name| workspace_name.to_string())
                 .collect::<Vec<String>>();
             packages.sort();
+            let packages_str = packages.join(", ");
             cprintln!(
                 self.color_config,
                 GREY,
                 "• Packages in scope: {}",
-                packages.join(", ")
+                packages_str
             );
             cprint!(self.color_config, GREY, "{} ", "• Running");
             cprint!(self.color_config, BOLD_GREY, "{}", targets_list);
@@ -116,6 +123,20 @@ impl Run {
                 " in {} packages\n",
                 self.filtered_pkgs.len()
             );
+
+            turborepo_log::info(
+                turborepo_log::Source::turbo("run"),
+                format!("Packages in scope: {packages_str}"),
+            )
+            .emit();
+            turborepo_log::info(
+                turborepo_log::Source::turbo("run"),
+                format!(
+                    "Running {targets_list} in {} packages",
+                    self.filtered_pkgs.len()
+                ),
+            )
+            .emit();
         }
 
         let use_http_cache = self.opts.cache_opts.cache.remote.should_use();
