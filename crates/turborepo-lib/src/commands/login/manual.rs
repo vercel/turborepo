@@ -42,8 +42,8 @@ pub async fn login_manual(base: &mut CommandBase, force: bool) -> Result<(), Err
     api_client.with_base_url(api_url);
     let token = Token::new(token);
     check_credentials(&api_client, &token, &team_identifier).await?;
-    // update global config with token
-    write_token(base, token)?;
+    // update global config with token (manual login has no OAuth token set)
+    write_token(base, token, None)?;
     // ensure api url & team id/slug are present in turbo.json
     let turbo_json_path = base.root_turbo_json_path()?;
     write_remote(&turbo_json_path, api_client.base_url(), team_identifier)?;

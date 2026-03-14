@@ -8,12 +8,9 @@ license = "MIT"
 workspace = true
 
 [dependencies]
-anyhow = { workspace = true, features = ["backtrace"] }
-async-trait.workspace = true
-axum-server = { workspace = true }
-axum.workspace = true
 chrono.workspace = true
 hostname = "0.3.1"
+rand.workspace = true
 reqwest.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -26,7 +23,6 @@ turborepo-api-client = { workspace = true }
 turborepo-dirs = { version = "0.1.0", path = "../turborepo-dirs" }
 turborepo-ui.workspace = true
 turborepo-vercel-api = { workspace = true }
-turborepo-vercel-api-mock = { workspace = true }
 url = { workspace = true }
 webbrowser = { workspace = true }
 
@@ -36,3 +32,4 @@ httpmock = { workspace = true }
 insta = { workspace = true }
 port_scanner = { workspace = true }
 tempfile = { workspace = true }
+turborepo-vercel-api-mock = { workspace = true }
