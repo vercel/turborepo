@@ -240,8 +240,13 @@ impl ConfigV1 {
     }
 
     pub fn port(&self, name: &str) -> Option<u16> {
-        let application = self.applications.get(name)?;
-        Some(application.port(name))
+        if let Some(application) = self.applications.get(name) {
+            return Some(application.port(name));
+        }
+        self.applications
+            .iter()
+            .find(|(key, app)| app.package_name(key) == name)
+            .map(|(key, app)| app.port(key))
     }
 
     pub fn local_proxy_port(&self) -> Option<u16> {
@@ -437,6 +442,49 @@ mod test {
                 );
             }
             ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_port_lookup_by_package_name() {
+        let input = r#"{
+        "applications": {
+            "my-vercel-project": {
+                "packageName": "my-app",
+                "development": {"local": 3001}
+            }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(config_v1.port("my-app"), Some(3001));
+                assert_eq!(config_v1.port("my-vercel-project"), Some(3001));
+            }
+            ParseResult::Reference(_) => panic!("expected main config"),
+        }
+    }
+
+    #[test]
+    fn test_port_lookup_by_package_name_auto_generated() {
+        let input = r#"{
+        "applications": {
+            "my-vercel-project": {
+                "packageName": "my-app"
+            }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                let port_by_pkg = config_v1.port("my-app");
+                let port_by_key = config_v1.port("my-vercel-project");
+                assert!(port_by_pkg.is_some());
+                assert!(port_by_key.is_some());
+                assert_eq!(port_by_pkg, port_by_key);
+                assert_eq!(port_by_key, Some(generate_port_from_name("my-vercel-project")));
+            }
+            ParseResult::Reference(_) => panic!("expected main config"),
         }
     }
 
