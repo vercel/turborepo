@@ -10,7 +10,7 @@ use tracing::Instrument;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
 use turborepo_api_client::{APIAuth, APIClient, SharedHttpClient};
-use turborepo_cache::{AsyncCache, CacheScmState};
+use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -443,24 +443,26 @@ impl RunBuilder {
             })
             .unzip();
 
-        let scm_state_task = {
+        let scm_state = LazyScmState::new();
+        {
+            let scm_state = scm_state.clone();
             let scm = scm.clone();
             let repo_root = self.repo_root.clone();
             tokio::task::spawn_blocking(move || {
                 let _span = tracing::info_span!("capture_scm_state").entered();
                 let sha = scm.get_current_sha(&repo_root).ok();
                 let dirty_hash = scm.get_dirty_hash();
-                if sha.is_some() || dirty_hash.is_some() {
+                let state = if sha.is_some() || dirty_hash.is_some() {
                     Some(CacheScmState { sha, dirty_hash })
                 } else {
                     None
-                }
-            })
-        };
+                };
+                scm_state.resolve(state);
+            });
+        }
 
         let async_cache = {
             let _span = tracing::info_span!("async_cache_new").entered();
-            let scm_state = scm_state_task.await.expect("scm state capture panicked");
             AsyncCache::new(
                 &self.opts.cache_opts,
                 &self.repo_root,
