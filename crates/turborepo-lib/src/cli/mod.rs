@@ -1625,21 +1625,13 @@ async fn run_main(
             target,
         } => {
             if target.is_some() {
-                turborepo_log::warn(
-                    turborepo_log::Source::turbo("cli"),
-                    "`--target` flag is deprecated and does not do anything",
-                )
-                .emit();
+                warn!("`--target` flag is deprecated and does not do anything")
             }
             let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
             event.track_call();
 
             if cli_args.team.is_some() {
-                turborepo_log::warn(
-                    turborepo_log::Source::turbo("cli"),
-                    "team flag does not set the scope for linking. Use --scope instead.",
-                )
-                .emit();
+                warn!("team flag does not set the scope for linking. Use --scope instead.");
             }
 
             if cli_args.test_run {
@@ -1696,11 +1688,7 @@ async fn run_main(
         }
         Command::Unlink { target } => {
             if target.is_some() {
-                turborepo_log::warn(
-                    turborepo_log::Source::turbo("cli"),
-                    "`--target` flag is deprecated and does not do anything",
-                )
-                .emit();
+                warn!("`--target` flag is deprecated and does not do anything");
             }
 
             let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
@@ -1736,13 +1724,21 @@ async fn run_main(
             }
 
             run_args.track(&event);
-            let exit_code = run::run(base, event, http_client, query_server.clone())
-                .await
-                .inspect(|code| {
-                    if *code != 0 {
-                        error!("run failed: command  exited ({code})");
-                    }
-                })?;
+            let verbosity: u8 = cli_args.verbosity.into();
+            let exit_code = run::run(
+                base,
+                event,
+                http_client,
+                query_server.clone(),
+                logger,
+                verbosity,
+            )
+            .await
+            .inspect(|code| {
+                if *code != 0 {
+                    error!("run failed: command  exited ({code})");
+                }
+            })?;
 
             // Chrome tracing is enabled early in shim::run(). Here we just
             // flush and generate the markdown summary.
@@ -1775,11 +1771,7 @@ async fn run_main(
             let Some(ref query_server) = query_server else {
                 return Err(error::Error::QueryNotAvailable);
             };
-            turborepo_log::warn(
-                turborepo_log::Source::turbo("cli"),
-                "query command is experimental and may change in the future",
-            )
-            .emit();
+            warn!("query command is experimental and may change in the future");
             let subcommand = subcommand.clone();
             let query = query.clone();
             let variables = variables.clone();
@@ -1817,9 +1809,16 @@ async fn run_main(
                 return Ok(1);
             }
 
-            let mut client =
-                WatchClient::new(base, *experimental_write_cache, event, query_server.clone())
-                    .await?;
+            let verbosity: u8 = cli_args.verbosity.into();
+            let mut client = WatchClient::new(
+                base,
+                *experimental_write_cache,
+                event,
+                query_server.clone(),
+                logger,
+                verbosity,
+            )
+            .await?;
             match client.start().await {
                 Ok(()) => {}
                 Err(crate::run::watch::Error::SignalInterrupt) => {
@@ -1831,6 +1830,10 @@ async fn run_main(
                 }
             }
             client.shutdown().await;
+            if let Some(path) = logger.stderr_redirect_path() {
+                logger.restore_stderr();
+                println!("Verbose logs written to {path}");
+            }
             return Ok(0);
         }
         Command::Prune {
