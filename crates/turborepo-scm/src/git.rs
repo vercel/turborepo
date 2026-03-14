@@ -218,8 +218,6 @@ impl GitRepo {
     /// Note: content of untracked files (not yet `git add`ed) is not included
     /// in the diff — only their filenames from `git status` contribute.
     fn get_dirty_hash(&self) -> Option<String> {
-        use std::{io::Read, process::Stdio};
-
         use sha2::{Digest, Sha256};
 
         let status_output = match self.execute_git_command(&["status", "--porcelain", "-z"], "") {
@@ -237,45 +235,55 @@ impl GitRepo {
         let mut hasher = Sha256::new();
         hasher.update(&status_output);
 
-        // Stream `git diff HEAD` through the hasher instead of buffering the
-        // entire output. --no-ext-diff prevents external diff drivers from
-        // producing non-deterministic output, --no-color ensures consistent
-        // formatting regardless of git config.
-        match Command::new(self.bin.as_std_path())
-            .args(["diff", "HEAD", "--no-ext-diff", "--no-color"])
+        // Try `git diff HEAD` first. In a freshly initialized repo with no
+        // commits, HEAD doesn't exist and git exits with code 128. Fall back
+        // to `git diff --cached` which diffs the index against an empty tree,
+        // correctly capturing staged file content without needing HEAD.
+        if !self.stream_diff_into_hasher(
+            &["diff", "HEAD", "--no-ext-diff", "--no-color"],
+            &mut hasher,
+        ) && !self.stream_diff_into_hasher(
+            &["diff", "--cached", "--no-ext-diff", "--no-color"],
+            &mut hasher,
+        ) {
+            warn!("failed to run git diff for dirty hash");
+        }
+
+        Some(hex::encode(hasher.finalize()))
+    }
+
+    /// Spawn a git diff subprocess, streaming its stdout into `hasher`.
+    /// Returns `true` if the command exited successfully.
+    fn stream_diff_into_hasher(&self, args: &[&str], hasher: &mut sha2::Sha256) -> bool {
+        use std::{io::Read, process::Stdio};
+
+        use sha2::Digest;
+
+        let mut child = match Command::new(self.bin.as_std_path())
+            .args(args)
             .current_dir(&self.root)
             .env("GIT_OPTIONAL_LOCKS", "0")
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
         {
-            Ok(mut child) => {
-                if let Some(stdout) = child.stdout.take() {
-                    let mut reader = std::io::BufReader::new(stdout);
-                    let mut buf = [0u8; 65536];
-                    loop {
-                        match reader.read(&mut buf) {
-                            Ok(0) => break,
-                            Ok(n) => hasher.update(&buf[..n]),
-                            Err(e) => {
-                                warn!("error reading git diff output: {e}");
-                                break;
-                            }
-                        }
-                    }
+            Ok(child) => child,
+            Err(_) => return false,
+        };
+
+        if let Some(stdout) = child.stdout.take() {
+            let mut reader = std::io::BufReader::new(stdout);
+            let mut buf = [0u8; 65536];
+            loop {
+                match reader.read(&mut buf) {
+                    Ok(0) => break,
+                    Ok(n) => hasher.update(&buf[..n]),
+                    Err(_) => break,
                 }
-                if let Ok(status) = child.wait()
-                    && !status.success()
-                {
-                    warn!("git diff exited with non-zero status: {status}");
-                }
-            }
-            Err(e) => {
-                warn!("failed to spawn git diff for dirty hash: {e}");
             }
         }
 
-        Some(hex::encode(hasher.finalize()))
+        child.wait().is_ok_and(|s| s.success())
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
@@ -1587,5 +1595,39 @@ mod tests {
     #[test]
     fn test_dirty_hash_manual_scm_returns_none() {
         assert_eq!(SCM::Manual.get_dirty_hash(), None);
+    }
+
+    #[test]
+    fn test_dirty_hash_no_commits_untracked_file() {
+        let (repo_root, _repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("new.txt"), "hello").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        assert!(
+            scm.get_dirty_hash().is_some(),
+            "fresh repo with untracked files should produce a dirty hash"
+        );
+    }
+
+    #[test]
+    fn test_dirty_hash_no_commits_staged_content_affects_hash() {
+        let (repo_root, _repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+
+        fs::write(&file, "content A").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let hash_a = scm.get_dirty_hash();
+
+        fs::write(&file, "content B").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+        let hash_b = scm.get_dirty_hash();
+
+        assert_ne!(
+            hash_a, hash_b,
+            "different staged content in a fresh repo should produce different hashes"
+        );
     }
 }
