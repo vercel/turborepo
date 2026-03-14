@@ -35,7 +35,8 @@ async function releaseTurbo(options: {
       platforms: supportedPlatforms,
       version,
       skipPublish: options.skipPublish as boolean,
-      npmTag
+      npmTag,
+      packagePrefix: "@turbo"
     });
     console.log("Packaging and publishing completed successfully");
   } catch (error) {
