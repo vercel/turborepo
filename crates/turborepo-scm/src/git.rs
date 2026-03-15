@@ -223,7 +223,11 @@ impl GitRepo {
         let status_output = match self.execute_git_command(&["status", "--porcelain", "-z"], "") {
             Ok(output) => output,
             Err(e) => {
-                warn!("failed to get git status for dirty hash: {e}");
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo("scm"),
+                    format!("failed to get git status for dirty hash: {e}"),
+                )
+                .emit();
                 return None;
             }
         };
@@ -246,7 +250,11 @@ impl GitRepo {
             &["diff", "--cached", "--no-ext-diff", "--no-color"],
             &mut hasher,
         ) {
-            warn!("failed to run git diff for dirty hash");
+            turborepo_log::warn(
+                turborepo_log::Source::turbo("scm"),
+                "failed to run git diff for dirty hash",
+            )
+            .emit();
         }
 
         Some(hex::encode(hasher.finalize()))
