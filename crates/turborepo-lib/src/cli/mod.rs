@@ -1418,11 +1418,13 @@ async fn run_main(
         initialize_deferred_telemetry_client(http_client.clone(), color_config, version)
     };
 
-    if should_print_version() {
+    let mut command = get_command(&mut cli_args)?;
+
+    // Run and Watch emit the version banner through turborepo_log as
+    // part of the run prelude. Other commands print it directly.
+    if should_print_version() && !matches!(command, Command::Run { .. } | Command::Watch { .. }) {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
     }
-
-    let mut command = get_command(&mut cli_args)?;
 
     // Set some run flags if we have the data and are executing a Run
     set_run_flags(&mut command, &repo_state, &cli_args)?;

@@ -59,7 +59,6 @@ pub struct RunBuilder {
     // We will then prune away any tasks that do not depend on tasks inside
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
-    should_print_prelude_override: Option<bool>,
 
     // In query, we don't want to validate the engine. Defaults to `true`
     should_validate_engine: bool,
@@ -109,7 +108,6 @@ impl RunBuilder {
             version,
             api_auth,
             entrypoint_packages: None,
-            should_print_prelude_override: None,
 
             should_validate_engine: true,
             add_all_tasks: false,
@@ -134,11 +132,6 @@ impl RunBuilder {
 
     pub fn with_query_server(mut self, server: Arc<dyn turborepo_query_api::QueryServer>) -> Self {
         self.query_server = Some(server);
-        self
-    }
-
-    pub fn hide_prelude(mut self) -> Self {
-        self.should_print_prelude_override = Some(false);
         self
     }
 
@@ -714,10 +707,6 @@ impl RunBuilder {
 
         let remote_cache_status = self.resolve_remote_cache_status(preflight_handle).await;
 
-        let should_print_prelude = self
-            .should_print_prelude_override
-            .unwrap_or_else(|| self.will_execute_tasks());
-
         let run_cache = Arc::new(RunCache::new(
             async_cache,
             &self.repo_root,
@@ -781,7 +770,6 @@ impl RunBuilder {
                 engine: Arc::new(engine),
                 run_cache,
                 signal_handler: signal_handler.clone(),
-                should_print_prelude,
                 remote_cache_status,
                 micro_frontend_configs,
                 repo_index,
