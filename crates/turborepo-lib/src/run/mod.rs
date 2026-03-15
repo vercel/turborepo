@@ -72,9 +72,10 @@ pub struct Run {
     scm: SCM,
     run_cache: Arc<RunCache>,
     signal_handler: SignalHandler,
+    should_print_prelude: bool,
     engine: Arc<Engine>,
     task_access: TaskAccess,
-    should_print_prelude: bool,
+
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: Arc<Option<RepoGitIndex>>,
     observability_handle: Option<ObservabilityHandle>,
@@ -90,17 +91,14 @@ impl Run {
     fn has_non_interruptible_tasks(&self) -> bool {
         self.engine.has_non_interruptible_tasks
     }
+    /// Print the run prelude to stdout. Gated on `should_print_prelude`
+    /// (false in watch mode). This is the CLI's stdout output contract —
+    /// separate from the turborepo_log events which serve the TUI.
     fn print_run_prelude(&self) {
         let targets_list = self.opts.run_opts.tasks.join(", ");
         if self.opts.run_opts.single_package {
             cprint!(self.color_config, GREY, "{}", "• Running");
             cprint!(self.color_config, BOLD_GREY, " {}\n", targets_list);
-
-            turborepo_log::info(
-                turborepo_log::Source::turbo("run"),
-                format!("Running {targets_list}"),
-            )
-            .emit();
         } else {
             let mut packages = self
                 .filtered_pkgs
@@ -108,12 +106,11 @@ impl Run {
                 .map(|workspace_name| workspace_name.to_string())
                 .collect::<Vec<String>>();
             packages.sort();
-            let packages_str = packages.join(", ");
             cprintln!(
                 self.color_config,
                 GREY,
                 "• Packages in scope: {}",
-                packages_str
+                packages.join(", ")
             );
             cprint!(self.color_config, GREY, "{} ", "• Running");
             cprint!(self.color_config, BOLD_GREY, "{}", targets_list);
@@ -123,20 +120,6 @@ impl Run {
                 " in {} packages\n",
                 self.filtered_pkgs.len()
             );
-
-            turborepo_log::info(
-                turborepo_log::Source::turbo("run"),
-                format!("Packages in scope: {packages_str}"),
-            )
-            .emit();
-            turborepo_log::info(
-                turborepo_log::Source::turbo("run"),
-                format!(
-                    "Running {targets_list} in {} packages",
-                    self.filtered_pkgs.len()
-                ),
-            )
-            .emit();
         }
 
         let use_http_cache = self.opts.cache_opts.cache.remote.should_use();
@@ -161,6 +144,53 @@ impl Run {
                 remote_status
             );
         }
+    }
+
+    /// Emit run prelude info through turborepo_log so it reaches the
+    /// TUI log panel. Called unconditionally from the run/watch entry
+    /// points — independent of `should_print_prelude`.
+    pub fn emit_run_prelude_logs(&self) {
+        let targets_list = self.opts.run_opts.tasks.join(", ");
+        if self.opts.run_opts.single_package {
+            turborepo_log::info(
+                turborepo_log::Source::turbo("run"),
+                format!("Running {targets_list}"),
+            )
+            .emit();
+        } else {
+            let mut packages = self
+                .filtered_pkgs
+                .iter()
+                .map(|workspace_name| workspace_name.to_string())
+                .collect::<Vec<String>>();
+            packages.sort();
+            turborepo_log::info(
+                turborepo_log::Source::turbo("run"),
+                format!("Packages in scope: {}", packages.join(", ")),
+            )
+            .emit();
+            turborepo_log::info(
+                turborepo_log::Source::turbo("run"),
+                format!(
+                    "Running {targets_list} in {} packages",
+                    self.filtered_pkgs.len()
+                ),
+            )
+            .emit();
+        }
+
+        let use_http_cache = self.opts.cache_opts.cache.remote.should_use();
+        let remote_status = if use_http_cache {
+            "enabled"
+        } else {
+            "disabled"
+        };
+        let cache_status = if self.opts.run_opts.is_shared_worktree_cache {
+            format!("Remote caching {remote_status}, using shared worktree cache")
+        } else {
+            format!("Remote caching {remote_status}")
+        };
+        turborepo_log::info(turborepo_log::Source::turbo("run"), cache_status).emit();
     }
 
     pub fn turbo_json_loader(&self) -> &UnifiedTurboJsonLoader {
@@ -270,11 +300,9 @@ impl Run {
     }
 
     pub fn start_ui(self: &Arc<Self>) -> UIResult<UISender> {
-        // Print prelude here as this needs to happen before the UI is started
         if self.should_print_prelude {
             self.print_run_prelude();
         }
-
         match self.opts.run_opts.ui_mode {
             UIMode::Tui => self
                 .start_terminal_ui()

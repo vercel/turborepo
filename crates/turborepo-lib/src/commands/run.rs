@@ -63,9 +63,6 @@ pub async fn run(
             (Arc::new(run), analytics_handle)
         };
 
-        // Disable TerminalSink before start_ui() so log events emitted
-        // during the prelude don't write to stderr and corrupt the TUI.
-        // The prelude's cprint! calls still reach stdout for stream mode.
         terminal.disable();
 
         let (sender, handle) = {
@@ -86,12 +83,12 @@ pub async fn run(
             }
         } else {
             terminal.enable();
-            // TUI didn't start — restore tracing to stderr so verbose
-            // output is visible in stream mode.
             if subscriber.stderr_redirect_path().is_some() {
                 subscriber.restore_stderr();
             }
         }
+
+        run.emit_run_prelude_logs();
 
         let result = run.run(sender.clone(), false).await;
 

@@ -331,6 +331,8 @@ impl WatchClient {
             }
         }
 
+        run.emit_run_prelude_logs();
+
         Ok(Self {
             base,
             run,
