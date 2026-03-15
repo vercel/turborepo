@@ -15,7 +15,7 @@ use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use tokio::sync::mpsc;
-use tracing::{debug, warn, Instrument, Span};
+use tracing::{debug, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
 use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_engine::{TaskError, TaskWarning};
@@ -566,9 +566,11 @@ impl<'a> Visitor<'a> {
         // output any warnings that we collected while running tasks
         if let Ok(warnings) = self.warnings.lock() {
             if !warnings.is_empty() {
-                eprintln!();
-                warn!("finished with warnings");
-                eprintln!();
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo("run"),
+                    "finished with warnings",
+                )
+                .emit();
 
                 PlatformEnv::output_header(global_env_mode == EnvMode::Strict, self.color_config);
 
