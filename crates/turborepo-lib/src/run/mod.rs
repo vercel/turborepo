@@ -44,7 +44,7 @@ pub use crate::run::error::Error;
 use crate::{
     engine::{Engine, EngineExt},
     microfrontends::MicrofrontendsConfigs,
-    opts::Opts,
+    opts::{Opts, RemoteCacheDisabledReason},
     run::task_access::TaskAccess,
     task_graph::Visitor,
     task_hash::{
@@ -53,6 +53,26 @@ use crate::{
     },
     turbo_json::{TurboJson, UnifiedTurboJsonLoader},
 };
+
+/// Live status of the remote cache, determined by a preflight API check
+/// that runs concurrently with graph building.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RemoteCacheUnavailableReason {
+    CouldNotConnect,
+    UsageLimitExceeded,
+    SpendingPaused,
+    DisabledForTeam,
+    AuthenticationFailed,
+    UnexpectedServerError,
+}
+
+/// Resolved remote cache status for the run prelude display.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RemoteCacheStatus {
+    Disabled(RemoteCacheDisabledReason),
+    Enabled,
+    Unavailable(RemoteCacheUnavailableReason),
+}
 
 #[derive(Clone)]
 pub struct Run {
@@ -73,9 +93,9 @@ pub struct Run {
     run_cache: Arc<RunCache>,
     signal_handler: SignalHandler,
     should_print_prelude: bool,
+    remote_cache_status: RemoteCacheStatus,
     engine: Arc<Engine>,
     task_access: TaskAccess,
-
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: Arc<Option<RepoGitIndex>>,
     observability_handle: Option<ObservabilityHandle>,
@@ -122,27 +142,68 @@ impl Run {
             );
         }
 
-        let use_http_cache = self.opts.cache_opts.cache.remote.should_use();
-        let remote_status = if use_http_cache {
-            "enabled"
-        } else {
-            "disabled"
+        let api_url = &self.opts.api_client_opts.api_url;
+        let (base_msg, use_warning_color) = match self.remote_cache_status {
+            RemoteCacheStatus::Disabled(reason) => {
+                let msg = match reason {
+                    RemoteCacheDisabledReason::NotLinked => "• Remote caching disabled".to_string(),
+                    RemoteCacheDisabledReason::TokenWithoutTeam => {
+                        "• Remote caching disabled (TURBO_TOKEN set without TURBO_TEAM)".to_string()
+                    }
+                    RemoteCacheDisabledReason::InConfig => {
+                        "• Remote caching disabled (in configuration)".to_string()
+                    }
+                    RemoteCacheDisabledReason::InEnvVar => {
+                        "• Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
+                    }
+                    RemoteCacheDisabledReason::ByFlags => {
+                        "• Remote caching disabled (by flags)".to_string()
+                    }
+                };
+                (msg, false)
+            }
+            RemoteCacheStatus::Enabled => ("• Remote caching enabled".to_string(), false),
+            RemoteCacheStatus::Unavailable(reason) => {
+                let msg = match reason {
+                    RemoteCacheUnavailableReason::CouldNotConnect => {
+                        format!("• Remote caching unavailable (Could not connect to \"{api_url}\")")
+                    }
+                    RemoteCacheUnavailableReason::AuthenticationFailed => {
+                        "• Remote caching unavailable (Authentication failed \u{2014} check \
+                         TURBO_TOKEN or run \"turbo login\")"
+                            .to_string()
+                    }
+                    RemoteCacheUnavailableReason::UsageLimitExceeded => {
+                        "• Remote caching unavailable (Usage limit exceeded)".to_string()
+                    }
+                    RemoteCacheUnavailableReason::SpendingPaused => {
+                        "• Remote caching unavailable (Spending paused)".to_string()
+                    }
+                    RemoteCacheUnavailableReason::DisabledForTeam => {
+                        "• Remote caching unavailable (Disabled for this team)".to_string()
+                    }
+                    RemoteCacheUnavailableReason::UnexpectedServerError => {
+                        format!(
+                            "• Remote caching unavailable (Unexpected server error at \
+                             \"{api_url}\")"
+                        )
+                    }
+                };
+                (msg, true)
+            }
         };
 
         if self.opts.run_opts.is_shared_worktree_cache {
-            cprintln!(
-                self.color_config,
-                GREY,
-                "• Remote caching {}, using shared worktree cache",
-                remote_status
-            );
+            let msg = format!("{base_msg}, using shared worktree cache");
+            if use_warning_color {
+                cprintln!(self.color_config, YELLOW, "{}", msg);
+            } else {
+                cprintln!(self.color_config, GREY, "{}", msg);
+            }
+        } else if use_warning_color {
+            cprintln!(self.color_config, YELLOW, "{}", base_msg);
         } else {
-            cprintln!(
-                self.color_config,
-                GREY,
-                "• Remote caching {}",
-                remote_status
-            );
+            cprintln!(self.color_config, GREY, "{}", base_msg);
         }
     }
 

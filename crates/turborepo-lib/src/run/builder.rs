@@ -9,7 +9,7 @@ use chrono::Local;
 use tracing::Instrument;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
-use turborepo_api_client::{APIAuth, APIClient, SharedHttpClient};
+use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
 use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
@@ -32,13 +32,17 @@ use turborepo_telemetry::events::{
 };
 use turborepo_types::{DryRunMode, UIMode};
 use turborepo_ui::ColorConfig;
+use turborepo_vercel_api::CachingStatusResponse;
 
 use crate::{
     commands::CommandBase,
     engine::{Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
+    run::{
+        scope, task_access::TaskAccess, Error, RemoteCacheStatus, RemoteCacheUnavailableReason,
+        Run, RunCache,
+    },
     shim::TurboState,
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
@@ -182,6 +186,109 @@ impl RunBuilder {
             self.version,
             self.opts.api_client_opts.preflight,
         )
+    }
+
+    async fn resolve_remote_cache_status(
+        &self,
+        preflight_handle: Option<
+            tokio::task::JoinHandle<turborepo_api_client::Result<CachingStatusResponse>>,
+        >,
+    ) -> RemoteCacheStatus {
+        use turborepo_vercel_api::CachingStatus;
+
+        if let Some(reason) = self.opts.remote_cache_disabled_reason {
+            return RemoteCacheStatus::Disabled(reason);
+        }
+
+        let Some(handle) = preflight_handle else {
+            return RemoteCacheStatus::Enabled;
+        };
+
+        // Wait at most 250ms for the preflight check. This runs concurrently
+        // with graph building so in practice it's almost always done by now.
+        // If it's not, fall back to "enabled" — the connection warmup still
+        // benefits later cache operations.
+        let result = tokio::time::timeout(Duration::from_millis(250), handle).await;
+        match result {
+            Ok(Ok(Ok(response))) => match response.status {
+                CachingStatus::Enabled => RemoteCacheStatus::Enabled,
+                CachingStatus::Disabled => {
+                    RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::DisabledForTeam)
+                }
+                CachingStatus::OverLimit => {
+                    RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::UsageLimitExceeded)
+                }
+                CachingStatus::Paused => {
+                    RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::SpendingPaused)
+                }
+            },
+            Ok(Ok(Err(api_err))) => Self::map_api_error_to_status(api_err),
+            Ok(Err(_join_err)) => {
+                tracing::debug!("Remote cache preflight task panicked; assuming enabled");
+                RemoteCacheStatus::Enabled
+            }
+            Err(_timeout) => {
+                tracing::debug!("Remote cache preflight timed out after 250ms; assuming enabled");
+                RemoteCacheStatus::Enabled
+            }
+        }
+    }
+
+    fn map_api_error_to_status(err: turborepo_api_client::Error) -> RemoteCacheStatus {
+        match &err {
+            turborepo_api_client::Error::ReqwestError(e) if e.is_connect() || e.is_timeout() => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect)
+            }
+            turborepo_api_client::Error::ReqwestError(e) => {
+                if let Some(status) = e.status() {
+                    if status == reqwest::StatusCode::UNAUTHORIZED
+                        || status == reqwest::StatusCode::FORBIDDEN
+                    {
+                        return RemoteCacheStatus::Unavailable(
+                            RemoteCacheUnavailableReason::AuthenticationFailed,
+                        );
+                    }
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        return RemoteCacheStatus::Unavailable(
+                            RemoteCacheUnavailableReason::UsageLimitExceeded,
+                        );
+                    }
+                    if status.is_server_error() {
+                        return RemoteCacheStatus::Unavailable(
+                            RemoteCacheUnavailableReason::UnexpectedServerError,
+                        );
+                    }
+                }
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect)
+            }
+            turborepo_api_client::Error::InvalidToken { .. } => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::AuthenticationFailed)
+            }
+            turborepo_api_client::Error::ForbiddenToken { .. } => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::AuthenticationFailed)
+            }
+            turborepo_api_client::Error::CacheDisabled { status, .. } => {
+                use turborepo_vercel_api::CachingStatus;
+                match status {
+                    CachingStatus::Disabled => RemoteCacheStatus::Unavailable(
+                        RemoteCacheUnavailableReason::DisabledForTeam,
+                    ),
+                    CachingStatus::OverLimit => RemoteCacheStatus::Unavailable(
+                        RemoteCacheUnavailableReason::UsageLimitExceeded,
+                    ),
+                    CachingStatus::Paused => {
+                        RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::SpendingPaused)
+                    }
+                    CachingStatus::Enabled => RemoteCacheStatus::Enabled,
+                }
+            }
+            turborepo_api_client::Error::InvalidJson { .. }
+            | turborepo_api_client::Error::UnknownCachingStatus(..)
+            | turborepo_api_client::Error::UnknownStatus { .. } => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::UnexpectedServerError)
+            }
+            _ => RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect),
+        }
     }
 
     fn all_package_prefixes(pkg_dep_graph: &PackageGraph) -> Vec<RelativeUnixPathBuf> {
@@ -433,6 +540,23 @@ impl RunBuilder {
             None
         };
 
+        let preflight_handle = if self.opts.remote_cache_disabled_reason.is_none() {
+            if let (Some(client), Some(auth)) = (api_client.clone(), self.api_auth.as_ref()) {
+                let token = auth.token.clone();
+                let team_id = auth.team_id.clone();
+                let team_slug = auth.team_slug.clone();
+                Some(tokio::spawn(async move {
+                    client
+                        .get_caching_status(&token, team_id.as_deref(), team_slug.as_deref())
+                        .await
+                }))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let (analytics_sender, analytics_handle) = self
             .api_auth
             .as_ref()
@@ -588,6 +712,8 @@ impl RunBuilder {
             )?;
         }
 
+        let remote_cache_status = self.resolve_remote_cache_status(preflight_handle).await;
+
         let should_print_prelude = self
             .should_print_prelude_override
             .unwrap_or_else(|| self.will_execute_tasks());
@@ -656,6 +782,7 @@ impl RunBuilder {
                 run_cache,
                 signal_handler: signal_handler.clone(),
                 should_print_prelude,
+                remote_cache_status,
                 micro_frontend_configs,
                 repo_index,
                 observability_handle,
