@@ -6,7 +6,7 @@ use std::{
 };
 
 use serde::Deserialize;
-use tracing::{debug, error, warn};
+use tracing::{debug, warn};
 use turbopath::{AbsoluteSystemPathBuf, PathRelation};
 use turborepo_cache::AsyncCache;
 use turborepo_gitignore::ensure_turbo_is_gitignored;
@@ -106,10 +106,11 @@ impl TaskAccessTraceFile {
     pub fn can_cache(&self, repo_root: &AbsoluteSystemPathBuf) -> bool {
         // network
         if self.accessed.network {
-            warn!(
-                "skipping automatic task caching - detected network
-        access",
-            );
+            turborepo_log::warn(
+                turborepo_log::Source::turbo("task-access"),
+                "skipping automatic task caching - detected network access",
+            )
+            .emit();
             return false;
         }
 
@@ -120,11 +121,14 @@ impl TaskAccessTraceFile {
                     let relation = path.relation_to_path(repo_root);
                     // only paths within the repo can be automatically cached
                     if relation == PathRelation::Parent || relation == PathRelation::Divergent {
-                        warn!(
-                            "skipping automatic task caching - file accessed outside of repo root \
-                             ({})",
-                            unescaped_str
-                        );
+                        turborepo_log::warn(
+                            turborepo_log::Source::turbo("task-access"),
+                            format!(
+                                "skipping automatic task caching - file accessed outside of repo \
+                                 root ({unescaped_str})"
+                            ),
+                        )
+                        .emit();
                         return false;
                     }
                 }
@@ -159,7 +163,13 @@ impl TaskAccess {
             match ensure_turbo_is_gitignored(&repo_root) {
                 Ok(_) => debug!("Automatically added .turbo to .gitignore"),
                 Err(e) => {
-                    error!("Failed to add .turbo to .gitignore. Caching will be disabled - {e}")
+                    turborepo_log::error(
+                        turborepo_log::Source::turbo("task-access"),
+                        format!(
+                            "Failed to add .turbo to .gitignore. Caching will be disabled - {e}"
+                        ),
+                    )
+                    .emit();
                 }
             }
 
@@ -220,7 +230,11 @@ impl TaskAccess {
                 trace_by_task.insert(task_id, trace);
             }
             Err(e) => {
-                error!("Failed to save trace result - {e}");
+                turborepo_log::error(
+                    turborepo_log::Source::turbo("task-access"),
+                    format!("Failed to save trace result - {e}"),
+                )
+                .emit();
             }
         }
     }
@@ -234,7 +248,11 @@ impl TaskAccess {
         match self.to_file().await {
             Ok(_) => (),
             Err(e) => {
-                error!("Failed to write task access trace file - {e}");
+                turborepo_log::error(
+                    turborepo_log::Source::turbo("task-access"),
+                    format!("Failed to write task access trace file - {e}"),
+                )
+                .emit();
             }
         }
     }
