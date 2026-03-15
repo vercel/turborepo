@@ -1031,6 +1031,22 @@ fn cleanup<B: Backend<Error = io::Error> + io::Write>(
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
     app.preferences.flush_to_disk().ok();
+
+    // Discard any stale mouse tracking events from stdin before re-enabling
+    // echo. There's a race between sending DisableMouseCapture to the terminal
+    // and the terminal actually stopping mouse event generation. Any events
+    // buffered in the kernel's input queue during that window would be echoed
+    // as raw escape sequences (e.g. ^[[<35;29;43M) once disable_raw_mode()
+    // restores canonical mode with echo.
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        let _ = nix::sys::termios::tcflush(
+            std::io::stdin().as_raw_fd(),
+            nix::sys::termios::FlushArg::TCIFLUSH,
+        );
+    }
+
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
 
