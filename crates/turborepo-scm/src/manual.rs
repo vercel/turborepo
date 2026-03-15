@@ -1,12 +1,13 @@
 use std::{
     collections::HashSet,
     io::{BufReader, ErrorKind, Read},
+    str::FromStr,
 };
 
-use globwalk::fix_glob_pattern;
+use globwalk::{ValidatedGlob, fix_glob_pattern};
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix};
 use wax::{Glob, Program, any};
 
 use crate::{Error, GitHashes, OidHash};
@@ -81,15 +82,59 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     include_default_files: bool,
 ) -> Result<GitHashes, Error> {
     let full_package_path = turbo_root.resolve(package_path);
+    let package_unix_path = package_path.to_unix();
     let mut hashes = GitHashes::new();
     let mut default_file_hashes = GitHashes::new();
     let mut excluded_file_paths = HashSet::new();
 
+    // Inputs that reference parent directories (contain "..") can't be found by
+    // the WalkBuilder since it only walks within the package directory. Handle
+    // these separately using globwalk rooted at turbo_root, matching the git
+    // path's behavior.
+    let mut local_inputs: Vec<&str> = Vec::new();
+    let mut external_inclusions = Vec::new();
+    let mut external_exclusions = Vec::new();
+    for pattern in inputs {
+        let pattern = pattern.as_ref();
+        let is_exclusion = pattern.starts_with('!');
+        let raw = if is_exclusion { &pattern[1..] } else { pattern };
+
+        if raw.starts_with("..") {
+            let mut glob_buf =
+                String::with_capacity(package_unix_path.as_str().len() + 1 + raw.len());
+            glob_buf.push_str(package_unix_path.as_str());
+            glob_buf.push('/');
+            glob_buf.push_str(raw);
+            if is_exclusion {
+                external_exclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+            } else {
+                external_inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
+            }
+        } else {
+            local_inputs.push(pattern);
+        }
+    }
+
+    if !external_inclusions.is_empty() {
+        let files = globwalk::globwalk(
+            turbo_root,
+            &external_inclusions,
+            &external_exclusions,
+            globwalk::WalkType::Files,
+        )?;
+        for file_path in &files {
+            let relative_path =
+                AnchoredSystemPathBuf::relative_path_between(&full_package_path, file_path)
+                    .to_unix();
+            let hash = git_like_hash_file(file_path)?;
+            hashes.insert(relative_path, hash);
+        }
+    }
+
     let mut walker_builder = WalkBuilder::new(&full_package_path);
     let mut includes = Vec::new();
     let mut excludes = Vec::new();
-    for pattern in inputs {
-        let pattern = pattern.as_ref();
+    for pattern in &local_inputs {
         if let Some(exclusion) = pattern.strip_prefix('!') {
             let g = to_glob(exclusion)?;
             excludes.push(g);
@@ -98,7 +143,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             includes.push(g);
         }
     }
-    let include_pattern = if includes.is_empty() {
+    let include_pattern = if includes.is_empty() && external_inclusions.is_empty() {
         None
     } else {
         // Add in package.json and turbo.json to input patterns. Both file paths are
@@ -128,7 +173,7 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
         .follow_links(false)
         // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
         // regular behavior
-        .git_ignore(inputs.is_empty())
+        .git_ignore(local_inputs.is_empty() && external_inclusions.is_empty())
         .require_git(false)
         .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
         .build();
@@ -613,5 +658,80 @@ mod tests {
                 "manual hash for {name} must match git hash-object"
             );
         }
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/10485
+    //
+    // Inputs referencing parent directories (e.g. "../../root-file") should be
+    // included in the hash output, matching the behavior of the git path.
+    #[test]
+    fn test_parent_dir_inputs_are_hashed() {
+        let (_tmp, turbo_root) = tmp_dir();
+
+        // turbo_root/
+        //   root-file
+        //   packages/
+        //     my-app/
+        //       package.json
+        let root_file = turbo_root.join_component("root-file");
+        root_file
+            .create_with_contents("root file contents")
+            .unwrap();
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("packages/my-app").unwrap();
+        let full_pkg_path = turbo_root.resolve(&pkg_path);
+        full_pkg_path.create_dir_all().unwrap();
+
+        let pkg_json = full_pkg_path.join_component("package.json");
+        pkg_json.create_with_contents("{}").unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["../../root-file"],
+            false,
+        )
+        .unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("../../root-file").unwrap()),
+            "input referencing a parent directory should be hashed, got keys: {:?}",
+            hashes.keys().collect::<Vec<_>>()
+        );
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/10485
+    //
+    // Same as above but with a glob pattern that traverses parent directories.
+    #[test]
+    fn test_parent_dir_glob_inputs_are_hashed() {
+        let (_tmp, turbo_root) = tmp_dir();
+
+        // turbo_root/
+        //   root-file
+        //   packages/
+        //     my-app/
+        //       package.json
+        let root_file = turbo_root.join_component("root-file");
+        root_file
+            .create_with_contents("root file contents")
+            .unwrap();
+
+        let pkg_path = AnchoredSystemPathBuf::from_raw("packages/my-app").unwrap();
+        let full_pkg_path = turbo_root.resolve(&pkg_path);
+        full_pkg_path.create_dir_all().unwrap();
+
+        let pkg_json = full_pkg_path.join_component("package.json");
+        pkg_json.create_with_contents("{}").unwrap();
+
+        let hashes =
+            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["../../*-file"], false)
+                .unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("../../root-file").unwrap()),
+            "glob input traversing parent directories should find files, got keys: {:?}",
+            hashes.keys().collect::<Vec<_>>()
+        );
     }
 }
