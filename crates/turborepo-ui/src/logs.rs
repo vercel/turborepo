@@ -3,7 +3,7 @@ use std::{
     io::{BufRead, BufReader, BufWriter, Write},
 };
 
-use tracing::{debug, warn};
+use tracing::debug;
 use turbopath::AbsoluteSystemPath;
 
 use crate::Error;
@@ -29,12 +29,20 @@ impl<W> Default for LogWriter<W> {
 impl<W: Write> LogWriter<W> {
     pub fn with_log_file(&mut self, log_file_path: &AbsoluteSystemPath) -> Result<(), Error> {
         log_file_path.ensure_dir().map_err(|err| {
-            warn!("error creating log file directory: {:?}", err);
+            turborepo_log::warn(
+                turborepo_log::Source::turbo("logs"),
+                format!("error creating log file directory: {err:?}"),
+            )
+            .emit();
             Error::CannotWriteLogs(err)
         })?;
 
         let log_file = log_file_path.create().map_err(|err| {
-            warn!("error creating log file: {:?}", err);
+            turborepo_log::warn(
+                turborepo_log::Source::turbo("logs"),
+                format!("error creating log file: {err:?}"),
+            )
+            .emit();
             Error::CannotWriteLogs(err)
         })?;
 
@@ -89,7 +97,11 @@ pub fn replay_logs<W: Write>(
     debug!("start replaying logs");
 
     let log_file = File::open(log_file_name).map_err(|err| {
-        warn!("error opening log file: {:?}", err);
+        turborepo_log::warn(
+            turborepo_log::Source::turbo("logs"),
+            format!("error opening log file: {err:?}"),
+        )
+        .emit();
         Error::CannotReadLogs(err)
     })?;
 
@@ -128,7 +140,11 @@ pub fn replay_logs_with_crlf<W: Write>(
     debug!("start replaying logs");
 
     let log_file = File::open(log_file_name).map_err(|err| {
-        warn!("error opening log file: {:?}", err);
+        turborepo_log::warn(
+            turborepo_log::Source::turbo("logs"),
+            format!("error opening log file: {err:?}"),
+        )
+        .emit();
         Error::CannotReadLogs(err)
     })?;
 

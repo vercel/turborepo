@@ -211,6 +211,8 @@ impl WatchClient {
         experimental_write_cache: bool,
         telemetry: CommandEventBuilder,
         query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+        subscriber: &crate::tracing::TurboSubscriber,
+        verbosity: u8,
     ) -> Result<Self, Error> {
         let signal = get_signal()?;
         let handler = SignalHandler::new(signal);
@@ -282,11 +284,6 @@ impl WatchClient {
         if let Some(ref qs) = query_server {
             run_builder = run_builder.with_query_server(qs.clone());
         }
-        let (run, _analytics) = run_builder.build(&handler, telemetry.clone()).await?;
-        let run = Arc::new(run);
-
-        let watched_packages = run.get_relevant_packages();
-
         let collector = Arc::new(CollectorSink::new());
         let terminal = Arc::new(TerminalSink::new(base.color_config));
         let tui_sink = Arc::new(TuiSink::new());
@@ -301,14 +298,37 @@ impl WatchClient {
             unsafe { env::remove_var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) };
         }
 
+        if verbosity > 0 {
+            if let Ok(path) = subscriber.redirect_stderr_to_file(base.repo_root.as_std_path()) {
+                tracing::debug!("Verbose tracing redirected to {path}");
+            }
+        }
+
+        let (run, _analytics) = run_builder.build(&handler, telemetry.clone()).await?;
+        let run = Arc::new(run);
+
+        let watched_packages = run.get_relevant_packages();
+
         terminal.disable();
 
         let (ui_sender, ui_handle) = run.start_ui()?.unzip();
 
         if let Some(UISender::Tui(ref tui_sender)) = ui_sender {
             tui_sink.connect(tui_sender.clone());
+            if let Some(path) = subscriber.stderr_redirect_path() {
+                turborepo_log::info(
+                    turborepo_log::Source::turbo("tracing"),
+                    format!("Verbose logs redirected to {path}"),
+                )
+                .emit();
+            } else {
+                subscriber.suppress_stderr();
+            }
         } else {
             terminal.enable();
+            if subscriber.stderr_redirect_path().is_some() {
+                subscriber.restore_stderr();
+            }
         }
 
         Ok(Self {

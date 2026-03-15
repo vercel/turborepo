@@ -8,7 +8,7 @@ use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{sender::UISender, TerminalSink, TuiSink};
 
-use crate::{commands::CommandBase, run, run::builder::RunBuilder};
+use crate::{commands::CommandBase, run, run::builder::RunBuilder, tracing::TurboSubscriber};
 
 #[tracing::instrument(skip_all)]
 pub async fn run(
@@ -16,6 +16,8 @@ pub async fn run(
     telemetry: CommandEventBuilder,
     http_client: SharedHttpClient,
     query_server: Option<Arc<dyn QueryServer>>,
+    subscriber: &TurboSubscriber,
+    verbosity: u8,
 ) -> Result<i32, run::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
@@ -32,6 +34,19 @@ pub async fn run(
     if let Ok(message) = env::var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) {
         turborepo_log::warn(turborepo_log::Source::turbo("shim"), message).emit();
         unsafe { env::remove_var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) };
+    }
+
+    // When verbosity is active, redirect tracing to a file before build()
+    // so SCM, hashing, and config tracing is captured. Only done here
+    // (not in the shim) because non-TUI commands should keep stderr output.
+    let repo_root = base.repo_root.clone();
+    if let Some(path) = subscriber.stderr_redirect_path() {
+        // Already redirected (shouldn't happen, but be safe)
+        tracing::debug!("stderr already redirected to {path}");
+    } else if verbosity > 0 {
+        if let Ok(path) = subscriber.redirect_stderr_to_file(repo_root.as_std_path()) {
+            tracing::debug!("Verbose tracing redirected to {path}");
+        }
     }
 
     let mut run_builder = {
@@ -60,8 +75,22 @@ pub async fn run(
 
         if let Some(UISender::Tui(ref tui_sender)) = sender {
             tui_sink.connect(tui_sender.clone());
+            if let Some(path) = subscriber.stderr_redirect_path() {
+                turborepo_log::info(
+                    turborepo_log::Source::turbo("tracing"),
+                    format!("Verbose logs redirected to {path}"),
+                )
+                .emit();
+            } else {
+                subscriber.suppress_stderr();
+            }
         } else {
             terminal.enable();
+            // TUI didn't start — restore tracing to stderr so verbose
+            // output is visible in stream mode.
+            if subscriber.stderr_redirect_path().is_some() {
+                subscriber.restore_stderr();
+            }
         }
 
         let result = run.run(sender.clone(), false).await;
@@ -81,6 +110,10 @@ pub async fn run(
             }
         }
 
+        if let Some(path) = subscriber.stderr_redirect_path() {
+            subscriber.restore_stderr();
+            println!("Verbose logs written to {path}");
+        }
         result
     };
 
