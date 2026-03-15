@@ -7,11 +7,10 @@ use turborepo_log::{Level, LogEvent, LogSink};
 
 use crate::ColorConfig;
 
-/// Routes [`LogEvent`]s to stderr with color styling.
-///
-/// This is the primary sink for user-facing messages during `turbo run`.
-/// It formats events to stderr using the same color conventions as the
-/// rest of turborepo's terminal output.
+/// Routes `Warn` and `Error` level [`LogEvent`]s to stderr with color
+/// styling. Info events are handled by [`StdoutSink`](crate::StdoutSink)
+/// instead, keeping stdout as the channel for status information and
+/// stderr for diagnostics.
 ///
 /// When the TUI is active it owns the terminal, so stderr writes would
 /// corrupt the display. Call [`disable()`](Self::disable) to suppress
@@ -47,6 +46,12 @@ impl LogSink for TerminalSink {
         if !self.active.load(Ordering::Relaxed) {
             return;
         }
+
+        // Info events go to stdout via StdoutSink, not here.
+        if matches!(event.level(), Level::Info) {
+            return;
+        }
+
         let stderr = io::stderr();
         let mut handle = stderr.lock();
 
@@ -55,13 +60,13 @@ impl LogSink for TerminalSink {
             Level::Warn => self
                 .color_config
                 .apply(crate::BOLD_YELLOW_REVERSE.apply_to(" WARNING ")),
-            _ => self.color_config.apply(crate::BOLD_CYAN.apply_to(" INFO ")),
+            _ => return,
         };
 
         let message_style = match event.level() {
             Level::Error => &*crate::BOLD_RED,
             Level::Warn => &*crate::YELLOW,
-            _ => &*crate::GREY,
+            _ => return,
         };
 
         let _ = write!(

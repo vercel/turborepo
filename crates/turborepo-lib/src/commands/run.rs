@@ -6,7 +6,7 @@ use turborepo_log::{sinks::collector::CollectorSink, Logger};
 use turborepo_query_api::QueryServer;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{sender::UISender, TerminalSink, TuiSink};
+use turborepo_ui::{sender::UISender, StdoutSink, TerminalSink, TuiSink};
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder, tracing::TurboSubscriber};
 
@@ -24,10 +24,12 @@ pub async fn run(
 
     let collector = Arc::new(CollectorSink::new());
     let terminal = Arc::new(TerminalSink::new(base.color_config));
+    let stdout_sink = Arc::new(StdoutSink::new(base.color_config));
     let tui_sink = Arc::new(TuiSink::new());
     let _ = turborepo_log::init(Logger::new(vec![
         Box::new(collector),
         Box::new(terminal.clone()),
+        Box::new(stdout_sink.clone()),
         Box::new(tui_sink.clone()),
     ]));
 
@@ -63,10 +65,10 @@ pub async fn run(
             (Arc::new(run), analytics_handle)
         };
 
-        // Disable TerminalSink before start_ui() so log events emitted
-        // during the prelude don't write to stderr and corrupt the TUI.
-        // The prelude's cprint! calls still reach stdout for stream mode.
+        // Disable terminal sinks before start_ui() so log events don't
+        // write to stdout/stderr while the TUI is starting up.
         terminal.disable();
+        stdout_sink.disable();
 
         let (sender, handle) = {
             let _span = tracing::info_span!("start_ui").entered();
@@ -86,12 +88,13 @@ pub async fn run(
             }
         } else {
             terminal.enable();
-            // TUI didn't start — restore tracing to stderr so verbose
-            // output is visible in stream mode.
+            stdout_sink.enable();
             if subscriber.stderr_redirect_path().is_some() {
                 subscriber.restore_stderr();
             }
         }
+
+        run.emit_run_prelude_logs();
 
         let result = run.run(sender.clone(), false).await;
 

@@ -26,7 +26,7 @@ use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_scm::SCM;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{sender::UISender, TerminalSink, TuiSink};
+use turborepo_ui::{sender::UISender, StdoutSink, TerminalSink, TuiSink};
 
 use crate::{
     commands::CommandBase,
@@ -286,10 +286,12 @@ impl WatchClient {
         }
         let collector = Arc::new(CollectorSink::new());
         let terminal = Arc::new(TerminalSink::new(base.color_config));
+        let stdout_sink = Arc::new(StdoutSink::new(base.color_config));
         let tui_sink = Arc::new(TuiSink::new());
         let _ = turborepo_log::init(Logger::new(vec![
             Box::new(collector),
             Box::new(terminal.clone()),
+            Box::new(stdout_sink.clone()),
             Box::new(tui_sink.clone()),
         ]));
 
@@ -310,6 +312,7 @@ impl WatchClient {
         let watched_packages = run.get_relevant_packages();
 
         terminal.disable();
+        stdout_sink.disable();
 
         let (ui_sender, ui_handle) = run.start_ui()?.unzip();
 
@@ -326,10 +329,13 @@ impl WatchClient {
             }
         } else {
             terminal.enable();
+            stdout_sink.enable();
             if subscriber.stderr_redirect_path().is_some() {
                 subscriber.restore_stderr();
             }
         }
+
+        run.emit_run_prelude_logs();
 
         Ok(Self {
             base,
@@ -559,8 +565,7 @@ impl WatchClient {
                 let mut run_builder = RunBuilder::new(new_base, None)?
                     .with_output_watcher(self.output_watcher.clone())
                     .with_entrypoint_packages(packages)
-                    .with_changed_files(changed_files)
-                    .hide_prelude();
+                    .with_changed_files(changed_files);
                 if let Some(ref qs) = self.query_server {
                     run_builder = run_builder.with_query_server(qs.clone());
                 }
@@ -602,8 +607,7 @@ impl WatchClient {
                 );
 
                 let mut run_builder = RunBuilder::new(base.clone(), None)?
-                    .with_output_watcher(self.output_watcher.clone())
-                    .hide_prelude();
+                    .with_output_watcher(self.output_watcher.clone());
                 if let Some(ref qs) = self.query_server {
                     run_builder = run_builder.with_query_server(qs.clone());
                 }

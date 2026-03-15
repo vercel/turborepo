@@ -36,8 +36,8 @@ use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
 use turborepo_ui::{
-    cprint, cprintln, cwrite, cwriteln, sender::UISender, tui, tui::TuiSender,
-    wui::sender::WebUISender, ColorConfig, BOLD, BOLD_GREY, BOLD_YELLOW_REVERSE, GREY, YELLOW,
+    cprintln, cwrite, cwriteln, sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender,
+    ColorConfig, BOLD, BOLD_YELLOW_REVERSE, YELLOW,
 };
 
 pub use crate::run::error::Error;
@@ -74,7 +74,7 @@ pub struct Run {
     signal_handler: SignalHandler,
     engine: Arc<Engine>,
     task_access: TaskAccess,
-    should_print_prelude: bool,
+
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: Arc<Option<RepoGitIndex>>,
     observability_handle: Option<ObservabilityHandle>,
@@ -90,15 +90,15 @@ impl Run {
     fn has_non_interruptible_tasks(&self) -> bool {
         self.engine.has_non_interruptible_tasks
     }
-    fn print_run_prelude(&self) {
+    /// Emit run prelude through `turborepo_log`. In stream mode,
+    /// `StdoutSink` writes these to stdout; in TUI mode, `TuiSink`
+    /// captures them for the log panel.
+    pub fn emit_run_prelude_logs(&self) {
         let targets_list = self.opts.run_opts.tasks.join(", ");
         if self.opts.run_opts.single_package {
-            cprint!(self.color_config, GREY, "{}", "• Running");
-            cprint!(self.color_config, BOLD_GREY, " {}\n", targets_list);
-
             turborepo_log::info(
                 turborepo_log::Source::turbo("run"),
-                format!("Running {targets_list}"),
+                format!("• Running {targets_list}"),
             )
             .emit();
         } else {
@@ -108,31 +108,15 @@ impl Run {
                 .map(|workspace_name| workspace_name.to_string())
                 .collect::<Vec<String>>();
             packages.sort();
-            let packages_str = packages.join(", ");
-            cprintln!(
-                self.color_config,
-                GREY,
-                "• Packages in scope: {}",
-                packages_str
-            );
-            cprint!(self.color_config, GREY, "{} ", "• Running");
-            cprint!(self.color_config, BOLD_GREY, "{}", targets_list);
-            cprint!(
-                self.color_config,
-                GREY,
-                " in {} packages\n",
-                self.filtered_pkgs.len()
-            );
-
             turborepo_log::info(
                 turborepo_log::Source::turbo("run"),
-                format!("Packages in scope: {packages_str}"),
+                format!("• Packages in scope: {}", packages.join(", ")),
             )
             .emit();
             turborepo_log::info(
                 turborepo_log::Source::turbo("run"),
                 format!(
-                    "Running {targets_list} in {} packages",
+                    "• Running {targets_list} in {} packages",
                     self.filtered_pkgs.len()
                 ),
             )
@@ -145,22 +129,12 @@ impl Run {
         } else {
             "disabled"
         };
-
-        if self.opts.run_opts.is_shared_worktree_cache {
-            cprintln!(
-                self.color_config,
-                GREY,
-                "• Remote caching {}, using shared worktree cache",
-                remote_status
-            );
+        let cache_status = if self.opts.run_opts.is_shared_worktree_cache {
+            format!("• Remote caching {remote_status}, using shared worktree cache")
         } else {
-            cprintln!(
-                self.color_config,
-                GREY,
-                "• Remote caching {}",
-                remote_status
-            );
-        }
+            format!("• Remote caching {remote_status}")
+        };
+        turborepo_log::info(turborepo_log::Source::turbo("run"), cache_status).emit();
     }
 
     pub fn turbo_json_loader(&self) -> &UnifiedTurboJsonLoader {
@@ -270,11 +244,6 @@ impl Run {
     }
 
     pub fn start_ui(self: &Arc<Self>) -> UIResult<UISender> {
-        // Print prelude here as this needs to happen before the UI is started
-        if self.should_print_prelude {
-            self.print_run_prelude();
-        }
-
         match self.opts.run_opts.ui_mode {
             UIMode::Tui => self
                 .start_terminal_ui()
