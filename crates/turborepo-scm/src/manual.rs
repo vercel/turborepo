@@ -1,12 +1,13 @@
 use std::{
+    borrow::Cow,
     collections::HashSet,
     io::{BufReader, ErrorKind, Read},
 };
 
-use globwalk::fix_glob_pattern;
+use globwalk::{fix_glob_pattern, is_glob_pattern};
 use ignore::WalkBuilder;
 use sha1::{Digest, Sha1};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, IntoUnix, RelativeUnixPath};
 use wax::{Glob, Program, any};
 
 use crate::{Error, GitHashes, OidHash};
@@ -46,7 +47,26 @@ fn git_like_hash_file(path: &AbsoluteSystemPath) -> Result<OidHash, Error> {
     Ok(OidHash::from_hex_buf(hex_buf))
 }
 
-fn to_glob(input: &str) -> Result<Glob<'_>, Error> {
+fn expand_dir_pattern<'a>(base: &AbsoluteSystemPath, pattern: &'a str) -> Cow<'a, str> {
+    if is_glob_pattern(pattern) {
+        return Cow::Borrowed(pattern);
+    }
+    let Ok(rel) = RelativeUnixPath::new(pattern) else {
+        return Cow::Borrowed(pattern);
+    };
+    let resolved = base.join_unix_path(rel);
+    if resolved.symlink_metadata().is_ok_and(|m| m.is_dir()) {
+        if pattern.ends_with('/') {
+            Cow::Owned(format!("{pattern}**"))
+        } else {
+            Cow::Owned(format!("{pattern}/**"))
+        }
+    } else {
+        Cow::Borrowed(pattern)
+    }
+}
+
+fn to_glob(input: &str) -> Result<Glob<'static>, Error> {
     let glob = fix_glob_pattern(input).into_unix();
     let g = Glob::new(glob.as_str()).map(|g| g.into_owned())?;
 
@@ -94,7 +114,12 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
             let g = to_glob(exclusion)?;
             excludes.push(g);
         } else {
-            let g = to_glob(pattern)?;
+            // If the pattern has no glob metacharacters and resolves to a
+            // directory, treat it as "dir/**" to match all files inside.
+            // This mirrors what globwalk::add_doublestar_to_dir does in the
+            // git code path.
+            let effective_pattern = expand_dir_pattern(&full_package_path, pattern);
+            let g = to_glob(effective_pattern.as_ref())?;
             includes.push(g);
         }
     }
@@ -560,6 +585,94 @@ mod tests {
         assert!(
             !hashes.contains_key(&RelativeUnixPathBuf::new("excluded.ts").unwrap()),
             "excluded.ts should NOT be present"
+        );
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/9574
+    /// Directory names as inputs (e.g. "src") should match all files inside.
+    #[test]
+    fn test_directory_input_matches_all_files_inside() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        let src_dir = pkg_dir.join_component("src");
+        src_dir.create_dir_all().unwrap();
+        src_dir
+            .join_component("index.ts")
+            .create_with_contents("export const x = 1")
+            .unwrap();
+        let nested = src_dir.join_component("utils");
+        nested.create_dir_all().unwrap();
+        nested
+            .join_component("helper.ts")
+            .create_with_contents("export const h = 2")
+            .unwrap();
+
+        // A file outside "src" that should NOT be included
+        pkg_dir
+            .join_component("readme.md")
+            .create_with_contents("readme")
+            .unwrap();
+
+        let hashes =
+            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["src"], false).unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("src/index.ts").unwrap()),
+            "src/index.ts should be present"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("src/utils/helper.ts").unwrap()),
+            "src/utils/helper.ts should be present"
+        );
+        // package.json and turbo.json are auto-added when includes are specified
+        assert!(
+            !hashes.contains_key(&RelativeUnixPathBuf::new("readme.md").unwrap()),
+            "readme.md should NOT be present"
+        );
+    }
+
+    /// Directory input combined with include_default_files should include
+    /// both the directory contents and default (gitignore-respecting) files.
+    #[test]
+    fn test_directory_input_with_default_files() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("my-pkg").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        let src_dir = pkg_dir.join_component("src");
+        src_dir.create_dir_all().unwrap();
+        src_dir
+            .join_component("index.ts")
+            .create_with_contents("code")
+            .unwrap();
+
+        pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        pkg_dir
+            .join_component("other.ts")
+            .create_with_contents("other")
+            .unwrap();
+
+        let hashes =
+            get_package_file_hashes_without_git(&turbo_root, &pkg_path, &["src"], true).unwrap();
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("src/index.ts").unwrap()),
+            "src/index.ts should be in explicit includes"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("other.ts").unwrap()),
+            "other.ts should be in default files"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()),
+            "package.json should be present"
         );
     }
 
