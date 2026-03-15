@@ -354,18 +354,32 @@ impl GitRepo {
                     // compiling a glob and walking directories.
                     let resolved =
                         full_pkg_path.join_unix_path(turbopath::RelativeUnixPath::new(raw_glob)?);
-                    if resolved.symlink_metadata().is_ok() {
-                        let git_relative = self.root.anchor(&resolved)?.to_unix();
-                        let pkg_relative =
-                            turbopath::RelativeUnixPath::strip_prefix(&git_relative, &pkg_prefix)
-                                .ok()
-                                .map(|s| s.to_owned());
-                        let already_known = pkg_relative
-                            .as_ref()
-                            .is_some_and(|rel| hashes.contains_key(rel));
-                        if !already_known {
-                            literal_to_hash.push(git_relative);
+                    match resolved.symlink_metadata() {
+                        Ok(meta) if meta.is_dir() => {
+                            // Directory literal — fall through to the glob
+                            // walker which will expand it via
+                            // add_doublestar_to_dir (e.g. "src" -> "src/**").
+                            glob_buf.push_str(package_unix_path);
+                            glob_buf.push('/');
+                            glob_buf.push_str(raw_glob.trim_start_matches('/'));
+                            glob_inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
                         }
+                        Ok(_) => {
+                            let git_relative = self.root.anchor(&resolved)?.to_unix();
+                            let pkg_relative = turbopath::RelativeUnixPath::strip_prefix(
+                                &git_relative,
+                                &pkg_prefix,
+                            )
+                            .ok()
+                            .map(|s| s.to_owned());
+                            let already_known = pkg_relative
+                                .as_ref()
+                                .is_some_and(|rel| hashes.contains_key(rel));
+                            if !already_known {
+                                literal_to_hash.push(git_relative);
+                            }
+                        }
+                        Err(_) => {}
                     }
                 } else {
                     glob_buf.push_str(package_unix_path);
