@@ -48,7 +48,7 @@ pub use processed::{
 pub use raw::{
     HasConfigBeyondExtends, Pipeline, RawExperimentalObservability, RawObservabilityOtel,
     RawObservabilityOtelMetrics, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson,
-    RawTaskDefinition, RawTurboJson, SpacesJson,
+    RawTaskDefinition, RawTurboJson,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};
 
@@ -428,14 +428,6 @@ mod tests {
     fn test_ui(json: &str, expected: Option<UIMode>) {
         let json = RawRootTurboJson::parse(json, "").unwrap();
         assert_eq!(json.ui.as_ref().map(|ui| *ui.as_inner()), expected);
-    }
-
-    #[test_case(r#"{ "experimentalSpaces": { "id": "hello-world" } }"#, Some(SpacesJson { id: Some("hello-world".to_string().into()) }))]
-    #[test_case(r#"{ "experimentalSpaces": {} }"#, Some(SpacesJson { id: None }))]
-    #[test_case(r#"{}"#, None)]
-    fn test_spaces(json: &str, expected: Option<SpacesJson>) {
-        let json = RawRootTurboJson::parse(json, "").unwrap();
-        assert_eq!(json.experimental_spaces, expected);
     }
 
     #[test]
