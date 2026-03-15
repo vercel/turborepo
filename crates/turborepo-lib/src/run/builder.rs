@@ -56,6 +56,7 @@ pub struct RunBuilder {
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
     should_print_prelude_override: Option<bool>,
+
     // In query, we don't want to validate the engine. Defaults to `true`
     should_validate_engine: bool,
     // If true, we will add all tasks to the graph, even if they are not specified
@@ -105,6 +106,7 @@ impl RunBuilder {
             api_auth,
             entrypoint_packages: None,
             should_print_prelude_override: None,
+
             should_validate_engine: true,
             add_all_tasks: false,
             output_watcher: None,
