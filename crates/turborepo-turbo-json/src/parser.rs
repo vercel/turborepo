@@ -17,7 +17,6 @@ use convert_case::{Case, Casing};
 use miette::Diagnostic;
 use struct_iterable::Iterable;
 use thiserror::Error;
-use tracing::log::warn;
 use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
 use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;
@@ -283,13 +282,7 @@ impl WithMetadata for RawPackageTurboJson {
 
 impl RawRootTurboJson {
     pub fn parse(text: &str, file_path: &str) -> Result<Self, BiomeParseError> {
-        let turbo_json = parse_turbo_json::<RawRootTurboJson>(text, file_path)?;
-
-        if turbo_json.experimental_spaces.is_some() {
-            warn!("`experimentalSpaces` key in turbo.json is deprecated and does not do anything")
-        }
-
-        Ok(turbo_json)
+        parse_turbo_json::<RawRootTurboJson>(text, file_path)
     }
 }
 

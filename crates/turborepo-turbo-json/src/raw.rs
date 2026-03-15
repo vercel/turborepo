@@ -20,16 +20,6 @@ use turborepo_unescape::UnescapedString;
 
 use crate::{error::Error, future_flags::FutureFlags};
 
-// Forward declarations for types that will be moved later
-// For now we define minimal versions here
-
-/// Spaces configuration (experimental)
-#[derive(Serialize, Debug, Default, PartialEq, Clone, Deserializable)]
-#[serde(rename_all = "camelCase")]
-pub struct SpacesJson {
-    pub id: Option<UnescapedString>,
-}
-
 /// An object representing the task dependency graph of your project.
 ///
 /// turbo interprets these conventions to schedule, execute, and cache the
@@ -276,8 +266,6 @@ pub struct RawRootTurboJson {
 
     #[deserializable(rename = "$schema")]
     pub schema: Option<UnescapedString>,
-    pub experimental_spaces: Option<SpacesJson>,
-
     // Global root filesystem dependencies
     pub global_dependencies: Option<Vec<Spanned<UnescapedString>>>,
     pub global_env: Option<Vec<Spanned<UnescapedString>>>,
@@ -343,12 +331,6 @@ pub struct RawTurboJson {
     #[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
     #[ts(optional, rename = "$schema")]
     pub schema: Option<UnescapedString>,
-
-    // Internal field - excluded from schema
-    #[serde(skip_serializing)]
-    #[schemars(skip)]
-    #[ts(skip)]
-    pub experimental_spaces: Option<SpacesJson>,
 
     /// This key is only available in Workspace Configs and cannot be used in
     /// your root turbo.json.
@@ -687,7 +669,6 @@ impl From<RawRootTurboJson> for RawTurboJson {
         RawTurboJson {
             span: root.span,
             schema: root.schema,
-            experimental_spaces: root.experimental_spaces,
             global_dependencies: root.global_dependencies,
             global_env: root.global_env,
             global_pass_through_env: root.global_pass_through_env,
