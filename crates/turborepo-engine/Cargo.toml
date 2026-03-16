@@ -11,9 +11,11 @@ workspace = true
 convert_case = "0.6.0"
 futures = { workspace = true }
 itertools = { workspace = true }
+layout-rs = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
 petgraph = { workspace = true }
 rand = { workspace = true, features = ["small_rng"] }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
@@ -31,7 +33,6 @@ which = { workspace = true }
 [dev-dependencies]
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
-serde_json = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
 turborepo-lockfiles = { path = "../turborepo-lockfiles" }

@@ -417,6 +417,25 @@ impl Args {
                      no longer used for `turbo run`."
                 );
             }
+            if let Some(graph) = &run_args.graph {
+                match Utf8Path::new(graph).extension() {
+                    Some("png" | "jpg" | "pdf") => {
+                        warn!(
+                            "--graph with .{ext} output is deprecated and will be removed in \
+                             version 3.0. Use .svg, .html, .mermaid, or .dot instead.",
+                            ext = Utf8Path::new(graph).extension().unwrap()
+                        );
+                    }
+                    Some("json") => {
+                        warn!(
+                            "--graph with .json output is deprecated and will be removed in \
+                             version 3.0. Use `turbo query` for programmatic access to the task \
+                             graph."
+                        );
+                    }
+                    _ => {}
+                }
+            }
         }
 
         if let Some(Command::Prune { ref scope, .. }) = clap_args.command {
@@ -1077,9 +1096,9 @@ pub struct RunArgs {
     #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "text")]
     pub dry_run: Option<DryRunMode>,
     /// Generate a graph of the task execution and output to a file when a
-    /// filename is specified (.svg, .png, .jpg, .pdf, .json,
-    /// .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename
-    /// is provided
+    /// filename is specified (.svg, .html, .mermaid, .dot). Outputs dot graph
+    /// to stdout when no filename is provided.
+    /// [DEPRECATED formats: .png, .jpg, .pdf, .json -- will be removed in 3.0]
     #[clap(long, num_args = 0..=1, default_missing_value = "", value_parser = validate_graph_extension)]
     pub graph: Option<String>,
     // clap does not have negation flags such as --daemon and --no-daemon

@@ -1047,7 +1047,8 @@ fn emit_graphviz_warning() -> Result<(), io::Error> {
     turborepo_log::warn(
         turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
         "`turbo` uses Graphviz to generate an image of your graph, but Graphviz isn't installed \
-         on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn \
+         on this machine.\n\nNote: --graph output to .png, .jpg, .pdf, and .json is deprecated \
+         and will be removed in version 3.0. Use .svg, .html, .mermaid, or .dot instead.\n\nIn \
          the meantime, you can use this string output with an online Dot graph viewer.",
     )
     .emit();
