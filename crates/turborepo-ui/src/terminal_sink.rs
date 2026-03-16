@@ -3,7 +3,7 @@ use std::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use turborepo_log::{Level, LogEvent, LogSink, Source};
+use turborepo_log::{Level, LogEvent, LogSink, OutputChannel, Source};
 
 use crate::ColorConfig;
 
@@ -104,6 +104,45 @@ impl LogSink for TerminalSink {
                 self.emit_stderr(event);
             }
             _ => {}
+        }
+    }
+
+    fn task_output(&self, _task: &str, channel: OutputChannel, bytes: &[u8]) {
+        if self.mode.load(Ordering::Relaxed) == MODE_DISABLED {
+            return;
+        }
+        let mut handle: Box<dyn Write> = match channel {
+            OutputChannel::Stdout => Box::new(io::stdout().lock()),
+            OutputChannel::Stderr => Box::new(io::stderr().lock()),
+        };
+        let _ = handle.write_all(bytes);
+    }
+
+    fn begin_task_group(&self, task: &str, is_error: bool) {
+        if self.mode.load(Ordering::Relaxed) == MODE_DISABLED {
+            return;
+        }
+        if self.ci_annotations {
+            let stdout = io::stdout();
+            let mut handle = stdout.lock();
+            if is_error {
+                let _ = writeln!(handle, "\x1b[;31m{task}\x1b[;0m");
+            } else {
+                let _ = writeln!(handle, "::group::{task}");
+            }
+        }
+    }
+
+    fn end_task_group(&self, _task: &str, is_error: bool) {
+        if self.mode.load(Ordering::Relaxed) == MODE_DISABLED {
+            return;
+        }
+        // Error tasks use a red header instead of ::group::, so
+        // emitting ::endgroup:: would be unpaired.
+        if self.ci_annotations && !is_error {
+            let stdout = io::stdout();
+            let mut handle = stdout.lock();
+            let _ = writeln!(handle, "::endgroup::");
         }
     }
 }

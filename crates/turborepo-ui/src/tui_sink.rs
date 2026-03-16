@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 
-use turborepo_log::{LogEvent, LogSink};
+use turborepo_log::{LogEvent, LogSink, OutputChannel};
 
 use crate::tui::TuiSender;
 
@@ -55,6 +55,13 @@ impl LogSink for TuiSink {
             SinkState::Connected(sender) => {
                 sender.log_event(event.clone());
             }
+        }
+    }
+
+    fn task_output(&self, task: &str, _channel: OutputChannel, bytes: &[u8]) {
+        let state = self.state.lock().unwrap();
+        if let SinkState::Connected(sender) = &*state {
+            let _ = sender.output(task.to_string(), bytes.to_vec());
         }
     }
 }

@@ -130,6 +130,15 @@ impl fmt::Display for Level {
     }
 }
 
+/// Which output stream a task byte chunk originated from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+pub enum OutputChannel {
+    /// Child process stdout.
+    Stdout,
+    /// Child process stderr.
+    Stderr,
+}
+
 /// A Turborepo infrastructure subsystem that can emit log events.
 ///
 /// Each variant identifies a logical area of the codebase. Adding a

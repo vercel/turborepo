@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::{
-    event::{Level, LogEvent, Source, Value},
+    event::{Level, LogEvent, OutputChannel, Source, Value},
     sink::LogSink,
 };
 
@@ -54,6 +54,27 @@ impl Logger {
             if sink.enabled(event.level) {
                 sink.emit(event);
             }
+        }
+    }
+
+    /// Dispatch raw task output bytes to all registered sinks.
+    pub fn task_output(&self, task: &str, channel: OutputChannel, bytes: &[u8]) {
+        for sink in &self.sinks {
+            sink.task_output(task, channel, bytes);
+        }
+    }
+
+    /// Notify all sinks that a grouped task flush is starting.
+    pub fn begin_task_group(&self, task: &str, is_error: bool) {
+        for sink in &self.sinks {
+            sink.begin_task_group(task, is_error);
+        }
+    }
+
+    /// Notify all sinks that a grouped task flush has completed.
+    pub fn end_task_group(&self, task: &str, is_error: bool) {
+        for sink in &self.sinks {
+            sink.end_task_group(task, is_error);
         }
     }
 

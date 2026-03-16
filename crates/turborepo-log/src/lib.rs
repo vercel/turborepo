@@ -94,7 +94,9 @@ mod logger;
 mod sink;
 pub mod sinks;
 
-pub use event::{Level, LogEvent, SanitizedString, Scalar, Source, Subsystem, Value};
+pub use event::{
+    Level, LogEvent, OutputChannel, SanitizedString, Scalar, Source, Subsystem, Value,
+};
 pub use logger::{
     InitError, LogEventBuilder, LogHandle, Logger, error, flush, info, init, log, warn,
 };
