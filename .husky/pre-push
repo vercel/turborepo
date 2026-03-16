@@ -5,7 +5,7 @@
 [ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
 pnpm exec lint-staged
-turbo run format
+turbo run format check:toml
 
 export RUSTFLAGS="-D warnings"
 cargo fmt --check
