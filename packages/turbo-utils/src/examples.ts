@@ -14,6 +14,30 @@ import { error, warn } from "./logger";
 const REQUEST_TIMEOUT = 10000;
 const DOWNLOAD_TIMEOUT = 120000;
 
+const GITHUB_API_HOSTS = new Set(["api.github.com", "codeload.github.com"]);
+
+function getGitHubToken(): string | undefined {
+  return process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+}
+
+function getGitHubAuthHeaders(url: string): Record<string, string> {
+  try {
+    const { hostname } = new URL(url);
+    if (!GITHUB_API_HOSTS.has(hostname)) {
+      return {};
+    }
+  } catch {
+    return {};
+  }
+
+  const token = getGitHubToken();
+  if (!token) {
+    return {};
+  }
+
+  return { Authorization: `Bearer ${token}` };
+}
+
 /**
  * Gets proxy URL from environment variables.
  * Checks both lowercase and uppercase variants.
@@ -70,8 +94,15 @@ async function fetchWithTimeout(
       ? getProxyAgent(proxyUrl)
       : undefined;
 
+    const authHeaders = getGitHubAuthHeaders(url);
+    const headers =
+      Object.keys(authHeaders).length > 0
+        ? { ...authHeaders, ...(options.headers as Record<string, string>) }
+        : options.headers;
+
     return await fetch(url, {
       ...options,
+      headers,
       signal: controller.signal,
       // @ts-expect-error - dispatcher is a valid option for undici's fetch
       dispatcher
@@ -255,7 +286,12 @@ export async function streamingExtract({
       ? getProxyAgent(proxyUrl)
       : undefined;
 
+    const authHeaders = getGitHubAuthHeaders(url);
+    const headers =
+      Object.keys(authHeaders).length > 0 ? authHeaders : undefined;
+
     const response = await fetch(url, {
+      headers,
       signal: controller.signal,
       // @ts-expect-error - dispatcher is a valid option for undici's fetch
       dispatcher
