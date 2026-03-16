@@ -30,7 +30,7 @@ use turborepo_telemetry::events::{
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_types::{DryRunMode, UIMode};
+use turborepo_types::UIMode;
 use turborepo_ui::ColorConfig;
 use turborepo_vercel_api::CachingStatusResponse;
 
@@ -436,9 +436,6 @@ impl RunBuilder {
         if is_linked {
             run_telemetry.track_remote_cache(&self.opts.api_client_opts.api_url);
         }
-        let _is_structured_output = self.opts.run_opts.graph.is_some()
-            || matches!(self.opts.run_opts.dry_run, Some(DryRunMode::Json));
-
         let is_single_package = self.opts.run_opts.single_package;
         repo_telemetry.track_type(if is_single_package {
             RepoType::SinglePackage

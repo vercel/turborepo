@@ -111,9 +111,11 @@ impl Run {
     /// `StdoutSink` writes these to stdout; in TUI mode, `TuiSink`
     /// captures them for the log panel.
     pub fn emit_run_prelude_logs(&self) {
+        let pad = "   ";
+        turborepo_log::info(turborepo_log::Source::turbo("run"), "").emit();
         turborepo_log::info(
             turborepo_log::Source::turbo("cli"),
-            format!("• turbo {}", self.version),
+            format!("{pad}• turbo {}", self.version),
         )
         .emit();
 
@@ -121,7 +123,7 @@ impl Run {
         if self.opts.run_opts.single_package {
             turborepo_log::info(
                 turborepo_log::Source::turbo("run"),
-                format!("• Running {targets_list}"),
+                format!("{pad}• Running {targets_list}"),
             )
             .emit();
         } else {
@@ -133,13 +135,13 @@ impl Run {
             packages.sort();
             turborepo_log::info(
                 turborepo_log::Source::turbo("run"),
-                format!("• Packages in scope: {}", packages.join(", ")),
+                format!("{pad}• Packages in scope: {}", packages.join(", ")),
             )
             .emit();
             turborepo_log::info(
                 turborepo_log::Source::turbo("run"),
                 format!(
-                    "• Running {targets_list} in {} packages",
+                    "{pad}• Running {targets_list} in {} packages",
                     self.filtered_pkgs.len()
                 ),
             )
@@ -153,11 +155,12 @@ impl Run {
             "disabled"
         };
         let cache_status = if self.opts.run_opts.is_shared_worktree_cache {
-            format!("• Remote caching {remote_status}, using shared worktree cache")
+            format!("{pad}• Remote caching {remote_status}, using shared worktree cache")
         } else {
-            format!("• Remote caching {remote_status}")
+            format!("{pad}• Remote caching {remote_status}")
         };
         turborepo_log::info(turborepo_log::Source::turbo("run"), cache_status).emit();
+        turborepo_log::info(turborepo_log::Source::turbo("run"), "").emit();
     }
 
     pub fn turbo_json_loader(&self) -> &UnifiedTurboJsonLoader {

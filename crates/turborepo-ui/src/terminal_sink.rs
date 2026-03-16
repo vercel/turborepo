@@ -42,13 +42,17 @@ impl TerminalSink {
 }
 
 impl LogSink for TerminalSink {
+    fn enabled(&self, level: Level) -> bool {
+        matches!(level, Level::Warn | Level::Error) && self.active.load(Ordering::Relaxed)
+    }
+
     fn emit(&self, event: &LogEvent) {
+        // Re-check: disable() may have been called between enabled() and emit().
         if !self.active.load(Ordering::Relaxed) {
             return;
         }
 
-        // Info events go to stdout via StdoutSink, not here.
-        if matches!(event.level(), Level::Info) {
+        if !matches!(event.level(), Level::Warn | Level::Error) {
             return;
         }
 
@@ -129,6 +133,15 @@ mod tests {
     }
 
     #[test]
+    fn filters_info_level() {
+        let sink = Arc::new(TerminalSink::new(ColorConfig::new(true)));
+
+        assert!(!sink.enabled(Level::Info));
+        assert!(sink.enabled(Level::Warn));
+        assert!(sink.enabled(Level::Error));
+    }
+
+    #[test]
     fn disable_suppresses_emit() {
         // TerminalSink behind Arc so disable() and emit() share the same AtomicBool.
         let sink = Arc::new(TerminalSink::new(ColorConfig::new(true)));
@@ -149,5 +162,7 @@ mod tests {
         // Both events reached the collector, confirming the logger still
         // dispatches. TerminalSink's disable only affects its own output.
         assert_eq!(collector.events().len(), 2);
+        assert!(!sink.enabled(Level::Warn));
+        assert!(!sink.enabled(Level::Error));
     }
 }
