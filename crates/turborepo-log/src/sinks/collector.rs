@@ -123,19 +123,19 @@ impl LogSink for CollectorSink {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::event::Source;
+    use crate::event::{Source, Subsystem};
 
     #[test]
     fn stores_events() {
         let collector = CollectorSink::new();
         collector.emit(&LogEvent::new(
             Level::Warn,
-            Source::turbo("test"),
+            Source::turbo(Subsystem::Cache),
             "warning 1",
         ));
         collector.emit(&LogEvent::new(
             Level::Error,
-            Source::turbo("test"),
+            Source::turbo(Subsystem::Cache),
             "error 1",
         ));
         assert_eq!(collector.events().len(), 2);
@@ -144,9 +144,21 @@ mod tests {
     #[test]
     fn filter_by_severity() {
         let collector = CollectorSink::new();
-        collector.emit(&LogEvent::new(Level::Info, Source::turbo("t"), "info"));
-        collector.emit(&LogEvent::new(Level::Warn, Source::turbo("t"), "warn"));
-        collector.emit(&LogEvent::new(Level::Error, Source::turbo("t"), "error"));
+        collector.emit(&LogEvent::new(
+            Level::Info,
+            Source::turbo(Subsystem::Cache),
+            "info",
+        ));
+        collector.emit(&LogEvent::new(
+            Level::Warn,
+            Source::turbo(Subsystem::Cache),
+            "warn",
+        ));
+        collector.emit(&LogEvent::new(
+            Level::Error,
+            Source::turbo(Subsystem::Cache),
+            "error",
+        ));
 
         let warnings_and_above = collector.events_at_severity(Level::Warn);
         assert_eq!(warnings_and_above.len(), 2);
@@ -165,7 +177,11 @@ mod tests {
     #[test]
     fn drain_clears_buffer() {
         let collector = CollectorSink::new();
-        collector.emit(&LogEvent::new(Level::Warn, Source::turbo("test"), "msg"));
+        collector.emit(&LogEvent::new(
+            Level::Warn,
+            Source::turbo(Subsystem::Cache),
+            "msg",
+        ));
         let drained = collector.drain();
         assert_eq!(drained.len(), 1);
         assert_eq!(collector.events().len(), 0);
@@ -177,7 +193,7 @@ mod tests {
         for i in 0..5 {
             collector.emit(&LogEvent::new(
                 Level::Warn,
-                Source::turbo("test"),
+                Source::turbo(Subsystem::Cache),
                 format!("event {i}"),
             ));
         }
@@ -188,7 +204,11 @@ mod tests {
     #[test]
     fn with_capacity_zero_drops_all_events() {
         let collector = CollectorSink::with_capacity(0);
-        collector.emit(&LogEvent::new(Level::Warn, Source::turbo("t"), "msg"));
+        collector.emit(&LogEvent::new(
+            Level::Warn,
+            Source::turbo(Subsystem::Cache),
+            "msg",
+        ));
         assert_eq!(collector.events().len(), 0);
         assert_eq!(collector.dropped_count(), 1);
     }
@@ -196,7 +216,11 @@ mod tests {
     #[test]
     fn with_events_borrows_without_cloning() {
         let collector = CollectorSink::new();
-        collector.emit(&LogEvent::new(Level::Info, Source::turbo("test"), "msg"));
+        collector.emit(&LogEvent::new(
+            Level::Info,
+            Source::turbo(Subsystem::Cache),
+            "msg",
+        ));
         collector.with_events(|events| {
             assert_eq!(events.len(), 1);
             assert_eq!(events[0].message, "msg");
@@ -213,7 +237,7 @@ mod tests {
     #[test]
     fn with_logger_creates_wired_pair() {
         let (collector, logger) = CollectorSink::with_logger();
-        let handle = logger.handle(Source::turbo("test"));
+        let handle = logger.handle(Source::turbo(Subsystem::Cache));
         handle.warn("via helper").emit();
         assert_eq!(collector.events().len(), 1);
     }
@@ -228,7 +252,7 @@ mod tests {
                 for j in 0..100 {
                     c.emit(&LogEvent::new(
                         Level::Warn,
-                        Source::turbo("test"),
+                        Source::turbo(Subsystem::Cache),
                         format!("thread {i} event {j}"),
                     ));
                 }

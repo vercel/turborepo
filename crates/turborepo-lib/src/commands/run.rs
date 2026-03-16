@@ -1,14 +1,14 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
 use tracing::error;
 use turborepo_api_client::SharedHttpClient;
-use turborepo_log::{sinks::collector::CollectorSink, Logger};
 use turborepo_query_api::QueryServer;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{sender::UISender, TerminalSink, TuiSink};
+use turborepo_types::DryRunMode;
+use turborepo_ui::{sender::UISender, LogSinks};
 
-use crate::{commands::CommandBase, run, run::builder::RunBuilder};
+use crate::{commands::CommandBase, run, run::builder::RunBuilder, tracing::TurboSubscriber};
 
 #[tracing::instrument(skip_all)]
 pub async fn run(
@@ -16,18 +16,36 @@ pub async fn run(
     telemetry: CommandEventBuilder,
     http_client: SharedHttpClient,
     query_server: Option<Arc<dyn QueryServer>>,
+    subscriber: &TurboSubscriber,
+    verbosity: u8,
 ) -> Result<i32, run::Error> {
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let collector = Arc::new(CollectorSink::new());
-    let terminal = Arc::new(TerminalSink::new(base.color_config));
-    let tui_sink = Arc::new(TuiSink::new());
-    let _ = turborepo_log::init(Logger::new(vec![
-        Box::new(collector),
-        Box::new(terminal.clone()),
-        Box::new(tui_sink.clone()),
-    ]));
+    let sinks = LogSinks::new(base.color_config);
+    sinks.init_logger();
+
+    if let Ok(message) = env::var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) {
+        turborepo_log::warn(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Shim),
+            message,
+        )
+        .emit();
+        unsafe { env::remove_var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) };
+    }
+
+    // When verbosity is active, redirect tracing to a file before build()
+    // so SCM, hashing, and config tracing is captured. Only done here
+    // (not in the shim) because non-TUI commands should keep stderr output.
+    let repo_root = base.repo_root.clone();
+    if let Some(path) = subscriber.stderr_redirect_path() {
+        // Already redirected (shouldn't happen, but be safe)
+        tracing::debug!("stderr already redirected to {path}");
+    } else if verbosity > 0 {
+        if let Ok(path) = subscriber.redirect_stderr_to_file(repo_root.as_std_path()) {
+            tracing::debug!("Verbose tracing redirected to {path}");
+        }
+    }
 
     let mut run_builder = {
         let _span = tracing::info_span!("run_builder_new").entered();
@@ -43,14 +61,41 @@ pub async fn run(
             (Arc::new(run), analytics_handle)
         };
 
+        // Structured output modes own stdout for machine-readable data.
+        if run.opts().run_opts.graph.is_some()
+            || matches!(run.opts().run_opts.dry_run, Some(DryRunMode::Json))
+        {
+            sinks.suppress_stdout();
+        }
+
+        // Emit the prelude while TerminalSink is still active so it
+        // lands in the main terminal buffer (survives TUI alternate-
+        // screen). TuiSink buffers these events and flushes on connect().
+        run.emit_run_prelude_logs();
+
+        sinks.disable_for_tui();
+
         let (sender, handle) = {
             let _span = tracing::info_span!("start_ui").entered();
             run.start_ui()?.unzip()
         };
 
         if let Some(UISender::Tui(ref tui_sender)) = sender {
-            tui_sink.connect(tui_sender.clone());
-            terminal.disable();
+            sinks.tui.connect(tui_sender.clone());
+            if let Some(path) = subscriber.stderr_redirect_path() {
+                turborepo_log::info(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Tracing),
+                    format!("Verbose logs redirected to {path}"),
+                )
+                .emit();
+            } else {
+                subscriber.suppress_stderr();
+            }
+        } else {
+            sinks.enable_for_stream();
+            if subscriber.stderr_redirect_path().is_some() {
+                subscriber.restore_stderr();
+            }
         }
 
         let result = run.run(sender.clone(), false).await;
@@ -70,6 +115,10 @@ pub async fn run(
             }
         }
 
+        if let Some(path) = subscriber.stderr_redirect_path() {
+            subscriber.restore_stderr();
+            println!("Verbose logs written to {path}");
+        }
         result
     };
 

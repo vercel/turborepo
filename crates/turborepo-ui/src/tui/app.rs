@@ -66,6 +66,7 @@ pub struct App<W> {
     scrollback_len: u64,
     scroll_momentum: ScrollMomentum,
     log_events: Vec<turborepo_log::LogEvent>,
+    showing_log_panel: bool,
 }
 
 impl<W> App<W> {
@@ -123,6 +124,7 @@ impl<W> App<W> {
             scrollback_len,
             scroll_momentum: ScrollMomentum::new(),
             log_events: Vec::new(),
+            showing_log_panel: false,
         }
     }
 
@@ -146,6 +148,7 @@ impl<W> App<W> {
             focus: &self.section_focus,
             has_selection,
             is_help_popup_open: self.showing_help_popup,
+            is_log_panel_open: self.showing_log_panel,
         })
     }
 
@@ -1028,6 +1031,22 @@ fn cleanup<B: Backend<Error = io::Error> + io::Write>(
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
     app.preferences.flush_to_disk().ok();
+
+    // Discard any stale mouse tracking events from stdin before re-enabling
+    // echo. There's a race between sending DisableMouseCapture to the terminal
+    // and the terminal actually stopping mouse event generation. Any events
+    // buffered in the kernel's input queue during that window would be echoed
+    // as raw escape sequences (e.g. ^[[<35;29;43M) once disable_raw_mode()
+    // restores canonical mode with echo.
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        let _ = nix::sys::termios::tcflush(
+            std::io::stdin().as_raw_fd(),
+            nix::sys::termios::FlushArg::TCIFLUSH,
+        );
+    }
+
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
 
@@ -1135,6 +1154,9 @@ fn update(
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
         }
+        Event::ToggleLogPanel => {
+            app.showing_log_panel = !app.showing_log_panel;
+        }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
         }
@@ -1217,8 +1239,12 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     if app.showing_help_popup {
         let area = popup_area(*f.buffer_mut().area());
         let area = area.intersection(*f.buffer_mut().area());
-        f.render_widget(Clear, area); // Clears background underneath popup
+        f.render_widget(Clear, area);
         f.render_widget(popup(area), area);
+    }
+
+    if app.showing_log_panel {
+        super::log_panel::render_log_panel(f, &app.log_events);
     }
 }
 
@@ -2576,7 +2602,7 @@ mod test {
 
         let event = turborepo_log::LogEvent::new(
             turborepo_log::Level::Warn,
-            turborepo_log::Source::turbo("scm"),
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
             "something went wrong",
         );
         update(&mut app, Event::LogEvent(event))?;

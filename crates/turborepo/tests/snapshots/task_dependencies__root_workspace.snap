@@ -2,9 +2,10 @@
 source: crates/turborepo/tests/task_dependencies.rs
 expression: stdout.to_string()
 ---
-• Packages in scope: //, lib-a
-• Running mytask in 2 packages
-• Remote caching disabled
+   • Packages in scope: //, lib-a
+   • Running mytask in 2 packages
+   • Remote caching disabled
+
 lib-a:build: cache miss, executing eddc59f63124ca26
 lib-a:build: 
 lib-a:build: > build

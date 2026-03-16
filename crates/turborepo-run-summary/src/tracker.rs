@@ -12,7 +12,6 @@ use serde::Serialize;
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
 use thiserror::Error;
-use tracing::log::warn;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
@@ -413,7 +412,11 @@ impl<'a> RunSummary<'a> {
         if self.should_save
             && let Err(err) = self.save().await
         {
-            warn!("Error writing run summary: {}", err)
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                format!("Error writing run summary: {err}"),
+            )
+            .emit()
         }
 
         if !is_watch && let Some(execution) = &self.execution {
@@ -432,7 +435,11 @@ impl<'a> RunSummary<'a> {
         }
 
         for error in errors {
-            warn!("{}", error)
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                format!("{error}"),
+            )
+            .emit();
         }
     }
 

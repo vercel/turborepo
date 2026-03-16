@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use tracing::log::warn;
+use tracing::warn;
 
 use crate::{
     sender::{TaskSender, UISender},

@@ -266,12 +266,6 @@ pub enum TelemetryCommand {
     Status,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
-pub enum LinkTarget {
-    RemoteCache,
-    Spaces,
-}
-
 /// Returns formatted RunArgs options derived from clap's command definition.
 /// These options aren't included in the usage line by clap because they're all
 /// optional.
@@ -708,10 +702,6 @@ pub enum Command {
         /// Answer yes to all prompts (default false)
         #[clap(long, short)]
         yes: bool,
-
-        /// DEPRECATED: Specify what should be linked (default "remote cache")
-        #[clap(long, value_enum)]
-        target: Option<LinkTarget>,
     },
     /// Login to your Vercel account
     Login {
@@ -794,11 +784,7 @@ pub enum Command {
     },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink {
-        /// DEPRECATED: Specify what should be unlinked (default "remote cache")
-        #[clap(long, value_enum)]
-        target: Option<LinkTarget>,
-    },
+    Unlink,
 }
 
 #[derive(Copy, Clone, Debug, Default, ValueEnum, Serialize, Eq, PartialEq)]
@@ -1432,11 +1418,11 @@ async fn run_main(
         initialize_deferred_telemetry_client(http_client.clone(), color_config, version)
     };
 
+    let mut command = get_command(&mut cli_args)?;
+
     if should_print_version() {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
     }
-
-    let mut command = get_command(&mut cli_args)?;
 
     // Set some run flags if we have the data and are executing a Run
     set_run_flags(&mut command, &repo_state, &cli_args)?;
@@ -1622,11 +1608,7 @@ async fn run_main(
             no_gitignore,
             scope,
             yes,
-            target,
         } => {
-            if target.is_some() {
-                warn!("`--target` flag is deprecated and does not do anything")
-            }
             let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
             event.track_call();
 
@@ -1686,11 +1668,7 @@ async fn run_main(
 
             Ok(0)
         }
-        Command::Unlink { target } => {
-            if target.is_some() {
-                warn!("`--target` flag is deprecated and does not do anything");
-            }
-
+        Command::Unlink => {
             let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
             event.track_call();
             if cli_args.test_run {
@@ -1724,13 +1702,21 @@ async fn run_main(
             }
 
             run_args.track(&event);
-            let exit_code = run::run(base, event, http_client, query_server.clone())
-                .await
-                .inspect(|code| {
-                    if *code != 0 {
-                        error!("run failed: command  exited ({code})");
-                    }
-                })?;
+            let verbosity: u8 = cli_args.verbosity.into();
+            let exit_code = run::run(
+                base,
+                event,
+                http_client,
+                query_server.clone(),
+                logger,
+                verbosity,
+            )
+            .await
+            .inspect(|code| {
+                if *code != 0 {
+                    error!("run failed: command  exited ({code})");
+                }
+            })?;
 
             // Chrome tracing is enabled early in shim::run(). Here we just
             // flush and generate the markdown summary.
@@ -1801,9 +1787,16 @@ async fn run_main(
                 return Ok(1);
             }
 
-            let mut client =
-                WatchClient::new(base, *experimental_write_cache, event, query_server.clone())
-                    .await?;
+            let verbosity: u8 = cli_args.verbosity.into();
+            let mut client = WatchClient::new(
+                base,
+                *experimental_write_cache,
+                event,
+                query_server.clone(),
+                logger,
+                verbosity,
+            )
+            .await?;
             match client.start().await {
                 Ok(()) => {}
                 Err(crate::run::watch::Error::SignalInterrupt) => {
@@ -1815,6 +1808,10 @@ async fn run_main(
                 }
             }
             client.shutdown().await;
+            if let Some(path) = logger.stderr_redirect_path() {
+                logger.restore_stderr();
+                println!("Verbose logs written to {path}");
+            }
             return Ok(0);
         }
         Command::Prune {
@@ -1876,7 +1873,7 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ContinueMode, ExecutionArgs, LinkTarget, RunArgs};
+    use crate::cli::{ContinueMode, ExecutionArgs, RunArgs};
 
     fn get_subcommand(name: &str) -> clap::Command {
         Args::command()
@@ -2843,7 +2840,6 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
-                    target: None,
                 }),
                 ..Args::default()
             }
@@ -2858,7 +2854,6 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
-                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2875,7 +2870,6 @@ mod test {
                     yes: true,
                     no_gitignore: false,
                     scope: None,
-                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2892,7 +2886,6 @@ mod test {
                     yes: false,
                     no_gitignore: false,
                     scope: Some("foo".to_string()),
-                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2909,24 +2902,6 @@ mod test {
                     yes: false,
                     no_gitignore: true,
                     scope: None,
-                    target: None,
-                }),
-                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
-                ..Args::default()
-            },
-        }
-        .test();
-
-        CommandTestCase {
-            command: "link",
-            command_args: vec![vec!["--target", "spaces"]],
-            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
-            expected_output: Args {
-                command: Some(Command::Link {
-                    yes: false,
-                    no_gitignore: false,
-                    scope: None,
-                    target: Some(LinkTarget::Spaces),
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -3010,7 +2985,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink { target: None }),
+                command: Some(Command::Unlink),
                 ..Args::default()
             }
         );
@@ -3020,21 +2995,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Unlink { target: None }),
-                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
-                ..Args::default()
-            },
-        }
-        .test();
-
-        CommandTestCase {
-            command: "unlink",
-            command_args: vec![vec!["--target", "remote-cache"]],
-            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
-            expected_output: Args {
-                command: Some(Command::Unlink {
-                    target: Some(LinkTarget::RemoteCache),
-                }),
+                command: Some(Command::Unlink),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },

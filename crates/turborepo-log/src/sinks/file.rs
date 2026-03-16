@@ -122,12 +122,12 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::event::{Level, Source, Value};
+    use crate::event::{Level, Source, Subsystem, Value};
 
     #[test]
     fn writes_valid_jsonl() {
         let sink = FileSink::new(Vec::new());
-        let event = LogEvent::new(Level::Warn, Source::turbo("cache"), "cache miss");
+        let event = LogEvent::new(Level::Warn, Source::turbo(Subsystem::Cache), "cache miss");
         sink.emit(&event);
         sink.flush();
 
@@ -141,9 +141,21 @@ mod tests {
     #[test]
     fn writes_multiple_events_as_jsonl() {
         let sink = FileSink::new(Vec::new());
-        sink.emit(&LogEvent::new(Level::Info, Source::turbo("a"), "first"));
-        sink.emit(&LogEvent::new(Level::Warn, Source::turbo("b"), "second"));
-        sink.emit(&LogEvent::new(Level::Error, Source::turbo("c"), "third"));
+        sink.emit(&LogEvent::new(
+            Level::Info,
+            Source::turbo(Subsystem::Cache),
+            "first",
+        ));
+        sink.emit(&LogEvent::new(
+            Level::Warn,
+            Source::turbo(Subsystem::Run),
+            "second",
+        ));
+        sink.emit(&LogEvent::new(
+            Level::Error,
+            Source::turbo(Subsystem::Scm),
+            "third",
+        ));
         sink.flush();
 
         let writer = sink.writer.lock().unwrap();
@@ -175,7 +187,7 @@ mod tests {
     #[test]
     fn omits_fields_when_empty() {
         let sink = FileSink::new(Vec::new());
-        let event = LogEvent::new(Level::Warn, Source::turbo("test"), "no fields");
+        let event = LogEvent::new(Level::Warn, Source::turbo(Subsystem::Cache), "no fields");
         sink.emit(&event);
         sink.flush();
 
@@ -189,14 +201,18 @@ mod tests {
     fn tracks_dropped_count_starts_at_zero() {
         let sink = FileSink::new(Vec::new());
         assert_eq!(sink.dropped_count(), 0);
-        sink.emit(&LogEvent::new(Level::Info, Source::turbo("t"), "ok"));
+        sink.emit(&LogEvent::new(
+            Level::Info,
+            Source::turbo(Subsystem::Cache),
+            "ok",
+        ));
         assert_eq!(sink.dropped_count(), 0);
     }
 
     #[test]
     fn redacted_fields_serialize_as_null() {
         let sink = FileSink::new(Vec::new());
-        let mut event = LogEvent::new(Level::Info, Source::turbo("auth"), "token used");
+        let mut event = LogEvent::new(Level::Info, Source::turbo(Subsystem::Cache), "token used");
         event.fields.push(("token", Value::Redacted));
         sink.emit(&event);
         sink.flush();
@@ -212,7 +228,11 @@ mod tests {
         // 200 bytes is enough for ~1 event but not 3
         let sink = FileSink::with_max_bytes(Vec::new(), 400);
         for _ in 0..10 {
-            sink.emit(&LogEvent::new(Level::Info, Source::turbo("t"), "msg"));
+            sink.emit(&LogEvent::new(
+                Level::Info,
+                Source::turbo(Subsystem::Cache),
+                "msg",
+            ));
         }
         sink.flush();
 
@@ -224,7 +244,11 @@ mod tests {
     fn bytes_written_tracks_output_size() {
         let sink = FileSink::new(Vec::new());
         assert_eq!(sink.bytes_written(), 0);
-        sink.emit(&LogEvent::new(Level::Info, Source::turbo("t"), "msg"));
+        sink.emit(&LogEvent::new(
+            Level::Info,
+            Source::turbo(Subsystem::Cache),
+            "msg",
+        ));
         assert!(sink.bytes_written() > 0);
     }
 
@@ -245,7 +269,11 @@ mod tests {
         // reaches the underlying FailWriter (small writes are absorbed
         // by the buffer and never hit the writer).
         let big_msg = "x".repeat(10_000);
-        sink.emit(&LogEvent::new(Level::Info, Source::turbo("t"), big_msg));
+        sink.emit(&LogEvent::new(
+            Level::Info,
+            Source::turbo(Subsystem::Cache),
+            big_msg,
+        ));
         assert_eq!(sink.dropped_count(), 1);
     }
 
@@ -259,7 +287,7 @@ mod tests {
                 for j in 0..100 {
                     s.emit(&LogEvent::new(
                         Level::Info,
-                        Source::turbo("test"),
+                        Source::turbo(Subsystem::Cache),
                         format!("t{i}e{j}"),
                     ));
                 }
@@ -283,7 +311,11 @@ mod tests {
     fn concurrent_writes_with_max_bytes_bounded_overshoot() {
         // Measure one event's serialized size.
         let probe = FileSink::new(Vec::new());
-        probe.emit(&LogEvent::new(Level::Info, Source::turbo("t"), "msg"));
+        probe.emit(&LogEvent::new(
+            Level::Info,
+            Source::turbo(Subsystem::Cache),
+            "msg",
+        ));
         let one_event = probe.bytes_written();
 
         let max = one_event * 5;
@@ -295,7 +327,7 @@ mod tests {
                 for j in 0..50 {
                     s.emit(&LogEvent::new(
                         Level::Info,
-                        Source::turbo("t"),
+                        Source::turbo(Subsystem::Cache),
                         format!("t{i}e{j}"),
                     ));
                 }

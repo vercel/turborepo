@@ -2,13 +2,13 @@ use std::sync::{Arc, Mutex, atomic::AtomicU8};
 
 use futures::{StreamExt, stream::FuturesUnordered};
 use tokio::sync::{Semaphore, mpsc, oneshot};
-use tracing::{Instrument, Level, warn};
+use tracing::{Instrument, Level};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{
-    CacheError, CacheHitMetadata, CacheOpts, CacheScmState, http::UploadMap,
+    CacheError, CacheHitMetadata, CacheOpts, LazyScmState, http::UploadMap,
     multiplexer::CacheMultiplexer,
 };
 
@@ -41,7 +41,7 @@ impl AsyncCache {
         api_client: Option<APIClient>,
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
-        scm_state: Option<CacheScmState>,
+        scm_state: LazyScmState,
     ) -> Result<AsyncCache, CacheError> {
         let max_workers = opts.workers.try_into().expect("usize is smaller than u32");
         let real_cache = Arc::new(CacheMultiplexer::new(
@@ -90,7 +90,13 @@ impl AsyncCache {
                                             num_warnings + 1,
                                             std::sync::atomic::Ordering::Release,
                                         );
-                                        warn!("{err}");
+                                        turborepo_log::warn(
+                                            turborepo_log::Source::turbo(
+                                                turborepo_log::Subsystem::Cache,
+                                            ),
+                                            format!("{err}"),
+                                        )
+                                        .emit();
                                     }
                                 }
                                 // Release permit once we're done with the write
@@ -236,7 +242,7 @@ mod tests {
 
     use crate::{
         AsyncCache, CacheActions, CacheConfig, CacheHitMetadata, CacheOpts, CacheSource,
-        RemoteCacheOpts,
+        LazyScmState, RemoteCacheOpts,
         test_cases::{TestCase, get_test_cases},
     };
 
@@ -307,7 +313,7 @@ mod tests {
             Some(api_client),
             api_auth,
             None,
-            None,
+            LazyScmState::new(),
         )?;
 
         // Ensure that the cache is empty
@@ -393,7 +399,14 @@ mod tests {
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache = AsyncCache::new(&opts, &repo_root_path, None, api_auth, None, None)?;
+        let async_cache = AsyncCache::new(
+            &opts,
+            &repo_root_path,
+            None,
+            api_auth,
+            None,
+            LazyScmState::new(),
+        )?;
 
         // Ensure that the cache is empty
         let response = async_cache.exists(&hash).await;
@@ -487,7 +500,14 @@ mod tests {
             token: SecretString::new("my-token".to_string()),
             team_slug: None,
         });
-        let async_cache = AsyncCache::new(&opts, &repo_root_path, None, api_auth, None, None)?;
+        let async_cache = AsyncCache::new(
+            &opts,
+            &repo_root_path,
+            None,
+            api_auth,
+            None,
+            LazyScmState::new(),
+        )?;
 
         assert_matches!(async_cache.exists(&hash).await, Ok(None));
 
@@ -566,7 +586,7 @@ mod tests {
             Some(api_client),
             api_auth,
             None,
-            None,
+            LazyScmState::new(),
         )?;
 
         // Ensure that the cache is empty

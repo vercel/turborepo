@@ -9,8 +9,8 @@ use chrono::Local;
 use tracing::Instrument;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
-use turborepo_api_client::{APIAuth, APIClient, SharedHttpClient};
-use turborepo_cache::{AsyncCache, CacheScmState};
+use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
+use turborepo_cache::{AsyncCache, CacheScmState, LazyScmState};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_errors::Spanned;
 use turborepo_process::ProcessManager;
@@ -30,15 +30,19 @@ use turborepo_telemetry::events::{
     repo::{RepoEventBuilder, RepoType},
     EventBuilder, TrackedErrors,
 };
-use turborepo_types::{DryRunMode, UIMode};
+use turborepo_types::UIMode;
 use turborepo_ui::ColorConfig;
+use turborepo_vercel_api::CachingStatusResponse;
 
 use crate::{
     commands::CommandBase,
     engine::{Engine, EngineBuilder, EngineExt},
     microfrontends::MicrofrontendsConfigs,
     opts::Opts,
-    run::{scope, task_access::TaskAccess, Error, Run, RunCache},
+    run::{
+        scope, task_access::TaskAccess, Error, RemoteCacheStatus, RemoteCacheUnavailableReason,
+        Run, RunCache,
+    },
     shim::TurboState,
     turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
@@ -55,7 +59,7 @@ pub struct RunBuilder {
     // We will then prune away any tasks that do not depend on tasks inside
     // this package.
     entrypoint_packages: Option<HashSet<PackageName>>,
-    should_print_prelude_override: Option<bool>,
+
     // In query, we don't want to validate the engine. Defaults to `true`
     should_validate_engine: bool,
     // If true, we will add all tasks to the graph, even if they are not specified
@@ -104,7 +108,7 @@ impl RunBuilder {
             version,
             api_auth,
             entrypoint_packages: None,
-            should_print_prelude_override: None,
+
             should_validate_engine: true,
             add_all_tasks: false,
             output_watcher: None,
@@ -128,11 +132,6 @@ impl RunBuilder {
 
     pub fn with_query_server(mut self, server: Arc<dyn turborepo_query_api::QueryServer>) -> Self {
         self.query_server = Some(server);
-        self
-    }
-
-    pub fn hide_prelude(mut self) -> Self {
-        self.should_print_prelude_override = Some(false);
         self
     }
 
@@ -180,6 +179,109 @@ impl RunBuilder {
             self.version,
             self.opts.api_client_opts.preflight,
         )
+    }
+
+    async fn resolve_remote_cache_status(
+        &self,
+        preflight_handle: Option<
+            tokio::task::JoinHandle<turborepo_api_client::Result<CachingStatusResponse>>,
+        >,
+    ) -> RemoteCacheStatus {
+        use turborepo_vercel_api::CachingStatus;
+
+        if let Some(reason) = self.opts.remote_cache_disabled_reason {
+            return RemoteCacheStatus::Disabled(reason);
+        }
+
+        let Some(handle) = preflight_handle else {
+            return RemoteCacheStatus::Enabled;
+        };
+
+        // Wait at most 250ms for the preflight check. This runs concurrently
+        // with graph building so in practice it's almost always done by now.
+        // If it's not, fall back to "enabled" — the connection warmup still
+        // benefits later cache operations.
+        let result = tokio::time::timeout(Duration::from_millis(250), handle).await;
+        match result {
+            Ok(Ok(Ok(response))) => match response.status {
+                CachingStatus::Enabled => RemoteCacheStatus::Enabled,
+                CachingStatus::Disabled => {
+                    RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::DisabledForTeam)
+                }
+                CachingStatus::OverLimit => {
+                    RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::UsageLimitExceeded)
+                }
+                CachingStatus::Paused => {
+                    RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::SpendingPaused)
+                }
+            },
+            Ok(Ok(Err(api_err))) => Self::map_api_error_to_status(api_err),
+            Ok(Err(_join_err)) => {
+                tracing::debug!("Remote cache preflight task panicked; assuming enabled");
+                RemoteCacheStatus::Enabled
+            }
+            Err(_timeout) => {
+                tracing::debug!("Remote cache preflight timed out after 250ms; assuming enabled");
+                RemoteCacheStatus::Enabled
+            }
+        }
+    }
+
+    fn map_api_error_to_status(err: turborepo_api_client::Error) -> RemoteCacheStatus {
+        match &err {
+            turborepo_api_client::Error::ReqwestError(e) if e.is_connect() || e.is_timeout() => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect)
+            }
+            turborepo_api_client::Error::ReqwestError(e) => {
+                if let Some(status) = e.status() {
+                    if status == reqwest::StatusCode::UNAUTHORIZED
+                        || status == reqwest::StatusCode::FORBIDDEN
+                    {
+                        return RemoteCacheStatus::Unavailable(
+                            RemoteCacheUnavailableReason::AuthenticationFailed,
+                        );
+                    }
+                    if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                        return RemoteCacheStatus::Unavailable(
+                            RemoteCacheUnavailableReason::UsageLimitExceeded,
+                        );
+                    }
+                    if status.is_server_error() {
+                        return RemoteCacheStatus::Unavailable(
+                            RemoteCacheUnavailableReason::UnexpectedServerError,
+                        );
+                    }
+                }
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect)
+            }
+            turborepo_api_client::Error::InvalidToken { .. } => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::AuthenticationFailed)
+            }
+            turborepo_api_client::Error::ForbiddenToken { .. } => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::AuthenticationFailed)
+            }
+            turborepo_api_client::Error::CacheDisabled { status, .. } => {
+                use turborepo_vercel_api::CachingStatus;
+                match status {
+                    CachingStatus::Disabled => RemoteCacheStatus::Unavailable(
+                        RemoteCacheUnavailableReason::DisabledForTeam,
+                    ),
+                    CachingStatus::OverLimit => RemoteCacheStatus::Unavailable(
+                        RemoteCacheUnavailableReason::UsageLimitExceeded,
+                    ),
+                    CachingStatus::Paused => {
+                        RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::SpendingPaused)
+                    }
+                    CachingStatus::Enabled => RemoteCacheStatus::Enabled,
+                }
+            }
+            turborepo_api_client::Error::InvalidJson { .. }
+            | turborepo_api_client::Error::UnknownCachingStatus(..)
+            | turborepo_api_client::Error::UnknownStatus { .. } => {
+                RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::UnexpectedServerError)
+            }
+            _ => RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect),
+        }
     }
 
     fn all_package_prefixes(pkg_dep_graph: &PackageGraph) -> Vec<RelativeUnixPathBuf> {
@@ -334,9 +436,6 @@ impl RunBuilder {
         if is_linked {
             run_telemetry.track_remote_cache(&self.opts.api_client_opts.api_url);
         }
-        let _is_structured_output = self.opts.run_opts.graph.is_some()
-            || matches!(self.opts.run_opts.dry_run, Some(DryRunMode::Json));
-
         let is_single_package = self.opts.run_opts.single_package;
         repo_telemetry.track_type(if is_single_package {
             RepoType::SinglePackage
@@ -431,6 +530,23 @@ impl RunBuilder {
             None
         };
 
+        let preflight_handle = if self.opts.remote_cache_disabled_reason.is_none() {
+            if let (Some(client), Some(auth)) = (api_client.clone(), self.api_auth.as_ref()) {
+                let token = auth.token.clone();
+                let team_id = auth.team_id.clone();
+                let team_slug = auth.team_slug.clone();
+                Some(tokio::spawn(async move {
+                    client
+                        .get_caching_status(&token, team_id.as_deref(), team_slug.as_deref())
+                        .await
+                }))
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
         let (analytics_sender, analytics_handle) = self
             .api_auth
             .as_ref()
@@ -443,24 +559,26 @@ impl RunBuilder {
             })
             .unzip();
 
-        let scm_state_task = {
+        let scm_state = LazyScmState::new();
+        {
+            let scm_state = scm_state.clone();
             let scm = scm.clone();
             let repo_root = self.repo_root.clone();
             tokio::task::spawn_blocking(move || {
                 let _span = tracing::info_span!("capture_scm_state").entered();
                 let sha = scm.get_current_sha(&repo_root).ok();
                 let dirty_hash = scm.get_dirty_hash();
-                if sha.is_some() || dirty_hash.is_some() {
+                let state = if sha.is_some() || dirty_hash.is_some() {
                     Some(CacheScmState { sha, dirty_hash })
                 } else {
                     None
-                }
-            })
-        };
+                };
+                scm_state.resolve(state);
+            });
+        }
 
         let async_cache = {
             let _span = tracing::info_span!("async_cache_new").entered();
-            let scm_state = scm_state_task.await.expect("scm state capture panicked");
             AsyncCache::new(
                 &self.opts.cache_opts,
                 &self.repo_root,
@@ -584,9 +702,7 @@ impl RunBuilder {
             )?;
         }
 
-        let should_print_prelude = self
-            .should_print_prelude_override
-            .unwrap_or_else(|| self.will_execute_tasks());
+        let remote_cache_status = self.resolve_remote_cache_status(preflight_handle).await;
 
         let run_cache = Arc::new(RunCache::new(
             async_cache,
@@ -651,7 +767,7 @@ impl RunBuilder {
                 engine: Arc::new(engine),
                 run_cache,
                 signal_handler: signal_handler.clone(),
-                should_print_prelude,
+                remote_cache_status,
                 micro_frontend_configs,
                 repo_index,
                 observability_handle,
@@ -717,7 +833,7 @@ impl RunBuilder {
                     "SCM returned invalid change set; skipping task-level filtering"
                 );
                 turborepo_log::warn(
-                    turborepo_log::Source::turbo("scm"),
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
                     "--affected could not determine changed files. All tasks will run. Check your \
                      git fetch depth.",
                 )

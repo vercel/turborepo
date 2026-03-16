@@ -91,6 +91,16 @@ pub fn restore_terminal_on_panic() -> bool {
 
     let _ = stdout.flush();
 
+    // Discard any stale mouse events from stdin before re-enabling echo.
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        let _ = nix::sys::termios::tcflush(
+            std::io::stdin().as_raw_fd(),
+            nix::sys::termios::FlushArg::TCIFLUSH,
+        );
+    }
+
     // Disable raw mode - this is the one crossterm call we make, but it's
     // relatively safe as it just makes a tcsetattr syscall
     let _ = crossterm::terminal::disable_raw_mode();

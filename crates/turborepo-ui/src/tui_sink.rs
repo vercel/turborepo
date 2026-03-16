@@ -70,7 +70,11 @@ mod tests {
     use crate::tui::event::Event;
 
     fn make_event(msg: &str) -> LogEvent {
-        LogEvent::new(Level::Warn, Source::turbo("test"), msg)
+        LogEvent::new(
+            Level::Warn,
+            Source::turbo(turborepo_log::Subsystem::Cache),
+            msg,
+        )
     }
 
     fn make_tui_sender() -> (TuiSender, mpsc::UnboundedReceiver<Event>) {

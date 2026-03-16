@@ -24,6 +24,24 @@ use crate::{
     Args,
 };
 
+/// Why remote caching was disabled by local configuration.
+/// Determined during opts resolution — no network call required.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum RemoteCacheDisabledReason {
+    /// User never opted in: no token, no team.
+    NotLinked,
+    /// TURBO_TOKEN env var is set but no team is configured.
+    /// The token gets effectively ignored because `is_linked` returns false.
+    TokenWithoutTeam,
+    /// `remoteCache.enabled: false` in turbo.json.
+    InConfig,
+    /// `TURBO_REMOTE_CACHE_ENABLED=0` env var.
+    InEnvVar,
+    /// CLI flags (e.g. `--cache=local:rw`, or `--no-cache` + `--force`)
+    /// disabled both remote read and write.
+    ByFlags,
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Expected `run` command.")]
@@ -68,6 +86,9 @@ pub struct Opts {
     /// Pre-resolved git root from worktree detection, if available.
     /// Allows `SCM::new` to skip its own `git rev-parse` subprocess.
     pub git_root: Option<AbsoluteSystemPathBuf>,
+    /// If remote caching is disabled, this captures the reason.
+    /// `None` means remote caching is enabled (by local config).
+    pub remote_cache_disabled_reason: Option<RemoteCacheDisabledReason>,
 }
 
 impl Opts {
@@ -183,6 +204,38 @@ impl Opts {
         let future_flags = config.future_flags();
         let experimental_observability = config.experimental_observability().cloned();
 
+        let remote_cache_disabled_reason = if !cache_opts.cache.remote.should_use() {
+            let is_linked = turborepo_api_client::is_linked(&api_auth);
+            if !is_linked {
+                let has_token_env = std::env::var("TURBO_TOKEN")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+                    .is_some();
+                if has_token_env {
+                    Some(RemoteCacheDisabledReason::TokenWithoutTeam)
+                } else {
+                    Some(RemoteCacheDisabledReason::NotLinked)
+                }
+            } else if config.enabled == Some(false) {
+                let disabled_by_env = std::env::var("TURBO_REMOTE_CACHE_ENABLED")
+                    .ok()
+                    .filter(|v| v == "0")
+                    .is_some();
+                if disabled_by_env {
+                    Some(RemoteCacheDisabledReason::InEnvVar)
+                } else {
+                    Some(RemoteCacheDisabledReason::InConfig)
+                }
+            } else {
+                // Linked and enabled in config, but remote cache is still disabled.
+                // This means CLI flags (--no-cache + --force, or --cache=local:rw)
+                // disabled both remote read and write.
+                Some(RemoteCacheDisabledReason::ByFlags)
+            }
+        } else {
+            None
+        };
+
         Ok(Self {
             repo_opts,
             run_opts,
@@ -194,6 +247,7 @@ impl Opts {
             future_flags,
             git_root: cache_dir_result.git_root,
             experimental_observability,
+            remote_cache_disabled_reason,
         })
     }
 }
@@ -736,6 +790,7 @@ mod test {
             future_flags: Default::default(),
             experimental_observability: None,
             git_root: None,
+            remote_cache_disabled_reason: None,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);

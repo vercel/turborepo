@@ -452,6 +452,66 @@ fn test_affected_tasks_filter_by_task_name() {
 }
 
 #[test]
+fn test_affected_tasks_excludes_packages_without_script() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected_tasks_fixture(tempdir.path());
+
+    // Change a file in lib-no-test (which has build + typecheck but NOT test)
+    fs::write(
+        tempdir.path().join("packages/lib-no-test/index.ts"),
+        "export const changed = true;",
+    )
+    .unwrap();
+
+    // affectedTasks(tasks: ["test"]) should NOT include lib-no-test
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { affectedTasks(tasks: [\"test\"]) { items { name package { name } } } }",
+        ],
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    for item in items {
+        assert_ne!(
+            item["package"]["name"], "lib-no-test",
+            "lib-no-test has no test script and should not appear in affectedTasks(tasks: \
+             [\"test\"])"
+        );
+    }
+
+    // affectedTasks (no filter) should also not include phantom test task for
+    // lib-no-test
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "query { affectedTasks { items { name package { name } } } }",
+        ],
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    let phantom_test = items
+        .iter()
+        .any(|item| item["package"]["name"] == "lib-no-test" && item["name"] == "test");
+    assert!(
+        !phantom_test,
+        "lib-no-test#test should not appear — no test script in package.json"
+    );
+
+    // But lib-no-test's real tasks (build, typecheck) SHOULD still appear
+    let has_build = items
+        .iter()
+        .any(|item| item["package"]["name"] == "lib-no-test" && item["name"] == "build");
+    let has_typecheck = items
+        .iter()
+        .any(|item| item["package"]["name"] == "lib-no-test" && item["name"] == "typecheck");
+    assert!(has_build, "lib-no-test#build should be affected");
+    assert!(has_typecheck, "lib-no-test#typecheck should be affected");
+}
+
+#[test]
 fn test_affected_tasks_test_file_excluded_from_typecheck() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_affected_tasks_fixture(tempdir.path());

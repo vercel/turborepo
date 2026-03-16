@@ -30,7 +30,11 @@ pub mod signature_authentication;
 mod test_cases;
 mod upload_progress;
 
-use std::{backtrace, backtrace::Backtrace};
+use std::{
+    backtrace,
+    backtrace::Backtrace,
+    sync::{Arc, OnceLock},
+};
 
 pub use async_cache::AsyncCache;
 use camino::Utf8PathBuf;
@@ -111,9 +115,6 @@ impl From<turborepo_api_client::Error> for CacheError {
 /// can be traced back to the commit (and working-tree state) that
 /// produced them.
 ///
-/// Because this is a snapshot from run start, it may become stale for
-/// tasks that execute later in a long-running build.
-///
 /// Currently only written to the local filesystem cache's `-meta.json`
 /// sidecar. Remote cache entries do not include SCM state.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -124,6 +125,46 @@ pub struct CacheScmState {
     /// and untracked files). `None` when the working tree is clean or
     /// when git is unavailable.
     pub dirty_hash: Option<String>,
+}
+
+/// SCM state that is computed in the background and resolved lazily.
+///
+/// Git operations (rev-parse, status, diff) are spawned at run start but
+/// the cache no longer blocks on them. `get()` returns the resolved state
+/// if the background work has finished, or `None` if it hasn't yet. This
+/// keeps git subprocesses off the critical startup path.
+#[derive(Debug, Clone)]
+pub struct LazyScmState(Arc<OnceLock<Option<CacheScmState>>>);
+
+impl LazyScmState {
+    pub fn new() -> Self {
+        Self(Arc::new(OnceLock::new()))
+    }
+
+    /// Create an already-resolved instance (useful in tests).
+    pub fn resolved(state: Option<CacheScmState>) -> Self {
+        let lock = OnceLock::new();
+        let _ = lock.set(state);
+        Self(Arc::new(lock))
+    }
+
+    /// Set the resolved value. No-op if already set.
+    pub fn resolve(&self, state: Option<CacheScmState>) {
+        let _ = self.0.set(state);
+    }
+
+    /// Returns the SCM state if the background computation has finished
+    /// and produced a value. Returns `None` if still pending or if git
+    /// was unavailable.
+    pub fn get(&self) -> Option<&CacheScmState> {
+        self.0.get().and_then(|s| s.as_ref())
+    }
+}
+
+impl Default for LazyScmState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Copy)]

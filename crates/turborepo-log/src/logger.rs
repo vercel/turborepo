@@ -133,9 +133,9 @@ enum LoggerRef {
 /// permanently bound to their logger.
 ///
 /// ```no_run
-/// use turborepo_log::{log, Source};
+/// use turborepo_log::{log, Source, Subsystem};
 ///
-/// let handle = log(Source::turbo("config"));
+/// let handle = log(Source::turbo(Subsystem::Cache));
 /// handle.warn("'daemon' config option is deprecated").emit();
 /// handle.warn("deprecated field").field("name", "daemon").emit();
 /// ```
@@ -218,13 +218,13 @@ enum LogResolver<'a> {
 ///
 /// ```
 /// use std::sync::Arc;
-/// use turborepo_log::{Logger, Source};
+/// use turborepo_log::{Logger, Source, Subsystem};
 /// use turborepo_log::sinks::collector::CollectorSink;
 ///
 /// let collector = Arc::new(CollectorSink::new());
 /// let logger = Arc::new(Logger::new(vec![Box::new(collector.clone())]));
 ///
-/// logger.handle(Source::turbo("cache"))
+/// logger.handle(Source::turbo(Subsystem::Cache))
 ///     .warn("cache miss")
 ///     .field("task", "web#build")
 ///     .field("hash", "abc123")
@@ -316,13 +316,13 @@ mod tests {
     use std::sync::Arc;
 
     use super::*;
-    use crate::sinks::collector::CollectorSink;
+    use crate::{Subsystem, sinks::collector::CollectorSink};
 
     #[test]
     fn logger_dispatches_to_sinks() {
         let (collector, logger) = CollectorSink::with_logger();
 
-        let event = LogEvent::new(Level::Warn, Source::turbo("test"), "test warning");
+        let event = LogEvent::new(Level::Warn, Source::turbo(Subsystem::Cache), "test warning");
         logger.emit(&event);
 
         let events = collector.events();
@@ -337,7 +337,7 @@ mod tests {
         let c2 = Arc::new(CollectorSink::new());
         let logger = Logger::new(vec![Box::new(c1.clone()), Box::new(c2.clone())]);
 
-        let event = LogEvent::new(Level::Error, Source::turbo("test"), "broadcast");
+        let event = LogEvent::new(Level::Error, Source::turbo(Subsystem::Cache), "broadcast");
         logger.emit(&event);
 
         assert_eq!(c1.events().len(), 1);
@@ -349,7 +349,7 @@ mod tests {
     fn log_handle_emits_via_builder() {
         let (collector, logger) = CollectorSink::with_logger();
 
-        let handle = logger.handle(Source::turbo("config"));
+        let handle = logger.handle(Source::turbo(Subsystem::Cache));
         handle
             .warn("deprecated field")
             .field("name", "daemon")
@@ -367,7 +367,7 @@ mod tests {
     fn builder_without_emit_does_not_dispatch() {
         let (collector, logger) = CollectorSink::with_logger();
 
-        let handle = logger.handle(Source::turbo("test"));
+        let handle = logger.handle(Source::turbo(Subsystem::Cache));
         let _builder = handle.warn("should not appear");
         drop(_builder);
         assert_eq!(collector.events().len(), 0);
@@ -378,7 +378,7 @@ mod tests {
         let (collector, logger) = CollectorSink::with_logger();
 
         logger
-            .handle(Source::turbo("cache"))
+            .handle(Source::turbo(Subsystem::Cache))
             .warn("cache miss")
             .field("hash", "abc123")
             .field("task", "web#build")
@@ -394,7 +394,7 @@ mod tests {
     #[test]
     fn logger_with_no_sinks_does_not_panic() {
         let logger = Logger::new(vec![]);
-        let event = LogEvent::new(Level::Warn, Source::turbo("test"), "ignored");
+        let event = LogEvent::new(Level::Warn, Source::turbo(Subsystem::Cache), "ignored");
         logger.emit(&event);
         logger.flush();
     }
@@ -403,7 +403,7 @@ mod tests {
     fn log_event_with_fields() {
         let (collector, logger) = CollectorSink::with_logger();
 
-        let mut event = LogEvent::new(Level::Warn, Source::turbo("cache"), "cache miss");
+        let mut event = LogEvent::new(Level::Warn, Source::turbo(Subsystem::Cache), "cache miss");
         event.fields.push(("hash", Value::from("abc123")));
         event.fields.push(("task", Value::from("web#build")));
         logger.emit(&event);
@@ -419,7 +419,7 @@ mod tests {
     fn log_handle_all_levels() {
         let (collector, logger) = CollectorSink::with_logger();
 
-        let handle = logger.handle(Source::turbo("test"));
+        let handle = logger.handle(Source::turbo(Subsystem::Cache));
         handle.info("info msg").emit();
         handle.warn("warn msg").emit();
         handle.error("error msg").emit();
@@ -440,7 +440,7 @@ mod tests {
     #[test]
     fn cloned_handle_emits_to_same_sinks() {
         let (collector, logger) = CollectorSink::with_logger();
-        let handle = logger.handle(Source::turbo("test"));
+        let handle = logger.handle(Source::turbo(Subsystem::Cache));
         let cloned = handle.clone();
 
         handle.warn("from original").emit();
@@ -469,7 +469,7 @@ mod tests {
         let sink = WarnAndAbove(inner.clone());
         let logger = Arc::new(Logger::new(vec![Box::new(sink)]));
 
-        let handle = logger.handle(Source::turbo("test"));
+        let handle = logger.handle(Source::turbo(Subsystem::Cache));
         handle.info("should be filtered").emit();
         handle.warn("should pass").emit();
         handle.error("should pass").emit();
@@ -504,7 +504,7 @@ mod tests {
             Box::new(errors_only),
         ]));
 
-        let handle = logger.handle(Source::turbo("test"));
+        let handle = logger.handle(Source::turbo(Subsystem::Cache));
         handle.info("info").emit();
         handle.warn("warn").emit();
         handle.error("error").emit();

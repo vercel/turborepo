@@ -31,7 +31,7 @@
 //!
 //! ```no_run
 //! use std::sync::Arc;
-//! use turborepo_log::{init, log, Logger, Source};
+//! use turborepo_log::{init, log, Logger, Source, Subsystem};
 //! use turborepo_log::sinks::collector::CollectorSink;
 //!
 //! // Initialize the global logger (once, at startup).
@@ -39,7 +39,7 @@
 //! init(Logger::new(vec![Box::new(collector.clone())])).ok();
 //!
 //! // Create a source-scoped handle and emit events.
-//! let handle = log(Source::turbo("config"));
+//! let handle = log(Source::turbo(Subsystem::Cache));
 //! handle.warn("'daemon' config option is deprecated").emit();
 //!
 //! // With structured fields:
@@ -66,7 +66,7 @@
 //!
 //! let (collector, logger) = CollectorSink::with_logger();
 //!
-//! let handle = logger.handle(Source::turbo("test"));
+//! let handle = logger.handle(Source::turbo(Subsystem::Cache));
 //! handle.warn("test warning").emit();
 //!
 //! assert_eq!(collector.events().len(), 1);
@@ -94,7 +94,7 @@ mod logger;
 mod sink;
 pub mod sinks;
 
-pub use event::{Level, LogEvent, SanitizedString, Scalar, Source, Value};
+pub use event::{Level, LogEvent, SanitizedString, Scalar, Source, Subsystem, Value};
 pub use logger::{
     InitError, LogEventBuilder, LogHandle, Logger, error, flush, info, init, log, warn,
 };

@@ -9,7 +9,7 @@ use tokio::{
     sync::{broadcast, mpsc, oneshot, watch},
     task::JoinHandle,
 };
-use tracing::log::trace;
+use tracing::trace;
 
 pub struct Walker<N, S> {
     marker: std::marker::PhantomData<S>,

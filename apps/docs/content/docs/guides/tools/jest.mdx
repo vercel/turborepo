@@ -198,3 +198,15 @@ turbo test:watch
 </Tab>
 
 </Tabs>
+
+## Using with the VS Code Jest extension
+
+The [Jest extension for VS Code](https://github.com/jest-community/vscode-jest) parses JSON output from Jest to discover and display tests. By default, Turborepo prepends a `<package>:<task>:` prefix to log lines, which breaks the extension's ability to parse this output.
+
+To fix this, use the [`--log-prefix=none`](/docs/reference/run#--log-prefix-option) flag in your VS Code settings:
+
+```json title=".vscode/settings.json"
+{
+  "jest.jestCommandLine": "turbo run test --log-prefix=none --"
+}
+```

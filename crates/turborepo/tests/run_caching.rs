@@ -169,7 +169,10 @@ fn test_remote_caching_enable() {
         ],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Remote caching enabled"));
+    // Config enables remote caching, but the preflight check may report
+    // "unavailable" because the test uses fake credentials.
+    // The key assertion is that it's NOT "disabled" (a local config state).
+    assert!(!stdout.contains("Remote caching disabled"));
 
     // Add empty remoteCache → still enabled
     let mut json: serde_json::Value = serde_json::from_str(&normalized).unwrap();
@@ -198,7 +201,7 @@ fn test_remote_caching_enable() {
         ],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Remote caching enabled"));
+    assert!(!stdout.contains("Remote caching disabled"));
 
     // Set remoteCache.enabled = false → disabled
     let mut json: serde_json::Value = serde_json::from_str(&new_normalized).unwrap();
@@ -222,7 +225,7 @@ fn test_remote_caching_enable() {
         ],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Remote caching disabled"));
+    assert!(stdout.contains("Remote caching disabled (in configuration)"));
 }
 
 // --- cache-state.t ---

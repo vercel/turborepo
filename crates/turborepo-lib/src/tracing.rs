@@ -1,4 +1,9 @@
-use std::{io::Stderr, marker::PhantomData, path::Path, sync::Mutex};
+use std::{
+    io::{self, Write},
+    marker::PhantomData,
+    path::Path,
+    sync::{Arc, Mutex},
+};
 
 use chrono::Local;
 use owo_colors::{
@@ -26,22 +31,108 @@ use turborepo_ui::ColorConfig;
 
 // a lot of types to make sure we record the right relationships
 
-/// Note that we cannot express the type of `std::io::stderr` directly, so
-/// use zero-size wrapper to call the function.
-struct StdErrWrapper {}
+/// Where the tracing stderr layer directs output.
+#[derive(Clone)]
+enum WriterTarget {
+    Stderr,
+    File(Arc<Mutex<Box<dyn Write + Send>>>),
+    Null,
+}
 
-impl<'a> MakeWriter<'a> for StdErrWrapper {
-    type Writer = Stderr;
+/// A switchable writer for the tracing stderr layer.
+///
+/// Starts writing to stderr. When the TUI is active, the target can be
+/// switched to a file (with `--verbosity`) or suppressed entirely so
+/// that tracing output doesn't corrupt the alternate screen.
+#[derive(Clone)]
+pub struct SwitchableWriter {
+    target: Arc<Mutex<WriterTarget>>,
+}
+
+/// The concrete writer returned by [`SwitchableWriter::make_writer`].
+pub struct SwitchableOutput {
+    target: WriterTarget,
+}
+
+impl Write for SwitchableOutput {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match &self.target {
+            WriterTarget::Stderr => io::stderr().write(buf),
+            WriterTarget::File(f) => f.lock().unwrap().write(buf),
+            WriterTarget::Null => Ok(buf.len()),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match &self.target {
+            WriterTarget::Stderr => io::stderr().flush(),
+            WriterTarget::File(f) => f.lock().unwrap().flush(),
+            WriterTarget::Null => Ok(()),
+        }
+    }
+}
+
+impl SwitchableWriter {
+    fn new() -> Self {
+        Self {
+            target: Arc::new(Mutex::new(WriterTarget::Stderr)),
+        }
+    }
+
+    fn handle(&self) -> SwitchableWriterHandle {
+        SwitchableWriterHandle {
+            target: self.target.clone(),
+            redirect_path: Arc::new(Mutex::new(None)),
+        }
+    }
+}
+
+impl<'a> MakeWriter<'a> for SwitchableWriter {
+    type Writer = SwitchableOutput;
 
     fn make_writer(&'a self) -> Self::Writer {
-        std::io::stderr()
+        SwitchableOutput {
+            target: self.target.lock().unwrap().clone(),
+        }
+    }
+}
+
+/// Handle for switching the tracing stderr writer at runtime.
+/// Stored on [`TurboSubscriber`] and exposed via its methods.
+#[derive(Clone)]
+pub struct SwitchableWriterHandle {
+    target: Arc<Mutex<WriterTarget>>,
+    redirect_path: Arc<Mutex<Option<String>>>,
+}
+
+impl SwitchableWriterHandle {
+    pub fn is_stderr(&self) -> bool {
+        matches!(*self.target.lock().unwrap(), WriterTarget::Stderr)
+    }
+
+    pub fn suppress(&self) {
+        *self.target.lock().unwrap() = WriterTarget::Null;
+    }
+
+    pub fn redirect_to_file(&self, writer: Box<dyn Write + Send>, path: String) {
+        *self.target.lock().unwrap() = WriterTarget::File(Arc::new(Mutex::new(writer)));
+        *self.redirect_path.lock().unwrap() = Some(path);
+    }
+
+    pub fn redirect_path(&self) -> Option<String> {
+        self.redirect_path.lock().unwrap().clone()
+    }
+
+    pub fn restore(&self) {
+        *self.target.lock().unwrap() = WriterTarget::Stderr;
+        *self.redirect_path.lock().unwrap() = None;
     }
 }
 
 /// A basic logger that logs to stderr using the TurboFormatter.
 /// The first generic parameter refers to the previous layer, which
 /// is in this case the default layer (`Registry`).
-type StdErrLog = fmt::Layer<Registry, DefaultFields, TurboFormatter, StdErrWrapper>;
+type StdErrLog = fmt::Layer<Registry, DefaultFields, TurboFormatter, SwitchableWriter>;
 /// We filter this using an EnvFilter.
 type StdErrLogFiltered = Filtered<StdErrLog, EnvFilter, Registry>;
 /// When the `StdErrLogFiltered` is applied to the `Registry`, we get a
@@ -71,6 +162,8 @@ type ChromeReload = reload::Layer<Option<ChromeLog>, DaemonLogLayered>;
 type ChromeLogLayered = layer::Layered<ChromeReload, DaemonLogLayered>;
 
 pub struct TurboSubscriber {
+    stderr_handle: SwitchableWriterHandle,
+
     daemon_update: Handle<Option<DaemonLog>, StdErrLogLayered>,
 
     /// The non-blocking file logger only continues to log while this guard is
@@ -129,10 +222,14 @@ impl TurboSubscriber {
             }
         };
 
+        let switchable = SwitchableWriter::new();
+        let stderr_handle = switchable.handle();
+
         let stderr = fmt::layer()
-            .with_writer(StdErrWrapper {})
-            .event_format(TurboFormatter::new_with_ansi(
+            .with_writer(switchable)
+            .event_format(TurboFormatter::new(
                 !color_config.should_strip_ansi,
+                stderr_handle.clone(),
             ))
             .with_filter(env_filter(LevelFilter::WARN));
 
@@ -157,6 +254,7 @@ impl TurboSubscriber {
         registry.init();
 
         Self {
+            stderr_handle,
             daemon_update,
             daemon_guard: Mutex::new(None),
             chrome_update,
@@ -165,6 +263,40 @@ impl TurboSubscriber {
             #[cfg(feature = "pprof")]
             pprof_guard,
         }
+    }
+
+    /// Suppress the tracing stderr layer. Used when the TUI is active
+    /// and verbosity is off — tracing output is silently dropped.
+    pub fn suppress_stderr(&self) {
+        self.stderr_handle.suppress();
+    }
+
+    /// Redirect the tracing stderr layer to a file. Used when the TUI
+    /// is active but verbosity is on — tracing output goes to a file
+    /// instead of corrupting the alternate screen.
+    ///
+    /// The file is written to `<repo_root>/.turbo/debug-logs/`.
+    /// Returns the path to the log file.
+    pub fn redirect_stderr_to_file(&self, repo_root: &Path) -> io::Result<String> {
+        let timestamp = chrono::Local::now().format("%Y%m%d-%H%M%S");
+        let dir = repo_root.join(".turbo").join("debug-logs");
+        std::fs::create_dir_all(&dir)?;
+        let path = dir.join(format!("turbo-{timestamp}.log"));
+        let file = std::fs::File::create(&path)?;
+        let path_str = path.to_string_lossy().into_owned();
+        self.stderr_handle
+            .redirect_to_file(Box::new(std::io::BufWriter::new(file)), path_str.clone());
+        Ok(path_str)
+    }
+
+    /// Returns the path to the current redirect file, if active.
+    pub fn stderr_redirect_path(&self) -> Option<String> {
+        self.stderr_handle.redirect_path()
+    }
+
+    /// Restore the tracing stderr layer to write to stderr.
+    pub fn restore_stderr(&self) {
+        self.stderr_handle.restore();
     }
 
     /// Enables daemon logging with the specified rotation settings.
@@ -316,12 +448,20 @@ impl Drop for TurboSubscriber {
 /// not print any event metadata other than the message set when you
 /// call `debug!(...)` or `info!(...)` etc.
 pub struct TurboFormatter {
-    is_ansi: bool,
+    default_ansi: bool,
+    writer_handle: SwitchableWriterHandle,
 }
 
 impl TurboFormatter {
-    pub fn new_with_ansi(is_ansi: bool) -> Self {
-        Self { is_ansi }
+    pub fn new(default_ansi: bool, writer_handle: SwitchableWriterHandle) -> Self {
+        Self {
+            default_ansi,
+            writer_handle,
+        }
+    }
+
+    fn is_ansi(&self) -> bool {
+        self.default_ansi && self.writer_handle.is_stderr()
     }
 }
 
@@ -339,18 +479,19 @@ where
         let level = event.metadata().level();
         let target = event.metadata().target();
 
+        let is_ansi = self.is_ansi();
         match *level {
             Level::ERROR => {
                 // The padding spaces are necessary to match the formatting of Go
-                write_string::<Red, Black>(writer.by_ref(), self.is_ansi, " ERROR ")
-                    .and_then(|_| write_message::<Red, Default>(writer, self.is_ansi, event))
+                write_string::<Red, Black>(writer.by_ref(), is_ansi, " ERROR ")
+                    .and_then(|_| write_message::<Red, Default>(writer, is_ansi, event))
             }
             Level::WARN => {
                 // The padding spaces are necessary to match the formatting of Go
-                write_string::<Yellow, Black>(writer.by_ref(), self.is_ansi, " WARNING ")
-                    .and_then(|_| write_message::<Yellow, Default>(writer, self.is_ansi, event))
+                write_string::<Yellow, Black>(writer.by_ref(), is_ansi, " WARNING ")
+                    .and_then(|_| write_message::<Yellow, Default>(writer, is_ansi, event))
             }
-            Level::INFO => write_message::<Default, Default>(writer, self.is_ansi, event),
+            Level::INFO => write_message::<Default, Default>(writer, is_ansi, event),
             // trace and debug use the same style
             _ => {
                 let now = Local::now();
@@ -363,7 +504,7 @@ where
                     level,
                     target,
                 )
-                .and_then(|_| write_message::<Default, Default>(writer, self.is_ansi, event))
+                .and_then(|_| write_message::<Default, Default>(writer, is_ansi, event))
             }
         }
     }
@@ -420,4 +561,206 @@ fn write_message<FG: Color, BG: Color>(
     };
     event.record(&mut visitor);
     writeln!(writer)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io::{Cursor, Write},
+        sync::{Arc, Mutex},
+    };
+
+    use super::*;
+
+    #[test]
+    fn switchable_writer_starts_as_stderr() {
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+        assert!(handle.is_stderr());
+        assert!(handle.redirect_path().is_none());
+    }
+
+    #[test]
+    fn suppress_switches_to_null() {
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+
+        handle.suppress();
+
+        assert!(!handle.is_stderr());
+        assert!(handle.redirect_path().is_none());
+    }
+
+    #[test]
+    fn suppress_drops_writes() {
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+        handle.suppress();
+
+        let mut output = writer.make_writer();
+        let result = output.write(b"should be dropped");
+        assert_eq!(result.unwrap(), 17);
+        // No panic, no error — bytes are silently consumed.
+    }
+
+    #[test]
+    fn redirect_to_file_captures_writes() {
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+
+        let buffer = Arc::new(Mutex::new(Cursor::new(Vec::new())));
+        handle.redirect_to_file(
+            Box::new(CursorWriter(buffer.clone())),
+            "/fake/path.log".to_string(),
+        );
+
+        assert!(!handle.is_stderr());
+        assert_eq!(handle.redirect_path().unwrap(), "/fake/path.log");
+
+        let mut output = writer.make_writer();
+        output.write_all(b"hello file").unwrap();
+        output.flush().unwrap();
+
+        let content = buffer.lock().unwrap().get_ref().clone();
+        assert_eq!(content, b"hello file");
+    }
+
+    #[test]
+    fn restore_returns_to_stderr() {
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+
+        handle.suppress();
+        assert!(!handle.is_stderr());
+
+        handle.restore();
+        assert!(handle.is_stderr());
+        assert!(handle.redirect_path().is_none());
+    }
+
+    #[test]
+    fn restore_clears_redirect_path() {
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+
+        let buffer = Arc::new(Mutex::new(Cursor::new(Vec::new())));
+        handle.redirect_to_file(Box::new(CursorWriter(buffer)), "/some/path.log".to_string());
+        assert!(handle.redirect_path().is_some());
+
+        handle.restore();
+        assert!(handle.redirect_path().is_none());
+    }
+
+    #[test]
+    fn handle_clone_shares_state() {
+        let writer = SwitchableWriter::new();
+        let handle1 = writer.handle();
+        let handle2 = handle1.clone();
+
+        handle1.suppress();
+        assert!(!handle2.is_stderr());
+
+        handle2.restore();
+        assert!(handle1.is_stderr());
+    }
+
+    #[test]
+    fn formatter_reports_ansi_only_when_stderr() {
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+
+        let formatter = TurboFormatter::new(true, handle.clone());
+        assert!(formatter.is_ansi());
+
+        handle.suppress();
+        assert!(!formatter.is_ansi());
+
+        handle.restore();
+        assert!(formatter.is_ansi());
+    }
+
+    #[test]
+    fn formatter_respects_default_ansi_false() {
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+
+        let formatter = TurboFormatter::new(false, handle);
+        // Even on stderr, if default_ansi is false, no ANSI.
+        assert!(!formatter.is_ansi());
+    }
+
+    #[test]
+    fn formatter_no_ansi_when_redirected_to_file() {
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+
+        let formatter = TurboFormatter::new(true, handle.clone());
+        assert!(formatter.is_ansi());
+
+        let buffer = Arc::new(Mutex::new(Cursor::new(Vec::new())));
+        handle.redirect_to_file(Box::new(CursorWriter(buffer)), "/tmp/test.log".to_string());
+        assert!(!formatter.is_ansi());
+    }
+
+    #[test]
+    fn redirect_to_file_then_write_then_read_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let log_path = tmp.path().join("test.log");
+
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+
+        let file = std::fs::File::create(&log_path).unwrap();
+        handle.redirect_to_file(
+            Box::new(std::io::BufWriter::new(file)),
+            log_path.to_string_lossy().into_owned(),
+        );
+
+        let mut output = writer.make_writer();
+        output.write_all(b"line one\nline two\n").unwrap();
+        output.flush().unwrap();
+        // Drop to flush BufWriter
+        drop(output);
+        // Switch away so the file Arc is released
+        handle.restore();
+
+        let content = std::fs::read_to_string(&log_path).unwrap();
+        assert_eq!(content, "line one\nline two\n");
+    }
+
+    #[test]
+    fn switching_targets_mid_stream() {
+        let writer = SwitchableWriter::new();
+        let handle = writer.handle();
+
+        let buf1 = Arc::new(Mutex::new(Cursor::new(Vec::new())));
+        let buf2 = Arc::new(Mutex::new(Cursor::new(Vec::new())));
+
+        // Start redirected to buf1
+        handle.redirect_to_file(Box::new(CursorWriter(buf1.clone())), "buf1".to_string());
+        writer.make_writer().write_all(b"to buf1").unwrap();
+
+        // Switch to buf2
+        handle.redirect_to_file(Box::new(CursorWriter(buf2.clone())), "buf2".to_string());
+        writer.make_writer().write_all(b"to buf2").unwrap();
+
+        // Suppress
+        handle.suppress();
+        writer.make_writer().write_all(b"dropped").unwrap();
+
+        assert_eq!(buf1.lock().unwrap().get_ref().as_slice(), b"to buf1");
+        assert_eq!(buf2.lock().unwrap().get_ref().as_slice(), b"to buf2");
+    }
+
+    // Wrapper to make Arc<Mutex<Cursor>> implement Write.
+    struct CursorWriter(Arc<Mutex<Cursor<Vec<u8>>>>);
+
+    impl Write for CursorWriter {
+        fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+            self.0.lock().unwrap().write(buf)
+        }
+        fn flush(&mut self) -> io::Result<()> {
+            self.0.lock().unwrap().flush()
+        }
+    }
 }

@@ -537,3 +537,138 @@ fn test_full_cache_hit_output() {
     assert!(stdout.contains("2 cached, 2 total"));
     assert!(stdout.contains("FULL TURBO"));
 }
+
+// --- run-prelude.t ---
+// The run prelude (packages in scope, tasks, remote cache status) must appear
+// on stdout in stream mode but stay off stdout in structured output modes
+// (--graph, --dry=json) where stdout carries machine-readable data.
+
+#[test]
+fn test_prelude_appears_in_stream_mode() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--output-logs=none"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains("Packages in scope"),
+        "prelude should list packages in scope on stdout"
+    );
+    assert!(
+        stdout.contains("Running build in"),
+        "prelude should show running tasks on stdout"
+    );
+    assert!(
+        stdout.contains("Remote caching"),
+        "prelude should show remote cache status on stdout"
+    );
+}
+
+#[test]
+fn test_prelude_absent_from_graph_stdout() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "task_dependencies/topological",
+        "npm@10.5.0",
+        true,
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["build", "--graph"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains("digraph {"),
+        "stdout should contain DOT graph"
+    );
+    assert!(
+        !stdout.contains("Packages in scope"),
+        "prelude must not appear on stdout in --graph mode"
+    );
+    assert!(
+        !stdout.contains("Remote caching"),
+        "remote cache status must not appear on stdout in --graph mode"
+    );
+}
+
+#[test]
+fn test_prelude_absent_from_dry_json_stdout() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--dry=json"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // stdout must be valid JSON — no prelude text mixed in.
+    let parsed: Result<serde_json::Value, _> = serde_json::from_str(&stdout);
+    assert!(
+        parsed.is_ok(),
+        "stdout should be valid JSON, got parse error: {:?}\nstdout: {}",
+        parsed.err(),
+        &stdout[..stdout.len().min(200)]
+    );
+    assert!(
+        !stdout.contains("Packages in scope"),
+        "prelude must not appear on stdout in --dry=json mode"
+    );
+}
+
+#[test]
+fn test_prelude_appears_in_dry_text_mode() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--dry"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains("Packages in scope"),
+        "prelude should appear on stdout in --dry text mode"
+    );
+    assert!(
+        stdout.contains("Remote caching"),
+        "remote cache status should appear in --dry text mode"
+    );
+}
+
+#[test]
+fn test_prelude_single_package_format() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", true).unwrap();
+
+    let output = run_turbo(tempdir.path(), &["run", "build", "--output-logs=none"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    assert!(
+        stdout.contains("Running build"),
+        "single-package prelude should show 'Running <task>'"
+    );
+    assert!(
+        !stdout.contains("Packages in scope"),
+        "single-package prelude must not show 'Packages in scope'"
+    );
+}
+
+#[test]
+fn test_github_actions_error_annotation_on_stderr() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "ordered", "npm@10.5.0", true).unwrap();
+
+    let output = run_turbo_with_env(tempdir.path(), &["run", "fail"], &[("GITHUB_ACTIONS", "1")]);
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    assert!(
+        stderr.contains("::error::"),
+        "stderr should contain ::error:: annotation for GitHub Actions, got: {}",
+        &stderr[..stderr.len().min(500)]
+    );
+}
