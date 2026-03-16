@@ -71,6 +71,19 @@ pub trait LogSink: Send + Sync + 'static {
     /// Default: no-op.
     fn end_task_group(&self, _task: &str, _is_error: bool) {}
 
+    /// Register a task with this sink.
+    ///
+    /// Called before a task starts producing output. Sinks that need
+    /// per-task render state (e.g., colored prefixes, line buffers)
+    /// should initialize it here.
+    ///
+    /// `task` is the task identifier used in `task_output()` calls.
+    /// `prefix` is the display prefix for terminal rendering
+    /// (e.g., `"my-app:build"` — the sink appends `": "`).
+    ///
+    /// Default: no-op.
+    fn register_task(&self, _task: &str, _prefix: &str) {}
+
     /// Flush any buffered output. Called during graceful shutdown.
     fn flush(&self) {}
 
@@ -97,6 +110,10 @@ impl<T: LogSink> LogSink for Arc<T> {
 
     fn end_task_group(&self, task: &str, is_error: bool) {
         (**self).end_task_group(task, is_error)
+    }
+
+    fn register_task(&self, task: &str, prefix: &str) {
+        (**self).register_task(task, prefix)
     }
 
     fn flush(&self) {

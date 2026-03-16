@@ -473,7 +473,12 @@ impl<'a> Visitor<'a> {
                         continue;
                     };
 
-                    let task_handle = self.grouping_layer.task(info.to_string());
+                    let task_id_str = info.to_string();
+                    let task_prefix = self.prefix(&info);
+                    let task_handle = self.grouping_layer.task(task_id_str.clone());
+                    self.grouping_layer
+                        .logger()
+                        .register_task(&task_id_str, &task_prefix);
                     let tracker = self.run_tracker.track_task(info.into_owned());
                     let parent_span = Span::current();
 

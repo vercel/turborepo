@@ -498,42 +498,36 @@ where
             process.stdin();
         }
 
-        // Create output writer and pipe outputs
-        let mut stdout_writer = self
-            .task_cache
-            .output_writer(prefixed_ui.task_writer())
-            .inspect_err(|_| {
+        // Create output writer and pipe outputs.
+        // The stdout_writer is scoped so that TaskHandleWriter drops before
+        // the error handling section, which needs &mut task_handle for emit().
+        let exit_status = {
+            let writer = task_handle.writer(turborepo_log::OutputChannel::Stdout);
+            let mut stdout_writer = self.task_cache.output_writer(writer).inspect_err(|_| {
                 telemetry.track_error(TrackedErrors::FailedToCaptureOutputs);
             })?;
 
-        let exit_status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
-            Ok(Some(exit_status)) => exit_status,
-            Err(e) => {
-                telemetry.track_error(TrackedErrors::FailedToPipeOutputs);
-                return Err(e.into());
+            let status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
+                Ok(Some(exit_status)) => exit_status,
+                Err(e) => {
+                    telemetry.track_error(TrackedErrors::FailedToPipeOutputs);
+                    return Err(e.into());
+                }
+                Ok(None) => {
+                    telemetry.track_error(TrackedErrors::UnknownChildExit);
+                    error!("unable to determine why child exited");
+                    return Err(InternalError::UnknownChildExit);
+                }
+            };
+
+            if let Err(e) = stdout_writer.flush() {
+                error!("error flushing logs: {e}");
             }
-            Ok(None) => {
-                telemetry.track_error(TrackedErrors::UnknownChildExit);
-                error!("unable to determine why child exited");
-                return Err(InternalError::UnknownChildExit);
-            }
+            status
         };
         match exit_status {
-            ChildExit::Finished(Some(0)) => {
-                // Cache save is deferred to execute() so the callback can
-                // fire first, unblocking dependent tasks while the globwalk
-                // and cache write proceed in the background.
-                if let Err(e) = stdout_writer.flush() {
-                    error!("{e}");
-                    Ok(ExecOutcome::Success(SuccessOutcome::RunOutputError))
-                } else {
-                    Ok(ExecOutcome::Success(SuccessOutcome::Run))
-                }
-            }
+            ChildExit::Finished(Some(0)) => Ok(ExecOutcome::Success(SuccessOutcome::Run)),
             ChildExit::Finished(Some(code)) => {
-                if let Err(e) = stdout_writer.flush() {
-                    error!("error flushing logs: {e}");
-                }
                 if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
                     error!("error reading logs: {e}");
                 }
@@ -565,11 +559,6 @@ where
                 })
             }
             ChildExit::Finished(None) | ChildExit::Failed => {
-                // Process exited without a code (e.g., killed by signal) or we failed to get
-                // status. Treat as a task failure with exit code 1.
-                if let Err(e) = stdout_writer.flush() {
-                    error!("error flushing logs: {e}");
-                }
                 if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
                     error!("error reading logs: {e}");
                 }
@@ -591,12 +580,7 @@ where
                 })
             }
             ChildExit::KilledExternal => {
-                // Process was killed by an external signal (e.g., OOM killer sending SIGKILL).
-                // Use exit code 137 (128 + 9) which is the conventional code for SIGKILL.
                 const SIGKILL_EXIT_CODE: i32 = 137;
-                if let Err(e) = stdout_writer.flush() {
-                    error!("error flushing logs: {e}");
-                }
                 if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
                     error!("error reading logs: {e}");
                 }
@@ -635,24 +619,19 @@ where
         task_handle: &mut turborepo_log::grouping::TaskHandle,
         task_id: &str,
         continue_on_error: ContinueMode,
-        message: &str,
+        _message: &str,
     ) {
-        let source = turborepo_log::Source::task(task_id);
-        match continue_on_error {
-            ContinueMode::Never => {
-                task_handle.emit(turborepo_log::LogEvent::new(
-                    turborepo_log::Level::Error,
-                    source,
-                    format!("command finished with error: {message}"),
-                ));
-            }
-            ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
-                task_handle.emit(turborepo_log::LogEvent::new(
-                    turborepo_log::Level::Warn,
-                    source,
-                    "command finished with error, but continuing...",
-                ));
-            }
+        // In strict mode (Never), the run-level error summary already
+        // reports the failure — no need to duplicate it here.
+        if matches!(
+            continue_on_error,
+            ContinueMode::Always | ContinueMode::DependenciesSuccessful
+        ) {
+            task_handle.emit(turborepo_log::LogEvent::new(
+                turborepo_log::Level::Warn,
+                turborepo_log::Source::task(task_id),
+                "command finished with error, but continuing...",
+            ));
         }
     }
 }

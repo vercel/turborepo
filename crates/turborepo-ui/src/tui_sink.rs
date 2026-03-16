@@ -4,6 +4,22 @@ use turborepo_log::{Level, LogEvent, LogSink, OutputChannel, Source};
 
 use crate::tui::TuiSender;
 
+/// Normalize lone `\n` to `\r\n` for the TUI's VT100 terminal emulator.
+///
+/// Already-correct `\r\n` sequences are left as-is.
+fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
+    let mut result = Vec::with_capacity(bytes.len());
+    let mut prev_cr = false;
+    for &b in bytes {
+        if b == b'\n' && !prev_cr {
+            result.push(b'\r');
+        }
+        result.push(b);
+        prev_cr = b == b'\r';
+    }
+    result
+}
+
 /// Format a task-scoped log event as a string for the task output pane.
 ///
 /// Produces output like `ERROR: command finished with error: exit code 1\r\n`
@@ -83,7 +99,9 @@ impl LogSink for TuiSink {
     fn task_output(&self, task: &str, _channel: OutputChannel, bytes: &[u8]) {
         let state = self.state.lock().unwrap();
         if let SinkState::Connected(sender) = &*state {
-            let _ = sender.output(task.to_string(), bytes.to_vec());
+            // Normalize \n to \r\n for the TUI's VT100 terminal emulator.
+            let normalized = normalize_newlines(bytes);
+            let _ = sender.output(task.to_string(), normalized);
         }
     }
 }
