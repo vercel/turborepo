@@ -162,7 +162,7 @@ Run Arguments:
           [possible values: text, json]
 
       --graph [<GRAPH>]
-          Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
+          Generate a graph of the task execution and output to a file when a filename is specified (.svg, .html, .mermaid, .dot). Outputs dot graph to stdout when no filename is provided. [DEPRECATED formats: .png, .jpg, .pdf, .json -- will be removed in 3.0]
 
       --daemon
           [DEPRECATED] The daemon is no longer used for `turbo run`. This flag will be removed in version 3.0

@@ -354,14 +354,23 @@ turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="
 
 Default: `dot`
 
-This command can output a graph file: `svg`, `png`, `jpg`, `pdf`, `json`, `html`, `mermaid`, or `dot`.
+This command can output a graph file: `svg`, `html`, `mermaid`, or `dot`.
 
-If [Graphviz](https://graphviz.org/) is not installed, or no filename is provided, this command prints the dot graph to `stdout`.
+If no filename is provided, this command prints the dot graph to `stdout`.
 
 ```bash title="Terminal"
 turbo run build --graph
 turbo run build test lint --graph=my-graph.svg
 ```
+
+<Callout type="warn" title="Deprecated formats">
+  The `.png`, `.jpg`, `.pdf`, and `.json` output formats for `--graph` are
+  deprecated and will be removed in version 3.0. These formats require an
+  external [Graphviz](https://graphviz.org/) installation.
+
+  Use `.svg`, `.html`, `.mermaid`, or `.dot` instead. For programmatic access to
+  the task graph, use [`turbo query`](/docs/reference/query).
+</Callout>
 
 <Callout type="info">
   **Known Bug**: All possible task nodes will be added to the graph at the
