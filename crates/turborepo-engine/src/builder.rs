@@ -5,6 +5,11 @@
 //! - Resolving task dependencies through the extends chain
 //! - Validating task definitions and dependencies
 //! - Building the final execution engine
+//!
+//! The engine builder is the sole layer that validates the task graph for
+//! cycles and self-dependencies. Package graph cycles are intentionally allowed
+//! — only task graph cycles (e.g. from topological `^` dependencies through a
+//! package cycle) prevent execution.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -430,6 +435,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             }
         }
 
+        // This is the sole cycle/self-dependency check in the pipeline. Package
+        // graph cycles are intentionally allowed; only task graph cycles prevent
+        // execution. See #2559.
         graph::validate_graph(engine.task_graph_mut())?;
 
         Ok(engine.seal())
@@ -4709,6 +4717,194 @@ mod test {
             matches!(result, Err(BuilderError::MissingTasks(_))),
             "expected MissingTasks error for non-existent task with empty workspaces, got: \
              {result:?}"
+        );
+    }
+
+    // --- Cyclic package graph tests (see #2559) ---
+
+    #[test]
+    fn test_cyclic_package_graph_without_task_cycle_succeeds() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "a" => ["b"],
+                "b" => ["a"]
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "lint": {},
+                    "build": { "dependsOn": ["lint"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![PackageName::from("a"), PackageName::from("b")])
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            all_dependencies(&engine),
+            deps! {
+                "a#build" => ["a#lint"],
+                "a#lint" => ["___ROOT___"],
+                "b#build" => ["b#lint"],
+                "b#lint" => ["___ROOT___"]
+            }
+        );
+    }
+
+    #[test]
+    fn test_cyclic_package_graph_with_topo_deps_produces_task_cycle_error() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "a" => ["b"],
+                "b" => ["a"]
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![PackageName::from("a"), PackageName::from("b")])
+            .build();
+
+        assert!(
+            matches!(engine, Err(BuilderError::Graph(..))),
+            "topological deps on cyclic package graph should produce task graph cycle error: \
+             {engine:?}"
+        );
+    }
+
+    #[test]
+    fn test_three_node_cycle_with_topo_deps_produces_task_cycle_error() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "a" => ["b"],
+                "b" => ["c"],
+                "c" => ["a"]
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![
+                PackageName::from("a"),
+                PackageName::from("b"),
+                PackageName::from("c"),
+            ])
+            .build();
+
+        assert!(
+            matches!(engine, Err(BuilderError::Graph(..))),
+            "3-node cycle with topological deps should produce task graph cycle error: {engine:?}"
+        );
+    }
+
+    #[test]
+    fn test_self_dependency_without_topo_deps_succeeds() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "a" => ["a"]
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "lint": {},
+                    "build": { "dependsOn": ["lint"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![PackageName::from("a")])
+            .build()
+            .unwrap();
+
+        assert_eq!(
+            all_dependencies(&engine),
+            deps! {
+                "a#build" => ["a#lint"],
+                "a#lint" => ["___ROOT___"]
+            }
+        );
+    }
+
+    #[test]
+    fn test_self_dependency_with_topo_deps_produces_error() {
+        let repo_root_dir = TempDir::with_prefix("repo").unwrap();
+        let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
+        let package_graph = mock_package_graph(
+            &repo_root,
+            package_jsons! {
+                repo_root,
+                "a" => ["a"]
+            },
+        );
+        let turbo_jsons = vec![(
+            PackageName::Root,
+            turbo_json(json!({
+                "tasks": {
+                    "build": { "dependsOn": ["^build"] },
+                }
+            })),
+        )]
+        .into_iter()
+        .collect();
+        let loader = TestTurboJsonLoader::new(turbo_jsons);
+        let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+            .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+            .with_workspaces(vec![PackageName::from("a")])
+            .build();
+
+        assert!(
+            matches!(engine, Err(BuilderError::Graph(..))),
+            "self-dependency with topological deps should produce task graph error: {engine:?}"
         );
     }
 

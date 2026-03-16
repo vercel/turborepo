@@ -40,3 +40,9 @@ test-group = 'turborepo-dirs-serial'
 filter = 'package(turbo) and test(/^watch_/)'
 test-group = 'turbo-watch-serial'
 slow-timeout = { period = "60s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+# Cyclic package graph tests could deadlock if the validate_graph guard
+# ever regresses, so cap them to prevent 45-min CI hangs.
+filter = 'test(/cyclic/) or test(/cycle/)'
+slow-timeout = { period = "30s", terminate-after = 2 }

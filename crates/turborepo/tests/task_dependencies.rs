@@ -1,5 +1,7 @@
 mod common;
 
+use std::fs;
+
 use common::{run_turbo, setup, turbo_output_filters};
 
 fn setup_task_deps(fixture_suffix: &str) -> tempfile::TempDir {
@@ -210,4 +212,92 @@ fn test_workspace_tasks_special_graph() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     insta::assert_snapshot!("workspace_tasks_special_graph", stdout.to_string());
+}
+
+// === cyclic.t (see #2559) ===
+
+#[test]
+fn test_cyclic_packages_with_topo_deps_errors() {
+    let tempdir = setup_task_deps("cyclic");
+    let output = run_turbo(tempdir.path(), &["run", "build"]);
+    assert!(
+        !output.status.success(),
+        "cyclic packages with ^build should fail"
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+    assert!(
+        combined.contains("Cyclic dependency detected"),
+        "expected cycle error, got:\n{combined}"
+    );
+}
+
+#[test]
+fn test_cyclic_packages_without_topo_deps_succeeds() {
+    let tempdir = setup_task_deps("cyclic");
+    let output = run_turbo(tempdir.path(), &["run", "lint"]);
+    assert!(
+        output.status.success(),
+        "cyclic packages with non-topo task should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("pkg-a:lint") && stdout.contains("pkg-b:lint"),
+        "expected both packages to run lint, got:\n{stdout}"
+    );
+}
+
+#[test]
+fn test_cyclic_packages_filter_scopes_correctly() {
+    let tempdir = setup_task_deps("cyclic");
+    let output = run_turbo(tempdir.path(), &["run", "lint", "--filter=pkg-a"]);
+    assert!(
+        output.status.success(),
+        "--filter on cyclic package should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("pkg-a:lint"),
+        "expected pkg-a:lint to run, got:\n{stdout}"
+    );
+    assert!(
+        !stdout.contains("pkg-b:lint"),
+        "--filter=pkg-a should not run pkg-b:lint, got:\n{stdout}"
+    );
+}
+
+#[test]
+fn test_cyclic_packages_prune_includes_all_cycle_members() {
+    let tempdir = setup_task_deps("cyclic");
+    let output = run_turbo(tempdir.path(), &["prune", "pkg-a"]);
+    assert!(
+        output.status.success(),
+        "prune on cyclic package should succeed, stderr: {}",
+        String::from_utf8_lossy(&output.stderr),
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // transitive_closure includes all reachable cycle members, so pruning
+    // pkg-a in a pkg-a ↔ pkg-b cycle should include both.
+    assert!(
+        stdout.contains("pkg-b"),
+        "prune should include the other cycle member (pkg-b), got:\n{stdout}"
+    );
+
+    // Verify the pruned output directory actually contains both packages.
+    let out_packages = tempdir.path().join("out").join("packages");
+    assert!(
+        out_packages.join("pkg-a").exists() && out_packages.join("pkg-b").exists(),
+        "pruned output should contain both cycle members, entries: {:?}",
+        fs::read_dir(&out_packages)
+            .map(|rd| rd
+                .filter_map(|e| e.ok())
+                .map(|e| e.file_name().to_string_lossy().to_string())
+                .collect::<Vec<_>>())
+            .unwrap_or_default()
+    );
 }

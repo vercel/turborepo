@@ -6,7 +6,6 @@ use tracing::{Instrument, warn};
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
-use turborepo_graph_utils as graph;
 use turborepo_lockfiles::Lockfile;
 
 use super::{
@@ -53,8 +52,6 @@ pub enum Error {
     PackageJson(#[from] crate::package_json::Error),
     #[error("package.json must have a name field:\n{0}")]
     PackageJsonMissingName(AbsoluteSystemPathBuf),
-    #[error("Invalid package dependency graph:")]
-    InvalidPackageGraph(#[source] graph::Error),
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::Error),
     #[error(transparent)]
