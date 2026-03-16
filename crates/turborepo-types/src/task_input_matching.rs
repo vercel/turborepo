@@ -143,12 +143,10 @@ pub fn file_matches_compiled_inputs(
         }
         relative.push_str(file_unix);
 
-        return check_compiled_globs(
-            &relative,
-            &compiled.inclusions,
-            &compiled.exclusions,
-            compiled.default,
-        );
+        // `default` (from $TURBO_DEFAULT$) only covers files *inside* the
+        // package. For traversal paths (files outside the package, typically
+        // from $TURBO_ROOT$), only explicit inclusion globs should match.
+        return check_compiled_globs(&relative, &compiled.inclusions, &compiled.exclusions, false);
     };
 
     check_compiled_globs(
@@ -410,6 +408,42 @@ mod tests {
             "apps/nested/deep/pkg",
             &TaskInputs {
                 globs: vec!["../../../../jest.config.js".to_string()],
+                default: true,
+            },
+            true,
+        );
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/12338
+    ///
+    /// When two tasks both use $TURBO_DEFAULT$ but have different $TURBO_ROOT$
+    /// inputs, changing a root file that only one task references should NOT
+    /// mark the other task as affected. The `default` flag from $TURBO_DEFAULT$
+    /// must not apply to files outside the package directory.
+    #[test]
+    fn turbo_root_default_does_not_match_unrelated_root_file() {
+        // Task "test" declares $TURBO_DEFAULT$ + $TURBO_ROOT$/test-config.txt
+        // (resolved to ../../test-config.txt for packages/lib-a).
+        // Changing build-config.txt at the root should NOT match this task.
+        assert_match(
+            "build-config.txt",
+            "packages/lib-a",
+            &TaskInputs {
+                globs: vec!["../../test-config.txt".to_string()],
+                default: true,
+            },
+            false,
+        );
+    }
+
+    #[test]
+    fn turbo_root_default_matches_declared_root_file() {
+        // Same task shape, but this time the changed file IS the declared input.
+        assert_match(
+            "test-config.txt",
+            "packages/lib-a",
+            &TaskInputs {
+                globs: vec!["../../test-config.txt".to_string()],
                 default: true,
             },
             true,

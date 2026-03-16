@@ -284,4 +284,42 @@ mod tests {
             "lib-a#build should not match a root file with default inputs: {result:?}"
         );
     }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/12338
+    ///
+    /// Two tasks both use $TURBO_DEFAULT$ but reference different $TURBO_ROOT$
+    /// files. Changing only one root file should only affect the task that
+    /// declared it, not the other.
+    #[tokio::test]
+    async fn turbo_root_inputs_are_isolated_between_tasks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let a_test = TaskId::new("lib-a", "test");
+
+        let engine = make_engine(&[
+            (
+                a_build.clone(),
+                def_with_inputs(&["../../build-config.txt"], true),
+            ),
+            (
+                a_test.clone(),
+                def_with_inputs(&["../../test-config.txt"], true),
+            ),
+        ]);
+
+        // Only build-config.txt changes at the root.
+        let result =
+            match_tasks_against_changed_files(&engine, &pkg_graph, &changed(&["build-config.txt"]));
+        assert!(
+            result.contains_key(&a_build),
+            "lib-a#build should match its declared $TURBO_ROOT$ input: {result:?}"
+        );
+        assert!(
+            !result.contains_key(&a_test),
+            "lib-a#test should NOT match a root file it didn't declare: {result:?}"
+        );
+    }
 }

@@ -1100,6 +1100,87 @@ fn test_task_level_affected_turbo_root_input() {
     );
 }
 
+/// Regression test for https://github.com/vercel/turborepo/issues/12338
+///
+/// Two tasks both use $TURBO_DEFAULT$ but declare different $TURBO_ROOT$ files.
+/// Changing only one root file should mark only the task that declared it as
+/// affected, not the other. Previously, $TURBO_DEFAULT$ (which sets
+/// `default: true`) incorrectly matched ALL root-level files when the task
+/// had any traversal glob, causing cross-task contamination.
+#[test]
+fn test_task_level_affected_different_turbo_root_inputs_are_isolated() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+
+    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", true).unwrap();
+
+    // Create two distinct root-level config files.
+    fs::write(dir.join("build-config.txt"), "v1").unwrap();
+    fs::write(dir.join("test-config.txt"), "v1").unwrap();
+
+    // build references $TURBO_ROOT$/build-config.txt,
+    // test references $TURBO_ROOT$/test-config.txt.
+    let turbo_json = r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/build-config.txt"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/test-config.txt"]
+    }
+  },
+  "futureFlags": {
+    "affectedUsingTaskInputs": true
+  }
+}"#;
+    fs::write(dir.join("turbo.json"), turbo_json).unwrap();
+
+    git(dir, &["add", "."]);
+    git(dir, &["commit", "-m", "setup", "--quiet"]);
+    git(dir, &["checkout", "-b", "my-branch"]);
+
+    // Change ONLY build-config.txt. No package source files change.
+    fs::write(dir.join("build-config.txt"), "v2").unwrap();
+
+    let output = run_turbo(dir, &["run", "build", "test", "--affected", "--dry=json"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
+
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    let task_ids: Vec<&str> = tasks
+        .iter()
+        .map(|t| t["taskId"].as_str().unwrap())
+        .collect();
+
+    // build tasks should be affected (they declared build-config.txt).
+    assert!(
+        task_ids.contains(&"lib-a#build"),
+        "lib-a#build should be affected by its $TURBO_ROOT$ input: {task_ids:?}"
+    );
+    assert!(
+        task_ids.contains(&"app-a#build"),
+        "app-a#build should be affected by its $TURBO_ROOT$ input: {task_ids:?}"
+    );
+
+    // lib-a#test declared $TURBO_ROOT$/test-config.txt, NOT build-config.txt,
+    // and lib-a has no package dependencies so ^build adds nothing. It should
+    // NOT be affected.
+    assert!(
+        !task_ids.contains(&"lib-a#test"),
+        "lib-a#test should NOT be affected (its root input didn't change): {task_ids:?}"
+    );
+
+    // app-a#test IS correctly affected: it depends on lib-a#build via ^build,
+    // and lib-a#build is directly affected. That's transitive propagation,
+    // not the input-matching bug.
+}
+
 #[test]
 fn test_affected_with_nonexistent_task_errors() {
     let tempdir = tempfile::tempdir().unwrap();
