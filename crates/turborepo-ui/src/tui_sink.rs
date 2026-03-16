@@ -1,8 +1,22 @@
 use std::sync::Mutex;
 
-use turborepo_log::{LogEvent, LogSink, OutputChannel};
+use turborepo_log::{Level, LogEvent, LogSink, OutputChannel, Source};
 
 use crate::tui::TuiSender;
+
+/// Format a task-scoped log event as a string for the task output pane.
+///
+/// Produces output like `ERROR: command finished with error: exit code 1\r\n`
+/// that will be rendered by the TUI's VT100 parser in the task pane.
+fn format_task_event(event: &LogEvent) -> String {
+    let badge = match event.level() {
+        Level::Error => "ERROR: ",
+        Level::Warn => "WARNING: ",
+        Level::Info => "",
+        _ => "",
+    };
+    format!("{badge}{}\r\n", event.message())
+}
 
 /// Routes [`LogEvent`]s into the TUI's event channel.
 ///
@@ -53,7 +67,15 @@ impl LogSink for TuiSink {
         match &mut *state {
             SinkState::Buffering(buffer) => buffer.push(event.clone()),
             SinkState::Connected(sender) => {
-                sender.log_event(event.clone());
+                // Task-scoped events go to the task's output pane so
+                // they appear inline with the task's process output.
+                // Non-task events go to the global log panel.
+                if let Source::Task(id) = event.source() {
+                    let formatted = format_task_event(event);
+                    let _ = sender.output(id.to_string(), formatted.into_bytes());
+                } else {
+                    sender.log_event(event.clone());
+                }
             }
         }
     }

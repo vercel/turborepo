@@ -19,7 +19,7 @@ use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{EnvironmentVariableMap, platform::PlatformEnv};
 use turborepo_process::{ChildExit, Command, ProcessManager};
-use turborepo_run_cache::{CacheOutput, TaskCache};
+use turborepo_run_cache::TaskCache;
 use turborepo_run_summary::TaskTracker;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{TrackedErrors, task::PackageTaskEventBuilder};
@@ -268,6 +268,7 @@ where
         parent_span_id: Option<tracing::Id>,
         tracker: TaskTracker<()>,
         output_client: TaskOutput<O>,
+        mut task_handle: turborepo_log::grouping::TaskHandle,
         callback: oneshot::Sender<Result<(), StopExecution>>,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<(), InternalError> {
@@ -277,7 +278,7 @@ where
         span.follows_from(parent_span_id);
 
         let mut result = self
-            .execute_inner(&output_client, telemetry)
+            .execute_inner(&output_client, &mut task_handle, telemetry)
             .instrument(span)
             .await;
         let task_duration = task_start.elapsed();
@@ -291,6 +292,10 @@ where
             error!("unable to flush output client: {e}");
             result = Err(InternalError::Io(e));
         }
+        // Flush any structured events buffered by the grouping layer.
+        // This must happen after output_client.finish() so the grouped
+        // block includes both child process output and structured events.
+        task_handle.finish(is_error);
 
         // Send the callback as early as possible after output is flushed.
         // For cache hits, this unblocks dependent tasks before the tracker
@@ -394,6 +399,7 @@ where
     async fn execute_inner<O: Write>(
         &mut self,
         output_client: &TaskOutput<O>,
+        task_handle: &mut turborepo_log::grouping::TaskHandle,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
         let mut prefixed_ui = self.prefixed_ui(output_client);
@@ -433,7 +439,11 @@ where
             Ok(None) => (),
             Err(e) => {
                 telemetry.track_error(TrackedErrors::ErrorFetchingFromCache);
-                prefixed_ui.error(&format!("error fetching from cache: {e}"));
+                task_handle.emit(turborepo_log::LogEvent::new(
+                    turborepo_log::Level::Error,
+                    turborepo_log::Source::task(&self.task_id_for_display),
+                    format!("error fetching from cache: {e}"),
+                ));
             }
         }
 
@@ -446,7 +456,11 @@ where
             {
                 Some(Ok(child)) => child,
                 Some(Err(e)) => {
-                    prefixed_ui.error(&format!("command finished with error: {e}"));
+                    task_handle.emit(turborepo_log::LogEvent::new(
+                        turborepo_log::Level::Error,
+                        turborepo_log::Source::task(&self.task_id_for_display),
+                        format!("command finished with error: {e}"),
+                    ));
                     let error_string = e.to_string();
                     self.errors
                         .push_spawn_error(self.task_id_for_display.clone(), e);
@@ -534,14 +548,12 @@ where
                 } else {
                     format!("command {} exited ({})", process.label(), code)
                 };
-                match self.continue_on_error {
-                    ContinueMode::Never => {
-                        prefixed_ui.error(&format!("command finished with error: {}", message))
-                    }
-                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
-                        prefixed_ui.warn("command finished with error, but continuing...")
-                    }
-                }
+                Self::emit_task_error(
+                    task_handle,
+                    &self.task_id_for_display,
+                    self.continue_on_error,
+                    &message,
+                );
                 self.errors.push_execution_error(
                     self.task_id_for_display.clone(),
                     process.label().to_string(),
@@ -562,14 +574,12 @@ where
                     error!("error reading logs: {e}");
                 }
                 let message = format!("command {} exited unexpectedly", process.label());
-                match self.continue_on_error {
-                    ContinueMode::Never => {
-                        prefixed_ui.error(&format!("command finished with error: {}", message))
-                    }
-                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
-                        prefixed_ui.warn("command finished with error, but continuing...")
-                    }
-                }
+                Self::emit_task_error(
+                    task_handle,
+                    &self.task_id_for_display,
+                    self.continue_on_error,
+                    &message,
+                );
                 self.errors.push_execution_error(
                     self.task_id_for_display.clone(),
                     process.label().to_string(),
@@ -595,14 +605,12 @@ where
                     process.label(),
                     SIGKILL_EXIT_CODE
                 );
-                match self.continue_on_error {
-                    ContinueMode::Never => {
-                        prefixed_ui.error(&format!("command finished with error: {}", message))
-                    }
-                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
-                        prefixed_ui.warn("command finished with error, but continuing...")
-                    }
-                }
+                Self::emit_task_error(
+                    task_handle,
+                    &self.task_id_for_display,
+                    self.continue_on_error,
+                    &message,
+                );
                 self.errors.push_execution_error(
                     self.task_id_for_display.clone(),
                     process.label().to_string(),
@@ -619,6 +627,31 @@ where
                 } else {
                     Ok(ExecOutcome::Restarted)
                 }
+            }
+        }
+    }
+
+    fn emit_task_error(
+        task_handle: &mut turborepo_log::grouping::TaskHandle,
+        task_id: &str,
+        continue_on_error: ContinueMode,
+        message: &str,
+    ) {
+        let source = turborepo_log::Source::task(task_id);
+        match continue_on_error {
+            ContinueMode::Never => {
+                task_handle.emit(turborepo_log::LogEvent::new(
+                    turborepo_log::Level::Error,
+                    source,
+                    format!("command finished with error: {message}"),
+                ));
+            }
+            ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
+                task_handle.emit(turborepo_log::LogEvent::new(
+                    turborepo_log::Level::Warn,
+                    source,
+                    "command finished with error, but continuing...",
+                ));
             }
         }
     }

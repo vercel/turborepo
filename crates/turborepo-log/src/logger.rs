@@ -123,6 +123,13 @@ pub fn init(logger: Logger) -> Result<(), InitError> {
     GLOBAL_LOGGER.set(Arc::new(logger)).map_err(|_| InitError)
 }
 
+/// Get a reference to the global logger, if initialized.
+///
+/// Returns `None` if [`init`] has not been called yet.
+pub fn global_logger() -> Option<Arc<Logger>> {
+    GLOBAL_LOGGER.get().cloned()
+}
+
 /// Flush all sinks on the global logger. Call during graceful shutdown.
 pub fn flush() {
     if let Some(logger) = GLOBAL_LOGGER.get() {
