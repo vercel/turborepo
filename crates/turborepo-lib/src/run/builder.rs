@@ -663,15 +663,33 @@ impl RunBuilder {
             )?
         };
 
+        let use_task_level_affected = self.opts.scope_opts.affected_range.is_some()
+            && self.opts.future_flags.affected_using_task_inputs;
+
+        // When task-level affected filtering is active, the engine must
+        // contain tasks for ALL packages so that $TURBO_ROOT$ inputs in
+        // packages not flagged by the package-level scope resolution are
+        // still matched. The task-level filter (below) does the pruning.
+        let all_pkgs: Vec<PackageName> = if use_task_level_affected {
+            pkg_dep_graph
+                .packages()
+                .map(|(name, _)| name.clone())
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if use_task_level_affected {
+            Box::new(all_pkgs.iter())
+        } else {
+            Box::new(filtered_pkgs.keys())
+        };
+
         let mut engine = self.build_engine(
             &pkg_dep_graph,
             &root_turbo_json,
-            filtered_pkgs.keys(),
+            engine_pkgs,
             &turbo_json_loader,
         )?;
-
-        let use_task_level_affected = self.opts.scope_opts.affected_range.is_some()
-            && self.opts.future_flags.affected_using_task_inputs;
 
         let task_access = {
             let _span = tracing::info_span!("task_access_setup").entered();
@@ -685,10 +703,15 @@ impl RunBuilder {
         // rather than on both engines to avoid a redundant SCM query.
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
+            let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if use_task_level_affected {
+                Box::new(all_pkgs.iter())
+            } else {
+                Box::new(filtered_pkgs.keys())
+            };
             engine = self.build_engine(
                 &pkg_dep_graph,
                 &root_turbo_json,
-                filtered_pkgs.keys(),
+                engine_pkgs,
                 &turbo_json_loader,
             )?;
         }
