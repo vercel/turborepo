@@ -1,24 +1,42 @@
 use std::{
+    collections::HashMap,
     io::{self, Write},
-    sync::atomic::{AtomicU8, Ordering},
+    sync::{
+        Mutex,
+        atomic::{AtomicU8, Ordering},
+    },
 };
 
 use turborepo_log::{Level, LogEvent, LogSink, OutputChannel, Source};
 
-use crate::ColorConfig;
+use crate::{ColorConfig, ColorSelector};
 
 const MODE_DISABLED: u8 = 0;
 const MODE_STDERR_ONLY: u8 = 1;
 const MODE_ACTIVE: u8 = 2;
 
-/// Routes [`LogEvent`]s to the appropriate file descriptor with color
-/// styling:
+/// Per-task rendering state held by `TerminalSink`.
+struct TaskRenderState {
+    /// Pre-formatted ANSI-colored prefix (e.g., "\x1b[36mmy-app:build:
+    /// \x1b[0m").
+    prefix: String,
+    /// Partial line buffer — bytes accumulate until `\n` before being written
+    /// with the prefix prepended.
+    line_buffer: Vec<u8>,
+}
+
+/// Routes [`LogEvent`]s and task output to the appropriate file
+/// descriptor with color styling:
 ///
 /// | Level | Destination | Style |
 /// |-------|-------------|-------|
 /// | Info  | stdout      | grey, no badge |
 /// | Warn  | stderr      | yellow, `WARNING` badge |
 /// | Error | stderr      | red, `ERROR` badge |
+///
+/// Task output bytes are rendered with a per-task colored prefix.
+/// Call [`register_task`](LogSink::register_task) before a task
+/// starts producing output so the sink can assign a color.
 ///
 /// Operates in three modes controlled by an [`AtomicU8`]:
 ///
@@ -33,6 +51,9 @@ pub struct TerminalSink {
     color_config: ColorConfig,
     mode: AtomicU8,
     ci_annotations: bool,
+    color_selector: ColorSelector,
+    tasks: Mutex<HashMap<String, TaskRenderState>>,
+    include_timestamps: bool,
 }
 
 impl TerminalSink {
@@ -46,7 +67,16 @@ impl TerminalSink {
             color_config,
             mode: AtomicU8::new(MODE_ACTIVE),
             ci_annotations,
+            color_selector: ColorSelector::default(),
+            tasks: Mutex::new(HashMap::new()),
+            include_timestamps: false,
         }
+    }
+
+    /// Enable timestamp prefixes on task output lines.
+    pub fn with_timestamps(mut self, include: bool) -> Self {
+        self.include_timestamps = include;
+        self
     }
 
     /// Suppress all output. Called before the TUI takes ownership of
@@ -66,6 +96,67 @@ impl TerminalSink {
     /// carries machine-readable data.
     pub fn suppress_stdout(&self) {
         self.mode.store(MODE_STDERR_ONLY, Ordering::Relaxed);
+    }
+
+    /// Generate the current prefix string for a task, optionally with
+    /// timestamp.
+    fn task_prefix(&self, base_prefix: &str) -> String {
+        if self.include_timestamps {
+            let timestamp = chrono::Local::now().format("%H:%M:%S%.3f");
+            let grey_timestamp = self
+                .color_config
+                .apply(crate::GREY.apply_to(format!("[{timestamp}]")));
+            format!("{grey_timestamp} {base_prefix}")
+        } else {
+            base_prefix.to_string()
+        }
+    }
+
+    /// Write task output bytes to stdout with per-line prefix.
+    ///
+    /// Buffers partial lines. On each complete line (ending with `\n`),
+    /// writes `prefix + line` to stdout. Handles `\r` for progress
+    /// bars by rewriting the prefix at the start of the line.
+    fn write_task_output(&self, task: &str, bytes: &[u8]) {
+        let mut tasks = self.tasks.lock().unwrap();
+        let Some(state) = tasks.get_mut(task) else {
+            // Task not registered — write raw bytes as fallback
+            let stdout = io::stdout();
+            let mut handle = stdout.lock();
+            let _ = handle.write_all(bytes);
+            return;
+        };
+
+        let stdout = io::stdout();
+        let mut handle = stdout.lock();
+
+        // Split on newlines. For each complete line, write prefix + line.
+        for line in bytes.split_inclusive(|c| *c == b'\n') {
+            if line.ends_with(b"\n") {
+                if state.line_buffer.is_empty() {
+                    self.write_prefixed_line(&mut handle, &state.prefix, line);
+                } else {
+                    state.line_buffer.extend_from_slice(line);
+                    let buffered = std::mem::take(&mut state.line_buffer);
+                    self.write_prefixed_line(&mut handle, &state.prefix, &buffered);
+                }
+            } else {
+                state.line_buffer.extend_from_slice(line);
+            }
+        }
+    }
+
+    /// Write a complete line with per-chunk prefix handling for `\r`.
+    fn write_prefixed_line(&self, handle: &mut io::StdoutLock<'_>, base_prefix: &str, line: &[u8]) {
+        let mut is_first = true;
+        for chunk in line.split_inclusive(|c| *c == b'\r') {
+            if is_first || chunk != b"\n" {
+                let prefix = self.task_prefix(base_prefix);
+                let _ = handle.write_all(prefix.as_bytes());
+            }
+            let _ = handle.write_all(chunk);
+            is_first = false;
+        }
     }
 }
 
@@ -107,15 +198,21 @@ impl LogSink for TerminalSink {
         }
     }
 
-    fn task_output(&self, _task: &str, channel: OutputChannel, bytes: &[u8]) {
+    fn task_output(&self, task: &str, _channel: OutputChannel, bytes: &[u8]) {
         if self.mode.load(Ordering::Relaxed) == MODE_DISABLED {
             return;
         }
-        let mut handle: Box<dyn Write> = match channel {
-            OutputChannel::Stdout => Box::new(io::stdout().lock()),
-            OutputChannel::Stderr => Box::new(io::stderr().lock()),
-        };
-        let _ = handle.write_all(bytes);
+        self.write_task_output(task, bytes);
+    }
+
+    fn register_task(&self, task: &str, prefix: &str) {
+        let styled = self.color_selector.prefix_with_color(task, prefix);
+        let formatted = self.color_config.apply(styled).to_string();
+        let mut tasks = self.tasks.lock().unwrap();
+        tasks.entry(task.to_string()).or_insert(TaskRenderState {
+            prefix: formatted,
+            line_buffer: Vec::with_capacity(512),
+        });
     }
 
     fn begin_task_group(&self, task: &str, is_error: bool) {

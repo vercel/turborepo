@@ -47,6 +47,11 @@ impl GroupingLayer {
         })
     }
 
+    /// Get a reference to the underlying logger.
+    pub fn logger(&self) -> &Logger {
+        &self.logger
+    }
+
     /// Create a [`TaskHandle`] for a task.
     ///
     /// In passthrough mode the handle forwards directly to the logger.
@@ -155,6 +160,36 @@ impl TaskHandle {
             self.layer.logger.end_task_group(&self.task_id, is_error);
         }
         self.accumulated_bytes
+    }
+
+    /// Create a writer that forwards to [`task_output`](Self::task_output).
+    ///
+    /// The returned writer implements [`std::io::Write`], making it
+    /// compatible with the child process output pipeline. Dropping
+    /// the writer releases the mutable borrow on the `TaskHandle`.
+    pub fn writer(&mut self, channel: OutputChannel) -> TaskHandleWriter<'_> {
+        TaskHandleWriter {
+            task_handle: self,
+            channel,
+        }
+    }
+}
+
+/// Adapter that implements [`std::io::Write`] by forwarding to
+/// [`TaskHandle::task_output`].
+pub struct TaskHandleWriter<'a> {
+    task_handle: &'a mut TaskHandle,
+    channel: OutputChannel,
+}
+
+impl std::io::Write for TaskHandleWriter<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.task_handle.task_output(self.channel, buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 

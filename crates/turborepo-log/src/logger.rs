@@ -78,6 +78,13 @@ impl Logger {
         }
     }
 
+    /// Register a task with all sinks.
+    pub fn register_task(&self, task: &str, prefix: &str) {
+        for sink in &self.sinks {
+            sink.register_task(task, prefix);
+        }
+    }
+
     /// Flush all sinks. Call during graceful shutdown.
     pub fn flush(&self) {
         for sink in &self.sinks {
