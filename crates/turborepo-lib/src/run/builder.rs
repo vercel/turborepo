@@ -488,10 +488,11 @@ impl RunBuilder {
         repo_telemetry.track_size(pkg_dep_graph.len());
         run_telemetry.track_run_type(self.opts.run_opts.dry_run.is_some());
 
-        // Build the repo index using parallel git subprocesses for the tracked
-        // index (ls-tree + diff-index) and a race between walk_candidate_files
-        // and git ls-files for untracked discovery. The race ensures optimal
-        // performance: the walk wins on macOS, ls-files wins on Linux.
+        // Build the repo index by reading .git/index directly via gix-index
+        // (fast, in-process, no subprocess spawns) then running a scoped
+        // parallel walk for untracked file discovery. This replaces the
+        // subprocess approach (ls-tree + diff-index + ls-files race) which
+        // burned ~500ms of CPU on background threads.
         let all_prefixes = Self::all_package_prefixes(&pkg_dep_graph);
         let scm = scm_task
             .instrument(tracing::info_span!("scm_task_await"))
@@ -502,8 +503,12 @@ impl RunBuilder {
         } else {
             let scm = scm.clone();
             Some(tokio::task::spawn_blocking(move || {
-                let _span = tracing::info_span!("build_repo_index_subprocesses").entered();
-                scm.build_repo_index_from_subprocesses(&all_prefixes)
+                let _span = tracing::info_span!("build_repo_index_gix").entered();
+                let mut index = scm.build_tracked_repo_index_eager()?;
+                if let Err(e) = scm.populate_repo_index_untracked(&mut index, &all_prefixes) {
+                    tracing::debug!("failed to populate untracked files: {e}");
+                }
+                Some(index)
             }))
         };
         let micro_frontend_configs = {
