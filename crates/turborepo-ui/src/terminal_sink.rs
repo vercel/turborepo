@@ -170,7 +170,7 @@ mod tests {
             Box::new(collector.clone()),
         ]));
 
-        let handle = logger.handle(Source::turbo("test"));
+        let handle = logger.handle(Source::turbo(turborepo_log::Subsystem::Cache));
         handle.info("test info").emit();
         handle.warn("test warning").emit();
         handle.error("test error").field("code", 1).emit();
@@ -229,7 +229,7 @@ mod tests {
             Box::new(collector.clone()),
         ]));
 
-        let handle = logger.handle(Source::turbo("test"));
+        let handle = logger.handle(Source::turbo(turborepo_log::Subsystem::Cache));
         handle.warn("before disable").emit();
 
         sink.disable();

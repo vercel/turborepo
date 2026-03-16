@@ -567,7 +567,7 @@ impl<'a> Visitor<'a> {
         if let Ok(warnings) = self.warnings.lock() {
             if !warnings.is_empty() {
                 turborepo_log::warn(
-                    turborepo_log::Source::turbo("run"),
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                     "finished with warnings",
                 )
                 .emit();

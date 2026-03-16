@@ -91,7 +91,9 @@ impl AsyncCache {
                                             std::sync::atomic::Ordering::Release,
                                         );
                                         turborepo_log::warn(
-                                            turborepo_log::Source::turbo("cache"),
+                                            turborepo_log::Source::turbo(
+                                                turborepo_log::Subsystem::Cache,
+                                            ),
                                             format!("{err}"),
                                         )
                                         .emit();

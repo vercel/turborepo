@@ -30,7 +30,7 @@ impl<W: Write> LogWriter<W> {
     pub fn with_log_file(&mut self, log_file_path: &AbsoluteSystemPath) -> Result<(), Error> {
         log_file_path.ensure_dir().map_err(|err| {
             turborepo_log::warn(
-                turborepo_log::Source::turbo("logs"),
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Logs),
                 format!("error creating log file directory: {err:?}"),
             )
             .emit();
@@ -39,7 +39,7 @@ impl<W: Write> LogWriter<W> {
 
         let log_file = log_file_path.create().map_err(|err| {
             turborepo_log::warn(
-                turborepo_log::Source::turbo("logs"),
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Logs),
                 format!("error creating log file: {err:?}"),
             )
             .emit();
@@ -98,7 +98,7 @@ pub fn replay_logs<W: Write>(
 
     let log_file = File::open(log_file_name).map_err(|err| {
         turborepo_log::warn(
-            turborepo_log::Source::turbo("logs"),
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Logs),
             format!("error opening log file: {err:?}"),
         )
         .emit();
@@ -141,7 +141,7 @@ pub fn replay_logs_with_crlf<W: Write>(
 
     let log_file = File::open(log_file_name).map_err(|err| {
         turborepo_log::warn(
-            turborepo_log::Source::turbo("logs"),
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Logs),
             format!("error opening log file: {err:?}"),
         )
         .emit();

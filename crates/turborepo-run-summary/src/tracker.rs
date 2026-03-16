@@ -414,7 +414,7 @@ impl<'a> RunSummary<'a> {
             && let Err(err) = self.save().await
         {
             turborepo_log::warn(
-                turborepo_log::Source::turbo("summary"),
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
                 format!("Error writing run summary: {err}"),
             )
             .emit()
@@ -436,7 +436,11 @@ impl<'a> RunSummary<'a> {
         }
 
         for error in errors {
-            turborepo_log::warn(turborepo_log::Source::turbo("summary"), format!("{error}")).emit();
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                format!("{error}"),
+            )
+            .emit();
         }
     }
 

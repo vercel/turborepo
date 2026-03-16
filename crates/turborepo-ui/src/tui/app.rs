@@ -2602,7 +2602,7 @@ mod test {
 
         let event = turborepo_log::LogEvent::new(
             turborepo_log::Level::Warn,
-            turborepo_log::Source::turbo("scm"),
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
             "something went wrong",
         );
         update(&mut app, Event::LogEvent(event))?;

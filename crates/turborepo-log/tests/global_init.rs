@@ -6,7 +6,7 @@
 
 use std::sync::Arc;
 
-use turborepo_log::{Logger, Source, flush, init, log, sinks::collector::CollectorSink};
+use turborepo_log::{Logger, Source, Subsystem, flush, init, log, sinks::collector::CollectorSink};
 
 #[test]
 fn full_lifecycle() {
@@ -14,7 +14,7 @@ fn full_lifecycle() {
 
     // Handle created before init — the global logger isn't set yet,
     // so events emitted RIGHT NOW are dropped.
-    let early_handle = log(Source::turbo("early"));
+    let early_handle = log(Source::turbo(Subsystem::Cache));
     early_handle.warn("before init").emit();
     assert_eq!(collector.events().len(), 0);
 
@@ -23,13 +23,13 @@ fn full_lifecycle() {
     let early_builder = early_handle.warn("built before init");
 
     // Free function builder created before init — also defers.
-    let early_free = turborepo_log::warn(Source::turbo("free"), "free before init");
+    let early_free = turborepo_log::warn(Source::turbo(Subsystem::Cache), "free before init");
 
     // Initialize the global logger.
     assert!(init(Logger::new(vec![Box::new(collector.clone())])).is_ok());
 
     // Handle created after init works immediately.
-    let handle = log(Source::turbo("test"));
+    let handle = log(Source::turbo(Subsystem::Cache));
     handle.warn("test warning").field("key", "value").emit();
     assert_eq!(collector.events().len(), 1);
     assert_eq!(collector.events()[0].message(), "test warning");
@@ -54,12 +54,12 @@ fn full_lifecycle() {
     assert!(result.is_err());
 
     // Free functions work.
-    turborepo_log::warn(Source::turbo("free"), "free warning").emit();
+    turborepo_log::warn(Source::turbo(Subsystem::Cache), "free warning").emit();
     assert_eq!(collector.events().len(), 5);
 
     // All levels work.
-    turborepo_log::info(Source::turbo("free"), "info").emit();
-    turborepo_log::error(Source::turbo("free"), "error").emit();
+    turborepo_log::info(Source::turbo(Subsystem::Cache), "info").emit();
+    turborepo_log::error(Source::turbo(Subsystem::Cache), "error").emit();
     assert_eq!(collector.events().len(), 7);
 
     // Flush doesn't panic.

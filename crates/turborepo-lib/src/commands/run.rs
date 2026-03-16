@@ -26,7 +26,11 @@ pub async fn run(
     sinks.init_logger();
 
     if let Ok(message) = env::var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) {
-        turborepo_log::warn(turborepo_log::Source::turbo("shim"), message).emit();
+        turborepo_log::warn(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Shim),
+            message,
+        )
+        .emit();
         unsafe { env::remove_var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) };
     }
 
@@ -80,7 +84,7 @@ pub async fn run(
             sinks.tui.connect(tui_sender.clone());
             if let Some(path) = subscriber.stderr_redirect_path() {
                 turborepo_log::info(
-                    turborepo_log::Source::turbo("tracing"),
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Tracing),
                     format!("Verbose logs redirected to {path}"),
                 )
                 .emit();

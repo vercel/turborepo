@@ -107,7 +107,7 @@ impl TaskAccessTraceFile {
         // network
         if self.accessed.network {
             turborepo_log::warn(
-                turborepo_log::Source::turbo("task-access"),
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
                 "skipping automatic task caching - detected network access",
             )
             .emit();
@@ -122,7 +122,7 @@ impl TaskAccessTraceFile {
                     // only paths within the repo can be automatically cached
                     if relation == PathRelation::Parent || relation == PathRelation::Divergent {
                         turborepo_log::warn(
-                            turborepo_log::Source::turbo("task-access"),
+                            turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
                             format!(
                                 "skipping automatic task caching - file accessed outside of repo \
                                  root ({unescaped_str})"
@@ -164,7 +164,7 @@ impl TaskAccess {
                 Ok(_) => debug!("Automatically added .turbo to .gitignore"),
                 Err(e) => {
                     turborepo_log::error(
-                        turborepo_log::Source::turbo("task-access"),
+                        turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
                         format!(
                             "Failed to add .turbo to .gitignore. Caching will be disabled - {e}"
                         ),
@@ -231,7 +231,7 @@ impl TaskAccess {
             }
             Err(e) => {
                 turborepo_log::error(
-                    turborepo_log::Source::turbo("task-access"),
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
                     format!("Failed to save trace result - {e}"),
                 )
                 .emit();
@@ -249,7 +249,7 @@ impl TaskAccess {
             Ok(_) => (),
             Err(e) => {
                 turborepo_log::error(
-                    turborepo_log::Source::turbo("task-access"),
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::TaskAccess),
                     format!("Failed to write task access trace file - {e}"),
                 )
                 .emit();
