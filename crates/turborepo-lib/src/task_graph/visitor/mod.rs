@@ -21,6 +21,7 @@ use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_engine::{TaskError, TaskWarning};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
+use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker};
@@ -51,6 +52,7 @@ pub struct Visitor<'a> {
     color_cache: ColorSelector,
     dry: bool,
     global_env_mode: EnvMode,
+    grouping_layer: Arc<GroupingLayer>,
     manager: ProcessManager,
     run_opts: &'a RunOpts,
     package_graph: Arc<PackageGraph>,
@@ -138,7 +140,7 @@ impl<'a> Visitor<'a> {
         is_watch: bool,
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     ) -> Self {
-        let (task_hasher, sink, color_cache) = {
+        let (task_hasher, sink, color_cache, grouping_layer) = {
             let _span = tracing::info_span!("visitor_new").entered();
             let mut task_hasher = TaskHasher::new(
                 package_inputs_hashes,
@@ -155,7 +157,16 @@ impl<'a> Visitor<'a> {
 
             let sink = Self::sink(run_opts);
             let color_cache = ColorSelector::default();
-            (task_hasher, sink, color_cache)
+
+            let grouping_mode = match run_opts.log_order {
+                ResolvedLogOrder::Stream => GroupingMode::Passthrough,
+                ResolvedLogOrder::Grouped => GroupingMode::Grouped,
+            };
+            let logger = turborepo_log::global_logger()
+                .unwrap_or_else(|| Arc::new(turborepo_log::Logger::new(vec![])));
+            let grouping_layer = GroupingLayer::new(logger, grouping_mode);
+
+            (task_hasher, sink, color_cache, grouping_layer)
         };
 
         // Set up correct size for underlying pty (requires .await, so outside span)
@@ -173,6 +184,7 @@ impl<'a> Visitor<'a> {
             color_cache,
             dry: false,
             global_env_mode: run_opts.env_mode,
+            grouping_layer,
             manager,
             run_opts,
             package_graph,
@@ -461,6 +473,7 @@ impl<'a> Visitor<'a> {
                         continue;
                     };
 
+                    let task_handle = self.grouping_layer.task(info.to_string());
                     let tracker = self.run_tracker.track_task(info.into_owned());
                     let parent_span = Span::current();
 
@@ -470,6 +483,7 @@ impl<'a> Visitor<'a> {
                                 parent_span.id(),
                                 tracker,
                                 output_client,
+                                task_handle,
                                 callback,
                                 &execution_telemetry,
                             )
