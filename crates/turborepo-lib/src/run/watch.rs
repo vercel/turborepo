@@ -302,6 +302,11 @@ impl WatchClient {
 
         let watched_packages = run.get_relevant_packages();
 
+        // Emit the prelude while TerminalSink is still active so it
+        // lands in the main terminal buffer (survives TUI alternate-
+        // screen). TuiSink buffers these events and flushes on connect().
+        run.emit_run_prelude_logs();
+
         sinks.disable_for_tui();
 
         let (ui_sender, ui_handle) = run.start_ui()?.unzip();
@@ -323,8 +328,6 @@ impl WatchClient {
                 subscriber.restore_stderr();
             }
         }
-
-        run.emit_run_prelude_logs();
 
         Ok(Self {
             base,

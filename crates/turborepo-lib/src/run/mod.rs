@@ -108,16 +108,11 @@ impl Run {
         self.engine.has_non_interruptible_tasks
     }
     /// Emit run prelude through `turborepo_log`. In stream mode,
-    /// `StdoutSink` writes these to stdout; in TUI mode, `TuiSink`
+    /// `TerminalSink` writes these to stdout; in TUI mode, `TuiSink`
     /// captures them for the log panel.
     pub fn emit_run_prelude_logs(&self) {
         let pad = "   ";
         turborepo_log::info(turborepo_log::Source::turbo("run"), "").emit();
-        turborepo_log::info(
-            turborepo_log::Source::turbo("cli"),
-            format!("{pad}• turbo {}", self.version),
-        )
-        .emit();
 
         let targets_list = self.opts.run_opts.tasks.join(", ");
         if self.opts.run_opts.single_package {
@@ -148,18 +143,67 @@ impl Run {
             .emit();
         }
 
-        let use_http_cache = self.opts.cache_opts.cache.remote.should_use();
-        let remote_status = if use_http_cache {
-            "enabled"
-        } else {
-            "disabled"
+        let api_url = &self.opts.api_client_opts.api_url;
+        let (base_msg, is_warning) = match self.remote_cache_status {
+            RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
+            RemoteCacheStatus::Disabled(reason) => {
+                let msg = match reason {
+                    RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
+                    RemoteCacheDisabledReason::TokenWithoutTeam => {
+                        "Remote caching disabled (TURBO_TOKEN set without TURBO_TEAM)".to_string()
+                    }
+                    RemoteCacheDisabledReason::InConfig => {
+                        "Remote caching disabled (in configuration)".to_string()
+                    }
+                    RemoteCacheDisabledReason::InEnvVar => {
+                        "Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
+                    }
+                    RemoteCacheDisabledReason::ByFlags => {
+                        "Remote caching disabled (by flags)".to_string()
+                    }
+                };
+                (msg, false)
+            }
+            RemoteCacheStatus::Unavailable(reason) => {
+                let msg = match reason {
+                    RemoteCacheUnavailableReason::CouldNotConnect => {
+                        format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
+                    }
+                    RemoteCacheUnavailableReason::AuthenticationFailed => {
+                        "Remote caching unavailable (Authentication failed \u{2014} check \
+                         TURBO_TOKEN or run \"turbo login\")"
+                            .to_string()
+                    }
+                    RemoteCacheUnavailableReason::UsageLimitExceeded => {
+                        "Remote caching unavailable (Usage limit exceeded)".to_string()
+                    }
+                    RemoteCacheUnavailableReason::SpendingPaused => {
+                        "Remote caching unavailable (Spending paused)".to_string()
+                    }
+                    RemoteCacheUnavailableReason::DisabledForTeam => {
+                        "Remote caching unavailable (Disabled for this team)".to_string()
+                    }
+                    RemoteCacheUnavailableReason::UnexpectedServerError => {
+                        format!(
+                            "Remote caching unavailable (Unexpected server error at \"{api_url}\")"
+                        )
+                    }
+                };
+                (msg, true)
+            }
         };
+
         let cache_status = if self.opts.run_opts.is_shared_worktree_cache {
-            format!("{pad}• Remote caching {remote_status}, using shared worktree cache")
+            format!("{pad}• {base_msg}, using shared worktree cache")
         } else {
-            format!("{pad}• Remote caching {remote_status}")
+            format!("{pad}• {base_msg}")
         };
-        turborepo_log::info(turborepo_log::Source::turbo("run"), cache_status).emit();
+
+        if is_warning {
+            turborepo_log::warn(turborepo_log::Source::turbo("run"), cache_status).emit();
+        } else {
+            turborepo_log::info(turborepo_log::Source::turbo("run"), cache_status).emit();
+        }
         turborepo_log::info(turborepo_log::Source::turbo("run"), "").emit();
     }
 
@@ -779,17 +823,8 @@ impl Run {
             .max()
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
-        let error_prefix = if self.opts.run_opts.is_github_actions {
-            "::error::"
-        } else {
-            ""
-        };
         for err in &errors {
-            turborepo_log::error(
-                turborepo_log::Source::turbo("run"),
-                format!("{error_prefix}{err}"),
-            )
-            .emit();
+            turborepo_log::error(turborepo_log::Source::turbo("run"), err.to_string()).emit();
         }
 
         self.cleanup_proxy(proxy_shutdown).await;

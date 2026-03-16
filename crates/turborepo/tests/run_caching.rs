@@ -225,7 +225,7 @@ fn test_remote_caching_enable() {
         ],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("Remote caching disabled"));
+    assert!(stdout.contains("Remote caching disabled (in configuration)"));
 }
 
 // --- cache-state.t ---

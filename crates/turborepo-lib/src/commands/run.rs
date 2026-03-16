@@ -57,6 +57,18 @@ pub async fn run(
             (Arc::new(run), analytics_handle)
         };
 
+        // Structured output modes own stdout for machine-readable data.
+        if run.opts().run_opts.graph.is_some()
+            || matches!(run.opts().run_opts.dry_run, Some(DryRunMode::Json))
+        {
+            sinks.suppress_stdout();
+        }
+
+        // Emit the prelude while TerminalSink is still active so it
+        // lands in the main terminal buffer (survives TUI alternate-
+        // screen). TuiSink buffers these events and flushes on connect().
+        run.emit_run_prelude_logs();
+
         sinks.disable_for_tui();
 
         let (sender, handle) = {
@@ -81,16 +93,6 @@ pub async fn run(
                 subscriber.restore_stderr();
             }
         }
-
-        // Structured output modes own stdout for machine-readable data.
-        // Keep StdoutSink disabled so the prelude doesn't corrupt it.
-        if run.opts().run_opts.graph.is_some()
-            || matches!(run.opts().run_opts.dry_run, Some(DryRunMode::Json))
-        {
-            sinks.stdout.disable();
-        }
-
-        run.emit_run_prelude_logs();
 
         let result = run.run(sender.clone(), false).await;
 

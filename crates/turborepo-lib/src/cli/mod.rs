@@ -1420,9 +1420,7 @@ async fn run_main(
 
     let mut command = get_command(&mut cli_args)?;
 
-    // Run and Watch emit the version banner through turborepo_log as
-    // part of the run prelude. Other commands print it directly.
-    if should_print_version() && !matches!(command, Command::Run { .. } | Command::Watch { .. }) {
+    if should_print_version() {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
     }
 
