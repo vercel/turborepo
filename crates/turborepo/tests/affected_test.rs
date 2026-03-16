@@ -1024,6 +1024,82 @@ fn test_task_level_affected_global_file_runs_everything() {
     );
 }
 
+/// Regression test for https://github.com/vercel/turborepo/issues/12329
+///
+/// When a task declares a `$TURBO_ROOT$` input, changing that root-level file
+/// should mark the task as affected. Previously, the package-level scope
+/// resolution excluded non-root packages (since the file isn't inside them),
+/// so the engine never contained their tasks and the task-level filter couldn't
+/// match them.
+#[test]
+fn test_task_level_affected_turbo_root_input() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+
+    setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", true).unwrap();
+
+    // Create a root-level config file that tasks will reference.
+    fs::write(dir.join("rootconfig.txt"), "v1").unwrap();
+
+    // turbo.json: build uses $TURBO_ROOT$/rootconfig.txt as an input.
+    // This means every package's build task depends on that root file.
+    let turbo_json = r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/rootconfig.txt"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "!**/*.md"]
+    }
+  },
+  "futureFlags": {
+    "affectedUsingTaskInputs": true
+  }
+}"#;
+    fs::write(dir.join("turbo.json"), turbo_json).unwrap();
+
+    git(dir, &["add", "."]);
+    git(dir, &["commit", "-m", "setup", "--quiet"]);
+    git(dir, &["checkout", "-b", "my-branch"]);
+
+    // Change ONLY the root-level file. No package source files change.
+    fs::write(dir.join("rootconfig.txt"), "v2").unwrap();
+
+    let output = run_turbo(dir, &["run", "build", "test", "--affected", "--dry=json"]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("failed to parse dry run JSON: {e}\nstdout: {stdout}"));
+
+    let tasks = json["tasks"].as_array().expect("tasks array");
+    let task_ids: Vec<&str> = tasks
+        .iter()
+        .map(|t| t["taskId"].as_str().unwrap())
+        .collect();
+
+    // Both packages have a build task with $TURBO_ROOT$/rootconfig.txt input.
+    // Changing rootconfig.txt should mark both as affected.
+    assert!(
+        task_ids.contains(&"lib-a#build"),
+        "lib-a#build should be affected by $TURBO_ROOT$ input change: {task_ids:?}"
+    );
+    assert!(
+        task_ids.contains(&"app-a#build"),
+        "app-a#build should be affected by $TURBO_ROOT$ input change: {task_ids:?}"
+    );
+
+    // test tasks don't reference $TURBO_ROOT$/rootconfig.txt and no package
+    // source files changed, so they should NOT be directly affected.
+    assert!(
+        !task_ids.contains(&"lib-a#test"),
+        "lib-a#test should NOT be affected (no source changes, no root input): {task_ids:?}"
+    );
+}
+
 #[test]
 fn test_affected_with_nonexistent_task_errors() {
     let tempdir = tempfile::tempdir().unwrap();
