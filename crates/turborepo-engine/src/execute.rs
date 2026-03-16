@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use futures::{StreamExt, stream::FuturesUnordered};
 use tokio::sync::{Semaphore, mpsc, oneshot};
-use tracing::log::debug;
+use tracing::debug;
 use turborepo_graph_utils::Walker;
 use turborepo_task_id::TaskId;
 // Re-export StopExecution from turborepo-types for backwards compatibility
