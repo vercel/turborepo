@@ -112,12 +112,16 @@ impl Run {
     /// captures them for the log panel.
     pub fn emit_run_prelude_logs(&self) {
         let pad = "   ";
-        turborepo_log::info(turborepo_log::Source::turbo("run"), "").emit();
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+            "",
+        )
+        .emit();
 
         let targets_list = self.opts.run_opts.tasks.join(", ");
         if self.opts.run_opts.single_package {
             turborepo_log::info(
-                turborepo_log::Source::turbo("run"),
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                 format!("{pad}• Running {targets_list}"),
             )
             .emit();
@@ -129,12 +133,12 @@ impl Run {
                 .collect::<Vec<String>>();
             packages.sort();
             turborepo_log::info(
-                turborepo_log::Source::turbo("run"),
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                 format!("{pad}• Packages in scope: {}", packages.join(", ")),
             )
             .emit();
             turborepo_log::info(
-                turborepo_log::Source::turbo("run"),
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                 format!(
                     "{pad}• Running {targets_list} in {} packages",
                     self.filtered_pkgs.len()
@@ -200,11 +204,23 @@ impl Run {
         };
 
         if is_warning {
-            turborepo_log::warn(turborepo_log::Source::turbo("run"), cache_status).emit();
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                cache_status,
+            )
+            .emit();
         } else {
-            turborepo_log::info(turborepo_log::Source::turbo("run"), cache_status).emit();
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                cache_status,
+            )
+            .emit();
         }
-        turborepo_log::info(turborepo_log::Source::turbo("run"), "").emit();
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+            "",
+        )
+        .emit();
     }
 
     pub fn turbo_json_loader(&self) -> &UnifiedTurboJsonLoader {
@@ -824,7 +840,11 @@ impl Run {
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
         for err in &errors {
-            turborepo_log::error(turborepo_log::Source::turbo("run"), err.to_string()).emit();
+            turborepo_log::error(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                err.to_string(),
+            )
+            .emit();
         }
 
         self.cleanup_proxy(proxy_shutdown).await;
@@ -876,7 +896,7 @@ impl Run {
                 Some(graphviz_warning),
                 Some(&|filename: &AbsoluteSystemPath| {
                     turborepo_log::info(
-                        turborepo_log::Source::turbo("run"),
+                        turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
                         format!("\n✓ Generated task graph in {filename}"),
                     )
                     .emit();
@@ -1025,7 +1045,7 @@ impl turborepo_query_api::QueryRun for Run {
 
 fn emit_graphviz_warning() -> Result<(), io::Error> {
     turborepo_log::warn(
-        turborepo_log::Source::turbo("run"),
+        turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
         "`turbo` uses Graphviz to generate an image of your graph, but Graphviz isn't installed \
          on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn \
          the meantime, you can use this string output with an online Dot graph viewer.",

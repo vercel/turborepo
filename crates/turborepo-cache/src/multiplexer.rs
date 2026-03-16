@@ -46,7 +46,7 @@ impl CacheMultiplexer {
         // but we shouldn't fail your build for that reason.
         if !use_fs_cache && !use_http_cache {
             turborepo_log::warn(
-                turborepo_log::Source::turbo("cache"),
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
                 "no caches are enabled",
             )
             .emit();
@@ -132,7 +132,7 @@ impl CacheMultiplexer {
                         .load(Ordering::Relaxed)
                     {
                         turborepo_log::warn(
-                            turborepo_log::Source::turbo("cache"),
+                            turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
                             "Remote cache is read-only, skipping upload",
                         )
                         .emit();

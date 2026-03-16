@@ -224,7 +224,7 @@ impl GitRepo {
             Ok(output) => output,
             Err(e) => {
                 turborepo_log::warn(
-                    turborepo_log::Source::turbo("scm"),
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
                     format!("failed to get git status for dirty hash: {e}"),
                 )
                 .emit();
@@ -251,7 +251,7 @@ impl GitRepo {
             &mut hasher,
         ) {
             turborepo_log::warn(
-                turborepo_log::Source::turbo("scm"),
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
                 "failed to run git diff for dirty hash",
             )
             .emit();

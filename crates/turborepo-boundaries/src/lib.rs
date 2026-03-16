@@ -21,10 +21,10 @@ use oxc_ast::ast::Comment;
 use regex::Regex;
 pub use tags::{ProcessedPermissions, ProcessedRule, ProcessedRulesMap};
 use thiserror::Error;
-use tracing::log::warn;
 use turbo_trace::{ImportTraceType, Tracer, find_imports};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_errors::Spanned;
+use turborepo_log::Subsystem;
 use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName, PackageNode};
 use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, color};
 use unrs_resolver::Resolver;
@@ -256,7 +256,11 @@ impl BoundariesResult {
         };
 
         for warning in self.warnings.iter().take(MAX_WARNINGS) {
-            warn!("{}", warning);
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(Subsystem::Boundaries),
+                warning.to_string(),
+            )
+            .emit();
         }
         if !self.warnings.is_empty() {
             eprintln!();

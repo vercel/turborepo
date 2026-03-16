@@ -833,7 +833,7 @@ impl RunBuilder {
                     "SCM returned invalid change set; skipping task-level filtering"
                 );
                 turborepo_log::warn(
-                    turborepo_log::Source::turbo("scm"),
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
                     "--affected could not determine changed files. All tasks will run. Check your \
                      git fetch depth.",
                 )

@@ -130,6 +130,51 @@ impl fmt::Display for Level {
     }
 }
 
+/// A Turborepo infrastructure subsystem that can emit log events.
+///
+/// Each variant identifies a logical area of the codebase. Adding a
+/// variant here is the only way to register a new subsystem — this
+/// keeps the set discoverable and typo-proof at compile time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[non_exhaustive]
+#[serde(rename_all = "kebab-case")]
+pub enum Subsystem {
+    /// Package boundary checks (`turbo boundaries`).
+    Boundaries,
+    /// Cache reads, writes, and configuration.
+    Cache,
+    /// Log file replay and related output.
+    Logs,
+    /// The `turbo run` orchestrator.
+    Run,
+    /// Source control (git) operations.
+    Scm,
+    /// Global shim version-mismatch warnings.
+    Shim,
+    /// Run summary generation and output.
+    Summary,
+    /// Task-access permission checks.
+    TaskAccess,
+    /// Tracing/logging infrastructure messages.
+    Tracing,
+}
+
+impl fmt::Display for Subsystem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Subsystem::Boundaries => write!(f, "boundaries"),
+            Subsystem::Cache => write!(f, "cache"),
+            Subsystem::Logs => write!(f, "logs"),
+            Subsystem::Run => write!(f, "run"),
+            Subsystem::Scm => write!(f, "scm"),
+            Subsystem::Shim => write!(f, "shim"),
+            Subsystem::Summary => write!(f, "summary"),
+            Subsystem::TaskAccess => write!(f, "task-access"),
+            Subsystem::Tracing => write!(f, "tracing"),
+        }
+    }
+}
+
 /// Origin of a log event.
 ///
 /// # Relationship to `turborepo-task-id`
@@ -141,14 +186,8 @@ impl fmt::Display for Level {
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Source {
-    /// Turborepo infrastructure (config, cache, scm, etc.).
-    ///
-    /// The string identifies the subsystem. Uses `&'static str` so that
-    /// only compile-time constants are accepted — no runtime sanitization
-    /// is needed for static strings.
-    ///
-    /// Convention: lowercase, e.g., `"config"`, `"cache"`, `"scm"`.
-    Turbo(&'static str),
+    /// Turborepo infrastructure (cache, scm, run, etc.).
+    Turbo(Subsystem),
     /// A specific task, identified by its display string (e.g., `"web#build"`).
     /// Uses `Arc<str>` so cloning a `LogHandle` for a task is cheap.
     Task(Arc<str>),
@@ -168,9 +207,7 @@ impl Serialize for Source {
 
 impl Source {
     /// Create a source identifying a Turborepo subsystem.
-    ///
-    /// Convention: lowercase, e.g., `"config"`, `"cache"`, `"scm"`.
-    pub fn turbo(subsystem: &'static str) -> Self {
+    pub fn turbo(subsystem: Subsystem) -> Self {
         Source::Turbo(subsystem)
     }
 
@@ -668,7 +705,7 @@ mod tests {
 
     #[test]
     fn source_display() {
-        assert_eq!(Source::turbo("config").to_string(), "turbo:config");
+        assert_eq!(Source::turbo(Subsystem::Cache).to_string(), "turbo:cache");
         assert_eq!(Source::task("web#build").to_string(), "task:web#build");
     }
 
@@ -843,7 +880,7 @@ mod tests {
     fn message_strips_full_ansi_sequences() {
         let event = LogEvent::new(
             Level::Warn,
-            Source::turbo("test"),
+            Source::turbo(Subsystem::Cache),
             "hello\x1b[31mworld\x00".to_string(),
         );
         assert_eq!(event.message, "helloworld");
@@ -853,7 +890,7 @@ mod tests {
     fn message_strips_clear_screen_sequence() {
         let event = LogEvent::new(
             Level::Warn,
-            Source::turbo("test"),
+            Source::turbo(Subsystem::Cache),
             "before\x1b[2Jafter".to_string(),
         );
         assert_eq!(event.message, "beforeafter");
@@ -863,7 +900,7 @@ mod tests {
     fn message_preserves_newlines() {
         let event = LogEvent::new(
             Level::Info,
-            Source::turbo("test"),
+            Source::turbo(Subsystem::Cache),
             "line 1\nline 2".to_string(),
         );
         assert_eq!(event.message, "line 1\nline 2");
@@ -871,7 +908,7 @@ mod tests {
 
     #[test]
     fn serialization_omits_empty_fields() {
-        let event = LogEvent::new(Level::Warn, Source::turbo("test"), "msg");
+        let event = LogEvent::new(Level::Warn, Source::turbo(Subsystem::Cache), "msg");
         let json = serde_json::to_string(&event).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed.get("fields").is_none());
@@ -890,7 +927,7 @@ mod tests {
 
     #[test]
     fn serialization_redacted_field_is_null() {
-        let mut event = LogEvent::new(Level::Info, Source::turbo("auth"), "token used");
+        let mut event = LogEvent::new(Level::Info, Source::turbo(Subsystem::Cache), "token used");
         event.fields.push(("token", Value::Redacted));
         let json = serde_json::to_string(&event).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
@@ -899,7 +936,7 @@ mod tests {
 
     #[test]
     fn serialization_timestamp_is_epoch_millis() {
-        let event = LogEvent::new(Level::Info, Source::turbo("test"), "msg");
+        let event = LogEvent::new(Level::Info, Source::turbo(Subsystem::Cache), "msg");
         let json = serde_json::to_string(&event).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert!(parsed["timestamp"].is_u64());
@@ -907,7 +944,7 @@ mod tests {
 
     #[test]
     fn serialization_level_is_uppercase() {
-        let event = LogEvent::new(Level::Warn, Source::turbo("test"), "msg");
+        let event = LogEvent::new(Level::Warn, Source::turbo(Subsystem::Cache), "msg");
         let json = serde_json::to_string(&event).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
         assert_eq!(parsed["level"], "WARN");
@@ -916,7 +953,8 @@ mod tests {
     #[test]
     fn with_timestamp_uses_provided_time() {
         let ts = SystemTime::UNIX_EPOCH;
-        let event = LogEvent::with_timestamp(Level::Info, Source::turbo("test"), "msg", ts);
+        let event =
+            LogEvent::with_timestamp(Level::Info, Source::turbo(Subsystem::Cache), "msg", ts);
         assert_eq!(event.timestamp, ts);
     }
 
@@ -964,7 +1002,7 @@ mod tests {
     fn message_strips_c1_csi() {
         let event = LogEvent::new(
             Level::Warn,
-            Source::turbo("test"),
+            Source::turbo(Subsystem::Cache),
             "\u{9b}31mred\u{9b}0m text",
         );
         assert_eq!(event.message, "red text");
@@ -1031,10 +1069,11 @@ mod tests {
     #[test]
     fn accessors_return_expected_values() {
         let ts = SystemTime::UNIX_EPOCH;
-        let mut event = LogEvent::with_timestamp(Level::Warn, Source::turbo("test"), "msg", ts);
+        let mut event =
+            LogEvent::with_timestamp(Level::Warn, Source::turbo(Subsystem::Cache), "msg", ts);
         event.push_field("key", Value::from("val"));
         assert_eq!(event.level(), Level::Warn);
-        assert_eq!(event.source(), &Source::turbo("test"));
+        assert_eq!(event.source(), &Source::turbo(Subsystem::Cache));
         assert_eq!(event.message(), "msg");
         assert_eq!(event.fields().len(), 1);
         assert_eq!(event.fields()[0].0, "key");
