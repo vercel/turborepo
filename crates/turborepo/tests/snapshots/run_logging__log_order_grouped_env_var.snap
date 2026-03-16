@@ -1,10 +1,12 @@
 ---
 source: crates/turborepo/tests/run_logging.rs
+assertion_line: 80
 expression: stdout.to_string()
 ---
-• Packages in scope: my-app, util
-• Running build in 2 packages
-• Remote caching disabled
+   • Packages in scope: my-app, util
+   • Running build in 2 packages
+   • Remote caching disabled
+
 my-app:build: cache bypass, force executing 0af90ec6a57471be
 my-app:build: 
 my-app:build: > build

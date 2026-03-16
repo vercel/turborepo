@@ -1418,11 +1418,11 @@ async fn run_main(
         initialize_deferred_telemetry_client(http_client.clone(), color_config, version)
     };
 
+    let mut command = get_command(&mut cli_args)?;
+
     if should_print_version() {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
     }
-
-    let mut command = get_command(&mut cli_args)?;
 
     // Set some run flags if we have the data and are executing a Run
     set_run_flags(&mut command, &repo_state, &cli_args)?;

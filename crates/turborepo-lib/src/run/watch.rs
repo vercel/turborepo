@@ -20,13 +20,12 @@ use turborepo_filewatch::{
     cookies::CookieWriter, globwatcher::GlobWatcher, hash_watcher::HashWatcher,
     package_watcher::PackageWatcher, FileSystemWatcher,
 };
-use turborepo_log::{sinks::collector::CollectorSink, Logger};
 use turborepo_repository::package_graph::PackageName;
 use turborepo_run_cache::{OutputWatcher, OutputWatcherError};
 use turborepo_scm::SCM;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{sender::UISender, TerminalSink, TuiSink};
+use turborepo_ui::{sender::UISender, LogSinks};
 
 use crate::{
     commands::CommandBase,
@@ -284,14 +283,8 @@ impl WatchClient {
         if let Some(ref qs) = query_server {
             run_builder = run_builder.with_query_server(qs.clone());
         }
-        let collector = Arc::new(CollectorSink::new());
-        let terminal = Arc::new(TerminalSink::new(base.color_config));
-        let tui_sink = Arc::new(TuiSink::new());
-        let _ = turborepo_log::init(Logger::new(vec![
-            Box::new(collector),
-            Box::new(terminal.clone()),
-            Box::new(tui_sink.clone()),
-        ]));
+        let sinks = LogSinks::new(base.color_config);
+        sinks.init_logger();
 
         if let Ok(message) = env::var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) {
             turborepo_log::warn(turborepo_log::Source::turbo("shim"), message).emit();
@@ -309,12 +302,17 @@ impl WatchClient {
 
         let watched_packages = run.get_relevant_packages();
 
-        terminal.disable();
+        // Emit the prelude while TerminalSink is still active so it
+        // lands in the main terminal buffer (survives TUI alternate-
+        // screen). TuiSink buffers these events and flushes on connect().
+        run.emit_run_prelude_logs();
+
+        sinks.disable_for_tui();
 
         let (ui_sender, ui_handle) = run.start_ui()?.unzip();
 
         if let Some(UISender::Tui(ref tui_sender)) = ui_sender {
-            tui_sink.connect(tui_sender.clone());
+            sinks.tui.connect(tui_sender.clone());
             if let Some(path) = subscriber.stderr_redirect_path() {
                 turborepo_log::info(
                     turborepo_log::Source::turbo("tracing"),
@@ -325,13 +323,11 @@ impl WatchClient {
                 subscriber.suppress_stderr();
             }
         } else {
-            terminal.enable();
+            sinks.enable_for_stream();
             if subscriber.stderr_redirect_path().is_some() {
                 subscriber.restore_stderr();
             }
         }
-
-        run.emit_run_prelude_logs();
 
         Ok(Self {
             base,
@@ -561,8 +557,7 @@ impl WatchClient {
                 let mut run_builder = RunBuilder::new(new_base, None)?
                     .with_output_watcher(self.output_watcher.clone())
                     .with_entrypoint_packages(packages)
-                    .with_changed_files(changed_files)
-                    .hide_prelude();
+                    .with_changed_files(changed_files);
                 if let Some(ref qs) = self.query_server {
                     run_builder = run_builder.with_query_server(qs.clone());
                 }
@@ -604,8 +599,7 @@ impl WatchClient {
                 );
 
                 let mut run_builder = RunBuilder::new(base.clone(), None)?
-                    .with_output_watcher(self.output_watcher.clone())
-                    .hide_prelude();
+                    .with_output_watcher(self.output_watcher.clone());
                 if let Some(ref qs) = self.query_server {
                     run_builder = run_builder.with_query_server(qs.clone());
                 }

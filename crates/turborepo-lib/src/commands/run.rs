@@ -2,11 +2,11 @@ use std::{env, sync::Arc};
 
 use tracing::error;
 use turborepo_api_client::SharedHttpClient;
-use turborepo_log::{sinks::collector::CollectorSink, Logger};
 use turborepo_query_api::QueryServer;
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
-use turborepo_ui::{sender::UISender, TerminalSink, TuiSink};
+use turborepo_types::DryRunMode;
+use turborepo_ui::{sender::UISender, LogSinks};
 
 use crate::{commands::CommandBase, run, run::builder::RunBuilder, tracing::TurboSubscriber};
 
@@ -22,14 +22,8 @@ pub async fn run(
     let signal = get_signal()?;
     let handler = SignalHandler::new(signal);
 
-    let collector = Arc::new(CollectorSink::new());
-    let terminal = Arc::new(TerminalSink::new(base.color_config));
-    let tui_sink = Arc::new(TuiSink::new());
-    let _ = turborepo_log::init(Logger::new(vec![
-        Box::new(collector),
-        Box::new(terminal.clone()),
-        Box::new(tui_sink.clone()),
-    ]));
+    let sinks = LogSinks::new(base.color_config);
+    sinks.init_logger();
 
     if let Ok(message) = env::var(turborepo_shim::GLOBAL_WARNING_ENV_VAR) {
         turborepo_log::warn(turborepo_log::Source::turbo("shim"), message).emit();
@@ -63,7 +57,19 @@ pub async fn run(
             (Arc::new(run), analytics_handle)
         };
 
-        terminal.disable();
+        // Structured output modes own stdout for machine-readable data.
+        if run.opts().run_opts.graph.is_some()
+            || matches!(run.opts().run_opts.dry_run, Some(DryRunMode::Json))
+        {
+            sinks.suppress_stdout();
+        }
+
+        // Emit the prelude while TerminalSink is still active so it
+        // lands in the main terminal buffer (survives TUI alternate-
+        // screen). TuiSink buffers these events and flushes on connect().
+        run.emit_run_prelude_logs();
+
+        sinks.disable_for_tui();
 
         let (sender, handle) = {
             let _span = tracing::info_span!("start_ui").entered();
@@ -71,7 +77,7 @@ pub async fn run(
         };
 
         if let Some(UISender::Tui(ref tui_sender)) = sender {
-            tui_sink.connect(tui_sender.clone());
+            sinks.tui.connect(tui_sender.clone());
             if let Some(path) = subscriber.stderr_redirect_path() {
                 turborepo_log::info(
                     turborepo_log::Source::turbo("tracing"),
@@ -82,13 +88,11 @@ pub async fn run(
                 subscriber.suppress_stderr();
             }
         } else {
-            terminal.enable();
+            sinks.enable_for_stream();
             if subscriber.stderr_redirect_path().is_some() {
                 subscriber.restore_stderr();
             }
         }
-
-        run.emit_run_prelude_logs();
 
         let result = run.run(sender.clone(), false).await;
 

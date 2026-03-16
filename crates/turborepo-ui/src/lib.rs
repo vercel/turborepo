@@ -6,6 +6,7 @@
 
 mod color_selector;
 mod line;
+mod log_sinks;
 mod logs;
 mod output;
 mod prefixed;
@@ -24,6 +25,7 @@ use thiserror::Error;
 pub use crate::{
     color_selector::ColorSelector,
     line::LineWriter,
+    log_sinks::LogSinks,
     logs::{LogWriter, replay_logs, replay_logs_with_crlf},
     output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
     prefixed::{PrefixedUI, PrefixedWriter},
