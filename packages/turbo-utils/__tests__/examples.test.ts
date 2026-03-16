@@ -220,7 +220,7 @@ describe("examples", () => {
     });
 
     it("isUrlOk sends Authorization header when GITHUB_TOKEN is set", async () => {
-      process.env.GITHUB_TOKEN = "ghp_test_token_123";
+      process.env.GITHUB_TOKEN = "test_fake_token_123";
 
       global.fetch = jest.fn(() =>
         Promise.resolve({ ok: true } as Response)
@@ -235,14 +235,14 @@ describe("examples", () => {
         expect.objectContaining({
           method: "HEAD",
           headers: expect.objectContaining({
-            Authorization: "Bearer ghp_test_token_123"
+            Authorization: "Bearer test_fake_token_123"
           })
         })
       );
     });
 
     it("isUrlOk sends Authorization header when GH_TOKEN is set", async () => {
-      process.env.GH_TOKEN = "ghp_gh_token_456";
+      process.env.GH_TOKEN = "test_fake_gh_token_456";
 
       global.fetch = jest.fn(() =>
         Promise.resolve({ ok: true } as Response)
@@ -257,15 +257,15 @@ describe("examples", () => {
         expect.objectContaining({
           method: "HEAD",
           headers: expect.objectContaining({
-            Authorization: "Bearer ghp_gh_token_456"
+            Authorization: "Bearer test_fake_gh_token_456"
           })
         })
       );
     });
 
     it("GITHUB_TOKEN takes precedence over GH_TOKEN", async () => {
-      process.env.GITHUB_TOKEN = "ghp_primary";
-      process.env.GH_TOKEN = "ghp_secondary";
+      process.env.GITHUB_TOKEN = "test_fake_primary";
+      process.env.GH_TOKEN = "test_fake_secondary";
 
       global.fetch = jest.fn(() =>
         Promise.resolve({ ok: true } as Response)
@@ -278,7 +278,7 @@ describe("examples", () => {
         url,
         expect.objectContaining({
           headers: expect.objectContaining({
-            Authorization: "Bearer ghp_primary"
+            Authorization: "Bearer test_fake_primary"
           })
         })
       );
@@ -302,7 +302,7 @@ describe("examples", () => {
     });
 
     it("no Authorization header for non-GitHub URLs", async () => {
-      process.env.GITHUB_TOKEN = "ghp_test_token_123";
+      process.env.GITHUB_TOKEN = "test_fake_token_123";
 
       global.fetch = jest.fn(() =>
         Promise.resolve({ ok: true } as Response)
@@ -319,8 +319,30 @@ describe("examples", () => {
       expect(headers?.Authorization).toBeUndefined();
     });
 
+    it.each([
+      "https://api.github.com.evil.com/repos/user/repo",
+      "https://evil-api.github.com/repos/user/repo",
+      "https://codeload.github.com.attacker.io/user/repo/tar.gz/main",
+      "https://github.com/user/repo"
+    ])("no Authorization header for look-alike domain: %s", async (url) => {
+      process.env.GITHUB_TOKEN = "test_fake_token_bypass";
+
+      global.fetch = jest.fn(() =>
+        Promise.resolve({ ok: true } as Response)
+      ) as typeof fetch;
+
+      await isUrlOk(url);
+
+      const callArgs = (global.fetch as jest.Mock).mock.calls[0] as [
+        string,
+        RequestInit
+      ];
+      const headers = callArgs[1].headers as Record<string, string> | undefined;
+      expect(headers?.Authorization).toBeUndefined();
+    });
+
     it("getRepoInfo sends auth header when fetching default branch for private repo", async () => {
-      process.env.GITHUB_TOKEN = "ghp_test_token_123";
+      process.env.GITHUB_TOKEN = "test_fake_token_123";
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -336,14 +358,14 @@ describe("examples", () => {
         "https://api.github.com/repos/private-user/private-repo",
         expect.objectContaining({
           headers: expect.objectContaining({
-            Authorization: "Bearer ghp_test_token_123"
+            Authorization: "Bearer test_fake_token_123"
           })
         })
       );
     });
 
     it("hasRepo sends auth header for private repo contents check", async () => {
-      process.env.GITHUB_TOKEN = "ghp_test_token_123";
+      process.env.GITHUB_TOKEN = "test_fake_token_123";
 
       global.fetch = jest.fn(() =>
         Promise.resolve({ ok: true } as Response)
@@ -360,14 +382,14 @@ describe("examples", () => {
         "https://api.github.com/repos/private-user/private-repo/contents/packages/my-app/package.json?ref=main",
         expect.objectContaining({
           headers: expect.objectContaining({
-            Authorization: "Bearer ghp_test_token_123"
+            Authorization: "Bearer test_fake_token_123"
           })
         })
       );
     });
 
     it("downloadAndExtractRepo sends auth header for private repo tarball", async () => {
-      process.env.GITHUB_TOKEN = "ghp_test_token_123";
+      process.env.GITHUB_TOKEN = "test_fake_token_123";
 
       global.fetch = jest.fn(() =>
         Promise.resolve({
@@ -380,21 +402,22 @@ describe("examples", () => {
       mkdirSync(root, { recursive: true });
 
       try {
-        await downloadAndExtractRepo(root, {
-          username: "private-user",
-          name: "private-repo",
-          branch: "main",
-          filePath: ""
-        }).catch(() => {
-          // Expected to fail on extraction since we returned empty data.
-          // We only care that auth headers were sent.
-        });
+        // Extraction fails because we returned an empty ArrayBuffer
+        await expect(
+          downloadAndExtractRepo(root, {
+            username: "private-user",
+            name: "private-repo",
+            branch: "main",
+            filePath: ""
+          })
+        ).rejects.toThrow();
 
+        expect(global.fetch).toHaveBeenCalledTimes(1);
         expect(global.fetch).toHaveBeenCalledWith(
           "https://codeload.github.com/private-user/private-repo/tar.gz/main",
           expect.objectContaining({
             headers: expect.objectContaining({
-              Authorization: "Bearer ghp_test_token_123"
+              Authorization: "Bearer test_fake_token_123"
             })
           })
         );
@@ -770,6 +793,46 @@ describe("examples", () => {
           process.env.https_proxy = originalHttpsProxyLower;
         if (originalHttpProxyLower !== undefined)
           process.env.http_proxy = originalHttpProxyLower;
+      }
+    });
+
+    it("sends auth header for GitHub URLs when GITHUB_TOKEN is set", async () => {
+      const savedToken = process.env.GITHUB_TOKEN;
+      process.env.GITHUB_TOKEN = "test_fake_token_streaming";
+
+      try {
+        const mockBody = await createMockTarballBody([
+          { path: "file.txt", content: "Hello" }
+        ]);
+
+        global.fetch = jest.fn(() =>
+          Promise.resolve({
+            ok: true,
+            body: mockBody
+          } as Response)
+        ) as typeof fetch;
+
+        await streamingExtract({
+          url: "https://codeload.github.com/private-user/private-repo/tar.gz/main",
+          root: testDir,
+          strip: 1,
+          filter: () => true
+        });
+
+        expect(global.fetch).toHaveBeenCalledWith(
+          "https://codeload.github.com/private-user/private-repo/tar.gz/main",
+          expect.objectContaining({
+            headers: expect.objectContaining({
+              Authorization: "Bearer test_fake_token_streaming"
+            })
+          })
+        );
+      } finally {
+        if (savedToken !== undefined) {
+          process.env.GITHUB_TOKEN = savedToken;
+        } else {
+          delete process.env.GITHUB_TOKEN;
+        }
       }
     });
   });
