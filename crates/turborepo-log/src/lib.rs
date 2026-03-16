@@ -99,6 +99,7 @@ pub use event::{
     Level, LogEvent, OutputChannel, SanitizedString, Scalar, Source, Subsystem, Value,
 };
 pub use logger::{
-    InitError, LogEventBuilder, LogHandle, Logger, error, flush, info, init, log, warn,
+    InitError, LogEventBuilder, LogHandle, Logger, error, flush, global_logger, info, init, log,
+    warn,
 };
 pub use sink::LogSink;
