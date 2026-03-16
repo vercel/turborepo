@@ -41,6 +41,10 @@ pub enum ExecuteError {
     Semaphore(#[from] tokio::sync::AcquireError),
     #[error("Engine visitor closed channel before walk finished")]
     Visitor,
+    #[error(
+        "Task graph contains a cycle — validate_graph should have rejected it before execution"
+    )]
+    CyclicTaskGraph,
 }
 
 impl From<mpsc::error::SendError<Message<VisitorData, VisitorResult>>> for ExecuteError {
@@ -77,6 +81,9 @@ impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
         let mut tasks: FuturesUnordered<tokio::task::JoinHandle<Result<(), ExecuteError>>> =
             FuturesUnordered::new();
 
+        if petgraph::algo::is_cyclic_directed(&self.task_graph) {
+            return Err(ExecuteError::CyclicTaskGraph);
+        }
         let (walker, mut nodes) = Walker::new(&self.task_graph).walk();
         let walker = Arc::new(Mutex::new(walker));
 

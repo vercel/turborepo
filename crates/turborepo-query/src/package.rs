@@ -65,12 +65,20 @@ impl Package {
 
     pub fn indirect_dependents_count(&self) -> usize {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-        self.run.pkg_dep_graph().ancestors(&node).len() - self.direct_dependents_count()
+        self.run
+            .pkg_dep_graph()
+            .ancestors(&node)
+            .len()
+            .saturating_sub(self.direct_dependents_count())
     }
 
     pub fn indirect_dependencies_count(&self) -> usize {
         let node: PackageNode = PackageNode::Workspace(self.name.clone());
-        self.run.pkg_dep_graph().dependencies(&node).len() - self.direct_dependencies_count()
+        self.run
+            .pkg_dep_graph()
+            .dependencies(&node)
+            .len()
+            .saturating_sub(self.direct_dependencies_count())
     }
 
     pub fn all_dependents_count(&self) -> usize {

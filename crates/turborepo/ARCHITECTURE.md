@@ -68,6 +68,14 @@ Represents the workspace structure and package dependencies:
 - Discovers packages in workspace
 - Performs lockfile analysis
 - Builds dependency relationships between workspace packages
+- Validates that all non-root packages have a `name` field
+  (`PackageGraph::validate()`)
+
+The package graph intentionally allows cyclic dependencies between packages —
+this aligns with how npm, pnpm, and yarn handle cyclic workspace deps. Cycle
+detection is deferred to the task graph layer (engine builder), since
+package-level cycles only matter when they produce task-level cycles via
+topological (`^`) dependencies.
 
 ### 3. Task Graph (`crates/turborepo-lib/src/engine/`)
 
@@ -82,7 +90,8 @@ The core task graph consists of:
 - Parses `turbo.json` and other configuration sources to determine task definitions
 - Resolves task dependencies (topological `^build` and direct `build`)
 - Creates task nodes and dependency edges
-- Validates task definitions and checks for circular dependencies
+- Validates task definitions and is the sole layer that checks for circular
+  dependencies (both cycles and self-dependencies in the task graph)
 
 #### Engine Execution (`crates/turborepo-lib/src/engine/execute.rs`)
 
@@ -281,10 +290,10 @@ command handler.
 
 ```
 RunBuilder
-  ├── Package Discovery → PackageGraph
+  ├── Package Discovery → PackageGraph (validates package names)
   ├── Task Discovery → EngineBuilder
   ├── Task Graph Construction → Engine (built)
-  └── Validation → Ready Engine
+  └── Task Graph Validation (cycles, missing deps) → Ready Engine
 ```
 
 **Process:**
@@ -293,7 +302,7 @@ RunBuilder
 2. Load turbo.json configurations for tasks
 3. Create task nodes for each package × task combination
 4. Build dependency edges based on `dependsOn` configurations
-5. Validate graph for cycles and missing dependencies
+5. Validate task graph for cycles and missing dependencies
 
 ### 2. Task Graph Traversal
 
