@@ -475,7 +475,16 @@ impl<'a> Visitor<'a> {
 
                     let task_id_str = info.to_string();
                     let task_prefix = self.prefix(&info);
-                    let task_handle = self.grouping_layer.task(task_id_str.clone());
+                    // The display label always includes the task name for
+                    // CI group markers, even when log_prefix is None.
+                    let display_label = if self.run_opts.single_package {
+                        info.task().to_string()
+                    } else {
+                        format!("{}:{}", info.package(), info.task())
+                    };
+                    let task_handle = self
+                        .grouping_layer
+                        .task_with_label(&task_id_str, display_label);
                     self.grouping_layer
                         .logger()
                         .register_task(&task_id_str, &task_prefix);

@@ -114,12 +114,6 @@ pub struct RunCache {
 }
 
 /// Trait used to output cache information to user
-pub trait CacheOutput {
-    fn status(&mut self, message: &str, result: CacheResult);
-    fn error(&mut self, message: &str);
-    fn replay_logs(&mut self, log_file: &AbsoluteSystemPath) -> Result<(), turborepo_ui::Error>;
-}
-
 impl RunCache {
     pub fn new(
         cache: AsyncCache,
@@ -233,20 +227,28 @@ impl TaskCache {
     }
 
     /// Will read log file and write to output a line at a time
-    pub fn replay_log_file(&self, output: &mut impl CacheOutput) -> Result<(), Error> {
+    fn replay_log_file(
+        &self,
+        task_handle: &mut turborepo_log::grouping::TaskHandle,
+    ) -> Result<(), Error> {
         if self.log_file_path.exists() {
-            output.replay_logs(&self.log_file_path)?;
+            let mut writer = task_handle.writer(turborepo_log::OutputChannel::Stdout);
+            turborepo_ui::replay_logs(&mut writer, &self.log_file_path)?;
         }
 
         Ok(())
     }
 
-    pub fn on_error(&self, terminal_output: &mut impl CacheOutput) -> Result<(), Error> {
+    pub fn on_error(
+        &self,
+        task_handle: &mut turborepo_log::grouping::TaskHandle,
+        tui_sender: Option<&turborepo_ui::sender::TaskSender>,
+    ) -> Result<(), Error> {
         if self.task_output_logs == OutputLogsMode::ErrorsOnly {
-            // If errors_only_show_hash is enabled, we already printed the hash when
-            // the task started, so we don't need to print it again. We just replay logs.
             if !self.errors_only_show_hash {
-                terminal_output.status(
+                self.write_status(
+                    task_handle,
+                    tui_sender,
                     &format!(
                         "cache miss, executing {}",
                         color!(self.ui, GREY, "{}", self.hash)
@@ -254,10 +256,31 @@ impl TaskCache {
                     CacheResult::Miss,
                 );
             }
-            self.replay_log_file(terminal_output)?;
+            self.replay_log_file(task_handle)?;
         }
 
         Ok(())
+    }
+
+    /// Write a cache status message to the task output stream.
+    ///
+    /// This renders as plain text with the task's prefix — matching
+    /// the old `PrefixedUI::output()` behavior. Empty messages are
+    /// silently ignored.
+    fn write_status(
+        &self,
+        task_handle: &mut turborepo_log::grouping::TaskHandle,
+        tui_sender: Option<&turborepo_ui::sender::TaskSender>,
+        message: &str,
+        result: turborepo_ui::tui::event::CacheResult,
+    ) {
+        if let Some(sender) = tui_sender {
+            sender.status(message, result);
+        }
+        if !message.is_empty() {
+            let line = format!("{message}\n");
+            task_handle.task_output(turborepo_log::OutputChannel::Stdout, line.as_bytes());
+        }
     }
 
     pub fn output_writer<W: Write>(&self, writer: W) -> Result<LogWriter<W>, Error> {
@@ -289,12 +312,11 @@ impl TaskCache {
 
     pub async fn restore_outputs(
         &mut self,
-        terminal_output: &mut impl CacheOutput,
+        task_handle: &mut turborepo_log::grouping::TaskHandle,
+        tui_sender: Option<&turborepo_ui::sender::TaskSender>,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<Option<CacheHitMetadata>, Error> {
         if self.caching_disabled || self.run_cache.reads_disabled {
-            // Always send the cache miss status so TUI knows to start rendering.
-            // The message is only shown based on output_logs setting.
             let message = if self.task_output_logs == OutputLogsMode::ErrorsOnly
                 && self.errors_only_show_hash
             {
@@ -314,7 +336,12 @@ impl TaskCache {
                     color!(self.ui, GREY, "{}", self.hash)
                 )
             };
-            terminal_output.status(&message, CacheResult::Miss);
+            self.write_status(
+                task_handle,
+                tui_sender,
+                &message,
+                turborepo_ui::tui::event::CacheResult::Miss,
+            );
 
             return Ok(None);
         }
@@ -363,8 +390,6 @@ impl TaskCache {
                 .await?;
 
             let Some((cache_hit_metadata, restored_files)) = cache_status else {
-                // Always send the cache miss status so TUI knows to start rendering.
-                // The message is only shown based on output_logs setting.
                 let message = if self.task_output_logs == OutputLogsMode::ErrorsOnly
                     && self.errors_only_show_hash
                 {
@@ -384,7 +409,7 @@ impl TaskCache {
                         color!(self.ui, GREY, "{}", self.hash)
                     )
                 };
-                terminal_output.status(&message, CacheResult::Miss);
+                self.write_status(task_handle, tui_sender, &message, CacheResult::Miss);
 
                 return Ok(None);
             };
@@ -431,7 +456,9 @@ impl TaskCache {
 
         match self.task_output_logs {
             OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
-                terminal_output.status(
+                self.write_status(
+                    task_handle,
+                    tui_sender,
                     &format!(
                         "cache hit{}, suppressing logs {}",
                         more_context,
@@ -442,7 +469,9 @@ impl TaskCache {
             }
             OutputLogsMode::Full => {
                 debug!("log file path: {}", self.log_file_path);
-                terminal_output.status(
+                self.write_status(
+                    task_handle,
+                    tui_sender,
                     &format!(
                         "cache hit{}, replaying logs {}",
                         more_context,
@@ -450,11 +479,13 @@ impl TaskCache {
                     ),
                     CacheResult::Hit,
                 );
-                self.replay_log_file(terminal_output)?;
+                self.replay_log_file(task_handle)?;
             }
             OutputLogsMode::ErrorsOnly if self.errors_only_show_hash => {
                 debug!("log file path: {}", self.log_file_path);
-                terminal_output.status(
+                self.write_status(
+                    task_handle,
+                    tui_sender,
                     &format!(
                         "cache hit{}, replaying logs (no errors) {}",
                         more_context,
@@ -463,8 +494,6 @@ impl TaskCache {
                     CacheResult::Hit,
                 );
             }
-            // Note that if we're restoring from cache, the task succeeded
-            // so we know we don't need to print anything for errors
             OutputLogsMode::ErrorsOnly | OutputLogsMode::None => {}
         }
 
