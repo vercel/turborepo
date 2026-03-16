@@ -90,6 +90,7 @@
 //! than by replacing the logger.
 
 mod event;
+pub mod grouping;
 mod logger;
 mod sink;
 pub mod sinks;
