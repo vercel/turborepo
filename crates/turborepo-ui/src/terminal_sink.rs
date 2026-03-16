@@ -3,7 +3,7 @@ use std::{
     sync::atomic::{AtomicU8, Ordering},
 };
 
-use turborepo_log::{Level, LogEvent, LogSink};
+use turborepo_log::{Level, LogEvent, LogSink, Source};
 
 use crate::ColorConfig;
 
@@ -117,6 +117,17 @@ impl TerminalSink {
         // the runner to parse it as a workflow command.
         if self.ci_annotations && event.level() == Level::Error {
             let _ = writeln!(handle, "::error::{}", event.message());
+        }
+
+        // Task-scoped events get the task ID prefix so the user
+        // knows which task produced the warning/error.
+        if let Source::Task(id) = event.source() {
+            let _ = write!(
+                handle,
+                "{}",
+                self.color_config
+                    .apply(crate::BOLD.apply_to(format!("{id}: ")))
+            );
         }
 
         let badge = match event.level() {
