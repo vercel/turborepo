@@ -5,7 +5,7 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_task_id::TaskId;
-use turborepo_ui::{BOLD, BOLD_GREEN, BOLD_RED, ColorConfig, MAGENTA, YELLOW, color, cprintln};
+use turborepo_ui::{BOLD, BOLD_GREEN, BOLD_RED, ColorConfig, MAGENTA, color};
 
 use crate::{TurboDuration, task::TaskExecutionSummary};
 
@@ -149,8 +149,11 @@ impl<'a> ExecutionSummary<'a> {
             .collect();
 
         if self.attempted == 0 {
-            println!();
-            cprintln!(ui, YELLOW, "No tasks were executed as part of this run.");
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                "No tasks were executed as part of this run.",
+            )
+            .emit();
         }
 
         println!();
