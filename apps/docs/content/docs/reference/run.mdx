@@ -534,26 +534,6 @@ If you need to ensure certain tasks always run together (e.g. a frontend and an 
 }
 ```
 
-**Tasks that can run in parallel but need correct caching** (e.g. linting, type checking): Use [Transit Nodes](/docs/core-concepts/package-and-task-graph#transit-nodes).
-
-```json title="./turbo.json"
-{
-  "tasks": {
-    "transit": {
-      "dependsOn": ["^transit"]
-    },
-    "check-types": {
-      "dependsOn": ["transit"]
-    },
-    "lint": {
-      "dependsOn": ["transit"]
-    }
-  }
-}
-```
-
-Transit Nodes preserve dependency-awareness for correct caching while still allowing tasks to execute in parallel.
-
 **High concurrency**: If you were using `--parallel` to remove the concurrency limit, use [`--concurrency`](/docs/reference/run#--concurrency-number--percentage) instead (e.g. `--concurrency=100%`).
 
 ### `--preflight`
