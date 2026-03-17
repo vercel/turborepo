@@ -47,7 +47,10 @@ pub struct TuiSink {
 }
 
 enum SinkState {
-    Buffering(Vec<LogEvent>),
+    Buffering {
+        events: Vec<LogEvent>,
+        task_output: Vec<(String, Vec<u8>)>,
+    },
     Connected(TuiSender),
 }
 
@@ -60,17 +63,28 @@ impl Default for TuiSink {
 impl TuiSink {
     pub fn new() -> Self {
         Self {
-            state: Mutex::new(SinkState::Buffering(Vec::new())),
+            state: Mutex::new(SinkState::Buffering {
+                events: Vec::new(),
+                task_output: Vec::new(),
+            }),
         }
     }
 
     /// Transition from buffering to connected. Drains all buffered
-    /// events through the sender, then forwards directly from here on.
+    /// events and task output through the sender, then forwards
+    /// directly from here on.
     pub fn connect(&self, sender: TuiSender) {
         let mut state = self.state.lock().unwrap();
-        if let SinkState::Buffering(buffer) = &mut *state {
-            for event in buffer.drain(..) {
+        if let SinkState::Buffering {
+            events,
+            task_output,
+        } = &mut *state
+        {
+            for event in events.drain(..) {
                 sender.log_event(event);
+            }
+            for (task, bytes) in task_output.drain(..) {
+                let _ = sender.output(task, bytes);
             }
         }
         *state = SinkState::Connected(sender);
@@ -81,7 +95,7 @@ impl LogSink for TuiSink {
     fn emit(&self, event: &LogEvent) {
         let mut state = self.state.lock().unwrap();
         match &mut *state {
-            SinkState::Buffering(buffer) => buffer.push(event.clone()),
+            SinkState::Buffering { events, .. } => events.push(event.clone()),
             SinkState::Connected(sender) => {
                 // Task-scoped events go to the task's output pane so
                 // they appear inline with the task's process output.
@@ -97,11 +111,15 @@ impl LogSink for TuiSink {
     }
 
     fn task_output(&self, task: &str, _channel: OutputChannel, bytes: &[u8]) {
-        let state = self.state.lock().unwrap();
-        if let SinkState::Connected(sender) = &*state {
-            // Normalize \n to \r\n for the TUI's VT100 terminal emulator.
-            let normalized = normalize_newlines(bytes);
-            let _ = sender.output(task.to_string(), normalized);
+        let mut state = self.state.lock().unwrap();
+        let normalized = normalize_newlines(bytes);
+        match &mut *state {
+            SinkState::Buffering { task_output, .. } => {
+                task_output.push((task.to_string(), normalized));
+            }
+            SinkState::Connected(sender) => {
+                let _ = sender.output(task.to_string(), normalized);
+            }
         }
     }
 }
@@ -137,10 +155,10 @@ mod tests {
 
         let state = sink.state.lock().unwrap();
         match &*state {
-            SinkState::Buffering(buf) => {
-                assert_eq!(buf.len(), 2);
-                assert_eq!(buf[0].message(), "first");
-                assert_eq!(buf[1].message(), "second");
+            SinkState::Buffering { events, .. } => {
+                assert_eq!(events.len(), 2);
+                assert_eq!(events[0].message(), "first");
+                assert_eq!(events[1].message(), "second");
             }
             SinkState::Connected(_) => panic!("expected Buffering state"),
         }

@@ -30,9 +30,9 @@ pub use command::{
 };
 pub use exec::{
     DryRunExecutor, ExecOutcome, HashTrackerProvider, InternalError, SuccessOutcome,
-    TaskErrorCollector, TaskExecutor, TaskWarningCollector, prefixed_ui,
+    TaskErrorCollector, TaskExecutor, TaskWarningCollector,
 };
-pub use output::{StdWriter, TaskCacheOutput, TaskOutput};
+pub use output::{StdWriter, TaskOutput};
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_task_id::TaskId;

@@ -56,13 +56,40 @@ impl GroupingLayer {
     ///
     /// In passthrough mode the handle forwards directly to the logger.
     /// In grouped mode it buffers until [`TaskHandle::finish`] is called.
+    /// Create a [`TaskHandle`] for a task.
+    ///
+    /// `task_id` is the canonical identifier (e.g., `"my-app#build"`).
+    /// `display_label` is used for CI group markers and other
+    /// human-facing contexts (e.g., `"my-app:build"`). If not
+    /// provided, `task_id` is used.
     pub fn task(self: &Arc<Self>, task_id: impl Into<String>) -> TaskHandle {
+        let id = task_id.into();
+        let buffer = match self.mode {
+            GroupingMode::Passthrough => None,
+            GroupingMode::Grouped => Some(Vec::new()),
+        };
+        TaskHandle {
+            display_label: id.clone(),
+            task_id: id,
+            layer: Arc::clone(self),
+            buffer,
+            accumulated_bytes: Vec::new(),
+        }
+    }
+
+    /// Create a [`TaskHandle`] with a separate display label.
+    pub fn task_with_label(
+        self: &Arc<Self>,
+        task_id: impl Into<String>,
+        display_label: impl Into<String>,
+    ) -> TaskHandle {
         let buffer = match self.mode {
             GroupingMode::Passthrough => None,
             GroupingMode::Grouped => Some(Vec::new()),
         };
         TaskHandle {
             task_id: task_id.into(),
+            display_label: display_label.into(),
             layer: Arc::clone(self),
             buffer,
             accumulated_bytes: Vec::new(),
@@ -90,6 +117,8 @@ enum TaskEvent {
 /// run summary use.
 pub struct TaskHandle {
     task_id: String,
+    /// Human-facing label for CI group markers. Defaults to `task_id`.
+    display_label: String,
     layer: Arc<GroupingLayer>,
     /// `None` in passthrough mode; `Some` in grouped mode.
     buffer: Option<Vec<TaskEvent>>,
@@ -144,7 +173,9 @@ impl TaskHandle {
                 .lock()
                 .unwrap_or_else(|e| e.into_inner());
 
-            self.layer.logger.begin_task_group(&self.task_id, is_error);
+            self.layer
+                .logger
+                .begin_task_group(&self.display_label, is_error);
 
             for event in buffer {
                 match event {
@@ -157,7 +188,9 @@ impl TaskHandle {
                 }
             }
 
-            self.layer.logger.end_task_group(&self.task_id, is_error);
+            self.layer
+                .logger
+                .end_task_group(&self.display_label, is_error);
         }
         self.accumulated_bytes
     }

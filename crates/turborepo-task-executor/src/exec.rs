@@ -12,7 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use console::{Style, StyledObject};
+use console::StyledObject;
 use tokio::sync::oneshot;
 use tracing::{Instrument, error};
 use turbopath::AnchoredSystemPathBuf;
@@ -24,9 +24,9 @@ use turborepo_run_summary::TaskTracker;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{TrackedErrors, task::PackageTaskEventBuilder};
 use turborepo_types::{ContinueMode, StopExecution, UIMode};
-use turborepo_ui::{ColorConfig, OutputWriter};
+use turborepo_ui::ColorConfig;
 
-use crate::{TaskAccessProvider, TaskCacheOutput, TaskOutput};
+use crate::{TaskAccessProvider, TaskOutput};
 
 /// Windows NT status codes that indicate out-of-memory conditions.
 /// These are the signed i32 representations of the unsigned NT status codes.
@@ -161,40 +161,6 @@ pub trait TaskWarningCollector: Clone + Send {
 }
 
 // =============================================================================
-// Helper Functions
-// =============================================================================
-
-/// Create a prefixed UI for task output.
-///
-/// This creates a `PrefixedUI` configured with appropriate prefixes for
-/// normal output, errors, and warnings.
-pub fn prefixed_ui<W: Write>(
-    color_config: ColorConfig,
-    is_github_actions: bool,
-    stdout: W,
-    stderr: W,
-    prefix: StyledObject<String>,
-    include_timestamps: bool,
-) -> turborepo_ui::PrefixedUI<W> {
-    let mut prefixed_ui = turborepo_ui::PrefixedUI::new(color_config, stdout, stderr)
-        .with_output_prefix(prefix.clone())
-        .with_error_prefix(
-            Style::new().apply_to(format!("{}ERROR: ", color_config.apply(prefix.clone()))),
-        )
-        .with_warn_prefix(prefix)
-        .with_timestamps(include_timestamps);
-    if is_github_actions {
-        prefixed_ui = prefixed_ui
-            .with_error_prefix(Style::new().apply_to("[ERROR] ".to_string()))
-            .with_warn_prefix(Style::new().apply_to("[WARN] ".to_string()));
-    }
-    prefixed_ui
-}
-
-// =============================================================================
-// TaskExecutor
-// =============================================================================
-
 /// Executes a single task.
 ///
 /// This struct encapsulates all the logic for executing a task, including:
@@ -379,31 +345,12 @@ where
         Ok(())
     }
 
-    fn prefixed_ui<'a, O: Write>(
-        &self,
-        output_client: &'a TaskOutput<O>,
-    ) -> TaskCacheOutput<OutputWriter<'a, O>> {
-        match output_client {
-            TaskOutput::Direct(client) => TaskCacheOutput::Direct(prefixed_ui(
-                self.color_config,
-                self.is_github_actions,
-                client.stdout(),
-                client.stderr(),
-                self.pretty_prefix.clone(),
-                self.ui_mode.should_include_timestamps(),
-            )),
-            TaskOutput::UI(task) => TaskCacheOutput::UI(task.clone()),
-        }
-    }
-
     async fn execute_inner<O: Write>(
         &mut self,
         output_client: &TaskOutput<O>,
         task_handle: &mut turborepo_log::grouping::TaskHandle,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
-        let mut prefixed_ui = self.prefixed_ui(output_client);
-
         if self.ui_mode.has_sender()
             && let TaskOutput::UI(task) = output_client
         {
@@ -421,9 +368,13 @@ where
         }
 
         // Try to restore from cache
+        let tui_sender = match output_client {
+            TaskOutput::UI(sender) => Some(sender),
+            _ => None,
+        };
         let cache_result = self
             .task_cache
-            .restore_outputs(&mut prefixed_ui, telemetry)
+            .restore_outputs(task_handle, tui_sender, telemetry)
             .instrument(tracing::info_span!("cache_restore", task = %self.task_id))
             .await;
         match cache_result {
@@ -528,7 +479,7 @@ where
         match exit_status {
             ChildExit::Finished(Some(0)) => Ok(ExecOutcome::Success(SuccessOutcome::Run)),
             ChildExit::Finished(Some(code)) => {
-                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
+                if let Err(e) = self.task_cache.on_error(task_handle, tui_sender) {
                     error!("error reading logs: {e}");
                 }
                 // Check if this looks like an OOM-related exit code
@@ -559,7 +510,7 @@ where
                 })
             }
             ChildExit::Finished(None) | ChildExit::Failed => {
-                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
+                if let Err(e) = self.task_cache.on_error(task_handle, tui_sender) {
                     error!("error reading logs: {e}");
                 }
                 let message = format!("command {} exited unexpectedly", process.label());
@@ -581,7 +532,7 @@ where
             }
             ChildExit::KilledExternal => {
                 const SIGKILL_EXIT_CODE: i32 = 137;
-                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
+                if let Err(e) = self.task_cache.on_error(task_handle, tui_sender) {
                     error!("error reading logs: {e}");
                 }
                 let message = format!(
