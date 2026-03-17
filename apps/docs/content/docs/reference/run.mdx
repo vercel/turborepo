@@ -486,6 +486,13 @@ Additionally, `--only` will only run tasks in specified packages, excluding depe
 
 ### `--parallel`
 
+<Callout type="warn" title="Deprecated">
+  This flag is deprecated and will be removed in a future major release.
+  `--parallel` discards the task dependency graph, which means caching, ordering,
+  and dependency-awareness are all lost. Instead, define task behavior correctly
+  in your `turbo.json` task definitions. See migration guidance below.
+</Callout>
+
 Default: `false`
 
 Run commands in parallel across packages, ignoring the task dependency graph.
@@ -495,11 +502,39 @@ turbo run lint --parallel
 turbo run dev --parallel
 ```
 
-<Callout type="info">
-  The `--parallel` flag is typically used for long-running "dev" or "watch"
-  tasks that don't exit. Starting in `turbo@1.7`, we recommend configuring these
-  tasks using [`persistent`](/docs/reference/configuration#persistent) instead.
-</Callout>
+#### Migrating off `--parallel`
+
+There are several alternatives depending on your use case:
+
+**Long-running dev tasks**: Use [`persistent`](/docs/reference/configuration#persistent) and [`with`](/docs/reference/configuration#with) in your task definitions.
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "dev": {
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+
+If you need to ensure certain tasks always run together (e.g. a frontend and an API), use `with` in a [Package Configuration](/docs/reference/configuration#package-configurations):
+
+```json title="./apps/web/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "dev": {
+      "with": ["api#dev"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+
+**High concurrency**: If you were using `--parallel` to remove the concurrency limit, use [`--concurrency`](/docs/reference/run#--concurrency-number--percentage) instead (e.g. `--concurrency=100%`).
 
 ### `--preflight`
 
