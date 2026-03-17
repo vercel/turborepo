@@ -15,7 +15,10 @@ use biome_deserialize_macros::Deserializable;
 use biome_json_parser::JsonParserOptions;
 use serde::Serialize;
 
-use crate::Error;
+use crate::{
+    Error,
+    port::{generate_port_from_name, parse_port_from_host},
+};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserializable, Default, Clone)]
 pub struct TurborepoConfig {
@@ -98,22 +101,6 @@ impl biome_deserialize::Deserializable for LocalHost {
     }
 }
 
-fn parse_port_from_host(host: &str) -> Option<u16> {
-    let without_protocol = if let Some(idx) = host.find("://") {
-        &host[idx + 3..]
-    } else {
-        host
-    };
-
-    if let Some(colon_idx) = without_protocol.rfind(':')
-        && let Ok(port) = without_protocol[colon_idx + 1..].parse::<u16>()
-    {
-        return Some(port);
-    }
-
-    None
-}
-
 impl TurborepoConfig {
     pub fn from_str(input: &str, source: &str) -> Result<Self, Error> {
         let jsonc_options = JsonParserOptions::default()
@@ -142,23 +129,48 @@ impl TurborepoConfig {
         self.applications.iter().map(|(k, v)| (k.clone(), v))
     }
 
+    /// Resolves an application by name. Tries a direct key match first,
+    /// then falls back to scanning by `packageName`. This handles the common
+    /// case where the config key (e.g. a Vercel project name) differs from
+    /// the local package name.
+    fn find_application(&self, name: &str) -> Option<(&String, &TurborepoApplication)> {
+        self.applications.get_key_value(name).or_else(|| {
+            self.applications
+                .iter()
+                .find(|(key, app)| app.package_name(key) == name)
+        })
+    }
+
+    /// Returns the dev server port for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`. When no explicit port is configured,
+    /// a deterministic port is generated from the config map key.
     pub fn port(&self, name: &str) -> Option<u16> {
-        let application = self.applications.get(name)?;
-        Some(application.port(name))
+        let (key, app) = self.find_application(name)?;
+        Some(app.port(key))
     }
 
     pub fn local_proxy_port(&self) -> Option<u16> {
         self.options.as_ref()?.local_proxy_port
     }
 
+    /// Returns the routing configuration for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`.
     pub fn routing(&self, app_name: &str) -> Option<&[PathGroup]> {
-        let application = self.applications.get(app_name)?;
-        application.routing.as_deref()
+        let (_, app) = self.find_application(app_name)?;
+        app.routing.as_deref()
     }
 
+    /// Returns the fallback URL for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`.
     pub fn fallback(&self, name: &str) -> Option<&str> {
-        let application = self.applications.get(name)?;
-        application.fallback()
+        let (_, app) = self.find_application(name)?;
+        app.fallback()
     }
 
     pub fn root_route_app(&self) -> Option<(&str, &str)> {
@@ -188,21 +200,6 @@ impl TurborepoApplication {
     }
 }
 
-const MIN_PORT: u16 = 3000;
-const MAX_PORT: u16 = 8000;
-const PORT_RANGE: u16 = MAX_PORT - MIN_PORT;
-
-fn generate_port_from_name(name: &str) -> u16 {
-    let mut hash: i32 = 0;
-    for c in name.chars() {
-        let code = i32::try_from(u32::from(c)).expect("char::MAX is less than 2^31");
-        hash = (hash << 5).overflowing_sub(hash).0.overflowing_add(code).0;
-    }
-    let hash = hash.abs_diff(0);
-    let port = hash % u32::from(PORT_RANGE);
-    MIN_PORT + u16::try_from(port).expect("u32 modulo a u16 number will be a valid u16")
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -219,6 +216,101 @@ mod test {
         let config = TurborepoConfig::from_str(input, "somewhere").unwrap();
         assert!(config.applications.contains_key("web"));
         assert!(config.applications.contains_key("docs"));
+    }
+
+    #[test]
+    fn test_port_lookup_by_package_name() {
+        let input = r#"{
+        "applications": {
+            "my-vercel-project": {
+                "packageName": "my-app",
+                "development": {"local": 3001}
+            }
+        }
+    }"#;
+        let config = TurborepoConfig::from_str(input, "microfrontends.json").unwrap();
+        assert_eq!(config.port("my-app"), Some(3001));
+        assert_eq!(config.port("my-vercel-project"), Some(3001));
+    }
+
+    #[test]
+    fn test_port_lookup_by_package_name_auto_generated() {
+        let input = r#"{
+        "applications": {
+            "my-vercel-project": {
+                "packageName": "my-app"
+            }
+        }
+    }"#;
+        let config = TurborepoConfig::from_str(input, "microfrontends.json").unwrap();
+        let port_by_pkg = config.port("my-app");
+        let port_by_key = config.port("my-vercel-project");
+        assert!(port_by_pkg.is_some());
+        assert!(port_by_key.is_some());
+        assert_eq!(port_by_pkg, port_by_key);
+        assert_eq!(
+            port_by_key,
+            Some(generate_port_from_name("my-vercel-project"))
+        );
+    }
+
+    #[test]
+    fn test_port_returns_none_for_unknown_name() {
+        let input = r#"{"applications": {"web": {"development": {"local": 3000}}}}"#;
+        let config = TurborepoConfig::from_str(input, "microfrontends.json").unwrap();
+        assert_eq!(config.port("nonexistent"), None);
+    }
+
+    #[test]
+    fn test_direct_key_takes_priority_over_package_name() {
+        let input = r#"{
+        "applications": {
+            "web": {
+                "development": {"local": 3000}
+            },
+            "vercel-web": {
+                "packageName": "web",
+                "development": {"local": 4000}
+            }
+        }
+    }"#;
+        let config = TurborepoConfig::from_str(input, "microfrontends.json").unwrap();
+        assert_eq!(config.port("web"), Some(3000));
+        assert_eq!(config.port("vercel-web"), Some(4000));
+    }
+
+    #[test]
+    fn test_fallback_lookup_by_package_name() {
+        let input = r#"{
+        "applications": {
+            "my-vercel-project": {
+                "packageName": "my-app",
+                "development": {
+                    "local": 3001,
+                    "fallback": "example.com"
+                }
+            }
+        }
+    }"#;
+        let config = TurborepoConfig::from_str(input, "microfrontends.json").unwrap();
+        assert_eq!(config.fallback("my-app"), Some("example.com"));
+        assert_eq!(config.fallback("my-vercel-project"), Some("example.com"));
+    }
+
+    #[test]
+    fn test_routing_lookup_by_package_name() {
+        let input = r#"{
+        "applications": {
+            "my-vercel-project": {
+                "packageName": "my-app",
+                "routing": [{"paths": ["/docs"], "group": "docs"}],
+                "development": {"local": 3001}
+            }
+        }
+    }"#;
+        let config = TurborepoConfig::from_str(input, "microfrontends.json").unwrap();
+        assert!(config.routing("my-app").is_some());
+        assert!(config.routing("my-vercel-project").is_some());
     }
 
     #[test]
