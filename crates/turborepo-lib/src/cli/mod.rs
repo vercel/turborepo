@@ -417,6 +417,13 @@ impl Args {
                      no longer used for `turbo run`."
                 );
             }
+            if run_args.parallel {
+                warn!(
+                    "--parallel is deprecated and will be removed in a future major version. \
+                     Instead, define task behavior in your turbo.json task definitions using \
+                     `persistent` and `with`."
+                );
+            }
             if let Some(graph) = &run_args.graph {
                 match Utf8Path::new(graph).extension() {
                     Some("png" | "jpg" | "pdf") => {
@@ -1127,7 +1134,8 @@ pub struct RunArgs {
     #[clap(long, default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
 
-    /// Execute all tasks in parallel.
+    /// [DEPRECATED] Execute all tasks in parallel. Use task configuration
+    /// (`persistent`, `with`) instead.
     #[clap(long)]
     pub parallel: bool,
 }
