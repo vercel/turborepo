@@ -658,6 +658,11 @@ impl<'a> Prune<'a> {
 
         for file_path in &matched_files {
             let anchored = AnchoredSystemPathBuf::new(&self.root, file_path)?;
+            // turbo.json is already written by copy_turbo_json as a pruned
+            // version. Don't overwrite it with the original.
+            if anchored.as_str() == CONFIG_FILE || anchored.as_str() == CONFIG_FILE_JSONC {
+                continue;
+            }
             trace!("Copying global dependency: {}", anchored);
             self.copy_file(&anchored, Some(CopyDestination::Docker))?;
         }

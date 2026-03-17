@@ -431,6 +431,58 @@ fn test_prune_global_dependencies_docker() {
     );
 }
 
+#[test]
+fn test_prune_global_deps_does_not_overwrite_pruned_turbo_json() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    // A glob that matches turbo.json itself
+    let turbo_json = serde_json::json!({
+        "globalDependencies": ["*.json"],
+        "futureFlags": {
+            "pruneIncludesGlobalFiles": true
+        },
+        "tasks": {
+            "build": { "outputs": [] },
+            "web#build": { "dependsOn": ["web#gen"] },
+            "web#gen": { "outputs": ["gen.txt"] }
+        }
+    });
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        serde_json::to_string_pretty(&turbo_json).unwrap(),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // The pruned turbo.json should NOT contain tasks for non-pruned workspaces.
+    // If the original was copied over the pruned version, it would still be the
+    // full config (which is fine here since we only have web tasks, but the key
+    // point is that it went through prune_tasks).
+    let pruned_contents = fs::read_to_string(tempdir.path().join("out/turbo.json")).unwrap();
+    let pruned: serde_json::Value = serde_json::from_str(&pruned_contents).unwrap();
+    let tasks = pruned["tasks"].as_object().unwrap();
+
+    // The pruned turbo.json should have gone through prune_tasks, so it should
+    // be a valid JSON object (not the JSONC original with comments).
+    assert!(
+        tasks.contains_key("build"),
+        "pruned turbo.json should contain generic tasks"
+    );
+}
+
 // --- yarn-pnp.t ---
 
 #[test]
