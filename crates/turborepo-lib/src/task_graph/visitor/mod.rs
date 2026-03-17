@@ -4,11 +4,9 @@ mod exec;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
-    io::Write,
     sync::{Arc, Mutex},
 };
 
-use console::{Style, StyledObject};
 use convert_case::{Case, Casing};
 use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
@@ -17,7 +15,6 @@ use miette::{Diagnostic, NamedSource, SourceSpan};
 use tokio::sync::mpsc;
 use tracing::{debug, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
-use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_engine::{TaskError, TaskWarning};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
@@ -27,15 +24,13 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NA
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker};
 use turborepo_scm::SCM;
 // Re-export output types and shared functions from turborepo-task-executor
-pub use turborepo_task_executor::{turbo_regex, StdWriter, TaskOutput};
+pub use turborepo_task_executor::{turbo_regex, TaskOutput};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
 use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
-use turborepo_ui::{
-    sender::UISender, ColorConfig, ColorSelector, OutputClient, OutputSink, PrefixedUI,
-};
+use turborepo_ui::{sender::UISender, ColorConfig, ColorSelector};
 
 use crate::{
     engine::{Engine, ExecutionOptions},
@@ -60,7 +55,6 @@ pub struct Visitor<'a> {
     run_cache: Arc<RunCache>,
     run_tracker: RunTracker,
     task_access: &'a TaskAccess,
-    sink: OutputSink<StdWriter>,
     task_hasher: TaskHasher<'a>,
     color_config: ColorConfig,
     is_watch: bool,
@@ -140,7 +134,7 @@ impl<'a> Visitor<'a> {
         is_watch: bool,
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     ) -> Self {
-        let (task_hasher, sink, color_cache, grouping_layer) = {
+        let (task_hasher, color_cache, grouping_layer) = {
             let _span = tracing::info_span!("visitor_new").entered();
             let mut task_hasher = TaskHasher::new(
                 package_inputs_hashes,
@@ -155,7 +149,6 @@ impl<'a> Visitor<'a> {
                 task_hasher.precompute_external_deps_hashes(package_graph.packages());
             });
 
-            let sink = Self::sink(run_opts);
             let color_cache = ColorSelector::default();
 
             let grouping_mode = match run_opts.log_order {
@@ -166,7 +159,7 @@ impl<'a> Visitor<'a> {
                 .unwrap_or_else(|| Arc::new(turborepo_log::Logger::new(vec![])));
             let grouping_layer = GroupingLayer::new(logger, grouping_mode);
 
-            (task_hasher, sink, color_cache, grouping_layer)
+            (task_hasher, color_cache, grouping_layer)
         };
 
         // Set up correct size for underlying pty (requires .await, so outside span)
@@ -192,7 +185,6 @@ impl<'a> Visitor<'a> {
             run_cache,
             run_tracker,
             task_access,
-            sink,
             task_hasher,
             color_config,
             ui_sender,
@@ -352,7 +344,6 @@ impl<'a> Visitor<'a> {
         let span = Span::current();
 
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine)?;
-        let cached_vendor_behavior = Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
 
         // Errors from the dispatch loop are captured here rather than returned
         // immediately. This ensures we always drain the FuturesUnordered below,
@@ -440,12 +431,10 @@ impl<'a> Visitor<'a> {
                 false => {
                     let takes_input = task_definition.interactive || task_definition.persistent;
 
-                    // Build values that only need &info before consuming it.
-                    let vendor_behavior = cached_vendor_behavior;
-                    let output_client = if let Some(handle) = &self.ui_sender {
-                        TaskOutput::UI(handle.task(info.to_string()))
+                    let task_output = if let Some(handle) = &self.ui_sender {
+                        TaskOutput::tui(handle.task(info.to_string()))
                     } else {
-                        TaskOutput::Direct(self.output_client(&info, vendor_behavior))
+                        TaskOutput::stream()
                     };
                     let package_task_event =
                         PackageTaskEventBuilder::new(info.package(), info.task())
@@ -496,7 +485,7 @@ impl<'a> Visitor<'a> {
                             .execute(
                                 parent_span.id(),
                                 tracker,
-                                output_client,
+                                task_output,
                                 task_handle,
                                 callback,
                                 &execution_telemetry,
@@ -633,51 +622,6 @@ impl<'a> Visitor<'a> {
             .await?)
     }
 
-    fn sink(run_opts: &RunOpts) -> OutputSink<StdWriter> {
-        let (out, err) = if run_opts.should_redirect_stderr_to_stdout() {
-            (std::io::stdout().into(), std::io::stdout().into())
-        } else {
-            (std::io::stdout().into(), std::io::stderr().into())
-        };
-        OutputSink::new(out, err)
-    }
-
-    fn output_client(
-        &self,
-        task_id: &TaskId,
-        vendor_behavior: Option<&VendorBehavior>,
-    ) -> OutputClient<impl std::io::Write> {
-        let behavior = match self.run_opts.log_order {
-            ResolvedLogOrder::Stream => turborepo_ui::OutputClientBehavior::Passthrough,
-            ResolvedLogOrder::Grouped => turborepo_ui::OutputClientBehavior::Grouped,
-        };
-
-        let mut logger = self.sink.logger(behavior);
-        if let Some(vendor_behavior) = vendor_behavior {
-            let group_name = if self.run_opts.single_package {
-                task_id.task().to_string()
-            } else {
-                format!("{}:{}", task_id.package(), task_id.task())
-            };
-
-            let header_factory = (vendor_behavior.group_prefix)(group_name.to_owned());
-            let footer_factory = (vendor_behavior.group_suffix)(group_name.to_owned());
-
-            logger.with_header_footer(Some(header_factory), Some(footer_factory));
-
-            let (error_header, error_footer) = (
-                vendor_behavior
-                    .error_group_prefix
-                    .map(|f| f(group_name.to_owned())),
-                vendor_behavior
-                    .error_group_suffix
-                    .map(|f| f(group_name.to_owned())),
-            );
-            logger.with_error_header_footer(error_header, error_footer);
-        }
-        logger
-    }
-
     pub(crate) fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
         match self.run_opts.log_prefix {
             ResolvedLogPrefix::Task if self.run_opts.single_package => task_id.task().into(),
@@ -692,28 +636,6 @@ impl<'a> Visitor<'a> {
             true => task_id.task().to_string(),
             false => task_id.to_string(),
         }
-    }
-
-    fn prefixed_ui<W: Write>(
-        color_config: ColorConfig,
-        is_github_actions: bool,
-        stdout: W,
-        stderr: W,
-        prefix: StyledObject<String>,
-    ) -> PrefixedUI<W> {
-        let mut prefixed_ui = PrefixedUI::new(color_config, stdout, stderr)
-            .with_output_prefix(prefix.clone())
-            // TODO: we can probably come up with a more ergonomic way to achieve this
-            .with_error_prefix(
-                Style::new().apply_to(format!("{}ERROR: ", color_config.apply(prefix.clone()))),
-            )
-            .with_warn_prefix(prefix);
-        if is_github_actions {
-            prefixed_ui = prefixed_ui
-                .with_error_prefix(Style::new().apply_to("[ERROR] ".to_string()))
-                .with_warn_prefix(Style::new().apply_to("[WARN] ".to_string()));
-        }
-        prefixed_ui
     }
 
     /// Only used for the hashing comparison between Rust and Go. After port,

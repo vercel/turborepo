@@ -17,6 +17,14 @@
 //! that an end user sees, use `turborepo-log`. If it's for debug output
 //! or internal diagnostics, use `tracing`.
 //!
+//! # When NOT to use this crate
+//!
+//! - **Program data output** (e.g., `turbo ls` listings, `--dry=json`, `turbo
+//!   info`): These are program output consumed by scripts or users. Use
+//!   `println!` for these — they go to stdout and may be piped.
+//! - **Internal diagnostics**: Use `tracing::{debug,trace,info,warn}!`. These
+//!   are filtered by `TURBO_LOG_VERBOSITY` and are not user-facing.
+//!
 //! # Architecture
 //!
 //! - **Handle**: [`LogHandle`] provides a source-scoped API for emitting

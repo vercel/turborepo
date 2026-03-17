@@ -229,11 +229,11 @@ where
     /// 3. Reports the outcome via the callback
     /// 4. Saves outputs to cache (off the critical path)
     /// 5. Updates the tracker
-    pub async fn execute<O: Write>(
+    pub async fn execute(
         &mut self,
         parent_span_id: Option<tracing::Id>,
         tracker: TaskTracker<()>,
-        output_client: TaskOutput<O>,
+        task_output: TaskOutput,
         mut task_handle: turborepo_log::grouping::TaskHandle,
         callback: oneshot::Sender<Result<(), StopExecution>>,
         telemetry: &PackageTaskEventBuilder,
@@ -243,25 +243,18 @@ where
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         span.follows_from(parent_span_id);
 
-        let mut result = self
-            .execute_inner(&output_client, &mut task_handle, telemetry)
+        let result = self
+            .execute_inner(&task_output, &mut task_handle, telemetry)
             .instrument(span)
             .await;
         let task_duration = task_start.elapsed();
 
-        // If the task resulted in an error, do not group in order to better highlight
-        // the error.
         let is_error = matches!(result, Ok(ExecOutcome::Task { .. }));
         let is_cache_hit = matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)));
-        if let Err(e) = output_client.finish(is_error, is_cache_hit) {
-            telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
-            error!("unable to flush output client: {e}");
-            result = Err(InternalError::Io(e));
-        }
-        // Flush any structured events buffered by the grouping layer.
-        // This must happen after output_client.finish() so the grouped
-        // block includes both child process output and structured events.
+        // Flush any events buffered by the grouping layer.
         task_handle.finish(is_error);
+        // Signal the TUI that the task completed.
+        task_output.finish(is_error, is_cache_hit);
 
         // Send the callback as early as possible after output is flushed.
         // For cache hits, this unblocks dependent tasks before the tracker
@@ -345,20 +338,14 @@ where
         Ok(())
     }
 
-    async fn execute_inner<O: Write>(
+    async fn execute_inner(
         &mut self,
-        output_client: &TaskOutput<O>,
+        task_output: &TaskOutput,
         task_handle: &mut turborepo_log::grouping::TaskHandle,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
-        if self.ui_mode.has_sender()
-            && let TaskOutput::UI(task) = output_client
-        {
-            let output_logs = self.task_cache.output_logs().into();
-            task.start(output_logs);
-        }
+        task_output.start(self.task_cache.output_logs().into());
 
-        // Check platform env warnings
         if !self.task_cache.is_caching_disabled() {
             let missing_platform_env = self.platform_env.validate(&self.execution_env);
             if !missing_platform_env.is_empty() {
@@ -367,11 +354,7 @@ where
             }
         }
 
-        // Try to restore from cache
-        let tui_sender = match output_client {
-            TaskOutput::UI(sender) => Some(sender),
-            _ => None,
-        };
+        let tui_sender = task_output.sender();
         let cache_result = self
             .task_cache
             .restore_outputs(task_handle, tui_sender, telemetry)
@@ -425,13 +408,10 @@ where
                 }
             };
 
-        // Handle stdin for interactive tasks
-        if self.ui_mode.has_sender()
-            && self.takes_input
-            && let TaskOutput::UI(task) = output_client
+        if self.takes_input
             && let Some(stdin) = process.stdin()
         {
-            task.set_stdin(stdin);
+            task_output.set_stdin(stdin);
         }
 
         // For persistent tasks not using TUI, take stdin and hold it so it
