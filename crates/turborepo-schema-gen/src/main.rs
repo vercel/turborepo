@@ -718,6 +718,14 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   affectedUsingTaskInputs?: boolean;
+  /**
+   * Include files matching `globalDependencies` globs in the `turbo prune`
+   * output. Without this flag, `globalDependencies` entries are preserved in
+   * the pruned `turbo.json` but the actual files are not copied.
+   *
+   * @defaultValue `false`
+   */
+  pruneIncludesGlobalFiles?: boolean;
 }
 
 "#

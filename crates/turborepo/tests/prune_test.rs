@@ -278,6 +278,159 @@ fn test_prune_resolutions() {
     assert!(yarn_lock.contains("resolution: \"is-odd@npm:3.0.1\""));
 }
 
+// --- global-dependencies.t ---
+
+#[test]
+fn test_prune_copies_global_dependencies_with_future_flag() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    // Create root-level files that will be referenced by globalDependencies
+    fs::write(
+        tempdir.path().join("tsconfig.json"),
+        r#"{"compilerOptions":{}}"#,
+    )
+    .unwrap();
+    fs::create_dir_all(tempdir.path().join("config")).unwrap();
+    fs::write(tempdir.path().join("config/base.json"), "{}").unwrap();
+    fs::write(tempdir.path().join("config/ignore-me.md"), "ignored").unwrap();
+
+    // Rewrite turbo.json with globalDependencies and the future flag enabled
+    let turbo_json = serde_json::json!({
+        "globalDependencies": ["tsconfig.json", "config/**", "!config/**/*.md"],
+        "futureFlags": {
+            "pruneIncludesGlobalFiles": true
+        },
+        "tasks": {
+            "build": { "outputs": [] }
+        }
+    });
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        serde_json::to_string_pretty(&turbo_json).unwrap(),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(
+        output.status.success(),
+        "prune failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // Global dependency files should be in the output
+    assert!(
+        tempdir.path().join("out/tsconfig.json").exists(),
+        "tsconfig.json should be in pruned output"
+    );
+    assert!(
+        tempdir.path().join("out/config/base.json").exists(),
+        "config/base.json should be in pruned output"
+    );
+
+    // Excluded file should NOT be in the output
+    assert!(
+        !tempdir.path().join("out/config/ignore-me.md").exists(),
+        "config/ignore-me.md should be excluded from pruned output"
+    );
+}
+
+#[test]
+fn test_prune_skips_global_dependencies_without_future_flag() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("tsconfig.json"),
+        r#"{"compilerOptions":{}}"#,
+    )
+    .unwrap();
+
+    // turbo.json with globalDependencies but NO future flag
+    let turbo_json = serde_json::json!({
+        "globalDependencies": ["tsconfig.json"],
+        "tasks": {
+            "build": { "outputs": [] }
+        }
+    });
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        serde_json::to_string_pretty(&turbo_json).unwrap(),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(output.status.success());
+
+    // Without the flag, global dependency files should NOT be copied
+    assert!(
+        !tempdir.path().join("out/tsconfig.json").exists(),
+        "tsconfig.json should NOT be in pruned output without future flag"
+    );
+}
+
+#[test]
+fn test_prune_global_dependencies_docker() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    fs::write(
+        tempdir.path().join("tsconfig.json"),
+        r#"{"compilerOptions":{}}"#,
+    )
+    .unwrap();
+
+    let turbo_json = serde_json::json!({
+        "globalDependencies": ["tsconfig.json"],
+        "futureFlags": {
+            "pruneIncludesGlobalFiles": true
+        },
+        "tasks": {
+            "build": { "outputs": [] }
+        }
+    });
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        serde_json::to_string_pretty(&turbo_json).unwrap(),
+    )
+    .unwrap();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web", "--docker"]);
+    assert!(
+        output.status.success(),
+        "prune --docker failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // In docker mode, global dependency files should be in both full and json
+    assert!(
+        tempdir.path().join("out/full/tsconfig.json").exists(),
+        "tsconfig.json should be in out/full/"
+    );
+    assert!(
+        tempdir.path().join("out/json/tsconfig.json").exists(),
+        "tsconfig.json should be in out/json/"
+    );
+}
+
 // --- yarn-pnp.t ---
 
 #[test]

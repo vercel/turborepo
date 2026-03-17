@@ -1,7 +1,11 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::sync::{LazyLock, OnceLock};
+use std::{
+    str::FromStr,
+    sync::{LazyLock, OnceLock},
+};
 
+use globwalk::{ValidatedGlob, WalkType};
 use miette::Diagnostic;
 use tracing::trace;
 use turbopath::{
@@ -52,6 +56,10 @@ pub enum Error {
     MissingLockfile,
     #[error("Unable to read config: {0}")]
     Config(#[from] crate::config::Error),
+    #[error("Glob error while resolving globalDependencies: {0}")]
+    Glob(#[from] globwalk::GlobError),
+    #[error("Walk error while resolving globalDependencies: {0}")]
+    Walk(#[from] globwalk::WalkError),
 }
 
 static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
@@ -219,6 +227,7 @@ pub async fn prune(
     }
 
     prune.copy_turbo_json(&workspace_names)?;
+    prune.copy_global_dependencies()?;
 
     let original_patches = prune
         .package_graph
@@ -600,6 +609,60 @@ impl<'a> Prune<'a> {
             .collect();
         names.sort();
         names
+    }
+
+    /// Copy files matched by `globalDependencies` globs when the
+    /// `pruneGlobalDependencies` future flag is enabled.
+    fn copy_global_dependencies(&self) -> Result<(), Error> {
+        let Some((turbo_json, _)) = self
+            .get_turbo_json(turbo_json())
+            .transpose()
+            .or_else(|| self.get_turbo_json(turbo_jsonc()).transpose())
+            .transpose()?
+        else {
+            return Ok(());
+        };
+
+        let prune_enabled = turbo_json
+            .future_flags
+            .as_ref()
+            .map(|ff| ff.value.prune_includes_global_files)
+            .unwrap_or(false);
+        if !prune_enabled {
+            return Ok(());
+        }
+
+        let Some(global_deps) = &turbo_json.global_dependencies else {
+            return Ok(());
+        };
+
+        let global_dep_globs: Vec<&str> = global_deps.iter().map(|s| s.value.as_ref()).collect();
+        if global_dep_globs.is_empty() {
+            return Ok(());
+        }
+
+        let (raw_inclusions, raw_exclusions): (Vec<&str>, Vec<&str>) =
+            global_dep_globs.iter().partition(|g| !g.starts_with('!'));
+
+        let inclusions = raw_inclusions
+            .iter()
+            .map(|i| ValidatedGlob::from_str(i))
+            .collect::<Result<Vec<_>, _>>()?;
+        let exclusions = raw_exclusions
+            .iter()
+            .map(|e| ValidatedGlob::from_str(e.strip_prefix('!').unwrap_or(e)))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let matched_files =
+            globwalk::globwalk(&self.root, &inclusions, &exclusions, WalkType::Files)?;
+
+        for file_path in &matched_files {
+            let anchored = AnchoredSystemPathBuf::new(&self.root, file_path)?;
+            trace!("Copying global dependency: {}", anchored);
+            self.copy_file(&anchored, Some(CopyDestination::Docker))?;
+        }
+
+        Ok(())
     }
 
     fn copy_turbo_json(&self, workspaces: &[String]) -> Result<(), Error> {
