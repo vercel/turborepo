@@ -1,15 +1,11 @@
 //! Turborepo's terminal UI library. Handles elements like spinners, colors,
-//! and logging. Includes a `PrefixedUI` struct that can be used to prefix
-//! output, and a `ColorSelector` that lets multiple concurrent resources get
-//! an assigned color.
+//! logging sinks, and the TUI. Includes a `ColorSelector` that lets multiple
+//! concurrent resources get an assigned color.
 #![feature(deadline_api)]
 
 mod color_selector;
-mod line;
 mod log_sinks;
 mod logs;
-mod output;
-mod prefixed;
 pub mod sender;
 mod terminal_sink;
 pub mod tui;
@@ -24,11 +20,8 @@ use thiserror::Error;
 
 pub use crate::{
     color_selector::ColorSelector,
-    line::LineWriter,
     log_sinks::LogSinks,
-    logs::{LogWriter, replay_logs, replay_logs_with_crlf},
-    output::{OutputClient, OutputClientBehavior, OutputSink, OutputWriter},
-    prefixed::{PrefixedUI, PrefixedWriter},
+    logs::{LogWriter, replay_logs},
     terminal_sink::TerminalSink,
     tui::{TaskTable, TerminalPane, panic_handler::restore_terminal_on_panic},
     tui_sink::TuiSink,

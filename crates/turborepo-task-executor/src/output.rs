@@ -3,24 +3,52 @@
 //! This module provides types for handling task output to both the terminal
 //! and the TUI.
 
-use std::io::Write;
+use turborepo_ui::sender::TaskSender;
 
-use turborepo_ui::{OutputClient, sender::TaskSender};
+/// Wrapper for TUI lifecycle signaling.
+///
+/// In stream mode (no TUI), this is `None` — lifecycle signals are not
+/// needed since `TerminalSink` handles all rendering.
+///
+/// In TUI mode, this holds a `TaskSender` for start/succeeded/failed
+/// lifecycle events that the TUI needs to manage task panes.
+pub struct TaskOutput(Option<TaskSender>);
 
-/// Small wrapper over our two output types that defines a shared interface for
-/// interacting with them.
-pub enum TaskOutput<W> {
-    Direct(OutputClient<W>),
-    UI(TaskSender),
-}
+impl TaskOutput {
+    pub fn stream() -> Self {
+        Self(None)
+    }
 
-/// Struct for displaying information about task
-impl<W: Write> TaskOutput<W> {
-    pub fn finish(self, use_error: bool, is_cache_hit: bool) -> std::io::Result<Option<Vec<u8>>> {
-        match self {
-            TaskOutput::Direct(client) => client.finish(use_error),
-            TaskOutput::UI(client) if use_error => Ok(Some(client.failed())),
-            TaskOutput::UI(client) => Ok(Some(client.succeeded(is_cache_hit))),
+    pub fn tui(sender: TaskSender) -> Self {
+        Self(Some(sender))
+    }
+
+    pub fn sender(&self) -> Option<&TaskSender> {
+        self.0.as_ref()
+    }
+
+    /// Signal task completion to the TUI (if active).
+    pub fn finish(self, is_error: bool, is_cache_hit: bool) {
+        if let Some(sender) = self.0 {
+            if is_error {
+                sender.failed();
+            } else {
+                sender.succeeded(is_cache_hit);
+            }
+        }
+    }
+
+    /// Signal task start to the TUI (if active).
+    pub fn start(&self, output_logs: turborepo_ui::tui::event::OutputLogs) {
+        if let Some(sender) = &self.0 {
+            sender.start(output_logs);
+        }
+    }
+
+    /// Set stdin for interactive tasks (TUI only).
+    pub fn set_stdin(&self, stdin: Box<dyn std::io::Write + Send>) {
+        if let Some(sender) = &self.0 {
+            sender.set_stdin(stdin);
         }
     }
 }
