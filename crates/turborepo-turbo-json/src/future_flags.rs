@@ -26,9 +26,6 @@ use ts_rs::TS;
 
 /// Opt into breaking changes prior to major releases, experimental features,
 /// and beta features.
-///
-/// Note: Currently all previous future flags (turboExtendsKeyword,
-/// nonRootExtends) have been graduated and are now enabled by default.
 #[derive(
     Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq, JsonSchema,
 )]
