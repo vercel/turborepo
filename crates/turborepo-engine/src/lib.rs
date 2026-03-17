@@ -547,6 +547,70 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         )
     }
 
+    /// Returns all task IDs belonging to the given packages.
+    pub fn task_ids_for_packages(
+        &self,
+        packages: &HashSet<PackageName>,
+    ) -> HashSet<TaskId<'static>> {
+        packages
+            .iter()
+            .filter_map(|pkg| self.package_tasks.get(pkg))
+            .flatten()
+            .filter_map(|&idx| match self.task_graph.node_weight(idx)? {
+                TaskNode::Task(id) => Some(id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect()
+    }
+
+    /// Returns the transitive task-graph dependencies of the given task set.
+    /// Forward DFS: all tasks that must run before any task in `task_ids`.
+    pub fn collect_task_dependencies(
+        &self,
+        task_ids: &HashSet<TaskId<'static>>,
+    ) -> HashSet<TaskId<'static>> {
+        let indices = task_ids
+            .iter()
+            .filter_map(|id| self.task_lookup.get(id))
+            .copied();
+        let nodes = turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            indices,
+            petgraph::Direction::Outgoing,
+        );
+        nodes
+            .into_iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(id) => Some(id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect()
+    }
+
+    /// Returns the transitive task-graph dependents of the given task set.
+    /// Reverse DFS: all tasks that depend on any task in `task_ids`.
+    pub fn collect_task_dependents(
+        &self,
+        task_ids: &HashSet<TaskId<'static>>,
+    ) -> HashSet<TaskId<'static>> {
+        let indices = task_ids
+            .iter()
+            .filter_map(|id| self.task_lookup.get(id))
+            .copied();
+        let nodes = turborepo_graph_utils::transitive_closure(
+            &self.task_graph,
+            indices,
+            petgraph::Direction::Incoming,
+        );
+        nodes
+            .into_iter()
+            .filter_map(|node| match node {
+                TaskNode::Task(id) => Some(id.clone()),
+                TaskNode::Root => None,
+            })
+            .collect()
+    }
+
     fn neighbors(
         &self,
         task_id: &TaskId,

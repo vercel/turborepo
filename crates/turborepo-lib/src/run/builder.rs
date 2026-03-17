@@ -668,14 +668,23 @@ impl RunBuilder {
             )?
         };
 
-        let use_task_level_affected = self.opts.scope_opts.affected_range.is_some()
+        // When filterUsingTasks is active, --affected is handled by the
+        // same task-level filter rather than a separate codepath.
+        let use_task_level_filter = self.opts.future_flags.filter_using_tasks
+            && (!self.opts.scope_opts.filter_patterns.is_empty()
+                || self.opts.scope_opts.affected_range.is_some());
+
+        let use_task_level_affected = !use_task_level_filter
+            && self.opts.scope_opts.affected_range.is_some()
             && self.opts.future_flags.affected_using_task_inputs;
 
-        // When task-level affected filtering is active, the engine must
-        // contain tasks for ALL packages so that $TURBO_ROOT$ inputs in
-        // packages not flagged by the package-level scope resolution are
-        // still matched. The task-level filter (below) does the pruning.
-        let all_pkgs: Vec<PackageName> = if use_task_level_affected {
+        let needs_all_packages = use_task_level_affected || use_task_level_filter;
+
+        // When task-level filtering is active, the engine must contain tasks
+        // for ALL packages so that $TURBO_ROOT$ inputs in packages not flagged
+        // by the package-level scope resolution are still matched.
+        // The task-level filter (below) does the pruning.
+        let all_pkgs: Vec<PackageName> = if needs_all_packages {
             pkg_dep_graph
                 .packages()
                 .map(|(name, _)| name.clone())
@@ -683,7 +692,7 @@ impl RunBuilder {
         } else {
             Vec::new()
         };
-        let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if use_task_level_affected {
+        let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
             Box::new(all_pkgs.iter())
         } else {
             Box::new(filtered_pkgs.keys())
@@ -708,7 +717,7 @@ impl RunBuilder {
         // rather than on both engines to avoid a redundant SCM query.
         if self.opts.run_opts.parallel {
             pkg_dep_graph.remove_package_dependencies();
-            let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if use_task_level_affected {
+            let engine_pkgs: Box<dyn Iterator<Item = &PackageName>> = if needs_all_packages {
                 Box::new(all_pkgs.iter())
             } else {
                 Box::new(filtered_pkgs.keys())
@@ -721,6 +730,45 @@ impl RunBuilder {
             )?;
         }
 
+        // Task-level filter: resolve --filter and/or --affected against the task graph.
+        if use_task_level_filter {
+            let mut selectors: Vec<turborepo_scope::TargetSelector> = self
+                .opts
+                .scope_opts
+                .filter_patterns
+                .iter()
+                .map(|p| p.parse())
+                .collect::<Result<_, _>>()
+                .map_err(turborepo_scope::ResolutionError::from)?;
+
+            // When --affected is used alongside filterUsingTasks, synthesize a
+            // selector equivalent to `...[base...HEAD]` so it flows through
+            // the same task-level filter instead of a separate codepath.
+            if let Some((from_ref, to_ref)) = &self.opts.scope_opts.affected_range {
+                selectors.push(turborepo_scope::TargetSelector {
+                    git_range: Some(turborepo_scope::GitRange {
+                        from_ref: from_ref.clone(),
+                        to_ref: to_ref.clone(),
+                        include_uncommitted: true,
+                        allow_unknown_objects: true,
+                        merge_base: true,
+                    }),
+                    include_dependents: true,
+                    ..Default::default()
+                });
+            }
+
+            engine = super::task_filter::filter_engine_to_tasks(
+                engine,
+                &selectors,
+                &pkg_dep_graph,
+                &scm,
+                &self.repo_root,
+                &root_turbo_json.global_deps,
+            )?;
+        }
+
+        // Task-level --affected detection (separate from --filter).
         if use_task_level_affected {
             engine = self.filter_engine_to_affected_tasks(
                 engine,

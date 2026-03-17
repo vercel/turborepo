@@ -236,6 +236,15 @@ export interface FutureFlags {
    */
   affectedUsingTaskInputs?: boolean;
   /**
+   * Use task-level `inputs` globs to determine which tasks to re-run when
+   * files change in `turbo watch`. When enabled, only tasks whose declared
+   * inputs match the changed files are re-executed, rather than re-running
+   * all tasks in changed packages.
+   *
+   * @defaultValue `false`
+   */
+  watchUsingTaskInputs?: boolean;
+  /**
    * Include files matching `globalDependencies` globs in the `turbo prune`
    * output. Without this flag, `globalDependencies` entries are preserved in
    * the pruned `turbo.json` but the actual files are not copied.
@@ -243,6 +252,15 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   pruneIncludesGlobalFiles?: boolean;
+  /**
+   * Resolve `--filter` at the task level instead of the package level.
+   * Git-range filters (e.g. `--filter=[main]`) will match against task
+   * `inputs` globs, and the `...` dependency/dependent syntax will
+   * traverse the task graph in addition to the package graph.
+   *
+   * @defaultValue `false`
+   */
+  filterUsingTasks?: boolean;
 }
 
 export interface Pipeline {

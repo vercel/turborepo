@@ -68,6 +68,12 @@ pub struct FutureFlags {
     /// the pruned `turbo.json` but the actual files are not copied.
     #[serde(default)]
     pub prune_includes_global_files: bool,
+    /// Resolve `--filter` at the task level instead of the package level.
+    /// Git-range filters (e.g. `--filter=[main]`) will match against task
+    /// `inputs` globs, and the `...` dependency/dependent syntax will
+    /// traverse the task graph in addition to the package graph.
+    #[serde(default)]
+    pub filter_using_tasks: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and
@@ -84,28 +90,28 @@ impl TS for FutureFlags {
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean }"
+         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
          boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean }"
+         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean }"
             .to_string()
     }
 
     fn decl() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, pruneIncludesGlobalFiles?: boolean };"
+         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean };"
             .to_string()
     }
 
     fn decl_concrete() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, pruneIncludesGlobalFiles?: boolean };"
+         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean };"
             .to_string()
     }
 
