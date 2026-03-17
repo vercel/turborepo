@@ -5,6 +5,7 @@ mod error;
 pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub mod task_access;
+pub(crate) mod task_filter;
 mod ui;
 pub mod watch;
 

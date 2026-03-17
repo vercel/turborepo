@@ -281,6 +281,11 @@
           "description": "Use task-level `inputs` globs to determine which tasks to re-run when files change in `turbo watch`. When enabled, only tasks whose declared inputs match the changed files are re-executed, rather than re-running all tasks in changed packages.",
           "default": false,
           "type": "boolean"
+        },
+        "filterUsingTasks": {
+          "description": "Resolve `--filter` at the task level instead of the package level. Git-range filters (e.g. `--filter=[main]`) will match against task `inputs` globs, and the `...` dependency/dependent syntax will traverse the task graph in addition to the package graph.",
+          "default": false,
+          "type": "boolean"
         }
       }
     },

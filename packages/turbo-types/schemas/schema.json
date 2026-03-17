@@ -272,6 +272,11 @@
           "default": false,
           "type": "boolean"
         },
+        "filterUsingTasks": {
+          "description": "Resolve `--filter` at the task level instead of the package level. Git-range filters (e.g. `--filter=[main]`) will match against task `inputs` globs, and the `...` dependency/dependent syntax will traverse the task graph in addition to the package graph.",
+          "default": false,
+          "type": "boolean"
+        },
         "longerSignatureKey": {
           "description": "Enforce a minimum length of 32 bytes for `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is enabled. Short keys weaken the HMAC-SHA256 signature, making brute-force tag collision feasible.",
           "default": false,

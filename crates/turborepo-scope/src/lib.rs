@@ -15,7 +15,7 @@
 // Module declarations
 mod change_detector;
 pub mod filter;
-mod simple_glob;
+pub mod simple_glob;
 pub mod target_selector;
 
 use std::collections::HashMap;
