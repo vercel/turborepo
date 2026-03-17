@@ -50,6 +50,13 @@ By default, only the root package.json and lockfile are included in [the global 
   repository aren't supported.
 </Callout>
 
+<Callout type="info">
+  By default, `turbo prune` does not copy `globalDependencies` files into the
+  pruned output. Enable the
+  [`pruneIncludesGlobalFiles`](#pruneincludesglobalfiles) future flag to include
+  them.
+</Callout>
+
 ### `globalEnv`
 
 ```jsonc title="./turbo.json"
@@ -315,6 +322,28 @@ In this example, editing `README.md` in a package would not trigger a `build` re
   [`globalDependencies`](#globaldependencies) will always cause all tasks to be
   re-run, regardless of individual task `inputs`.
 </Callout>
+
+#### `pruneIncludesGlobalFiles` <ExperimentalBadge>Pre-release</ExperimentalBadge>
+
+Default: `false`
+
+Copy files matching [`globalDependencies`](#globaldependencies) globs into the [`turbo prune`](/docs/reference/prune) output directory.
+
+Without this flag, the `globalDependencies` entries are preserved in the pruned `turbo.json` but the actual files they reference (e.g. a root `tsconfig.json` or `.env`) are not copied. This can cause tasks to behave differently in the pruned output because the files they depend on are missing.
+
+```jsonc title="./turbo.json"
+{
+  "globalDependencies": ["tsconfig.json", ".env"],
+  "futureFlags": {
+    "pruneIncludesGlobalFiles": true,
+  },
+  "tasks": {
+    "build": {},
+  },
+}
+```
+
+With this configuration, running `turbo prune frontend` will include `tsconfig.json` and `.env` in the output alongside the pruned workspaces and lockfile. Both inclusion and `!` exclusion globs are supported.
 
 ### `tags` <ExperimentalBadge>Experimental</ExperimentalBadge>
 

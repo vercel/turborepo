@@ -211,6 +211,23 @@ Default: `true`
 
 Respect `.gitignore` file(s) when copying files to the output directory.
 
+### Including `globalDependencies`
+
+By default, `turbo prune` does not copy files referenced by [`globalDependencies`](/docs/reference/configuration#globaldependencies) into the output directory. The `globalDependencies` field is preserved in the pruned `turbo.json`, but the files themselves (e.g., a root `tsconfig.json` or `.env`) are not included.
+
+Enable the [`pruneIncludesGlobalFiles`](/docs/reference/configuration#pruneincludesglobalfiles) future flag to copy these files:
+
+```jsonc title="./turbo.json"
+{
+  "globalDependencies": ["tsconfig.json", ".env"],
+  "futureFlags": {
+    "pruneIncludesGlobalFiles": true,
+  },
+}
+```
+
+With this flag, all files matching the `globalDependencies` globs will be included in the pruned output. In `--docker` mode, they are copied to both the `full` and `json` directories.
+
 ### Comparison to `pnpm deploy`
 
 While both `turbo prune` and [`pnpm deploy`](https://pnpm.io/cli/deploy) are used to isolate packages in a monorepo, they serve different purposes and produce different outputs.

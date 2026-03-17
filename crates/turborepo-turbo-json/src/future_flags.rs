@@ -63,6 +63,11 @@ pub struct FutureFlags {
     /// all tasks in changed packages.
     #[serde(default)]
     pub watch_using_task_inputs: bool,
+    /// Include files matching `globalDependencies` globs in the `turbo prune`
+    /// output. Without this flag, `globalDependencies` entries are preserved in
+    /// the pruned `turbo.json` but the actual files are not copied.
+    #[serde(default)]
+    pub prune_includes_global_files: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Iterable and
@@ -78,27 +83,29 @@ impl TS for FutureFlags {
 
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean }"
+         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
+         pruneIncludesGlobalFiles?: boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean }"
+         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
+         pruneIncludesGlobalFiles?: boolean }"
             .to_string()
     }
 
     fn decl() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean };"
+         boolean, pruneIncludesGlobalFiles?: boolean };"
             .to_string()
     }
 
     fn decl_concrete() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean };"
+         boolean, pruneIncludesGlobalFiles?: boolean };"
             .to_string()
     }
 
