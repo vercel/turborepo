@@ -1553,24 +1553,12 @@ impl BunLockfile {
             .map(|entry| entry.ident.as_str())
             .collect();
 
-        // Filter overrides to only include those for packages in the subgraph
-        // Extract package names from idents for comparison with override keys
-        let included_package_names: HashSet<String> = pruned_data
-            .packages
-            .values()
-            .filter_map(|entry| {
-                // Extract package name from ident (format: "name@version")
-                entry.ident.split('@').next().map(|s| s.to_string())
-            })
-            .collect();
-
-        for (pkg_name, override_version) in &self.data.overrides {
-            if included_package_names.contains(pkg_name) {
-                pruned_data
-                    .overrides
-                    .insert(pkg_name.clone(), override_version.clone());
-            }
-        }
+        // Preserve ALL overrides from the original lockfile. turbo prune copies
+        // the root package.json with all overrides intact, so the lockfile must
+        // keep them in sync. If overrides are selectively stripped here, bun
+        // detects the mismatch with package.json and re-resolves, which breaks
+        // `bun install --frozen-lockfile` when a range has drifted (e.g. "latest").
+        pruned_data.overrides = self.data.overrides.clone();
 
         // Filter patched_dependencies to only include those for packages in the
         // subgraph
@@ -2150,11 +2138,12 @@ mod test {
             .unwrap();
         let subgraph_data = subgraph.lockfile().unwrap();
 
-        // Check that overrides are filtered
-        assert_eq!(subgraph_data.overrides.len(), 1);
+        // All overrides are preserved to stay in sync with the root
+        // package.json that turbo prune copies as-is
+        assert_eq!(subgraph_data.overrides.len(), 3);
         assert!(subgraph_data.overrides.contains_key("foo"));
-        assert!(!subgraph_data.overrides.contains_key("bar"));
-        assert!(!subgraph_data.overrides.contains_key("unused"));
+        assert!(subgraph_data.overrides.contains_key("bar"));
+        assert!(subgraph_data.overrides.contains_key("unused"));
 
         // Check that workspaces are correct
         assert_eq!(subgraph_data.workspaces.len(), 2);
@@ -2483,11 +2472,11 @@ mod test {
         assert!(subgraph_data.packages.contains_key("lodash-override"));
         assert!(!subgraph_data.packages.contains_key("express"));
 
-        // Verify overrides filtering
-        assert_eq!(subgraph_data.overrides.len(), 2);
+        // All overrides are preserved to stay in sync with root package.json
+        assert_eq!(subgraph_data.overrides.len(), 3);
         assert!(subgraph_data.overrides.contains_key("react"));
         assert!(subgraph_data.overrides.contains_key("lodash"));
-        assert!(!subgraph_data.overrides.contains_key("express"));
+        assert!(subgraph_data.overrides.contains_key("express"));
 
         // Verify patches filtering
         assert_eq!(subgraph_data.patched_dependencies.len(), 1);
