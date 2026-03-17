@@ -145,6 +145,42 @@ There are many open-source Turborepos out in the community that you can test wit
 
 ## Debugging tips
 
+## Logging & Output
+
+All output in Turborepo flows through `turborepo-log`. Use the following decision tree when adding new output:
+
+| What you're writing              | Use this                                                               | Why                                                                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Internal debug/trace info        | `tracing::{debug,trace,info,warn}!`                                    | Developer diagnostics, filtered by `TURBO_LOG_VERBOSITY`. Not user-facing.                                                                 |
+| User-facing warning/error/status | `turborepo_log::{warn,error,info}(Source::turbo(Subsystem::X), ...)`   | Renders in both terminal and TUI via sinks. Structured, sanitized.                                                                         |
+| Task child process output        | `TaskHandle::task_output(channel, bytes)`                              | Routes through `GroupingLayer` for grouped/passthrough buffering, then to sinks for rendering. `TerminalSink` adds per-line task prefixes. |
+| Task-scoped error/warning        | `task_handle.emit(LogEvent::new(Level::Error, Source::task(id), msg))` | Appears inline in the task's output stream (grouped with child process bytes).                                                             |
+| Cache status message             | `task_handle.task_output(OutputChannel::Stdout, message.as_bytes())`   | Plain text, rendered with task prefix by `TerminalSink`. Also call `TaskSender::status()` for TUI lifecycle.                               |
+
+### Adding a new subsystem
+
+To emit logs from a new area of the codebase, add a variant to the `Subsystem` enum in `crates/turborepo-log/src/event.rs`. The enum is `#[non_exhaustive]` so this is non-breaking. Each variant maps to a lowercase string via the `Display` impl.
+
+### Architecture
+
+```
+Task Executor / Commands
+        |
+   GroupingLayer          <- per-task buffering (passthrough vs grouped)
+        |
+     Logger               <- broadcasts to all sinks
+        |
+   +---------+---------+
+   |         |         |
+Terminal   TuiSink   FileSink
+ Sink
+```
+
+- `TerminalSink`: Owns line prefixing (ColorSelector, per-task line buffers), CI group markers, and color rendering.
+- `TuiSink`: Routes task output to the TUI's task panes, normalizes `\n` to `\r\n` for the VT100 parser.
+- `FileSink` / `CollectorSink`: Structured JSON capture.
+- `GroupingLayer`: Manages per-task buffering. In passthrough mode (stream), events flow immediately. In grouped mode, events buffer per-task and flush atomically on task completion.
+
 ### Links in error messages
 
 Many of Turborepo's error messages include links to information or documentation to help end users.
@@ -227,42 +263,6 @@ Key characteristics of a great example include:
 - Works with every package manager listed in our [Support Policy](https://turborepo.dev/docs/getting-started/support-policy#package-managers)
 
 Once you've created your example (with prior approval, as discussed above), you can submit a pull request to the repository.
-
-## Logging & Output
-
-All output in Turborepo flows through `turborepo-log`. Use the following decision tree when adding new output:
-
-| What you're writing              | Use this                                                               | Why                                                                                                                                        |
-| -------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| Internal debug/trace info        | `tracing::{debug,trace,info,warn}!`                                    | Developer diagnostics, filtered by `TURBO_LOG_VERBOSITY`. Not user-facing.                                                                 |
-| User-facing warning/error/status | `turborepo_log::{warn,error,info}(Source::turbo(Subsystem::X), ...)`   | Renders in both terminal and TUI via sinks. Structured, sanitized.                                                                         |
-| Task child process output        | `TaskHandle::task_output(channel, bytes)`                              | Routes through `GroupingLayer` for grouped/passthrough buffering, then to sinks for rendering. `TerminalSink` adds per-line task prefixes. |
-| Task-scoped error/warning        | `task_handle.emit(LogEvent::new(Level::Error, Source::task(id), msg))` | Appears inline in the task's output stream (grouped with child process bytes).                                                             |
-| Cache status message             | `task_handle.task_output(OutputChannel::Stdout, message.as_bytes())`   | Plain text, rendered with task prefix by `TerminalSink`. Also call `TaskSender::status()` for TUI lifecycle.                               |
-
-### Adding a new subsystem
-
-To emit logs from a new area of the codebase, add a variant to the `Subsystem` enum in `crates/turborepo-log/src/event.rs`. The enum is `#[non_exhaustive]` so this is non-breaking. Each variant maps to a lowercase string via the `Display` impl.
-
-### Architecture
-
-```
-Task Executor / Commands
-        |
-   GroupingLayer          <- per-task buffering (passthrough vs grouped)
-        |
-     Logger               <- broadcasts to all sinks
-        |
-   +---------+---------+
-   |         |         |
-Terminal   TuiSink   FileSink
- Sink
-```
-
-- `TerminalSink`: Owns line prefixing (ColorSelector, per-task line buffers), CI group markers, and color rendering.
-- `TuiSink`: Routes task output to the TUI's task panes, normalizes `\n` to `\r\n` for the VT100 parser.
-- `FileSink` / `CollectorSink`: Structured JSON capture.
-- `GroupingLayer`: Manages per-task buffering. In passthrough mode (stream), events flow immediately. In grouped mode, events buffer per-task and flush atomically on task completion.
 
 ### Testing examples
 
