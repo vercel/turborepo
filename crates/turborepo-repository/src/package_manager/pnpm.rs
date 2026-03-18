@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use node_semver::{Range, Version};
 use serde::Deserialize;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
+use turbopath::{AbsoluteSystemPath, RelativeUnixPath, RelativeUnixPathBuf};
 
 use super::npmrc;
 use crate::{
@@ -70,7 +70,7 @@ impl Iterator for PnpmDetector<'_> {
 pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
     package_json: &PackageJson,
     patches: &[R],
-    repo_root: &AbsoluteSystemPath,
+    _repo_root: &AbsoluteSystemPath,
 ) -> PackageJson {
     let mut pruned_json = package_json.clone();
     let patches_set = patches.iter().map(|r| r.as_ref()).collect::<HashSet<_>>();
@@ -83,21 +83,38 @@ pub(crate) fn prune_patches<R: AsRef<RelativeUnixPath>>(
         existing_patches.retain(|_, patch_path| patches_set.contains(patch_path.as_ref()));
     }
 
-    // Patches can be declared in pnpm-workspace.yaml as well
-    if let Ok(workspace) = PnpmWorkspace::from_file(repo_root) {
-        let pnpm_config = pruned_json.pnpm.get_or_insert_with(Default::default);
-        let patched_deps = pnpm_config
-            .patched_dependencies
-            .get_or_insert_with(Default::default);
+    pruned_json
+}
 
-        for (key, patch_path) in workspace.patched_dependencies.into_iter().flatten() {
-            if patches_set.contains(patch_path.as_ref()) {
-                patched_deps.insert(key, patch_path);
-            }
-        }
+/// Prune `patchedDependencies` in a `pnpm-workspace.yaml` file in-place,
+/// retaining only entries whose patch path is in `patches`.
+pub fn prune_workspace_patches<R: AsRef<RelativeUnixPath>>(
+    workspace_yaml_path: &AbsoluteSystemPath,
+    patches: &[R],
+) -> Result<(), std::io::Error> {
+    if !workspace_yaml_path.exists() {
+        return Ok(());
+    }
+    let contents = workspace_yaml_path.read_to_string()?;
+    let mut doc: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+    let patches_set: HashSet<&RelativeUnixPath> = patches.iter().map(|r| r.as_ref()).collect();
+
+    if let Some(patched_deps) = doc.get_mut("patchedDependencies")
+        && let Some(mapping) = patched_deps.as_mapping_mut()
+    {
+        mapping.retain(|_key, val| {
+            val.as_str()
+                .and_then(|s| RelativeUnixPathBuf::new(s).ok())
+                .is_some_and(|p| patches_set.contains(p.as_ref()))
+        });
     }
 
-    pruned_json
+    let output = serde_yaml_ng::to_string(&doc)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    workspace_yaml_path.create_with_contents(output)?;
+    Ok(())
 }
 
 pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSystemPath) -> bool {
@@ -140,7 +157,8 @@ pub fn get_default_exclusions() -> &'static [&'static str] {
 struct PnpmWorkspace {
     pub packages: Vec<String>,
     link_workspace_packages: Option<LinkWorkspacePackages>,
-    pub patched_dependencies:
+    #[serde(rename = "patchedDependencies")]
+    _patched_dependencies:
         Option<std::collections::BTreeMap<String, turbopath::RelativeUnixPathBuf>>,
     /// Default catalog (`catalog:` protocol resolves to these)
     #[serde(default)]
@@ -297,7 +315,7 @@ mod test {
     }
 
     #[test]
-    fn test_workspace_patches_pruning() {
+    fn test_workspace_patches_not_migrated_to_package_json() {
         let tmpdir = tempfile::tempdir().unwrap();
         let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
 
@@ -315,18 +333,41 @@ mod test {
             .unwrap();
         let patches = vec![RelativeUnixPathBuf::new("patches/foo@1.0.0.patch").unwrap()];
         let pruned = prune_patches(&package_json, &patches, repo_root);
+        // prune_patches should NOT migrate workspace yaml patches into
+        // package.json — that would change its content and invalidate caches.
         assert_eq!(
             pruned
                 .pnpm
                 .as_ref()
                 .and_then(|c| c.patched_dependencies.as_ref()),
-            Some(
-                [("foo@1.0.0", "patches/foo@1.0.0.patch")]
-                    .iter()
-                    .map(|(k, v)| (k.to_string(), RelativeUnixPathBuf::new(*v).unwrap()))
-                    .collect::<BTreeMap<_, _>>()
+            None,
+        );
+    }
+
+    #[test]
+    fn test_prune_workspace_yaml_patches() {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        let ws_path = repo_root.join_component(WORKSPACE_CONFIGURATION_PATH);
+        ws_path
+            .create_with_contents(
+                "packages:\n  - \"packages/*\"\npatchedDependencies:\n  foo@1.0.0: \
+                 patches/foo@1.0.0.patch\n  bar@2.0.0: patches/bar@2.0.0.patch\n",
             )
-            .as_ref()
+            .unwrap();
+
+        let patches = vec![RelativeUnixPathBuf::new("patches/foo@1.0.0.patch").unwrap()];
+        prune_workspace_patches(&ws_path, &patches).unwrap();
+
+        let result: serde_yaml_ng::Value =
+            serde_yaml_ng::from_str(&ws_path.read_to_string().unwrap()).unwrap();
+        let patched = result["patchedDependencies"].as_mapping().unwrap();
+        assert_eq!(patched.len(), 1);
+        assert_eq!(
+            patched
+                .get(serde_yaml_ng::Value::String("foo@1.0.0".into()))
+                .and_then(|v| v.as_str()),
+            Some("patches/foo@1.0.0.patch"),
         );
     }
 

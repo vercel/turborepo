@@ -250,7 +250,16 @@ pub async fn prune(
             &pruned_patches,
             repo_root,
         );
-        let mut pruned_json_contents = serde_json::to_string_pretty(&pruned_json)?;
+
+        // Read the original package.json as serde_json::Value to preserve key
+        // ordering. Serializing the PackageJson struct directly would sort keys
+        // alphabetically, producing a byte-different file that invalidates
+        // cache hashes. See https://github.com/vercel/turborepo/issues/12369
+        let original_contents = prune.root.resolve(package_json()).read_to_string()?;
+        let original_value: serde_json::Value = serde_json::from_str(&original_contents)?;
+        let pruned_value = serde_json::to_value(&pruned_json)?;
+        let merged = merge_preserving_key_order(&original_value, &pruned_value);
+        let mut pruned_json_contents = serde_json::to_string_pretty(&merged)?;
         // Add trailing newline to match Go behavior
         pruned_json_contents.push('\n');
 
@@ -271,11 +280,36 @@ pub async fn prune(
             )?;
         }
 
-        for patch in pruned_patches {
+        for patch in &pruned_patches {
             prune.copy_file(
                 &patch.to_anchored_system_path_buf(),
                 Some(CopyDestination::Docker),
             )?;
+        }
+
+        // Prune pnpm-workspace.yaml's patchedDependencies so it only
+        // references patches that are actually in the pruned output.
+        if matches!(
+            package_manager,
+            turborepo_repository::package_manager::PackageManager::Pnpm
+                | turborepo_repository::package_manager::PackageManager::Pnpm6
+                | turborepo_repository::package_manager::PackageManager::Pnpm9
+        ) {
+            let ws_config =
+                turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
+            let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
+            let full_ws = prune.full_directory.resolve(&ws_path);
+            turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+                &full_ws,
+                &pruned_patches,
+            )?;
+            if prune.docker {
+                let docker_ws = prune.docker_directory().resolve(&ws_path);
+                turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+                    &docker_ws,
+                    &pruned_patches,
+                )?;
+            }
         }
     } else {
         prune.copy_file(package_json(), Some(CopyDestination::Docker))?;
@@ -699,5 +733,79 @@ impl<'a> Prune<'a> {
         let turbo_json =
             RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.into();
         Ok(Some((turbo_json, turbo_json_name)))
+    }
+}
+
+/// Merge `pruned` values into `original`, preserving the key ordering from
+/// `original`. Keys present in `original` but absent from `pruned` are dropped.
+/// Keys present in `pruned` but absent from `original` are appended.
+fn merge_preserving_key_order(
+    original: &serde_json::Value,
+    pruned: &serde_json::Value,
+) -> serde_json::Value {
+    match (original, pruned) {
+        (serde_json::Value::Object(orig_map), serde_json::Value::Object(pruned_map)) => {
+            let mut result = serde_json::Map::new();
+            for (key, orig_val) in orig_map {
+                if let Some(pruned_val) = pruned_map.get(key) {
+                    result.insert(
+                        key.clone(),
+                        merge_preserving_key_order(orig_val, pruned_val),
+                    );
+                }
+            }
+            for (key, pruned_val) in pruned_map {
+                if !orig_map.contains_key(key) {
+                    result.insert(key.clone(), pruned_val.clone());
+                }
+            }
+            serde_json::Value::Object(result)
+        }
+        (_, pruned) => pruned.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::merge_preserving_key_order;
+
+    #[test]
+    fn merge_preserves_key_order() {
+        let original: serde_json::Value = serde_json::from_str(
+            r#"{"z_last": 1, "a_first": 2, "m_middle": {"nested_z": true, "nested_a": false}}"#,
+        )
+        .unwrap();
+        let pruned =
+            json!({"a_first": 2, "m_middle": {"nested_a": false, "nested_z": true}, "z_last": 1});
+
+        let merged = merge_preserving_key_order(&original, &pruned);
+        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["z_last", "a_first", "m_middle"]);
+
+        let nested_keys: Vec<_> = merged["m_middle"].as_object().unwrap().keys().collect();
+        assert_eq!(nested_keys, vec!["nested_z", "nested_a"]);
+    }
+
+    #[test]
+    fn merge_drops_removed_keys() {
+        let original: serde_json::Value =
+            serde_json::from_str(r#"{"keep": 1, "drop": 2, "also_keep": 3}"#).unwrap();
+        let pruned = json!({"keep": 1, "also_keep": 3});
+
+        let merged = merge_preserving_key_order(&original, &pruned);
+        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["keep", "also_keep"]);
+    }
+
+    #[test]
+    fn merge_appends_new_keys() {
+        let original: serde_json::Value = serde_json::from_str(r#"{"existing": 1}"#).unwrap();
+        let pruned = json!({"existing": 1, "new_key": 2});
+
+        let merged = merge_preserving_key_order(&original, &pruned);
+        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["existing", "new_key"]);
     }
 }
