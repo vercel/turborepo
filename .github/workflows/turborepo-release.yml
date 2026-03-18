@@ -164,15 +164,25 @@ jobs:
 
       - name: Get previous tag
         id: previous-tag
+        env:
+          INCREMENT: ${{ github.event_name == 'schedule' && 'prerelease' || inputs.increment }}
         run: |
-          # Use ls-remote to query tags without fetching objects
-          PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
-            | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
-            | sort -V | tail -n 1)
-          if [ -z "$PREV_TAG" ]; then
+          # For stable releases, compare against the previous stable tag so
+          # release notes include everything since the last stable release.
+          # For canary releases, compare against the latest canary tag.
+          if [[ "$INCREMENT" == "patch" || "$INCREMENT" == "minor" || "$INCREMENT" == "major" ]]; then
             PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
               | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
               | grep -v canary | sort -V | tail -n 1)
+          else
+            PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*-canary.*' \
+              | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+              | sort -V | tail -n 1)
+            if [ -z "$PREV_TAG" ]; then
+              PREV_TAG=$(git ls-remote --tags origin 'refs/tags/v*' \
+                | awk '{print $2}' | sed 's|refs/tags/||' | grep -v '\^{}$' \
+                | grep -v canary | sort -V | tail -n 1)
+            fi
           fi
           echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
           echo "Previous tag: $PREV_TAG"
