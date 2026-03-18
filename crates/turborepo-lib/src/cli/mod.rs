@@ -905,6 +905,11 @@ pub struct AffectedArgs {
     /// Head git ref for comparison
     #[clap(long)]
     pub head: Option<String>,
+    /// Exit with code 1 when affected packages or tasks are found, 0 when
+    /// none are found. Useful for CI gating. We recommend parsing the JSON
+    /// output directly for more flexibility.
+    #[clap(long)]
+    pub exit_code: bool,
 }
 
 fn validate_graph_extension(s: &str) -> Result<String, String> {
@@ -3659,6 +3664,7 @@ mod test {
                     tasks: None,
                     base: None,
                     head: None,
+                    exit_code: false,
                 })),
                 query: None,
                 variables: None,
@@ -3778,6 +3784,19 @@ mod test {
                 subcommand: Some(super::QuerySubcommand::Affected(ref a)),
                 ..
             }) if a.packages == Some(vec![]) && a.tasks == Some(vec![])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_exit_code_flag() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--exit-code"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.exit_code
         );
     }
 

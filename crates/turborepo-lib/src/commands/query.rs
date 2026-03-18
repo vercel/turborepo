@@ -191,10 +191,41 @@ pub async fn run(
     let run: Arc<dyn QueryRun> = Arc::new(run);
 
     if let Some(subcommand) = subcommand {
-        let query = match &subcommand {
-            QuerySubcommand::Affected(args) => args.to_graphql_query(),
-        };
-        return execute_query_and_print(run, query_server, &query, None).await;
+        match &subcommand {
+            QuerySubcommand::Affected(args) => {
+                let query = args.to_graphql_query();
+                let result = query_server
+                    .execute_query(run, &query, None)
+                    .await?;
+
+                println!("{}", result.result_json);
+
+                if !result.errors.is_empty() {
+                    for error in result.errors {
+                        let error = QueryError::from_query_error(error, query.clone());
+                        eprintln!("{:?}", Report::new(error));
+                    }
+                    return Ok(1);
+                }
+
+                if args.exit_code {
+                    let has_results = serde_json::from_str::<serde_json::Value>(
+                        &result.result_json,
+                    )
+                    .ok()
+                    .and_then(|json| {
+                        json.pointer("/data/affectedTasks/length")
+                            .or_else(|| json.pointer("/data/affectedPackages/length"))
+                            .and_then(|v| v.as_u64())
+                    })
+                    .map_or(false, |len| len > 0);
+
+                    return Ok(if has_results { 1 } else { 0 });
+                }
+
+                return Ok(0);
+            }
+        }
     }
 
     let query = query
@@ -244,6 +275,7 @@ mod tests {
             tasks: tasks.map(|v| v.into_iter().map(String::from).collect()),
             base: base.map(String::from),
             head: head.map(String::from),
+            exit_code: false,
         }
     }
 

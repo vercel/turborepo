@@ -42,6 +42,13 @@ export function turboIgnore(
     ...opts
   };
 
+  warn(
+    `"turbo-ignore" is deprecated and will be removed in a future major version. Use "turbo query affected" instead.`
+  );
+  warn(
+    `Learn more: https://turbo.build/repo/docs/reference/query#migrating-from-turbo-ignore\n`
+  );
+
   info(
     `Using Turborepo to determine if this project is affected by the commit...\n`
   );

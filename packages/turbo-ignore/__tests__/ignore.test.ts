@@ -117,7 +117,7 @@ describe("turboIgnore()", () => {
     );
 
     expect(mockConsole.warn).toHaveBeenNthCalledWith(
-      1,
+      3,
       "≫  ",
       `turbo-ignore could not complete - no package manager detected, please commit a lockfile, or set "packageManager" in your root "package.json"`
     );
@@ -168,7 +168,7 @@ describe("turboIgnore()", () => {
     );
 
     expect(mockConsole.warn).toHaveBeenNthCalledWith(
-      1,
+      3,
       "≫  ",
       `turbo-ignore could not complete - a ref or SHA is invalid. It could have been removed from the branch history via a force push, or this could be a shallow clone with insufficient history`
     );
@@ -212,7 +212,7 @@ describe("turboIgnore()", () => {
     );
 
     expect(mockConsole.warn).toHaveBeenNthCalledWith(
-      1,
+      3,
       "≫  ",
       `turbo-ignore could not complete - parent commit does not exist or is unreachable`
     );

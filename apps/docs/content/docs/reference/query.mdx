@@ -134,6 +134,52 @@ Can also be set with the `TURBO_SCM_HEAD` environment variable.
 turbo query affected --head my-branch
 ```
 
+#### `--exit-code`
+
+Exit with code 1 when affected packages or tasks are found, 0 when none are found. JSON output is still printed to stdout.
+
+This is useful for simple CI gating where you only need a binary "affected or not" signal. For most use cases, we recommend parsing the JSON output directly for more flexibility.
+
+```bash title="Terminal"
+turbo query affected --packages my-app --exit-code
+```
+
+| Condition | Exit code |
+| --- | --- |
+| Nothing affected | `0` |
+| Affected packages or tasks found | `1` |
+| Query error | `1` |
+
+### Migrating from turbo-ignore
+
+`turbo-ignore` is deprecated. `turbo query affected` is its replacement, with more precise task-level change detection that respects your [`inputs`](/docs/reference/configuration#inputs) configuration.
+
+#### Flag mapping
+
+| `turbo-ignore` | `turbo query affected` |
+| --- | --- |
+| `npx turbo-ignore my-app` | `turbo query affected --packages my-app --exit-code` |
+| `--task build` | `--tasks build` |
+| `--fallback main` | `--base main` |
+
+#### Key differences
+
+- **More precise detection**: `turbo-ignore` operates at the package level. `turbo query affected` operates at the task input level, so a `.md` change won't trigger a rebuild if your task excludes `*.md` files via `inputs`.
+- **Structured output**: The JSON output includes the reason each package or task is affected, which is useful for debugging and automation.
+- **No commit message directives**: `turbo-ignore` supported `[skip ci]` and `[vercel skip]` commit message directives. Use your CI platform's native skip features instead.
+- **No `TURBO_FORCE` handling**: Check this environment variable in your CI script if needed.
+
+#### CI example
+
+```bash title="Terminal"
+# Check if a package is affected (exit 1 = affected, 0 = not affected)
+turbo query affected --packages my-app --exit-code
+
+# Or parse the JSON output for more control
+result=$(turbo query affected --packages my-app)
+# Use jq, Node.js, or your preferred JSON tool to inspect the output
+```
+
 ## Flags
 
 ### `--schema`
