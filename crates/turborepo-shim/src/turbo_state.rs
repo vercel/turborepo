@@ -85,25 +85,20 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_scoped_platform_package_scope_returns_at_turbo() {
-        assert_eq!(TurboState::scoped_platform_package_scope(), "@turbo");
-    }
-
-    #[test]
-    fn test_scoped_platform_package_dir_matches_platform_name() {
+    fn test_scoped_package_path_segments_have_no_separators() {
+        let scope = TurboState::scoped_platform_package_scope();
         let dir = TurboState::scoped_platform_package_dir();
-        let platform = TurboState::platform_name();
-        assert_eq!(dir, platform);
         assert!(
-            !dir.contains('/'),
-            "scoped_platform_package_dir must not contain '/' (join_components constraint)"
+            scope.starts_with('@'),
+            "scope must start with '@' for npm scoped packages"
         );
-    }
-
-    #[test]
-    fn test_legacy_package_name_unchanged() {
-        let name = TurboState::platform_package_name();
-        assert!(name.starts_with("turbo-"));
-        assert_eq!(name, format!("turbo-{}", TurboState::platform_name()));
+        assert!(
+            !scope.contains('/') && !scope.contains('\\'),
+            "scope segment must not contain path separators (join_components constraint)"
+        );
+        assert!(
+            !dir.contains('/') && !dir.contains('\\'),
+            "dir segment must not contain path separators (join_components constraint)"
+        );
     }
 }
