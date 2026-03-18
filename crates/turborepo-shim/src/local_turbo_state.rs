@@ -138,22 +138,18 @@ impl LocalTurboState {
             })
     }
 
-    // We support six per-platform packages and one `turbo` package which handles
-    // indirection. We identify the per-platform package and execute the appropriate
-    // binary directly. We can choose to operate this aggressively because the
-    // _worst_ outcome is that we run global `turbo`.
-    //
-    // In spite of that, the only known unsupported local invocation is Yarn/Berry <
-    // 2.1 PnP
-    pub fn infer(root_path: &AbsoluteSystemPath) -> Option<Self> {
-        let platform_package_name = TurboState::platform_package_name();
+    fn try_find_with_package_path(
+        root_path: &AbsoluteSystemPath,
+        package_path: &[&str],
+    ) -> Option<Self> {
         let binary_name = TurboState::binary_name();
 
-        let platform_package_json_path_components = [platform_package_name, "package.json"];
-        let platform_package_executable_path_components =
-            [platform_package_name, "bin", binary_name];
+        let mut bin_components: Vec<&str> = package_path.to_vec();
+        bin_components.extend_from_slice(&["bin", binary_name]);
 
-        // These are lazy because the last two are more expensive.
+        let mut json_components: Vec<&str> = package_path.to_vec();
+        json_components.push("package.json");
+
         let search_functions = [
             Self::generate_hoisted_path,
             Self::generate_nested_path,
@@ -161,19 +157,15 @@ impl LocalTurboState {
             Self::generate_unplugged_path,
         ];
 
-        // Detecting the package manager is more expensive than just doing an exhaustive
-        // search.
         for root in search_functions
             .iter()
             .filter_map(|search_function| search_function(root_path))
         {
-            // Needs borrow because of the loop.
             #[allow(clippy::needless_borrow)]
-            let bin_path = root.join_components(&platform_package_executable_path_components);
+            let bin_path = root.join_components(&bin_components);
             match fs_canonicalize(&bin_path) {
                 Ok(bin_path) => {
-                    let resolved_package_json_path =
-                        root.join_components(&platform_package_json_path_components);
+                    let resolved_package_json_path = root.join_components(&json_components);
                     let platform_package_json =
                         PackageJson::load(&resolved_package_json_path).ok()?;
                     let local_version = platform_package_json.version?;
@@ -190,6 +182,24 @@ impl LocalTurboState {
         }
 
         None
+    }
+
+    // We support six per-platform packages and one `turbo` package which handles
+    // indirection. We identify the per-platform package and execute the appropriate
+    // binary directly. We can choose to operate this aggressively because the
+    // _worst_ outcome is that we run global `turbo`.
+    //
+    // In spite of that, the only known unsupported local invocation is Yarn/Berry <
+    // 2.1 PnP
+    pub fn infer(root_path: &AbsoluteSystemPath) -> Option<Self> {
+        let scoped_path: &[&str] = &[
+            TurboState::scoped_platform_package_scope(),
+            TurboState::scoped_platform_package_dir(),
+        ];
+        let legacy_path: &[&str] = &[TurboState::platform_package_name()];
+
+        Self::try_find_with_package_path(root_path, scoped_path)
+            .or_else(|| Self::try_find_with_package_path(root_path, legacy_path))
     }
 
     /// Check to see if the detected local executable is the one currently

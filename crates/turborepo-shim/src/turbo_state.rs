@@ -48,6 +48,17 @@ impl TurboState {
         formatcp!("turbo-{}", TurboState::platform_name())
     }
 
+    /// Scope segment for `@turbo/{platform}` packages. Split from dir to
+    /// avoid `/` in a single `join_components` segment (which debug-asserts).
+    pub const fn scoped_platform_package_scope() -> &'static str {
+        "@turbo"
+    }
+
+    /// Directory segment under the scope (e.g. `"linux-64"`).
+    pub const fn scoped_platform_package_dir() -> &'static str {
+        TurboState::platform_name()
+    }
+
     pub const fn binary_name() -> &'static str {
         {
             #[cfg(windows)]
@@ -66,5 +77,33 @@ impl TurboState {
             .lines()
             .next()
             .expect("Failed to read version from version.txt")
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_scoped_platform_package_scope_returns_at_turbo() {
+        assert_eq!(TurboState::scoped_platform_package_scope(), "@turbo");
+    }
+
+    #[test]
+    fn test_scoped_platform_package_dir_matches_platform_name() {
+        let dir = TurboState::scoped_platform_package_dir();
+        let platform = TurboState::platform_name();
+        assert_eq!(dir, platform);
+        assert!(
+            !dir.contains('/'),
+            "scoped_platform_package_dir must not contain '/' (join_components constraint)"
+        );
+    }
+
+    #[test]
+    fn test_legacy_package_name_unchanged() {
+        let name = TurboState::platform_package_name();
+        assert!(name.starts_with("turbo-"));
+        assert_eq!(name, format!("turbo-{}", TurboState::platform_name()));
     }
 }
