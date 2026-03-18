@@ -43,10 +43,10 @@ export function turboIgnore(
   };
 
   warn(
-    `"turbo-ignore" is deprecated and will be removed in a future major version. Use "turbo query affected" instead.`
+    `\x1b[33m"turbo-ignore" is deprecated and will be removed in a future major version. Use "turbo query affected" instead.\x1b[39m`
   );
   warn(
-    `Learn more: https://turbo.build/repo/docs/reference/query#migrating-from-turbo-ignore\n`
+    `\x1b[33mLearn more: https://turborepo.dev/docs/reference/query#migrating-from-turbo-ignore\x1b[39m\n`
   );
 
   info(
