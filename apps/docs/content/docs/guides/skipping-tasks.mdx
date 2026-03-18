@@ -21,60 +21,62 @@ Ideally, you would do a quick check to see if any of that work needs to happen i
 
 ## Using `turbo query affected`
 
-After you've checked out the repo, but **before** any other work, you can take a few seconds to check if your `web` workspace is affected by the changes in your branch.
+After you've checked out the repo, but **before** any other work, you can take a few seconds to check if your `web` workspace is affected by the changes in your branch:
 
 ```bash title="Terminal"
-turbo query affected --packages web --exit-code
+affected=$(turbo query affected --packages web)
+count=$(echo "$affected" | jq '.data.affectedPackages.length')
+
+if [ "$count" -gt 0 ]; then
+  echo "web is affected, proceeding with build"
+  # Run your build steps
+else
+  echo "web is not affected, skipping"
+  exit 0
+fi
 ```
 
-This command will:
-
-1. Determine which files changed between your branch and the base branch.
-2. Check if those changes affect the `web` package or any of its dependencies.
-3. Exit with code `1` if changes are detected. Otherwise, exit with code `0`.
-
-The JSON output is always printed to stdout, so you can also parse it for more granular information (like the reason each package is affected).
-
-While you may have been able to hit a `>>> FULL TURBO` cache for this task, you just saved time with all of the other setup tasks required to run your CI.
-
-### Checking for a specific task
-
-You can also check if a specific task is affected, which is more precise because it respects the [`inputs`](/docs/reference/configuration#inputs) configuration for that task:
-
-```bash title="Terminal"
-turbo query affected --tasks test --packages web --exit-code
-```
-
-### Customizing the comparison
-
-By default, `turbo query affected` compares against the merge-base with your default branch. You can customize this with `--base` and `--head`:
-
-```bash title="Terminal"
-turbo query affected --packages web --base main --head HEAD --exit-code
-```
-
-You can also set `TURBO_SCM_BASE` and `TURBO_SCM_HEAD` environment variables.
-
-### Parsing the output
-
-For more control than a binary exit code, parse the JSON output directly:
-
-```bash title="Terminal"
-turbo query affected --packages web
-```
+The JSON output tells you exactly *what* changed and *why*, so you can make decisions beyond a simple skip/build:
 
 ```json title="Output"
 {
   "data": {
     "affectedPackages": {
       "items": [
-        { "name": "web", "path": "apps/web", "reason": { "__typename": "FileChanged" } }
+        {
+          "name": "web",
+          "path": "apps/web",
+          "reason": { "__typename": "FileChanged" }
+        }
       ],
       "length": 1
     }
   }
 }
 ```
+
+While you may have been able to hit a `>>> FULL TURBO` cache for this task, you just saved time with all of the other setup tasks required to run your CI.
+
+### Checking for a specific task
+
+You can check if a specific task is affected, which is more precise because it respects the [`inputs`](/docs/reference/configuration#inputs) configuration for that task:
+
+```bash title="Terminal"
+affected=$(turbo query affected --tasks test --packages web)
+count=$(echo "$affected" | jq '.data.affectedTasks.length')
+```
+
+### Customizing the comparison
+
+By default, `turbo query affected` compares against the [merge-base](https://git-scm.com/docs/git-merge-base) with your default branch. This means it detects all changes across your entire branch, not just the latest commit.
+
+You can customize this with `--base` and `--head`:
+
+```bash title="Terminal"
+turbo query affected --packages web --base main --head HEAD
+```
+
+You can also set `TURBO_SCM_BASE` and `TURBO_SCM_HEAD` environment variables.
 
 For more details and the full flag reference, see the [`turbo query affected` reference](/docs/reference/query#affected).
 

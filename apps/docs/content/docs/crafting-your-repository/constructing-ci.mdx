@@ -99,13 +99,22 @@ Start by cloning your repository. A clone with sufficient history is necessary f
 <Step>
 ### Check if the package is affected
 
-Use `turbo query affected` with `--exit-code` to get a binary signal:
+Use `turbo query affected` to check if a package has changes. The command outputs JSON that you can parse with a tool like `jq`:
 
-<Tabs items={["Check a package", "Check a specific task", "Parse JSON output"]}>
+<Tabs items={["Check a package", "Check a specific task"]}>
 <Tab value="Check a package">
 
 ```bash title="Terminal"
-turbo query affected --packages web --exit-code
+affected=$(turbo query affected --packages web)
+count=$(echo "$affected" | jq '.data.affectedPackages.length')
+
+if [ "$count" -gt 0 ]; then
+  echo "web is affected, proceeding with build"
+  # Run your build steps
+else
+  echo "web is not affected, skipping"
+  exit 0
+fi
 ```
 
 </Tab>
@@ -115,20 +124,16 @@ turbo query affected --packages web --exit-code
 Check if the `test` task for the `docs` package is affected. This respects [`inputs`](/docs/reference/configuration#inputs) configuration, so only relevant file changes are considered:
 
 ```bash title="Terminal"
-turbo query affected --tasks test --packages docs --exit-code
+affected=$(turbo query affected --tasks test --packages docs)
+count=$(echo "$affected" | jq '.data.affectedTasks.length')
+
+if [ "$count" -gt 0 ]; then
+  echo "docs#test is affected, proceeding"
+else
+  echo "docs#test is not affected, skipping"
+  exit 0
+fi
 ```
-
-</Tab>
-
-<Tab value="Parse JSON output">
-
-For more control, parse the JSON output directly:
-
-```bash title="Terminal"
-turbo query affected --packages web
-```
-
-The output includes the reason each package is affected, which is useful for debugging.
 
 </Tab>
 </Tabs>
@@ -137,9 +142,9 @@ The output includes the reason each package is affected, which is useful for deb
 <Step>
 ### Handle the result
 
-With `--exit-code`, the command exits with code `1` if the package is affected by changes, and `0` if it is not.
+The JSON output includes a `length` field that tells you how many packages or tasks are affected. When `length` is `0`, you can safely skip the rest of your CI pipeline.
 
-Using this exit code, you can choose what the rest of your CI pipeline should do. For instance, a `1` exit code likely means that you should move forward with installing dependencies and running tasks.
+The output also includes the reason each package is affected (e.g., `FileChanged`, `DependencyChanged`), which is useful for debugging unexpected builds.
 
 </Step>
 </Steps>
