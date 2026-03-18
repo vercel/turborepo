@@ -483,6 +483,38 @@ fn test_prune_global_deps_does_not_overwrite_pruned_turbo_json() {
     );
 }
 
+// --- key-order.t ---
+
+#[test]
+fn test_prune_preserves_package_json_key_order() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(
+        tempdir.path(),
+        "monorepo_with_root_dep",
+        "pnpm@7.25.1",
+        false,
+    )
+    .unwrap();
+
+    let original_contents = fs::read_to_string(tempdir.path().join("package.json")).unwrap();
+    let original: serde_json::Value = serde_json::from_str(&original_contents).unwrap();
+    let original_keys: Vec<_> = original.as_object().unwrap().keys().cloned().collect();
+
+    let output = run_turbo(tempdir.path(), &["prune", "web"]);
+    assert!(output.status.success());
+
+    let pruned_contents = fs::read_to_string(tempdir.path().join("out/package.json")).unwrap();
+    let pruned: serde_json::Value = serde_json::from_str(&pruned_contents).unwrap();
+    let pruned_keys: Vec<_> = pruned.as_object().unwrap().keys().cloned().collect();
+
+    // The fixture has non-alphabetical key order (name, packageManager,
+    // devDependencies, pnpm). Verify prune doesn't sort them.
+    assert_eq!(
+        original_keys, pruned_keys,
+        "pruned package.json should preserve original key order"
+    );
+}
+
 // --- yarn-pnp.t ---
 
 #[test]
