@@ -59,6 +59,8 @@ pub const BUILTIN_PASS_THROUGH_ENV: &[&str] = &[
     "JB_IDE_*",
     "JB_INTERPRETER",
     "_JETBRAINS_TEST_RUNNER_RUN_SCOPE_TYPE",
+    // Turborepo config (needed for nested turbo invocations)
+    "TURBO_*",
     // Vercel specific
     "VERCEL",
     "VERCEL_*",
@@ -671,6 +673,7 @@ mod tests {
                 ("DOCKER_HOST", "tcp://localhost"),
                 ("GITHUB_TOKEN", "ghp_xxx"),
                 ("NEXT_PUBLIC_API", "https://api"),
+                ("TURBO_TOKEN", "tkn_xxx"),
                 ("RANDOM_VAR", "value"),
                 ("CI", "true"),
                 ("VERCEL", "1"),
