@@ -101,7 +101,7 @@ Start by cloning your repository. A clone with sufficient history is necessary f
 
 Use `turbo query affected` to check if a package has changes. The command outputs JSON that you can parse with a tool like `jq`:
 
-<Tabs items={["Check a package", "Check a specific task"]}>
+<Tabs items={["Check a package", "Check a specific task", "Quick check with --exit-code"]}>
 <Tab value="Check a package">
 
 ```bash title="Terminal"
@@ -133,6 +133,16 @@ else
   echo "docs#test is not affected, skipping"
   exit 0
 fi
+```
+
+</Tab>
+
+<Tab value="Quick check with --exit-code">
+
+If you only need a binary "affected or not" signal, use `--exit-code` as a shorthand. It exits with code `1` when results are found, `0` when empty:
+
+```bash title="Terminal"
+turbo query affected --packages web --exit-code
 ```
 
 </Tab>
