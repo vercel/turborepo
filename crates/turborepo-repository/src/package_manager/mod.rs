@@ -15,7 +15,7 @@ use bun::BunDetector;
 use itertools::{Either, Itertools};
 use lazy_regex::{Lazy, lazy_regex};
 use miette::{Diagnostic, NamedSource, SourceSpan};
-use node_semver::SemverError;
+use node_semver::{SemverError, Version};
 use npm::NpmDetector;
 use regex::Regex;
 use serde::Deserialize;
@@ -356,25 +356,25 @@ impl PackageManager {
                         "found invalid package manager even though regex should have caught it"
                     ),
                 };
-            } else {
-                let version = version.parse().map_err(|err: SemverError| {
-                    let (span, text) = package_manager.span_and_text("package.json");
-                    Error::InvalidVersion {
-                        explanation: err.to_string(),
-                        span,
-                        text,
-                    }
-                })?;
-                return match manager {
-                    "npm" => Ok(PackageManager::Npm),
-                    "bun" => Ok(PackageManager::Bun),
-                    "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
-                    "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
-                    _ => unreachable!(
-                        "found invalid package manager even though regex should have caught it"
-                    ),
-                };
             }
+
+            let version = version.parse().map_err(|err: SemverError| {
+                let (span, text) = package_manager.span_and_text("package.json");
+                Error::InvalidVersion {
+                    explanation: err.to_string(),
+                    span,
+                    text,
+                }
+            })?;
+            return match manager {
+                "npm" => Ok(PackageManager::Npm),
+                "bun" => Ok(PackageManager::Bun),
+                "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
+                "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
+                _ => unreachable!(
+                    "found invalid package manager even though regex should have caught it"
+                ),
+            };
         }
 
         // Fallback: try devEngines.packageManager
@@ -386,53 +386,41 @@ impl PackageManager {
     }
 
     /// Resolve package manager from devEngines.packageManager fields.
-    /// The version field in devEngines can be a semver range (e.g. "9.x"),
-    /// so we extract the major version for variant detection. If no version
-    /// is provided or it can't be parsed, we fall back to lockfile detection.
+    /// The version field in devEngines can use semver ranges (e.g. "9.x"),
+    /// so we extract the major version and construct a synthetic semver for
+    /// variant detection using the same logic as the top-level packageManager
+    /// path. If no version is provided or can't be parsed, we fall back to
+    /// lockfile detection.
     fn resolve_from_dev_engines(
         repo_root: &AbsoluteSystemPath,
         name: &str,
         version: Option<&str>,
     ) -> Result<Self, Error> {
-        // Try to extract major version from the version string for variant detection
-        let major_version = version.and_then(|v| {
-            // Extract leading digits as major version (handles "9.x", "9.0.0", ">=9", etc.)
-            let digits: String = v.chars().skip_while(|c| !c.is_ascii_digit()).take_while(|c| c.is_ascii_digit()).collect();
-            digits.parse::<u64>().ok()
+        // Extract leading digits as major version (handles "9.x", "9.0.0", etc.)
+        let synthetic_version: Option<Version> = version.and_then(|v| {
+            let digits: String = v
+                .chars()
+                .take_while(|c| c.is_ascii_digit())
+                .collect();
+            // Construct a synthetic semver so we can reuse the existing detector methods
+            format!("{}.0.0", digits).parse().ok()
         });
 
         match name {
             "npm" => Ok(PackageManager::Npm),
             "bun" => Ok(PackageManager::Bun),
-            "yarn" => {
-                if let Some(major) = major_version {
-                    if major >= 2 {
-                        Ok(PackageManager::Berry)
-                    } else {
-                        Ok(PackageManager::Yarn)
-                    }
-                } else {
-                    // No parseable version — detect from lockfile
-                    YarnDetector::new(repo_root)
-                        .next()
-                        .ok_or(Error::MissingPackageManager)?
-                }
-            }
-            "pnpm" => {
-                if let Some(major) = major_version {
-                    if major < 7 {
-                        Ok(PackageManager::Pnpm6)
-                    } else if major >= 9 {
-                        Ok(PackageManager::Pnpm9)
-                    } else {
-                        Ok(PackageManager::Pnpm)
-                    }
-                } else {
-                    PnpmDetector::new(repo_root)
-                        .next()
-                        .ok_or(Error::MissingPackageManager)?
-                }
-            }
+            "yarn" => match synthetic_version {
+                Some(v) => YarnDetector::detect_berry_or_yarn(&v),
+                None => YarnDetector::new(repo_root)
+                    .next()
+                    .ok_or(Error::MissingPackageManager)?,
+            },
+            "pnpm" => match synthetic_version {
+                Some(v) => PnpmDetector::detect_pnpm6_or_pnpm(&v),
+                None => PnpmDetector::new(repo_root)
+                    .next()
+                    .ok_or(Error::MissingPackageManager)?,
+            },
             _ => Err(Error::MissingPackageManager),
         }
     }
