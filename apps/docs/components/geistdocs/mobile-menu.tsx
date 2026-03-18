@@ -14,6 +14,7 @@ export const MobileMenu = ({ className }: MobileMenuProps) => {
 
   return (
     <Button
+      aria-label="Toggle navigation menu"
       className={cn(className)}
       onClick={() => setIsOpen(!isOpen)}
       size="icon-sm"

@@ -30,8 +30,14 @@ const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
       </head>
       <body>
         <GeistdocsProvider basePath={basePath} lang={lang}>
+          <a
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-md"
+            href="#main-content"
+          >
+            Skip to content
+          </a>
           <Navbar />
-          {children}
+          <div id="main-content">{children}</div>
           <Footer />
         </GeistdocsProvider>
         {shouldInjectToolbar ? <VercelToolbar /> : null}

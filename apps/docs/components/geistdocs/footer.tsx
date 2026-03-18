@@ -17,7 +17,7 @@ const FooterSection = ({
   links: FooterLink[];
 }) => (
   <div className="flex flex-col gap-y-3 text-sm">
-    <h4 className="font-medium">{title}</h4>
+    <p className="font-medium">{title}</p>
     <ul className="flex flex-col gap-y-3 text-muted-foreground">
       {links.map((link) => (
         <li
