@@ -31,7 +31,7 @@ const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
       <body>
         <GeistdocsProvider basePath={basePath} lang={lang}>
           <a
-            className="fixed left-4 top-4 z-50 -translate-y-full rounded-md bg-background px-4 py-2 text-sm font-medium text-foreground shadow-md transition focus:translate-y-0"
+            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-background focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-foreground focus:shadow-md"
             href="#main-content"
           >
             Skip to content
