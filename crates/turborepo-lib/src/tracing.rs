@@ -212,6 +212,7 @@ impl TurboSubscriber {
                 .with_env_var("TURBO_LOG_VERBOSITY")
                 .from_env_lossy()
                 .add_directive("reqwest=error".parse().unwrap())
+                .add_directive("rustls=error".parse().unwrap())
                 .add_directive("hyper=warn".parse().unwrap())
                 .add_directive("h2=warn".parse().unwrap());
 
