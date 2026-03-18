@@ -48,6 +48,17 @@ impl TurboState {
         formatcp!("turbo-{}", TurboState::platform_name())
     }
 
+    /// Scope segment for `@turbo/{platform}` packages. Split from dir to
+    /// avoid `/` in a single `join_components` segment (which debug-asserts).
+    pub const fn scoped_platform_package_scope() -> &'static str {
+        "@turbo"
+    }
+
+    /// Directory segment under the scope (e.g. `"linux-64"`).
+    pub const fn scoped_platform_package_dir() -> &'static str {
+        TurboState::platform_name()
+    }
+
     pub const fn binary_name() -> &'static str {
         {
             #[cfg(windows)]
@@ -66,5 +77,28 @@ impl TurboState {
             .lines()
             .next()
             .expect("Failed to read version from version.txt")
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_scoped_package_path_segments_have_no_separators() {
+        let scope = TurboState::scoped_platform_package_scope();
+        let dir = TurboState::scoped_platform_package_dir();
+        assert!(
+            scope.starts_with('@'),
+            "scope must start with '@' for npm scoped packages"
+        );
+        assert!(
+            !scope.contains('/') && !scope.contains('\\'),
+            "scope segment must not contain path separators (join_components constraint)"
+        );
+        assert!(
+            !dir.contains('/') && !dir.contains('\\'),
+            "dir segment must not contain path separators (join_components constraint)"
+        );
     }
 }

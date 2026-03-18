@@ -44,6 +44,11 @@ impl LocalTurboState {
     // - `npm install --install-strategy=shallow` (`npm install --global-style`)
     // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
     // - berry (nodeLinker: "pnpm")
+    //
+    // Returns `node_modules/turbo/node_modules` — the caller appends
+    // package-specific segments. This works for both legacy
+    // (`turbo-{platform}`) and scoped (`@turbo/{platform}`) packages since
+    // `join_components` handles multi-segment paths correctly.
     fn generate_nested_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
         Some(root_path.join_components(&["node_modules", "turbo", "node_modules"]))
     }
@@ -109,22 +114,22 @@ impl LocalTurboState {
         root_path.as_path().join(yarn_rc.pnp_unplugged_folder)
     }
 
-    // Unplugged strategy:
-    // - berry 2.1+
-    fn generate_unplugged_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        let platform_package_name = TurboState::platform_package_name();
-        let unplugged_base_path = Self::get_unplugged_base_path(root_path);
-
+    // Unplugged strategy (Berry 2.1+): Berry encodes the package identity in
+    // the unplugged directory name. For scoped `@turbo/linux-64` the dir is
+    // `@turbo-linux-64-npm-{version}-{hash}`, for legacy `turbo-linux-64` it
+    // is `turbo-linux-64-npm-{version}-{hash}`.
+    fn find_in_unplugged(
+        unplugged_base_path: &Utf8PathBuf,
+        package_prefix: &str,
+    ) -> Option<AbsoluteSystemPathBuf> {
         unplugged_base_path
             .read_dir_utf8()
             .ok()
             .and_then(|mut read_dir| {
-                // berry includes additional metadata in the filename.
-                // We actually have to find the platform package.
                 read_dir.find_map(|item| match item {
                     Ok(entry) => {
                         let file_name = entry.file_name();
-                        if file_name.starts_with(platform_package_name) {
+                        if file_name.starts_with(package_prefix) {
                             AbsoluteSystemPathBuf::new(
                                 unplugged_base_path.join(file_name).join("node_modules"),
                             )
@@ -138,54 +143,114 @@ impl LocalTurboState {
             })
     }
 
-    // We support six per-platform packages and one `turbo` package which handles
-    // indirection. We identify the per-platform package and execute the appropriate
-    // binary directly. We can choose to operate this aggressively because the
-    // _worst_ outcome is that we run global `turbo`.
+    /// Try to resolve a local turbo binary at a specific root + package path.
+    /// Returns `None` if the binary doesn't exist or the package metadata is
+    /// unreadable — the caller should try the next candidate.
+    fn try_probe_binary(
+        root: &AbsoluteSystemPath,
+        package_path: &[&str],
+        binary_name: &str,
+    ) -> Option<Self> {
+        let mut bin_components: Vec<&str> = Vec::with_capacity(package_path.len() + 2);
+        bin_components.extend_from_slice(package_path);
+        bin_components.extend_from_slice(&["bin", binary_name]);
+
+        let bin_path = root.join_components(&bin_components);
+        let bin_path = match fs_canonicalize(&bin_path) {
+            Ok(p) => p,
+            Err(_) => {
+                debug!("No local turbo binary found at: {}", bin_path);
+                return None;
+            }
+        };
+
+        let mut json_components: Vec<&str> = Vec::with_capacity(package_path.len() + 1);
+        json_components.extend_from_slice(package_path);
+        json_components.push("package.json");
+        let resolved_package_json_path = root.join_components(&json_components);
+
+        let Some(platform_package_json) = PackageJson::load(&resolved_package_json_path).ok()
+        else {
+            debug!(
+                "Failed to load package.json at: {}",
+                resolved_package_json_path
+            );
+            return None;
+        };
+        let Some(local_version) = platform_package_json.version else {
+            debug!(
+                "No version field in package.json at: {}",
+                resolved_package_json_path
+            );
+            return None;
+        };
+
+        debug!("Local turbo path: {}", bin_path.display());
+        debug!("Local turbo version: {}", &local_version);
+        Some(Self {
+            bin_path,
+            version: local_version,
+        })
+    }
+
+    // We support twelve per-platform packages (six scoped `@turbo/{platform}`
+    // and six legacy `turbo-{platform}`) and one `turbo` package which handles
+    // indirection. We identify the per-platform package and execute the
+    // appropriate binary directly. We can choose to operate this aggressively
+    // because the _worst_ outcome is that we run global `turbo`.
     //
-    // In spite of that, the only known unsupported local invocation is Yarn/Berry <
-    // 2.1 PnP
+    // In spite of that, the only known unsupported local invocation is
+    // Yarn/Berry < 2.1 PnP
     pub fn infer(root_path: &AbsoluteSystemPath) -> Option<Self> {
-        let platform_package_name = TurboState::platform_package_name();
         let binary_name = TurboState::binary_name();
 
-        let platform_package_json_path_components = [platform_package_name, "package.json"];
-        let platform_package_executable_path_components =
-            [platform_package_name, "bin", binary_name];
+        // Prefer scoped `@turbo/{platform}` over legacy `turbo-{platform}`.
+        // Scoped packages are the canonical format going forward; legacy is
+        // retained for backward compatibility.
+        let scoped_path: &[&str] = &[
+            TurboState::scoped_platform_package_scope(),
+            TurboState::scoped_platform_package_dir(),
+        ];
+        let legacy_path: &[&str] = &[TurboState::platform_package_name()];
+        let package_paths: &[&[&str]] = &[scoped_path, legacy_path];
 
-        // These are lazy because the last two are more expensive.
+        // Ordered cheap-to-expensive: hoisted/nested are pure path joins,
+        // linked requires symlink resolution, unplugged requires directory
+        // scanning. Detecting the package manager is more expensive than
+        // exhaustive search.
         let search_functions = [
             Self::generate_hoisted_path,
             Self::generate_nested_path,
             Self::generate_linked_path,
-            Self::generate_unplugged_path,
         ];
 
-        // Detecting the package manager is more expensive than just doing an exhaustive
-        // search.
+        // For each root, try all package formats before moving to the next
+        // (more expensive) strategy. This avoids redundant filesystem work
+        // compared to exhausting all roots per format.
         for root in search_functions
             .iter()
             .filter_map(|search_function| search_function(root_path))
         {
-            // Needs borrow because of the loop.
-            #[allow(clippy::needless_borrow)]
-            let bin_path = root.join_components(&platform_package_executable_path_components);
-            match fs_canonicalize(&bin_path) {
-                Ok(bin_path) => {
-                    let resolved_package_json_path =
-                        root.join_components(&platform_package_json_path_components);
-                    let platform_package_json =
-                        PackageJson::load(&resolved_package_json_path).ok()?;
-                    let local_version = platform_package_json.version?;
-
-                    debug!("Local turbo path: {}", bin_path.display());
-                    debug!("Local turbo version: {}", &local_version);
-                    return Some(Self {
-                        bin_path,
-                        version: local_version,
-                    });
+            for package_path in package_paths {
+                if let Some(state) = Self::try_probe_binary(&root, package_path, binary_name) {
+                    return Some(state);
                 }
-                Err(_) => debug!("No local turbo binary found at: {}", bin_path),
+            }
+        }
+
+        // Unplugged strategy (Berry 2.1+): directory scanning is
+        // package-name-aware because Berry encodes the identity in the
+        // directory name. Read the unplugged base path once to avoid
+        // re-parsing .yarnrc.yml.
+        let unplugged_base_path = Self::get_unplugged_base_path(root_path);
+        for package_path in package_paths {
+            // Berry unplugged dirs use `{name}-npm-{version}-{hash}`.
+            // For scoped `@turbo/linux-64` this becomes `@turbo-linux-64-npm-...`.
+            let unplugged_prefix = package_path.join("-");
+            if let Some(root) = Self::find_in_unplugged(&unplugged_base_path, &unplugged_prefix)
+                && let Some(state) = Self::try_probe_binary(&root, package_path, binary_name)
+            {
+                return Some(state);
             }
         }
 
@@ -233,6 +298,7 @@ pub fn turbo_version_has_shim(version: &str) -> bool {
 
 #[cfg(test)]
 mod test {
+    use tempfile::TempDir;
     use test_case::test_case;
 
     use super::*;
@@ -251,5 +317,145 @@ mod test {
     #[test_case("canary", true; "canary tag")]
     fn test_skip_infer_version_constraint(version: &str, expected: bool) {
         assert_eq!(turbo_version_has_shim(version), expected);
+    }
+
+    fn create_mock_turbo_install(root: &AbsoluteSystemPath, package_path: &[&str], version: &str) {
+        let binary_name = TurboState::binary_name();
+
+        let mut bin_components: Vec<&str> = package_path.to_vec();
+        bin_components.extend_from_slice(&["bin", binary_name]);
+        let bin_file = root.join_components(&bin_components);
+        bin_file.ensure_dir().unwrap();
+        bin_file.create_with_contents("").unwrap();
+
+        let mut json_components: Vec<&str> = package_path.to_vec();
+        json_components.push("package.json");
+        let json_file = root.join_components(&json_components);
+        json_file.ensure_dir().unwrap();
+        json_file
+            .create_with_contents(format!(
+                r#"{{"name": "test-turbo", "version": "{}"}}"#,
+                version,
+            ))
+            .unwrap();
+    }
+
+    fn scoped_path() -> Vec<&'static str> {
+        vec![
+            TurboState::scoped_platform_package_scope(),
+            TurboState::scoped_platform_package_dir(),
+        ]
+    }
+
+    fn legacy_path() -> Vec<&'static str> {
+        vec![TurboState::platform_package_name()]
+    }
+
+    #[test]
+    fn test_infer_hoisted_scoped() {
+        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        let nm = root.join_component("node_modules");
+
+        create_mock_turbo_install(&nm, &scoped_path(), "2.0.0");
+
+        let result = LocalTurboState::infer(root).unwrap();
+        assert_eq!(result.version(), "2.0.0");
+    }
+
+    #[test]
+    fn test_infer_hoisted_legacy_fallback() {
+        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        let nm = root.join_component("node_modules");
+
+        create_mock_turbo_install(&nm, &legacy_path(), "1.9.0");
+
+        let result = LocalTurboState::infer(root).unwrap();
+        assert_eq!(result.version(), "1.9.0");
+    }
+
+    #[test]
+    fn test_infer_scoped_preferred_over_legacy() {
+        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        let nm = root.join_component("node_modules");
+
+        create_mock_turbo_install(&nm, &scoped_path(), "3.0.0");
+        create_mock_turbo_install(&nm, &legacy_path(), "2.0.0");
+
+        let result = LocalTurboState::infer(root).unwrap();
+        assert_eq!(result.version(), "3.0.0");
+    }
+
+    #[test]
+    fn test_infer_empty_dir_returns_none() {
+        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        assert!(LocalTurboState::infer(root).is_none());
+    }
+
+    #[test]
+    fn test_infer_malformed_package_json_continues_search() {
+        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        let nm = root.join_component("node_modules");
+
+        let scoped = scoped_path();
+        let binary_name = TurboState::binary_name();
+
+        // Create scoped binary but with invalid package.json
+        let mut bin_components: Vec<&str> = scoped.clone();
+        bin_components.extend_from_slice(&["bin", binary_name]);
+        let bin_file = nm.join_components(&bin_components);
+        bin_file.ensure_dir().unwrap();
+        bin_file.create_with_contents("").unwrap();
+
+        let mut json_components: Vec<&str> = scoped.clone();
+        json_components.push("package.json");
+        let json_file = nm.join_components(&json_components);
+        json_file.ensure_dir().unwrap();
+        json_file.create_with_contents("not valid json").unwrap();
+
+        // Create valid legacy install
+        create_mock_turbo_install(&nm, &legacy_path(), "1.8.0");
+
+        // Should fall through to legacy despite scoped binary existing
+        let result = LocalTurboState::infer(root).unwrap();
+        assert_eq!(result.version(), "1.8.0");
+    }
+
+    #[test]
+    fn test_infer_unplugged_scoped() {
+        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+
+        // Berry unplugged dirs use `{identity}-npm-{version}-{hash}`.
+        // For @turbo/linux-64 → @turbo-linux-64-npm-2.1.0-abc123
+        let scoped_dir = TurboState::scoped_platform_package_dir();
+        let unplugged_dir_name = format!("@turbo-{}-npm-2.1.0-abc123", scoped_dir);
+
+        let unplugged_nm =
+            root.join_components(&[".yarn", "unplugged", &unplugged_dir_name, "node_modules"]);
+        create_mock_turbo_install(&unplugged_nm, &scoped_path(), "2.1.0");
+
+        let result = LocalTurboState::infer(root).unwrap();
+        assert_eq!(result.version(), "2.1.0");
+    }
+
+    #[test]
+    fn test_infer_unplugged_legacy() {
+        let tmpdir = TempDir::with_prefix("turbo_infer").unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+
+        let platform_package_name = TurboState::platform_package_name();
+        let unplugged_dir_name = format!("{}-npm-1.9.0-def456", platform_package_name);
+
+        let unplugged_nm =
+            root.join_components(&[".yarn", "unplugged", &unplugged_dir_name, "node_modules"]);
+        create_mock_turbo_install(&unplugged_nm, &legacy_path(), "1.9.0");
+
+        let result = LocalTurboState::infer(root).unwrap();
+        assert_eq!(result.version(), "1.9.0");
     }
 }
