@@ -87,7 +87,8 @@ impl std::error::Error for NoPackageManager {}
 impl Display for NoPackageManager {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "We did not find a package manager specified in your root package.json. \
-        Please set the \"packageManager\" property in your root package.json (https://nodejs.org/api/packages.html#packagemanager) \
+        Please set the \"packageManager\" property in your root package.json (https://nodejs.org/api/packages.html#packagemanager), \
+        set \"devEngines.packageManager\" (https://docs.npmjs.com/cli/v11/configuring-npm/package-json#devengines), \
         or run `npx @turbo/codemod add-package-manager` in the root of your monorepo.")
     }
 }
@@ -186,7 +187,8 @@ pub enum Error {
     LockfileMissing(AbsoluteSystemPathBuf),
     #[error("Discovering workspace: {0}")]
     WorkspaceDiscovery(#[from] discovery::Error),
-    #[error("Missing `packageManager` field in package.json")]
+    #[error("Missing `packageManager` field in package.json. You can also set \
+             `devEngines.packageManager` as an alternative.")]
     MissingPackageManager,
     #[error(transparent)]
     Yarnrc(#[from] yarnrc::Error),
@@ -336,44 +338,102 @@ impl PackageManager {
         repo_root: &AbsoluteSystemPath,
         pkg: &PackageJson,
     ) -> Result<Self, Error> {
-        let Some(package_manager) = &pkg.package_manager else {
-            return Err(Error::MissingPackageManager);
-        };
+        // Try top-level packageManager first
+        if let Some(package_manager) = &pkg.package_manager {
+            let (manager, version) = Self::parse_package_manager_string(package_manager)?;
+            // if version is a https attempt to check that instead
+            if version.starts_with("http") {
+                return match manager {
+                    "npm" => Ok(PackageManager::Npm),
+                    "bun" => Ok(PackageManager::Bun),
+                    "yarn" => Ok(YarnDetector::new(repo_root)
+                        .next()
+                        .ok_or_else(|| Error::MissingPackageManager)??),
+                    "pnpm" => Ok(PnpmDetector::new(repo_root)
+                        .next()
+                        .ok_or_else(|| Error::MissingPackageManager)??),
+                    _ => unreachable!(
+                        "found invalid package manager even though regex should have caught it"
+                    ),
+                };
+            } else {
+                let version = version.parse().map_err(|err: SemverError| {
+                    let (span, text) = package_manager.span_and_text("package.json");
+                    Error::InvalidVersion {
+                        explanation: err.to_string(),
+                        span,
+                        text,
+                    }
+                })?;
+                return match manager {
+                    "npm" => Ok(PackageManager::Npm),
+                    "bun" => Ok(PackageManager::Bun),
+                    "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
+                    "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
+                    _ => unreachable!(
+                        "found invalid package manager even though regex should have caught it"
+                    ),
+                };
+            }
+        }
 
-        let (manager, version) = Self::parse_package_manager_string(package_manager)?;
-        // if version is a https attempt to check that instead
-        if version.starts_with("http") {
-            match manager {
-                "npm" => Ok(PackageManager::Npm),
-                "bun" => Ok(PackageManager::Bun),
-                "yarn" => Ok(YarnDetector::new(repo_root)
-                    .next()
-                    .ok_or_else(|| Error::MissingPackageManager)??),
-                "pnpm" => Ok(PnpmDetector::new(repo_root)
-                    .next()
-                    .ok_or_else(|| Error::MissingPackageManager)??),
-                _ => unreachable!(
-                    "found invalid package manager even though regex should have caught it"
-                ),
-            }
-        } else {
-            let version = version.parse().map_err(|err: SemverError| {
-                let (span, text) = package_manager.span_and_text("package.json");
-                Error::InvalidVersion {
-                    explanation: err.to_string(),
-                    span,
-                    text,
+        // Fallback: try devEngines.packageManager
+        if let Some((name, version)) = pkg.dev_engines_package_manager() {
+            return Self::resolve_from_dev_engines(repo_root, name, version);
+        }
+
+        Err(Error::MissingPackageManager)
+    }
+
+    /// Resolve package manager from devEngines.packageManager fields.
+    /// The version field in devEngines can be a semver range (e.g. "9.x"),
+    /// so we extract the major version for variant detection. If no version
+    /// is provided or it can't be parsed, we fall back to lockfile detection.
+    fn resolve_from_dev_engines(
+        repo_root: &AbsoluteSystemPath,
+        name: &str,
+        version: Option<&str>,
+    ) -> Result<Self, Error> {
+        // Try to extract major version from the version string for variant detection
+        let major_version = version.and_then(|v| {
+            // Extract leading digits as major version (handles "9.x", "9.0.0", ">=9", etc.)
+            let digits: String = v.chars().skip_while(|c| !c.is_ascii_digit()).take_while(|c| c.is_ascii_digit()).collect();
+            digits.parse::<u64>().ok()
+        });
+
+        match name {
+            "npm" => Ok(PackageManager::Npm),
+            "bun" => Ok(PackageManager::Bun),
+            "yarn" => {
+                if let Some(major) = major_version {
+                    if major >= 2 {
+                        Ok(PackageManager::Berry)
+                    } else {
+                        Ok(PackageManager::Yarn)
+                    }
+                } else {
+                    // No parseable version — detect from lockfile
+                    YarnDetector::new(repo_root)
+                        .next()
+                        .ok_or(Error::MissingPackageManager)?
                 }
-            })?;
-            match manager {
-                "npm" => Ok(PackageManager::Npm),
-                "bun" => Ok(PackageManager::Bun),
-                "yarn" => Ok(YarnDetector::detect_berry_or_yarn(&version)?),
-                "pnpm" => Ok(PnpmDetector::detect_pnpm6_or_pnpm(&version)?),
-                _ => unreachable!(
-                    "found invalid package manager even though regex should have caught it"
-                ),
             }
+            "pnpm" => {
+                if let Some(major) = major_version {
+                    if major < 7 {
+                        Ok(PackageManager::Pnpm6)
+                    } else if major >= 9 {
+                        Ok(PackageManager::Pnpm9)
+                    } else {
+                        Ok(PackageManager::Pnpm)
+                    }
+                } else {
+                    PnpmDetector::new(repo_root)
+                        .next()
+                        .ok_or(Error::MissingPackageManager)?
+                }
+            }
+            _ => Err(Error::MissingPackageManager),
         }
     }
 
@@ -895,6 +955,194 @@ mod tests {
         let package_manager = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Bun);
 
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_pnpm9() -> Result<(), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "pnpm",
+                        "version": "9.x"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(pm, PackageManager::Pnpm9);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_npm() -> Result<(), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "npm"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(pm, PackageManager::Npm);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_yarn_berry() -> Result<(), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "yarn",
+                        "version": "4.x"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(pm, PackageManager::Berry);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_yarn_classic() -> Result<(), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "yarn",
+                        "version": "1.x"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(pm, PackageManager::Yarn);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_bun() -> Result<(), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "bun",
+                        "version": "1.0.0"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(pm, PackageManager::Bun);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_package_manager_top_level_takes_precedence() -> Result<(), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        // Top-level says npm, devEngines says pnpm — top-level should win
+        let package_json = PackageJson {
+            package_manager: Some(Spanned::new("npm@8.19.4".to_string())),
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "pnpm",
+                        "version": "9.x"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(pm, PackageManager::Npm);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_unknown_name() {
+        let dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path()).unwrap();
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "pip"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let result = PackageManager::read_package_manager(repo_root, &package_json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_pnpm6() -> Result<(), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "pnpm",
+                        "version": "6.x"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(pm, PackageManager::Pnpm6);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_pnpm7() -> Result<(), Error> {
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "pnpm",
+                        "version": "7.0.0"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(pm, PackageManager::Pnpm);
         Ok(())
     }
 
