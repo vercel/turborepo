@@ -194,9 +194,7 @@ pub async fn run(
         match &subcommand {
             QuerySubcommand::Affected(args) => {
                 let query = args.to_graphql_query();
-                let result = query_server
-                    .execute_query(run, &query, None)
-                    .await?;
+                let result = query_server.execute_query(run, &query, None).await?;
 
                 println!("{}", result.result_json);
 
@@ -209,16 +207,15 @@ pub async fn run(
                 }
 
                 if args.exit_code {
-                    let has_results = serde_json::from_str::<serde_json::Value>(
-                        &result.result_json,
-                    )
-                    .ok()
-                    .and_then(|json| {
-                        json.pointer("/data/affectedTasks/length")
-                            .or_else(|| json.pointer("/data/affectedPackages/length"))
-                            .and_then(|v| v.as_u64())
-                    })
-                    .map_or(false, |len| len > 0);
+                    let has_results =
+                        serde_json::from_str::<serde_json::Value>(&result.result_json)
+                            .ok()
+                            .and_then(|json| {
+                                json.pointer("/data/affectedTasks/length")
+                                    .or_else(|| json.pointer("/data/affectedPackages/length"))
+                                    .and_then(|v| v.as_u64())
+                            })
+                            .map_or(false, |len| len > 0);
 
                     return Ok(if has_results { 1 } else { 0 });
                 }

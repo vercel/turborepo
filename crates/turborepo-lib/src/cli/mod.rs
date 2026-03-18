@@ -3789,8 +3789,7 @@ mod test {
 
     #[test]
     fn test_query_affected_exit_code_flag() {
-        let args =
-            Args::try_parse_from(["turbo", "query", "affected", "--exit-code"]).unwrap();
+        let args = Args::try_parse_from(["turbo", "query", "affected", "--exit-code"]).unwrap();
         assert_matches!(
             args.command,
             Some(Command::Query {
