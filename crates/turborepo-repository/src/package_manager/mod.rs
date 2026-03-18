@@ -396,14 +396,15 @@ impl PackageManager {
         name: &str,
         version: Option<&str>,
     ) -> Result<Self, Error> {
-        // Extract leading digits as major version (handles "9.x", "9.0.0", etc.)
+        // Extract major version digits, stripping common range prefixes like
+        // ">=", "^", "~" (e.g. "^9.0.0" → "9", ">=9" → "9", "9.x" → "9").
         let synthetic_version: Option<Version> = version.and_then(|v| {
-            let digits: String = v
-                .chars()
-                .take_while(|c| c.is_ascii_digit())
-                .collect();
-            // Construct a synthetic semver so we can reuse the existing detector methods
-            format!("{}.0.0", digits).parse().ok()
+            let v = v.trim_start_matches(|c: char| !c.is_ascii_digit());
+            let digits: String = v.chars().take(10).take_while(|c| c.is_ascii_digit()).collect();
+            if digits.is_empty() {
+                return None;
+            }
+            format!("{digits}.0.0").parse().ok()
         });
 
         match name {
@@ -1131,6 +1132,50 @@ mod tests {
         };
         let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
         assert_eq!(pm, PackageManager::Pnpm);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_caret_range() -> Result<(), Error> {
+        // Version with caret prefix like "^9.0.0" should extract major version 9
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "pnpm",
+                        "version": "^9.0.0"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(pm, PackageManager::Pnpm9);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_gte_range() -> Result<(), Error> {
+        // Version with ">=" prefix should extract major version
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "yarn",
+                        "version": ">=4.0.0"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        assert_eq!(pm, PackageManager::Berry);
         Ok(())
     }
 
