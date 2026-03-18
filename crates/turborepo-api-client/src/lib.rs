@@ -626,17 +626,34 @@ impl APIClient {
         connect_timeout: Option<Duration>,
         #[allow(unused_variables)] native_roots: bool,
     ) -> Result<reqwest::Client> {
-        let mut builder = reqwest::Client::builder();
-        #[cfg(feature = "rustls-tls")]
-        {
-            builder = builder
-                .tls_built_in_webpki_certs(true)
-                .tls_built_in_native_certs(native_roots);
+        let build = |#[allow(unused_variables)] use_native: bool| {
+            let mut builder = reqwest::Client::builder();
+            #[cfg(feature = "rustls-tls")]
+            {
+                builder = builder
+                    .tls_built_in_webpki_certs(true)
+                    .tls_built_in_native_certs(use_native);
+            }
+            if let Some(dur) = connect_timeout {
+                builder = builder.connect_timeout(dur);
+            }
+            builder.build()
+        };
+
+        match build(native_roots) {
+            Ok(client) => Ok(client),
+            Err(e) if native_roots => {
+                // The system certificate store may be inaccessible (e.g.
+                // "Access is denied" on locked-down Windows machines).
+                // Fall back to the bundled Mozilla CA bundle which doesn't
+                // require any OS-level access.
+                tracing::warn!(
+                    "System certificate store is unavailable ({e}), using bundled certificates"
+                );
+                build(false).map_err(Error::TlsError)
+            }
+            Err(e) => Err(Error::TlsError(e)),
         }
-        if let Some(dur) = connect_timeout {
-            builder = builder.connect_timeout(dur);
-        }
-        builder.build().map_err(Error::TlsError)
     }
 
     pub fn base_url(&self) -> &str {
