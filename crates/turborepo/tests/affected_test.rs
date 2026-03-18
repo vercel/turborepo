@@ -1426,4 +1426,30 @@ fn test_query_affected_exit_code_filtered_no_match() {
         output.status.success(),
         "--exit-code should exit 0 when the filtered package is not affected"
     );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["data"]["affectedPackages"]["length"], 0);
+}
+
+#[test]
+fn test_query_affected_exit_code_error_returns_2() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // An invalid --base ref should produce a query error, which exits 2
+    // (distinct from exit 1 meaning "affected results found").
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "affected",
+            "--base",
+            "nonexistent-ref-00000",
+            "--exit-code",
+        ],
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "--exit-code should exit 2 on query errors, not 1"
+    );
 }

@@ -906,8 +906,8 @@ pub struct AffectedArgs {
     #[clap(long)]
     pub head: Option<String>,
     /// Exit with code 1 when affected packages or tasks are found, 0 when
-    /// none are found. Useful for CI gating. We recommend parsing the JSON
-    /// output directly for more flexibility.
+    /// none are found, or 2 on errors. Useful for CI gating. We recommend
+    /// parsing the JSON output directly for more flexibility.
     #[clap(long)]
     pub exit_code: bool,
 }

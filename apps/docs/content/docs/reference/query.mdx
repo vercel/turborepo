@@ -140,7 +140,7 @@ turbo query affected --head my-branch
 
 #### `--exit-code`
 
-Exit with code `1` when affected packages or tasks are found, `0` when none are found. JSON output is still printed to stdout.
+Exit with code `1` when affected packages or tasks are found, `0` when none are found, or `2` on errors. JSON output is still printed to stdout.
 
 We recommend parsing the JSON output directly for most use cases since it gives you the reason for each change and lets you make more nuanced decisions. `--exit-code` is available as a shorthand for simple cases.
 
@@ -152,7 +152,7 @@ turbo query affected --packages my-app --exit-code
 | -------------------------------- | --------- |
 | Nothing affected                 | `0`       |
 | Affected packages or tasks found | `1`       |
-| Query error                      | `1`       |
+| Query error                      | `2`       |
 
 ### Migrating from turbo-ignore
 

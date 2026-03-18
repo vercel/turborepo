@@ -80,7 +80,7 @@ You can also set `TURBO_SCM_BASE` and `TURBO_SCM_HEAD` environment variables.
 
 ### Quick check with `--exit-code`
 
-If you only need a binary "affected or not" signal without parsing JSON, you can use the `--exit-code` flag as a shorthand. It exits with code `1` when your query reports something has been affected. It returns `0` when empty:
+If you only need a binary "affected or not" signal without parsing JSON, you can use the `--exit-code` flag as a shorthand. It exits with code `1` when affected results are found, `0` when nothing is affected, or `2` on errors:
 
 ```bash title="Terminal"
 turbo query affected --packages web --exit-code
