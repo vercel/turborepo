@@ -148,6 +148,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.sha || github.sha }}
+          filter: blob:none
 
       - uses: ./.github/actions/setup-node
         with:
@@ -292,6 +293,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -340,6 +342,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
 
       - name: Setup Protoc
         uses: ./.github/actions/setup-protoc
@@ -383,6 +386,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
 
       - name: Setup Environment
         uses: ./.github/actions/setup-environment
@@ -410,6 +414,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
 
       - uses: ./.github/actions/setup-node
         with:
@@ -468,6 +473,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
 
       - name: Configure git
         run: |
@@ -515,6 +521,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
 
       - name: Get version and compute subdomain
         id: version
@@ -598,6 +605,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
 
       - uses: ./.github/actions/setup-node
         with:
