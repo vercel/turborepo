@@ -36,7 +36,7 @@ else
 fi
 ```
 
-The JSON output tells you exactly *what* changed and *why*, so you can make decisions beyond a simple skip/build:
+The JSON output tells you exactly _what_ changed and _why_, so you can make decisions beyond a simple skip/build:
 
 ```json title="Output"
 {
@@ -59,7 +59,7 @@ While you may have been able to hit a `>>> FULL TURBO` cache for this task, you 
 
 ### Checking for a specific task
 
-You can check if a specific task is affected, which is more precise because it respects the [`inputs`](/docs/reference/configuration#inputs) configuration for that task:
+You can check if a specific task is affected using
 
 ```bash title="Terminal"
 affected=$(turbo query affected --tasks test --packages web)
@@ -80,7 +80,7 @@ You can also set `TURBO_SCM_BASE` and `TURBO_SCM_HEAD` environment variables.
 
 ### Quick check with `--exit-code`
 
-If you only need a binary "affected or not" signal without parsing JSON, you can use the `--exit-code` flag as a shorthand. It exits with code `1` when results are found, `0` when empty:
+If you only need a binary "affected or not" signal without parsing JSON, you can use the `--exit-code` flag as a shorthand. It exits with code `1` when your query reports something has been affected. I return `0` when empty:
 
 ```bash title="Terminal"
 turbo query affected --packages web --exit-code
@@ -91,7 +91,8 @@ For more details and the full flag reference, see the [`turbo query affected` re
 ## Legacy: `turbo-ignore`
 
 <Callout type="warn" title="Deprecated">
-  `turbo-ignore` is deprecated. Use `turbo query affected` as described above. See the [migration guide](/docs/reference/query#migrating-from-turbo-ignore).
+  `turbo-ignore` is deprecated. Use `turbo query affected` as described above.
+  See the [migration guide](/docs/reference/query#migrating-from-turbo-ignore).
 </Callout>
 
 `turbo-ignore` is a Node.js package that was previously the recommended way to skip CI tasks. It uses `--filter` and `--dry=json` under the hood to detect package-level changes. If you are still using it, see the [migration guide](/docs/reference/query#migrating-from-turbo-ignore) for how to switch.

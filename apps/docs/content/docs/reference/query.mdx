@@ -106,7 +106,11 @@ turbo query affected --packages web docs
   "data": {
     "affectedPackages": {
       "items": [
-        { "name": "web", "path": "apps/web", "reason": { "__typename": "FileChanged" } }
+        {
+          "name": "web",
+          "path": "apps/web",
+          "reason": { "__typename": "FileChanged" }
+        }
       ],
       "length": 1
     }
@@ -136,7 +140,7 @@ turbo query affected --head my-branch
 
 #### `--exit-code`
 
-Exit with code 1 when affected packages or tasks are found, 0 when none are found. JSON output is still printed to stdout.
+Exit with code `1` when affected packages or tasks are found, `0` when none are found. JSON output is still printed to stdout.
 
 We recommend parsing the JSON output directly for most use cases since it gives you the reason for each change and lets you make more nuanced decisions. `--exit-code` is available as a shorthand for simple cases.
 
@@ -144,11 +148,11 @@ We recommend parsing the JSON output directly for most use cases since it gives 
 turbo query affected --packages my-app --exit-code
 ```
 
-| Condition | Exit code |
-| --- | --- |
-| Nothing affected | `0` |
-| Affected packages or tasks found | `1` |
-| Query error | `1` |
+| Condition                        | Exit code |
+| -------------------------------- | --------- |
+| Nothing affected                 | `0`       |
+| Affected packages or tasks found | `1`       |
+| Query error                      | `1`       |
 
 ### Migrating from turbo-ignore
 
@@ -156,18 +160,16 @@ turbo query affected --packages my-app --exit-code
 
 #### Flag mapping
 
-| `turbo-ignore` | `turbo query affected` |
-| --- | --- |
+| `turbo-ignore`            | `turbo query affected`                   |
+| ------------------------- | ---------------------------------------- |
 | `npx turbo-ignore my-app` | `turbo query affected --packages my-app` |
-| `--task build` | `--tasks build` |
-| `--fallback main` | `--base main` |
+| `--task build`            | `--tasks build`                          |
+| `--fallback main`         | `--base main`                            |
 
 #### Key differences
 
 - **More precise detection**: `turbo-ignore` operates at the package level. `turbo query affected` operates at the task input level, so a `.md` change won't trigger a rebuild if your task excludes `*.md` files via `inputs`.
 - **Structured output**: The JSON output includes the reason each package or task is affected, which is useful for debugging and automation.
-- **No commit message directives**: `turbo-ignore` supported `[skip ci]` and `[vercel skip]` commit message directives. Use your CI platform's native skip features instead.
-- **No `TURBO_FORCE` handling**: Check this environment variable in your CI script if needed.
 
 #### CI example
 
