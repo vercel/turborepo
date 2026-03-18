@@ -215,7 +215,7 @@ pub async fn run(
                                     .or_else(|| json.pointer("/data/affectedPackages/length"))
                                     .and_then(|v| v.as_u64())
                             })
-                            .map_or(false, |len| len > 0);
+                            .is_some_and(|len| len > 0);
 
                     return Ok(if has_results { 1 } else { 0 });
                 }
