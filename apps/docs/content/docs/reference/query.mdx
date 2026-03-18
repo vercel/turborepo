@@ -106,7 +106,11 @@ turbo query affected --packages web docs
   "data": {
     "affectedPackages": {
       "items": [
-        { "name": "web", "path": "apps/web", "reason": { "__typename": "FileChanged" } }
+        {
+          "name": "web",
+          "path": "apps/web",
+          "reason": { "__typename": "FileChanged" }
+        }
       ],
       "length": 1
     }
@@ -132,6 +136,53 @@ Can also be set with the `TURBO_SCM_HEAD` environment variable.
 
 ```bash title="Terminal"
 turbo query affected --head my-branch
+```
+
+#### `--exit-code`
+
+Exit with code `1` when affected packages or tasks are found, `0` when none are found, or `2` on errors. JSON output is still printed to stdout.
+
+We recommend parsing the JSON output directly for most use cases since it gives you the reason for each change and lets you make more nuanced decisions. `--exit-code` is available as a shorthand for simple cases.
+
+```bash title="Terminal"
+turbo query affected --packages my-app --exit-code
+```
+
+| Condition                        | Exit code |
+| -------------------------------- | --------- |
+| Nothing affected                 | `0`       |
+| Affected packages or tasks found | `1`       |
+| Query error                      | `2`       |
+
+### Migrating from turbo-ignore
+
+`turbo-ignore` is deprecated. `turbo query affected` is its replacement, with more precise task-level change detection that respects your [`inputs`](/docs/reference/configuration#inputs) configuration.
+
+#### Flag mapping
+
+| `turbo-ignore`            | `turbo query affected`                   |
+| ------------------------- | ---------------------------------------- |
+| `npx turbo-ignore my-app` | `turbo query affected --packages my-app` |
+| `--task build`            | `--tasks build`                          |
+| `--fallback main`         | `--base main`                            |
+
+#### Key differences
+
+- **More precise detection**: `turbo-ignore` operates at the package level. `turbo query affected` operates at the task input level, so a `.md` change won't trigger a rebuild if your task excludes `*.md` files via `inputs`.
+- **Structured output**: The JSON output includes the reason each package or task is affected, which is useful for debugging and automation.
+
+#### CI example
+
+```bash title="Terminal"
+affected=$(turbo query affected --packages my-app)
+count=$(echo "$affected" | jq '.data.affectedPackages.length')
+
+if [ "$count" -gt 0 ]; then
+  echo "my-app is affected, proceeding with build"
+else
+  echo "my-app is not affected, skipping"
+  exit 0
+fi
 ```
 
 ## Flags

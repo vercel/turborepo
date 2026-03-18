@@ -1351,3 +1351,105 @@ fn test_query_affected_shorthand_combined_packages_and_tasks() {
         "my-app#build should be in results: {full_names:?}"
     );
 }
+
+// -- --exit-code tests --
+
+#[test]
+fn test_query_affected_exit_code_with_changes() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    let output = run_turbo(tempdir.path(), &["query", "affected", "--exit-code"]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "--exit-code should exit 1 when affected tasks are found"
+    );
+    // JSON should still be printed to stdout
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedTasks"]["items"].as_array().unwrap();
+    assert!(!items.is_empty());
+}
+
+#[test]
+fn test_query_affected_exit_code_no_changes() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    let output = run_turbo(tempdir.path(), &["query", "affected", "--exit-code"]);
+    assert!(
+        output.status.success(),
+        "--exit-code should exit 0 when nothing is affected"
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["data"]["affectedTasks"]["length"], 0);
+}
+
+#[test]
+fn test_query_affected_exit_code_packages() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["query", "affected", "--packages", "--exit-code"],
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "--exit-code should exit 1 when affected packages are found"
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["data"]["affectedPackages"]["items"]
+        .as_array()
+        .unwrap();
+    assert!(!items.is_empty());
+}
+
+#[test]
+fn test_query_affected_exit_code_filtered_no_match() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    fs::write(tempdir.path().join("apps/my-app/new.js"), "foo").unwrap();
+
+    // Change is in my-app, but we filter for util only
+    let output = run_turbo(
+        tempdir.path(),
+        &["query", "affected", "--packages", "util", "--exit-code"],
+    );
+    assert!(
+        output.status.success(),
+        "--exit-code should exit 0 when the filtered package is not affected"
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["data"]["affectedPackages"]["length"], 0);
+}
+
+#[test]
+fn test_query_affected_exit_code_error_returns_2() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_affected(tempdir.path());
+
+    // An invalid --base ref should produce a query error, which exits 2
+    // (distinct from exit 1 meaning "affected results found").
+    let output = run_turbo(
+        tempdir.path(),
+        &[
+            "query",
+            "affected",
+            "--base",
+            "nonexistent-ref-00000",
+            "--exit-code",
+        ],
+    );
+    assert_eq!(
+        output.status.code(),
+        Some(2),
+        "--exit-code should exit 2 on query errors, not 1"
+    );
+}

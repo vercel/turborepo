@@ -49,12 +49,15 @@ impl QueryError {
     }
 }
 
+/// Execute a GraphQL query, print results to stdout, and report errors to
+/// stderr. Returns `(exit_code, result_json)` so callers can inspect the
+/// response for post-processing (e.g. `--exit-code`).
 async fn execute_query_and_print(
     run: Arc<dyn QueryRun>,
     query_server: &dyn QueryServer,
     query: &str,
     variables_json: Option<&str>,
-) -> Result<i32, cli::Error> {
+) -> Result<(i32, String), cli::Error> {
     let result = query_server
         .execute_query(run, query, variables_json)
         .await?;
@@ -65,9 +68,21 @@ async fn execute_query_and_print(
             let error = QueryError::from_query_error(error, query.to_string());
             eprintln!("{:?}", Report::new(error));
         }
-        return Ok(1);
+        return Ok((2, result.result_json));
     }
-    Ok(0)
+    Ok((0, result.result_json))
+}
+
+/// Inspect the JSON response from an affected query to determine whether any
+/// packages or tasks were found. Returns `Some(count)` on success, or `None`
+/// if the response doesn't match the expected schema (which callers should
+/// treat as an error).
+fn affected_result_count(json: &str) -> Option<u64> {
+    let value: serde_json::Value = serde_json::from_str(json).ok()?;
+    value
+        .pointer("/data/affectedTasks/length")
+        .or_else(|| value.pointer("/data/affectedPackages/length"))
+        .and_then(|v| v.as_u64())
 }
 
 fn escape_graphql_string(s: &str) -> String {
@@ -191,10 +206,31 @@ pub async fn run(
     let run: Arc<dyn QueryRun> = Arc::new(run);
 
     if let Some(subcommand) = subcommand {
-        let query = match &subcommand {
-            QuerySubcommand::Affected(args) => args.to_graphql_query(),
-        };
-        return execute_query_and_print(run, query_server, &query, None).await;
+        match &subcommand {
+            QuerySubcommand::Affected(args) => {
+                let query = args.to_graphql_query();
+                let (exit_code, result_json) =
+                    execute_query_and_print(run, query_server, &query, None).await?;
+
+                if exit_code != 0 {
+                    return Ok(exit_code);
+                }
+
+                if args.exit_code {
+                    return match affected_result_count(&result_json) {
+                        Some(count) => Ok(if count > 0 { 1 } else { 0 }),
+                        None => {
+                            eprintln!(
+                                "error: could not determine affected count from query result"
+                            );
+                            Ok(2)
+                        }
+                    };
+                }
+
+                return Ok(0);
+            }
+        }
     }
 
     let query = query
@@ -221,7 +257,9 @@ pub async fn run(
             .transpose()
             .map_err(turborepo_query_api::Error::Server)?;
 
-        execute_query_and_print(run, query_server, query, variables_json.as_deref()).await
+        let (exit_code, _) =
+            execute_query_and_print(run, query_server, query, variables_json.as_deref()).await?;
+        Ok(exit_code)
     } else {
         query_server.run_query_server(run, handler).await?;
         Ok(0)
@@ -230,7 +268,7 @@ pub async fn run(
 
 #[cfg(test)]
 mod tests {
-    use super::escape_graphql_string;
+    use super::{affected_result_count, escape_graphql_string};
     use crate::cli::AffectedArgs;
 
     fn affected(
@@ -244,6 +282,7 @@ mod tests {
             tasks: tasks.map(|v| v.into_iter().map(String::from).collect()),
             base: base.map(String::from),
             head: head.map(String::from),
+            exit_code: false,
         }
     }
 
@@ -454,5 +493,60 @@ mod tests {
             !q.contains("filter:"),
             "bare --packages should not add filter: {q}"
         );
+    }
+
+    // -- affected_result_count tests --
+
+    #[test]
+    fn affected_result_count_tasks_with_results() {
+        let json = r#"{"data":{"affectedTasks":{"items":[{"name":"build"}],"length":1}}}"#;
+        assert_eq!(affected_result_count(json), Some(1));
+    }
+
+    #[test]
+    fn affected_result_count_tasks_empty() {
+        let json = r#"{"data":{"affectedTasks":{"items":[],"length":0}}}"#;
+        assert_eq!(affected_result_count(json), Some(0));
+    }
+
+    #[test]
+    fn affected_result_count_packages_with_results() {
+        let json = r#"{"data":{"affectedPackages":{"items":[{"name":"web"}],"length":2}}}"#;
+        assert_eq!(affected_result_count(json), Some(2));
+    }
+
+    #[test]
+    fn affected_result_count_packages_empty() {
+        let json = r#"{"data":{"affectedPackages":{"items":[],"length":0}}}"#;
+        assert_eq!(affected_result_count(json), Some(0));
+    }
+
+    #[test]
+    fn affected_result_count_missing_data_key() {
+        let json = r#"{"errors":[{"message":"something broke"}]}"#;
+        assert_eq!(affected_result_count(json), None);
+    }
+
+    #[test]
+    fn affected_result_count_empty_data() {
+        let json = r#"{"data":{}}"#;
+        assert_eq!(affected_result_count(json), None);
+    }
+
+    #[test]
+    fn affected_result_count_invalid_json() {
+        assert_eq!(affected_result_count("not json"), None);
+    }
+
+    #[test]
+    fn affected_result_count_length_is_string() {
+        let json = r#"{"data":{"affectedTasks":{"length":"oops"}}}"#;
+        assert_eq!(affected_result_count(json), None);
+    }
+
+    #[test]
+    fn affected_result_count_missing_length_field() {
+        let json = r#"{"data":{"affectedTasks":{"items":[]}}}"#;
+        assert_eq!(affected_result_count(json), None);
     }
 }
