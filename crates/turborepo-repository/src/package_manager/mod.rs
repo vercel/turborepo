@@ -1135,6 +1135,114 @@ mod tests {
     }
 
     #[test]
+    fn test_read_package_manager_dev_engines_unparseable_version_no_lockfile() {
+        // Version string with no leading digits ("latest") can't produce a
+        // synthetic semver and no lockfile exists, so this should error.
+        let dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path()).unwrap();
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "pnpm",
+                        "version": "latest"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let result = PackageManager::read_package_manager(repo_root, &package_json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_empty_version_no_lockfile() {
+        let dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path()).unwrap();
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "yarn",
+                        "version": ""
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let result = PackageManager::read_package_manager(repo_root, &package_json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_no_version_no_lockfile() {
+        // devEngines with name only and no lockfile → should error
+        let dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path()).unwrap();
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "pnpm"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let result = PackageManager::read_package_manager(repo_root, &package_json);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_read_package_manager_dev_engines_no_version_with_pnpm_lockfile() -> Result<(), Error> {
+        // devEngines with name only but pnpm-lock.yaml exists → lockfile detection
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        // Create a pnpm-lock.yaml — PnpmDetector checks existence only
+        std::fs::write(dir.path().join("pnpm-lock.yaml"), "lockfileVersion: '6.0'\n")?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "pnpm"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_package_manager(repo_root, &package_json)?;
+        // PnpmDetector returns Pnpm when lockfile exists (version-agnostic)
+        assert_eq!(pm, PackageManager::Pnpm);
+        Ok(())
+    }
+
+    #[test]
+    fn test_read_or_detect_with_dev_engines() -> Result<(), Error> {
+        // Test the full public API: read_or_detect_package_manager with devEngines
+        let dir = TempDir::new()?;
+        let repo_root = AbsoluteSystemPath::from_std_path(dir.path())?;
+        let package_json = PackageJson {
+            other: serde_json::from_value(serde_json::json!({
+                "devEngines": {
+                    "packageManager": {
+                        "name": "npm",
+                        "version": "10.0.0"
+                    }
+                }
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let pm = PackageManager::read_or_detect_package_manager(&package_json, repo_root)?;
+        assert_eq!(pm, PackageManager::Npm);
+        Ok(())
+    }
+
+    #[test]
     fn test_globs_test() {
         struct TestCase {
             globs: WorkspaceGlobs,
