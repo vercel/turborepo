@@ -1428,6 +1428,100 @@ mod test {
         assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
     }
 
+    /// Regression test for #12393: proves that dropping stdin causes a
+    /// persistent-style child (one that exits on stdin EOF) to terminate.
+    ///
+    /// This documents the mechanism behind the bug: when the task executor
+    /// took stdin and passed it to `TaskOutput::set_stdin()` in stream mode,
+    /// the stdin was dropped immediately, sending EOF to the child.
+    #[test_case(false)]
+    #[test_case(TEST_PTY)]
+    #[tokio::test]
+    async fn test_dropping_stdin_terminates_persistent_child(use_pty: bool) {
+        let script = find_script_dir().join_component("persistent_server.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child =
+            Child::spawn(cmd, ShutdownStyle::Kill, use_pty.then(PtySize::default)).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        // Take stdin and immediately drop it — simulates the bug where
+        // TaskOutput::stream().set_stdin() dropped stdin in stream mode.
+        {
+            let _dropped = child.stdin();
+        }
+
+        // The child should exit because it received EOF on stdin.
+        let mut out = Vec::new();
+        let result = tokio::time::timeout(
+            Duration::from_secs(5),
+            child.wait_with_piped_outputs(&mut out),
+        )
+        .await;
+
+        let exit = result
+            .expect("child should have exited after stdin was dropped")
+            .unwrap();
+
+        let output = String::from_utf8(out).unwrap();
+        assert!(
+            output.contains("server ready"),
+            "expected 'server ready' in output, got: {output:?}"
+        );
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
+    /// Regression test for #12393: proves that holding stdin in a guard
+    /// keeps a persistent-style child alive.
+    ///
+    /// This is the correct behavior after the fix: in stream mode, stdin
+    /// is held by `_stdin_guard` instead of being passed to
+    /// `TaskOutput::set_stdin()` which would drop it.
+    ///
+    /// PTY-only: `child.stdin()` returns `None` for non-PTY children
+    /// (`ChildInput::Std` is filtered out), so the guard mechanism only
+    /// applies to PTY-spawned processes — which is the production path
+    /// for persistent tasks on Unix.
+    #[tokio::test]
+    async fn test_held_stdin_keeps_persistent_child_alive() {
+        if !TEST_PTY {
+            return;
+        }
+        let script = find_script_dir().join_component("persistent_server.js");
+        let mut cmd = Command::new("node");
+        cmd.args([script.as_std_path()]);
+        cmd.open_stdin();
+        let mut child = Child::spawn(cmd, ShutdownStyle::Kill, Some(PtySize::default())).unwrap();
+
+        tokio::time::sleep(STARTUP_DELAY).await;
+
+        // Hold stdin in a guard — simulates the correct persistent task flow.
+        let _stdin_guard = child.stdin();
+        assert!(
+            _stdin_guard.is_some(),
+            "PTY child should return Some from stdin()"
+        );
+
+        // The child should NOT exit while we hold stdin. Give it a moment
+        // and verify it's still alive by checking that wait times out.
+        let result = tokio::time::timeout(Duration::from_secs(2), child.wait()).await;
+        assert!(
+            result.is_err(),
+            "child should still be alive while stdin is held"
+        );
+
+        // Now drop the guard — child should exit.
+        drop(_stdin_guard);
+
+        let exit = tokio::time::timeout(Duration::from_secs(5), child.wait())
+            .await
+            .expect("child should exit after stdin guard is dropped");
+
+        assert_matches!(exit, Some(ChildExit::Finished(Some(0))));
+    }
+
     /// Verifies that stopping a parent process also kills its child processes.
     ///
     /// On Unix this works via process groups (setpgid + kill(-pgid)).
