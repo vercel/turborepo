@@ -408,18 +408,27 @@ where
                 }
             };
 
-        if self.takes_input
-            && let Some(stdin) = process.stdin()
-        {
-            task_output.set_stdin(stdin);
-        }
-
-        // For persistent tasks not using TUI, take stdin and hold it so it
-        // stays alive until the process exits. Without this, the PTY read
-        // path in `wait_with_piped_outputs` would drop stdin immediately,
-        // sending EOF to tools like Vite that exit when stdin closes.
+        // For persistent/interactive tasks, keep stdin alive so tools like
+        // Vite that exit on EOF don't terminate prematurely.
+        //
+        // In TUI mode, forward stdin to the TaskSender for interactive display.
+        // In stream mode (no TUI sender), hold stdin in a guard that lives
+        // until the process exits — process.stdin() uses .take(), so only the
+        // first call returns Some.
         let _stdin_guard = if self.takes_input {
-            process.stdin()
+            let stdin = process.stdin();
+            if let Some(stdin) = stdin {
+                if task_output.sender().is_some() {
+                    task_output.set_stdin(stdin);
+                    // TUI sender now owns stdin, no guard needed.
+                    None
+                } else {
+                    // Stream mode: hold stdin open via the guard.
+                    Some(stdin)
+                }
+            } else {
+                None
+            }
         } else {
             None
         };
