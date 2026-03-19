@@ -37,6 +37,8 @@ jobs:
         run: bash scripts/update-examples-dep.sh
 
       - name: Commit and push
+        env:
+          HUSKY: "0"
         run: |
           git commit -am "release(turborepo): update examples to latest"
           git push origin ${{ steps.branch.outputs.STAGE_BRANCH }}
