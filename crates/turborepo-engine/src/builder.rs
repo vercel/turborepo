@@ -620,7 +620,19 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let mut task_def =
             TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;
 
-        if !self.global_deps.is_empty() {
+        // Only prepend global inputs to tasks whose package actually has a
+        // script for this task. Phantom/transit tasks (packages without a
+        // matching script that exist solely for dependency ordering via
+        // `dependsOn: ["^task"]`) should not hash global input files — they
+        // don't execute, and including the files would cause their hash to
+        // change and cascade into downstream tasks that depend on them.
+        let package_has_script = self
+            .package_graph
+            .package_json(&PackageName::from(task_id.package()))
+            .and_then(|pj| pj.scripts.get(task_id.task()))
+            .is_some_and(|script| !script.is_empty());
+
+        if !self.global_deps.is_empty() && package_has_script {
             crate::task_definition::prepend_global_inputs(
                 &mut task_def.inputs,
                 had_explicit_inputs,

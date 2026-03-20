@@ -764,7 +764,7 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 &scm,
                 &self.repo_root,
-                root_turbo_json.global_deps_for_hash(),
+                &root_turbo_json.global_deps,
             )?;
         }
 
@@ -893,7 +893,7 @@ impl RunBuilder {
                     &engine,
                     pkg_dep_graph,
                     &changed_files,
-                    root_turbo_json.global_deps_for_hash(),
+                    &root_turbo_json.global_deps,
                 );
                 tracing::info!(
                     total_tasks,
@@ -988,7 +988,7 @@ impl RunBuilder {
                     &engine,
                     pkg_dep_graph,
                     &existing_files,
-                    root_turbo_json.global_deps_for_hash(),
+                    &root_turbo_json.global_deps,
                 );
                 tracing::info!(
                     total_tasks,
