@@ -17,8 +17,8 @@ If inputs haven't changed, restore outputs from cache instead of re-running the 
 These affect ALL tasks in the repo:
 
 - `package-lock.json` / `yarn.lock` / `pnpm-lock.yaml`
-- Files listed in `globalDependencies`
-- Environment variables in `globalEnv`
+- Files listed in `globalDependencies` (or `global.env` when using `globalConfiguration`)
+- Environment variables in `globalEnv` (or `global.env`)
 - `turbo.json` configuration
 
 ```json
@@ -37,6 +37,7 @@ These affect specific tasks:
 - Environment variables in task's `env` key
 - Task configuration (command, outputs, dependencies)
 - Hashes of dependent tasks (`dependsOn`)
+- Files from `global.inputs` (when using `futureFlags.globalConfiguration` — see below)
 
 ```json
 {
@@ -49,6 +50,51 @@ These affect specific tasks:
   }
 }
 ```
+
+### How `global.inputs` Changes the Hash Equation
+
+When `futureFlags.globalConfiguration` is enabled, `global.inputs` files are **not** part of the global hash. Instead, they are prepended to every task's `inputs` and folded into the **task hash**. This is a fundamental change from `globalDependencies`.
+
+**With `globalDependencies` (default):**
+
+```
+task cache key = hash(global hash, task hash)
+                      ↑ includes globalDependencies file hashes
+```
+
+Changing a `globalDependencies` file invalidates **every** task, regardless of task-level `inputs`. There is no way for a task to opt out.
+
+**With `global.inputs` (`futureFlags.globalConfiguration`):**
+
+```
+task cache key = hash(global hash, task hash)
+                                   ↑ includes global.inputs file hashes (merged with task inputs)
+```
+
+`global.inputs` files are merged into each task's input globs. This means:
+
+- Tasks can **exclude** specific global files with negation globs: `"inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/tsconfig.json"]`
+- The global hash is smaller (it still includes lockfile, engines, `global.env`, etc. — but not file hashes from `global.inputs`)
+- The task hash correctly includes the global input file hashes alongside the task's own inputs
+
+```json
+{
+  "futureFlags": { "globalConfiguration": true },
+  "global": {
+    "inputs": ["tsconfig.json", ".env"]
+  },
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "lint": {
+      "inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/tsconfig.json"]
+    }
+  }
+}
+```
+
+In this example, changing `tsconfig.json` invalidates `build` (it's in the task's inputs) but **not** `lint` (which explicitly excludes it). With `globalDependencies`, both would have been invalidated.
 
 ## What Gets Cached
 

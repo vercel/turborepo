@@ -87,6 +87,17 @@ Or use `globalDependencies` for repo-wide env files:
 }
 ```
 
+With `futureFlags.globalConfiguration`, use `global.inputs` instead. The key difference: `global.inputs` files are folded into each task's hash individually (not the global hash), so tasks can exclude specific files with negation globs.
+
+```json
+{
+  "futureFlags": { "globalConfiguration": true },
+  "global": {
+    "inputs": [".env"]
+  }
+}
+```
+
 ### Lockfile Changed
 
 Installing/updating packages changes the global hash.
@@ -153,6 +164,16 @@ turbo build --output-logs=full
 # See why tasks are running
 turbo build --verbosity=2
 ```
+
+## Debugging with `globalConfiguration` Enabled
+
+When `futureFlags.globalConfiguration` is on, `global.inputs` files appear in per-task hash inputs (not the global hash). If you're getting unexpected cache misses:
+
+1. Check `--summarize` output — global input files will show up in the **task inputs** section, not the global hash section
+2. Verify tasks aren't accidentally excluding global inputs via negation globs in `inputs`
+3. Remember that toggling the `globalConfiguration` flag itself invalidates all caches (the flag value is part of the global hash)
+
+If you're getting unexpected cache **hits** after changing a global input file, the task may be excluding that file with a negation glob. Check the task's `inputs` for `!$TURBO_ROOT$/...` patterns.
 
 ## Quick Checklist
 
