@@ -1,6 +1,5 @@
 import "../global.css";
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
 import { VercelToolbar } from "@vercel/toolbar/next";
 import { FaviconHandler } from "@/components/favicon-handler";
 import { Footer } from "@/components/geistdocs/footer";
@@ -18,7 +17,6 @@ export const metadata: Metadata = {
 
 const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
   const { lang } = await params;
-
   const shouldInjectToolbar = process.env.NODE_ENV === "development";
 
   return (
