@@ -8,21 +8,17 @@ import { Navbar } from "@/components/geistdocs/navbar";
 import { GeistdocsProvider } from "@/components/geistdocs/provider";
 import { basePath } from "@/geistdocs";
 import { mono, sans } from "@/lib/geistdocs/fonts";
-import { i18n } from "@/lib/geistdocs/i18n";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   icons: {
-    icon: "/images/product-icons/repo-dark-32x32.png"
-  }
+    icon: "/images/product-icons/repo-dark-32x32.png",
+  },
 };
 
 const Layout = async ({ children, params }: LayoutProps<"/[lang]">) => {
   const { lang } = await params;
 
-  if (!i18n.languages.includes(lang)) {
-    notFound();
-  }
   const shouldInjectToolbar = process.env.NODE_ENV === "development";
 
   return (
