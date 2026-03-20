@@ -2,7 +2,7 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "inputs": ["**", "!$TURBO_ROOT$/config.txt"]
+      "inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/config.txt"]
     }
   }
 }

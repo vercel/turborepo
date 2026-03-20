@@ -72,11 +72,11 @@ fn test_global_dependencies_cannot_be_excluded_by_task_inputs() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined = format!("{stdout}{stderr}");
     assert!(
-        combined.contains("app-a#build") && combined.contains("cache miss"),
+        combined.contains("app-a:build") && combined.contains("cache miss"),
         "expected app-a cache miss, got: {combined}"
     );
     assert!(
-        combined.contains("app-b#build") && combined.contains("cache miss"),
+        combined.contains("app-b:build") && combined.contains("cache miss"),
         "expected app-b cache miss (negation glob has no effect with globalDependencies), got: \
          {combined}"
     );
@@ -124,12 +124,12 @@ fn test_global_inputs_can_be_excluded_by_task_inputs() {
     );
     // app-a has no negation glob → config.txt is in its inputs → cache miss
     assert!(
-        combined.contains("app-a#build") && combined.contains("cache miss"),
+        combined.contains("app-a:build") && combined.contains("cache miss"),
         "expected app-a cache miss, got: {combined}"
     );
     // app-b excludes config.txt via !$TURBO_ROOT$/config.txt → cache hit
     assert!(
-        combined.contains("app-b#build") && combined.contains("cache hit"),
+        combined.contains("app-b:build") && combined.contains("cache hit"),
         "expected app-b cache hit (negation glob works with global.inputs), got: {combined}"
     );
 }
