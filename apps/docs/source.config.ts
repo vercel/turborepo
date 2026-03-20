@@ -5,6 +5,7 @@ import {
   transformerNotationWordHighlight
 } from "@shikijs/transformers";
 import remarkMermaid from "./components/diagram/remark-mermaid";
+import rehypeStripHeadingJsx from "./lib/rehype-strip-heading-jsx";
 import {
   defineConfig,
   defineDocs,
@@ -221,6 +222,7 @@ const theme = createCssVariablesTheme({
 export default defineConfig({
   mdxOptions: {
     remarkPlugins: [remarkMermaid],
+    rehypePlugins: [rehypeStripHeadingJsx],
     rehypeCodeOptions: {
       themes: {
         light: theme,
