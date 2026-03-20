@@ -95,16 +95,23 @@ impl<'a> TurboJsonReader<'a> {
 
         opts.future_flags = turbo_json.future_flags.map(|f| *f.as_inner());
 
-        // Only read observability config if futureFlags.experimentalObservability is
-        // enabled
-        if opts
-            .future_flags
-            .map(|f| f.experimental_observability)
-            .unwrap_or(false)
-            && let Some(raw_observability) = turbo_json.experimental_observability
-        {
-            opts.experimental_observability = Some(convert_raw_observability(raw_observability)?);
+        if let Some(raw_observability) = turbo_json.experimental_observability {
+            let otel_enabled = opts
+                .future_flags
+                .map(|f| f.experimental_observability)
+                .unwrap_or(false);
+
+            let converted = convert_raw_observability(raw_observability)?;
+
+            let effective = ExperimentalObservabilityOptions {
+                otel: if otel_enabled { converted.otel } else { None },
+            };
+
+            if effective.otel.is_some() {
+                opts.experimental_observability = Some(effective);
+            }
         }
+
         Ok(opts)
     }
 }

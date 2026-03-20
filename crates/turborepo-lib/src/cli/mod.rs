@@ -997,6 +997,14 @@ pub struct ExecutionArgs {
     /// turbo decide based on its own heuristics. (default auto)
     #[clap(long, value_enum)]
     pub log_order: Option<LogOrder>,
+    /// Output machine-readable NDJSON to stdout instead of human-readable
+    /// text. Disables the TUI and forces stream mode.
+    #[clap(long)]
+    pub json: bool,
+    /// Write structured JSON logs to a file. If no path is given, writes to
+    /// `.turbo/logs/<epoch_millis>.json`.
+    #[clap(long)]
+    pub log_file: Option<Option<String>>,
     /// Only executes the tasks specified, does not execute parent tasks.
     #[clap(long)]
     pub only: bool,
@@ -1452,7 +1460,14 @@ async fn run_main(
 
     let mut command = get_command(&mut cli_args)?;
 
-    if should_print_version() {
+    // Suppress the version banner in --json mode — all output on stdout
+    // must be machine-readable NDJSON.
+    let is_json_mode = matches!(
+        &command,
+        Command::Run { execution_args, .. } | Command::Watch { execution_args, .. }
+            if execution_args.json
+    );
+    if should_print_version() && !is_json_mode {
         eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
     }
 

@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use turborepo_log::{Logger, sinks::collector::CollectorSink};
+use turborepo_log::{Logger, StructuredLogSink, sinks::collector::CollectorSink};
 
 use crate::{ColorConfig, TerminalSink, TuiSink};
 
@@ -14,15 +14,17 @@ use crate::{ColorConfig, TerminalSink, TuiSink};
 /// # Lifecycle
 ///
 /// 1. `LogSinks::new()` — all sinks start in Active mode
-/// 2. `init_logger()` — registers sinks with the global `turborepo_log` logger
-/// 3. For `--graph` / `--dry=json`: `suppress_stdout()` before emitting prelude
-/// 4. Emit prelude logs (Info→stdout, unless suppressed)
-/// 5. `disable_for_tui()` — suppress all terminal output before TUI startup
-/// 6. If TUI starts: `tui.connect(sender)` to forward buffered events If TUI
+/// 2. Optionally call `with_structured_sink()` to enable structured logging
+/// 3. `init_logger()` — registers sinks with the global `turborepo_log` logger
+/// 4. For `--graph` / `--dry=json`: `suppress_stdout()` before emitting prelude
+/// 5. Emit prelude logs (Info→stdout, unless suppressed)
+/// 6. `disable_for_tui()` — suppress all terminal output before TUI startup
+/// 7. If TUI starts: `tui.connect(sender)` to forward buffered events If TUI
 ///    doesn't start: `enable_for_stream()` to re-enable output
 pub struct LogSinks {
     pub terminal: Arc<TerminalSink>,
     pub tui: Arc<TuiSink>,
+    pub structured: Option<Arc<StructuredLogSink>>,
 }
 
 impl LogSinks {
@@ -30,7 +32,13 @@ impl LogSinks {
         Self {
             terminal: Arc::new(TerminalSink::new(color_config)),
             tui: Arc::new(TuiSink::new()),
+            structured: None,
         }
+    }
+
+    /// Set the structured log sink. Must be called before `init_logger()`.
+    pub fn with_structured_sink(&mut self, sink: Arc<StructuredLogSink>) {
+        self.structured = Some(sink);
     }
 
     /// Initialize the global logger with these sinks plus a fresh
@@ -38,11 +46,15 @@ impl LogSinks {
     /// return `Err` but the original sinks remain active via `Arc`.
     pub fn init_logger(&self) {
         let collector = Arc::new(CollectorSink::new());
-        let _ = turborepo_log::init(Logger::new(vec![
+        let mut sinks: Vec<Box<dyn turborepo_log::LogSink>> = vec![
             Box::new(collector),
             Box::new(self.terminal.clone()),
             Box::new(self.tui.clone()),
-        ]));
+        ];
+        if let Some(ref structured) = self.structured {
+            sinks.push(Box::new(structured.clone()));
+        }
+        let _ = turborepo_log::init(Logger::new(sinks));
     }
 
     /// Suppress Info→stdout while keeping Warn/Error→stderr. Used for
