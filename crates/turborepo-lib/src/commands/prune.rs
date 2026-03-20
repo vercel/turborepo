@@ -60,6 +60,9 @@ pub enum Error {
     Glob(#[from] globwalk::GlobError),
     #[error("Walk error while resolving globalDependencies: {0}")]
     Walk(#[from] globwalk::WalkError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TurboJson(#[from] turborepo_turbo_json::Error),
 }
 
 static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
@@ -648,7 +651,7 @@ impl<'a> Prune<'a> {
     /// Copy files matched by `globalDependencies` globs when the
     /// `pruneGlobalDependencies` future flag is enabled.
     fn copy_global_dependencies(&self) -> Result<(), Error> {
-        let Some((turbo_json, _)) = self
+        let Some((mut turbo_json, _)) = self
             .get_turbo_json(turbo_json())
             .transpose()
             .or_else(|| self.get_turbo_json(turbo_jsonc()).transpose())
@@ -665,6 +668,8 @@ impl<'a> Prune<'a> {
         if !prune_enabled {
             return Ok(());
         }
+
+        turbo_json.resolve_global_config();
 
         let Some(global_deps) = &turbo_json.global_dependencies else {
             return Ok(());
@@ -731,7 +736,7 @@ impl<'a> Prune<'a> {
         };
 
         let turbo_json =
-            RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.into();
+            RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.try_into()?;
         Ok(Some((turbo_json, turbo_json_name)))
     }
 }

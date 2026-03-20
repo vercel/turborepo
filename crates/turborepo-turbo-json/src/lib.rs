@@ -82,7 +82,9 @@ pub struct TurboJson {
 impl TryFrom<RawTurboJson> for TurboJson {
     type Error = Error;
 
-    fn try_from(raw_turbo: RawTurboJson) -> Result<Self, Error> {
+    fn try_from(mut raw_turbo: RawTurboJson) -> Result<Self, Error> {
+        raw_turbo.resolve_global_config();
+
         if let Some(pipeline) = raw_turbo.pipeline {
             let (span, text) = pipeline.span_and_text("turbo.json");
             return Err(Error::PipelineField { span, text });
@@ -166,6 +168,18 @@ impl TryFrom<RawTurboJson> for TurboJson {
 }
 
 impl TurboJson {
+    /// Returns the global deps that should contribute to the global hash and
+    /// scope/filter/affected resolution. When `globalConfiguration` is
+    /// enabled, this returns an empty slice because global deps are embedded
+    /// in per-task inputs via `prepend_global_inputs`.
+    pub fn global_deps_for_hash(&self) -> &[String] {
+        if self.future_flags.global_configuration {
+            &[]
+        } else {
+            &self.global_deps
+        }
+    }
+
     /// Check if this TurboJson has a task matching the given task name
     pub fn has_task(&self, task_name: &TaskName) -> bool {
         for key in self.tasks.keys() {
@@ -901,7 +915,10 @@ mod tests {
     #[test_case(r#"{ "daemon": true }"#, r#"{"daemon":true}"# ; "daemon_on")]
     #[test_case(r#"{ "daemon": false }"#, r#"{"daemon":false}"# ; "daemon_off")]
     fn test_daemon(json: &str, expected: &str) {
-        let parsed: RawTurboJson = RawRootTurboJson::parse(json, "").unwrap().into();
+        let parsed: RawTurboJson = RawRootTurboJson::parse(json, "")
+            .unwrap()
+            .try_into()
+            .unwrap();
         let actual = serde_json::to_string(&parsed).unwrap();
         assert_eq!(actual, expected);
     }
@@ -909,7 +926,10 @@ mod tests {
     #[test_case(r#"{ "ui": "tui" }"#, r#"{"ui":"tui"}"# ; "tui")]
     #[test_case(r#"{ "ui": "stream" }"#, r#"{"ui":"stream"}"# ; "stream")]
     fn test_ui_serialization(input: &str, expected: &str) {
-        let parsed: RawTurboJson = RawRootTurboJson::parse(input, "").unwrap().into();
+        let parsed: RawTurboJson = RawRootTurboJson::parse(input, "")
+            .unwrap()
+            .try_into()
+            .unwrap();
         let actual = serde_json::to_string(&parsed).unwrap();
         assert_eq!(actual, expected);
     }
@@ -918,7 +938,10 @@ mod tests {
     #[test_case(r#"{"dangerouslyDisablePackageManagerCheck":false}"#, Some(false) ; "f")]
     #[test_case(r#"{}"#, None ; "missing")]
     fn test_allow_no_package_manager_serde(json_str: &str, expected: Option<bool>) {
-        let json: RawTurboJson = RawRootTurboJson::parse(json_str, "").unwrap().into();
+        let json: RawTurboJson = RawRootTurboJson::parse(json_str, "")
+            .unwrap()
+            .try_into()
+            .unwrap();
         assert_eq!(
             json.allow_no_package_manager
                 .as_ref()
@@ -950,7 +973,7 @@ mod tests {
         assert_eq!(result.is_ok(), should_succeed);
 
         if should_succeed {
-            let raw_config = RawTurboJson::from(result.unwrap());
+            let raw_config: RawTurboJson = result.unwrap().try_into().unwrap();
             assert!(raw_config.extends.is_none());
         }
     }
@@ -1011,14 +1034,16 @@ mod tests {
         let parsed: RawTurboJson =
             RawRootTurboJson::parse(json_with_partial_permissions, "turbo.json")
                 .unwrap()
-                .into();
+                .try_into()
+                .unwrap();
 
         let serialized = serde_json::to_string(&parsed).unwrap();
 
         // The serialized JSON should not contain "deny":null
         let reparsed: RawTurboJson = RawRootTurboJson::parse(&serialized, "turbo.json")
             .unwrap()
-            .into();
+            .try_into()
+            .unwrap();
 
         // Verify the structure is preserved
         assert!(reparsed.boundaries.is_some());
@@ -1045,7 +1070,8 @@ mod tests {
 
         let parsed: RawTurboJson = RawRootTurboJson::parse(json_with_boundaries, "turbo.json")
             .unwrap()
-            .into();
+            .try_into()
+            .unwrap();
 
         // Simulate the prune operation
         let pruned = parsed.prune_tasks(&["app-a"]);
@@ -1061,7 +1087,7 @@ mod tests {
             reparsed_result.err()
         );
 
-        let reparsed: RawTurboJson = reparsed_result.unwrap().into();
+        let reparsed: RawTurboJson = reparsed_result.unwrap().try_into().unwrap();
 
         // Verify boundaries structure is preserved
         assert!(reparsed.boundaries.is_some());
@@ -1071,5 +1097,239 @@ mod tests {
         assert!(deps.allow.is_some());
         assert!(deps.deny.is_none()); // This should be None, not serialized as
         // null
+    }
+
+    #[test]
+    fn test_global_config_flag_on_parses_global_key() {
+        let json = r#"{
+            "futureFlags": { "globalConfiguration": true },
+            "global": {
+                "inputs": ["tsconfig.json"],
+                "env": ["CI"],
+                "passThroughEnv": ["SECRET"],
+                "ui": "tui",
+                "dangerouslyDisablePackageManagerCheck": true,
+                "daemon": false,
+                "envMode": "strict",
+                "cacheDir": ".cache",
+                "noUpdateNotifier": true,
+                "concurrency": "50%"
+            },
+            "tasks": { "build": {} }
+        }"#;
+        let raw: RawTurboJson = RawRootTurboJson::parse(json, "turbo.json")
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        // Before resolve: top-level fields should be None, global should be Some
+        assert!(raw.global.is_some());
+        assert!(raw.global_dependencies.is_none());
+        assert!(raw.ui.is_none());
+
+        // After resolve via TurboJson::try_from: values should be accessible
+        let turbo_json = TurboJson::try_from(raw).unwrap();
+        assert_eq!(turbo_json.global_deps, vec!["tsconfig.json"]);
+        assert_eq!(turbo_json.global_env, vec!["CI"]);
+        assert_eq!(
+            turbo_json.global_pass_through_env,
+            Some(vec!["SECRET".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_global_config_flag_on_rejects_top_level_keys() {
+        let json = r#"{
+            "futureFlags": { "globalConfiguration": true },
+            "ui": "tui",
+            "tasks": { "build": {} }
+        }"#;
+        let result: Result<RawTurboJson, _> = RawRootTurboJson::parse(json, "turbo.json")
+            .unwrap()
+            .try_into();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("\"ui\""),
+            "Error should mention the offending key: {err}"
+        );
+    }
+
+    #[test]
+    fn test_global_config_flag_off_rejects_global_key() {
+        let json = r#"{
+            "global": { "ui": "tui" },
+            "tasks": { "build": {} }
+        }"#;
+        let result: Result<RawTurboJson, _> = RawRootTurboJson::parse(json, "turbo.json")
+            .unwrap()
+            .try_into();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("futureFlags.globalConfiguration"),
+            "Error should mention the required flag: {err}"
+        );
+    }
+
+    #[test]
+    fn test_global_config_flag_off_top_level_keys_still_work() {
+        let json = r#"{
+            "globalDependencies": ["tsconfig.json"],
+            "globalEnv": ["CI"],
+            "ui": "tui",
+            "envMode": "strict",
+            "tasks": { "build": {} }
+        }"#;
+        let raw: RawTurboJson = RawRootTurboJson::parse(json, "turbo.json")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let turbo_json = TurboJson::try_from(raw).unwrap();
+        assert_eq!(turbo_json.global_deps, vec!["tsconfig.json"]);
+        assert_eq!(turbo_json.global_env, vec!["CI"]);
+    }
+
+    #[test]
+    fn test_global_config_rename_hint_in_error() {
+        let json = r#"{
+            "futureFlags": { "globalConfiguration": true },
+            "globalDependencies": ["file.txt"],
+            "tasks": {}
+        }"#;
+        let result: Result<RawTurboJson, _> = RawRootTurboJson::parse(json, "turbo.json")
+            .unwrap()
+            .try_into();
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(
+            err.to_string().contains("\"inputs\""),
+            "Error should mention the new name: {err}"
+        );
+    }
+
+    #[test]
+    fn test_global_config_serialization_preserves_format() {
+        let json = r#"{
+            "futureFlags": { "globalConfiguration": true },
+            "global": {
+                "inputs": ["tsconfig.json"],
+                "env": ["CI"],
+                "ui": "tui"
+            },
+            "tasks": { "build": {} }
+        }"#;
+        let raw: RawTurboJson = RawRootTurboJson::parse(json, "turbo.json")
+            .unwrap()
+            .try_into()
+            .unwrap();
+
+        let serialized = serde_json::to_string_pretty(&raw).unwrap();
+        assert!(
+            serialized.contains("\"global\""),
+            "Serialized output should contain the global key"
+        );
+        assert!(
+            !serialized.contains("\"globalDependencies\""),
+            "Serialized output should NOT contain old top-level keys"
+        );
+    }
+
+    #[test]
+    fn test_global_config_with_remote_cache_and_observability() {
+        let json = r#"{
+            "futureFlags": {
+                "globalConfiguration": true,
+                "experimentalObservability": true
+            },
+            "global": {
+                "remoteCache": { "enabled": true },
+                "experimentalObservability": {
+                    "otel": { "enabled": true }
+                }
+            },
+            "tasks": {}
+        }"#;
+        let mut raw: RawTurboJson = RawRootTurboJson::parse(json, "turbo.json")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        raw.resolve_global_config();
+        assert!(raw.remote_cache.is_some());
+        assert!(raw.experimental_observability.is_some());
+    }
+
+    #[test]
+    fn test_global_deps_for_hash_without_flag() {
+        let tj = TurboJson {
+            global_deps: vec!["config.txt".to_string()],
+            ..Default::default()
+        };
+        assert!(!tj.future_flags.global_configuration);
+        assert_eq!(tj.global_deps_for_hash(), &["config.txt"]);
+    }
+
+    #[test]
+    fn test_global_deps_for_hash_with_flag() {
+        let tj = TurboJson {
+            global_deps: vec!["config.txt".to_string()],
+            future_flags: FutureFlags {
+                global_configuration: true,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert_eq!(
+            tj.global_deps_for_hash(),
+            &[] as &[String],
+            "global_deps_for_hash must return empty when globalConfiguration is on"
+        );
+        assert_eq!(
+            tj.global_deps,
+            vec!["config.txt"],
+            "global_deps field must still hold the values for per-task injection"
+        );
+    }
+
+    #[test]
+    fn test_all_top_level_keys_rejected_with_global_config_flag() {
+        // Table-driven: every top-level global key must be rejected when
+        // futureFlags.globalConfiguration is enabled.
+        let cases: &[(&str, &str)] = &[
+            (r#""globalDependencies": ["f.txt"]"#, "globalDependencies"),
+            (r#""globalEnv": ["CI"]"#, "globalEnv"),
+            (
+                r#""globalPassThroughEnv": ["SECRET"]"#,
+                "globalPassThroughEnv",
+            ),
+            (r#""ui": "tui""#, "ui"),
+            (
+                r#""dangerouslyDisablePackageManagerCheck": true"#,
+                "dangerouslyDisablePackageManagerCheck",
+            ),
+            (r#""daemon": false"#, "daemon"),
+            (r#""envMode": "strict""#, "envMode"),
+            (r#""cacheDir": ".cache""#, "cacheDir"),
+            (r#""noUpdateNotifier": true"#, "noUpdateNotifier"),
+            (r#""concurrency": "50%""#, "concurrency"),
+            (r#""remoteCache": { "enabled": true }"#, "remoteCache"),
+            (
+                r#""experimentalObservability": { "otel": { "enabled": true } }"#,
+                "experimentalObservability",
+            ),
+        ];
+        for (field_json, expected_key) in cases {
+            let json = format!(
+                r#"{{ "futureFlags": {{ "globalConfiguration": true }}, {field_json}, "tasks": {{}} }}"#
+            );
+            let result: Result<RawTurboJson, _> = RawRootTurboJson::parse(&json, "turbo.json")
+                .unwrap()
+                .try_into();
+            let err = result.unwrap_err();
+            assert!(
+                err.to_string().contains(expected_key),
+                "expected error to mention \"{expected_key}\", got: {err}"
+            );
+        }
     }
 }

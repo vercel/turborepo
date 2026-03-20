@@ -736,7 +736,7 @@ impl Run {
                         &self.repo_root,
                         self.pkg_dep_graph.package_manager(),
                         self.pkg_dep_graph.lockfile(),
-                        &self.root_turbo_json.global_deps,
+                        self.root_turbo_json.global_deps_for_hash(),
                         &self.env_at_execution_start,
                         &self.root_turbo_json.global_env,
                         &self.scm,
@@ -778,6 +778,7 @@ impl Run {
             env_mode,
             framework_inference: self.opts.run_opts.framework_inference,
             env_at_execution_start: &self.env_at_execution_start,
+            global_configuration: self.opts.future_flags.global_configuration,
         };
         let global_hash = global_hash_inputs.calculate_global_hash();
 

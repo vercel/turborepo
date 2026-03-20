@@ -31,6 +31,6 @@ pub fn resolve_packages(
         turbo_root,
         pkg_graph,
         scm,
-        &root_turbo_json.global_deps,
+        root_turbo_json.global_deps_for_hash(),
     )
 }

@@ -207,6 +207,82 @@ export interface RootSchema extends BaseSchema {
   futureFlags?: FutureFlags;
 }
 
+export interface FutureFlags {
+  /**
+   * When using `outputLogs: "errors-only"`, show task hashes when tasks
+   * complete successfully. This provides visibility into which tasks are
+   * running without showing full output logs.
+   *
+   * @defaultValue `false`
+   */
+  errorsOnlyShowHash?: boolean;
+  /**
+   * Enable experimental OpenTelemetry exporter support.
+   *
+   * When enabled, Turborepo will honor the `experimentalObservability`
+   * configuration block (if present) to send run summaries to an
+   * observability backend.
+   *
+   * @defaultValue `false`
+   */
+  experimentalObservability?: boolean;
+  /**
+   * Enforce a minimum length of 32 bytes for
+   * `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is
+   * enabled. Short keys weaken the HMAC-SHA256 signature, making brute-force
+   * tag collision feasible.
+   *
+   * @defaultValue `false`
+   */
+  longerSignatureKey?: boolean;
+  /**
+   * Use task-level `inputs` globs to determine which tasks are affected by
+   * changed files when running with `--affected`. When enabled, only tasks
+   * whose declared inputs match the changed files are selected, rather than
+   * selecting all tasks in changed packages.
+   *
+   * @defaultValue `false`
+   */
+  affectedUsingTaskInputs?: boolean;
+  /**
+   * Use task-level `inputs` globs to determine which tasks to re-run when
+   * files change in `turbo watch`. When enabled, only tasks whose declared
+   * inputs match the changed files are re-executed, rather than re-running
+   * all tasks in changed packages.
+   *
+   * @defaultValue `false`
+   */
+  watchUsingTaskInputs?: boolean;
+  /**
+   * Include files matching `globalDependencies` globs in the `turbo prune`
+   * output. Without this flag, `globalDependencies` entries are preserved in
+   * the pruned `turbo.json` but the actual files are not copied.
+   *
+   * @defaultValue `false`
+   */
+  pruneIncludesGlobalFiles?: boolean;
+  /**
+   * Resolve `--filter` at the task level instead of the package level.
+   * Git-range filters (e.g. `--filter=[main]`) will match against task
+   * `inputs` globs, and the `...` dependency/dependent syntax will
+   * traverse the task graph in addition to the package graph.
+   *
+   * @defaultValue `false`
+   */
+  filterUsingTasks?: boolean;
+  /**
+   * Move global configuration keys under a top-level `global` key.
+   *
+   * When enabled, keys like `globalDependencies`, `globalEnv`, `ui`,
+   * etc. must be placed inside the `global` block with new names:
+   * `globalDependencies` becomes `inputs`, `globalEnv` becomes `env`,
+   * and `globalPassThroughEnv` becomes `passThroughEnv`.
+   *
+   * @defaultValue `false`
+   */
+  globalConfiguration?: boolean;
+}
+
 export interface GlobalConfig {
   /**
    * A list of globs for files that implicitly affect all tasks.
@@ -305,82 +381,6 @@ export interface GlobalConfig {
    * @defaultValue `false`
    */
   noUpdateNotifier?: boolean;
-}
-
-export interface FutureFlags {
-  /**
-   * When using `outputLogs: "errors-only"`, show task hashes when tasks
-   * complete successfully. This provides visibility into which tasks are
-   * running without showing full output logs.
-   *
-   * @defaultValue `false`
-   */
-  errorsOnlyShowHash?: boolean;
-  /**
-   * Enable experimental OpenTelemetry exporter support.
-   *
-   * When enabled, Turborepo will honor the `experimentalObservability`
-   * configuration block (if present) to send run summaries to an
-   * observability backend.
-   *
-   * @defaultValue `false`
-   */
-  experimentalObservability?: boolean;
-  /**
-   * Enforce a minimum length of 32 bytes for
-   * `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is
-   * enabled. Short keys weaken the HMAC-SHA256 signature, making brute-force
-   * tag collision feasible.
-   *
-   * @defaultValue `false`
-   */
-  longerSignatureKey?: boolean;
-  /**
-   * Use task-level `inputs` globs to determine which tasks are affected by
-   * changed files when running with `--affected`. When enabled, only tasks
-   * whose declared inputs match the changed files are selected, rather than
-   * selecting all tasks in changed packages.
-   *
-   * @defaultValue `false`
-   */
-  affectedUsingTaskInputs?: boolean;
-  /**
-   * Use task-level `inputs` globs to determine which tasks to re-run when
-   * files change in `turbo watch`. When enabled, only tasks whose declared
-   * inputs match the changed files are re-executed, rather than re-running
-   * all tasks in changed packages.
-   *
-   * @defaultValue `false`
-   */
-  watchUsingTaskInputs?: boolean;
-  /**
-   * Include files matching `globalDependencies` globs in the `turbo prune`
-   * output. Without this flag, `globalDependencies` entries are preserved in
-   * the pruned `turbo.json` but the actual files are not copied.
-   *
-   * @defaultValue `false`
-   */
-  pruneIncludesGlobalFiles?: boolean;
-  /**
-   * Resolve `--filter` at the task level instead of the package level.
-   * Git-range filters (e.g. `--filter=[main]`) will match against task
-   * `inputs` globs, and the `...` dependency/dependent syntax will
-   * traverse the task graph in addition to the package graph.
-   *
-   * @defaultValue `false`
-   */
-  filterUsingTasks?: boolean;
-  /**
-   * Move global configuration keys under a top-level `global` key.
-   *
-   * When enabled, keys like `globalDependencies`, `globalEnv`, `ui`,
-   * etc. must be placed inside the `global` block with new names:
-   * `globalDependencies` becomes `inputs`, `globalEnv` becomes `env`,
-   * and `globalPassThroughEnv` becomes `passThroughEnv`.
-   *
-   * @defaultValue `false`
-   */
-  globalConfiguration?: boolean;
 }
 
 export interface Pipeline {

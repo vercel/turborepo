@@ -764,7 +764,7 @@ impl RunBuilder {
                 &pkg_dep_graph,
                 &scm,
                 &self.repo_root,
-                &root_turbo_json.global_deps,
+                root_turbo_json.global_deps_for_hash(),
             )?;
         }
 
@@ -893,7 +893,7 @@ impl RunBuilder {
                     &engine,
                     pkg_dep_graph,
                     &changed_files,
-                    &root_turbo_json.global_deps,
+                    root_turbo_json.global_deps_for_hash(),
                 );
                 tracing::info!(
                     total_tasks,
@@ -932,6 +932,13 @@ impl RunBuilder {
             // TODO: Pull span info from command
             Spanned::new(TaskName::from(task.as_str()).into_owned())
         });
+        // Inverse of global_deps_for_hash: when globalConfiguration is on,
+        // global deps are embedded in per-task inputs via prepend_global_inputs.
+        let global_deps_for_task_inputs = if self.opts.future_flags.global_configuration {
+            root_turbo_json.global_deps.clone()
+        } else {
+            Vec::new()
+        };
         let mut builder = EngineBuilder::new(
             &self.repo_root,
             pkg_dep_graph,
@@ -942,6 +949,7 @@ impl RunBuilder {
         .with_tasks_only(self.opts.run_opts.only)
         .with_workspaces(filtered_pkgs.cloned().collect())
         .with_future_flags(self.opts.future_flags)
+        .with_global_deps(global_deps_for_task_inputs)
         .with_tasks(tasks);
 
         if self.add_all_tasks {
@@ -980,7 +988,7 @@ impl RunBuilder {
                     &engine,
                     pkg_dep_graph,
                     &existing_files,
-                    root_turbo_json.global_deps.as_slice(),
+                    root_turbo_json.global_deps_for_hash(),
                 );
                 tracing::info!(
                     total_tasks,

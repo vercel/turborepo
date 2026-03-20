@@ -1,0 +1,8 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "inputs": ["**", "!$TURBO_ROOT$/config.txt"]
+    }
+  }
+}
