@@ -132,3 +132,131 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
         )
     }
 }
+
+/// Prepends global input globs to a task's `TaskInputs`.
+///
+/// When `futureFlags.globalConfiguration` is enabled, global input files
+/// are treated as implicit inputs for every task instead of being folded
+/// into the global hash. This lets tasks exclude specific global files
+/// via negation globs (e.g. `!$TURBO_ROOT$/config.txt`).
+///
+/// If the task had no explicit `inputs` key (i.e. it was using the
+/// default "hash everything in the package" behavior), `default` is set
+/// to `true` so that package files are still included alongside the
+/// global inputs.
+pub fn prepend_global_inputs(
+    inputs: &mut TaskInputs,
+    had_explicit_inputs: bool,
+    global_deps: &[String],
+    path_to_repo_root: &RelativeUnixPath,
+) {
+    if global_deps.is_empty() {
+        return;
+    }
+
+    if !had_explicit_inputs {
+        inputs.default = true;
+    }
+
+    let mut global_globs: Vec<String> = global_deps
+        .iter()
+        .map(|dep| {
+            if let Some(exclusion) = dep.strip_prefix('!') {
+                format!("!{path_to_repo_root}/{exclusion}")
+            } else {
+                format!("{path_to_repo_root}/{dep}")
+            }
+        })
+        .collect();
+    global_globs.append(&mut inputs.globs);
+    inputs.globs = global_globs;
+}
+
+#[cfg(test)]
+mod tests {
+    use turbopath::RelativeUnixPathBuf;
+    use turborepo_types::TaskInputs;
+
+    use super::*;
+
+    #[test]
+    fn test_prepend_global_inputs_basic() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec!["src/**".to_string()],
+            default: false,
+        };
+
+        prepend_global_inputs(
+            &mut inputs,
+            true,
+            &["config.txt".to_string()],
+            &path_to_root,
+        );
+
+        assert_eq!(
+            inputs.globs,
+            vec!["../../config.txt", "src/**"],
+            "global dep should be prepended with root-relative path"
+        );
+        assert!(
+            !inputs.default,
+            "default should remain false when task had explicit inputs"
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_sets_default_when_no_explicit_inputs() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs::default();
+
+        prepend_global_inputs(
+            &mut inputs,
+            false,
+            &["config.txt".to_string()],
+            &path_to_root,
+        );
+
+        assert_eq!(inputs.globs, vec!["../../config.txt"]);
+        assert!(
+            inputs.default,
+            "default should be set to true so package files are still hashed"
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_handles_negation() {
+        let path_to_root = RelativeUnixPathBuf::new("..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec!["**".to_string()],
+            default: false,
+        };
+
+        prepend_global_inputs(
+            &mut inputs,
+            true,
+            &["config/**".to_string(), "!config/local.txt".to_string()],
+            &path_to_root,
+        );
+
+        assert_eq!(
+            inputs.globs,
+            vec!["../config/**", "!../config/local.txt", "**"],
+        );
+    }
+
+    #[test]
+    fn test_prepend_global_inputs_noop_when_empty() {
+        let path_to_root = RelativeUnixPathBuf::new("../..").expect("valid path");
+        let mut inputs = TaskInputs {
+            globs: vec!["src/**".to_string()],
+            default: false,
+        };
+        let original = inputs.clone();
+
+        prepend_global_inputs(&mut inputs, true, &[], &path_to_root);
+
+        assert_eq!(inputs.globs, original.globs);
+        assert_eq!(inputs.default, original.default);
+    }
+}

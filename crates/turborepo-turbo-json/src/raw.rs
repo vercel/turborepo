@@ -259,6 +259,107 @@ pub struct RawObservabilityOtelTaskAttributes {
     pub hashes: Option<Spanned<bool>>,
 }
 
+/// Global configuration that applies to all tasks in the monorepo.
+///
+/// When `futureFlags.globalConfiguration` is enabled, these fields live
+/// under the top-level `"global"` key instead of being scattered across
+/// the root of turbo.json.
+///
+/// When adding a new field, also update:
+/// 1. The corresponding top-level field on `RawTurboJson`
+/// 2. `resolve_global_config()` on `RawTurboJson`
+/// 3. `validate_no_top_level_global_keys()` in this file
+/// 4. `WithMetadata` impl in `parser.rs`
+/// 5. `GlobalConfig` in `config-v2.ts` and `generate_global_config_interface()`
+///    in schema-gen
+#[derive(Serialize, Default, Debug, Clone, Iterable, Deserializable, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[schemars(rename = "GlobalConfig", rename_all = "camelCase")]
+#[ts(export, rename = "GlobalConfig")]
+#[deserializable(unknown_fields = "deny")]
+pub struct RawGlobalConfig {
+    /// A list of globs for files that implicitly affect all tasks.
+    ///
+    /// These files are prepended to every task's `inputs` during engine
+    /// construction rather than being folded into the global hash. This
+    /// allows individual tasks to exclude specific global files via
+    /// negation globs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub inputs: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// A list of environment variables for implicit global hash dependencies.
+    ///
+    /// Unlike `inputs` (which become per-task inputs), these variables are
+    /// included in the global hash and affect all task hashes uniformly.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub env: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// An allowlist of environment variables that should be made to all tasks,
+    /// but should not contribute to the task's cache key.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub pass_through_env: Option<Vec<Spanned<UnescapedString>>>,
+
+    /// Enable use of the UI for `turbo`.
+    #[serde(skip_serializing_if = "Option::is_none", rename = "ui")]
+    #[ts(optional)]
+    pub ui: Option<Spanned<UIMode>>,
+
+    /// Disable check for `packageManager` in root `package.json`.
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        rename = "dangerouslyDisablePackageManagerCheck"
+    )]
+    #[deserializable(rename = "dangerouslyDisablePackageManagerCheck")]
+    #[ts(optional, rename = "dangerouslyDisablePackageManagerCheck")]
+    pub allow_no_package_manager: Option<Spanned<bool>>,
+
+    /// Deprecated: The daemon is no longer used for `turbo run`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub daemon: Option<Spanned<bool>>,
+
+    /// Turborepo's Environment Modes allow you to control which environment
+    /// variables are available to a task at runtime.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub env_mode: Option<Spanned<EnvMode>>,
+
+    /// Specify the filesystem cache directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub cache_dir: Option<Spanned<UnescapedString>>,
+
+    /// When set to `true`, disables the update notification that appears when
+    /// a new version of `turbo` is available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub no_update_notifier: Option<Spanned<bool>>,
+
+    /// Set/limit the maximum concurrency for task execution.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub concurrency: Option<Spanned<String>>,
+
+    /// Configuration options when interfacing with the remote cache.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub remote_cache: Option<RawRemoteCacheOptions>,
+
+    /// Experimental observability configuration for OpenTelemetry export.
+    /// Excluded from JSON Schema and TypeScript types (`#[ts(skip)]`)
+    /// because this is gated behind a separate `experimentalObservability`
+    /// future flag.
+    #[serde(rename = "experimentalObservability")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[deserializable(rename = "experimentalObservability")]
+    #[schemars(skip)]
+    #[ts(skip)]
+    pub experimental_observability: Option<RawExperimentalObservability>,
+}
+
 // Root turbo.json
 #[derive(Default, Debug, Clone, Iterable, Deserializable)]
 pub struct RawRootTurboJson {
@@ -290,6 +391,9 @@ pub struct RawRootTurboJson {
     pub future_flags: Option<Spanned<FutureFlags>>,
     #[deserializable(rename = "experimentalObservability")]
     pub experimental_observability: Option<RawExperimentalObservability>,
+
+    pub global: Option<Spanned<RawGlobalConfig>>,
+
     #[deserializable(rename = "//")]
     pub _comment: Option<String>,
 }
@@ -489,6 +593,15 @@ pub struct RawTurboJson {
     #[ts(skip)]
     pub experimental_observability: Option<RawExperimentalObservability>,
 
+    /// Global configuration block.
+    ///
+    /// When `futureFlags.globalConfiguration` is enabled, global settings
+    /// like `inputs`, `env`, `ui`, etc. are placed here instead of at the
+    /// top level.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub global: Option<Spanned<RawGlobalConfig>>,
+
     // Internal field - excluded from schema
     #[deserializable(rename = "//")]
     #[serde(skip)]
@@ -664,32 +777,141 @@ impl HasConfigBeyondExtends for RawTaskDefinition {
     }
 }
 
-impl From<RawRootTurboJson> for RawTurboJson {
-    fn from(root: RawRootTurboJson) -> Self {
-        RawTurboJson {
-            span: root.span,
-            schema: root.schema,
-            global_dependencies: root.global_dependencies,
-            global_env: root.global_env,
-            global_pass_through_env: root.global_pass_through_env,
-            tasks: root.tasks,
-            pipeline: root.pipeline,
-            remote_cache: root.remote_cache,
-            ui: root.ui,
-            allow_no_package_manager: root.allow_no_package_manager,
-            daemon: root.daemon,
-            env_mode: root.env_mode,
-            cache_dir: root.cache_dir,
-            no_update_notifier: root.no_update_notifier,
-            tags: root.tags,
-            boundaries: root.boundaries,
-            concurrency: root.concurrency,
-            future_flags: root.future_flags,
-            experimental_observability: root.experimental_observability,
-            _comment: root._comment,
-            extends: None, // Root configs never have extends
+impl TryFrom<RawRootTurboJson> for RawTurboJson {
+    type Error = Error;
+
+    fn try_from(root: RawRootTurboJson) -> Result<Self, Error> {
+        let global_config_enabled = root
+            .future_flags
+            .as_ref()
+            .map(|ff| ff.value.global_configuration)
+            .unwrap_or(false);
+
+        if global_config_enabled {
+            validate_no_top_level_global_keys(&root)?;
+
+            Ok(RawTurboJson {
+                span: root.span,
+                schema: root.schema,
+                tasks: root.tasks,
+                pipeline: root.pipeline,
+                tags: root.tags,
+                boundaries: root.boundaries,
+                future_flags: root.future_flags,
+                global: root.global,
+                _comment: root._comment,
+                extends: None,
+                // All global fields are None — they live in `global`
+                global_dependencies: None,
+                global_env: None,
+                global_pass_through_env: None,
+                remote_cache: None,
+                ui: None,
+                allow_no_package_manager: None,
+                daemon: None,
+                env_mode: None,
+                cache_dir: None,
+                no_update_notifier: None,
+                concurrency: None,
+                experimental_observability: None,
+            })
+        } else {
+            if let Some(global) = &root.global {
+                let (span, text) = global.span_and_text("turbo.json");
+                return Err(Error::GlobalKeyWithoutFlag { span, text });
+            }
+
+            Ok(RawTurboJson {
+                span: root.span,
+                schema: root.schema,
+                global_dependencies: root.global_dependencies,
+                global_env: root.global_env,
+                global_pass_through_env: root.global_pass_through_env,
+                tasks: root.tasks,
+                pipeline: root.pipeline,
+                remote_cache: root.remote_cache,
+                ui: root.ui,
+                allow_no_package_manager: root.allow_no_package_manager,
+                daemon: root.daemon,
+                env_mode: root.env_mode,
+                cache_dir: root.cache_dir,
+                no_update_notifier: root.no_update_notifier,
+                tags: root.tags,
+                boundaries: root.boundaries,
+                concurrency: root.concurrency,
+                future_flags: root.future_flags,
+                experimental_observability: root.experimental_observability,
+                _comment: root._comment,
+                extends: None,
+                global: None,
+            })
         }
     }
+}
+
+/// Returns an error if any top-level global key is set when the
+/// `globalConfiguration` future flag is enabled.
+fn validate_no_top_level_global_keys(root: &RawRootTurboJson) -> Result<(), Error> {
+    // For Spanned<T> fields we can point at the exact location.
+    macro_rules! check_spanned {
+        ($field:expr, $key:literal, $hint:literal) => {
+            if let Some(val) = &$field {
+                let (span, text) = val.span_and_text("turbo.json");
+                return Err(Error::TopLevelGlobalKeyWithFlag {
+                    key: $key,
+                    rename_hint: $hint.to_string(),
+                    span,
+                    text,
+                });
+            }
+        };
+    }
+
+    // For non-Spanned fields (Vecs, plain structs) we report without a span.
+    macro_rules! check_present {
+        ($field:expr, $key:literal, $hint:literal) => {
+            if $field.is_some() {
+                let (span, text) = root.span.span_and_text("turbo.json");
+                return Err(Error::TopLevelGlobalKeyWithFlag {
+                    key: $key,
+                    rename_hint: $hint.to_string(),
+                    span,
+                    text,
+                });
+            }
+        };
+    }
+
+    check_present!(
+        root.global_dependencies,
+        "globalDependencies",
+        " as \"inputs\""
+    );
+    check_present!(root.global_env, "globalEnv", " as \"env\"");
+    check_present!(
+        root.global_pass_through_env,
+        "globalPassThroughEnv",
+        " as \"passThroughEnv\""
+    );
+    check_spanned!(root.ui, "ui", "");
+    check_spanned!(
+        root.allow_no_package_manager,
+        "dangerouslyDisablePackageManagerCheck",
+        ""
+    );
+    check_spanned!(root.daemon, "daemon", "");
+    check_spanned!(root.env_mode, "envMode", "");
+    check_spanned!(root.cache_dir, "cacheDir", "");
+    check_spanned!(root.no_update_notifier, "noUpdateNotifier", "");
+    check_spanned!(root.concurrency, "concurrency", "");
+    check_present!(root.remote_cache, "remoteCache", "");
+    check_present!(
+        root.experimental_observability,
+        "experimentalObservability",
+        ""
+    );
+
+    Ok(())
 }
 
 impl From<RawPackageTurboJson> for RawTurboJson {
@@ -704,6 +926,36 @@ impl From<RawPackageTurboJson> for RawTurboJson {
             tags: pkg.tags,
             _comment: pkg._comment,
             ..Default::default()
+        }
+    }
+}
+
+impl RawTurboJson {
+    /// Resolves the `global` config block into the top-level fields.
+    ///
+    /// After calling this, reading code can use the top-level fields
+    /// (e.g. `global_dependencies`, `ui`) regardless of whether the
+    /// original turbo.json used the `global` key or top-level keys.
+    ///
+    /// Idempotent: uses `Option::take()`, so a second call is a no-op.
+    ///
+    /// Call on **reading** paths only — NOT before serialization, so that
+    /// `serde_json::to_string_pretty` preserves the original format.
+    pub fn resolve_global_config(&mut self) {
+        if let Some(global) = self.global.take() {
+            let g = global.into_inner();
+            self.global_dependencies = g.inputs;
+            self.global_env = g.env;
+            self.global_pass_through_env = g.pass_through_env;
+            self.ui = g.ui;
+            self.allow_no_package_manager = g.allow_no_package_manager;
+            self.daemon = g.daemon;
+            self.env_mode = g.env_mode;
+            self.cache_dir = g.cache_dir;
+            self.no_update_notifier = g.no_update_notifier;
+            self.concurrency = g.concurrency;
+            self.remote_cache = g.remote_cache;
+            self.experimental_observability = g.experimental_observability;
         }
     }
 }
@@ -726,7 +978,7 @@ impl RawTurboJson {
         );
 
         Ok(Some(if is_root {
-            RawTurboJson::from(RawRootTurboJson::parse(&contents, &root_relative_path)?)
+            RawRootTurboJson::parse(&contents, &root_relative_path)?.try_into()?
         } else {
             RawTurboJson::from(RawPackageTurboJson::parse(&contents, &root_relative_path)?)
         }))

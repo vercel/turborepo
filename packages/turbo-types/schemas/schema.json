@@ -103,6 +103,17 @@
         }
       ]
     },
+    "global": {
+      "description": "Global configuration block.\n\nWhen `futureFlags.globalConfiguration` is enabled, global settings like `inputs`, `env`, `ui`, etc. are placed here instead of at the top level.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/GlobalConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "globalDependencies": {
       "description": "A list of globs to include in the set of implicit global hash dependencies.\n\nThe contents of these files will be included in the global hashing algorithm and affect the hashes of all tasks.\n\nThis is useful for busting the cache based on: - `.env` files (not in Git) - Any root level file that impacts package tasks that are not represented in the traditional dependency graph (e.g. a root `tsconfig.json`, `jest.config.ts`, `.eslintrc`, etc.)\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#globaldependencies",
       "type": ["array", "null"],
@@ -277,6 +288,11 @@
           "default": false,
           "type": "boolean"
         },
+        "globalConfiguration": {
+          "description": "Move global configuration keys (like `globalDependencies`, `ui`, `envMode`, etc.) under a top-level `global` key for clarity.\n\nWhen enabled, keys are renamed: `globalDependencies` becomes `global.inputs`, `globalEnv` becomes `global.env`, and `globalPassThroughEnv` becomes `global.passThroughEnv`.",
+          "default": false,
+          "type": "boolean"
+        },
         "longerSignatureKey": {
           "description": "Enforce a minimum length of 32 bytes for `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is enabled. Short keys weaken the HMAC-SHA256 signature, making brute-force tag collision feasible.",
           "default": false,
@@ -291,6 +307,121 @@
           "description": "Use task-level `inputs` globs to determine which tasks to re-run when files change in `turbo watch`. When enabled, only tasks whose declared inputs match the changed files are re-executed, rather than re-running all tasks in changed packages.",
           "default": false,
           "type": "boolean"
+        }
+      }
+    },
+    "GlobalConfig": {
+      "description": "Global configuration that applies to all tasks in the monorepo.\n\nWhen `futureFlags.globalConfiguration` is enabled, these fields live under the top-level `\"global\"` key instead of being scattered across the root of turbo.json.\n\nWhen adding a new field, also update: 1. The corresponding top-level field on `RawTurboJson` 2. `resolve_global_config()` on `RawTurboJson` 3. `validate_no_top_level_global_keys()` in this file 4. `WithMetadata` impl in `parser.rs` 5. `GlobalConfig` in `config-v2.ts` and `generate_global_config_interface()` in schema-gen",
+      "type": "object",
+      "properties": {
+        "cacheDir": {
+          "description": "Specify the filesystem cache directory.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "concurrency": {
+          "description": "Set/limit the maximum concurrency for task execution.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "daemon": {
+          "description": "Deprecated: The daemon is no longer used for `turbo run`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dangerouslyDisablePackageManagerCheck": {
+          "description": "Disable check for `packageManager` in root `package.json`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "env": {
+          "description": "A list of environment variables for implicit global hash dependencies.\n\nUnlike `inputs` (which become per-task inputs), these variables are included in the global hash and affect all task hashes uniformly.",
+          "type": ["array", "null"],
+          "items": {
+            "$ref": "#/definitions/String"
+          }
+        },
+        "envMode": {
+          "description": "Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/EnvMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "inputs": {
+          "description": "A list of globs for files that implicitly affect all tasks.\n\nThese files are prepended to every task's `inputs` during engine construction rather than being folded into the global hash. This allows individual tasks to exclude specific global files via negation globs.",
+          "type": ["array", "null"],
+          "items": {
+            "$ref": "#/definitions/String"
+          }
+        },
+        "noUpdateNotifier": {
+          "description": "When set to `true`, disables the update notification that appears when a new version of `turbo` is available.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Boolean"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "passThroughEnv": {
+          "description": "An allowlist of environment variables that should be made to all tasks, but should not contribute to the task's cache key.",
+          "type": ["array", "null"],
+          "items": {
+            "$ref": "#/definitions/String"
+          }
+        },
+        "remoteCache": {
+          "description": "Configuration options when interfacing with the remote cache.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/RemoteCache"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ui": {
+          "description": "Enable use of the UI for `turbo`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/UI"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },

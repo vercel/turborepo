@@ -153,6 +153,7 @@ fn generate_typescript() -> String {
     output.push_str(&generate_base_schema_interface());
     output.push_str(&generate_workspace_schema_interface());
     output.push_str(&generate_root_schema_interface());
+    output.push_str(&generate_global_config_interface());
     output.push_str(&generate_pipeline_interface());
     output.push_str(&generate_remote_cache_interface());
     output.push_str(&generate_permissions_interface());
@@ -674,6 +675,15 @@ fn generate_root_schema_interface() -> String {
   noUpdateNotifier?: boolean;
 
   /**
+   * Global configuration block.
+   *
+   * When `futureFlags.globalConfiguration` is enabled, global settings
+   * like `inputs`, `env`, `ui`, etc. are placed here instead of at the
+   * top level.
+   */
+  global?: GlobalConfig;
+
+  /**
    * Opt into breaking changes prior to major releases, experimental features, and beta features.
    *
    * @defaultValue `{}`
@@ -744,6 +754,123 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   filterUsingTasks?: boolean;
+  /**
+   * Move global configuration keys under a top-level `global` key.
+   *
+   * When enabled, keys like `globalDependencies`, `globalEnv`, `ui`,
+   * etc. must be placed inside the `global` block with new names:
+   * `globalDependencies` becomes `inputs`, `globalEnv` becomes `env`,
+   * and `globalPassThroughEnv` becomes `passThroughEnv`.
+   *
+   * @defaultValue `false`
+   */
+  globalConfiguration?: boolean;
+}
+
+"#
+    .to_string()
+}
+
+/// Generate the GlobalConfig interface
+fn generate_global_config_interface() -> String {
+    r#"export interface GlobalConfig {
+  /**
+   * A list of globs for files that implicitly affect all tasks.
+   *
+   * These files are prepended to every task's `inputs` instead of being
+   * included in the global hash. Tasks can exclude specific files via
+   * negation globs (e.g. `"inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/tsconfig.json"]`).
+   *
+   * Replaces `globalDependencies` when `futureFlags.globalConfiguration` is enabled.
+   *
+   * @defaultValue `[]`
+   */
+  inputs?: Array<string>;
+
+  /**
+   * A list of environment variables for implicit global hash dependencies.
+   *
+   * Replaces `globalEnv` when `futureFlags.globalConfiguration` is enabled.
+   *
+   * @defaultValue `[]`
+   */
+  env?: Array<EnvWildcard>;
+
+  /**
+   * An allowlist of environment variables that should be made to all tasks, but
+   * should not contribute to the task's cache key.
+   *
+   * Replaces `globalPassThroughEnv` when `futureFlags.globalConfiguration` is enabled.
+   *
+   * @defaultValue `null`
+   */
+  passThroughEnv?: null | Array<EnvWildcard>;
+
+  /**
+   * Configuration options that control how turbo interfaces with the remote cache.
+   *
+   * Documentation: https://turborepo.dev/docs/core-concepts/remote-caching
+   *
+   * @defaultValue `{}`
+   */
+  remoteCache?: RemoteCache;
+
+  /**
+   * Enable use of the UI for `turbo`.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#ui
+   *
+   * @defaultValue `"stream"`
+   */
+  ui?: UI;
+
+  /**
+   * Set/limit the maximum concurrency for task execution.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#concurrency
+   *
+   * @defaultValue `"10"`
+   */
+  concurrency?: string;
+
+  /**
+   * Disable check for `packageManager` in root `package.json`.
+   *
+   * @defaultValue `false`
+   */
+  dangerouslyDisablePackageManagerCheck?: boolean;
+
+  /**
+   * Specify the filesystem cache directory.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#cachedir
+   *
+   * @defaultValue `".turbo/cache"`
+   */
+  cacheDir?: RelativeUnixPath;
+
+  /**
+   * Deprecated: The daemon is no longer used for `turbo run`.
+   *
+   * @defaultValue `false`
+   */
+  daemon?: boolean;
+
+  /**
+   * Turborepo's Environment Modes allow you to control which environment variables are available to a task at runtime.
+   *
+   * Documentation: https://turborepo.dev/docs/reference/configuration#envmode
+   *
+   * @defaultValue `"strict"`
+   */
+  envMode?: EnvMode;
+
+  /**
+   * When set to `true`, disables the update notification.
+   *
+   * @defaultValue `false`
+   */
+  noUpdateNotifier?: boolean;
 }
 
 "#

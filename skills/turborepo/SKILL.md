@@ -338,7 +338,7 @@ Scripts like `prebuild` that manually build other packages bypass Turborepo's de
 
 ### Overly Broad `globalDependencies`
 
-`globalDependencies` affects ALL tasks in ALL packages. Be specific.
+`globalDependencies` affects ALL tasks in ALL packages via the **global hash** — tasks cannot opt out of specific files, even with negation globs in `inputs`. Be specific.
 
 ```json
 // WRONG - heavy hammer, affects all hashes
@@ -353,6 +353,24 @@ Scripts like `prebuild` that manually build other packages bypass Turborepo's de
     "build": {
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**"]
+    }
+  }
+}
+```
+
+With `futureFlags.globalConfiguration`, this problem is reduced because `global.inputs` files are folded into each task's inputs (not the global hash). Tasks can exclude specific files:
+
+```json
+// BEST - global.inputs with per-task exclusion
+{
+  "futureFlags": { "globalConfiguration": true },
+  "global": {
+    "inputs": [".env"]
+  },
+  "tasks": {
+    "build": { "outputs": ["dist/**"] },
+    "lint": {
+      "inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/.env"]
     }
   }
 }
@@ -835,16 +853,35 @@ The `transit` task creates dependency relationships without matching any actual 
 }
 ```
 
+With `futureFlags.globalConfiguration`, the same config moves global settings under `global` — and `.env` becomes a per-task input instead of a global hash input:
+
+```json
+{
+  "futureFlags": { "globalConfiguration": true },
+  "global": {
+    "env": ["NODE_ENV"],
+    "inputs": [".env"]
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "env": ["API_URL", "DATABASE_URL"]
+    }
+  }
+}
+```
+
 ## Reference Index
 
 ### Configuration
 
-| File                                                                            | Purpose                                                  |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| [configuration/RULE.md](./references/configuration/RULE.md)                     | turbo.json overview, Package Configurations              |
-| [configuration/tasks.md](./references/configuration/tasks.md)                   | dependsOn, outputs, inputs, env, cache, persistent       |
-| [configuration/global-options.md](./references/configuration/global-options.md) | globalEnv, globalDependencies, cacheDir, daemon, envMode |
-| [configuration/gotchas.md](./references/configuration/gotchas.md)               | Common configuration mistakes                            |
+| File                                                                            | Purpose                                                                   |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| [configuration/RULE.md](./references/configuration/RULE.md)                     | turbo.json overview, Package Configurations                               |
+| [configuration/tasks.md](./references/configuration/tasks.md)                   | dependsOn, outputs, inputs, env, cache, persistent                        |
+| [configuration/global-options.md](./references/configuration/global-options.md) | globalEnv, globalDependencies, global key, futureFlags, cacheDir, envMode |
+| [configuration/gotchas.md](./references/configuration/gotchas.md)               | Common configuration mistakes                                             |
 
 ### Caching
 

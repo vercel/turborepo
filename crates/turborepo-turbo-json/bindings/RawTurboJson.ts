@@ -139,4 +139,12 @@ concurrency?: string,
  * Opt into breaking changes prior to major releases, experimental
  * features, and beta features.
  */
-futureFlags?: FutureFlags, };
+futureFlags?: FutureFlags, 
+/**
+ * Global configuration block.
+ *
+ * When `futureFlags.globalConfiguration` is enabled, global settings
+ * like `inputs`, `env`, `ui`, etc. are placed here instead of at the
+ * top level.
+ */
+global?: GlobalConfig, };

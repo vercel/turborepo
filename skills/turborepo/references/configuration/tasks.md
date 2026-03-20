@@ -114,6 +114,46 @@ Files considered when calculating task hash. Defaults to all tracked files in pa
 }
 ```
 
+### Interaction with `global.inputs`
+
+When `futureFlags.globalConfiguration` is enabled, files listed in `global.inputs` are prepended to every task's `inputs`. The combined list is then used to compute the task hash.
+
+This is different from `globalDependencies`, where files were hashed into the **global** hash and could not be influenced by task-level `inputs`.
+
+**With `globalDependencies` (old behavior):**
+
+- `globalDependencies` files contribute to the global hash
+- Task `inputs` only control which **package** files are hashed
+- There is no way for a task to "opt out" of a `globalDependencies` file
+
+**With `global.inputs` (new behavior):**
+
+- `global.inputs` files are merged into each task's `inputs` globs
+- Task `inputs` and `global.inputs` are combined, then the full list is hashed into the **task** hash
+- Tasks can exclude specific global files with negation globs
+
+```json
+{
+  "futureFlags": { "globalConfiguration": true },
+  "global": {
+    "inputs": ["tsconfig.json", ".env"]
+  },
+  "tasks": {
+    "build": {},
+    "lint": {
+      "inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/.env"]
+    }
+  }
+}
+```
+
+In this example:
+
+- `build` hashes all package files + `tsconfig.json` + `.env` (from `global.inputs`)
+- `lint` hashes all package files + `tsconfig.json`, but **excludes** `.env` because of the negation glob
+
+Tasks with no explicit `inputs` key still hash all package files (the default behavior) plus the `global.inputs` files.
+
 ## env
 
 Environment variables to include in task hash.

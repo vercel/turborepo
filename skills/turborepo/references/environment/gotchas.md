@@ -139,3 +139,37 @@ This config:
 - Passes through SENTRY_AUTH_TOKEN without hashing
 - Includes all .env file variants in the hash
 - Makes CI tokens available globally
+
+### With `futureFlags.globalConfiguration`
+
+The same config using the `global` key. The `.env` files move to `global.inputs`, which means they get folded into each task's hash individually rather than the global hash. This lets tasks exclude specific `.env` files if needed.
+
+```json
+{
+  "$schema": "https://v2-8-20-canary-1.turborepo.dev/schema.json",
+  "futureFlags": { "globalConfiguration": true },
+  "global": {
+    "env": ["CI", "NODE_ENV", "VERCEL"],
+    "passThroughEnv": ["GITHUB_TOKEN", "VERCEL_URL"],
+    "inputs": [".env", ".env.local", ".env.production", ".env.production.local"]
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "env": ["DATABASE_URL", "NEXT_PUBLIC_*", "!NEXT_PUBLIC_ANALYTICS_ID"],
+      "passThroughEnv": ["SENTRY_AUTH_TOKEN"],
+      "outputs": [".next/**", "!.next/cache/**"]
+    }
+  }
+}
+```
+
+With this approach, a task that doesn't care about `.env.production` can exclude it:
+
+```json
+"lint": {
+  "inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/.env.production"]
+}
+```
+
+This wouldn't have been possible with `globalDependencies`, where `.env.production` would be baked into the global hash and affect every task unconditionally.

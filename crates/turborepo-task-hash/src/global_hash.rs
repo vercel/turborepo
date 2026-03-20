@@ -56,6 +56,9 @@ pub struct GlobalHashableInputs<'a> {
     pub env_mode: EnvMode,
     pub framework_inference: bool,
     pub env_at_execution_start: &'a EnvironmentVariableMap,
+    /// Whether `futureFlags.globalConfiguration` is enabled. Included in the
+    /// hash so that toggling the flag deterministically invalidates caches.
+    pub global_configuration: bool,
 }
 
 #[allow(clippy::too_many_arguments, clippy::result_large_err)]
@@ -73,6 +76,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     env_mode: EnvMode,
     framework_inference: bool,
     hasher: &SCM,
+    global_configuration: bool,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
     let GlobalFileHashInputs {
         global_file_hash_map,
@@ -106,6 +110,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         env_mode,
         framework_inference,
         env_at_execution_start,
+        global_configuration,
     })
 }
 
@@ -252,6 +257,7 @@ impl<'a> GlobalHashableInputs<'a> {
             pass_through_env: self.pass_through_env.unwrap_or_default(),
             env_mode: self.env_mode,
             framework_inference: self.framework_inference,
+            global_configuration: self.global_configuration,
         };
 
         global_hashable.hash()
@@ -408,6 +414,7 @@ mod tests {
             EnvMode::Strict,
             false,
             &SCM::new(&root),
+            false,
         );
         assert!(result.is_ok());
     }
