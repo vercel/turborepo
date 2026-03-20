@@ -133,7 +133,7 @@ Run `turbo prune frontend` to generate a pruned workspace for the `frontend` app
 
 Defaults to `false`.
 
-Alter the output directory to make it easier to use with [Docker best practices and layer caching](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/). The directory will contain:
+Alter the output directory to make it easier to use with [Docker best practices and layer caching](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/). For an example Dockerfile using this flag, see the [Docker guide](/docs/guides/tools/docker). The directory will contain:
 
 - A folder named `json` with the pruned workspace's `package.json` files.
 - A folder named `full` with the pruned workspace's full source code for the internal packages needed to build the target.
