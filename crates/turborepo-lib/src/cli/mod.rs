@@ -22,7 +22,7 @@ use crate::{
     cli::error::print_potential_tasks,
     commands::{
         bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link, login, logout,
-        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
+        ls, prune, query, run, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -690,8 +690,9 @@ pub enum Command {
         #[clap(subcommand)]
         command: Option<TelemetryCommand>,
     },
-    /// Turbo your monorepo by running a number of 'repo lints' to
-    /// identify common issues, suggest fixes, and improve performance.
+    /// [DEPRECATED] `turbo scan` has been removed. This command will be
+    /// fully removed in a future major version.
+    #[clap(hide = true)]
     Scan,
     #[clap(hide = true)]
     Config,
@@ -1607,13 +1608,8 @@ async fn run_main(
         Command::Scan => {
             let event = CommandEventBuilder::new("scan").with_parent(&root_telemetry);
             event.track_call();
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
-            event.track_ui_mode(base.opts.run_opts.ui_mode);
-            if scan::run(base).await {
-                Ok(0)
-            } else {
-                Ok(1)
-            }
+            warn!("`turbo scan` is deprecated and will be removed in a future major version.");
+            Ok(1)
         }
         Command::Config => {
             CommandEventBuilder::new("config")

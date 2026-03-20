@@ -7451,21 +7451,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "turborepo-diagnostics"
-version = "0.1.0"
-dependencies = [
- "futures",
- "pidlock",
- "semver 1.0.23",
- "tokio",
- "tonic",
- "turbo-updater",
- "turbopath",
- "turborepo-daemon",
- "turborepo-scm",
-]
-
-[[package]]
 name = "turborepo-dirs"
 version = "0.1.0"
 dependencies = [
@@ -7709,7 +7694,6 @@ dependencies = [
  "turborepo-config",
  "turborepo-daemon",
  "turborepo-devtools",
- "turborepo-diagnostics",
  "turborepo-dirs",
  "turborepo-engine",
  "turborepo-env",
