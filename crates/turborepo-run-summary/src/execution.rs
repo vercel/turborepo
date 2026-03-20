@@ -134,20 +134,6 @@ impl<'a> ExecutionSummary<'a> {
             .max()
             .unwrap_or_default();
 
-        let lines: Vec<_> = line_data
-            .into_iter()
-            .map(|(header, trailer)| {
-                color!(
-                    ui,
-                    BOLD,
-                    "{}{}:    {}",
-                    " ".repeat(max_length - header.len()),
-                    header,
-                    trailer
-                )
-            })
-            .collect();
-
         if self.attempted == 0 {
             turborepo_log::warn(
                 turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
@@ -156,12 +142,35 @@ impl<'a> ExecutionSummary<'a> {
             .emit();
         }
 
-        println!();
-        for line in lines {
-            println!("{line}");
+        // All output goes through the Logger. The TerminalSink renders
+        // ANSI codes for color; the StructuredLogSink strips them.
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+            "",
+        )
+        .emit();
+        for (header, trailer) in &line_data {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                format!(
+                    "{}",
+                    color!(
+                        ui,
+                        BOLD,
+                        "{}{}:    {}",
+                        " ".repeat(max_length - header.len()),
+                        header,
+                        trailer
+                    )
+                ),
+            )
+            .emit();
         }
-
-        println!();
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+            "",
+        )
+        .emit();
     }
 
     fn successful(&self) -> usize {

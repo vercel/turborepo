@@ -89,6 +89,12 @@ pub struct Opts {
     /// If remote caching is disabled, this captures the reason.
     /// `None` means remote caching is enabled (by local config).
     pub remote_cache_disabled_reason: Option<RemoteCacheDisabledReason>,
+    /// Resolved log file path, if enabled via `--log-file`, `logFile` in
+    /// turbo.json, or `TURBO_LOG_FILE` env var.
+    #[serde(skip)]
+    pub log_file_path: Option<AbsoluteSystemPathBuf>,
+    /// Whether JSON output mode is enabled (`--json`).
+    pub json: bool,
 }
 
 impl Opts {
@@ -236,6 +242,14 @@ impl Opts {
             None
         };
 
+        let json = execution_args.json;
+
+        let log_file_path = resolve_log_file_path(
+            repo_root,
+            execution_args.log_file.as_ref(),
+            inputs.config.log_file(),
+        );
+
         Ok(Self {
             repo_opts,
             run_opts,
@@ -248,8 +262,94 @@ impl Opts {
             git_root: cache_dir_result.git_root,
             experimental_observability,
             remote_cache_disabled_reason,
+            log_file_path,
+            json,
         })
     }
+}
+
+/// Resolve the log file path from the config layers.
+///
+/// Priority: CLI flag (`--log-file`) > turbo.json/env (`logFile` /
+/// `TURBO_LOG_FILE`).
+fn resolve_log_file_path(
+    repo_root: &AbsoluteSystemPath,
+    cli_flag: Option<&Option<String>>,
+    config_value: Option<&crate::config::LogFileConfig>,
+) -> Option<AbsoluteSystemPathBuf> {
+    // CLI: --log-file (present with no value → default, with value → custom)
+    if let Some(maybe_path) = cli_flag {
+        return Some(match maybe_path {
+            Some(path) => resolve_path_relative_to_root(repo_root, path),
+            None => default_log_file_path(repo_root),
+        });
+    }
+
+    // turbo.json / env var (merged by the config layer)
+    match config_value {
+        Some(crate::config::LogFileConfig::Enabled) => Some(default_log_file_path(repo_root)),
+        Some(crate::config::LogFileConfig::Path(path)) => {
+            Some(resolve_path_relative_to_root(repo_root, path))
+        }
+        None => None,
+    }
+}
+
+fn resolve_path_relative_to_root(
+    repo_root: &AbsoluteSystemPath,
+    path: &str,
+) -> AbsoluteSystemPathBuf {
+    let joined = repo_root.as_std_path().join(path);
+
+    let resolved = match AbsoluteSystemPathBuf::new(joined.to_string_lossy().to_string()) {
+        Ok(p) => p,
+        Err(_) => {
+            tracing::warn!(
+                "Invalid structured log path '{}', using default location",
+                path
+            );
+            return default_log_file_path(repo_root);
+        }
+    };
+
+    // Prevent path traversal outside the repo root. Canonicalization
+    // resolves `..` segments so we can compare prefixes reliably.
+    let repo_canonical = repo_root
+        .as_std_path()
+        .canonicalize()
+        .unwrap_or_else(|_| repo_root.as_std_path().to_path_buf());
+    let resolved_canonical = resolved
+        .as_std_path()
+        .canonicalize()
+        // If the file doesn't exist yet, canonicalize the parent.
+        .or_else(|_| {
+            resolved
+                .as_std_path()
+                .parent()
+                .and_then(|p| p.canonicalize().ok())
+                .ok_or(std::io::ErrorKind::NotFound)
+                .map(|parent| parent.join(resolved.as_std_path().file_name().unwrap_or_default()))
+        })
+        // Last resort: use the raw joined path for the prefix check.
+        .unwrap_or_else(|_| resolved.as_std_path().to_path_buf());
+
+    if !resolved_canonical.starts_with(&repo_canonical) {
+        tracing::warn!(
+            "Structured log path '{}' escapes the repository root, using default location",
+            path
+        );
+        return default_log_file_path(repo_root);
+    }
+
+    resolved
+}
+
+fn default_log_file_path(repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    repo_root.join_components(&[".turbo", "logs", &format!("{millis}.json")])
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -365,6 +465,13 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             ),
         };
 
+        // --json forces stream order — no grouping.
+        let log_order = if inputs.execution_args.json {
+            ResolvedLogOrder::Stream
+        } else {
+            log_order
+        };
+
         Ok(Self {
             tasks: inputs.execution_args.tasks.clone(),
             log_prefix,
@@ -386,7 +493,12 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             cache_dir: inputs.cache_dir_result.path.clone(),
             is_shared_worktree_cache: inputs.cache_dir_result.is_shared_worktree,
             is_github_actions,
-            ui_mode: inputs.config.ui(),
+            // --json disables the TUI and forces stream mode.
+            ui_mode: if inputs.execution_args.json {
+                UIMode::Stream
+            } else {
+                inputs.config.ui()
+            },
         })
     }
 }
@@ -791,6 +903,8 @@ mod test {
             experimental_observability: None,
             git_root: None,
             remote_cache_disabled_reason: None,
+            log_file_path: None,
+            json: false,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);

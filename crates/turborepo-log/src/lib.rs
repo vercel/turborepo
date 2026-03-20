@@ -111,3 +111,4 @@ pub use logger::{
     warn,
 };
 pub use sink::LogSink;
+pub use sinks::structured::{StructuredLogSink, StructuredTaskWriter, TeeWriter};

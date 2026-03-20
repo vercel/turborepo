@@ -235,6 +235,12 @@ Run Arguments:
           
           [possible values: auto, stream, grouped]
 
+      --json
+          Output machine-readable NDJSON to stdout instead of human-readable text. Disables the TUI and forces stream mode
+
+      --log-file [<LOG_FILE>]
+          Write structured JSON logs to a file. If no path is given, writes to `.turbo/logs/<epoch_millis>.json`
+
       --only
           Only executes the tasks specified, does not execute parent tasks
 

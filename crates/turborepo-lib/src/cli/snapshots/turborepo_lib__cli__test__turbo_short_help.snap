@@ -137,6 +137,10 @@ Run Arguments:
           Set type of process output logging. Use "full" to show all output. Use "hash-only" to show only turbo-computed task hashes. Use "new-only" to show only new output with only hashes for cached tasks. Use "none" to hide process output. (default full) [possible values: full, none, hash-only, new-only, errors-only]
       --log-order <LOG_ORDER>
           Set type of task output order. Use "stream" to show output as soon as it is available. Use "grouped" to show output when a command has finished execution. Use "auto" to let turbo decide based on its own heuristics. (default auto) [possible values: auto, stream, grouped]
+      --json
+          Output machine-readable NDJSON to stdout instead of human-readable text. Disables the TUI and forces stream mode
+      --log-file [<LOG_FILE>]
+          Write structured JSON logs to a file. If no path is given, writes to `.turbo/logs/<epoch_millis>.json`
       --only
           Only executes the tasks specified, does not execute parent tasks
       --log-prefix <LOG_PREFIX>

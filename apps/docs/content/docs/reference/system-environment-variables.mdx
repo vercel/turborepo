@@ -128,6 +128,18 @@ System environment variables are always overridden by flag values provided direc
         executed.
       </td>
     </tr>
+    <tr id="turbo_log_file">
+      <td>
+        <code>TURBO_LOG_FILE</code>
+      </td>
+      <td>
+        Write structured JSON logs to a file. Set to <code>1</code> or{" "}
+        <code>true</code> for the default location (
+        <code>.turbo/logs/&lt;timestamp&gt;.json</code>), or provide a custom
+        file path. Equivalent to the{" "}
+        <a href="/docs/reference/run#--log-file-path">--log-file</a> flag.
+      </td>
+    </tr>
     <tr id="turbo_log_order">
       <td>
         <code>TURBO_LOG_ORDER</code>
