@@ -28,6 +28,8 @@ A run consists of the following steps:
 **Key responsibilities:**
 
 - Workspace provider resolution (language/toolchain adapters)
+- Provider-aware workspace manifest synthesis for Cargo/uv repositories when
+  non-node providers are enabled
 - Package discovery and lockfile analysis
 - Task filtering based on arguments (task names and `--filter`)
 - Root task scoping via `FilterMode` (from `turborepo-types`): when no filter
