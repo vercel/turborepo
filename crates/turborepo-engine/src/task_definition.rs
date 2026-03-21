@@ -105,6 +105,7 @@ impl TaskDefinitionFromProcessed for TaskDefinition {
         Ok(TaskDefinition {
             outputs,
             cache,
+            command: processed.command.map(|command| command.into_inner().into()),
             topological_dependencies,
             task_dependencies,
             env,

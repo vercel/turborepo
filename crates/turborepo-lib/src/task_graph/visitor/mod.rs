@@ -373,31 +373,49 @@ impl<'a> Visitor<'a> {
                 break;
             };
 
-            let command = workspace_info.package_json.scripts.get(info.task());
-
-            match command {
-                Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(cmd) => {
-                    let package_task_event =
-                        PackageTaskEventBuilder::new(info.package(), info.task())
-                            .with_parent(telemetry);
-                    package_task_event.track_error(TrackedErrors::RecursiveError);
-                    let (span, text) = cmd.span_and_text("package.json");
-
-                    dispatch_error = Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
-                        task_name: info.to_string(),
-                        command: cmd.to_string(),
-                        span,
-                        text,
-                    })));
-                    break;
-                }
-                _ => (),
-            }
-
             let Some(task_definition) = engine.task_definition(&info) else {
                 dispatch_error = Some(Error::MissingDefinition);
                 break;
             };
+
+            let explicit_command = task_definition
+                .command
+                .as_deref()
+                .filter(|command| !command.is_empty());
+            let script_command = workspace_info.package_json.scripts.get(info.task());
+            let command = explicit_command.or_else(|| script_command.map(|script| script.as_str()));
+
+            if info.package() == ROOT_PKG_NAME {
+                if let Some(command) = command {
+                    if turbo_regex().is_match(command) {
+                        let package_task_event =
+                            PackageTaskEventBuilder::new(info.package(), info.task())
+                                .with_parent(telemetry);
+                        package_task_event.track_error(TrackedErrors::RecursiveError);
+
+                        let (span, text) = if explicit_command.is_some() {
+                            engine
+                                .task_locations()
+                                .get(&info)
+                                .map(|spanned| spanned.span_and_text("turbo.json"))
+                                .unwrap_or((None, NamedSource::new("", String::new())))
+                        } else {
+                            script_command
+                                .map(|script| script.span_and_text("package.json"))
+                                .unwrap_or((None, NamedSource::new("", String::new())))
+                        };
+
+                        dispatch_error =
+                            Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
+                                task_name: info.to_string(),
+                                command: command.to_string(),
+                                span,
+                                text,
+                            })));
+                        break;
+                    }
+                }
+            }
 
             // Move pre-computed hash and env out of the map — each task is
             // dispatched exactly once, so remove avoids cloning the env map.

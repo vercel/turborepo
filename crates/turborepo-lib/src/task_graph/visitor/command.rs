@@ -9,6 +9,10 @@ pub type CommandFactory<'a> = turborepo_task_executor::CommandFactory<'a, Error>
 pub type PackageGraphCommandProvider<'a> =
     turborepo_task_executor::PackageGraphCommandProvider<'a, MicrofrontendsConfigs>;
 
+// Re-export ExplicitTaskCommandProvider from turborepo-task-executor
+pub type ExplicitTaskCommandProvider<'a, T> =
+    turborepo_task_executor::ExplicitTaskCommandProvider<'a, T>;
+
 // Re-export MicroFrontendProxyProvider from turborepo-task-executor with our
 // MicrofrontendsConfigs type
 pub type MicroFrontendProxyProvider<'a, T> =

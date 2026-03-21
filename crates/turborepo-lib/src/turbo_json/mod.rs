@@ -122,6 +122,7 @@ mod tests {
         RawTaskDefinition {
             extends: None,
             description: None,
+            command: None,
             depends_on: Some(Spanned::new(vec![Spanned::<turborepo_unescape::UnescapedString>::new("cli#build".into()).with_range(26..37)]).with_range(25..38)),
             env: Some(vec![Spanned::<turborepo_unescape::UnescapedString>::new("OS".into()).with_range(58..62)]),
             pass_through_env: Some(vec![Spanned::<turborepo_unescape::UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(94..110)]),
@@ -142,6 +143,7 @@ mod tests {
               exclusions: vec![],
           },
           cache: false,
+          command: None,
           inputs: TaskInputs::new(vec!["package/a/src/**".to_string()]),
           output_logs: turborepo_types::OutputLogsMode::Full,
           pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),
@@ -170,6 +172,7 @@ mod tests {
         RawTaskDefinition {
             extends: None,
             description: None,
+            command: None,
             depends_on: Some(Spanned::new(vec![Spanned::<turborepo_unescape::UnescapedString>::new("cli#build".into()).with_range(30..41)]).with_range(29..42)),
             env: Some(vec![Spanned::<turborepo_unescape::UnescapedString>::new("OS".into()).with_range(66..70)]),
             pass_through_env: Some(vec![Spanned::<turborepo_unescape::UnescapedString>::new("AWS_SECRET_KEY".into()).with_range(106..122)]),
@@ -190,6 +193,7 @@ mod tests {
                 exclusions: vec![],
             },
             cache: false,
+            command: None,
             inputs: TaskInputs::new(vec!["package\\a\\src\\**".to_string()]),
             output_logs: turborepo_types::OutputLogsMode::Full,
             pass_through_env: Some(vec!["AWS_SECRET_KEY".to_string()]),

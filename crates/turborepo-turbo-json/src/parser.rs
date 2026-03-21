@@ -137,6 +137,7 @@ impl WithMetadata for Pipeline {
 
 impl WithMetadata for RawTaskDefinition {
     fn add_text(&mut self, text: Arc<str>) {
+        self.command.add_text(text.clone());
         self.depends_on.add_text(text.clone());
         if let Some(depends_on) = &mut self.depends_on {
             depends_on.value.add_text(text.clone());
@@ -153,6 +154,7 @@ impl WithMetadata for RawTaskDefinition {
     }
 
     fn add_path(&mut self, path: Arc<str>) {
+        self.command.add_path(path.clone());
         self.depends_on.add_path(path.clone());
         if let Some(depends_on) = &mut self.depends_on {
             depends_on.value.add_path(path.clone());

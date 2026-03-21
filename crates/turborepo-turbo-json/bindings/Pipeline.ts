@@ -17,6 +17,13 @@ export type Pipeline = {
  */
 description?: string, 
 /**
+ * Explicit command to execute for this task.
+ *
+ * When provided, this command takes precedence over inferred commands
+ * from workspace manifests (for example `package.json` scripts).
+ */
+command?: string, 
+/**
  * Whether or not to cache the outputs of the task.
  *
  * Setting cache to false is useful for long-running "watch" or

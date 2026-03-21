@@ -329,6 +329,14 @@ fn generate_pipeline_interface() -> String {
   description?: string;
 
   /**
+   * Explicit command to execute for this task.
+   *
+   * When provided, this command takes precedence over inferred commands
+   * from workspace manifests (for example package.json scripts).
+   */
+  command?: string;
+
+  /**
    * The list of tasks that this task depends on.
    *
    * Prefixing an item in dependsOn with a ^ prefix tells turbo that this task depends

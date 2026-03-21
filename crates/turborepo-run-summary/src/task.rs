@@ -129,6 +129,8 @@ pub struct TaskEnvConfiguration {
 pub struct TaskSummaryTaskDefinition {
     outputs: Vec<String>,
     cache: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    command: Option<String>,
     depends_on: Vec<String>,
     inputs: Vec<String>,
     output_logs: OutputLogsMode,
@@ -380,6 +382,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
                     exclusions,
                 },
             cache,
+            command,
             mut env,
             pass_through_env,
             topological_dependencies,
@@ -418,6 +421,7 @@ impl From<TaskDefinition> for TaskSummaryTaskDefinition {
         Self {
             outputs,
             cache,
+            command,
             depends_on,
             inputs: inputs.globs,
             output_logs,

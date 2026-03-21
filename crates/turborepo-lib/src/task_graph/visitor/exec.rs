@@ -3,7 +3,10 @@
 //! This module provides the factory for creating task executors. The actual
 //! execution logic is in `turborepo-task-executor`.
 
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+};
 
 use console::StyledObject;
 use turborepo_engine::{TaskError, TaskErrorCollectorWrapper, TaskWarningCollectorWrapper};
@@ -13,7 +16,10 @@ use turborepo_task_executor::{DryRunExecutor, TaskExecutor};
 use turborepo_task_id::TaskId;
 
 use super::{
-    command::{CommandFactory, MicroFrontendProxyProvider, PackageGraphCommandProvider},
+    command::{
+        CommandFactory, ExplicitTaskCommandProvider, MicroFrontendProxyProvider,
+        PackageGraphCommandProvider,
+    },
     Visitor,
 };
 use crate::{
@@ -60,6 +66,26 @@ impl<'a> ExecContextFactory<'a> {
             visitor.micro_frontends_configs,
         );
         let mut command_factory = CommandFactory::new();
+        let explicit_commands: HashMap<String, String> = engine
+            .task_definitions()
+            .iter()
+            .filter_map(|(task_id, task_definition)| {
+                task_definition
+                    .command
+                    .as_ref()
+                    .filter(|command| !command.is_empty())
+                    .map(|command| (task_id.to_string(), command.clone()))
+            })
+            .collect();
+
+        if !explicit_commands.is_empty() {
+            command_factory.add_provider(ExplicitTaskCommandProvider::new(
+                visitor.repo_root,
+                visitor.package_graph.as_ref(),
+                explicit_commands,
+            ));
+        }
+
         if let Some(micro_frontends_configs) = visitor.micro_frontends_configs {
             command_factory.add_provider(MicroFrontendProxyProvider::new(
                 visitor.repo_root,

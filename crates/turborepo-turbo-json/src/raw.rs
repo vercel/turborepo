@@ -650,6 +650,14 @@ pub struct RawTaskDefinition {
     #[ts(optional)]
     pub description: Option<Spanned<UnescapedString>>,
 
+    /// Explicit command to execute for this task.
+    ///
+    /// When provided, this command takes precedence over inferred commands
+    /// from workspace manifests (for example `package.json` scripts).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub command: Option<Spanned<UnescapedString>>,
+
     /// Whether or not to cache the outputs of the task.
     ///
     /// Setting cache to false is useful for long-running "watch" or
@@ -777,7 +785,8 @@ pub struct RawTaskDefinition {
 
 impl HasConfigBeyondExtends for RawTaskDefinition {
     fn has_config_beyond_extends(&self) -> bool {
-        self.cache.is_some()
+        self.command.is_some()
+            || self.cache.is_some()
             || self.depends_on.is_some()
             || self.env.is_some()
             || self.inputs.is_some()

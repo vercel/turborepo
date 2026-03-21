@@ -750,6 +750,7 @@ mod tests {
 pub struct TaskDefinition {
     pub outputs: TaskOutputs,
     pub cache: bool,
+    pub command: Option<String>,
 
     // This field is custom-marshalled from `env` and `depends_on`
     pub env: Vec<String>,
@@ -802,6 +803,7 @@ impl Default for TaskDefinition {
     fn default() -> Self {
         Self {
             cache: true,
+            command: Default::default(),
             outputs: Default::default(),
             env: Default::default(),
             pass_through_env: Default::default(),

@@ -79,12 +79,19 @@ impl EngineExt for Engine<Built> {
                 TaskNode::Task(task) => Some(task),
             })
             .filter_map(|task| {
+                let task_definition = self.task_definition(task)?;
                 let pkg_name = PackageName::from(task.package());
                 let json = pkg_graph.package_json(&pkg_name)?;
                 // TODO: delegate to command factory to filter down tasks to those that will
                 // have a runnable command.
-                (task.task() == "proxy" || json.command(task.task()).is_some())
-                    .then(|| task.to_string())
+                let has_explicit_command = task_definition
+                    .command
+                    .as_ref()
+                    .is_some_and(|command| !command.is_empty());
+                (has_explicit_command
+                    || task.task() == "proxy"
+                    || json.command(task.task()).is_some())
+                .then(|| task.to_string())
             })
             .collect()
     }
@@ -136,9 +143,15 @@ impl EngineExt for Engine<Built> {
                         .ok_or_else(|| ValidateError::MissingPackageJson {
                             package: dep_id.package().to_string(),
                         })?;
-                    if task_definition.persistent
-                        && package_json.scripts.contains_key(dep_id.task())
-                    {
+                    let dep_has_script = package_json
+                        .scripts
+                        .get(dep_id.task())
+                        .is_some_and(|script| !script.is_empty());
+                    let dep_has_explicit_command = task_definition
+                        .command
+                        .as_ref()
+                        .is_some_and(|command| !command.is_empty());
+                    if task_definition.persistent && (dep_has_explicit_command || dep_has_script) {
                         let (span, text) = self
                             .task_locations()
                             .get(dep_id)
@@ -166,11 +179,16 @@ impl EngineExt for Engine<Built> {
                     // handle legacy behaviour from go where an empty string may appear
                     .is_some_and(|script| !script.is_empty());
 
+                let task_has_explicit_command = self
+                    .task_definition(task_id)
+                    .and_then(|task_def| task_def.command.as_deref())
+                    .is_some_and(|command| !command.is_empty());
+
                 let task_is_persistent = self
                     .task_definition(task_id)
                     .is_some_and(|task_def| task_def.persistent);
 
-                Ok(task_is_persistent && package_has_task)
+                Ok(task_is_persistent && (package_has_task || task_has_explicit_command))
             })
             .fold((0, Vec::new()), |(mut count, mut errs), result| {
                 match result {

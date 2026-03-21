@@ -142,6 +142,7 @@ impl ProcessedTaskDefinition {
             self.cache = other.cache;
         }
         set_field!(self, other, description);
+        set_field!(self, other, command);
         set_field!(self, other, output_logs);
         set_field!(self, other, persistent);
         set_field!(self, other, interruptible);
@@ -167,6 +168,7 @@ mod test {
         ProcessedTaskDefinition {
             extends: None,
             description: None,
+            command: None,
             cache: Some(Spanned::new(true)),
             persistent: Some(Spanned::new(false)),
             outputs: Some(
@@ -204,6 +206,7 @@ mod test {
         ProcessedTaskDefinition {
             extends: None,
             description: None,
+            command: None,
             cache: Some(Spanned::new(false)),
             persistent: Some(Spanned::new(true)),
             outputs: Some(
@@ -241,6 +244,7 @@ mod test {
         ProcessedTaskDefinition {
             extends: None,
             description: None,
+            command: None,
             persistent: Some(Spanned::new(true)),
             output_logs: Some(Spanned::new(OutputLogsMode::HashOnly)),
             cache: None,

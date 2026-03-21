@@ -3,7 +3,10 @@
 //! This module provides the trait and factory for creating commands to execute
 //! tasks.
 
-use std::{collections::HashSet, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+};
 
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, RelativeUnixPath};
@@ -30,6 +33,7 @@ use crate::MfeConfigProvider;
 /// - `E`: The error type returned when command creation fails
 ///
 /// # Implementors
+/// - `ExplicitTaskCommandProvider` (runs explicit task commands)
 /// - `PackageGraphCommandProvider` in turborepo-lib (executes package.json
 ///   scripts)
 /// - `MicroFrontendProxyProvider` in turborepo-lib (starts MFE proxy)
@@ -126,6 +130,80 @@ impl PackageInfoProvider for PackageGraph {
 
     fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
         PackageGraph::package_info(self, name)
+    }
+}
+
+/// Command provider for explicit task commands from task definitions.
+///
+/// Commands are keyed by fully-qualified `TaskId` string (`package#task`).
+#[derive(Debug)]
+pub struct ExplicitTaskCommandProvider<'a, T> {
+    repo_root: &'a AbsoluteSystemPath,
+    package_info_provider: &'a T,
+    commands_by_task: HashMap<String, String>,
+}
+
+impl<'a, T: PackageInfoProvider> ExplicitTaskCommandProvider<'a, T> {
+    pub fn new(
+        repo_root: &'a AbsoluteSystemPath,
+        package_info_provider: &'a T,
+        commands_by_task: HashMap<String, String>,
+    ) -> Self {
+        Self {
+            repo_root,
+            package_info_provider,
+            commands_by_task,
+        }
+    }
+
+    fn package_info(&self, task_id: &TaskId) -> Result<&PackageInfo, CommandProviderError> {
+        self.package_info_provider
+            .package_info(&PackageName::from(task_id.package()))
+            .ok_or_else(|| CommandProviderError::MissingPackage {
+                package_name: task_id.package().into(),
+                task_id: task_id.clone().into_owned(),
+            })
+    }
+}
+
+impl<'a, T: PackageInfoProvider, E: From<CommandProviderError>> CommandProvider<E>
+    for ExplicitTaskCommandProvider<'a, T>
+{
+    fn command(
+        &self,
+        task_id: &TaskId,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<Option<Command>, E> {
+        let Some(command) = self.commands_by_task.get(&task_id.to_string()) else {
+            return Ok(None);
+        };
+
+        if command.is_empty() {
+            return Ok(None);
+        }
+
+        let workspace_info = self.package_info(task_id)?;
+        let package_dir = self.repo_root.resolve(workspace_info.package_path());
+
+        #[cfg(windows)]
+        let mut cmd = {
+            let mut cmd = Command::new("cmd");
+            cmd.args(["/C", command.as_str()]);
+            cmd
+        };
+        #[cfg(not(windows))]
+        let mut cmd = {
+            let mut cmd = Command::new("sh");
+            cmd.args(["-c", command.as_str()]);
+            cmd
+        };
+
+        cmd.current_dir(package_dir);
+        cmd.env_clear();
+        cmd.envs(environment.iter());
+        cmd.open_stdin();
+
+        Ok(Some(cmd))
     }
 }
 
@@ -411,7 +489,10 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
 
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsStr;
+    use std::{collections::HashMap, ffi::OsStr};
+
+    use turbopath::AnchoredSystemPath;
+    use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
 
     use super::*;
 
@@ -496,5 +577,59 @@ mod tests {
             .command(&task_id, &EnvironmentVariableMap::default())
             .unwrap();
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
+    }
+
+    struct MockPackageInfoProvider(PackageInfo);
+
+    impl PackageInfoProvider for MockPackageInfoProvider {
+        fn package_manager(&self) -> &PackageManager {
+            &PackageManager::Npm
+        }
+
+        fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
+            match name {
+                PackageName::Root => None,
+                PackageName::Other(other) if other == "app" => Some(&self.0),
+                _ => None,
+            }
+        }
+    }
+
+    #[test]
+    fn test_explicit_task_command_provider_returns_command() {
+        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\repo-root"
+        } else {
+            "/tmp/repo-root"
+        })
+        .unwrap();
+        let provider = MockPackageInfoProvider(PackageInfo {
+            package_json: PackageJson::default(),
+            package_json_path: AnchoredSystemPath::new("apps/app/package.json")
+                .unwrap()
+                .to_owned(),
+            unresolved_external_dependencies: None,
+            transitive_dependencies: None,
+        });
+        let explicit = ExplicitTaskCommandProvider::new(
+            repo_root,
+            &provider,
+            HashMap::from([("app#build".to_string(), "echo from-command".to_string())]),
+        );
+
+        let cmd = <ExplicitTaskCommandProvider<'_, MockPackageInfoProvider> as CommandProvider<
+            CommandProviderError,
+        >>::command(
+            &explicit,
+            &TaskId::new("app", "build"),
+            &EnvironmentVariableMap::default(),
+        )
+            .unwrap()
+            .unwrap();
+
+        #[cfg(windows)]
+        assert_eq!(cmd.program(), OsStr::new("cmd"));
+        #[cfg(not(windows))]
+        assert_eq!(cmd.program(), OsStr::new("sh"));
     }
 }
