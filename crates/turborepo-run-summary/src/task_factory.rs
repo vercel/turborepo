@@ -267,3 +267,242 @@ pub fn get_external_deps_hash(transitive_dependencies: &Option<HashSet<Package>>
 
     LockFilePackagesRef(transitive_deps).hash()
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{collections::HashMap, sync::Arc};
+
+    use serde_json::json;
+    use turborepo_repository::{
+        discovery::{DiscoveryResponse, PackageDiscovery},
+        package_json::PackageJson,
+    };
+    use turborepo_types::{
+        DryRunMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, TaskOutputs,
+    };
+
+    use super::*;
+
+    struct StaticDiscovery;
+
+    impl PackageDiscovery for StaticDiscovery {
+        async fn discover_packages(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            Ok(DiscoveryResponse {
+                package_manager: turborepo_repository::package_manager::PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            self.discover_packages().await
+        }
+    }
+
+    #[derive(Default)]
+    struct MockEngine {
+        definitions: HashMap<TaskId<'static>, TaskDefinition>,
+        dependencies: HashMap<TaskId<'static>, Vec<TaskId<'static>>>,
+        dependents: HashMap<TaskId<'static>, Vec<TaskId<'static>>>,
+    }
+
+    impl EngineInfo for MockEngine {
+        type TaskIter<'a>
+            = std::slice::Iter<'a, TaskId<'static>>
+        where
+            Self: 'a;
+
+        fn task_definition(&self, task_id: &TaskId<'static>) -> Option<&TaskDefinition> {
+            self.definitions.get(task_id)
+        }
+
+        fn dependencies(&self, task_id: &TaskId<'static>) -> Option<Self::TaskIter<'_>> {
+            self.dependencies.get(task_id).map(|deps| deps.iter())
+        }
+
+        fn dependents(&self, task_id: &TaskId<'static>) -> Option<Self::TaskIter<'_>> {
+            self.dependents.get(task_id).map(|deps| deps.iter())
+        }
+    }
+
+    struct MockHashTracker;
+
+    impl HashTrackerInfo for MockHashTracker {
+        fn hash(&self, _task_id: &TaskId) -> Option<Arc<str>> {
+            Some(Arc::from("test-hash"))
+        }
+
+        fn env_vars(&self, _task_id: &TaskId) -> Option<HashTrackerDetailedMap> {
+            Some(HashTrackerDetailedMap::default())
+        }
+
+        fn cache_status(&self, _task_id: &TaskId) -> Option<HashTrackerCacheHitMetadata> {
+            Some(HashTrackerCacheHitMetadata {
+                local: false,
+                remote: false,
+                time_saved: 0,
+                sha: None,
+                dirty_hash: None,
+            })
+        }
+
+        fn expanded_outputs(
+            &self,
+            _task_id: &TaskId,
+        ) -> Option<Vec<turbopath::AnchoredSystemPathBuf>> {
+            Some(vec![])
+        }
+
+        fn framework(&self, _task_id: &TaskId) -> Option<String> {
+            None
+        }
+
+        fn expanded_inputs(
+            &self,
+            _task_id: &TaskId,
+        ) -> Option<Vec<(turbopath::RelativeUnixPathBuf, String)>> {
+            Some(vec![])
+        }
+    }
+
+    #[derive(Default)]
+    struct MockRunOpts;
+
+    impl RunOptsInfo for MockRunOpts {
+        fn dry_run(&self) -> Option<DryRunMode> {
+            None
+        }
+
+        fn single_package(&self) -> bool {
+            false
+        }
+
+        fn summarize(&self) -> Option<&str> {
+            None
+        }
+
+        fn framework_inference(&self) -> bool {
+            false
+        }
+
+        fn pass_through_args(&self) -> &[String] {
+            &[]
+        }
+
+        fn tasks(&self) -> &[String] {
+            &[]
+        }
+    }
+
+    async fn make_package_graph(
+        manifest_path: &str,
+        scripts: HashMap<String, String>,
+    ) -> PackageGraph {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = turbopath::AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let manifest = root.join_components(&["workspace", "pkg", manifest_path]);
+        let mut package_jsons = HashMap::new();
+        package_jsons.insert(
+            manifest,
+            PackageJson::from_value(json!({
+                "name": "pkg",
+                "scripts": scripts
+            }))
+            .unwrap(),
+        );
+
+        PackageGraph::builder(root, PackageJson::default())
+            .with_package_discovery(StaticDiscovery)
+            .with_package_jsons(Some(package_jsons))
+            .build()
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn task_summary_uses_provider_inferred_cargo_command() {
+        let package_graph = make_package_graph("Cargo.toml", HashMap::new()).await;
+        let task_id = TaskId::new("pkg", "build");
+        let mut engine = MockEngine::default();
+        engine
+            .definitions
+            .insert(task_id.clone(), TaskDefinition::default());
+        let env_at_start = EnvironmentVariableMap::default();
+        let run_opts = MockRunOpts;
+        let hash_tracker = MockHashTracker;
+
+        let factory = TaskSummaryFactory::new(
+            &package_graph,
+            &engine,
+            &hash_tracker,
+            &env_at_start,
+            &run_opts,
+            EnvMode::Strict,
+        );
+
+        let summary = factory.task_summary(task_id, None).unwrap();
+        assert_eq!(summary.shared.command, "cargo build");
+    }
+
+    #[tokio::test]
+    async fn task_summary_prefers_explicit_command_over_provider_inference() {
+        let package_graph = make_package_graph("Cargo.toml", HashMap::new()).await;
+        let task_id = TaskId::new("pkg", "build");
+        let mut engine = MockEngine::default();
+        engine.definitions.insert(
+            task_id.clone(),
+            TaskDefinition {
+                command: Some("custom build command".to_string()),
+                outputs: TaskOutputs::default(),
+                ..Default::default()
+            },
+        );
+        let env_at_start = EnvironmentVariableMap::default();
+        let run_opts = MockRunOpts;
+        let hash_tracker = MockHashTracker;
+
+        let factory = TaskSummaryFactory::new(
+            &package_graph,
+            &engine,
+            &hash_tracker,
+            &env_at_start,
+            &run_opts,
+            EnvMode::Strict,
+        );
+
+        let summary = factory.task_summary(task_id, None).unwrap();
+        assert_eq!(summary.shared.command, "custom build command");
+    }
+
+    #[tokio::test]
+    async fn task_summary_prefers_script_over_provider_inference_for_node() {
+        let package_graph = make_package_graph(
+            "package.json",
+            HashMap::from([("build".to_string(), "echo from-script".to_string())]),
+        )
+        .await;
+        let task_id = TaskId::new("pkg", "build");
+        let mut engine = MockEngine::default();
+        engine
+            .definitions
+            .insert(task_id.clone(), TaskDefinition::default());
+        let env_at_start = EnvironmentVariableMap::default();
+        let run_opts = MockRunOpts;
+        let hash_tracker = MockHashTracker;
+
+        let factory = TaskSummaryFactory::new(
+            &package_graph,
+            &engine,
+            &hash_tracker,
+            &env_at_start,
+            &run_opts,
+            EnvMode::Strict,
+        );
+
+        let summary = factory.task_summary(task_id, None).unwrap();
+        assert_eq!(summary.shared.command, "echo from-script");
+    }
+}
