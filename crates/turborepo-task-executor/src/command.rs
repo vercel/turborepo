@@ -801,4 +801,39 @@ mod tests {
         #[cfg(not(windows))]
         assert_eq!(cmd.program(), OsStr::new("sh"));
     }
+
+    #[test]
+    fn test_workspace_provider_command_provider_for_uv_task() {
+        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\repo-root"
+        } else {
+            "/tmp/repo-root"
+        })
+        .unwrap();
+        let provider = MockPackageInfoProvider(PackageInfo {
+            package_json: PackageJson::default(),
+            package_json_path: AnchoredSystemPath::new("apps/api/pyproject.toml")
+                .unwrap()
+                .to_owned(),
+            unresolved_external_dependencies: None,
+            transitive_dependencies: None,
+        });
+        let command_provider = WorkspaceProviderCommandProvider::new(repo_root, &provider);
+
+        let cmd =
+            <WorkspaceProviderCommandProvider<'_, MockPackageInfoProvider> as CommandProvider<
+                CommandProviderError,
+            >>::command(
+                &command_provider,
+                &TaskId::new("app", "test"),
+                &EnvironmentVariableMap::default(),
+            )
+            .unwrap()
+            .unwrap();
+
+        #[cfg(windows)]
+        assert_eq!(cmd.program(), OsStr::new("cmd"));
+        #[cfg(not(windows))]
+        assert_eq!(cmd.program(), OsStr::new("sh"));
+    }
 }

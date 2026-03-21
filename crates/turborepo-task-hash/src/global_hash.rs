@@ -26,6 +26,7 @@ use turborepo_types::EnvMode;
 static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
 pub const GLOBAL_CACHE_KEY: &str = "I can’t see ya, but I know you’re here";
+const PROVIDER_GLOBAL_FILES: [&str; 4] = ["Cargo.toml", "Cargo.lock", "pyproject.toml", "uv.lock"];
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -153,10 +154,19 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
         collect_global_deps(package_manager, root_path, global_file_dependencies)?;
 
     if lockfile.is_none() {
-        global_deps.insert(root_path.join_component("package.json"));
+        let package_json_path = root_path.join_component("package.json");
+        if package_json_path.exists() {
+            global_deps.insert(package_json_path);
+        }
         let lockfile_path = package_manager.lockfile_path(root_path);
         if lockfile_path.exists() {
             global_deps.insert(lockfile_path);
+        }
+        for provider_file in PROVIDER_GLOBAL_FILES {
+            let provider_path = root_path.join_component(provider_file);
+            if provider_path.exists() {
+                global_deps.insert(provider_path);
+            }
         }
     }
 
@@ -456,5 +466,54 @@ mod tests {
 
         // should not yield the root folder itself, src, or empty-folder
         assert_eq!(results.len(), 3, "{:?}", results);
+    }
+
+    #[test]
+    fn provider_manifest_files_hash_without_package_json_fallback() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        root.join_component("Cargo.toml")
+            .create_with_contents(
+                r#"[workspace]
+members = ["crates/*"]
+"#,
+            )
+            .unwrap();
+        root.join_component("Cargo.lock")
+            .create_with_contents("")
+            .unwrap();
+
+        let env_var_map = EnvironmentVariableMap::default();
+        let package_info = PackageInfo::default();
+        let lockfile: Option<&dyn Lockfile> = None;
+        let result = get_global_hash_inputs(
+            None,
+            None,
+            &package_info,
+            &root,
+            &PackageManager::Npm,
+            lockfile,
+            &[],
+            &env_var_map,
+            &[],
+            None,
+            EnvMode::Strict,
+            false,
+            &SCM::new(&root),
+            false,
+        )
+        .unwrap();
+
+        let file_keys = result
+            .global_file_hash_map
+            .keys()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        assert!(file_keys.iter().any(|key| key == "Cargo.toml"));
+        assert!(file_keys.iter().any(|key| key == "Cargo.lock"));
     }
 }
