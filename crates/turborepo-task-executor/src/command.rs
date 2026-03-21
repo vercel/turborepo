@@ -624,8 +624,8 @@ mod tests {
             &TaskId::new("app", "build"),
             &EnvironmentVariableMap::default(),
         )
-            .unwrap()
-            .unwrap();
+        .unwrap()
+        .unwrap();
 
         #[cfg(windows)]
         assert_eq!(cmd.program(), OsStr::new("cmd"));

@@ -30,7 +30,11 @@ impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
                 .package_files
                 .into_iter()
                 .map(|p| WorkspaceData {
-                    package_json: AbsoluteSystemPathBuf::new(p.package_json).expect("absolute"),
+                    package_json: {
+                        let manifest_path =
+                            p.manifest_path.unwrap_or_else(|| p.package_json.clone());
+                        AbsoluteSystemPathBuf::new(manifest_path).expect("absolute")
+                    },
                     turbo_json: p
                         .turbo_json
                         .map(|t| AbsoluteSystemPathBuf::new(t).expect("absolute")),
@@ -58,7 +62,11 @@ impl<C: Clone + Send + Sync> PackageDiscovery for DaemonPackageDiscovery<C> {
                 .package_files
                 .into_iter()
                 .map(|p| WorkspaceData {
-                    package_json: AbsoluteSystemPathBuf::new(p.package_json).expect("absolute"),
+                    package_json: {
+                        let manifest_path =
+                            p.manifest_path.unwrap_or_else(|| p.package_json.clone());
+                        AbsoluteSystemPathBuf::new(manifest_path).expect("absolute")
+                    },
                     turbo_json: p
                         .turbo_json
                         .map(|t| AbsoluteSystemPathBuf::new(t).expect("absolute")),

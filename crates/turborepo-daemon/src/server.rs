@@ -629,6 +629,8 @@ impl<W: PackageChangesWatcher + 'static> proto::turbod_server::Turbod for TurboG
                     .map(|d| proto::PackageFiles {
                         package_json: d.package_json.to_string(),
                         turbo_json: d.turbo_json.map(|t| t.to_string()),
+                        manifest_path: Some(d.package_json.to_string()),
+                        provider_id: Some("node".to_string()),
                     })
                     .collect(),
                 package_manager: proto::PackageManager::from(packages.package_manager).into(),
@@ -654,6 +656,8 @@ impl<W: PackageChangesWatcher + 'static> proto::turbod_server::Turbod for TurboG
                     .map(|d| proto::PackageFiles {
                         package_json: d.package_json.to_string(),
                         turbo_json: d.turbo_json.map(|t| t.to_string()),
+                        manifest_path: Some(d.package_json.to_string()),
+                        provider_id: Some("node".to_string()),
                     })
                     .collect(),
                 package_manager: proto::PackageManager::from(packages.package_manager).into(),
