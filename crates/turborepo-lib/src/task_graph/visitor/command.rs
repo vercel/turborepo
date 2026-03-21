@@ -13,6 +13,10 @@ pub type PackageGraphCommandProvider<'a> =
 pub type ExplicitTaskCommandProvider<'a, T> =
     turborepo_task_executor::ExplicitTaskCommandProvider<'a, T>;
 
+// Re-export WorkspaceProviderCommandProvider from turborepo-task-executor
+pub type WorkspaceProviderCommandProvider<'a, T> =
+    turborepo_task_executor::WorkspaceProviderCommandProvider<'a, T>;
+
 // Re-export MicroFrontendProxyProvider from turborepo-task-executor with our
 // MicrofrontendsConfigs type
 pub type MicroFrontendProxyProvider<'a, T> =

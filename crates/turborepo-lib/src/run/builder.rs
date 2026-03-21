@@ -1,11 +1,14 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     io::{ErrorKind, IsTerminal},
+    str::FromStr,
     sync::Arc,
     time::{Duration, SystemTime},
 };
 
 use chrono::Local;
+use globwalk::{ValidatedGlob, WalkType};
+use toml::{Table, Value};
 use tracing::Instrument;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_analytics::{start_analytics, AnalyticsHandle};
@@ -19,7 +22,11 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageName},
     package_json,
     package_json::PackageJson,
-    workspace_provider::WorkspaceProviderRegistry,
+    package_manager::PackageManager,
+    workspace_provider::{
+        CargoWorkspaceProvider, UvWorkspaceProvider, WorkspaceDependencyProvider,
+        WorkspaceProviderId, WorkspaceProviderRegistry,
+    },
 };
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
@@ -318,6 +325,280 @@ impl RunBuilder {
         }))
     }
 
+    fn load_root_package_json(
+        repo_root: &AbsoluteSystemPath,
+        workspace_providers: &[WorkspaceProviderId],
+    ) -> Result<PackageJson, Error> {
+        let package_json_path = repo_root.join_component("package.json");
+        if package_json_path.exists() {
+            return Ok(PackageJson::load(&package_json_path)?);
+        }
+
+        let has_only_non_node_providers = !workspace_providers.is_empty()
+            && workspace_providers
+                .iter()
+                .all(|provider| *provider != WorkspaceProviderId::Node);
+        if has_only_non_node_providers {
+            return Ok(PackageJson::default());
+        }
+
+        PackageJson::load(&package_json_path).map_err(Error::from)
+    }
+
+    fn package_manager_for_provider_graph(
+        repo_root: &AbsoluteSystemPath,
+        root_package_json: &PackageJson,
+        workspace_providers: &[WorkspaceProviderId],
+    ) -> PackageManager {
+        if workspace_providers.contains(&WorkspaceProviderId::Node) {
+            PackageManager::read_or_detect_package_manager(root_package_json, repo_root)
+                .unwrap_or(PackageManager::Npm)
+        } else {
+            PackageManager::Npm
+        }
+    }
+
+    fn include_manifest_glob(member: &str, manifest_name: &str) -> Option<ValidatedGlob> {
+        let member = member.trim().trim_start_matches("./");
+        if member.is_empty() {
+            return None;
+        }
+
+        let member = member.trim_end_matches('/');
+        let pattern = if member.ends_with(manifest_name) {
+            member.to_string()
+        } else {
+            format!("{member}/{manifest_name}")
+        };
+        ValidatedGlob::from_str(&pattern).ok()
+    }
+
+    fn nested_table<'a>(table: &'a Table, path: &[&str]) -> Option<&'a Table> {
+        let mut cursor = table;
+        for segment in path {
+            cursor = cursor.get(*segment)?.as_table()?;
+        }
+        Some(cursor)
+    }
+
+    fn nested_array_strings(table: &Table, path: &[&str]) -> Vec<String> {
+        let Some(array) = Self::nested_table(table, &path[..path.len().saturating_sub(1)])
+            .and_then(|parent| parent.get(path[path.len() - 1]))
+            .and_then(Value::as_array)
+        else {
+            return Vec::new();
+        };
+
+        array
+            .iter()
+            .filter_map(Value::as_str)
+            .map(ToString::to_string)
+            .collect()
+    }
+
+    fn manifest_paths_from_members(
+        repo_root: &AbsoluteSystemPath,
+        include_members: &[String],
+        exclude_members: &[String],
+        manifest_name: &str,
+    ) -> Vec<AbsoluteSystemPathBuf> {
+        let include = include_members
+            .iter()
+            .filter_map(|member| Self::include_manifest_glob(member, manifest_name))
+            .collect::<Vec<_>>();
+        if include.is_empty() {
+            return Vec::new();
+        }
+        let exclude = exclude_members
+            .iter()
+            .filter_map(|member| Self::include_manifest_glob(member, manifest_name))
+            .collect::<Vec<_>>();
+
+        match globwalk::globwalk(repo_root, &include, &exclude, WalkType::Files) {
+            Ok(paths) => paths.into_iter().collect(),
+            Err(err) => {
+                tracing::warn!("failed to evaluate workspace members for {manifest_name}: {err}");
+                Vec::new()
+            }
+        }
+    }
+
+    fn synthesize_package_jsons_from_provider_manifests(
+        repo_root: &AbsoluteSystemPath,
+        workspace_providers: &[WorkspaceProviderId],
+        root_package_json: &PackageJson,
+    ) -> HashMap<AbsoluteSystemPathBuf, PackageJson> {
+        let mut package_jsons = HashMap::new();
+
+        if workspace_providers.contains(&WorkspaceProviderId::Node) {
+            if let Ok(package_manager) =
+                PackageManager::read_or_detect_package_manager(root_package_json, repo_root)
+            {
+                if let Ok(paths) = package_manager.get_package_jsons(repo_root) {
+                    for path in paths {
+                        if let Ok(package_json) = PackageJson::load(&path) {
+                            package_jsons.insert(path, package_json);
+                        }
+                    }
+                }
+            }
+        }
+
+        if workspace_providers.contains(&WorkspaceProviderId::Cargo) {
+            package_jsons.extend(Self::cargo_workspace_package_jsons(repo_root));
+        }
+
+        if workspace_providers.contains(&WorkspaceProviderId::Uv) {
+            package_jsons.extend(Self::uv_workspace_package_jsons(repo_root));
+        }
+
+        package_jsons
+    }
+
+    fn cargo_workspace_package_jsons(
+        repo_root: &AbsoluteSystemPath,
+    ) -> HashMap<AbsoluteSystemPathBuf, PackageJson> {
+        let cargo_manifest = repo_root.join_component("Cargo.toml");
+        if !cargo_manifest.exists() {
+            return HashMap::new();
+        }
+
+        let Ok(cargo_manifest_contents) = cargo_manifest.read_to_string() else {
+            return HashMap::new();
+        };
+        let Ok(cargo_manifest_table) = toml::from_str::<Table>(&cargo_manifest_contents) else {
+            return HashMap::new();
+        };
+
+        let include_members =
+            Self::nested_array_strings(&cargo_manifest_table, &["workspace", "members"]);
+        let exclude_members =
+            Self::nested_array_strings(&cargo_manifest_table, &["workspace", "exclude"]);
+
+        let mut manifests = Self::manifest_paths_from_members(
+            repo_root,
+            &include_members,
+            &exclude_members,
+            "Cargo.toml",
+        );
+        if cargo_manifest_table
+            .get("package")
+            .and_then(Value::as_table)
+            .and_then(|package| package.get("name"))
+            .and_then(Value::as_str)
+            .is_some()
+        {
+            manifests.push(cargo_manifest);
+        }
+
+        manifests.sort();
+        manifests.dedup();
+
+        manifests
+            .into_iter()
+            .filter_map(|manifest_path| {
+                let manifest_contents = manifest_path.read_to_string().ok()?;
+                let package_name =
+                    toml::from_str::<Table>(&manifest_contents)
+                        .ok()
+                        .and_then(|manifest| {
+                            manifest
+                                .get("package")
+                                .and_then(Value::as_table)
+                                .and_then(|package| package.get("name"))
+                                .and_then(Value::as_str)
+                                .map(ToString::to_string)
+                        })?;
+                let dependencies = CargoWorkspaceProvider
+                    .infer_internal_dependencies(&manifest_contents)
+                    .into_iter()
+                    .map(|dependency| (dependency, "*".to_string()))
+                    .collect::<BTreeMap<_, _>>();
+
+                Some((
+                    manifest_path,
+                    PackageJson {
+                        name: Some(Spanned::new(package_name)),
+                        dependencies: (!dependencies.is_empty()).then_some(dependencies),
+                        ..Default::default()
+                    },
+                ))
+            })
+            .collect()
+    }
+
+    fn uv_workspace_package_jsons(
+        repo_root: &AbsoluteSystemPath,
+    ) -> HashMap<AbsoluteSystemPathBuf, PackageJson> {
+        let pyproject_manifest = repo_root.join_component("pyproject.toml");
+        if !pyproject_manifest.exists() {
+            return HashMap::new();
+        }
+
+        let Ok(pyproject_contents) = pyproject_manifest.read_to_string() else {
+            return HashMap::new();
+        };
+        let Ok(pyproject_table) = toml::from_str::<Table>(&pyproject_contents) else {
+            return HashMap::new();
+        };
+
+        let include_members =
+            Self::nested_array_strings(&pyproject_table, &["tool", "uv", "workspace", "members"]);
+        let exclude_members =
+            Self::nested_array_strings(&pyproject_table, &["tool", "uv", "workspace", "exclude"]);
+
+        let mut manifests = Self::manifest_paths_from_members(
+            repo_root,
+            &include_members,
+            &exclude_members,
+            "pyproject.toml",
+        );
+        if pyproject_table
+            .get("project")
+            .and_then(Value::as_table)
+            .and_then(|project| project.get("name"))
+            .and_then(Value::as_str)
+            .is_some()
+        {
+            manifests.push(pyproject_manifest);
+        }
+
+        manifests.sort();
+        manifests.dedup();
+
+        manifests
+            .into_iter()
+            .filter_map(|manifest_path| {
+                let manifest_contents = manifest_path.read_to_string().ok()?;
+                let package_name =
+                    toml::from_str::<Table>(&manifest_contents)
+                        .ok()
+                        .and_then(|manifest| {
+                            manifest
+                                .get("project")
+                                .and_then(Value::as_table)
+                                .and_then(|project| project.get("name"))
+                                .and_then(Value::as_str)
+                                .map(ToString::to_string)
+                        })?;
+                let dependencies = UvWorkspaceProvider
+                    .infer_internal_dependencies(&manifest_contents)
+                    .into_iter()
+                    .map(|dependency| (dependency, "*".to_string()))
+                    .collect::<BTreeMap<_, _>>();
+
+                Some((
+                    manifest_path,
+                    PackageJson {
+                        name: Some(Spanned::new(package_name)),
+                        dependencies: (!dependencies.is_empty()).then_some(dependencies),
+                        ..Default::default()
+                    },
+                ))
+            })
+            .collect()
+    }
+
     /// Resolve the set of packages that should participate in this run.
     ///
     /// Starts with the result of scope resolution (which handles `--filter`
@@ -435,8 +716,6 @@ impl RunBuilder {
                 None => SCM::new(&repo_root),
             })
         };
-        let package_json_path = self.repo_root.join_component("package.json");
-        let root_package_json = PackageJson::load(&package_json_path)?;
         let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
 
         let workspace_provider_registry = WorkspaceProviderRegistry::default();
@@ -446,6 +725,8 @@ impl RunBuilder {
         )?;
         let workspace_providers =
             workspace_provider_registry.resolve(configured_workspace_providers.as_deref())?;
+        let root_package_json =
+            Self::load_root_package_json(&self.repo_root, &workspace_providers)?;
 
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
         let repo_telemetry =
@@ -496,9 +777,28 @@ impl RunBuilder {
         }
 
         let mut pkg_dep_graph = {
-            let builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
+            let has_non_node_provider = workspace_providers
+                .iter()
+                .any(|provider| *provider != WorkspaceProviderId::Node);
+            let mut builder = PackageGraph::builder(&self.repo_root, root_package_json.clone())
                 .with_single_package_mode(self.opts.run_opts.single_package)
                 .with_allow_no_package_manager(self.opts.repo_opts.allow_no_package_manager);
+            if has_non_node_provider {
+                let provider_workspace_package_jsons =
+                    Self::synthesize_package_jsons_from_provider_manifests(
+                        &self.repo_root,
+                        &workspace_providers,
+                        &root_package_json,
+                    );
+                builder = builder
+                    .with_package_manager(Self::package_manager_for_provider_graph(
+                        &self.repo_root,
+                        &root_package_json,
+                        &workspace_providers,
+                    ))
+                    .with_allow_no_package_manager(true)
+                    .with_package_jsons(Some(provider_workspace_package_jsons));
+            }
 
             let graph = builder
                 .build()
@@ -1064,5 +1364,120 @@ impl RunBuilder {
         }
 
         Ok(engine)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cargo_workspace_package_jsons_infer_names_and_internal_dependencies() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        repo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                r#"[workspace]
+members = ["crates/*"]
+"#,
+            )
+            .unwrap();
+        let a_manifest = repo_root.join_components(&["crates", "a", "Cargo.toml"]);
+        a_manifest.ensure_dir().unwrap();
+        a_manifest
+            .create_with_contents(
+                r#"[package]
+name = "a"
+version = "0.1.0"
+
+[dependencies]
+b = { path = "../b" }
+"#,
+            )
+            .unwrap();
+        let b_manifest = repo_root.join_components(&["crates", "b", "Cargo.toml"]);
+        b_manifest.ensure_dir().unwrap();
+        b_manifest
+            .create_with_contents(
+                r#"[package]
+name = "b"
+version = "0.1.0"
+"#,
+            )
+            .unwrap();
+
+        let package_jsons = RunBuilder::cargo_workspace_package_jsons(&repo_root);
+        assert_eq!(package_jsons.len(), 2);
+
+        let a_package = package_jsons.get(&a_manifest).unwrap();
+        assert_eq!(a_package.name.as_ref().unwrap().as_inner(), "a");
+        assert_eq!(
+            a_package
+                .dependencies
+                .as_ref()
+                .and_then(|deps| deps.get("b"))
+                .map(String::as_str),
+            Some("*")
+        );
+    }
+
+    #[test]
+    fn uv_workspace_package_jsons_infer_names_and_internal_dependencies() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        repo_root
+            .join_component("pyproject.toml")
+            .create_with_contents(
+                r#"[tool.uv.workspace]
+members = ["packages/*"]
+"#,
+            )
+            .unwrap();
+        let api_manifest = repo_root.join_components(&["packages", "api", "pyproject.toml"]);
+        api_manifest.ensure_dir().unwrap();
+        api_manifest
+            .create_with_contents(
+                r#"[project]
+name = "api"
+version = "0.1.0"
+
+[tool.uv.sources]
+core = { path = "../core" }
+"#,
+            )
+            .unwrap();
+        let core_manifest = repo_root.join_components(&["packages", "core", "pyproject.toml"]);
+        core_manifest.ensure_dir().unwrap();
+        core_manifest
+            .create_with_contents(
+                r#"[project]
+name = "core"
+version = "0.1.0"
+"#,
+            )
+            .unwrap();
+
+        let package_jsons = RunBuilder::uv_workspace_package_jsons(&repo_root);
+        assert_eq!(package_jsons.len(), 2);
+
+        let api_package = package_jsons.get(&api_manifest).unwrap();
+        assert_eq!(api_package.name.as_ref().unwrap().as_inner(), "api");
+        assert_eq!(
+            api_package
+                .dependencies
+                .as_ref()
+                .and_then(|deps| deps.get("core"))
+                .map(String::as_str),
+            Some("*")
+        );
     }
 }

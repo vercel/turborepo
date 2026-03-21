@@ -18,7 +18,7 @@ use turborepo_task_id::TaskId;
 use super::{
     command::{
         CommandFactory, ExplicitTaskCommandProvider, MicroFrontendProxyProvider,
-        PackageGraphCommandProvider,
+        PackageGraphCommandProvider, WorkspaceProviderCommandProvider,
     },
     Visitor,
 };
@@ -94,6 +94,10 @@ impl<'a> ExecContextFactory<'a> {
                 micro_frontends_configs,
             ));
         }
+        command_factory.add_provider(WorkspaceProviderCommandProvider::new(
+            visitor.repo_root,
+            visitor.package_graph.as_ref(),
+        ));
         command_factory.add_provider(pkg_graph_provider);
 
         Ok(Self {

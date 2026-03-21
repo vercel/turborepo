@@ -3,7 +3,13 @@ use std::collections::HashSet;
 use turbopath::AnchoredSystemPath;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_lockfiles::Package;
-use turborepo_repository::package_graph::{PackageGraph, PackageInfo, PackageName};
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageInfo, PackageName},
+    workspace_provider::{
+        CargoWorkspaceProvider, TaskCommandProvider as WorkspaceTaskCommandProvider,
+        UvWorkspaceProvider,
+    },
+};
 use turborepo_task_id::TaskId;
 use turborepo_types::{EnvMode, LOG_DIR, TaskDefinition, task_log_filename};
 
@@ -53,6 +59,17 @@ where
             env_at_start,
             run_opts,
             global_env_mode,
+        }
+    }
+
+    fn inferred_provider_command(workspace_info: &PackageInfo, task_name: &str) -> Option<String> {
+        let manifest_name = workspace_info.package_json_path().as_path().file_name()?;
+        if manifest_name.eq_ignore_ascii_case("Cargo.toml") {
+            CargoWorkspaceProvider.resolve_task_command(task_name)
+        } else if manifest_name.eq_ignore_ascii_case("pyproject.toml") {
+            UvWorkspaceProvider.resolve_task_command(task_name)
+        } else {
+            None
         }
     }
 
@@ -112,6 +129,7 @@ where
                     .get(task_id.task())
                     .map(|script| script.as_inner().clone())
             })
+            .or_else(|| Self::inferred_provider_command(workspace_info, task_id.task()))
             .unwrap_or_else(|| "<NONEXISTENT>".to_string());
 
         let expanded_outputs = self

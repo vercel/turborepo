@@ -1,5 +1,6 @@
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use thiserror::Error;
+use turbopath::AnchoredSystemPath;
 // Building state is used for engine construction
 #[cfg(test)]
 pub use turborepo_engine::Building;
@@ -9,7 +10,13 @@ pub use turborepo_engine::{BuilderError, EngineBuilder};
 pub use turborepo_engine::{
     Built, ExecuteError, ExecutionOptions, Message, TaskDefinitionInfo, TaskNode,
 };
-use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_repository::{
+    package_graph::{PackageGraph, PackageName},
+    workspace_provider::{
+        CargoWorkspaceProvider, TaskCommandProvider as WorkspaceTaskCommandProvider,
+        UvWorkspaceProvider,
+    },
+};
 use turborepo_types::{TaskDefinition, UIMode};
 // Keep backward compatibility type alias
 pub type Error = BuilderError;
@@ -71,6 +78,24 @@ pub trait EngineExt {
     ) -> Result<(), Vec<ValidateError>>;
 }
 
+fn has_provider_inferred_command(manifest_path: &AnchoredSystemPath, task_name: &str) -> bool {
+    let Some(manifest_name) = manifest_path.as_path().file_name() else {
+        return false;
+    };
+
+    if manifest_name.eq_ignore_ascii_case("Cargo.toml") {
+        CargoWorkspaceProvider
+            .resolve_task_command(task_name)
+            .is_some()
+    } else if manifest_name.eq_ignore_ascii_case("pyproject.toml") {
+        UvWorkspaceProvider
+            .resolve_task_command(task_name)
+            .is_some()
+    } else {
+        false
+    }
+}
+
 impl EngineExt for Engine<Built> {
     fn tasks_with_command(&self, pkg_graph: &PackageGraph) -> Vec<String> {
         self.tasks()
@@ -88,8 +113,18 @@ impl EngineExt for Engine<Built> {
                     .command
                     .as_ref()
                     .is_some_and(|command| !command.is_empty());
+                let has_provider_inferred_command =
+                    pkg_graph
+                        .package_info(&pkg_name)
+                        .is_some_and(|package_info| {
+                            has_provider_inferred_command(
+                                package_info.package_json_path(),
+                                task.task(),
+                            )
+                        });
                 (has_explicit_command
                     || task.task() == "proxy"
+                    || has_provider_inferred_command
                     || json.command(task.task()).is_some())
                 .then(|| task.to_string())
             })
@@ -151,7 +186,19 @@ impl EngineExt for Engine<Built> {
                         .command
                         .as_ref()
                         .is_some_and(|command| !command.is_empty());
-                    if task_definition.persistent && (dep_has_explicit_command || dep_has_script) {
+                    let dep_has_provider_inferred_command = package_graph
+                        .package_info(&PackageName::from(dep_id.package()))
+                        .is_some_and(|package_info| {
+                            has_provider_inferred_command(
+                                package_info.package_json_path(),
+                                dep_id.task(),
+                            )
+                        });
+                    if task_definition.persistent
+                        && (dep_has_explicit_command
+                            || dep_has_script
+                            || dep_has_provider_inferred_command)
+                    {
                         let (span, text) = self
                             .task_locations()
                             .get(dep_id)
@@ -183,12 +230,17 @@ impl EngineExt for Engine<Built> {
                     .task_definition(task_id)
                     .and_then(|task_def| task_def.command.as_deref())
                     .is_some_and(|command| !command.is_empty());
+                let task_has_provider_inferred_command =
+                    has_provider_inferred_command(info.package_json_path(), task_id.task());
 
                 let task_is_persistent = self
                     .task_definition(task_id)
                     .is_some_and(|task_def| task_def.persistent);
 
-                Ok(task_is_persistent && (package_has_task || task_has_explicit_command))
+                Ok(task_is_persistent
+                    && (package_has_task
+                        || task_has_explicit_command
+                        || task_has_provider_inferred_command))
             })
             .fold((0, Vec::new()), |(mut count, mut errs), result| {
                 match result {

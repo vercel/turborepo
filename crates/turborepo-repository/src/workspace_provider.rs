@@ -334,8 +334,9 @@ impl Default for WorkspaceProviderRegistry {
 impl WorkspaceProviderRegistry {
     pub fn new() -> Self {
         let mut available = HashSet::new();
-        // Milestone 1: keep behavior unchanged and only enable Node.
         available.insert(WorkspaceProviderId::Node);
+        available.insert(WorkspaceProviderId::Cargo);
+        available.insert(WorkspaceProviderId::Uv);
         Self { available }
     }
 
@@ -422,18 +423,12 @@ mod tests {
     }
 
     #[test]
-    fn unavailable_provider_errors() {
+    fn cargo_provider_is_available_by_default() {
         let configured = vec!["cargo".to_string()];
-        let err = WorkspaceProviderRegistry::new()
+        let resolved = WorkspaceProviderRegistry::new()
             .resolve(Some(configured.as_slice()))
-            .unwrap_err();
-        assert!(matches!(
-            err,
-            WorkspaceProviderResolveError::NotAvailable {
-                requested: WorkspaceProviderId::Cargo,
-                ..
-            }
-        ));
+            .unwrap();
+        assert_eq!(resolved, vec![WorkspaceProviderId::Cargo]);
     }
 
     #[test]

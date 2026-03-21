@@ -15,6 +15,10 @@ use turborepo_process::Command;
 use turborepo_repository::{
     package_graph::{PackageGraph, PackageInfo, PackageName},
     package_manager::PackageManager,
+    workspace_provider::{
+        CargoWorkspaceProvider, TaskCommandProvider as WorkspaceTaskCommandProvider,
+        UvWorkspaceProvider,
+    },
 };
 use turborepo_task_id::TaskId;
 use turborepo_types::TaskArgs;
@@ -183,6 +187,85 @@ impl<'a, T: PackageInfoProvider, E: From<CommandProviderError>> CommandProvider<
         }
 
         let workspace_info = self.package_info(task_id)?;
+        let package_dir = self.repo_root.resolve(workspace_info.package_path());
+
+        #[cfg(windows)]
+        let mut cmd = {
+            let mut cmd = Command::new("cmd");
+            cmd.args(["/C", command.as_str()]);
+            cmd
+        };
+        #[cfg(not(windows))]
+        let mut cmd = {
+            let mut cmd = Command::new("sh");
+            cmd.args(["-c", command.as_str()]);
+            cmd
+        };
+
+        cmd.current_dir(package_dir);
+        cmd.env_clear();
+        cmd.envs(environment.iter());
+        cmd.open_stdin();
+
+        Ok(Some(cmd))
+    }
+}
+
+/// Command provider that infers commands from workspace provider manifests.
+///
+/// For non-node workspaces this enables command fallback when no explicit
+/// command is configured and no package.json script exists.
+#[derive(Debug)]
+pub struct WorkspaceProviderCommandProvider<'a, T> {
+    repo_root: &'a AbsoluteSystemPath,
+    package_info_provider: &'a T,
+}
+
+impl<'a, T: PackageInfoProvider> WorkspaceProviderCommandProvider<'a, T> {
+    pub fn new(repo_root: &'a AbsoluteSystemPath, package_info_provider: &'a T) -> Self {
+        Self {
+            repo_root,
+            package_info_provider,
+        }
+    }
+
+    fn package_info(&self, task_id: &TaskId) -> Result<&PackageInfo, CommandProviderError> {
+        self.package_info_provider
+            .package_info(&PackageName::from(task_id.package()))
+            .ok_or_else(|| CommandProviderError::MissingPackage {
+                package_name: task_id.package().into(),
+                task_id: task_id.clone().into_owned(),
+            })
+    }
+
+    fn inferred_command(&self, workspace_info: &PackageInfo, task_name: &str) -> Option<String> {
+        let manifest_name = workspace_info.package_json_path().as_path().file_name()?;
+        if manifest_name.eq_ignore_ascii_case("Cargo.toml") {
+            CargoWorkspaceProvider.resolve_task_command(task_name)
+        } else if manifest_name.eq_ignore_ascii_case("pyproject.toml") {
+            UvWorkspaceProvider.resolve_task_command(task_name)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'a, T: PackageInfoProvider, E: From<CommandProviderError>> CommandProvider<E>
+    for WorkspaceProviderCommandProvider<'a, T>
+{
+    fn command(
+        &self,
+        task_id: &TaskId,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<Option<Command>, E> {
+        let workspace_info = self.package_info(task_id)?;
+        let Some(command) = self.inferred_command(workspace_info, task_id.task()) else {
+            return Ok(None);
+        };
+        if command.is_empty() {
+            return Ok(None);
+        }
+
         let package_dir = self.repo_root.resolve(workspace_info.package_path());
 
         #[cfg(windows)]
@@ -672,6 +755,41 @@ mod tests {
 
         let cmd = factory
             .command(
+                &TaskId::new("app", "build"),
+                &EnvironmentVariableMap::default(),
+            )
+            .unwrap()
+            .unwrap();
+
+        #[cfg(windows)]
+        assert_eq!(cmd.program(), OsStr::new("cmd"));
+        #[cfg(not(windows))]
+        assert_eq!(cmd.program(), OsStr::new("sh"));
+    }
+
+    #[test]
+    fn test_workspace_provider_command_provider_for_cargo_task() {
+        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\repo-root"
+        } else {
+            "/tmp/repo-root"
+        })
+        .unwrap();
+        let provider = MockPackageInfoProvider(PackageInfo {
+            package_json: PackageJson::default(),
+            package_json_path: AnchoredSystemPath::new("crates/app/Cargo.toml")
+                .unwrap()
+                .to_owned(),
+            unresolved_external_dependencies: None,
+            transitive_dependencies: None,
+        });
+        let command_provider = WorkspaceProviderCommandProvider::new(repo_root, &provider);
+
+        let cmd =
+            <WorkspaceProviderCommandProvider<'_, MockPackageInfoProvider> as CommandProvider<
+                CommandProviderError,
+            >>::command(
+                &command_provider,
                 &TaskId::new("app", "build"),
                 &EnvironmentVariableMap::default(),
             )
