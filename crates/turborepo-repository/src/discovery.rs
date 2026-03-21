@@ -168,6 +168,17 @@ impl PackageDiscovery for LocalPackageDiscovery {
                     package_manager: self.package_manager.clone(),
                 });
             }
+            // Provider-backed package graphs can intentionally omit a root
+            // package.json. In that case package-manager workspace discovery
+            // reports NotFound; treat it as "no node workspaces" rather than a
+            // hard failure so callers can still use the pre-synthesized
+            // provider package graph.
+            Err(package_manager::Error::Io(io)) if io.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(DiscoveryResponse {
+                    workspaces: vec![],
+                    package_manager: self.package_manager.clone(),
+                });
+            }
             Err(e) => return Err(Error::Failed(Box::new(e))),
         };
 
@@ -313,6 +324,32 @@ impl<P: PackageDiscovery + Send + Sync> PackageDiscovery for CachingPackageDisco
             })
             .await
             .map(ToOwned::to_owned)
+    }
+}
+
+#[cfg(test)]
+mod local_discovery_tests {
+    use tokio::runtime::Runtime;
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use super::{LocalPackageDiscovery, PackageDiscovery};
+    use crate::package_manager::PackageManager;
+
+    #[test]
+    fn local_discovery_without_package_json_returns_empty_workspaces() {
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            let tmp = tempfile::tempdir().unwrap();
+            let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+                .unwrap()
+                .to_realpath()
+                .unwrap();
+            let discovery = LocalPackageDiscovery::new(repo_root, PackageManager::Npm);
+
+            let response = discovery.discover_packages().await.unwrap();
+            assert!(response.workspaces.is_empty());
+            assert_eq!(response.package_manager, PackageManager::Npm);
+        });
     }
 }
 

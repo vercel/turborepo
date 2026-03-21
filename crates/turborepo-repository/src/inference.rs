@@ -1,4 +1,5 @@
 use thiserror::Error;
+use toml::Value;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::{
@@ -7,7 +8,7 @@ use crate::{
     workspaces::WorkspaceGlobs,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum RepoMode {
     SinglePackage,
     MultiPackage,
@@ -31,17 +32,14 @@ pub enum Error {
 struct InferInfo {
     path: AbsoluteSystemPathBuf,
     workspace_globs: Option<WorkspaceGlobs>,
+    mode: RepoMode,
     package_manager: Result<PackageManager, package_manager::Error>,
     package_json: PackageJson,
 }
 
 impl InferInfo {
     fn repo_mode(&self) -> RepoMode {
-        if self.workspace_globs.is_some() {
-            RepoMode::MultiPackage
-        } else {
-            RepoMode::SinglePackage
-        }
+        self.mode
     }
 
     pub fn is_workspace_root_of(&self, target_path: &AbsoluteSystemPath) -> bool {
@@ -88,14 +86,21 @@ impl RepoState {
                             .as_ref()
                             .ok()
                             .and_then(|mgr| mgr.get_workspace_globs(path).ok());
+                        let mode = if workspace_globs.is_some() {
+                            RepoMode::MultiPackage
+                        } else {
+                            RepoMode::SinglePackage
+                        };
 
                         InferInfo {
                             path: path.to_owned(),
                             workspace_globs,
+                            mode,
                             package_manager,
                             package_json,
                         }
                     })
+                    .or_else(|| infer_non_node_repo(path))
             })
             .reduce(|current, candidate| {
                 if current.repo_mode() == RepoMode::MultiPackage {
@@ -113,6 +118,60 @@ impl RepoState {
             .map(|root| root.into())
             .ok_or_else(|| Error::NotFound(reference_dir.to_owned()))
     }
+}
+
+fn infer_non_node_repo(path: &AbsoluteSystemPath) -> Option<InferInfo> {
+    if !has_turbo_config(path) {
+        return None;
+    }
+
+    let has_cargo_workspace = has_cargo_workspace(path);
+    let has_uv_workspace = has_uv_workspace(path);
+    if !has_cargo_workspace && !has_uv_workspace {
+        return None;
+    }
+
+    Some(InferInfo {
+        path: path.to_owned(),
+        workspace_globs: None,
+        mode: RepoMode::MultiPackage,
+        package_manager: Err(package_manager::Error::MissingPackageManager),
+        package_json: PackageJson::default(),
+    })
+}
+
+fn has_turbo_config(path: &AbsoluteSystemPath) -> bool {
+    path.join_component("turbo.json").exists() || path.join_component("turbo.jsonc").exists()
+}
+
+fn has_cargo_workspace(path: &AbsoluteSystemPath) -> bool {
+    let manifest = path.join_component("Cargo.toml");
+    has_toml_table(&manifest, &["workspace"])
+}
+
+fn has_uv_workspace(path: &AbsoluteSystemPath) -> bool {
+    let manifest = path.join_component("pyproject.toml");
+    has_toml_table(&manifest, &["tool", "uv", "workspace"])
+}
+
+fn has_toml_table(manifest_path: &AbsoluteSystemPathBuf, path: &[&str]) -> bool {
+    if !manifest_path.exists() {
+        return false;
+    }
+
+    let Ok(contents) = manifest_path.read_to_string() else {
+        return false;
+    };
+    let Ok(value) = toml::from_str::<Value>(&contents) else {
+        return false;
+    };
+
+    path.iter()
+        .fold(Some(&value), |cursor, segment| {
+            cursor.and_then(|value| value.get(*segment))
+        })
+        .and_then(Value::as_table)
+        .is_some()
 }
 
 #[cfg(test)]
@@ -368,6 +427,72 @@ mod test {
 
         let repo_state = RepoState::infer(&package_foo).unwrap();
         assert_eq!(repo_state.root, monorepo_root);
+        assert_eq!(repo_state.mode, RepoMode::MultiPackage);
+    }
+
+    #[test]
+    fn infers_non_node_workspace_from_turbo_and_cargo_manifests() {
+        let (_tmp, tmp_dir) = tmp_dir();
+        let cargo_root = tmp_dir.join_component("cargo_repo");
+        cargo_root.create_dir_all().unwrap();
+        cargo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{ "workspaceProviders": ["cargo"] }"#)
+            .unwrap();
+        cargo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                r#"
+[workspace]
+members = ["crates/*"]
+"#,
+            )
+            .unwrap();
+        let crate_dir = cargo_root.join_components(&["crates", "crate-a"]);
+        crate_dir.create_dir_all().unwrap();
+
+        let repo_state = RepoState::infer(&crate_dir).unwrap();
+        assert_eq!(repo_state.root, cargo_root);
+        assert_eq!(repo_state.mode, RepoMode::MultiPackage);
+        assert!(repo_state.package_manager.is_err());
+    }
+
+    #[test]
+    fn prefers_nearest_non_node_workspace_over_ancestor_node_repo() {
+        let (_tmp, tmp_dir) = tmp_dir();
+        let node_root = tmp_dir.join_component("node_root");
+        node_root.create_dir_all().unwrap();
+        node_root
+            .join_component("package.json")
+            .create_with_contents(
+                r#"{"name":"root","packageManager":"npm@10.0.0","workspaces":["apps/*"]}"#,
+            )
+            .unwrap();
+        node_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let cargo_root = node_root.join_components(&["apps", "cargo_workspace"]);
+        cargo_root.create_dir_all().unwrap();
+        cargo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{ "workspaceProviders": ["cargo"] }"#)
+            .unwrap();
+        cargo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                r#"
+[workspace]
+members = ["crates/*"]
+"#,
+            )
+            .unwrap();
+        let crate_dir = cargo_root.join_components(&["crates", "crate-a"]);
+        crate_dir.create_dir_all().unwrap();
+
+        let repo_state = RepoState::infer(&crate_dir).unwrap();
+        assert_eq!(repo_state.root, cargo_root);
         assert_eq!(repo_state.mode, RepoMode::MultiPackage);
     }
 }
