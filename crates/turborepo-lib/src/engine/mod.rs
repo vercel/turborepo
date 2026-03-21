@@ -297,8 +297,7 @@ fn validate_interactive(engine: &Engine<Built>, ui_mode: UIMode) -> Vec<Validate
 
 #[cfg(test)]
 mod test {
-
-    use std::collections::BTreeMap;
+    use std::collections::{BTreeMap, HashMap};
 
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPath;
@@ -367,6 +366,25 @@ mod test {
             turborepo_repository::discovery::DiscoveryResponse,
             turborepo_repository::discovery::Error,
         > {
+            self.discover_packages().await
+        }
+    }
+
+    struct StaticDiscovery;
+
+    impl PackageDiscovery for StaticDiscovery {
+        async fn discover_packages(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+            Ok(DiscoveryResponse {
+                package_manager: turborepo_repository::package_manager::PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
             self.discover_packages().await
         }
     }
@@ -542,6 +560,45 @@ mod test {
                 assert!(!def.persistent, "task should not be persistent");
             }
         }
+    }
+
+    #[tokio::test]
+    async fn tasks_with_command_includes_provider_inferred_commands() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let mut package_jsons = HashMap::new();
+        package_jsons.insert(
+            repo_root.join_components(&["crates", "a", "Cargo.toml"]),
+            PackageJson {
+                name: Some(Spanned::new("a".to_string())),
+                ..Default::default()
+            },
+        );
+        package_jsons.insert(
+            repo_root.join_components(&["apps", "api", "pyproject.toml"]),
+            PackageJson {
+                name: Some(Spanned::new("api".to_string())),
+                ..Default::default()
+            },
+        );
+
+        let graph = PackageGraph::builder(repo_root, PackageJson::default())
+            .with_package_discovery(StaticDiscovery)
+            .with_package_jsons(Some(package_jsons))
+            .build()
+            .await
+            .unwrap();
+
+        let mut engine: Engine<Building> = Engine::new();
+        for task_id in [TaskId::new("a", "build"), TaskId::new("api", "test")] {
+            engine.get_index(&task_id);
+            engine.add_definition(task_id, TaskDefinition::default());
+        }
+        let engine = engine.seal();
+
+        let tasks_with_command = engine.tasks_with_command(&graph);
+        assert!(tasks_with_command.contains(&"a#build".to_string()));
+        assert!(tasks_with_command.contains(&"api#test".to_string()));
     }
 
     #[tokio::test]
