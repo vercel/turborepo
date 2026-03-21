@@ -508,6 +508,18 @@ mod tests {
         }
     }
 
+    struct EchoCommandProviderErrorProvider;
+
+    impl CommandProvider<CommandProviderError> for EchoCommandProviderErrorProvider {
+        fn command(
+            &self,
+            _task_id: &TaskId,
+            _environment: &EnvironmentVariableMap,
+        ) -> Result<Option<Command>, CommandProviderError> {
+            Ok(Some(Command::new("echo")))
+        }
+    }
+
     struct NoneProvider;
 
     impl CommandProvider<String> for NoneProvider {
@@ -626,6 +638,45 @@ mod tests {
         )
         .unwrap()
         .unwrap();
+
+        #[cfg(windows)]
+        assert_eq!(cmd.program(), OsStr::new("cmd"));
+        #[cfg(not(windows))]
+        assert_eq!(cmd.program(), OsStr::new("sh"));
+    }
+
+    #[test]
+    fn test_explicit_command_provider_takes_precedence_over_later_providers() {
+        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\repo-root"
+        } else {
+            "/tmp/repo-root"
+        })
+        .unwrap();
+        let provider = MockPackageInfoProvider(PackageInfo {
+            package_json: PackageJson::default(),
+            package_json_path: AnchoredSystemPath::new("apps/app/package.json")
+                .unwrap()
+                .to_owned(),
+            unresolved_external_dependencies: None,
+            transitive_dependencies: None,
+        });
+
+        let mut factory = CommandFactory::<CommandProviderError>::new();
+        factory.add_provider(ExplicitTaskCommandProvider::new(
+            repo_root,
+            &provider,
+            HashMap::from([("app#build".to_string(), "echo from-command".to_string())]),
+        ));
+        factory.add_provider(EchoCommandProviderErrorProvider);
+
+        let cmd = factory
+            .command(
+                &TaskId::new("app", "build"),
+                &EnvironmentVariableMap::default(),
+            )
+            .unwrap()
+            .unwrap();
 
         #[cfg(windows)]
         assert_eq!(cmd.program(), OsStr::new("cmd"));

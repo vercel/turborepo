@@ -232,6 +232,23 @@ mod tests {
     )]
     #[test_case(
         r#"{
+            "command": "cargo build"
+        }"#,
+        RawTaskDefinition {
+            command: Some(
+                Spanned::<turborepo_unescape::UnescapedString>::new("cargo build".into())
+                    .with_range(25..38),
+            ),
+            ..RawTaskDefinition::default()
+        },
+        TaskDefinition {
+            command: Some("cargo build".to_string()),
+            ..TaskDefinition::default()
+        }
+    ; "explicit command"
+    )]
+    #[test_case(
+        r#"{
             "with": ["proxy"]
         }"#,
         RawTaskDefinition {
