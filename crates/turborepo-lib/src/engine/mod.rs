@@ -299,10 +299,7 @@ mod test {
                     let file = std::fs::File::create(package_json.as_std_path()).unwrap();
                     serde_json::to_writer(file, &package).unwrap();
 
-                    WorkspaceData {
-                        package_json,
-                        turbo_json: None,
-                    }
+                    WorkspaceData::node(package_json, None)
                 })
                 .collect();
 

@@ -464,9 +464,9 @@ impl Subscriber {
                 workspaces
                     .insert(
                         path_workspace.to_owned(),
-                        WorkspaceData {
+                        WorkspaceData::node(
                             package_json,
-                            turbo_json: turbo_json_exists
+                            turbo_json_exists
                                 .unwrap_or_default()
                                 .then_some(turbo_json)
                                 .or_else(|| {
@@ -474,7 +474,7 @@ impl Subscriber {
                                         .unwrap_or_default()
                                         .then_some(turbo_jsonc)
                                 }),
-                        },
+                        ),
                     )
                     .is_none()
             } else {
@@ -587,14 +587,14 @@ mod test {
             .unwrap();
 
         let package_data = vec![
-            WorkspaceData {
-                package_json: repo_root.join_components(&["packages", "foo", "package.json"]),
-                turbo_json: None,
-            },
-            WorkspaceData {
-                package_json: repo_root.join_components(&["packages", "bar", "package.json"]),
-                turbo_json: None,
-            },
+            WorkspaceData::node(
+                repo_root.join_components(&["packages", "foo", "package.json"]),
+                None,
+            ),
+            WorkspaceData::node(
+                repo_root.join_components(&["packages", "bar", "package.json"]),
+                None,
+            ),
         ];
 
         // create folders and files
@@ -634,14 +634,14 @@ mod test {
         assert_eq!(
             data.workspaces,
             vec![
-                WorkspaceData {
-                    package_json: repo_root.join_components(&["packages", "bar", "package.json",]),
-                    turbo_json: None,
-                },
-                WorkspaceData {
-                    package_json: repo_root.join_components(&["packages", "foo", "package.json",]),
-                    turbo_json: None,
-                },
+                WorkspaceData::node(
+                    repo_root.join_components(&["packages", "bar", "package.json",]),
+                    None,
+                ),
+                WorkspaceData::node(
+                    repo_root.join_components(&["packages", "foo", "package.json",]),
+                    None,
+                ),
             ]
         );
 
@@ -658,10 +658,10 @@ mod test {
             .sort_by_key(|workspace| workspace.package_json.clone());
         assert_eq!(
             data.workspaces,
-            vec![WorkspaceData {
-                package_json: repo_root.join_components(&["packages", "bar", "package.json"]),
-                turbo_json: None,
-            }]
+            vec![WorkspaceData::node(
+                repo_root.join_components(&["packages", "bar", "package.json"]),
+                None,
+            )]
         );
 
         // move package bar
@@ -686,20 +686,20 @@ mod test {
             .unwrap();
 
         let package_data = vec![
-            WorkspaceData {
-                package_json: repo_root
+            WorkspaceData::node(
+                repo_root
                     .join_component("packages")
                     .join_component("foo")
                     .join_component("package.json"),
-                turbo_json: None,
-            },
-            WorkspaceData {
-                package_json: repo_root
+                None,
+            ),
+            WorkspaceData::node(
+                repo_root
                     .join_component("packages2")
                     .join_component("bar")
                     .join_component("package.json"),
-                turbo_json: None,
-            },
+                None,
+            ),
         ];
 
         // create folders and files
@@ -740,20 +740,20 @@ mod test {
         assert_eq!(
             data.workspaces,
             vec![
-                WorkspaceData {
-                    package_json: repo_root
+                WorkspaceData::node(
+                    repo_root
                         .join_component("packages")
                         .join_component("foo")
                         .join_component("package.json"),
-                    turbo_json: None,
-                },
-                WorkspaceData {
-                    package_json: repo_root
+                    None,
+                ),
+                WorkspaceData::node(
+                    repo_root
                         .join_component("packages2")
                         .join_component("bar")
                         .join_component("package.json"),
-                    turbo_json: None,
-                },
+                    None,
+                ),
             ]
         );
 
@@ -771,13 +771,13 @@ mod test {
 
         assert_eq!(
             data.workspaces,
-            vec![WorkspaceData {
-                package_json: repo_root
+            vec![WorkspaceData::node(
+                repo_root
                     .join_component("packages")
                     .join_component("foo")
                     .join_component("package.json"),
-                turbo_json: None,
-            }]
+                None,
+            )]
         );
 
         // move the packages2 workspace into package
@@ -791,20 +791,20 @@ mod test {
         assert_eq!(
             data.workspaces,
             vec![
-                WorkspaceData {
-                    package_json: repo_root
+                WorkspaceData::node(
+                    repo_root
                         .join_component("packages")
                         .join_component("bar")
                         .join_component("package.json"),
-                    turbo_json: None,
-                },
-                WorkspaceData {
-                    package_json: repo_root
+                    None,
+                ),
+                WorkspaceData::node(
+                    repo_root
                         .join_component("packages")
                         .join_component("foo")
                         .join_component("package.json"),
-                    turbo_json: None,
-                },
+                    None,
+                ),
             ]
         );
     }

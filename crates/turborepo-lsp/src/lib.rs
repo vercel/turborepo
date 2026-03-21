@@ -717,10 +717,10 @@ impl Backend {
         let workspaces = packages.map(|p| {
             chain(
                 p.workspaces.into_iter(),
-                iter::once(WorkspaceData {
-                    package_json: repo_root.join_component("package.json"),
-                    turbo_json: root_turbo_json.exists().then_some(root_turbo_json),
-                }),
+                iter::once(WorkspaceData::node(
+                    repo_root.join_component("package.json"),
+                    root_turbo_json.exists().then_some(root_turbo_json),
+                )),
             )
         });
 

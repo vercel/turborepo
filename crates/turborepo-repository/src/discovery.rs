@@ -16,12 +16,29 @@ use turbopath::AbsoluteSystemPathBuf;
 use crate::{
     package_json::PackageJson,
     package_manager::{self, PackageManager},
+    workspace_provider::WorkspaceProviderId,
 };
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WorkspaceData {
+    pub provider_id: WorkspaceProviderId,
+    pub manifest_path: AbsoluteSystemPathBuf,
     pub package_json: AbsoluteSystemPathBuf,
     pub turbo_json: Option<AbsoluteSystemPathBuf>,
+}
+
+impl WorkspaceData {
+    pub fn node(
+        package_json: AbsoluteSystemPathBuf,
+        turbo_json: Option<AbsoluteSystemPathBuf>,
+    ) -> Self {
+        Self {
+            provider_id: WorkspaceProviderId::Node,
+            manifest_path: package_json.clone(),
+            package_json,
+            turbo_json,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -162,12 +179,12 @@ impl PackageDiscovery for LocalPackageDiscovery {
                     .join_component("turbo.json");
                 let potential_turbo_exists = tokio::fs::try_exists(potential_turbo.as_path()).await;
 
-                Ok(WorkspaceData {
-                    package_json: path,
-                    turbo_json: potential_turbo_exists
+                Ok(WorkspaceData::node(
+                    path,
+                    potential_turbo_exists
                         .unwrap_or_default()
                         .then_some(potential_turbo),
-                })
+                ))
             })
             .collect::<Result<Vec<_>, _>>()
             .await
