@@ -287,10 +287,16 @@ export function forEachTaskDef<BaseSchema extends BaseSchemaV1 | BaseSchemaV2>(
   ) => void
 ): void {
   if ("pipeline" in config) {
+    if (!config.pipeline) {
+      return;
+    }
     for (const entry of Object.entries(config.pipeline)) {
       f(entry);
     }
   } else {
+    if (!config.tasks) {
+      return;
+    }
     for (const entry of Object.entries(config.tasks)) {
       f(entry);
     }

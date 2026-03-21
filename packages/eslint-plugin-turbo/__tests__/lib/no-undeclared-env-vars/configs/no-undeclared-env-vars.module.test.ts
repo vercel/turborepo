@@ -304,3 +304,33 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
     }
   ]
 });
+
+// Test that eslint-plugin-turbo does not crash when turbo.json has no tasks/pipeline key
+const emptyTasksCwd = path.join(__dirname, "../../../../__fixtures__/configs/empty-tasks");
+const emptyTasksOptions = () => ({
+  options: [{ cwd: emptyTasksCwd }]
+});
+
+const emptyTasksRuleTester = new RuleTester({
+  languageOptions: { ecmaVersion: 2020, sourceType: "module" }
+});
+
+emptyTasksRuleTester.run(
+  `${RULES.noUndeclaredEnvVars} (no tasks/pipeline key)`,
+  rule,
+  {
+    valid: [],
+    invalid: [
+      {
+        code: "var x = import.meta.env.ANY_ENV_VAR;",
+        ...emptyTasksOptions(),
+        errors: [
+          {
+            message:
+              "ANY_ENV_VAR is not listed as a dependency in turbo.json"
+          }
+        ]
+      }
+    ]
+  }
+);
