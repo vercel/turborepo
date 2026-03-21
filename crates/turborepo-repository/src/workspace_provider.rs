@@ -1,4 +1,6 @@
-use std::{collections::HashSet, fmt, str::FromStr};
+use std::{collections::HashSet, fmt, path::Path, str::FromStr};
+
+use toml::{Table, Value};
 
 /// Identifier for a language/toolchain workspace provider.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -48,21 +50,29 @@ impl FromStr for WorkspaceProviderId {
 /// Provider trait for workspace discovery logic.
 pub trait WorkspaceDiscoveryProvider {
     fn provider_id(&self) -> WorkspaceProviderId;
+
+    fn is_workspace_manifest(&self, manifest_path: &str) -> bool;
 }
 
 /// Provider trait for dependency graph/dependency resolution logic.
 pub trait WorkspaceDependencyProvider {
     fn provider_id(&self) -> WorkspaceProviderId;
+
+    fn infer_internal_dependencies(&self, manifest_contents: &str) -> Vec<String>;
 }
 
 /// Provider trait for command inference/resolution logic.
 pub trait TaskCommandProvider {
     fn provider_id(&self) -> WorkspaceProviderId;
+
+    fn resolve_task_command(&self, task_name: &str) -> Option<String>;
 }
 
 /// Provider trait for hash input contributions.
 pub trait HashInputProvider {
     fn provider_id(&self) -> WorkspaceProviderId;
+
+    fn hash_inputs(&self) -> Vec<String>;
 }
 
 /// Node provider adapter used for backwards-compatible behavior.
@@ -73,11 +83,22 @@ impl WorkspaceDiscoveryProvider for NodeWorkspaceProvider {
     fn provider_id(&self) -> WorkspaceProviderId {
         WorkspaceProviderId::Node
     }
+
+    fn is_workspace_manifest(&self, manifest_path: &str) -> bool {
+        Path::new(manifest_path)
+            .file_name()
+            .and_then(|file_name| file_name.to_str())
+            .is_some_and(|file_name| file_name.eq_ignore_ascii_case("package.json"))
+    }
 }
 
 impl WorkspaceDependencyProvider for NodeWorkspaceProvider {
     fn provider_id(&self) -> WorkspaceProviderId {
         WorkspaceProviderId::Node
+    }
+
+    fn infer_internal_dependencies(&self, _manifest_contents: &str) -> Vec<String> {
+        Vec::new()
     }
 }
 
@@ -85,12 +106,203 @@ impl TaskCommandProvider for NodeWorkspaceProvider {
     fn provider_id(&self) -> WorkspaceProviderId {
         WorkspaceProviderId::Node
     }
+
+    fn resolve_task_command(&self, _task_name: &str) -> Option<String> {
+        None
+    }
 }
 
 impl HashInputProvider for NodeWorkspaceProvider {
     fn provider_id(&self) -> WorkspaceProviderId {
         WorkspaceProviderId::Node
     }
+
+    fn hash_inputs(&self) -> Vec<String> {
+        vec!["package.json".to_string()]
+    }
+}
+
+/// Cargo provider adapter for Rust workspaces.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct CargoWorkspaceProvider;
+
+impl WorkspaceDiscoveryProvider for CargoWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Cargo
+    }
+
+    fn is_workspace_manifest(&self, manifest_path: &str) -> bool {
+        Path::new(manifest_path)
+            .file_name()
+            .and_then(|file_name| file_name.to_str())
+            .is_some_and(|file_name| file_name.eq_ignore_ascii_case("cargo.toml"))
+    }
+}
+
+impl WorkspaceDependencyProvider for CargoWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Cargo
+    }
+
+    fn infer_internal_dependencies(&self, manifest_contents: &str) -> Vec<String> {
+        let Ok(manifest) = toml::from_str::<Table>(manifest_contents) else {
+            return Vec::new();
+        };
+
+        let mut dependencies = HashSet::new();
+        collect_dependency_names_for_table(&manifest, &mut dependencies);
+
+        if let Some(target) = manifest.get("target").and_then(Value::as_table) {
+            for target_table in target.values().filter_map(Value::as_table) {
+                collect_dependency_names_for_table(target_table, &mut dependencies);
+            }
+        }
+
+        let mut dependencies: Vec<_> = dependencies.into_iter().collect();
+        dependencies.sort();
+        dependencies
+    }
+}
+
+impl TaskCommandProvider for CargoWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Cargo
+    }
+
+    fn resolve_task_command(&self, task_name: &str) -> Option<String> {
+        match task_name {
+            "build" => Some("cargo build".to_string()),
+            "check" => Some("cargo check".to_string()),
+            "test" => Some("cargo test".to_string()),
+            "lint" => Some("cargo clippy".to_string()),
+            "fmt" | "format" => Some("cargo fmt".to_string()),
+            "doc" => Some("cargo doc".to_string()),
+            _ => None,
+        }
+    }
+}
+
+impl HashInputProvider for CargoWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Cargo
+    }
+
+    fn hash_inputs(&self) -> Vec<String> {
+        vec!["Cargo.toml".to_string(), "Cargo.lock".to_string()]
+    }
+}
+
+/// uv provider adapter for Python workspaces.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct UvWorkspaceProvider;
+
+impl WorkspaceDiscoveryProvider for UvWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Uv
+    }
+
+    fn is_workspace_manifest(&self, manifest_path: &str) -> bool {
+        Path::new(manifest_path)
+            .file_name()
+            .and_then(|file_name| file_name.to_str())
+            .is_some_and(|file_name| file_name.eq_ignore_ascii_case("pyproject.toml"))
+    }
+}
+
+impl WorkspaceDependencyProvider for UvWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Uv
+    }
+
+    fn infer_internal_dependencies(&self, manifest_contents: &str) -> Vec<String> {
+        let Ok(manifest) = toml::from_str::<Table>(manifest_contents) else {
+            return Vec::new();
+        };
+
+        let sources = manifest
+            .get("tool")
+            .and_then(Value::as_table)
+            .and_then(|tool| tool.get("uv"))
+            .and_then(Value::as_table)
+            .and_then(|uv| uv.get("sources"))
+            .and_then(Value::as_table);
+
+        let mut dependencies = sources
+            .into_iter()
+            .flat_map(|sources| {
+                sources.iter().filter_map(|(name, source)| {
+                    let source_table = source.as_table()?;
+                    let has_path_dependency = source_table
+                        .get("path")
+                        .and_then(Value::as_str)
+                        .is_some_and(|path| !path.is_empty());
+                    let has_workspace_dependency = source_table
+                        .get("workspace")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    (has_path_dependency || has_workspace_dependency).then_some(name.clone())
+                })
+            })
+            .collect::<Vec<_>>();
+
+        dependencies.sort();
+        dependencies
+    }
+}
+
+impl TaskCommandProvider for UvWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Uv
+    }
+
+    fn resolve_task_command(&self, task_name: &str) -> Option<String> {
+        match task_name {
+            "build" => Some("uv build".to_string()),
+            "test" => Some("uv run pytest".to_string()),
+            "lint" => Some("uv run ruff check .".to_string()),
+            "fmt" | "format" => Some("uv run ruff format .".to_string()),
+            _ => None,
+        }
+    }
+}
+
+impl HashInputProvider for UvWorkspaceProvider {
+    fn provider_id(&self) -> WorkspaceProviderId {
+        WorkspaceProviderId::Uv
+    }
+
+    fn hash_inputs(&self) -> Vec<String> {
+        vec!["pyproject.toml".to_string(), "uv.lock".to_string()]
+    }
+}
+
+fn collect_dependency_names_for_table(table: &Table, dependencies: &mut HashSet<String>) {
+    for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
+        if let Some(dependency_table) = table.get(section).and_then(Value::as_table) {
+            for (name, definition) in dependency_table {
+                if is_internal_dependency_definition(definition) {
+                    dependencies.insert(name.clone());
+                }
+            }
+        }
+    }
+}
+
+fn is_internal_dependency_definition(definition: &Value) -> bool {
+    let Some(definition_table) = definition.as_table() else {
+        return false;
+    };
+
+    let has_path_dependency = definition_table
+        .get("path")
+        .and_then(Value::as_str)
+        .is_some_and(|path| !path.is_empty());
+    let has_workspace_dependency = definition_table
+        .get("workspace")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+
+    has_path_dependency || has_workspace_dependency
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -234,6 +446,71 @@ mod tests {
         assert_eq!(
             resolved,
             vec![WorkspaceProviderId::Cargo, WorkspaceProviderId::Node]
+        );
+    }
+
+    #[test]
+    fn cargo_provider_recognizes_manifest_and_dependencies() {
+        let provider = CargoWorkspaceProvider;
+        assert!(provider.is_workspace_manifest("/repo/crates/app/Cargo.toml"));
+        assert!(!provider.is_workspace_manifest("/repo/crates/app/package.json"));
+
+        let manifest = r#"
+[package]
+name = "app"
+
+[dependencies]
+serde = { workspace = true }
+utils = { path = "../utils" }
+tokio = "1.0"
+
+[target.'cfg(unix)'.dependencies]
+shared = { path = "../shared" }
+"#;
+        assert_eq!(
+            provider.infer_internal_dependencies(manifest),
+            vec![
+                "serde".to_string(),
+                "shared".to_string(),
+                "utils".to_string(),
+            ]
+        );
+        assert_eq!(
+            provider.resolve_task_command("lint"),
+            Some("cargo clippy".to_string())
+        );
+        assert_eq!(
+            provider.hash_inputs(),
+            vec!["Cargo.toml".to_string(), "Cargo.lock".to_string()]
+        );
+    }
+
+    #[test]
+    fn uv_provider_recognizes_manifest_and_dependencies() {
+        let provider = UvWorkspaceProvider;
+        assert!(provider.is_workspace_manifest("/repo/apps/api/pyproject.toml"));
+        assert!(!provider.is_workspace_manifest("/repo/apps/api/Cargo.toml"));
+
+        let manifest = r#"
+[project]
+name = "api"
+
+[tool.uv.sources]
+shared = { workspace = true }
+core = { path = "../core" }
+requests = { index = "pypi" }
+"#;
+        assert_eq!(
+            provider.infer_internal_dependencies(manifest),
+            vec!["core".to_string(), "shared".to_string()]
+        );
+        assert_eq!(
+            provider.resolve_task_command("test"),
+            Some("uv run pytest".to_string())
+        );
+        assert_eq!(
+            provider.hash_inputs(),
+            vec!["pyproject.toml".to_string(), "uv.lock".to_string()]
         );
     }
 }
