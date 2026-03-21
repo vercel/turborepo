@@ -33,6 +33,26 @@ Extend from the root `turbo.json` to create specific configuration for a package
 - You can also extend from other packages (e.g., `["//", "shared-config"]`).
 - If `extends` is used in the root `turbo.json`, it will be ignored.
 
+### `workspaceProviders`
+
+Default: `["node"]`
+
+Configures which workspace manifest ecosystems Turborepo should use when building the workspace graph.
+
+```jsonc title="./turbo.json"
+{
+  "workspaceProviders": ["node", "cargo", "uv"],
+}
+```
+
+Supported providers:
+
+- `node` - `package.json` workspaces and scripts
+- `cargo` - Rust `Cargo.toml` workspaces
+- `uv` - Python `pyproject.toml` workspaces managed by uv
+
+If omitted, Turborepo behaves like a Node-first repository (`["node"]`).
+
 ### `globalDependencies`
 
 ```jsonc title="./turbo.json"
@@ -428,6 +448,28 @@ A human- or agent-readable description of what a task does.
 ```
 
 This field is for documentation purposes only and does not affect task execution or caching behavior.
+
+### `command`
+
+Set an explicit command to execute for a task.
+
+```jsonc title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      "command": "cargo build --workspace --release",
+    },
+  },
+}
+```
+
+When provided, `command` takes precedence over inferred commands from workspace manifests (for example Node scripts, Cargo task inference, uv task inference).
+
+This is useful when:
+
+- You want a non-default command for a provider task
+- You need a single command that works across packages
+- You are incrementally migrating task commands into `turbo.json`
 
 ### `dependsOn`
 
