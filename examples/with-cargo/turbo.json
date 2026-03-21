@@ -1,0 +1,24 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "workspaceProviders": ["cargo"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["target/**"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "lint": {
+      "outputs": []
+    },
+    "fmt": {
+      "outputs": []
+    },
+    "check": {
+      "dependsOn": ["^check"],
+      "outputs": []
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "name": "with-workspace-providers",
+  "private": true,
+  "packageManager": "npm@10.5.0",
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "fmt": "turbo run fmt"
+  },
+  "devDependencies": {
+    "turbo": "^2.8.17"
+  }
+}
