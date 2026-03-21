@@ -3,6 +3,7 @@ use std::{env, io, path::Path, process};
 use sysinfo::{System, SystemExt};
 use thiserror::Error;
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
+use turborepo_turbo_json::RawTurboJson;
 
 use super::CommandBase;
 use crate::{DaemonConnector, DaemonConnectorError};
@@ -18,6 +19,23 @@ fn is_wsl() -> bool {
     Path::new("/proc/sys/fs/binfmt_misc/WSLInterop").exists()
 }
 
+fn read_workspace_providers(repo_root: &turbopath::AbsoluteSystemPath) -> Vec<String> {
+    let root_turbo_json = repo_root.join_component("turbo.json");
+    RawTurboJson::read(repo_root, &root_turbo_json, true)
+        .ok()
+        .flatten()
+        .and_then(|raw| {
+            raw.workspace_providers.map(|providers| {
+                providers
+                    .into_iter()
+                    .map(|provider| provider.into_inner().into())
+                    .collect::<Vec<String>>()
+            })
+        })
+        .filter(|providers| !providers.is_empty())
+        .unwrap_or_else(|| vec!["node".to_string()])
+}
+
 pub async fn run(base: CommandBase) {
     let system = System::new_all();
     let connector = DaemonConnector::new(false, false, &base.repo_root, None);
@@ -26,12 +44,20 @@ pub async fn run(base: CommandBase) {
         Err(DaemonConnectorError::NotRunning) => "Not running",
         Err(_e) => "Error getting status",
     };
-    let package_manager = PackageJson::load(&base.repo_root.join_component("package.json"))
-        .ok()
-        .and_then(|package_json| {
-            PackageManager::read_or_detect_package_manager(&package_json, &base.repo_root).ok()
-        })
-        .map_or_else(|| "Not found".to_owned(), |pm| pm.name().to_string());
+    let workspace_providers = read_workspace_providers(&base.repo_root);
+    let package_manager = if workspace_providers
+        .iter()
+        .any(|provider| provider == "node")
+    {
+        PackageJson::load(&base.repo_root.join_component("package.json"))
+            .ok()
+            .and_then(|package_json| {
+                PackageManager::read_or_detect_package_manager(&package_json, &base.repo_root).ok()
+            })
+            .map_or_else(|| "Not found".to_owned(), |pm| pm.name().to_string())
+    } else {
+        "Not applicable (non-node workspace providers)".to_owned()
+    };
 
     println!("CLI:");
     println!("   Version: {}", base.version);
@@ -43,6 +69,7 @@ pub async fn run(base: CommandBase) {
 
     println!("   Path to executable: {exe_path}");
     println!("   Daemon status: {daemon_status}");
+    println!("   Workspace providers: {}", workspace_providers.join(", "));
     println!("   Package manager: {package_manager}");
     println!();
 

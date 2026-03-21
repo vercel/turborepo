@@ -1,7 +1,8 @@
 use camino::Utf8Path;
 use serde::Serialize;
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_repository::{package_graph::PackageGraph, package_json::PackageJson};
+use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
+use turborepo_turbo_json::RawTurboJson;
 use turborepo_types::{EnvMode, UIMode};
 
 use crate::{cli, commands::CommandBase, Args};
@@ -19,7 +20,8 @@ struct ConfigOutput<'a> {
     upload_timeout: u64,
     enabled: bool,
     ui: UIMode,
-    package_manager: &'static str,
+    workspace_providers: Vec<String>,
+    package_manager: String,
     daemon: Option<bool>,
     env_mode: EnvMode,
     scm_base: Option<&'a str>,
@@ -30,13 +32,37 @@ struct ConfigOutput<'a> {
 
 pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli::Error> {
     let config = CommandBase::load_config(&repo_root, &args)?;
-    let root_package_json = PackageJson::load(&repo_root.join_component("package.json"))?;
+    let root_turbo_json = repo_root.join_component("turbo.json");
+    let workspace_providers = RawTurboJson::read(&repo_root, &root_turbo_json, true)
+        .ok()
+        .flatten()
+        .and_then(|raw| {
+            raw.workspace_providers.map(|providers| {
+                providers
+                    .into_iter()
+                    .map(|provider| provider.into_inner().into())
+                    .collect::<Vec<String>>()
+            })
+        })
+        .filter(|providers| !providers.is_empty())
+        .unwrap_or_else(|| vec!["node".to_string()]);
 
-    let package_graph = PackageGraph::builder(&repo_root, root_package_json)
-        .build()
-        .await?;
-
-    let package_manager = package_graph.package_manager().name();
+    let package_manager = if workspace_providers
+        .iter()
+        .any(|provider| provider == "node")
+    {
+        PackageJson::load(&repo_root.join_component("package.json"))
+            .ok()
+            .and_then(|package_json| {
+                PackageManager::read_or_detect_package_manager(&package_json, &repo_root).ok()
+            })
+            .map_or_else(
+                || "not-found".to_string(),
+                |package_manager| package_manager.name().to_string(),
+            )
+    } else {
+        "not-applicable".to_string()
+    };
 
     println!(
         "{}",
@@ -51,6 +77,7 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli
             upload_timeout: config.upload_timeout(),
             enabled: config.enabled(),
             ui: config.ui(),
+            workspace_providers,
             package_manager,
             daemon: config.daemon,
             env_mode: config.env_mode(),

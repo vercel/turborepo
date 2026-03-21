@@ -32,14 +32,16 @@ struct ItemsWithCount<T> {
 #[serde(into = "RepositoryDetailsDisplay")]
 struct RepositoryDetails<'a> {
     color_config: ColorConfig,
-    package_manager: &'static str,
+    package_manager: String,
+    workspace_providers: Vec<String>,
     packages: Vec<(&'a PackageName, &'a AnchoredSystemPath)>,
 }
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct RepositoryDetailsDisplay {
-    package_manager: &'static str,
+    package_manager: String,
+    workspace_providers: Vec<String>,
     packages: ItemsWithCount<PackageDetailDisplay>,
 }
 
@@ -53,6 +55,7 @@ impl<'a> From<RepositoryDetails<'a>> for RepositoryDetailsDisplay {
     fn from(val: RepositoryDetails) -> Self {
         RepositoryDetailsDisplay {
             package_manager: val.package_manager,
+            workspace_providers: val.workspace_providers,
             packages: ItemsWithCount {
                 count: val.packages.len(),
                 items: val
@@ -175,9 +178,28 @@ impl<'a> RepositoryDetails<'a> {
             .collect();
         packages.sort_by(|a, b| a.0.cmp(b.0));
 
+        let mut workspace_providers = package_graph
+            .packages()
+            .filter_map(|(_, package_info)| package_info.package_json_path().as_path().file_name())
+            .filter_map(|manifest_name| {
+                if manifest_name.eq_ignore_ascii_case("Cargo.toml") {
+                    Some("cargo".to_string())
+                } else if manifest_name.eq_ignore_ascii_case("pyproject.toml") {
+                    Some("uv".to_string())
+                } else if manifest_name.eq_ignore_ascii_case("package.json") {
+                    Some("node".to_string())
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>();
+        workspace_providers.sort();
+        workspace_providers.dedup();
+
         Self {
             color_config,
-            package_manager: package_graph.package_manager().name(),
+            package_manager: package_graph.package_manager().name().to_string(),
+            workspace_providers,
             packages,
         }
     }
@@ -195,7 +217,13 @@ impl<'a> RepositoryDetails<'a> {
             self.packages.len(),
             package_copy
         );
-        cprintln!(self.color_config, GREY, "({})\n", self.package_manager);
+        cprintln!(
+            self.color_config,
+            GREY,
+            "({}; providers: {})\n",
+            self.package_manager,
+            self.workspace_providers.join(", ")
+        );
 
         for (package_name, entry) in &self.packages {
             println!("  {package_name} {}", GREY.apply_to(entry));
