@@ -317,3 +317,58 @@ impl TaskAccessProvider for TaskAccess {
         TaskAccess::save(self).await
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use super::task_access_trace_enabled;
+
+    #[test]
+    fn task_access_trace_disabled_when_turbo_json_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        root.join_component("turbo.json")
+            .create_with_contents("{}")
+            .unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"scripts":{"build":"next build"}}"#)
+            .unwrap();
+
+        assert!(!task_access_trace_enabled(&root).unwrap());
+    }
+
+    #[test]
+    fn task_access_trace_disabled_when_turbo_jsonc_exists() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        root.join_component("turbo.jsonc")
+            .create_with_contents("{}")
+            .unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"scripts":{"build":"next build"}}"#)
+            .unwrap();
+
+        assert!(!task_access_trace_enabled(&root).unwrap());
+    }
+
+    #[test]
+    fn task_access_trace_enabled_for_implicit_next_build_without_turbo_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        root.join_component("package.json")
+            .create_with_contents(r#"{"scripts":{"build":"next build"}}"#)
+            .unwrap();
+
+        assert!(task_access_trace_enabled(&root).unwrap());
+    }
+}
