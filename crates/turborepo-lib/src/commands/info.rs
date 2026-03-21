@@ -36,6 +36,25 @@ fn read_workspace_providers(repo_root: &turbopath::AbsoluteSystemPath) -> Vec<St
         .unwrap_or_else(|| vec!["node".to_string()])
 }
 
+fn package_manager_display_for_providers(
+    repo_root: &turbopath::AbsoluteSystemPath,
+    workspace_providers: &[String],
+) -> String {
+    if workspace_providers
+        .iter()
+        .any(|provider| provider == "node")
+    {
+        PackageJson::load(&repo_root.join_component("package.json"))
+            .ok()
+            .and_then(|package_json| {
+                PackageManager::read_or_detect_package_manager(&package_json, repo_root).ok()
+            })
+            .map_or_else(|| "Not found".to_owned(), |pm| pm.name().to_string())
+    } else {
+        "Not applicable (non-node workspace providers)".to_owned()
+    }
+}
+
 pub async fn run(base: CommandBase) {
     let system = System::new_all();
     let connector = DaemonConnector::new(false, false, &base.repo_root, None);
@@ -45,19 +64,8 @@ pub async fn run(base: CommandBase) {
         Err(_e) => "Error getting status",
     };
     let workspace_providers = read_workspace_providers(&base.repo_root);
-    let package_manager = if workspace_providers
-        .iter()
-        .any(|provider| provider == "node")
-    {
-        PackageJson::load(&base.repo_root.join_component("package.json"))
-            .ok()
-            .and_then(|package_json| {
-                PackageManager::read_or_detect_package_manager(&package_json, &base.repo_root).ok()
-            })
-            .map_or_else(|| "Not found".to_owned(), |pm| pm.name().to_string())
-    } else {
-        "Not applicable (non-node workspace providers)".to_owned()
-    };
+    let package_manager =
+        package_manager_display_for_providers(&base.repo_root, &workspace_providers);
 
     println!("CLI:");
     println!("   Version: {}", base.version);
@@ -129,4 +137,44 @@ pub async fn run(base: CommandBase) {
     println!("   stdin: {}", turborepo_ci::is_ci());
     println!("   Node.js version: {node_version}");
     println!();
+}
+
+#[cfg(test)]
+mod tests {
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use super::{package_manager_display_for_providers, read_workspace_providers};
+
+    #[test]
+    fn reads_workspace_providers_defaulting_to_node() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents("{}")
+            .unwrap();
+
+        assert_eq!(
+            read_workspace_providers(&repo_root),
+            vec!["node".to_string()]
+        );
+    }
+
+    #[test]
+    fn package_manager_not_applicable_without_node_provider() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let providers = vec!["cargo".to_string(), "uv".to_string()];
+
+        assert_eq!(
+            package_manager_display_for_providers(&repo_root, &providers),
+            "Not applicable (non-node workspace providers)"
+        );
+    }
 }

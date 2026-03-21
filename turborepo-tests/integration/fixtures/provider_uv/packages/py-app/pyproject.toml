@@ -1,0 +1,7 @@
+[project]
+name = "py-app"
+version = "0.1.0"
+dependencies = ["py-lib"]
+
+[tool.uv.sources]
+py-lib = { workspace = true }

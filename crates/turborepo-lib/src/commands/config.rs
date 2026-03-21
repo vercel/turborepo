@@ -30,10 +30,9 @@ struct ConfigOutput<'a> {
     concurrency: Option<&'a str>,
 }
 
-pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli::Error> {
-    let config = CommandBase::load_config(&repo_root, &args)?;
+fn read_workspace_providers(repo_root: &AbsoluteSystemPathBuf) -> Vec<String> {
     let root_turbo_json = repo_root.join_component("turbo.json");
-    let workspace_providers = RawTurboJson::read(&repo_root, &root_turbo_json, true)
+    RawTurboJson::read(repo_root, &root_turbo_json, true)
         .ok()
         .flatten()
         .and_then(|raw| {
@@ -45,16 +44,21 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli
             })
         })
         .filter(|providers| !providers.is_empty())
-        .unwrap_or_else(|| vec!["node".to_string()]);
+        .unwrap_or_else(|| vec!["node".to_string()])
+}
 
-    let package_manager = if workspace_providers
+fn package_manager_display(
+    repo_root: &AbsoluteSystemPathBuf,
+    workspace_providers: &[String],
+) -> String {
+    if workspace_providers
         .iter()
         .any(|provider| provider == "node")
     {
         PackageJson::load(&repo_root.join_component("package.json"))
             .ok()
             .and_then(|package_json| {
-                PackageManager::read_or_detect_package_manager(&package_json, &repo_root).ok()
+                PackageManager::read_or_detect_package_manager(&package_json, repo_root).ok()
             })
             .map_or_else(
                 || "not-found".to_string(),
@@ -62,7 +66,13 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli
             )
     } else {
         "not-applicable".to_string()
-    };
+    }
+}
+
+pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli::Error> {
+    let config = CommandBase::load_config(&repo_root, &args)?;
+    let workspace_providers = read_workspace_providers(&repo_root);
+    let package_manager = package_manager_display(&repo_root, &workspace_providers);
 
     println!(
         "{}",
@@ -88,4 +98,43 @@ pub async fn run(repo_root: AbsoluteSystemPathBuf, args: Args) -> Result<(), cli
         })?
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use turbopath::AbsoluteSystemPathBuf;
+
+    use super::{package_manager_display, read_workspace_providers};
+
+    #[test]
+    fn read_workspace_providers_defaults_to_node() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents("{}")
+            .unwrap();
+
+        assert_eq!(
+            read_workspace_providers(&repo_root),
+            vec!["node".to_string()]
+        );
+    }
+
+    #[test]
+    fn package_manager_display_not_applicable_without_node_provider() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+
+        assert_eq!(
+            package_manager_display(&repo_root, &["cargo".to_string()]),
+            "not-applicable"
+        );
+    }
 }

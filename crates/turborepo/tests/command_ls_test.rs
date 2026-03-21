@@ -52,3 +52,34 @@ fn test_ls_package_no_deps() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("another depends on: <no packages>"));
 }
+
+fn setup_provider_fixture(dir: &std::path::Path, fixture: &str) {
+    setup::copy_fixture(fixture, dir).unwrap();
+    setup::setup_git(dir).unwrap();
+}
+
+#[test]
+fn test_ls_json_reports_mixed_workspace_providers() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_provider_fixture(tempdir.path(), "provider_mixed");
+
+    let output = run_turbo(tempdir.path(), &["ls", "--output=json"]);
+    assert!(output.status.success());
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(
+        json["workspaceProviders"],
+        serde_json::json!(["cargo", "node", "uv"])
+    );
+    assert_eq!(json["packageManager"], "npm");
+
+    let names: Vec<&str> = json["packages"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["name"].as_str().unwrap())
+        .collect();
+    assert!(names.contains(&"web"));
+    assert!(names.contains(&"rust-app"));
+    assert!(names.contains(&"py-app"));
+}

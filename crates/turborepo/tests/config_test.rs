@@ -187,3 +187,37 @@ fn test_config_concurrency() {
         "expected concurrency 5, got: {conc3}"
     );
 }
+
+fn setup_provider_fixture(dir: &std::path::Path, fixture: &str) {
+    setup::copy_fixture(fixture, dir).unwrap();
+    setup::setup_git(dir).unwrap();
+}
+
+#[test]
+fn test_config_reports_non_node_provider_package_manager_as_not_applicable() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_provider_fixture(tempdir.path(), "provider_cargo");
+
+    let output = run_turbo(tempdir.path(), &["config"]);
+    assert!(output.status.success());
+
+    let cfg = config_json(&output);
+    assert_eq!(cfg["workspaceProviders"], serde_json::json!(["cargo"]));
+    assert_eq!(cfg["packageManager"], "not-applicable");
+}
+
+#[test]
+fn test_config_reports_mixed_workspace_providers() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup_provider_fixture(tempdir.path(), "provider_mixed");
+
+    let output = run_turbo(tempdir.path(), &["config"]);
+    assert!(output.status.success());
+
+    let cfg = config_json(&output);
+    assert_eq!(
+        cfg["workspaceProviders"],
+        serde_json::json!(["node", "cargo", "uv"])
+    );
+    assert_eq!(cfg["packageManager"], "npm");
+}

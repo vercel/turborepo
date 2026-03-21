@@ -4,7 +4,7 @@ use miette::Diagnostic;
 use serde::Serialize;
 use thiserror::Error;
 use turbopath::AnchoredSystemPath;
-use turborepo_repository::package_graph::{PackageName, PackageNode};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{color, cprint, cprintln, ColorConfig, BOLD, BOLD_GREEN, GREY};
@@ -157,6 +157,27 @@ pub async fn run(
     Ok(())
 }
 
+fn infer_workspace_providers(package_graph: &PackageGraph) -> Vec<String> {
+    let mut workspace_providers = package_graph
+        .packages()
+        .filter_map(|(_, package_info)| package_info.package_json_path().as_path().file_name())
+        .filter_map(|manifest_name| {
+            if manifest_name.eq_ignore_ascii_case("Cargo.toml") {
+                Some("cargo".to_string())
+            } else if manifest_name.eq_ignore_ascii_case("pyproject.toml") {
+                Some("uv".to_string())
+            } else if manifest_name.eq_ignore_ascii_case("package.json") {
+                Some("node".to_string())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    workspace_providers.sort();
+    workspace_providers.dedup();
+    workspace_providers
+}
+
 impl<'a> RepositoryDetails<'a> {
     fn new(run: &'a Run) -> Self {
         let color_config = run.color_config();
@@ -178,23 +199,7 @@ impl<'a> RepositoryDetails<'a> {
             .collect();
         packages.sort_by(|a, b| a.0.cmp(b.0));
 
-        let mut workspace_providers = package_graph
-            .packages()
-            .filter_map(|(_, package_info)| package_info.package_json_path().as_path().file_name())
-            .filter_map(|manifest_name| {
-                if manifest_name.eq_ignore_ascii_case("Cargo.toml") {
-                    Some("cargo".to_string())
-                } else if manifest_name.eq_ignore_ascii_case("pyproject.toml") {
-                    Some("uv".to_string())
-                } else if manifest_name.eq_ignore_ascii_case("package.json") {
-                    Some("node".to_string())
-                } else {
-                    None
-                }
-            })
-            .collect::<Vec<_>>();
-        workspace_providers.sort();
-        workspace_providers.dedup();
+        let workspace_providers = infer_workspace_providers(package_graph);
 
         Self {
             color_config,
@@ -247,6 +252,84 @@ impl<'a> RepositoryDetails<'a> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use serde_json::json;
+    use turbopath::AbsoluteSystemPathBuf;
+    use turborepo_repository::{package_graph::PackageGraph, package_json::PackageJson};
+
+    use super::infer_workspace_providers;
+
+    async fn make_graph_with_manifests(manifests: &[(&str, serde_json::Value)]) -> PackageGraph {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(
+                r#"{
+  "name": "root",
+  "private": true,
+  "packageManager": "npm@10.0.0"
+}"#,
+            )
+            .unwrap();
+
+        let mut package_jsons = HashMap::new();
+        for (manifest_path, manifest_json) in manifests {
+            let manifest = manifest_path
+                .split('/')
+                .fold(repo_root.to_owned(), |path, segment| {
+                    path.join_component(segment)
+                });
+            if let Some(parent) = manifest.parent() {
+                parent.create_dir_all().unwrap();
+            }
+            manifest
+                .create_with_contents(&manifest_json.to_string())
+                .unwrap();
+            package_jsons.insert(
+                manifest.clone(),
+                PackageJson::from_value(manifest_json.clone()).unwrap(),
+            );
+        }
+
+        let root_package_json =
+            PackageJson::load(&repo_root.join_component("package.json")).unwrap();
+        PackageGraph::builder(&repo_root, root_package_json)
+            .with_allow_no_package_manager(true)
+            .with_package_jsons(Some(package_jsons))
+            .build()
+            .await
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn infers_workspace_providers_from_manifest_file_names() {
+        let package_graph = make_graph_with_manifests(&[
+            ("crates/a/Cargo.toml", json!({"name":"crate-a"})),
+            (
+                "apps/py/pyproject.toml",
+                json!({"name":"py-app","version":"0.1.0"}),
+            ),
+            (
+                "apps/web/package.json",
+                json!({"name":"web","version":"0.0.0"}),
+            ),
+        ])
+        .await;
+
+        assert_eq!(
+            infer_workspace_providers(&package_graph),
+            vec!["cargo".to_string(), "node".to_string(), "uv".to_string()]
+        );
     }
 }
 
