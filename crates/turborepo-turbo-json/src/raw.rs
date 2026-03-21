@@ -387,6 +387,10 @@ pub struct RawRootTurboJson {
     pub concurrency: Option<Spanned<String>>,
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
     pub boundaries: Option<Spanned<BoundariesConfig>>,
+    /// Ordered list of workspace providers to enable for this repository.
+    ///
+    /// This field is root-only and is ignored in package turbo.json files.
+    pub workspace_providers: Option<Vec<Spanned<UnescapedString>>>,
 
     pub future_flags: Option<Spanned<FutureFlags>>,
     #[deserializable(rename = "experimentalObservability")]
@@ -568,6 +572,16 @@ pub struct RawTurboJson {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub boundaries: Option<Spanned<BoundariesConfig>>,
+
+    /// Ordered list of workspace providers to enable for this repository.
+    ///
+    /// Providers are language/toolchain-specific integrations (for example:
+    /// `node`, `cargo`, or `uv`).
+    ///
+    /// This field is root-only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub workspace_providers: Option<Vec<Spanned<UnescapedString>>>,
 
     /// Set/limit the maximum concurrency for task execution.
     ///
@@ -797,6 +811,7 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
                 pipeline: root.pipeline,
                 tags: root.tags,
                 boundaries: root.boundaries,
+                workspace_providers: root.workspace_providers,
                 future_flags: root.future_flags,
                 global: root.global,
                 _comment: root._comment,
@@ -838,6 +853,7 @@ impl TryFrom<RawRootTurboJson> for RawTurboJson {
                 no_update_notifier: root.no_update_notifier,
                 tags: root.tags,
                 boundaries: root.boundaries,
+                workspace_providers: root.workspace_providers,
                 concurrency: root.concurrency,
                 future_flags: root.future_flags,
                 experimental_observability: root.experimental_observability,

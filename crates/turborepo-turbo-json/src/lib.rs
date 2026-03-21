@@ -71,6 +71,7 @@ pub struct TurboJson {
     path: Option<Arc<str>>,
     pub tags: Option<Spanned<Vec<Spanned<String>>>>,
     pub boundaries: Option<Spanned<BoundariesConfig>>,
+    pub workspace_providers: Vec<String>,
     pub extends: Spanned<Vec<String>>,
     pub global_deps: Vec<String>,
     pub global_env: Vec<String>,
@@ -129,6 +130,19 @@ impl TryFrom<RawTurboJson> for TurboJson {
             text: raw_turbo.span.text,
             path: raw_turbo.span.path,
             tags: raw_turbo.tags,
+            workspace_providers: {
+                let providers: Vec<String> = raw_turbo
+                    .workspace_providers
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|provider| provider.into_inner().into())
+                    .collect();
+                let mut seen = HashSet::new();
+                providers
+                    .into_iter()
+                    .filter(|provider| seen.insert(provider.clone()))
+                    .collect()
+            },
             global_env: {
                 let mut global_env: Vec<_> = global_env.into_iter().collect();
                 global_env.sort();
@@ -1289,6 +1303,20 @@ mod tests {
             vec!["config.txt"],
             "global_deps field must still hold the values for per-task injection"
         );
+    }
+
+    #[test]
+    fn test_workspace_providers_preserve_order_and_dedup() {
+        let json = r#"{
+            "workspaceProviders": ["node", "cargo", "node", "uv"],
+            "tasks": {}
+        }"#;
+        let raw: RawTurboJson = RawRootTurboJson::parse(json, "turbo.json")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let turbo_json = TurboJson::try_from(raw).unwrap();
+        assert_eq!(turbo_json.workspace_providers, vec!["node", "cargo", "uv"]);
     }
 
     #[test]

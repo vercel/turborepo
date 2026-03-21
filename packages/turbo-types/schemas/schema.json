@@ -185,6 +185,13 @@
           "type": "null"
         }
       ]
+    },
+    "workspaceProviders": {
+      "description": "Ordered list of workspace providers to enable for this repository.\n\nProviders are language/toolchain-specific integrations (for example: `node`, `cargo`, or `uv`).\n\nThis field is root-only.",
+      "type": ["array", "null"],
+      "items": {
+        "$ref": "#/definitions/String"
+      }
     }
   },
   "allowComments": true,

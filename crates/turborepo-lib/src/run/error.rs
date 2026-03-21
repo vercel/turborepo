@@ -2,7 +2,7 @@ use miette::Diagnostic;
 use thiserror::Error;
 use turborepo_daemon::{DaemonConnectorError, DaemonError};
 use turborepo_engine::GraphVisualizerError;
-use turborepo_repository::package_graph;
+use turborepo_repository::{package_graph, workspace_provider};
 use turborepo_ui::tui;
 
 use crate::{config, engine, engine::ValidateError, opts, run::scope, task_graph, task_hash};
@@ -63,4 +63,6 @@ pub enum Error {
     ApiClient(#[from] turborepo_api_client::Error),
     #[error(transparent)]
     Scm(#[from] turborepo_scm::Error),
+    #[error(transparent)]
+    WorkspaceProvider(#[from] workspace_provider::WorkspaceProviderResolveError),
 }

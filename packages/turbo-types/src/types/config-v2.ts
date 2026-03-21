@@ -1,9 +1,4 @@
-export type OutputLogs =
-  | "full"
-  | "none"
-  | "hash-only"
-  | "new-only"
-  | "errors-only";
+export type OutputLogs = "full" | "none" | "hash-only" | "new-only" | "errors-only";
 export type EnvMode = "loose" | "strict";
 export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
 /**
@@ -180,6 +175,14 @@ export interface RootSchema extends BaseSchema {
    * Configuration for `turbo boundaries`. Allows users to restrict a package's dependencies and dependents
    */
   boundaries?: RootBoundariesConfig;
+
+  /**
+   * Ordered list of workspace providers to enable for this repository.
+   *
+   * Providers are language/toolchain integrations (for example: `node`,
+   * `cargo`, or `uv`).
+   */
+  workspaceProviders?: Array<string>;
 
   /**
    * When set to `true`, disables the update notification that appears when a new version of `turbo` is available.

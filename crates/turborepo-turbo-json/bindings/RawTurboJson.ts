@@ -126,6 +126,15 @@ tags?: Array<string>,
  */
 boundaries?: BoundariesConfig, 
 /**
+ * Ordered list of workspace providers to enable for this repository.
+ *
+ * Providers are language/toolchain-specific integrations (for example:
+ * `node`, `cargo`, or `uv`).
+ *
+ * This field is root-only.
+ */
+workspaceProviders?: Array<string>, 
+/**
  * Set/limit the maximum concurrency for task execution.
  *
  * Must be an integer greater than or equal to `1` or a percentage value

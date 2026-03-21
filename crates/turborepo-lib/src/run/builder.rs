@@ -19,6 +19,7 @@ use turborepo_repository::{
     package_graph::{PackageGraph, PackageName},
     package_json,
     package_json::PackageJson,
+    workspace_provider::WorkspaceProviderRegistry,
 };
 use turborepo_run_summary::observability;
 use turborepo_scm::SCM;
@@ -44,7 +45,7 @@ use crate::{
         Run, RunCache,
     },
     shim::TurboState,
-    turbo_json::{TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
+    turbo_json::{RawTurboJson, TurboJson, TurboJsonReader, UnifiedTurboJsonLoader},
 };
 
 pub struct RunBuilder {
@@ -301,6 +302,22 @@ impl RunBuilder {
         prefixes
     }
 
+    fn read_workspace_providers_from_root_config(
+        repo_root: &AbsoluteSystemPath,
+        root_turbo_json_path: &AbsoluteSystemPath,
+    ) -> Result<Option<Vec<String>>, Error> {
+        let raw_turbo_json = RawTurboJson::read(repo_root, root_turbo_json_path, true)
+            .map_err(crate::config::Error::from)?;
+        Ok(raw_turbo_json.and_then(|raw| {
+            raw.workspace_providers.map(|providers| {
+                providers
+                    .into_iter()
+                    .map(|provider| provider.into_inner().into())
+                    .collect()
+            })
+        }))
+    }
+
     /// Resolve the set of packages that should participate in this run.
     ///
     /// Starts with the result of scope resolution (which handles `--filter`
@@ -420,6 +437,16 @@ impl RunBuilder {
         };
         let package_json_path = self.repo_root.join_component("package.json");
         let root_package_json = PackageJson::load(&package_json_path)?;
+        let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
+
+        let workspace_provider_registry = WorkspaceProviderRegistry::default();
+        let configured_workspace_providers = Self::read_workspace_providers_from_root_config(
+            &self.repo_root,
+            &root_turbo_json_path,
+        )?;
+        let workspace_providers =
+            workspace_provider_registry.resolve(configured_workspace_providers.as_deref())?;
+
         let run_telemetry = GenericEventBuilder::new().with_parent(&telemetry);
         let repo_telemetry =
             RepoEventBuilder::new(&self.repo_root.to_string()).with_parent(&telemetry);
@@ -430,6 +457,12 @@ impl RunBuilder {
         run_telemetry.track_arg_usage(
             "dangerously_allow_missing_package_manager",
             self.opts.repo_opts.allow_no_package_manager,
+        );
+        run_telemetry.track_arg_usage(
+            "workspace_providers",
+            configured_workspace_providers
+                .as_ref()
+                .is_some_and(|providers| !providers.is_empty()),
         );
         // we only track the remote cache if we're linked because this defaults to
         // Vercel
@@ -445,6 +478,13 @@ impl RunBuilder {
 
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
         run_telemetry.track_ai_agent(turborepo_ai_agents::get_agent());
+        tracing::debug!(
+            workspace_providers = ?workspace_providers
+                .iter()
+                .map(|provider| provider.to_string())
+                .collect::<Vec<_>>(),
+            "resolved workspace providers for run"
+        );
 
         // The daemon is no longer used for `turbo run`. It provided no measurable
         // performance benefit and added IPC overhead. The daemon is still used by
@@ -594,7 +634,6 @@ impl RunBuilder {
             )?
         };
 
-        let root_turbo_json_path = self.opts.repo_opts.root_turbo_json_path.clone();
         let future_flags = self.opts.future_flags;
 
         let reader = TurboJsonReader::new(self.repo_root.clone()).with_future_flags(future_flags);

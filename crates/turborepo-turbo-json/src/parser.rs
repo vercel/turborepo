@@ -337,6 +337,7 @@ impl WithMetadata for RawRootTurboJson {
         if let Some(boundaries) = &mut self.boundaries {
             boundaries.value.add_text(text.clone());
         }
+        self.workspace_providers.add_text(text.clone());
 
         self.tasks.add_text(text.clone());
         self.cache_dir.add_text(text.clone());
@@ -368,6 +369,7 @@ impl WithMetadata for RawRootTurboJson {
         if let Some(boundaries) = &mut self.boundaries {
             boundaries.value.add_path(path.clone());
         }
+        self.workspace_providers.add_path(path.clone());
         self.tasks.add_path(path.clone());
         self.cache_dir.add_path(path.clone());
         self.pipeline.add_path(path.clone());
@@ -553,6 +555,21 @@ mod tests {
             result.no_update_notifier.as_ref().map(|v| *v.as_inner()),
             Some(true),
             "noUpdateNotifier should be parsed from a full turbo.json"
+        );
+    }
+
+    #[test]
+    fn test_workspace_providers_parsed_from_root_turbo_json() {
+        let json = r#"{"workspaceProviders": ["node", "cargo", "uv"]}"#;
+        let result = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        assert_eq!(
+            result.workspace_providers.as_ref().map(|providers| {
+                providers
+                    .iter()
+                    .map(|provider| provider.as_inner().as_str())
+                    .collect::<Vec<_>>()
+            }),
+            Some(vec!["node", "cargo", "uv"])
         );
     }
 
