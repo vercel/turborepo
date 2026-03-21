@@ -21,6 +21,8 @@ use crate::package_graph::{
 mod package;
 
 const DEFAULT_GLOBAL_DEPS: &[&str] = ["package.json", "turbo.json", "turbo.jsonc"].as_slice();
+const CARGO_GLOBAL_DEPS: &[&str] = ["Cargo.toml", "Cargo.lock"].as_slice();
+const UV_GLOBAL_DEPS: &[&str] = ["pyproject.toml", "uv.lock"].as_slice();
 
 // We may not be able to load the lockfile contents, but we
 // still want to be able to express a generic change.
@@ -124,12 +126,36 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         }
     }
 
-    fn default_global_file_changed(
-        changed_files: &HashSet<AnchoredSystemPathBuf>,
-    ) -> Option<&AnchoredSystemPathBuf> {
+    fn default_global_file_changed<'b>(
+        &self,
+        changed_files: &'b HashSet<AnchoredSystemPathBuf>,
+    ) -> Option<&'b AnchoredSystemPathBuf> {
+        let mut default_global_deps = DEFAULT_GLOBAL_DEPS.to_vec();
+        let has_cargo_workspace = self.pkg_graph.packages().any(|(_, package_info)| {
+            package_info
+                .package_json_path()
+                .as_path()
+                .file_name()
+                .is_some_and(|manifest_name| manifest_name.eq_ignore_ascii_case("Cargo.toml"))
+        });
+        if has_cargo_workspace {
+            default_global_deps.extend(CARGO_GLOBAL_DEPS.iter().copied());
+        }
+
+        let has_uv_workspace = self.pkg_graph.packages().any(|(_, package_info)| {
+            package_info
+                .package_json_path()
+                .as_path()
+                .file_name()
+                .is_some_and(|manifest_name| manifest_name.eq_ignore_ascii_case("pyproject.toml"))
+        });
+        if has_uv_workspace {
+            default_global_deps.extend(UV_GLOBAL_DEPS.iter().copied());
+        }
+
         changed_files
             .iter()
-            .find(|f| DEFAULT_GLOBAL_DEPS.iter().any(|dep| *dep == f.as_str()))
+            .find(move |f| default_global_deps.iter().any(|dep| *dep == f.as_str()))
     }
 
     pub fn changed_packages(
@@ -137,7 +163,7 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         changed_files: HashSet<AnchoredSystemPathBuf>,
         lockfile_contents: LockfileContents,
     ) -> Result<PackageChanges, ChangeMapError> {
-        if let Some(file) = Self::default_global_file_changed(&changed_files) {
+        if let Some(file) = self.default_global_file_changed(&changed_files) {
             debug!("global file changed");
             return Ok(PackageChanges::All(
                 AllPackageChangeReason::DefaultGlobalFileChanged {
@@ -314,10 +340,57 @@ impl From<ChangedPackagesError> for ChangeMapError {
 
 #[cfg(test)]
 mod test {
-    use test_case::test_case;
+    use std::collections::HashMap;
 
-    use super::ChangeMapper;
-    use crate::change_mapper::package::DefaultPackageChangeMapper;
+    use test_case::test_case;
+    use turborepo_errors::Spanned;
+
+    use super::{AllPackageChangeReason, ChangeMapper, PackageChanges};
+    use crate::{
+        change_mapper::package::DefaultPackageChangeMapper,
+        discovery::{DiscoveryResponse, PackageDiscovery},
+        package_graph::PackageGraph,
+        package_json::PackageJson,
+        package_manager::PackageManager,
+    };
+
+    struct MockDiscovery;
+
+    impl PackageDiscovery for MockDiscovery {
+        async fn discover_packages(&self) -> Result<DiscoveryResponse, crate::discovery::Error> {
+            Ok(DiscoveryResponse {
+                package_manager: PackageManager::Npm,
+                workspaces: vec![],
+            })
+        }
+
+        async fn discover_packages_blocking(
+            &self,
+        ) -> Result<DiscoveryResponse, crate::discovery::Error> {
+            self.discover_packages().await
+        }
+    }
+
+    async fn make_pkg_graph_with_manifest(
+        repo_root: &turbopath::AbsoluteSystemPath,
+        manifest_name: &str,
+    ) -> PackageGraph {
+        let mut package_jsons = HashMap::new();
+        package_jsons.insert(
+            repo_root.join_components(&["packages", "lib-a", manifest_name]),
+            PackageJson {
+                name: Some(Spanned::new("lib-a".to_string())),
+                ..Default::default()
+            },
+        );
+
+        PackageGraph::builder(repo_root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(package_jsons))
+            .build()
+            .await
+            .unwrap()
+    }
 
     #[cfg(unix)]
     #[test_case("/a/b/c", &["package.lock"], "/a/b/c/package.lock", true ; "simple")]
@@ -367,5 +440,53 @@ mod test {
         // we don't want to implement PartialEq on the error type,
         // so simply compare the debug representations
         assert_eq!(changes, expected);
+    }
+
+    #[tokio::test]
+    async fn cargo_lock_is_treated_as_default_global_dep_for_cargo_workspaces() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = turbopath::AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph_with_manifest(repo_root, "Cargo.toml").await;
+
+        let mapper = ChangeMapper::new(
+            &pkg_graph,
+            vec![],
+            DefaultPackageChangeMapper::new(&pkg_graph),
+        );
+        let changed_files = [turbopath::AnchoredSystemPathBuf::from_raw("Cargo.lock").unwrap()]
+            .into_iter()
+            .collect();
+
+        let result = mapper
+            .changed_packages(changed_files, super::LockfileContents::Unchanged)
+            .unwrap();
+        assert!(matches!(
+            result,
+            PackageChanges::All(AllPackageChangeReason::DefaultGlobalFileChanged { .. })
+        ));
+    }
+
+    #[tokio::test]
+    async fn uv_lock_is_treated_as_default_global_dep_for_uv_workspaces() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = turbopath::AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph_with_manifest(repo_root, "pyproject.toml").await;
+
+        let mapper = ChangeMapper::new(
+            &pkg_graph,
+            vec![],
+            DefaultPackageChangeMapper::new(&pkg_graph),
+        );
+        let changed_files = [turbopath::AnchoredSystemPathBuf::from_raw("uv.lock").unwrap()]
+            .into_iter()
+            .collect();
+
+        let result = mapper
+            .changed_packages(changed_files, super::LockfileContents::Unchanged)
+            .unwrap();
+        assert!(matches!(
+            result,
+            PackageChanges::All(AllPackageChangeReason::DefaultGlobalFileChanged { .. })
+        ));
     }
 }

@@ -26,6 +26,8 @@ const TASK_ACCESS_ENV_KEY: &str = "TURBOREPO_TRACE_FILE";
 const TASK_ACCESS_TRACE_NAME: &str = "trace.json";
 /// File name where the task is expected to leave a trace result
 const TURBO_CONFIG_FILE: &str = "turbo.json";
+/// Alternate root config format
+const TURBO_CONFIGC_FILE: &str = "turbo.jsonc";
 
 #[derive(Debug, thiserror::Error)]
 pub enum ToFileError {
@@ -66,8 +68,10 @@ pub fn trace_file_path(
 
 fn task_access_trace_enabled(repo_root: &AbsoluteSystemPathBuf) -> Result<bool, std::io::Error> {
     // TODO: use the existing config methods here
-    let root_turbo_json_path = &repo_root.join_component(TURBO_CONFIG_FILE);
-    if root_turbo_json_path.exists() {
+    let has_root_turbo_config = [TURBO_CONFIG_FILE, TURBO_CONFIGC_FILE]
+        .iter()
+        .any(|config_file| repo_root.join_component(config_file).exists());
+    if has_root_turbo_config {
         return Ok(false);
     }
 

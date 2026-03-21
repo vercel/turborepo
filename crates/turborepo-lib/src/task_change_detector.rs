@@ -22,6 +22,8 @@ use crate::engine::Engine;
 ///
 /// Lockfile changes are detected separately via the package manager.
 const DEFAULT_GLOBAL_DEPS: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
+const CARGO_GLOBAL_DEPS: &[&str] = &["Cargo.toml", "Cargo.lock"];
+const UV_GLOBAL_DEPS: &[&str] = &["pyproject.toml", "uv.lock"];
 
 /// Determines which tasks are directly affected by the given set of changed
 /// files. Does NOT include transitive dependents — use
@@ -74,6 +76,29 @@ fn is_global_change(
     global_deps: &[String],
     pkg_dep_graph: &PackageGraph,
 ) -> bool {
+    let mut default_global_deps = DEFAULT_GLOBAL_DEPS.to_vec();
+    let has_cargo_workspace = pkg_dep_graph.packages().any(|(_, package_info)| {
+        package_info
+            .package_json_path()
+            .as_path()
+            .file_name()
+            .is_some_and(|manifest_name| manifest_name.eq_ignore_ascii_case("Cargo.toml"))
+    });
+    if has_cargo_workspace {
+        default_global_deps.extend(CARGO_GLOBAL_DEPS.iter().copied());
+    }
+
+    let has_uv_workspace = pkg_dep_graph.packages().any(|(_, package_info)| {
+        package_info
+            .package_json_path()
+            .as_path()
+            .file_name()
+            .is_some_and(|manifest_name| manifest_name.eq_ignore_ascii_case("pyproject.toml"))
+    });
+    if has_uv_workspace {
+        default_global_deps.extend(UV_GLOBAL_DEPS.iter().copied());
+    }
+
     let lockfile_name = pkg_dep_graph.package_manager().lockfile_name();
     let global_globs: Vec<_> = global_deps
         .iter()
@@ -94,7 +119,7 @@ fn is_global_change(
     for file in changed_files {
         let file_str = file.as_str();
 
-        if DEFAULT_GLOBAL_DEPS.contains(&file_str) {
+        if default_global_deps.contains(&file_str) {
             return true;
         }
 
@@ -155,6 +180,27 @@ mod tests {
             let path = repo_root.join_components(&["packages", name, "package.json"]);
             let pkg = PackageJson {
                 name: Some(Spanned::new(name.to_string())),
+                ..Default::default()
+            };
+            pkgs.insert(path, pkg);
+        }
+        PackageGraph::builder(repo_root, PackageJson::default())
+            .with_package_discovery(MockDiscovery)
+            .with_package_jsons(Some(pkgs))
+            .build()
+            .await
+            .unwrap()
+    }
+
+    async fn make_pkg_graph_with_manifest_paths(
+        repo_root: &AbsoluteSystemPath,
+        packages: &[(&str, &str)],
+    ) -> PackageGraph {
+        let mut pkgs = HashMap::new();
+        for (name, manifest_path) in packages {
+            let path = repo_root.join_components(&["packages", name, manifest_path]);
+            let pkg = PackageJson {
+                name: Some(Spanned::new((*name).to_string())),
                 ..Default::default()
             };
             pkgs.insert(path, pkg);
@@ -281,6 +327,35 @@ mod tests {
         let engine = make_engine(&[(a_build.clone(), default_def())], &[]);
 
         let result = affected_task_ids(&engine, &pkg_graph, &changed(&["turbo.jsonc"]), &[]);
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&a_build));
+    }
+
+    #[tokio::test]
+    async fn cargo_lock_change_returns_all_when_cargo_workspace_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph_with_manifest_paths(root, &[("lib-a", "Cargo.toml")]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let engine = make_engine(&[(a_build.clone(), default_def())], &[]);
+
+        let result = affected_task_ids(&engine, &pkg_graph, &changed(&["Cargo.lock"]), &[]);
+        assert_eq!(result.len(), 1);
+        assert!(result.contains(&a_build));
+    }
+
+    #[tokio::test]
+    async fn uv_lock_change_returns_all_when_uv_workspace_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph =
+            make_pkg_graph_with_manifest_paths(root, &[("lib-a", "pyproject.toml")]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let engine = make_engine(&[(a_build.clone(), default_def())], &[]);
+
+        let result = affected_task_ids(&engine, &pkg_graph, &changed(&["uv.lock"]), &[]);
         assert_eq!(result.len(), 1);
         assert!(result.contains(&a_build));
     }

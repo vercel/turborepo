@@ -325,7 +325,12 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         dependency_set: &[&TaskNode],
         telemetry: PackageTaskEventBuilder,
     ) -> Result<String, Error> {
-        let do_framework_inference = self.run_opts.framework_inference();
+        let do_framework_inference = self.run_opts.framework_inference()
+            && workspace
+                .package_json_path()
+                .as_path()
+                .file_name()
+                .is_some_and(|manifest_name| manifest_name.eq_ignore_ascii_case("package.json"));
         let is_monorepo = !self.run_opts.single_package();
 
         let hash_of_files = self
