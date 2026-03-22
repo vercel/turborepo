@@ -15,7 +15,7 @@ export async function customGenerators({
 }) {
   if (generator) {
     const matchingGenerators = generators.filter(
-      (g) =>
+      (g): g is Generator =>
         !(g instanceof Separator) &&
         (g.name === generator ||
           g.displayName === generator ||
