@@ -11,7 +11,9 @@ import { getWorkspaceDetailsMockReturnValue } from "./test-utils";
 type NodePlopMock = {
   __setConfig: (
     configPath: string,
-    handler: (api: { setGenerator: (name: string, config: unknown) => void }) => void
+    handler: (api: {
+      setGenerator: (name: string, config: unknown) => void;
+    }) => void
   ) => void;
   __reset: () => void;
 };

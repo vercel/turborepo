@@ -556,7 +556,10 @@ async function loadConfigWithDuplicateResolution({
     }
 
     const createdGenerator = (
-      originalSetGenerator as (name: string, generatorConfig: unknown) => unknown
+      originalSetGenerator as (
+        name: string,
+        generatorConfig: unknown
+      ) => unknown
     )(resolvedName, generatorConfig);
 
     generatorSources.set(resolvedName, {
