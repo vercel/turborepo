@@ -14,16 +14,29 @@ export async function customGenerators({
   generator?: string;
 }) {
   if (generator) {
-    if (
-      generators.some((g) => !(g instanceof Separator) && g.name === generator)
-    ) {
+    const matchingGenerators = generators.filter(
+      (g) =>
+        !(g instanceof Separator) &&
+        (g.name === generator ||
+          g.displayName === generator ||
+          g.originalName === generator)
+    );
+
+    if (matchingGenerators.length === 1) {
       return {
-        selectedGenerator: generator
+        selectedGenerator: matchingGenerators[0].name
       };
     }
 
-    logger.warn(`Generator "${generator}" not found`);
-    logger.log();
+    if (matchingGenerators.length > 1) {
+      logger.warn(
+        `Generator "${generator}" is ambiguous. Use the package-qualified name in the prompt.`
+      );
+      logger.log();
+    } else {
+      logger.warn(`Generator "${generator}" not found`);
+      logger.log();
+    }
   }
 
   const selectedGenerator = await select({
@@ -34,8 +47,8 @@ export async function customGenerators({
       }
       return {
         name: gen.description
-          ? `  ${gen.name}: ${gen.description}`
-          : `  ${gen.name}`,
+          ? `  ${gen.displayName ?? gen.name}: ${gen.description}`
+          : `  ${gen.displayName ?? gen.name}`,
         value: gen.name
       };
     })
