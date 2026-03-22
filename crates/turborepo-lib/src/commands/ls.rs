@@ -125,7 +125,7 @@ pub async fn run(
     let handler = SignalHandler::new(signal);
 
     let run_builder = RunBuilder::new(base, None)?;
-    let run = run_builder.build(&handler, telemetry).await?;
+    let (run, _analytics) = run_builder.build(&handler, telemetry).await?;
 
     if packages.is_empty() {
         RepositoryDetails::new(&run).print(output)?;

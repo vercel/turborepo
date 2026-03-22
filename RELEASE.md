@@ -60,7 +60,7 @@ The Turborepo release process is a multi-stage pipeline that:
 
 1. **Manages versions centrally** via `version.txt` at the repository root
 2. **Builds Rust binaries** for 6 different platforms (macOS, Linux, Windows on x64 and ARM64)
-3. **Packages native binaries** as separate npm packages (e.g., `turbo-darwin-64`, `turbo-linux-arm64`)
+3. **Packages native binaries** as separate npm packages (e.g., `@turbo/darwin-64`, `@turbo/linux-arm64`)
 4. **Publishes JavaScript packages** (main `turbo` package, `create-turbo`, codemods, ESLint plugins, etc.)
 5. **Aliases versioned documentation** to subdomains (e.g., `v2-5-4.turborepo.dev`)
 6. **Creates a release branch** with version bumps and automatically opens a PR to merge back to `main`
@@ -336,7 +336,7 @@ Execute `turbo release-native` which invokes the `@turbo/releaser` tool.
    - Copies the prebuilt binary from `cli/dist-<os>-<arch>/`
    - Makes the binary executable (`chmod +x` on Unix)
    - Creates a `.tar.gz` archive
-   - Publishes to npm: `npm publish turbo-<os>-<arch>.tar.gz --tag <npm-tag>`
+   - Publishes to npm: `npm publish @turbo/<os>-<arch>.tar.gz --tag <npm-tag> --access public`
 
 See: `packages/turbo-releaser/` for native package generation logic
 
@@ -427,14 +427,14 @@ The Turborepo release publishes **15 npm packages** (6 native + 9 JavaScript):
 
 #### Native Packages (Platform-Specific Binaries)
 
-| Package               | Description                | OS       | Arch    |
-| --------------------- | -------------------------- | -------- | ------- |
-| `turbo-darwin-64`     | macOS Intel binary         | `darwin` | `x64`   |
-| `turbo-darwin-arm64`  | macOS Apple Silicon binary | `darwin` | `arm64` |
-| `turbo-linux-64`      | Linux x64 binary (musl)    | `linux`  | `x64`   |
-| `turbo-linux-arm64`   | Linux ARM64 binary (musl)  | `linux`  | `arm64` |
-| `turbo-windows-64`    | Windows x64 binary         | `win32`  | `x64`   |
-| `turbo-windows-arm64` | Windows ARM64 binary       | `win32`  | `arm64` |
+| Package                | Description                | OS       | Arch    |
+| ---------------------- | -------------------------- | -------- | ------- |
+| `@turbo/darwin-64`     | macOS Intel binary         | `darwin` | `x64`   |
+| `@turbo/darwin-arm64`  | macOS Apple Silicon binary | `darwin` | `arm64` |
+| `@turbo/linux-64`      | Linux x64 binary (musl)    | `linux`  | `x64`   |
+| `@turbo/linux-arm64`   | Linux ARM64 binary (musl)  | `linux`  | `arm64` |
+| `@turbo/windows-64`    | Windows x64 binary         | `win32`  | `x64`   |
+| `@turbo/windows-arm64` | Windows ARM64 binary       | `win32`  | `arm64` |
 
 **Note**: Native packages use musl for Linux to ensure maximum compatibility across distributions.
 
@@ -582,7 +582,7 @@ This is because the Rust binary is never published to crates.io; it's only publi
 
    ```bash
    npm view turbo@<version>
-   npm view turbo-darwin-64@<version>
+   npm view @turbo/darwin-64@<version>
    npm view create-turbo@<version>
    # ... etc
    ```
@@ -605,7 +605,7 @@ If a canary release fails after some packages were published but before others:
 
    ```bash
    VERSION="2.6.1-canary.5"  # The failed version
-   for pkg in turbo turbo-darwin-64 turbo-darwin-arm64 turbo-linux-64 turbo-linux-arm64 turbo-windows-64 turbo-windows-arm64 create-turbo @turbo/codemod turbo-ignore @turbo/workspaces @turbo/gen eslint-plugin-turbo eslint-config-turbo @turbo/types; do
+   for pkg in turbo @turbo/darwin-64 @turbo/darwin-arm64 @turbo/linux-64 @turbo/linux-arm64 @turbo/windows-64 @turbo/windows-arm64 create-turbo @turbo/codemod turbo-ignore @turbo/workspaces @turbo/gen eslint-plugin-turbo eslint-config-turbo @turbo/types; do
      npm view "$pkg@$VERSION" version 2>/dev/null && echo "✓ $pkg published" || echo "✗ $pkg NOT published"
    done
    ```
@@ -615,8 +615,8 @@ If a canary release fails after some packages were published but before others:
    ```bash
    # Deprecate the partial release
    npm deprecate turbo@2.6.1-canary.5 "Partial release, use 2.6.1-canary.6"
-   npm deprecate turbo-darwin-64@2.6.1-canary.5 "Partial release, use 2.6.1-canary.6"
-   # ... repeat for each published package
+    npm deprecate @turbo/darwin-64@2.6.1-canary.5 "Partial release, use 2.6.1-canary.6"
+    # ... repeat for each published package
 
    # Merge any PR to main to trigger a new canary release
    ```

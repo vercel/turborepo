@@ -10,9 +10,9 @@ import {
   Uri,
   env
 } from "vscode";
-import * as cp from "child_process";
-import * as path from "path";
-import * as fs from "fs";
+import * as cp from "node:child_process";
+import * as path from "node:path";
+import * as fs from "node:fs";
 
 import {
   LanguageClient,
@@ -42,9 +42,9 @@ const logs = window.createOutputChannel("Turborepo Extension");
 
 function rainbowRgb(i: number) {
   const f = 0.5;
-  const r = Math.sin(f * i + (4.0 * Math.PI) / 3.0) * 127.0 + 128.0;
+  const r = Math.sin(f * i + (4 * Math.PI) / 3) * 127 + 128;
   const g = 45;
-  const b = Math.sin(f * i) * 127.0 + 128.0;
+  const b = Math.sin(f * i) * 127 + 128;
 
   return `#${Math.round(r).toString(16).padStart(2, "0")}${Math.round(g)
     .toString(16)

@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import type { PackageJson } from "@turbo/utils";
-import { isDefaultExample } from "../utils/isDefaultExample";
+import { isDefaultExample } from "../utils/is-default-example";
 import type { TransformInput, TransformResult, MetaJson } from "./types";
 import { TransformError } from "./errors";
 

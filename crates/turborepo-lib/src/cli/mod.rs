@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, env, ffi::OsString, fmt, io, mem, process};
+use std::{env, ffi::OsString, fmt, io, mem, process, sync::Arc};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use clap::{ArgAction, ArgGroup, CommandFactory, Parser, Subcommand, ValueEnum};
@@ -7,7 +7,7 @@ pub use error::Error;
 use serde::Serialize;
 use tracing::{debug, error, log::warn};
 use turbopath::AbsoluteSystemPathBuf;
-use turborepo_api_client::{APIClient, AnonAPIClient};
+use turborepo_api_client::SharedHttpClient;
 use turborepo_repository::inference::{RepoMode, RepoState};
 use turborepo_telemetry::{
     events::{command::CommandEventBuilder, generic::GenericEventBuilder, EventBuilder, EventType},
@@ -22,7 +22,7 @@ use crate::{
     cli::error::print_potential_tasks,
     commands::{
         bin, boundaries, config, daemon, docs, generate, get_mfe_port, info, link, login, logout,
-        ls, prune, query, run, scan, telemetry, unlink, CommandBase,
+        ls, prune, query, run, telemetry, unlink, CommandBase,
     },
     get_version,
     run::watch::WatchClient,
@@ -31,12 +31,64 @@ use crate::{
 };
 
 mod error;
+mod observability;
+
 // Global turbo sets this environment variable to its cwd so that local
 // turbo can use it for package inference.
 pub const INVOCATION_DIR_ENV_VAR: &str = "TURBO_INVOCATION_DIR";
 
 // Default value for the --cache-workers argument
 const DEFAULT_NUM_WORKERS: u32 = 10;
+
+/// Returns a scaled thread count for rayon's global pool based on
+/// available CPU cores, capped at
+/// [`crate::rayon_compat::MAX_RAYON_THREADS`].
+///
+/// See [`init_rayon_pool`] and <https://github.com/vercel/turborepo/issues/12251>
+fn rayon_pool_size() -> usize {
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
+    crate::rayon_compat::scale_thread_count(cpus)
+}
+
+/// Explicitly initialize rayon's global thread pool early so we control
+/// its size and initialization timing.
+///
+/// If `RAYON_NUM_THREADS` is set, its value is still clamped to
+/// [`crate::rayon_compat::MAX_RAYON_THREADS`] to prevent the known
+/// deadlock on high-core-count machines.
+fn init_rayon_pool() {
+    let pool_size = match std::env::var("RAYON_NUM_THREADS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
+        Some(user_val) => {
+            let clamped = crate::rayon_compat::scale_thread_count(user_val);
+            if clamped < user_val {
+                tracing::debug!(
+                    requested = user_val,
+                    clamped,
+                    max = crate::rayon_compat::MAX_RAYON_THREADS,
+                    "RAYON_NUM_THREADS exceeds safe limit, clamping"
+                );
+            }
+            clamped
+        }
+        None => rayon_pool_size(),
+    };
+
+    tracing::info!(
+        rayon_pool_size = pool_size,
+        "initializing rayon global pool"
+    );
+
+    let builder = rayon::ThreadPoolBuilder::new().num_threads(pool_size);
+    if let Err(e) = builder.build_global() {
+        tracing::warn!("rayon global pool already initialized: {e}");
+    }
+}
+
 const SUPPORTED_GRAPH_FILE_EXTENSIONS: [&str; 8] =
     ["svg", "png", "jpg", "pdf", "json", "html", "mermaid", "dot"];
 
@@ -99,6 +151,8 @@ pub struct Args {
     /// verbosity
     #[clap(flatten)]
     pub verbosity: Verbosity,
+    #[clap(flatten)]
+    pub experimental_otel_args: observability::ExperimentalOtelCliArgs,
     /// Force a check for a new version of turbo
     #[clap(long, global = true, hide = true)]
     pub check_for_update: bool,
@@ -210,12 +264,6 @@ pub enum TelemetryCommand {
     Disable,
     /// Reports the status of telemetry
     Status,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, ValueEnum)]
-pub enum LinkTarget {
-    RemoteCache,
-    Spaces,
 }
 
 /// Returns formatted RunArgs options derived from clap's command definition.
@@ -367,6 +415,41 @@ impl Args {
                 warn!(
                     "--no-daemon is deprecated and will be removed in version 3.0. The daemon is \
                      no longer used for `turbo run`."
+                );
+            }
+            if run_args.parallel {
+                warn!(
+                    "--parallel is deprecated and will be removed in a future major version. \
+                     Instead, define task behavior in your turbo.json task definitions using \
+                     `persistent` and `with`."
+                );
+            }
+            if let Some(graph) = &run_args.graph {
+                match Utf8Path::new(graph).extension() {
+                    Some("png" | "jpg" | "pdf") => {
+                        warn!(
+                            "--graph with .{ext} output is deprecated and will be removed in \
+                             version 3.0. Use .svg, .html, .mermaid, or .dot instead.",
+                            ext = Utf8Path::new(graph).extension().unwrap()
+                        );
+                    }
+                    Some("json") => {
+                        warn!(
+                            "--graph with .json output is deprecated and will be removed in \
+                             version 3.0. Use `turbo query` for programmatic access to the task \
+                             graph."
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        if let Some(Command::Prune { ref scope, .. }) = clap_args.command {
+            if scope.is_some() {
+                warn!(
+                    "--scope is deprecated and will be removed in a future major version. Use \
+                     positional arguments instead (e.g. `turbo prune web`)"
                 );
             }
         }
@@ -607,8 +690,9 @@ pub enum Command {
         #[clap(subcommand)]
         command: Option<TelemetryCommand>,
     },
-    /// Turbo your monorepo by running a number of 'repo lints' to
-    /// identify common issues, suggest fixes, and improve performance.
+    /// [DEPRECATED] `turbo scan` has been removed. This command will be
+    /// fully removed in a future major version.
+    #[clap(hide = true)]
     Scan,
     #[clap(hide = true)]
     Config,
@@ -645,10 +729,6 @@ pub enum Command {
         /// Answer yes to all prompts (default false)
         #[clap(long, short)]
         yes: bool,
-
-        /// DEPRECATED: Specify what should be linked (default "remote cache")
-        #[clap(long, value_enum)]
-        target: Option<LinkTarget>,
     },
     /// Login to your Vercel account
     Login {
@@ -673,6 +753,8 @@ pub enum Command {
     Info,
     /// Prepare a subset of your monorepo.
     Prune {
+        /// DEPRECATED: Use positional arguments instead
+        /// (e.g. `turbo prune web`)
         #[clap(hide = true, long)]
         scope: Option<Vec<String>>,
         /// Workspaces that should be included in the subset
@@ -708,7 +790,10 @@ pub enum Command {
     },
     /// Query your monorepo using GraphQL. If no query is provided, spins up a
     /// GraphQL server with GraphiQL.
+    #[command(args_conflicts_with_subcommands = true)]
     Query {
+        #[clap(subcommand)]
+        subcommand: Option<QuerySubcommand>,
         /// Pass variables to the query via a JSON file
         #[clap(short = 'V', long, requires = "query")]
         variables: Option<Utf8PathBuf>,
@@ -726,11 +811,7 @@ pub enum Command {
     },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
-    Unlink {
-        /// DEPRECATED: Specify what should be unlinked (default "remote cache")
-        #[clap(long, value_enum)]
-        target: Option<LinkTarget>,
-    },
+    Unlink,
 }
 
 #[derive(Copy, Clone, Debug, Default, ValueEnum, Serialize, Eq, PartialEq)]
@@ -798,6 +879,38 @@ pub enum GenerateCommand {
     Workspace(GenerateWorkspaceArgs),
     #[clap(name = "run", alias = "r")]
     Run(GeneratorCustomArgs),
+}
+
+#[derive(Subcommand, Clone, Debug, PartialEq)]
+pub enum QuerySubcommand {
+    /// Check which packages or tasks are affected by changes between two git
+    /// refs
+    Affected(AffectedArgs),
+}
+
+#[derive(clap::Args, Clone, Debug, PartialEq)]
+pub struct AffectedArgs {
+    /// Return affected packages instead of tasks. Optionally filter by name.
+    /// When combined with --tasks, returns affected tasks that match both
+    /// the task name and package filters.
+    #[clap(long, num_args = 0..)]
+    pub packages: Option<Vec<String>>,
+    /// Filter to specific task names (e.g. build, test).
+    /// When combined with --packages, returns affected tasks that match both
+    /// the task name and package filters.
+    #[clap(long, num_args = 0..)]
+    pub tasks: Option<Vec<String>>,
+    /// Base git ref for comparison
+    #[clap(long)]
+    pub base: Option<String>,
+    /// Head git ref for comparison
+    #[clap(long)]
+    pub head: Option<String>,
+    /// Exit with code 1 when affected packages or tasks are found, 0 when
+    /// none are found, or 2 on errors. Useful for CI gating. We recommend
+    /// parsing the JSON output directly for more flexibility.
+    #[clap(long)]
+    pub exit_code: bool,
 }
 
 fn validate_graph_extension(s: &str) -> Result<String, String> {
@@ -885,6 +998,14 @@ pub struct ExecutionArgs {
     /// turbo decide based on its own heuristics. (default auto)
     #[clap(long, value_enum)]
     pub log_order: Option<LogOrder>,
+    /// Output machine-readable NDJSON to stdout instead of human-readable
+    /// text. Disables the TUI and forces stream mode.
+    #[clap(long)]
+    pub json: bool,
+    /// Write structured JSON logs to a file. If no path is given, writes to
+    /// `.turbo/logs/<epoch_millis>.json`.
+    #[clap(long)]
+    pub log_file: Option<Option<String>>,
     /// Only executes the tasks specified, does not execute parent tasks.
     #[clap(long)]
     pub only: bool,
@@ -996,9 +1117,9 @@ pub struct RunArgs {
     #[clap(alias = "dry", long = "dry-run", num_args = 0..=1, default_missing_value = "text")]
     pub dry_run: Option<DryRunMode>,
     /// Generate a graph of the task execution and output to a file when a
-    /// filename is specified (.svg, .png, .jpg, .pdf, .json,
-    /// .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename
-    /// is provided
+    /// filename is specified (.svg, .html, .mermaid, .dot). Outputs dot graph
+    /// to stdout when no filename is provided.
+    /// [DEPRECATED formats: .png, .jpg, .pdf, .json -- will be removed in 3.0]
     #[clap(long, num_args = 0..=1, default_missing_value = "", value_parser = validate_graph_extension)]
     pub graph: Option<String>,
     // clap does not have negation flags such as --daemon and --no-daemon
@@ -1027,7 +1148,8 @@ pub struct RunArgs {
     #[clap(long, default_missing_value = "true")]
     pub summarize: Option<Option<bool>>,
 
-    /// Execute all tasks in parallel.
+    /// [DEPRECATED] Execute all tasks in parallel. Use task configuration
+    /// (`persistent`, `with`) instead.
     #[clap(long)]
     pub parallel: bool,
 }
@@ -1138,19 +1260,23 @@ impl RunArgs {
     }
 }
 
-#[tracing::instrument(skip_all)]
-fn initialize_telemetry_client(
-    http_client: &reqwest::Client,
+fn initialize_deferred_telemetry_client(
+    http_client: SharedHttpClient,
     color_config: ColorConfig,
     version: &str,
 ) -> Option<TelemetryHandle> {
-    let anonymous_api_client = AnonAPIClient::new_with_client(
+    let deferred_client = turborepo_api_client::telemetry::DeferredTelemetryClient::new(
         http_client.clone(),
         "https://telemetry.vercel.com",
         version,
     );
-    match init_telemetry(anonymous_api_client, color_config) {
-        Ok(h) => Some(h),
+    match init_telemetry(deferred_client, color_config) {
+        Ok((handle, enabled)) => {
+            if enabled {
+                http_client.activate();
+            }
+            Some(handle)
+        }
         Err(error) => {
             debug!("failed to start telemetry: {:?}", error);
             None
@@ -1247,7 +1373,7 @@ fn default_to_run_command(cli_args: &Args) -> Result<Command, Error> {
         // We clone instead of take as take would leave the command base a copy of cli_args
         // missing any execution args.
         .clone()
-        .ok_or_else(|| Error::NoCommand(Backtrace::capture()))?;
+        .ok_or_else(|| Error::NoCommand)?;
 
     if execution_args.tasks.is_empty() {
         let mut cmd = <Args as CommandFactory>::command();
@@ -1283,45 +1409,72 @@ fn get_command(cli_args: &mut Args) -> Result<Command, Error> {
 ///
 /// # Arguments
 ///
-/// * `repo_state`: If we have done repository inference and NOT executed
-/// local turbo, such as in the case where `TURBO_BINARY_PATH` is set,
-/// we use it here to modify clap's arguments.
+/// * `repo_state`: If we have done repository inference and NOT executed local
+///   turbo, such as in the case where `TURBO_BINARY_PATH` is set, we use it
+///   here to modify clap's arguments.
 /// * `logger`: The logger to use for the run.
 /// * `color_config`: The color configuration to use for the run, i.e. whether
 ///   we should colorize output.
 ///
-/// returns: Result<Payload, Error>
-#[tokio::main]
+/// returns: Result<i32, Error>
+pub fn run(
+    repo_state: Option<RepoState>,
+    logger: &TurboSubscriber,
+    color_config: ColorConfig,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
+) -> Result<i32, Error> {
+    // Initialize rayon's global pool before the tokio runtime so we
+    // control thread count and avoid lazy initialization during a hot path.
+    init_rayon_pool();
+
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .expect("failed to build tokio runtime");
+
+    runtime.block_on(run_main(repo_state, logger, color_config, query_server))
+}
+
 #[tracing::instrument(skip_all)]
-pub async fn run(
+async fn run_main(
     repo_state: Option<RepoState>,
     #[allow(unused_variables)] logger: &TurboSubscriber,
     color_config: ColorConfig,
+    query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 ) -> Result<i32, Error> {
-    // TODO: remove mutability from this function
-    let mut cli_args = Args::new(env::args_os().collect());
+    let _cli_run_span = tracing::info_span!("cli_run").entered();
+    let http_client = SharedHttpClient::new();
+
+    let mut cli_args = {
+        let _span = tracing::info_span!("cli_arg_parsing").entered();
+        Args::new(env::args_os().collect())
+    };
     let version = get_version();
 
-    // Build a single HTTP client to share across telemetry, API, and cache
-    // operations. This avoids redundant TLS initialization (~150ms savings).
-    let http_client = APIClient::build_http_client(None)
-        .expect("Failed to create HTTP client: TLS initialization failed");
-
-    // track telemetry handle to close at the end of the run
-    let telemetry_handle = initialize_telemetry_client(&http_client, color_config, version);
-
-    if should_print_version() {
-        eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
-    }
+    // Initialize telemetry immediately so events are captured from startup.
+    // The shared HTTP client is only activated if telemetry is actually
+    // enabled for this invocation.
+    let telemetry_handle = {
+        let _span = tracing::info_span!("telemetry_init").entered();
+        initialize_deferred_telemetry_client(http_client.clone(), color_config, version)
+    };
 
     let mut command = get_command(&mut cli_args)?;
+
+    // Suppress the version banner in --json mode — all output on stdout
+    // must be machine-readable NDJSON.
+    let is_json_mode = matches!(
+        &command,
+        Command::Run { execution_args, .. } | Command::Watch { execution_args, .. }
+            if execution_args.json
+    );
+    if should_print_version() && !is_json_mode {
+        eprintln!("{}", GREY.apply_to(format!("• turbo {}", get_version())));
+    }
 
     // Set some run flags if we have the data and are executing a Run
     set_run_flags(&mut command, &repo_state, &cli_args)?;
 
-    // TODO: make better use of RepoState, here and below. We've already inferred
-    // the repo root, we don't need to calculate it again, along with package
-    // manager inference.
     let cwd = repo_state
         .as_ref()
         .map(|state| state.root.as_path())
@@ -1350,6 +1503,7 @@ pub async fn run(
     // track system info
     root_telemetry.track_platform(TurboState::platform_name());
     root_telemetry.track_version(TurboState::version());
+    root_telemetry.track_ai_agent(turborepo_ai_agents::get_agent());
     root_telemetry.track_cpus(
         std::thread::available_parallelism()
             .map(|n| n.get())
@@ -1469,13 +1623,8 @@ pub async fn run(
         Command::Scan => {
             let event = CommandEventBuilder::new("scan").with_parent(&root_telemetry);
             event.track_call();
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
-            event.track_ui_mode(base.opts.run_opts.ui_mode);
-            if scan::run(base).await {
-                Ok(0)
-            } else {
-                Ok(1)
-            }
+            warn!("`turbo scan` is deprecated and will be removed in a future major version.");
+            Ok(1)
         }
         Command::Config => {
             CommandEventBuilder::new("config")
@@ -1502,11 +1651,7 @@ pub async fn run(
             no_gitignore,
             scope,
             yes,
-            target,
         } => {
-            if target.is_some() {
-                warn!("`--target` flag is deprecated and does not do anything")
-            }
             let event = CommandEventBuilder::new("link").with_parent(&root_telemetry);
             event.track_call();
 
@@ -1566,11 +1711,7 @@ pub async fn run(
 
             Ok(0)
         }
-        Command::Unlink { target } => {
-            if target.is_some() {
-                warn!("`--target` flag is deprecated and does not do anything");
-            }
-
+        Command::Unlink => {
             let event = CommandEventBuilder::new("unlink").with_parent(&root_telemetry);
             event.track_call();
             if cli_args.test_run {
@@ -1592,7 +1733,10 @@ pub async fn run(
             let event = CommandEventBuilder::new("run").with_parent(&root_telemetry);
             event.track_call();
 
-            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+            let base = {
+                let _span = tracing::info_span!("command_base_new").entered();
+                CommandBase::new(cli_args.clone(), repo_root, version, color_config)?
+            };
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
             if execution_args.tasks.is_empty() {
@@ -1601,7 +1745,17 @@ pub async fn run(
             }
 
             run_args.track(&event);
-            let exit_code = run::run(base, event, &http_client).await.inspect(|code| {
+            let verbosity: u8 = cli_args.verbosity.into();
+            let exit_code = run::run(
+                base,
+                event,
+                http_client,
+                query_server.clone(),
+                logger,
+                verbosity,
+            )
+            .await
+            .inspect(|code| {
                 if *code != 0 {
                     error!("run failed: command  exited ({code})");
                 }
@@ -1611,6 +1765,12 @@ pub async fn run(
             // flush and generate the markdown summary.
             if let Some(file_path) = logger.chrome_tracing_file() {
                 let _ = logger.flush_chrome_tracing();
+
+                if let Err(e) =
+                    crate::tracing::inject_trace_metadata(std::path::Path::new(&file_path), version)
+                {
+                    warn!("Failed to inject trace metadata: {e}");
+                }
 
                 let md_path = format!("{file_path}.md");
                 if let Err(e) = turborepo_profile_md::trace_to_markdown(
@@ -1624,11 +1784,16 @@ pub async fn run(
             Ok(exit_code)
         }
         Command::Query {
+            subcommand,
             query,
             variables,
             schema,
         } => {
+            let Some(ref query_server) = query_server else {
+                return Err(error::Error::QueryNotAvailable);
+            };
             warn!("query command is experimental and may change in the future");
+            let subcommand = subcommand.clone();
             let query = query.clone();
             let variables = variables.clone();
             let schema = *schema;
@@ -1638,7 +1803,16 @@ pub async fn run(
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
 
-            let query = query::run(base, event, query, variables.as_deref(), schema).await?;
+            let query = query::run(
+                base,
+                event,
+                subcommand,
+                query,
+                variables.as_deref(),
+                schema,
+                query_server.as_ref(),
+            )
+            .await?;
 
             Ok(query)
         }
@@ -1656,13 +1830,32 @@ pub async fn run(
                 return Ok(1);
             }
 
-            let mut client = WatchClient::new(base, *experimental_write_cache, event).await?;
-            if let Err(e) = client.start().await {
-                client.shutdown().await;
-                return Err(e.into());
+            let verbosity: u8 = cli_args.verbosity.into();
+            let mut client = WatchClient::new(
+                base,
+                *experimental_write_cache,
+                event,
+                query_server.clone(),
+                logger,
+                verbosity,
+            )
+            .await?;
+            match client.start().await {
+                Ok(()) => {}
+                Err(crate::run::watch::Error::SignalInterrupt) => {
+                    // Normal shutdown via Ctrl+C — not an error.
+                }
+                Err(e) => {
+                    client.shutdown().await;
+                    return Err(e.into());
+                }
             }
-            // We only exit if we get a signal, so we return a non-zero exit code
-            return Ok(1);
+            client.shutdown().await;
+            if let Some(path) = logger.stderr_redirect_path() {
+                logger.restore_stderr();
+                println!("Verbose logs written to {path}");
+            }
+            return Ok(0);
         }
         Command::Prune {
             scope,
@@ -1723,7 +1916,7 @@ mod test {
     use itertools::Itertools;
     use pretty_assertions::assert_eq;
 
-    use crate::cli::{ContinueMode, ExecutionArgs, LinkTarget, RunArgs};
+    use crate::cli::{ContinueMode, ExecutionArgs, RunArgs};
 
     fn get_subcommand(name: &str) -> clap::Command {
         Args::command()
@@ -2690,7 +2883,6 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
-                    target: None,
                 }),
                 ..Args::default()
             }
@@ -2705,7 +2897,6 @@ mod test {
                     no_gitignore: false,
                     scope: None,
                     yes: false,
-                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2722,7 +2913,6 @@ mod test {
                     yes: true,
                     no_gitignore: false,
                     scope: None,
-                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2739,7 +2929,6 @@ mod test {
                     yes: false,
                     no_gitignore: false,
                     scope: Some("foo".to_string()),
-                    target: None,
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2756,24 +2945,6 @@ mod test {
                     yes: false,
                     no_gitignore: true,
                     scope: None,
-                    target: None,
-                }),
-                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
-                ..Args::default()
-            },
-        }
-        .test();
-
-        CommandTestCase {
-            command: "link",
-            command_args: vec![vec!["--target", "spaces"]],
-            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
-            expected_output: Args {
-                command: Some(Command::Link {
-                    yes: false,
-                    no_gitignore: false,
-                    scope: None,
-                    target: Some(LinkTarget::Spaces),
                 }),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
@@ -2857,7 +3028,7 @@ mod test {
         assert_eq!(
             Args::try_parse_from(["turbo", "unlink"]).unwrap(),
             Args {
-                command: Some(Command::Unlink { target: None }),
+                command: Some(Command::Unlink),
                 ..Args::default()
             }
         );
@@ -2867,21 +3038,7 @@ mod test {
             command_args: vec![],
             global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
             expected_output: Args {
-                command: Some(Command::Unlink { target: None }),
-                cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
-                ..Args::default()
-            },
-        }
-        .test();
-
-        CommandTestCase {
-            command: "unlink",
-            command_args: vec![vec!["--target", "remote-cache"]],
-            global_args: vec![vec!["--cwd", "../examples/with-yarn"]],
-            expected_output: Args {
-                command: Some(Command::Unlink {
-                    target: Some(LinkTarget::RemoteCache),
-                }),
+                command: Some(Command::Unlink),
                 cwd: Some(Utf8PathBuf::from("../examples/with-yarn")),
                 ..Args::default()
             },
@@ -3505,5 +3662,180 @@ mod test {
             let err = cli.unwrap_err();
             assert_snapshot!(args.join("-").as_str(), err);
         }
+    }
+
+    #[test]
+    fn test_query_affected_no_args() {
+        let args = Args::try_parse_from(["turbo", "query", "affected"]).unwrap();
+        assert_eq!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(super::AffectedArgs {
+                    packages: None,
+                    tasks: None,
+                    base: None,
+                    head: None,
+                    exit_code: false,
+                })),
+                query: None,
+                variables: None,
+                schema: false,
+            })
+        );
+    }
+
+    #[test]
+    fn test_query_affected_bare_packages_flag() {
+        let args = Args::try_parse_from(["turbo", "query", "affected", "--packages"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec![])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_packages() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--packages", "web"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec!["web".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_multiple_packages() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--packages", "web", "docs"])
+                .unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec!["web".to_string(), "docs".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_bare_tasks_flag() {
+        let args = Args::try_parse_from(["turbo", "query", "affected", "--tasks"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.tasks == Some(vec![])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_tasks() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--tasks", "build"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.tasks == Some(vec!["build".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_with_base_head() {
+        let args = Args::try_parse_from([
+            "turbo", "query", "affected", "--base", "main", "--head", "HEAD",
+        ])
+        .unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.base == Some("main".to_string()) && a.head == Some("HEAD".to_string())
+        );
+    }
+
+    #[test]
+    fn test_query_affected_combined_packages_and_tasks() {
+        let args = Args::try_parse_from([
+            "turbo",
+            "query",
+            "affected",
+            "--packages",
+            "web",
+            "--tasks",
+            "build",
+        ])
+        .unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec!["web".to_string()])
+                && a.tasks == Some(vec!["build".to_string()])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_combined_bare_packages_and_bare_tasks() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "affected", "--packages", "--tasks"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.packages == Some(vec![]) && a.tasks == Some(vec![])
+        );
+    }
+
+    #[test]
+    fn test_query_affected_exit_code_flag() {
+        let args = Args::try_parse_from(["turbo", "query", "affected", "--exit-code"]).unwrap();
+        assert_matches!(
+            args.command,
+            Some(Command::Query {
+                subcommand: Some(super::QuerySubcommand::Affected(ref a)),
+                ..
+            }) if a.exit_code
+        );
+    }
+
+    #[test]
+    fn test_query_raw_graphql_still_works() {
+        let args =
+            Args::try_parse_from(["turbo", "query", "{ packages { items { name } } }"]).unwrap();
+        assert_eq!(
+            args.command,
+            Some(Command::Query {
+                subcommand: None,
+                query: Some("{ packages { items { name } } }".to_string()),
+                variables: None,
+                schema: false,
+            })
+        );
+    }
+
+    #[test]
+    fn test_query_schema_still_works() {
+        let args = Args::try_parse_from(["turbo", "query", "--schema"]).unwrap();
+        assert_eq!(
+            args.command,
+            Some(Command::Query {
+                subcommand: None,
+                query: None,
+                variables: None,
+                schema: true,
+            })
+        );
     }
 }

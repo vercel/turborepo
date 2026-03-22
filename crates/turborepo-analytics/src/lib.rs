@@ -7,7 +7,6 @@
 
 use std::time::Duration;
 
-use futures::{StreamExt, stream::FuturesUnordered};
 use thiserror::Error;
 use tokio::{
     select,
@@ -60,7 +59,6 @@ pub fn start_analytics(
         buffer: Vec::new(),
         session_id,
         api_auth,
-        senders: FuturesUnordered::new(),
         exit_ch: cancel_tx,
         client,
     };
@@ -97,7 +95,6 @@ struct Worker<C> {
     buffer: Vec<AnalyticsEvent>,
     session_id: Uuid,
     api_auth: APIAuth,
-    senders: FuturesUnordered<JoinHandle<()>>,
     // Used to cancel the worker
     exit_ch: oneshot::Sender<()>,
     client: C,
@@ -135,23 +132,17 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                 }
             }
             self.flush_events();
-            while let Some(result) = self.senders.next().await {
-                if let Err(err) = result {
-                    debug!("failed to send analytics event. error: {}", err)
-                }
-            }
         })
     }
 
     pub fn flush_events(&mut self) {
         if !self.buffer.is_empty() {
             let events = std::mem::take(&mut self.buffer);
-            let handle = self.send_events(events);
-            self.senders.push(handle);
+            self.send_events(events);
         }
     }
 
-    fn send_events(&self, mut events: Vec<AnalyticsEvent>) -> JoinHandle<()> {
+    fn send_events(&self, mut events: Vec<AnalyticsEvent>) {
         let session_id = self.session_id;
         let client = self.client.clone();
         let api_auth = self.api_auth.clone();
@@ -166,7 +157,7 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
             {
                 debug!("failed to record cache usage analytics. error: {}", err)
             }
-        })
+        });
     }
 }
 
@@ -336,6 +327,51 @@ mod tests {
         assert_eq!(payloads.len(), 2);
 
         drop(analytics_handle);
+    }
+
+    #[derive(Clone, Copy)]
+    struct SlowClient;
+
+    impl AnalyticsClient for SlowClient {
+        async fn record_analytics(
+            &self,
+            _api_auth: &APIAuth,
+            _events: Vec<AnalyticsEvent>,
+        ) -> Result<(), turborepo_api_client::Error> {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn test_close_does_not_block_on_slow_client() {
+        let (analytics_sender, analytics_handle) = start_analytics(
+            APIAuth {
+                token: SecretString::new("foo".to_string()),
+                team_id: Some("bar".to_string()),
+                team_slug: None,
+            },
+            SlowClient,
+        );
+
+        for _ in 0..2 {
+            analytics_sender
+                .send(AnalyticsEvent {
+                    session_id: None,
+                    source: CacheSource::Local,
+                    event: CacheEvent::Hit,
+                    hash: "".to_string(),
+                    duration: 0,
+                })
+                .unwrap();
+        }
+        drop(analytics_sender);
+
+        // close() should return near-instantly even though the client takes 5s
+        tokio::time::timeout(Duration::from_millis(200), analytics_handle.close())
+            .await
+            .expect("close() blocked waiting for slow HTTP response")
+            .expect("worker panicked");
     }
 
     #[tokio::test]

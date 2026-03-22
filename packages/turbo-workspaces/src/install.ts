@@ -1,4 +1,4 @@
-import type { PackageManager } from "@turbo/utils";
+import type { PackageManager } from "./types";
 import execa from "execa";
 import ora from "ora";
 import { satisfies } from "semver";

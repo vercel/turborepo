@@ -133,7 +133,7 @@ Run `turbo prune frontend` to generate a pruned workspace for the `frontend` app
 
 Defaults to `false`.
 
-Alter the output directory to make it easier to use with [Docker best practices and layer caching](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/). The directory will contain:
+Alter the output directory to make it easier to use with [Docker best practices and layer caching](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/). For an example Dockerfile using this flag, see the [Docker guide](/docs/guides/tools/docker). The directory will contain:
 
 - A folder named `json` with the pruned workspace's `package.json` files.
 - A folder named `full` with the pruned workspace's full source code for the internal packages needed to build the target.
@@ -210,6 +210,23 @@ Customize the directory the pruned output is generated in.
 Default: `true`
 
 Respect `.gitignore` file(s) when copying files to the output directory.
+
+### Including `globalDependencies`
+
+By default, `turbo prune` does not copy files referenced by [`globalDependencies`](/docs/reference/configuration#globaldependencies) into the output directory. The `globalDependencies` field is preserved in the pruned `turbo.json`, but the files themselves (e.g., a root `tsconfig.json` or `.env`) are not included.
+
+Enable the [`pruneIncludesGlobalFiles`](/docs/reference/configuration#pruneincludesglobalfiles) future flag to copy these files:
+
+```jsonc title="./turbo.json"
+{
+  "globalDependencies": ["tsconfig.json", ".env"],
+  "futureFlags": {
+    "pruneIncludesGlobalFiles": true,
+  },
+}
+```
+
+With this flag, all files matching the `globalDependencies` globs will be included in the pruned output. In `--docker` mode, they are copied to both the `full` and `json` directories.
 
 ### Comparison to `pnpm deploy`
 

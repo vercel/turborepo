@@ -3,14 +3,14 @@ import path from "node:path";
 import { existsSync } from "node:fs";
 import { getTurboRoot } from "@turbo/utils";
 import type { DryRun } from "@turbo/types";
-import { getComparison } from "./getComparison";
-import { getTask } from "./getTask";
-import { getWorkspace } from "./getWorkspace";
-import { getTurboVersion } from "./getTurboVersion";
+import { getComparison } from "./get-comparison";
+import { getTask } from "./get-task";
+import { getWorkspace } from "./get-workspace";
+import { getTurboVersion } from "./get-turbo-version";
 import { log, info, warn, error } from "./logger";
 import { shouldWarn } from "./errors";
 import type { TurboIgnoreArg, TurboIgnoreOptions } from "./types";
-import { checkCommit } from "./checkCommit";
+import { checkCommit } from "./check-commit";
 
 function trackOptions(opts: TurboIgnoreOptions) {
   opts.telemetry?.trackOptionTask(opts.task);
@@ -41,6 +41,22 @@ export function turboIgnore(
     workspace: workspaceArg,
     ...opts
   };
+
+  if (process.env.VERCEL === "1") {
+    warn(
+      `\u001B[33m"turbo-ignore" is deprecated. Use Vercel's built-in project skipping instead.\u001B[39m`
+    );
+    warn(
+      `\u001B[33mLearn more: https://vercel.com/docs/monorepos#skipping-unaffected-projects\u001B[39m\n`
+    );
+  } else {
+    warn(
+      `\u001B[33m"turbo-ignore" is deprecated. Use "turbo query affected" instead.\u001B[39m`
+    );
+    warn(
+      `\u001B[33mLearn more: https://turborepo.dev/docs/reference/query#migrating-from-turbo-ignore\u001B[39m\n`
+    );
+  }
 
   info(
     `Using Turborepo to determine if this project is affected by the commit...\n`

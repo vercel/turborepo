@@ -12,7 +12,6 @@ use serde::Serialize;
 use svix_ksuid::{Ksuid, KsuidLike};
 use tabwriter::TabWriter;
 use thiserror::Error;
-use tracing::log::warn;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
@@ -24,6 +23,7 @@ use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cprintln, cwriteln
 use crate::{
     EngineInfo, GlobalHashSummary, HashTrackerInfo, RunOptsInfo, SCMState, TaskTracker,
     execution::{ExecutionSummary, ExecutionTracker, TaskState},
+    observability::Handle as ObservabilityHandle,
     task::{SinglePackageTaskSummary, TaskSummary},
     task_factory::TaskSummaryFactory,
 };
@@ -81,6 +81,8 @@ pub struct RunSummary<'a> {
     should_save: bool,
     #[serde(skip)]
     run_type: RunType,
+    #[serde(skip)]
+    observability_handle: Option<ObservabilityHandle>,
 }
 
 /// We use this to track the run, so it's constructed before the run.
@@ -91,6 +93,7 @@ pub struct RunTracker {
     execution_tracker: ExecutionTracker,
     user: Option<String>,
     synthesized_command: String,
+    observability_handle: Option<ObservabilityHandle>,
 }
 
 impl RunTracker {
@@ -99,6 +102,7 @@ impl RunTracker {
         synthesized_command: String,
         version: &'static str,
         user: Option<String>,
+        observability_handle: Option<ObservabilityHandle>,
     ) -> Self {
         RunTracker {
             version,
@@ -106,6 +110,7 @@ impl RunTracker {
             execution_tracker: ExecutionTracker::new(),
             user,
             synthesized_command,
+            observability_handle,
         }
     }
 
@@ -154,7 +159,7 @@ impl RunTracker {
 
         // Build task summaries in parallel — each task_summary call is read-only
         // on the engine, hash tracker, and package graph.
-        let tasks = {
+        let tasks = turborepo_rayon_compat::block_in_place(|| {
             use rayon::prelude::*;
             let results: Vec<Result<TaskSummary, crate::task_factory::Error>> = summary_state
                 .tasks
@@ -166,8 +171,8 @@ impl RunTracker {
                 .collect();
             results
                 .into_iter()
-                .collect::<Result<Vec<_>, crate::task_factory::Error>>()?
-        };
+                .collect::<Result<Vec<_>, crate::task_factory::Error>>()
+        })?;
         let execution_summary = ExecutionSummary::new(
             self.synthesized_command.clone(),
             summary_state,
@@ -193,6 +198,7 @@ impl RunTracker {
             repo_root,
             should_save,
             run_type,
+            observability_handle: self.observability_handle.clone(),
         })
     }
 
@@ -232,11 +238,14 @@ impl RunTracker {
     {
         let end_time = Local::now();
 
-        // For the common case (no --dry, no --summarize), skip the expensive
-        // TaskSummary construction, SCMState::get (2 git subprocesses), and
-        // full RunSummary assembly. We only need execution stats and failed
-        // task identification for terminal output.
-        if run_opts.dry_run().is_none() && run_opts.summarize().is_none() {
+        // For the common case (no --dry, no --summarize, no observability),
+        // skip the expensive TaskSummary construction, SCMState::get (2 git
+        // subprocesses), and full RunSummary assembly. We only need execution
+        // stats and failed task identification for terminal output.
+        if run_opts.dry_run().is_none()
+            && run_opts.summarize().is_none()
+            && self.observability_handle.is_none()
+        {
             let summary_state = self.execution_tracker.finish().await?;
 
             if !is_watch {
@@ -350,6 +359,31 @@ impl<'a> From<&'a RunSummary<'a>> for SinglePackageRunSummary<'a> {
 }
 
 impl<'a> RunSummary<'a> {
+    // Used in observability/otel.rs to populate RunMetricsPayload.run_id
+    pub(crate) fn id(&self) -> &Ksuid {
+        &self.id
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.turbo_version
+    pub(crate) fn turbo_version(&self) -> &'static str {
+        self.turbo_version
+    }
+
+    // Used in observability/otel.rs to access execution summary for metrics
+    pub(crate) fn execution_summary(&self) -> Option<&ExecutionSummary<'a>> {
+        self.execution.as_ref()
+    }
+
+    // Used in observability/otel.rs to iterate over tasks for TaskMetricsPayload
+    pub(crate) fn tasks(&self) -> &[TaskSummary] {
+        &self.tasks
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload SCM fields
+    pub(crate) fn scm_state(&self) -> &SCMState {
+        &self.scm
+    }
+
     #[tracing::instrument(skip(self, pkg_dep_graph, ui))]
     async fn finish(
         mut self,
@@ -359,6 +393,18 @@ impl<'a> RunSummary<'a> {
         ui: ColorConfig,
         is_watch: bool,
     ) -> Result<(), Error> {
+        // Handle observability shutdown before the dry run check to ensure graceful
+        // cleanup even when metrics are not being emitted.
+        // Note: shutdown respects the configured timeout_ms (default 10s) to prevent
+        // hanging indefinitely on network issues.
+        if let Some(handle) = self.observability_handle.take() {
+            // Only record metrics for actual runs, not dry runs
+            if !matches!(self.run_type, RunType::DryJson | RunType::DryText) {
+                handle.record(&self);
+            }
+            handle.shutdown();
+        }
+
         if matches!(self.run_type, RunType::DryJson | RunType::DryText) {
             return self.close_dry_run(pkg_dep_graph, ui);
         }
@@ -366,7 +412,11 @@ impl<'a> RunSummary<'a> {
         if self.should_save
             && let Err(err) = self.save().await
         {
-            warn!("Error writing run summary: {}", err)
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                format!("Error writing run summary: {err}"),
+            )
+            .emit()
         }
 
         if !is_watch && let Some(execution) = &self.execution {
@@ -385,7 +435,11 @@ impl<'a> RunSummary<'a> {
         }
 
         for error in errors {
-            warn!("{}", error)
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                format!("{error}"),
+            )
+            .emit();
         }
     }
 

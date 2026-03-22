@@ -1,4 +1,4 @@
-import fs from "fs/promises";
+import fs from "node:fs/promises";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkRehype from "remark-rehype";
@@ -56,6 +56,15 @@ const getAllMdxFilePaths = async (): Promise<string[]> => {
   );
 };
 
+// Strips JSX components from heading text so slugs match the rendered output.
+// The link checker parses raw markdown (not MDX), so JSX tags like
+// <ExperimentalBadge>Experimental</ExperimentalBadge> appear as text.
+const stripJsxComponents = (text: string): string =>
+  text
+    .replace(/<[A-Z]\w*(?:\s[^>]*)?>[\s\S]*?<\/[A-Z]\w*>/g, "")
+    .replace(/<[A-Z]\w*(?:\s[^>]*)?\/>/g, "")
+    .trim();
+
 // Returns the slugs of all headings in a tree
 const getHeadingsFromMarkdownTree = (
   tree: ReturnType<typeof markdownProcessor.parse>
@@ -65,13 +74,12 @@ const getHeadingsFromMarkdownTree = (
 
   visit(tree, "heading", (node) => {
     let headingText = "";
-    // Account for headings with inline code blocks by concatenating the
-    // text values of all children of a heading node.
     visit(node, (innerNode: any) => {
       if (innerNode.value) {
         headingText += innerNode.value;
       }
     });
+    headingText = stripJsxComponents(headingText);
     const slugified = slugger.slug(headingText);
     headings.push(slugified);
   });
@@ -148,32 +156,8 @@ const prepareDocumentMapEntry = async (
   }
 };
 
-/** Checks if the hash exists in a document's headings, accounting for ExperimentalBadge suffixes */
-const hashExistsInHeadings = (headings: string[], hash: string): boolean => {
-  if (headings.includes(hash)) {
-    return true;
-  }
-
-  // Handle experimental badge suffix: -experimental -> -experimentalbadgeexperimentalexperimentalbadge
-  const experimentalHeading = hash.replace(
-    "-experimental",
-    "-experimentalbadgeexperimentalexperimentalbadge"
-  );
-  if (headings.includes(experimentalHeading)) {
-    return true;
-  }
-
-  // Handle pre-release badge suffix: -pre-release -> -experimentalbadgepre-releaseexperimentalbadge
-  const preReleaseHeading = hash.replace(
-    "-pre-release",
-    "-experimentalbadgepre-releaseexperimentalbadge"
-  );
-  if (headings.includes(preReleaseHeading)) {
-    return true;
-  }
-
-  return false;
-};
+const hashExistsInHeadings = (headings: string[], hash: string): boolean =>
+  headings.includes(hash);
 
 /** Checks if the links point to existing documents */
 const validateInternalLink =
@@ -191,7 +175,7 @@ const validateInternalLink =
       foundPage = documentMap.get(`${link}/index`);
     }
 
-    let errors: LinkError[] = [];
+    const errors: LinkError[] = [];
 
     if (!foundPage) {
       errors.push({
@@ -226,32 +210,7 @@ const validateHashLink = (doc: Document, href: string) => {
     return [];
   }
 
-  // Handles when the link has the experimental badge in it.
-  // Because we're parsing the raw document (not the rendered output), the JSX declaration is still present.
-  const experimentalHeading = hashLink.replace(
-    "-experimental",
-    "-experimentalbadgeexperimentalexperimentalbadge"
-  );
-  const preReleaseHeading =
-    hashLink + "-experimentalbadgepre-releaseexperimentalbadge";
-
-  if (doc.headings.includes(experimentalHeading)) {
-    console.warn(
-      `The hash link "${hashLink}" passed when including the <ExperimentalBadge>Experimental</ExperimentalBadge> JSX declaration.`
-    );
-    console.log();
-    return [];
-  }
-
-  if (doc.headings.includes(preReleaseHeading)) {
-    console.warn(
-      `The hash link "${hashLink}" passed when including the <ExperimentalBadge>Pre-release</ExperimentalBadge> JSX declaration.`
-    );
-    console.log();
-    return [];
-  }
-
-  let linkError: LinkError = {
+  const linkError: LinkError = {
     type: "hash",
     href,
     doc
@@ -265,7 +224,7 @@ const traverseTreeAndValidateLinks = (
   tree: unknown,
   doc: Document
 ): LinkError[] => {
-  let errors: LinkError[] = [];
+  const errors: LinkError[] = [];
 
   try {
     visit(tree, (node: any) => {

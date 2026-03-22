@@ -56,6 +56,9 @@ pub struct GlobalHashableInputs<'a> {
     pub env_mode: EnvMode,
     pub framework_inference: bool,
     pub env_at_execution_start: &'a EnvironmentVariableMap,
+    /// Whether `futureFlags.globalConfiguration` is enabled. Included in the
+    /// hash so that toggling the flag deterministically invalidates caches.
+    pub global_configuration: bool,
 }
 
 #[allow(clippy::too_many_arguments, clippy::result_large_err)]
@@ -73,6 +76,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
     env_mode: EnvMode,
     framework_inference: bool,
     hasher: &SCM,
+    global_configuration: bool,
 ) -> Result<GlobalHashableInputs<'a>, Error> {
     let GlobalFileHashInputs {
         global_file_hash_map,
@@ -106,6 +110,7 @@ pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
         env_mode,
         framework_inference,
         env_at_execution_start,
+        global_configuration,
     })
 }
 
@@ -160,7 +165,11 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
         .map(|p| root_path.anchor(p).expect("path should be from root"))
         .collect::<Vec<_>>();
 
-    let global_file_hash_map = hasher.get_hashes_for_files(root_path, &global_deps_paths, false)?;
+    let global_file_hash_map = hasher
+        .get_hashes_for_files(root_path, &global_deps_paths, false)?
+        .into_iter()
+        .map(|(k, v)| (k, String::from(v)))
+        .collect();
 
     Ok(GlobalFileHashInputs {
         global_file_hash_map,
@@ -231,6 +240,7 @@ fn collect_global_deps(
 }
 
 impl<'a> GlobalHashableInputs<'a> {
+    #[tracing::instrument(skip_all)]
     pub fn calculate_global_hash(&self) -> String {
         let global_hashable = GlobalHashable {
             global_cache_key: self.global_cache_key,
@@ -247,6 +257,7 @@ impl<'a> GlobalHashableInputs<'a> {
             pass_through_env: self.pass_through_env.unwrap_or_default(),
             env_mode: self.env_mode,
             framework_inference: self.framework_inference,
+            global_configuration: self.global_configuration,
         };
 
         global_hashable.hash()
@@ -403,6 +414,7 @@ mod tests {
             EnvMode::Strict,
             false,
             &SCM::new(&root),
+            false,
         );
         assert!(result.is_ok());
     }

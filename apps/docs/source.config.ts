@@ -4,7 +4,8 @@ import {
   transformerNotationHighlight,
   transformerNotationWordHighlight
 } from "@shikijs/transformers";
-import { remarkMdxMermaid } from "fumadocs-core/mdx-plugins";
+import remarkMermaid from "./components/diagram/remark-mermaid";
+import rehypeStripHeadingJsx from "./lib/rehype-strip-heading-jsx";
 import {
   defineConfig,
   defineDocs,
@@ -220,7 +221,8 @@ const theme = createCssVariablesTheme({
 
 export default defineConfig({
   mdxOptions: {
-    remarkPlugins: [remarkMdxMermaid],
+    remarkPlugins: [remarkMermaid],
+    rehypePlugins: [rehypeStripHeadingJsx],
     rehypeCodeOptions: {
       themes: {
         light: theme,

@@ -16,9 +16,9 @@ import {
   type DependencyGroups,
   type PackageJson
 } from "@turbo/utils";
-import { getWorkspaceStructure } from "../../utils/getWorkspaceStructure";
+import { getWorkspaceStructure } from "../../utils/get-workspace-structure";
 import type { WorkspaceType } from "../../generators/types";
-import { getWorkspaceList } from "../../utils/getWorkspaceList";
+import { getWorkspaceList } from "../../utils/get-workspace-list";
 
 export async function name({
   override,
@@ -249,12 +249,12 @@ export async function dependencies({
     if (Object.keys(newDependencyGroup).length) {
       const existingDependencyKeys = new Set(Object.keys(newDependencyGroup));
 
-      selected.forEach((dep) => {
+      for (const dep of selected) {
         if (!existingDependencyKeys.has(dep)) {
           newDependencyGroup[dep] =
             project.packageManager === "pnpm" ? "workspace:*" : "*";
         }
-      });
+      }
 
       selectedDependencies[group] = newDependencyGroup;
     } else {

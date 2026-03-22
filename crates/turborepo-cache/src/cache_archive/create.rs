@@ -511,7 +511,7 @@ mod tests {
         let restore_dir_path = AbsoluteSystemPath::new(restore_dir.path().to_str().unwrap())?;
 
         let mut restore = CacheReader::open(&tar_path)?;
-        let files = restore.restore(restore_dir_path)?;
+        let (files, _) = restore.restore(restore_dir_path, None)?;
         assert_eq!(files.len(), 4);
         assert_eq!(files[0].as_str(), really_long_file.as_str());
         assert_eq!(files[1].as_str(), really_long_dir.as_str());

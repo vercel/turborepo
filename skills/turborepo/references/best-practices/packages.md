@@ -93,9 +93,9 @@ Package handles its own compilation.
 ```json
 {
   "exports": {
-    ".": "./src/index.ts",           // @repo/ui
-    "./button": "./src/button.tsx",  // @repo/ui/button
-    "./card": "./src/card.tsx",      // @repo/ui/card
+    ".": "./src/index.ts", // @repo/ui
+    "./button": "./src/button.tsx", // @repo/ui/button
+    "./card": "./src/card.tsx", // @repo/ui/card
     "./hooks": "./src/hooks/index.ts" // @repo/ui/hooks
   }
 }
@@ -124,7 +124,7 @@ Package handles its own compilation.
 // apps/web/package.json
 {
   "dependencies": {
-    "@repo/ui": "workspace:*"  // pnpm/bun
+    "@repo/ui": "workspace:*" // pnpm/bun
     // "@repo/ui": "*"         // npm/yarn
   }
 }
@@ -287,7 +287,7 @@ TypeScript `compilerOptions.paths` breaks with JIT packages. Use Node.js subpath
 
 ```typescript
 // packages/ui/button.tsx
-import { MY_STRING } from "#utils.ts";  // Uses .ts extension
+import { MY_STRING } from "#utils.ts"; // Uses .ts extension
 ```
 
 **Compiled Package:**
@@ -303,7 +303,7 @@ import { MY_STRING } from "#utils.ts";  // Uses .ts extension
 
 ```typescript
 // packages/ui/button.tsx
-import { MY_STRING } from "#utils.js";  // Uses .js extension
+import { MY_STRING } from "#utils.js"; // Uses .js extension
 ```
 
 ### Use `tsc` for Internal Packages

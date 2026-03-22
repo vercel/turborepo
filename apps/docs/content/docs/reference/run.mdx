@@ -11,15 +11,13 @@ related:
   - /docs/reference/options-overview
 ---
 
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
 Run tasks specified in `turbo.json`.
 
 ```bash title="Terminal"
 turbo run [tasks] [options] [-- [args passed to tasks]]
 ```
-
-- **[tasks]**: Turborepo can run one or many tasks at the same time. To run a task through `turbo`, it must be specified in `turbo.json`.
-- **[options]**: Options are used to control the behavior of the `turbo run` command. Available flag options are described below.
-- **[-- [args passed to tasks]]**: You may also pass arguments to the underlying scripts. Note that all arguments will be passed to all tasks that are named in the run command.
 
 <Callout type="info">
   `turbo run` is aliased to `turbo`. `turbo run build lint check-types` is the
@@ -28,6 +26,14 @@ turbo run [tasks] [options] [-- [args passed to tasks]]
   and `turbo` with [global `turbo`
   locally](/docs/getting-started/installation#global-installation) for ease of
   use.
+</Callout>
+
+- **[tasks]**: Turborepo can run one or many tasks at the same time. To run a task through `turbo`, it must be specified in `turbo.json`.
+- **[options]**: Options are used to control the behavior of the `turbo run` command. Available flag options are described below.
+- **[-- [args passed to tasks]]**: You may also pass arguments to the underlying scripts. Note that all arguments will be passed to all tasks that are named in the run command.
+
+<Callout type="info">
+  If you're using Yarn v1, you will need to use `-- --` (two sets of double dashes) to pass arguments through to tasks, e.g. `yarn turbo run build -- -- --sourcemap`. Yarn v1 consumes the first `--` before forwarding arguments to the underlying script.
 </Callout>
 
 If no tasks are provided, `turbo` will display what tasks are available for the packages in the repository.
@@ -66,6 +72,8 @@ TURBO_SCM_BASE=development turbo run build --affected
 # Override Git comparison head
 TURBO_SCM_HEAD=your-branch turbo run build --affected
 ```
+
+By default, `--affected` operates at the package level: if any file in a package changed, all of its tasks are selected. Enable [`futureFlags.affectedUsingTaskInputs`](/docs/reference/configuration#affectedusingtaskinputs) to filter at the task level using each task's [`inputs`](/docs/reference/configuration#inputs) globs instead.
 
 ### `--cache <options>`
 
@@ -348,14 +356,23 @@ turbo run build --global-deps=".env.*" --global-deps=".eslintrc" --global-deps="
 
 Default: `dot`
 
-This command can output a graph file: `svg`, `png`, `jpg`, `pdf`, `json`, `html`, `mermaid`, or `dot`.
+This command can output a graph file: `svg`, `html`, `mermaid`, or `dot`.
 
-If [Graphviz](https://graphviz.org/) is not installed, or no filename is provided, this command prints the dot graph to `stdout`.
+If no filename is provided, this command prints the dot graph to `stdout`.
 
 ```bash title="Terminal"
 turbo run build --graph
 turbo run build test lint --graph=my-graph.svg
 ```
+
+<Callout type="warn" title="Deprecated formats">
+  The `.png`, `.jpg`, `.pdf`, and `.json` output formats for `--graph` are
+  deprecated and will be removed in version 3.0. These formats require an
+  external [Graphviz](https://graphviz.org/) installation.
+
+  Use `.svg`, `.html`, `.mermaid`, or `.dot` instead. For programmatic access to
+  the task graph, use [`turbo query`](/docs/reference/query).
+</Callout>
 
 <Callout type="info">
   **Known Bug**: All possible task nodes will be added to the graph at the
@@ -363,6 +380,49 @@ turbo run build test lint --graph=my-graph.svg
   has no impact on execution, but the graph may overstate the number of packages
   and tasks involved.
 </Callout>
+
+### `--json` <ExperimentalBadge />
+
+Output machine-readable [NDJSON](https://github.com/ndjson/ndjson-spec) to stdout instead of human-readable text. Disables the TUI and forces stream mode.
+
+```bash title="Terminal"
+turbo run build --json
+```
+
+Each line is a JSON object with the following shape:
+
+```json
+{"timestamp":1710000000000,"source":"web#build","level":"stdout","text":"Compiled successfully"}
+```
+
+| Field | Description |
+| --- | --- |
+| `timestamp` | Unix epoch milliseconds |
+| `source` | `"turbo"` for Turborepo messages, or `"<package>#<task>"` for task output |
+| `level` | `"info"`, `"warn"`, `"error"` for Turborepo messages; `"stdout"`, `"stderr"` for task output |
+| `text` | The message content, with ANSI escape sequences stripped |
+
+Can be combined with `--log-file` to write to both stdout and a file simultaneously.
+
+<Callout type="warn">
+  Structured output captures **all** task output verbatim. If your build scripts echo secrets to stdout, those values will appear in the output.
+</Callout>
+
+### `--log-file [path]` <ExperimentalBadge />
+
+Write structured JSON logs to a file. If no path is given, writes to `.turbo/logs/<timestamp>.json`.
+
+```bash title="Terminal"
+# Default location
+turbo run build --log-file
+
+# Custom path
+turbo run build --log-file=build-log.json
+```
+
+The file is a valid JSON array at all times, even if the process is interrupted. Log files are created with owner-only permissions (`0600`) on Unix, and the path is restricted to the repository root.
+
+Can also be set with the [`TURBO_LOG_FILE`](/docs/reference/system-environment-variables#turbo_log_file) environment variable. The CLI flag takes precedence.
 
 ### `--log-order <option>`
 
@@ -471,6 +531,13 @@ Additionally, `--only` will only run tasks in specified packages, excluding depe
 
 ### `--parallel`
 
+<Callout type="warn" title="Deprecated">
+  This flag is deprecated and will be removed in a future major release.
+  `--parallel` discards the task dependency graph, which means caching, ordering,
+  and dependency-awareness are all lost. Instead, define task behavior correctly
+  in your `turbo.json` task definitions. See migration guidance below.
+</Callout>
+
 Default: `false`
 
 Run commands in parallel across packages, ignoring the task dependency graph.
@@ -480,11 +547,39 @@ turbo run lint --parallel
 turbo run dev --parallel
 ```
 
-<Callout type="info">
-  The `--parallel` flag is typically used for long-running "dev" or "watch"
-  tasks that don't exit. Starting in `turbo@1.7`, we recommend configuring these
-  tasks using [`persistent`](/docs/reference/configuration#persistent) instead.
-</Callout>
+#### Migrating off `--parallel`
+
+There are several alternatives depending on your use case:
+
+**Long-running dev tasks**: Use [`persistent`](/docs/reference/configuration#persistent) and [`with`](/docs/reference/configuration#with) in your task definitions.
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "dev": {
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+
+If you need to ensure certain tasks always run together (e.g. a frontend and an API), use `with` in a [Package Configuration](/docs/reference/configuration#package-configurations):
+
+```json title="./apps/web/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "dev": {
+      "with": ["api#dev"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
+```
+
+**High concurrency**: If you were using `--parallel` to remove the concurrency limit, use [`--concurrency`](/docs/reference/run#--concurrency-number--percentage) instead (e.g. `--concurrency=100%`).
 
 ### `--preflight`
 

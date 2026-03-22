@@ -80,8 +80,3 @@ labeler:
       when:
         isAnyFilePathMatch: '^version\.txt$'
         isPRTitleMatch: '^release\(turborepo\):.*$'
-events:
-  onPublish:
-    turbo:
-      - runWorkflow: update-examples-on-release.yml
-        when: latest

@@ -1,4 +1,4 @@
-import type { PackageManager } from "@turbo/utils";
+import type { PackageManager } from "../types";
 import type { ManagerHandler } from "../types";
 import { pnpm } from "./pnpm";
 import { npm } from "./npm";

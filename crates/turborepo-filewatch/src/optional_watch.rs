@@ -58,7 +58,10 @@ impl<T> std::ops::Deref for SomeRef<'_, T> {
 
 #[cfg(test)]
 mod test {
+    use std::time::Duration;
+
     use futures::FutureExt;
+    use tokio::sync::watch::error::RecvError;
 
     /// Futures have a method that allow you to fetch the value of a future
     /// if it is immediately available. This is useful for, for example,
@@ -71,5 +74,27 @@ mod test {
         tx.send(Some(42)).unwrap();
 
         assert_eq!(*rx.get().now_or_never().unwrap().unwrap(), 42);
+    }
+
+    #[tokio::test]
+    pub async fn get_returns_error_when_sender_dropped() {
+        let (tx, mut rx) = super::OptionalWatch::<i32>::new();
+
+        // Drop the sender without ever sending a value
+        drop(tx);
+
+        // get() should return RecvError, not hang
+        let result = rx.get().await;
+        assert!(matches!(result, Err(RecvError { .. })));
+    }
+
+    #[tokio::test]
+    pub async fn get_with_timeout_returns_elapsed_when_no_value() {
+        let (_tx, mut rx) = super::OptionalWatch::<i32>::new();
+
+        // The sender is alive but never sends. A timeout should fire
+        // instead of hanging forever.
+        let result = tokio::time::timeout(Duration::from_millis(50), rx.get()).await;
+        assert!(result.is_err(), "should have timed out");
     }
 }

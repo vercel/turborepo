@@ -12,21 +12,21 @@ use std::{
     time::{Duration, Instant},
 };
 
-use console::{Style, StyledObject};
+use console::StyledObject;
 use tokio::sync::oneshot;
 use tracing::{Instrument, error};
 use turbopath::AnchoredSystemPathBuf;
 use turborepo_cache::CacheHitMetadata;
 use turborepo_env::{EnvironmentVariableMap, platform::PlatformEnv};
 use turborepo_process::{ChildExit, Command, ProcessManager};
-use turborepo_run_cache::{CacheOutput, TaskCache};
+use turborepo_run_cache::TaskCache;
 use turborepo_run_summary::TaskTracker;
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{TrackedErrors, task::PackageTaskEventBuilder};
 use turborepo_types::{ContinueMode, StopExecution, UIMode};
-use turborepo_ui::{ColorConfig, OutputWriter};
+use turborepo_ui::ColorConfig;
 
-use crate::{TaskAccessProvider, TaskCacheOutput, TaskOutput};
+use crate::{TaskAccessProvider, TaskOutput};
 
 /// Windows NT status codes that indicate out-of-memory conditions.
 /// These are the signed i32 representations of the unsigned NT status codes.
@@ -107,8 +107,10 @@ pub enum ExecOutcome {
 pub enum SuccessOutcome {
     /// Task output was restored from cache
     CacheHit,
-    /// Task was executed
+    /// Task was executed and outputs are safe to cache
     Run,
+    /// Task was executed but log flush failed, so outputs should not be cached
+    RunOutputError,
 }
 
 /// Internal errors that can occur during task execution.
@@ -159,40 +161,6 @@ pub trait TaskWarningCollector: Clone + Send {
 }
 
 // =============================================================================
-// Helper Functions
-// =============================================================================
-
-/// Create a prefixed UI for task output.
-///
-/// This creates a `PrefixedUI` configured with appropriate prefixes for
-/// normal output, errors, and warnings.
-pub fn prefixed_ui<W: Write>(
-    color_config: ColorConfig,
-    is_github_actions: bool,
-    stdout: W,
-    stderr: W,
-    prefix: StyledObject<String>,
-    include_timestamps: bool,
-) -> turborepo_ui::PrefixedUI<W> {
-    let mut prefixed_ui = turborepo_ui::PrefixedUI::new(color_config, stdout, stderr)
-        .with_output_prefix(prefix.clone())
-        .with_error_prefix(
-            Style::new().apply_to(format!("{}ERROR: ", color_config.apply(prefix.clone()))),
-        )
-        .with_warn_prefix(prefix)
-        .with_timestamps(include_timestamps);
-    if is_github_actions {
-        prefixed_ui = prefixed_ui
-            .with_error_prefix(Style::new().apply_to("[ERROR] ".to_string()))
-            .with_warn_prefix(Style::new().apply_to("[WARN] ".to_string()));
-    }
-    prefixed_ui
-}
-
-// =============================================================================
-// TaskExecutor
-// =============================================================================
-
 /// Executes a single task.
 ///
 /// This struct encapsulates all the logic for executing a task, including:
@@ -257,46 +225,45 @@ where
     ///
     /// This is the main entry point for task execution. It:
     /// 1. Starts tracking
-    /// 2. Executes the task (checking cache, running process, saving outputs)
+    /// 2. Executes the task (checking cache, running process)
     /// 3. Reports the outcome via the callback
-    /// 4. Updates the tracker
-    pub async fn execute<O: Write>(
+    /// 4. Saves outputs to cache (off the critical path)
+    /// 5. Updates the tracker
+    pub async fn execute(
         &mut self,
         parent_span_id: Option<tracing::Id>,
         tracker: TaskTracker<()>,
-        output_client: TaskOutput<O>,
+        task_output: TaskOutput,
+        mut task_handle: turborepo_log::grouping::TaskHandle,
         callback: oneshot::Sender<Result<(), StopExecution>>,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<(), InternalError> {
         let tracker: TaskTracker<chrono::DateTime<chrono::Local>> = tracker.start().await;
+        let task_start = Instant::now();
         let span = tracing::debug_span!("execute_task", task = %self.task_id.task());
         span.follows_from(parent_span_id);
 
-        let mut result = self
-            .execute_inner(&output_client, telemetry)
+        let result = self
+            .execute_inner(&task_output, &mut task_handle, telemetry)
             .instrument(span)
             .await;
+        let task_duration = task_start.elapsed();
 
-        // If the task resulted in an error, do not group in order to better highlight
-        // the error.
         let is_error = matches!(result, Ok(ExecOutcome::Task { .. }));
         let is_cache_hit = matches!(result, Ok(ExecOutcome::Success(SuccessOutcome::CacheHit)));
-        if let Err(e) = output_client.finish(is_error, is_cache_hit) {
-            telemetry.track_error(TrackedErrors::DaemonFailedToMarkOutputsAsCached);
-            error!("unable to flush output client: {e}");
-            result = Err(InternalError::Io(e));
-        }
+        // Flush any events buffered by the grouping layer.
+        task_handle.finish(is_error);
+        // Signal the TUI that the task completed.
+        task_output.finish(is_error, is_cache_hit);
 
-        match result {
-            Ok(ExecOutcome::Success(outcome)) => {
-                match outcome {
-                    SuccessOutcome::CacheHit => tracker.cached().await,
-                    SuccessOutcome::Run => tracker.build_succeeded(0).await,
-                };
+        // Send the callback as early as possible after output is flushed.
+        // For cache hits, this unblocks dependent tasks before the tracker
+        // bookkeeping runs, shaving latency off the critical path.
+        match &result {
+            Ok(ExecOutcome::Success(_)) => {
                 callback.send(Ok(())).ok();
             }
-            Ok(ExecOutcome::Task { exit_code, message }) => {
-                tracker.build_failed(exit_code, message).await;
+            Ok(ExecOutcome::Task { .. }) => {
                 callback
                     .send(match self.continue_on_error {
                         ContinueMode::Always => Ok(()),
@@ -304,7 +271,51 @@ where
                         ContinueMode::Never => Err(StopExecution::AllTasks),
                     })
                     .ok();
+            }
+            Ok(ExecOutcome::Shutdown) | Err(_) => {
+                callback.send(Err(StopExecution::AllTasks)).ok();
+            }
+            Ok(ExecOutcome::Restarted) => {
+                callback.send(Err(StopExecution::DependentTasks)).ok();
+            }
+        }
 
+        // Cache save runs after the callback so dependent tasks can start
+        // while we walk the filesystem and write to cache.
+        if let Ok(ExecOutcome::Success(SuccessOutcome::Run)) = &result
+            && self
+                .task_access
+                .can_cache(&self.task_hash, &self.task_id_for_display)
+                .unwrap_or(true)
+        {
+            if let Err(e) = self
+                .task_cache
+                .save_outputs(task_duration, telemetry)
+                .instrument(tracing::info_span!("cache_save", task = %self.task_id))
+                .await
+            {
+                error!("error caching output: {e}");
+            } else {
+                self.hash_tracker.insert_expanded_outputs(
+                    self.task_id.clone(),
+                    self.task_cache.expanded_outputs().to_vec(),
+                );
+            }
+        }
+
+        // Tracker bookkeeping happens after the callback so dependents
+        // can start while we update summaries.
+        match result {
+            Ok(ExecOutcome::Success(outcome)) => {
+                match outcome {
+                    SuccessOutcome::CacheHit => tracker.cached().await,
+                    SuccessOutcome::Run | SuccessOutcome::RunOutputError => {
+                        tracker.build_succeeded(0).await
+                    }
+                };
+            }
+            Ok(ExecOutcome::Task { exit_code, message }) => {
+                tracker.build_failed(exit_code, message).await;
                 match self.continue_on_error {
                     ContinueMode::Always | ContinueMode::DependenciesSuccessful => (),
                     ContinueMode::Never => self.manager.stop().await,
@@ -312,16 +323,13 @@ where
             }
             Ok(ExecOutcome::Shutdown) => {
                 tracker.cancel();
-                callback.send(Err(StopExecution::AllTasks)).ok();
                 self.manager.stop().await;
             }
             Ok(ExecOutcome::Restarted) => {
                 tracker.cancel();
-                callback.send(Err(StopExecution::DependentTasks)).ok();
             }
             Err(e) => {
                 tracker.cancel();
-                callback.send(Err(StopExecution::AllTasks)).ok();
                 self.manager.stop().await;
                 return Err(e);
             }
@@ -330,39 +338,14 @@ where
         Ok(())
     }
 
-    fn prefixed_ui<'a, O: Write>(
-        &self,
-        output_client: &'a TaskOutput<O>,
-    ) -> TaskCacheOutput<OutputWriter<'a, O>> {
-        match output_client {
-            TaskOutput::Direct(client) => TaskCacheOutput::Direct(prefixed_ui(
-                self.color_config,
-                self.is_github_actions,
-                client.stdout(),
-                client.stderr(),
-                self.pretty_prefix.clone(),
-                self.ui_mode.should_include_timestamps(),
-            )),
-            TaskOutput::UI(task) => TaskCacheOutput::UI(task.clone()),
-        }
-    }
-
-    async fn execute_inner<O: Write>(
+    async fn execute_inner(
         &mut self,
-        output_client: &TaskOutput<O>,
+        task_output: &TaskOutput,
+        task_handle: &mut turborepo_log::grouping::TaskHandle,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
-        let task_start = Instant::now();
-        let mut prefixed_ui = self.prefixed_ui(output_client);
+        task_output.start(self.task_cache.output_logs().into());
 
-        if self.ui_mode.has_sender()
-            && let TaskOutput::UI(task) = output_client
-        {
-            let output_logs = self.task_cache.output_logs().into();
-            task.start(output_logs);
-        }
-
-        // Check platform env warnings
         if !self.task_cache.is_caching_disabled() {
             let missing_platform_env = self.platform_env.validate(&self.execution_env);
             if !missing_platform_env.is_empty() {
@@ -371,10 +354,10 @@ where
             }
         }
 
-        // Try to restore from cache
+        let tui_sender = task_output.sender();
         let cache_result = self
             .task_cache
-            .restore_outputs(&mut prefixed_ui, telemetry)
+            .restore_outputs(task_handle, tui_sender, telemetry)
             .instrument(tracing::info_span!("cache_restore", task = %self.task_id))
             .await;
         match cache_result {
@@ -390,7 +373,11 @@ where
             Ok(None) => (),
             Err(e) => {
                 telemetry.track_error(TrackedErrors::ErrorFetchingFromCache);
-                prefixed_ui.error(&format!("error fetching from cache: {e}"));
+                task_handle.emit(turborepo_log::LogEvent::new(
+                    turborepo_log::Level::Error,
+                    turborepo_log::Source::task(&self.task_id_for_display),
+                    format!("error fetching from cache: {e}"),
+                ));
             }
         }
 
@@ -403,7 +390,11 @@ where
             {
                 Some(Ok(child)) => child,
                 Some(Err(e)) => {
-                    prefixed_ui.error(&format!("command finished with error: {e}"));
+                    task_handle.emit(turborepo_log::LogEvent::new(
+                        turborepo_log::Level::Error,
+                        turborepo_log::Source::task(&self.task_id_for_display),
+                        format!("command finished with error: {e}"),
+                    ));
                     let error_string = e.to_string();
                     self.errors
                         .push_spawn_error(self.task_id_for_display.clone(), e);
@@ -417,21 +408,27 @@ where
                 }
             };
 
-        // Handle stdin for interactive tasks
-        if self.ui_mode.has_sender()
-            && self.takes_input
-            && let TaskOutput::UI(task) = output_client
-            && let Some(stdin) = process.stdin()
-        {
-            task.set_stdin(stdin);
-        }
-
-        // For persistent tasks not using TUI, take stdin and hold it so it
-        // stays alive until the process exits. Without this, the PTY read
-        // path in `wait_with_piped_outputs` would drop stdin immediately,
-        // sending EOF to tools like Vite that exit when stdin closes.
+        // For persistent/interactive tasks, keep stdin alive so tools like
+        // Vite that exit on EOF don't terminate prematurely.
+        //
+        // In TUI mode, forward stdin to the TaskSender for interactive display.
+        // In stream mode (no TUI sender), hold stdin in a guard that lives
+        // until the process exits — process.stdin() uses .take(), so only the
+        // first call returns Some.
         let _stdin_guard = if self.takes_input {
-            process.stdin()
+            let stdin = process.stdin();
+            if let Some(stdin) = stdin {
+                if task_output.sender().is_some() {
+                    task_output.set_stdin(stdin);
+                    // TUI sender now owns stdin, no guard needed.
+                    None
+                } else {
+                    // Stream mode: hold stdin open via the guard.
+                    Some(stdin)
+                }
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -441,61 +438,37 @@ where
             process.stdin();
         }
 
-        // Create output writer and pipe outputs
-        let mut stdout_writer = self
-            .task_cache
-            .output_writer(prefixed_ui.task_writer())
-            .inspect_err(|_| {
+        // Create output writer and pipe outputs.
+        // The stdout_writer is scoped so that TaskHandleWriter drops before
+        // the error handling section, which needs &mut task_handle for emit().
+        let exit_status = {
+            let writer = task_handle.writer(turborepo_log::OutputChannel::Stdout);
+            let mut stdout_writer = self.task_cache.output_writer(writer).inspect_err(|_| {
                 telemetry.track_error(TrackedErrors::FailedToCaptureOutputs);
             })?;
 
-        let exit_status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
-            Ok(Some(exit_status)) => exit_status,
-            Err(e) => {
-                telemetry.track_error(TrackedErrors::FailedToPipeOutputs);
-                return Err(e.into());
+            let status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
+                Ok(Some(exit_status)) => exit_status,
+                Err(e) => {
+                    telemetry.track_error(TrackedErrors::FailedToPipeOutputs);
+                    return Err(e.into());
+                }
+                Ok(None) => {
+                    telemetry.track_error(TrackedErrors::UnknownChildExit);
+                    error!("unable to determine why child exited");
+                    return Err(InternalError::UnknownChildExit);
+                }
+            };
+
+            if let Err(e) = stdout_writer.flush() {
+                error!("error flushing logs: {e}");
             }
-            Ok(None) => {
-                telemetry.track_error(TrackedErrors::UnknownChildExit);
-                error!("unable to determine why child exited");
-                return Err(InternalError::UnknownChildExit);
-            }
+            status
         };
-        let task_duration = task_start.elapsed();
-
         match exit_status {
-            ChildExit::Finished(Some(0)) => {
-                // Attempt to flush stdout_writer and log any errors encountered
-                if let Err(e) = stdout_writer.flush() {
-                    error!("{e}");
-                } else if self
-                    .task_access
-                    .can_cache(&self.task_hash, &self.task_id_for_display)
-                    .unwrap_or(true)
-                {
-                    if let Err(e) = self
-                        .task_cache
-                        .save_outputs(task_duration, telemetry)
-                        .instrument(tracing::info_span!("cache_save", task = %self.task_id))
-                        .await
-                    {
-                        error!("error caching output: {e}");
-                        return Err(e.into());
-                    } else {
-                        self.hash_tracker.insert_expanded_outputs(
-                            self.task_id.clone(),
-                            self.task_cache.expanded_outputs().to_vec(),
-                        );
-                    }
-                }
-
-                Ok(ExecOutcome::Success(SuccessOutcome::Run))
-            }
+            ChildExit::Finished(Some(0)) => Ok(ExecOutcome::Success(SuccessOutcome::Run)),
             ChildExit::Finished(Some(code)) => {
-                if let Err(e) = stdout_writer.flush() {
-                    error!("error flushing logs: {e}");
-                }
-                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
+                if let Err(e) = self.task_cache.on_error(task_handle, tui_sender) {
                     error!("error reading logs: {e}");
                 }
                 // Check if this looks like an OOM-related exit code
@@ -509,14 +482,12 @@ where
                 } else {
                     format!("command {} exited ({})", process.label(), code)
                 };
-                match self.continue_on_error {
-                    ContinueMode::Never => {
-                        prefixed_ui.error(&format!("command finished with error: {}", message))
-                    }
-                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
-                        prefixed_ui.warn("command finished with error, but continuing...")
-                    }
-                }
+                Self::emit_task_error(
+                    task_handle,
+                    &self.task_id_for_display,
+                    self.continue_on_error,
+                    &message,
+                );
                 self.errors.push_execution_error(
                     self.task_id_for_display.clone(),
                     process.label().to_string(),
@@ -528,23 +499,16 @@ where
                 })
             }
             ChildExit::Finished(None) | ChildExit::Failed => {
-                // Process exited without a code (e.g., killed by signal) or we failed to get
-                // status. Treat as a task failure with exit code 1.
-                if let Err(e) = stdout_writer.flush() {
-                    error!("error flushing logs: {e}");
-                }
-                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
+                if let Err(e) = self.task_cache.on_error(task_handle, tui_sender) {
                     error!("error reading logs: {e}");
                 }
                 let message = format!("command {} exited unexpectedly", process.label());
-                match self.continue_on_error {
-                    ContinueMode::Never => {
-                        prefixed_ui.error(&format!("command finished with error: {}", message))
-                    }
-                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
-                        prefixed_ui.warn("command finished with error, but continuing...")
-                    }
-                }
+                Self::emit_task_error(
+                    task_handle,
+                    &self.task_id_for_display,
+                    self.continue_on_error,
+                    &message,
+                );
                 self.errors.push_execution_error(
                     self.task_id_for_display.clone(),
                     process.label().to_string(),
@@ -556,13 +520,8 @@ where
                 })
             }
             ChildExit::KilledExternal => {
-                // Process was killed by an external signal (e.g., OOM killer sending SIGKILL).
-                // Use exit code 137 (128 + 9) which is the conventional code for SIGKILL.
                 const SIGKILL_EXIT_CODE: i32 = 137;
-                if let Err(e) = stdout_writer.flush() {
-                    error!("error flushing logs: {e}");
-                }
-                if let Err(e) = self.task_cache.on_error(&mut prefixed_ui) {
+                if let Err(e) = self.task_cache.on_error(task_handle, tui_sender) {
                     error!("error reading logs: {e}");
                 }
                 let message = format!(
@@ -570,14 +529,12 @@ where
                     process.label(),
                     SIGKILL_EXIT_CODE
                 );
-                match self.continue_on_error {
-                    ContinueMode::Never => {
-                        prefixed_ui.error(&format!("command finished with error: {}", message))
-                    }
-                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => {
-                        prefixed_ui.warn("command finished with error, but continuing...")
-                    }
-                }
+                Self::emit_task_error(
+                    task_handle,
+                    &self.task_id_for_display,
+                    self.continue_on_error,
+                    &message,
+                );
                 self.errors.push_execution_error(
                     self.task_id_for_display.clone(),
                     process.label().to_string(),
@@ -595,6 +552,26 @@ where
                     Ok(ExecOutcome::Restarted)
                 }
             }
+        }
+    }
+
+    fn emit_task_error(
+        task_handle: &mut turborepo_log::grouping::TaskHandle,
+        task_id: &str,
+        continue_on_error: ContinueMode,
+        _message: &str,
+    ) {
+        // In strict mode (Never), the run-level error summary already
+        // reports the failure — no need to duplicate it here.
+        if matches!(
+            continue_on_error,
+            ContinueMode::Always | ContinueMode::DependenciesSuccessful
+        ) {
+            task_handle.emit(turborepo_log::LogEvent::new(
+                turborepo_log::Level::Warn,
+                turborepo_log::Source::task(task_id),
+                "command finished with error, but continuing...",
+            ));
         }
     }
 }

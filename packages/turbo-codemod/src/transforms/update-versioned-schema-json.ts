@@ -39,7 +39,7 @@ import fs from "fs-extra";
 import { gte, coerce } from "semver";
 import { getTurboConfigs } from "@turbo/utils";
 import type { TransformerResults } from "../runner";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
 import type { Transformer, TransformerArgs } from "../types";
 
 // transformer details

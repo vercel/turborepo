@@ -19,7 +19,12 @@ export const ThemeToggle = () => {
 
   if (!mounted) {
     return (
-      <Button size="icon-sm" type="button" variant="ghost">
+      <Button
+        aria-label="Toggle theme"
+        size="icon-sm"
+        type="button"
+        variant="ghost"
+      >
         <div className="size-4" />
       </Button>
     );
@@ -28,7 +33,13 @@ export const ThemeToggle = () => {
   const Icon = resolvedTheme === "dark" ? MoonIcon : SunIcon;
 
   return (
-    <Button onClick={handleClick} size="icon-sm" type="button" variant="ghost">
+    <Button
+      aria-label="Toggle theme"
+      onClick={handleClick}
+      size="icon-sm"
+      type="button"
+      variant="ghost"
+    >
       <Icon className="size-4" />
     </Button>
   );

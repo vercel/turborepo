@@ -456,7 +456,7 @@ enum GlobSymbol<'a> {
 /// and `?`. any other case watches the entire directory.
 fn glob_to_paths(glob: &str) -> Vec<PathBuf> {
     // get all the symbols and chunk them by path separator
-    let chunks = glob_to_symbols(glob).group_by(|s| s != &GlobSymbol::PathSeparator);
+    let chunks = glob_to_symbols(glob).chunk_by(|s| s != &GlobSymbol::PathSeparator);
     let chunks = chunks
         .into_iter()
         .filter_map(|(not_sep, chunk)| (not_sep).then_some(chunk));

@@ -15,6 +15,7 @@
 #![allow(clippy::result_large_err)]
 
 mod env;
+mod experimental_otel;
 mod file;
 mod override_env;
 mod turbo_json;
@@ -32,7 +33,7 @@ use file::{AuthFile, ConfigFile};
 use merge::Merge;
 use miette::Diagnostic;
 use override_env::OverrideEnvVars;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use struct_iterable::Iterable;
 use thiserror::Error;
 use tracing::debug;
@@ -46,6 +47,52 @@ pub use turborepo_types::{EnvMode, LogOrder, UIMode};
 
 pub const CONFIG_FILE: &str = "turbo.json";
 pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
+
+pub use experimental_otel::{
+    ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
+    ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
+};
+
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
+#[merge(strategy = merge::option::overwrite_none)]
+#[serde(rename_all = "camelCase")]
+pub struct ExperimentalObservabilityOptions {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub otel: Option<ExperimentalOtelOptions>,
+}
+
+/// Configuration for structured log file output.
+///
+/// - `LogFileConfig::Enabled` — write to default location
+///   (`.turbo/logs/<epoch_millis>.json`)
+/// - `LogFileConfig::Path(p)` — write to a custom file path
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub enum LogFileConfig {
+    Enabled,
+    Path(String),
+}
+
+impl<'de> Deserialize<'de> for LogFileConfig {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(d)?;
+        match value {
+            serde_json::Value::Bool(true) => Ok(LogFileConfig::Enabled),
+            serde_json::Value::Bool(false) => Err(serde::de::Error::custom(
+                "use null/absent instead of false to disable log file",
+            )),
+            serde_json::Value::String(path) => Ok(LogFileConfig::Path(path)),
+            _ => Err(serde::de::Error::custom(
+                "expected true or a file path string",
+            )),
+        }
+    }
+}
+
+impl Merge for LogFileConfig {
+    fn merge(&mut self, _other: Self) {
+        // CLI/env takes precedence, no merging needed
+    }
+}
 
 // Re-export default constants for tests and external use
 pub const DEFAULT_API_URL: &str = "https://vercel.com/api";
@@ -146,6 +193,8 @@ pub enum Error {
     InvalidTuiScrollbackLength(#[source] std::num::ParseIntError),
     #[error("TURBO_SSO_LOGIN_CALLBACK_PORT: Invalid value. Use a number for the callback port.")]
     InvalidSsoLoginCallbackPort(#[source] std::num::ParseIntError),
+    #[error("Invalid experimentalOtel configuration: {message}")]
+    InvalidExperimentalOtelConfig { message: String },
 
     // ============================================================
     // Turbo.json loading errors (specific to loader, not in turbo_json crate)
@@ -258,6 +307,12 @@ pub struct ConfigurationOptions {
     pub sso_login_callback_port: Option<u16>,
     #[serde(skip)]
     pub future_flags: Option<FutureFlags>,
+    #[serde(rename = "experimentalObservability")]
+    pub experimental_observability: Option<ExperimentalObservabilityOptions>,
+    /// Structured log file destination, configured via `logFile` in
+    /// turbo.json or `TURBO_LOG_FILE` env var.
+    #[serde(rename = "logFile")]
+    pub log_file: Option<LogFileConfig>,
 }
 
 #[derive(Default)]
@@ -516,6 +571,14 @@ impl ConfigurationOptions {
     pub fn future_flags(&self) -> FutureFlags {
         self.future_flags.unwrap_or_default()
     }
+
+    pub fn experimental_observability(&self) -> Option<&ExperimentalObservabilityOptions> {
+        self.experimental_observability.as_ref()
+    }
+
+    pub fn log_file(&self) -> Option<&LogFileConfig> {
+        self.log_file.as_ref()
+    }
 }
 
 // Maps Some("") to None to emulate how Go handles empty strings
@@ -581,6 +644,7 @@ impl TurborepoConfigBuilder {
         // - environment variables
         // - CLI arguments
         // - builder pattern overrides.
+        // See `test_experimental_observability_otel_precedence` for coverage.
 
         let turbo_json = TurboJsonReader::new(&self.repo_root);
         let global_config = ConfigFile::global_config(self.global_config_path.clone())?;
@@ -652,7 +716,8 @@ mod test {
 
     use crate::{
         CONFIG_FILE, CONFIG_FILE_JSONC, ConfigurationOptions, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
-        DEFAULT_TIMEOUT, TurborepoConfigBuilder,
+        DEFAULT_TIMEOUT, ExperimentalObservabilityOptions, ExperimentalOtelMetricsOptions,
+        ExperimentalOtelOptions, ExperimentalOtelProtocol, TurborepoConfigBuilder,
     };
 
     #[test]
@@ -691,7 +756,7 @@ mod test {
 
         repo_root
             .join_component("turbo.json")
-            .create_with_contents(r#"{"experimentalSpaces": {"id": "my-spaces-id"}}"#)
+            .create_with_contents(r#"{}"#)
             .unwrap();
 
         let turbo_teamid = "team_nLlpyC6REAqxydlFKbrMDlud";
@@ -767,6 +832,106 @@ mod test {
         assert!(config.signature());
         assert!(!config.preflight());
         assert_eq!(config.timeout(), 123);
+    }
+
+    #[test]
+    fn test_experimental_observability_otel_precedence() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        // Lowest-priority source: turbo.json
+        let turbo_json_contents = serde_json::to_string_pretty(&serde_json::json!({
+            "futureFlags": {
+                "experimentalObservability": true
+            },
+            "experimentalObservability": {
+                "otel": {
+                    "enabled": true,
+                    "endpoint": "https://turbo-json.example/otel",
+                    "timeoutMs": 1111,
+                    "metrics": {
+                        "runSummary": true,
+                        "taskDetails": false
+                    }
+                }
+            }
+        }))
+        .unwrap();
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(&turbo_json_contents)
+            .unwrap();
+
+        // Higher-priority source: env vars
+        let mut env: HashMap<OsString, OsString> = HashMap::new();
+        env.insert(
+            "turbo_experimental_otel_endpoint".into(),
+            "https://env.example/otel".to_string().into(),
+        );
+        env.insert(
+            "turbo_experimental_otel_timeout_ms".into(),
+            "2222".to_string().into(),
+        );
+        env.insert(
+            "turbo_experimental_otel_metrics_task_details".into(),
+            "1".to_string().into(),
+        );
+        env.insert(
+            "turbo_experimental_otel_metrics_task_attributes_id".into(),
+            "1".to_string().into(),
+        );
+
+        // Highest-priority source: builder overrides
+        let override_config = ConfigurationOptions {
+            experimental_observability: Some(ExperimentalObservabilityOptions {
+                otel: Some(ExperimentalOtelOptions {
+                    endpoint: Some("https://override.example/otel".to_string()),
+                    protocol: Some(ExperimentalOtelProtocol::HttpProtobuf),
+                    timeout_ms: Some(3333),
+                    metrics: Some(ExperimentalOtelMetricsOptions {
+                        run_summary: Some(false),
+                        task_details: Some(false),
+                        run_attributes: None,
+                        task_attributes: None,
+                    }),
+                    ..Default::default()
+                }),
+            }),
+            ..Default::default()
+        };
+
+        let builder = TurborepoConfigBuilder {
+            repo_root,
+            override_config,
+            global_config_path: None,
+            environment: Some(env),
+        };
+
+        let config = builder.build().unwrap();
+        let otel = config
+            .experimental_observability()
+            .and_then(|obs| obs.otel.as_ref())
+            .expect("expected experimental observability otel config");
+
+        // Builder override wins over env/turbo.json.
+        assert_eq!(
+            otel.endpoint.as_deref(),
+            Some("https://override.example/otel")
+        );
+        assert_eq!(otel.protocol, Some(ExperimentalOtelProtocol::HttpProtobuf));
+        assert_eq!(otel.timeout_ms, Some(3333));
+        assert_eq!(
+            otel.metrics.as_ref().and_then(|m| m.run_summary),
+            Some(false)
+        );
+        assert_eq!(
+            otel.metrics.as_ref().and_then(|m| m.task_details),
+            Some(false)
+        );
+
+        // Since CLI/override is modeled as an Option at the `otel` object level,
+        // lower-precedence env/turbo.json values do not merge into it.
+        assert_eq!(otel.enabled, None);
     }
 
     #[test]
@@ -1030,6 +1195,30 @@ mod test {
         assert!(
             linked_result.is_shared_worktree,
             "Linked worktree should be marked as shared"
+        );
+    }
+
+    #[test]
+    fn test_no_update_notifier_from_turbo_json_full_build() {
+        let tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp_dir.path()).unwrap();
+
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(r#"{"noUpdateNotifier": true}"#)
+            .unwrap();
+
+        let builder = TurborepoConfigBuilder {
+            repo_root,
+            override_config: ConfigurationOptions::default(),
+            global_config_path: None,
+            environment: Some(HashMap::default()),
+        };
+
+        let config = builder.build().unwrap();
+        assert!(
+            config.no_update_notifier(),
+            "noUpdateNotifier from turbo.json should be respected"
         );
     }
 }

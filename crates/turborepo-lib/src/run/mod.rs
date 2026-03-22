@@ -5,6 +5,7 @@ mod error;
 pub(crate) mod package_discovery;
 pub(crate) mod scope;
 pub mod task_access;
+pub(crate) mod task_filter;
 mod ui;
 pub mod watch;
 
@@ -23,28 +24,25 @@ use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_api_client::{APIAuth, APIClient};
+use turborepo_api_client::APIAuth;
 use turborepo_ci::Vendor;
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 pub use turborepo_run_cache::{ConfigCache, RunCache, TaskCache};
-use turborepo_run_summary::RunTracker;
+use turborepo_run_summary::{ObservabilityHandle, RunTracker};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_signals::{listeners::get_signal, SignalHandler};
 use turborepo_telemetry::events::generic::GenericEventBuilder;
 use turborepo_types::{EnvMode, UIMode};
-use turborepo_ui::{
-    cprint, cprintln, cwrite, cwriteln, sender::UISender, tui, tui::TuiSender,
-    wui::sender::WebUISender, ColorConfig, BOLD, BOLD_GREY, BOLD_YELLOW_REVERSE, GREY, YELLOW,
-};
+use turborepo_ui::{sender::UISender, tui, tui::TuiSender, wui::sender::WebUISender, ColorConfig};
 
 pub use crate::run::error::Error;
 use crate::{
     engine::{Engine, EngineExt},
     microfrontends::MicrofrontendsConfigs,
-    opts::Opts,
+    opts::{Opts, RemoteCacheDisabledReason},
     run::task_access::TaskAccess,
     task_graph::Visitor,
     task_hash::{
@@ -53,6 +51,26 @@ use crate::{
     },
     turbo_json::{TurboJson, UnifiedTurboJsonLoader},
 };
+
+/// Live status of the remote cache, determined by a preflight API check
+/// that runs concurrently with graph building.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RemoteCacheUnavailableReason {
+    CouldNotConnect,
+    UsageLimitExceeded,
+    SpendingPaused,
+    DisabledForTeam,
+    AuthenticationFailed,
+    UnexpectedServerError,
+}
+
+/// Resolved remote cache status for the run prelude display.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum RemoteCacheStatus {
+    Disabled(RemoteCacheDisabledReason),
+    Enabled,
+    Unavailable(RemoteCacheUnavailableReason),
+}
 
 #[derive(Clone)]
 pub struct Run {
@@ -63,7 +81,6 @@ pub struct Run {
     run_telemetry: GenericEventBuilder,
     repo_root: AbsoluteSystemPathBuf,
     opts: Arc<Opts>,
-    api_client: APIClient,
     api_auth: Option<APIAuth>,
     env_at_execution_start: EnvironmentVariableMap,
     filtered_pkgs: HashSet<PackageName>,
@@ -73,11 +90,13 @@ pub struct Run {
     scm: SCM,
     run_cache: Arc<RunCache>,
     signal_handler: SignalHandler,
+    remote_cache_status: RemoteCacheStatus,
     engine: Arc<Engine>,
     task_access: TaskAccess,
-    should_print_prelude: bool,
     micro_frontend_configs: Option<MicrofrontendsConfigs>,
     repo_index: Arc<Option<RepoGitIndex>>,
+    observability_handle: Option<ObservabilityHandle>,
+    pub(crate) query_server: Option<Arc<dyn turborepo_query_api::QueryServer>>,
 }
 
 type UIResult<T> = Result<Option<(T, JoinHandle<Result<(), turborepo_ui::Error>>)>, Error>;
@@ -89,11 +108,24 @@ impl Run {
     fn has_non_interruptible_tasks(&self) -> bool {
         self.engine.has_non_interruptible_tasks
     }
-    fn print_run_prelude(&self) {
+    /// Emit run prelude through `turborepo_log`. In stream mode,
+    /// `TerminalSink` writes these to stdout; in TUI mode, `TuiSink`
+    /// captures them for the log panel.
+    pub fn emit_run_prelude_logs(&self) {
+        let pad = "   ";
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+            "",
+        )
+        .emit();
+
         let targets_list = self.opts.run_opts.tasks.join(", ");
         if self.opts.run_opts.single_package {
-            cprint!(self.color_config, GREY, "{}", "• Running");
-            cprint!(self.color_config, BOLD_GREY, " {}\n", targets_list);
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!("{pad}• Running {targets_list}"),
+            )
+            .emit();
         } else {
             let mut packages = self
                 .filtered_pkgs
@@ -101,44 +133,95 @@ impl Run {
                 .map(|workspace_name| workspace_name.to_string())
                 .collect::<Vec<String>>();
             packages.sort();
-            cprintln!(
-                self.color_config,
-                GREY,
-                "• Packages in scope: {}",
-                packages.join(", ")
-            );
-            cprint!(self.color_config, GREY, "{} ", "• Running");
-            cprint!(self.color_config, BOLD_GREY, "{}", targets_list);
-            cprint!(
-                self.color_config,
-                GREY,
-                " in {} packages\n",
-                self.filtered_pkgs.len()
-            );
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!("{pad}• Packages in scope: {}", packages.join(", ")),
+            )
+            .emit();
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                format!(
+                    "{pad}• Running {targets_list} in {} packages",
+                    self.filtered_pkgs.len()
+                ),
+            )
+            .emit();
         }
 
-        let use_http_cache = self.opts.cache_opts.cache.remote.should_use();
-        let remote_status = if use_http_cache {
-            "enabled"
-        } else {
-            "disabled"
+        let api_url = &self.opts.api_client_opts.api_url;
+        let (base_msg, is_warning) = match self.remote_cache_status {
+            RemoteCacheStatus::Enabled => ("Remote caching enabled".to_string(), false),
+            RemoteCacheStatus::Disabled(reason) => {
+                let msg = match reason {
+                    RemoteCacheDisabledReason::NotLinked => "Remote caching disabled".to_string(),
+                    RemoteCacheDisabledReason::TokenWithoutTeam => {
+                        "Remote caching disabled (TURBO_TOKEN set without TURBO_TEAM)".to_string()
+                    }
+                    RemoteCacheDisabledReason::InConfig => {
+                        "Remote caching disabled (in configuration)".to_string()
+                    }
+                    RemoteCacheDisabledReason::InEnvVar => {
+                        "Remote caching disabled (by TURBO_REMOTE_CACHE_ENABLED)".to_string()
+                    }
+                    RemoteCacheDisabledReason::ByFlags => {
+                        "Remote caching disabled (by flags)".to_string()
+                    }
+                };
+                (msg, false)
+            }
+            RemoteCacheStatus::Unavailable(reason) => {
+                let msg = match reason {
+                    RemoteCacheUnavailableReason::CouldNotConnect => {
+                        format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
+                    }
+                    RemoteCacheUnavailableReason::AuthenticationFailed => {
+                        "Remote caching unavailable (Authentication failed \u{2014} check \
+                         TURBO_TOKEN or run \"turbo login\")"
+                            .to_string()
+                    }
+                    RemoteCacheUnavailableReason::UsageLimitExceeded => {
+                        "Remote caching unavailable (Usage limit exceeded)".to_string()
+                    }
+                    RemoteCacheUnavailableReason::SpendingPaused => {
+                        "Remote caching unavailable (Spending paused)".to_string()
+                    }
+                    RemoteCacheUnavailableReason::DisabledForTeam => {
+                        "Remote caching unavailable (Disabled for this team)".to_string()
+                    }
+                    RemoteCacheUnavailableReason::UnexpectedServerError => {
+                        format!(
+                            "Remote caching unavailable (Unexpected server error at \"{api_url}\")"
+                        )
+                    }
+                };
+                (msg, true)
+            }
         };
 
-        if self.opts.run_opts.is_shared_worktree_cache {
-            cprintln!(
-                self.color_config,
-                GREY,
-                "• Remote caching {}, using shared worktree cache",
-                remote_status
-            );
+        let cache_status = if self.opts.run_opts.is_shared_worktree_cache {
+            format!("{pad}• {base_msg}, using shared worktree cache")
         } else {
-            cprintln!(
-                self.color_config,
-                GREY,
-                "• Remote caching {}",
-                remote_status
-            );
+            format!("{pad}• {base_msg}")
+        };
+
+        if is_warning {
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                cache_status,
+            )
+            .emit();
+        } else {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                cache_status,
+            )
+            .emit();
         }
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+            "",
+        )
+        .emit();
     }
 
     pub fn turbo_json_loader(&self) -> &UnifiedTurboJsonLoader {
@@ -248,11 +331,6 @@ impl Run {
     }
 
     pub fn start_ui(self: &Arc<Self>) -> UIResult<UISender> {
-        // Print prelude here as this needs to happen before the UI is started
-        if self.should_print_prelude {
-            self.print_run_prelude();
-        }
-
         match self.opts.run_opts.ui_mode {
             UIMode::Tui => self
                 .start_terminal_ui()
@@ -264,9 +342,13 @@ impl Run {
         }
     }
     fn start_web_ui(self: &Arc<Self>) -> WuiResult {
+        let Some(query_server) = self.query_server.clone() else {
+            tracing::warn!("Web UI requires a query server implementation");
+            return Ok(None);
+        };
         let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
 
-        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone()));
+        let handle = tokio::spawn(ui::start_web_ui_server(rx, self.clone(), query_server));
 
         Ok(Some((WebUISender { tx }, handle)))
     }
@@ -612,48 +694,60 @@ impl Run {
         let mut internal_deps_result = None;
         let mut global_file_result = None;
 
-        rayon::scope(|s| {
-            s.spawn(|_| {
-                let _span = tracing::info_span!("calculate_file_hashes_task").entered();
-                file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
-                    &self.scm,
-                    self.engine.tasks(),
-                    workspaces,
-                    self.engine.task_definitions(),
-                    &self.repo_root,
-                    &self.run_telemetry,
-                    repo_index,
-                ));
-            });
-            s.spawn(|_| {
-                let _span = tracing::info_span!("get_internal_deps_hash_task").entered();
-                internal_deps_result = Some(
-                    internal_dep_paths
-                        .map(|dep_paths| {
-                            get_internal_deps_hash(
-                                &self.scm,
-                                &self.repo_root,
-                                dep_paths,
-                                repo_index,
-                            )
-                        })
-                        .transpose(),
-                );
-            });
-            s.spawn(|_| {
-                let _span = tracing::info_span!("collect_global_file_hash_inputs_task").entered();
-                global_file_result = Some(collect_global_file_hash_inputs(
-                    root_workspace,
-                    &self.repo_root,
-                    self.pkg_dep_graph.package_manager(),
-                    self.pkg_dep_graph.lockfile(),
-                    &self.root_turbo_json.global_deps,
-                    &self.env_at_execution_start,
-                    &self.root_turbo_json.global_env,
-                    &self.scm,
-                ));
+        let _hash_scope_span = tracing::info_span!("hash_scope").entered();
+        crate::rayon_compat::block_in_place(|| {
+            rayon::scope(|s| {
+                s.spawn(|_| {
+                    let _span = tracing::info_span!("calculate_file_hashes_task").entered();
+                    let needs_expanded = self.opts.run_opts.dry_run.is_some()
+                        || self.opts.run_opts.summarize
+                        || self.observability_handle.is_some();
+                    file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
+                        &self.scm,
+                        self.engine.tasks(),
+                        workspaces,
+                        self.engine.task_definitions(),
+                        &self.repo_root,
+                        &self.run_telemetry,
+                        repo_index,
+                        needs_expanded,
+                    ));
+                });
+                s.spawn(|_| {
+                    let _span = tracing::info_span!("get_internal_deps_hash_task").entered();
+                    internal_deps_result = Some(
+                        internal_dep_paths
+                            .map(|dep_paths| {
+                                get_internal_deps_hash(
+                                    &self.scm,
+                                    &self.repo_root,
+                                    dep_paths,
+                                    repo_index,
+                                )
+                            })
+                            .transpose(),
+                    );
+                });
+                s.spawn(|_| {
+                    let _span =
+                        tracing::info_span!("collect_global_file_hash_inputs_task").entered();
+                    global_file_result = Some(collect_global_file_hash_inputs(
+                        root_workspace,
+                        &self.repo_root,
+                        self.pkg_dep_graph.package_manager(),
+                        self.pkg_dep_graph.lockfile(),
+                        self.root_turbo_json.global_deps_for_hash(),
+                        &self.env_at_execution_start,
+                        &self.root_turbo_json.global_env,
+                        &self.scm,
+                    ));
+                });
             });
         });
+
+        drop(_hash_scope_span);
+
+        let _setup_span = tracing::debug_span!("post_hashing_setup").entered();
 
         let package_inputs_hashes = file_hash_result.expect("file hash task did not complete")?;
         let root_internal_dependencies_hash =
@@ -684,6 +778,7 @@ impl Run {
             env_mode,
             framework_inference: self.opts.run_opts.framework_inference,
             env_at_execution_start: &self.env_at_execution_start,
+            global_configuration: self.opts.future_flags.global_configuration,
         };
         let global_hash = global_hash_inputs.calculate_global_hash();
 
@@ -703,7 +798,10 @@ impl Run {
             self.opts.synthesize_command(),
             self.version,
             Vendor::get_user(),
+            self.observability_handle.clone(),
         );
+
+        drop(_setup_span);
 
         let mut visitor = Visitor::new(
             self.pkg_dep_graph.clone(),
@@ -743,13 +841,12 @@ impl Run {
             .max()
             .unwrap_or(if errors.is_empty() { 0 } else { 1 });
 
-        let error_prefix = if self.opts.run_opts.is_github_actions {
-            "::error::"
-        } else {
-            ""
-        };
         for err in &errors {
-            writeln!(std::io::stderr(), "{error_prefix}{err}").ok();
+            turborepo_log::error(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                err.to_string(),
+            )
+            .emit();
         }
 
         self.cleanup_proxy(proxy_shutdown).await;
@@ -790,9 +887,8 @@ impl Run {
 
         if let Some(graph_opts) = &self.opts.run_opts.graph {
             let spawner = SharedChildSpawner;
-            let color_config = self.color_config;
             let graphviz_warning: turborepo_engine::GraphvizWarningFn =
-                Box::new(move || write_graphviz_warning(color_config));
+                Box::new(emit_graphviz_warning);
             turborepo_engine::write_graph(
                 graph_opts,
                 &self.engine,
@@ -801,8 +897,11 @@ impl Run {
                 &spawner,
                 Some(graphviz_warning),
                 Some(&|filename: &AbsoluteSystemPath| {
-                    print!("\n✓ Generated task graph in ");
-                    cprintln!(color_config, BOLD, "{filename}");
+                    turborepo_log::info(
+                        turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                        format!("\n✓ Generated task graph in {filename}"),
+                    )
+                    .emit();
                 }),
             )?;
             return Ok(0);
@@ -856,16 +955,104 @@ impl turborepo_engine::ChildProcess for SharedChildWrapper {
     }
 }
 
-fn write_graphviz_warning(color_config: ColorConfig) -> Result<(), io::Error> {
-    let stderr = io::stderr();
-    cwrite!(&stderr, color_config, BOLD_YELLOW_REVERSE, " WARNING ")?;
-    cwriteln!(
-        &stderr,
-        color_config,
-        YELLOW,
-        " `turbo` uses Graphviz to generate an image of your\ngraph, but Graphviz isn't installed \
-         on this machine.\n\nYou can download Graphviz from https://graphviz.org/download.\n\nIn \
-         the meantime, you can use this string output with an\nonline Dot graph viewer."
-    )?;
+impl turborepo_query_api::QueryRun for Run {
+    fn version(&self) -> &'static str {
+        self.version
+    }
+
+    fn repo_root(&self) -> &turbopath::AbsoluteSystemPath {
+        &self.repo_root
+    }
+
+    fn pkg_dep_graph(&self) -> &turborepo_repository::package_graph::PackageGraph {
+        &self.pkg_dep_graph
+    }
+
+    fn engine(
+        &self,
+    ) -> &turborepo_engine::Engine<turborepo_engine::Built, turborepo_types::TaskDefinition> {
+        &self.engine
+    }
+
+    fn scm(&self) -> &turborepo_scm::SCM {
+        &self.scm
+    }
+
+    fn root_turbo_json(&self) -> &turborepo_turbo_json::TurboJson {
+        &self.root_turbo_json
+    }
+
+    fn calculate_affected_packages(
+        &self,
+        base: Option<String>,
+        head: Option<String>,
+    ) -> Result<
+        std::collections::HashMap<
+            turborepo_repository::package_graph::PackageName,
+            turborepo_repository::change_mapper::PackageInclusionReason,
+        >,
+        turborepo_query_api::AffectedPackagesError,
+    > {
+        let mut opts = self.opts.as_ref().clone();
+        opts.scope_opts.affected_range = Some((base, head));
+        builder::RunBuilder::calculate_filtered_packages(
+            &self.repo_root,
+            &opts,
+            &self.pkg_dep_graph,
+            &self.scm,
+            &self.root_turbo_json,
+        )
+        .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))
+    }
+
+    fn changed_files(
+        &self,
+        base: Option<&str>,
+        head: Option<&str>,
+    ) -> Result<
+        std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+        turborepo_query_api::AffectedPackagesError,
+    > {
+        match self
+            .scm
+            .changed_files(&self.repo_root, base, head, true, true, true)
+            .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))?
+        {
+            Ok(files) => Ok(files),
+            Err(_invalid_range) => {
+                // If git range is invalid, return empty set — the affected packages
+                // computation will handle reporting all-packages-changed separately.
+                Ok(std::collections::HashSet::new())
+            }
+        }
+    }
+
+    fn check_boundaries(
+        &self,
+        show_progress: bool,
+    ) -> std::pin::Pin<
+        Box<
+            dyn std::future::Future<
+                    Output = Result<
+                        turborepo_boundaries::BoundariesResult,
+                        turborepo_boundaries::Error,
+                    >,
+                > + Send
+                + '_,
+        >,
+    > {
+        Box::pin(self.check_boundaries(show_progress))
+    }
+}
+
+fn emit_graphviz_warning() -> Result<(), io::Error> {
+    turborepo_log::warn(
+        turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+        "`turbo` uses Graphviz to generate an image of your graph, but Graphviz isn't installed \
+         on this machine.\n\nNote: --graph output to .png, .jpg, .pdf, and .json is deprecated \
+         and will be removed in version 3.0. Use .svg, .html, .mermaid, or .dot instead.\n\nIn \
+         the meantime, you can use this string output with an online Dot graph viewer.",
+    )
+    .emit();
     Ok(())
 }

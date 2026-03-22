@@ -18,6 +18,8 @@ turbo watch [tasks]
 
 `turbo watch` is dependency-aware, meaning tasks will re-run in the order [configured in `turbo.json`](/docs/reference/configuration).
 
+By default, `turbo watch` operates at the package level: if any file in a package changes, all tasks in that package are re-run. Enable [`futureFlags.watchUsingTaskInputs`](/docs/reference/configuration#watchusingtaskinputs) to filter at the task level using each task's [`inputs`](/docs/reference/configuration#inputs) globs instead.
+
 If no tasks are provided, `turbo` will display what tasks are available for the packages in the repository.
 
 ```bash title="Terminal"

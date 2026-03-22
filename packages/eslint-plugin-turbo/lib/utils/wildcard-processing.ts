@@ -35,7 +35,7 @@ function wildcardToRegexPattern(pattern: string): string {
         regexString.push(escapeRegExp(pattern.slice(previousIndex, i)));
 
         // Add a dynamic segment if it isn't adjacent to another dynamic segment.
-        if (regexString[regexString.length - 1] !== regexWildcardSegment) {
+        if (regexString.at(-1) !== regexWildcardSegment) {
           regexString.push(regexWildcardSegment);
         }
       }
@@ -74,7 +74,7 @@ export function wildcardTests(
   const includePatterns: Array<string> = [];
   const excludePatterns: Array<string> = [];
 
-  wildcardPatterns.forEach((wildcardPattern) => {
+  for (const wildcardPattern of wildcardPatterns) {
     const isExclude = wildcardPattern.startsWith("!");
     const isLiteralLeadingExclamation = wildcardPattern.startsWith("\\!");
 
@@ -88,7 +88,7 @@ export function wildcardTests(
       const includePattern = wildcardToRegexPattern(wildcardPattern);
       includePatterns.push(includePattern);
     }
-  });
+  }
 
   // Set some defaults.
   let inclusions = NO_PATTERNS;

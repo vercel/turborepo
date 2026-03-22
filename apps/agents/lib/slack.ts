@@ -22,7 +22,7 @@ export async function verifySlackRequest(
   }
 
   const fiveMinutesAgo = Math.floor(Date.now() / 1000) - 60 * 5;
-  if (parseInt(timestamp, 10) < fiveMinutesAgo) {
+  if (Number.parseInt(timestamp, 10) < fiveMinutesAgo) {
     throw new Error("Slack request too old");
   }
 

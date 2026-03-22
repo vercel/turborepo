@@ -38,7 +38,7 @@ export async function POST(request: Request) {
 
   switch (action.action_id) {
     case "approve_repro_request": {
-      const issueNumber = parseInt(action.value ?? "0", 10);
+      const issueNumber = Number.parseInt(action.value ?? "0", 10);
       if (!issueNumber) break;
 
       await addComment(issueNumber, REPRODUCTION_REQUEST);
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     }
 
     case "repro_dismiss": {
-      const issueNumber = parseInt(action.value ?? "0", 10);
+      const issueNumber = Number.parseInt(action.value ?? "0", 10);
       const issueRef = issueNumber
         ? ` for <https://github.com/vercel/turborepo/issues/${issueNumber}|#${issueNumber}>`
         : "";
@@ -63,8 +63,9 @@ export async function POST(request: Request) {
       break;
     }
 
-    default:
+    default: {
       break;
+    }
   }
 
   return new Response("OK", { status: 200 });

@@ -3,8 +3,9 @@ import type { SchemaV1 } from "@turbo/types";
 import { getTurboConfigs } from "@turbo/utils";
 import type { TransformerArgs, Transformer } from "../types";
 import type { TransformerResults } from "../runner";
-import { getTransformerHelpers } from "../utils/getTransformerHelpers";
-import { loadTurboJson } from "../utils/loadTurboJson";
+import { getTransformerHelpers } from "../utils/get-transformer-helpers";
+import { loadTurboJson } from "../utils/load-turbo-json";
+import { isPipelineKeyMissing } from "../utils/is-pipeline-key-missing";
 
 // transformer details
 const TRANSFORMER = "clean-globs";
@@ -32,7 +33,7 @@ export function transformer({
 
   // find and migrate any workspace configs
   const workspaceConfigs = getTurboConfigs(root);
-  workspaceConfigs.forEach((workspaceConfig) => {
+  for (const workspaceConfig of workspaceConfigs) {
     const { config, turboConfigPath: filePath } = workspaceConfig;
     if ("pipeline" in config) {
       runner.modifyFile({
@@ -40,12 +41,16 @@ export function transformer({
         after: migrateConfig(config)
       });
     }
-  });
+  }
 
   return runner.finish();
 }
 
 function migrateConfig(config: SchemaV1) {
+  if (isPipelineKeyMissing(config)) {
+    return config;
+  }
+
   const mapGlob = (glob: string) => fixGlobPattern(glob);
   for (const [_, taskDef] of Object.entries(config.pipeline)) {
     taskDef.inputs = taskDef.inputs?.map(mapGlob);

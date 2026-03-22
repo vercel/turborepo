@@ -14,6 +14,48 @@ import { error, warn } from "./logger";
 const REQUEST_TIMEOUT = 10000;
 const DOWNLOAD_TIMEOUT = 120000;
 
+// Hosts that receive Authorization headers when GITHUB_TOKEN / GH_TOKEN is set.
+// Limited to GitHub.com API hosts. GitHub Enterprise Server is not yet supported.
+const GITHUB_API_HOSTS = new Set(["api.github.com", "codeload.github.com"]);
+
+/**
+ * Reads a GitHub personal access token from the environment.
+ * GITHUB_TOKEN takes precedence over GH_TOKEN, matching the GitHub CLI convention.
+ * Requires `repo` scope (classic PAT) or `contents:read` (fine-grained PAT).
+ */
+function getGitHubToken(): string | undefined {
+  const token = (process.env.GITHUB_TOKEN || process.env.GH_TOKEN || "").trim();
+  if (!token) return undefined;
+  if (/[\r\n\0]/.test(token)) {
+    warn("GITHUB_TOKEN/GH_TOKEN contains invalid characters, ignoring.");
+    return undefined;
+  }
+  return token;
+}
+
+/**
+ * Returns an Authorization header for GitHub API requests when a token
+ * is available. Only sends tokens to hosts in GITHUB_API_HOSTS to
+ * prevent credential leakage to third-party domains.
+ */
+function getGitHubAuthHeaders(url: string): Record<string, string> {
+  try {
+    const { hostname } = new URL(url);
+    if (!GITHUB_API_HOSTS.has(hostname)) {
+      return {};
+    }
+  } catch {
+    return {};
+  }
+
+  const token = getGitHubToken();
+  if (!token) {
+    return {};
+  }
+
+  return { Authorization: `Bearer ${token}` };
+}
+
 /**
  * Gets proxy URL from environment variables.
  * Checks both lowercase and uppercase variants.
@@ -50,9 +92,50 @@ function getProxyAgent(proxyUrl: string): ProxyAgent {
 }
 
 /**
- * Performs a fetch request with an automatic timeout and proxy support.
+ * Builds common fetch options: proxy agent, GitHub auth headers, and
+ * undici dispatcher. Used by both fetchWithTimeout and streamingExtract
+ * to centralize proxy + auth logic.
+ */
+function buildFetchInit(url: string, options: RequestInit = {}): RequestInit {
+  const proxyUrl = getProxyForUrl(url);
+  const dispatcher: Dispatcher | undefined = proxyUrl
+    ? getProxyAgent(proxyUrl)
+    : undefined;
+
+  const authHeaders = getGitHubAuthHeaders(url);
+  let headers: HeadersInit | undefined = options.headers;
+  if (Object.keys(authHeaders).length > 0) {
+    let existing: Record<string, string> | undefined;
+    if (options.headers instanceof Headers) {
+      existing = {};
+      options.headers.forEach((value, key) => {
+        existing![key] = value;
+      });
+    } else if (Array.isArray(options.headers)) {
+      existing = {};
+      for (const [key, value] of options.headers) {
+        existing[key] = value;
+      }
+    } else {
+      existing = options.headers as Record<string, string> | undefined;
+    }
+    headers = { ...authHeaders, ...existing };
+  }
+
+  return {
+    ...options,
+    headers,
+    // @ts-expect-error - dispatcher is a valid option for undici's fetch
+    dispatcher
+  };
+}
+
+/**
+ * Performs a fetch request with an automatic timeout, proxy support,
+ * and GitHub authentication.
  * Centralizes the AbortController + setTimeout pattern to avoid repetition.
  * Automatically respects HTTP_PROXY/HTTPS_PROXY environment variables.
+ * Attaches a Bearer token from GITHUB_TOKEN/GH_TOKEN for known GitHub hosts.
  */
 async function fetchWithTimeout(
   url: string,
@@ -65,16 +148,9 @@ async function fetchWithTimeout(
   }, timeoutMs);
 
   try {
-    const proxyUrl = getProxyForUrl(url);
-    const dispatcher: Dispatcher | undefined = proxyUrl
-      ? getProxyAgent(proxyUrl)
-      : undefined;
-
     return await fetch(url, {
-      ...options,
-      signal: controller.signal,
-      // @ts-expect-error - dispatcher is a valid option for undici's fetch
-      dispatcher
+      ...buildFetchInit(url, options),
+      signal: controller.signal
     });
   } finally {
     clearTimeout(timeoutId);
@@ -91,6 +167,15 @@ export interface RepoInfo {
 export async function isUrlOk(url: string): Promise<boolean> {
   try {
     const res = await fetchWithTimeout(url, { method: "HEAD" });
+    if (
+      !res.ok &&
+      getGitHubToken() &&
+      (res.status === 401 || res.status === 403)
+    ) {
+      warn(
+        `GitHub auth failed (HTTP ${res.status}). Check GITHUB_TOKEN/GH_TOKEN permissions.`
+      );
+    }
     return res.ok;
   } catch {
     return false;
@@ -250,15 +335,9 @@ export async function streamingExtract({
   const createdDirs = new Set<string>();
 
   try {
-    const proxyUrl = getProxyForUrl(url);
-    const dispatcher: Dispatcher | undefined = proxyUrl
-      ? getProxyAgent(proxyUrl)
-      : undefined;
-
     const response = await fetch(url, {
-      signal: controller.signal,
-      // @ts-expect-error - dispatcher is a valid option for undici's fetch
-      dispatcher
+      ...buildFetchInit(url),
+      signal: controller.signal
     });
     if (!response.ok || !response.body) {
       throw new Error(`Failed to download: ${response.status}`);

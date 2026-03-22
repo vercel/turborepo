@@ -15,7 +15,6 @@ Commands:
   docs          Search the Turborepo documentation
   generate      Generate a new app / package
   telemetry     Enable or disable anonymous telemetry
-  scan          Turbo your monorepo by running a number of 'repo lints' to identify common issues, suggest fixes, and improve performance
   ls            EXPERIMENTAL: List packages in your monorepo
   link          Link your local directory to a Vercel organization and enable remote caching
   login         Login to your Vercel account
@@ -82,6 +81,44 @@ Options:
       --verbosity <COUNT>
           Verbosity level. Useful when debugging Turborepo or creating logs for issue reports
 
+      --experimental-otel-enabled [<ENABLED>]
+          Enable OpenTelemetry metrics export
+          
+          [possible values: true, false]
+
+      --experimental-otel-protocol <PROTOCOL>
+          OTLP transport protocol (grpc or http-protobuf)
+
+      --experimental-otel-endpoint <URL>
+          OTLP collector endpoint URL
+
+      --experimental-otel-timeout-ms <MILLISECONDS>
+          OTLP export timeout in milliseconds (default: 10000)
+
+      --experimental-otel-interval-ms <MILLISECONDS>
+          OTLP export interval in milliseconds (default: 15000)
+
+      --experimental-otel-header <KEY=VALUE>
+          Add header to OTLP requests (can be repeated)
+
+      --experimental-otel-resource <KEY=VALUE>
+          Add resource attribute to metrics (can be repeated)
+
+      --experimental-otel-metrics-run-summary [<METRICS_RUN_SUMMARY>]
+          Emit run-level summary metrics (default: true)
+          
+          [possible values: true, false]
+
+      --experimental-otel-metrics-task-details [<METRICS_TASK_DETAILS>]
+          Emit per-task detail metrics (default: false)
+          
+          [possible values: true, false]
+
+      --experimental-otel-use-remote-cache-token [<USE_REMOTE_CACHE_TOKEN>]
+          Use remote cache token for OTLP authentication
+          
+          [possible values: true, false]
+
       --dangerously-disable-package-manager-check
           Allow for missing `packageManager` in `package.json`.
           
@@ -124,7 +161,7 @@ Run Arguments:
           [possible values: text, json]
 
       --graph [<GRAPH>]
-          Generate a graph of the task execution and output to a file when a filename is specified (.svg, .png, .jpg, .pdf, .json, .html, .mermaid, .dot). Outputs dot graph to stdout when if no filename is provided
+          Generate a graph of the task execution and output to a file when a filename is specified (.svg, .html, .mermaid, .dot). Outputs dot graph to stdout when no filename is provided. [DEPRECATED formats: .png, .jpg, .pdf, .json -- will be removed in 3.0]
 
       --daemon
           [DEPRECATED] The daemon is no longer used for `turbo run`. This flag will be removed in version 3.0
@@ -144,7 +181,7 @@ Run Arguments:
           [possible values: true, false]
 
       --parallel
-          Execute all tasks in parallel
+          [DEPRECATED] Execute all tasks in parallel. Use task configuration (`persistent`, `with`) instead
 
       --cache-dir <CACHE_DIR>
           Override the filesystem cache directory
@@ -197,6 +234,12 @@ Run Arguments:
           Set type of task output order. Use "stream" to show output as soon as it is available. Use "grouped" to show output when a command has finished execution. Use "auto" to let turbo decide based on its own heuristics. (default auto)
           
           [possible values: auto, stream, grouped]
+
+      --json
+          Output machine-readable NDJSON to stdout instead of human-readable text. Disables the TUI and forces stream mode
+
+      --log-file [<LOG_FILE>]
+          Write structured JSON logs to a file. If no path is given, writes to `.turbo/logs/<epoch_millis>.json`
 
       --only
           Only executes the tasks specified, does not execute parent tasks

@@ -372,7 +372,7 @@ describe("update-versioned-schema-json", () => {
 
     expect(result.fatalError).toBeUndefined();
     // Should have 3 modified files
-    expect(Object.keys(result.changes).length).toBe(3);
+    expect(Object.keys(result.changes)).toHaveLength(3);
     expect(result.changes["turbo.json"].action).toBe("modified");
   });
 

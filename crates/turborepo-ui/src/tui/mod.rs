@@ -4,6 +4,7 @@ mod debouncer;
 pub mod event;
 mod handle;
 mod input;
+mod log_panel;
 mod pane;
 pub mod panic_handler;
 mod popup;

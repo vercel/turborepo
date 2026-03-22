@@ -3,38 +3,34 @@ mod exec;
 
 use std::{
     borrow::Cow,
-    collections::HashSet,
-    io::Write,
+    collections::{HashMap, HashSet},
     sync::{Arc, Mutex},
 };
 
-use console::{Style, StyledObject};
 use convert_case::{Case, Casing};
 use exec::ExecContextFactory;
 use futures::{stream::FuturesUnordered, StreamExt};
 use itertools::Itertools;
 use miette::{Diagnostic, NamedSource, SourceSpan};
 use tokio::sync::mpsc;
-use tracing::{debug, warn, Span};
+use tracing::{debug, Instrument, Span};
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPath};
-use turborepo_ci::{Vendor, VendorBehavior};
 use turborepo_engine::{TaskError, TaskWarning};
 use turborepo_env::{platform::PlatformEnv, EnvironmentVariableMap};
 use turborepo_errors::TURBO_SITE;
+use turborepo_log::grouping::{GroupingLayer, GroupingMode};
 use turborepo_process::ProcessManager;
 use turborepo_repository::package_graph::{PackageGraph, PackageName, ROOT_PKG_NAME};
 use turborepo_run_summary::{self as summary, GlobalHashSummary, RunTracker};
 use turborepo_scm::SCM;
 // Re-export output types and shared functions from turborepo-task-executor
-pub use turborepo_task_executor::{turbo_regex, StdWriter, TaskOutput};
+pub use turborepo_task_executor::{turbo_regex, TaskOutput};
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     generic::GenericEventBuilder, task::PackageTaskEventBuilder, EventBuilder, TrackedErrors,
 };
 use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
-use turborepo_ui::{
-    sender::UISender, ColorConfig, ColorSelector, OutputClient, OutputSink, PrefixedUI,
-};
+use turborepo_ui::{sender::UISender, ColorConfig, ColorSelector};
 
 use crate::{
     engine::{Engine, ExecutionOptions},
@@ -51,6 +47,7 @@ pub struct Visitor<'a> {
     color_cache: ColorSelector,
     dry: bool,
     global_env_mode: EnvMode,
+    grouping_layer: Arc<GroupingLayer>,
     manager: ProcessManager,
     run_opts: &'a RunOpts,
     package_graph: Arc<PackageGraph>,
@@ -58,7 +55,6 @@ pub struct Visitor<'a> {
     run_cache: Arc<RunCache>,
     run_tracker: RunTracker,
     task_access: &'a TaskAccess,
-    sink: OutputSink<StdWriter>,
     task_hasher: TaskHasher<'a>,
     color_config: ColorConfig,
     is_watch: bool,
@@ -138,7 +134,7 @@ impl<'a> Visitor<'a> {
         is_watch: bool,
         micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     ) -> Self {
-        let (task_hasher, sink, color_cache) = {
+        let (task_hasher, color_cache, grouping_layer) = {
             let _span = tracing::info_span!("visitor_new").entered();
             let mut task_hasher = TaskHasher::new(
                 package_inputs_hashes,
@@ -149,16 +145,30 @@ impl<'a> Visitor<'a> {
                 global_env_patterns,
             );
 
-            task_hasher.precompute_external_deps_hashes(package_graph.packages());
+            crate::rayon_compat::block_in_place(|| {
+                task_hasher.precompute_external_deps_hashes(package_graph.packages());
+            });
 
-            let sink = Self::sink(run_opts);
             let color_cache = ColorSelector::default();
-            (task_hasher, sink, color_cache)
+
+            let grouping_mode = match run_opts.log_order {
+                ResolvedLogOrder::Stream => GroupingMode::Passthrough,
+                ResolvedLogOrder::Grouped => GroupingMode::Grouped,
+            };
+            let logger = turborepo_log::global_logger()
+                .unwrap_or_else(|| Arc::new(turborepo_log::Logger::new(vec![])));
+            let grouping_layer = GroupingLayer::new(logger, grouping_mode);
+
+            (task_hasher, color_cache, grouping_layer)
         };
 
         // Set up correct size for underlying pty (requires .await, so outside span)
         if let Some(app) = ui_sender.as_ref() {
-            if let Some(pane_size) = app.pane_size().await {
+            if let Some(pane_size) = app
+                .pane_size()
+                .instrument(tracing::debug_span!("configure_pane_size"))
+                .await
+            {
                 manager.set_pty_size(pane_size.rows, pane_size.cols);
             }
         }
@@ -167,6 +177,7 @@ impl<'a> Visitor<'a> {
             color_cache,
             dry: false,
             global_env_mode: run_opts.env_mode,
+            grouping_layer,
             manager,
             run_opts,
             package_graph,
@@ -174,7 +185,6 @@ impl<'a> Visitor<'a> {
             run_cache,
             run_tracker,
             task_access,
-            sink,
             task_hasher,
             color_config,
             ui_sender,
@@ -182,6 +192,124 @@ impl<'a> Visitor<'a> {
             warnings: Default::default(),
             micro_frontends_configs,
         }
+    }
+
+    /// Pre-compute task hashes and execution environments for all tasks in
+    /// parallel. Tasks are processed in topological waves so dependency
+    /// hashes are always available when needed. Returns a map from TaskId
+    /// to (hash, execution_env).
+    fn precompute_task_hashes(
+        &self,
+        engine: &Engine,
+        telemetry: &GenericEventBuilder,
+    ) -> Result<HashMap<TaskId<'static>, (String, EnvironmentVariableMap)>, Error> {
+        use petgraph::algo::toposort;
+        use rayon::prelude::*;
+        use turborepo_engine::TaskNode;
+
+        let graph = engine.task_graph();
+        let mut sorted = toposort(graph, None).map_err(|_| Error::MissingDefinition)?;
+        // toposort returns dependents before dependencies (edges point
+        // dependent→dependency via Outgoing). Reverse so dependencies
+        // come first.
+        sorted.reverse();
+
+        // Compute depth (topological level) for each node so we can process
+        // independent tasks in parallel within each wave. Dependencies
+        // (Outgoing neighbors) must have lower depth.
+        let mut depth: HashMap<petgraph::graph::NodeIndex, usize> = HashMap::new();
+        for &node_idx in &sorted {
+            let max_dep_depth = graph
+                .neighbors_directed(node_idx, petgraph::Direction::Outgoing)
+                .filter_map(|dep| depth.get(&dep))
+                .max()
+                .copied();
+            let d = match max_dep_depth {
+                Some(dd) => dd + 1,
+                None => 0,
+            };
+            depth.insert(node_idx, d);
+        }
+
+        let max_depth = depth.values().max().copied().unwrap_or(0);
+
+        // Group task nodes by depth level.
+        let mut waves: Vec<Vec<petgraph::graph::NodeIndex>> = vec![Vec::new(); max_depth + 1];
+        for &node_idx in &sorted {
+            let d = depth[&node_idx];
+            waves[d].push(node_idx);
+        }
+
+        let results: Arc<Mutex<HashMap<TaskId<'static>, (String, EnvironmentVariableMap)>>> =
+            Arc::new(Mutex::new(HashMap::with_capacity(sorted.len())));
+
+        // Process each wave in parallel. Within a wave, all dependencies
+        // have already been hashed in earlier waves.
+        for wave in &waves {
+            type HashResult =
+                Result<Option<(TaskId<'static>, String, EnvironmentVariableMap)>, Error>;
+            let wave_results: Vec<HashResult> = wave
+                .par_iter()
+                .map(|&node_idx| {
+                    let node = &graph[node_idx];
+                    let TaskNode::Task(task_id) = node else {
+                        return Ok(None);
+                    };
+
+                    let package_name = PackageName::from(task_id.package());
+                    let workspace_info = self
+                        .package_graph
+                        .package_info(&package_name)
+                        .ok_or_else(|| Error::MissingPackage {
+                            package_name: package_name.clone(),
+                            task_id: task_id.clone(),
+                        })?;
+
+                    let task_definition = engine
+                        .task_definition(task_id)
+                        .ok_or(Error::MissingDefinition)?;
+
+                    let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
+
+                    let dependency_set = engine
+                        .dependencies(task_id)
+                        .ok_or(Error::MissingDefinition)?;
+
+                    let package_task_event =
+                        PackageTaskEventBuilder::new(task_id.package(), task_id.task())
+                            .with_parent(telemetry);
+                    package_task_event.track_env_mode(&task_env_mode.to_string());
+
+                    let task_hash_telemetry = package_task_event.child();
+                    let task_hash = self.task_hasher.calculate_task_hash(
+                        task_id,
+                        task_definition,
+                        task_env_mode,
+                        workspace_info,
+                        &dependency_set,
+                        task_hash_telemetry,
+                    )?;
+
+                    let execution_env =
+                        self.task_hasher
+                            .env(task_id, task_env_mode, task_definition)?;
+
+                    Ok(Some((task_id.clone(), task_hash, execution_env)))
+                })
+                .collect();
+
+            let mut map = results.lock().expect("precompute lock poisoned");
+            for result in wave_results {
+                if let Some((task_id, hash, env)) = result? {
+                    map.insert(task_id, (hash, env));
+                }
+            }
+        }
+
+        Ok(Arc::try_unwrap(results)
+            .expect("all wave references dropped")
+            .into_inner()
+            .expect("mutex not poisoned"))
     }
 
     #[tracing::instrument(skip_all)]
@@ -193,6 +321,16 @@ impl<'a> Visitor<'a> {
         for task in engine.tasks().sorted() {
             self.color_cache.color_for_key(&task.to_string());
         }
+
+        // Pre-compute all task hashes and execution envs in parallel using
+        // rayon. Tasks are grouped into topological waves so that each
+        // task's dependency hashes are available before it is hashed.
+        // This replaces the per-task serial hashing that was inside the
+        // dispatch loop.
+        let mut precomputed = crate::rayon_compat::block_in_place(|| {
+            let _span = tracing::info_span!("precompute_task_hashes").entered();
+            self.precompute_task_hashes(&engine, telemetry)
+        })?;
 
         let concurrency = self.run_opts.concurrency as usize;
         let (node_sender, mut node_stream) = mpsc::channel(concurrency);
@@ -206,68 +344,75 @@ impl<'a> Visitor<'a> {
         let span = Span::current();
 
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine)?;
-        let cached_vendor_behavior = Vendor::infer().and_then(|vendor| vendor.behavior.as_ref());
 
-        while let Some(message) = node_stream.recv().await {
+        // Errors from the dispatch loop are captured here rather than returned
+        // immediately. This ensures we always drain the FuturesUnordered below,
+        // so that every spawned task's TaskTracker is consumed before the
+        // ExecutionTracker is dropped. Without this, orphaned TaskTrackers can
+        // panic with SendError during shutdown.
+        let mut dispatch_error: Option<Error> = None;
+
+        loop {
+            let message = node_stream
+                .recv()
+                .instrument(tracing::info_span!("visit_recv_wait"))
+                .await;
+            let Some(message) = message else {
+                break;
+            };
             let span = tracing::debug_span!(parent: &span, "queue_task", task = %message.info);
             let _enter = span.enter();
             let crate::engine::Message { info, callback } = message;
             let package_name = PackageName::from(info.package());
 
-            let workspace_info =
-                self.package_graph
-                    .package_info(&package_name)
-                    .ok_or_else(|| Error::MissingPackage {
-                        package_name: package_name.clone(),
-                        task_id: info.clone(),
-                    })?;
+            let Some(workspace_info) = self.package_graph.package_info(&package_name) else {
+                dispatch_error = Some(Error::MissingPackage {
+                    package_name: package_name.clone(),
+                    task_id: info.clone(),
+                });
+                break;
+            };
 
-            let package_task_event =
-                PackageTaskEventBuilder::new(info.package(), info.task()).with_parent(telemetry);
             let command = workspace_info.package_json.scripts.get(info.task());
 
             match command {
                 Some(cmd) if info.package() == ROOT_PKG_NAME && turbo_regex().is_match(cmd) => {
+                    let package_task_event =
+                        PackageTaskEventBuilder::new(info.package(), info.task())
+                            .with_parent(telemetry);
                     package_task_event.track_error(TrackedErrors::RecursiveError);
                     let (span, text) = cmd.span_and_text("package.json");
 
-                    return Err(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
+                    dispatch_error = Some(Error::RecursiveTurbo(Box::new(RecursiveTurboError {
                         task_name: info.to_string(),
                         command: cmd.to_string(),
                         span,
                         text,
                     })));
+                    break;
                 }
                 _ => (),
             }
 
-            let task_definition = engine
-                .task_definition(&info)
-                .ok_or(Error::MissingDefinition)?;
+            let Some(task_definition) = engine.task_definition(&info) else {
+                dispatch_error = Some(Error::MissingDefinition);
+                break;
+            };
 
-            let task_env_mode = task_definition.env_mode.unwrap_or(self.global_env_mode);
-            package_task_event.track_env_mode(&task_env_mode.to_string());
-
-            let dependency_set = engine.dependencies(&info).ok_or(Error::MissingDefinition)?;
-
-            let task_hash_telemetry = package_task_event.child();
-            let task_hash = self.task_hasher.calculate_task_hash(
-                &info,
-                task_definition,
-                task_env_mode,
-                workspace_info,
-                dependency_set,
-                task_hash_telemetry,
-            )?;
+            // Move pre-computed hash and env out of the map — each task is
+            // dispatched exactly once, so remove avoids cloning the env map.
+            let Some((task_hash, execution_env)) = precomputed.remove(&info) else {
+                dispatch_error = Some(Error::MissingDefinition);
+                break;
+            };
 
             debug!("task {} hash is {}", info, task_hash);
 
-            let task_cache = self.run_cache.task_cache(
-                task_definition,
-                workspace_info,
-                info.clone(),
-                &task_hash,
-            );
+            let task_cache = {
+                let _span = tracing::info_span!("task_cache_new").entered();
+                self.run_cache
+                    .task_cache(task_definition, workspace_info, info.clone(), &task_hash)
+            };
 
             // Drop to avoid holding the span across an await
 
@@ -284,49 +429,64 @@ impl<'a> Visitor<'a> {
                     }));
                 }
                 false => {
-                    // Compute execution env only when we actually need it (not
-                    // during dry runs). The task_hasher is !Send so this must
-                    // happen in the dispatch loop rather than inside the spawned task.
-                    let execution_env =
-                        self.task_hasher
-                            .env(&info, task_env_mode, task_definition)?;
-
                     let takes_input = task_definition.interactive || task_definition.persistent;
-                    let Some(mut exec_context) = factory.exec_context(
-                        info.clone(),
-                        task_hash,
-                        task_cache,
-                        execution_env,
-                        takes_input,
-                        self.task_access.clone(),
-                    )?
-                    else {
-                        // TODO(gsoltis): if/when we fix https://github.com/vercel/turborepo/issues/937
-                        // the following block should never get hit. In the meantime, keep it after
-                        // hashing so that downstream tasks can count on the hash existing
-                        //
-                        // bail if the script doesn't exist or is empty
+
+                    let task_output = if let Some(handle) = &self.ui_sender {
+                        TaskOutput::tui(handle.task(info.to_string()))
+                    } else {
+                        TaskOutput::stream()
+                    };
+                    let package_task_event =
+                        PackageTaskEventBuilder::new(info.package(), info.task())
+                            .with_parent(telemetry);
+                    let execution_telemetry = package_task_event.child();
+
+                    let exec_context = {
+                        let _span = tracing::info_span!("exec_context_new").entered();
+                        match factory.exec_context(
+                            info.clone(),
+                            task_hash,
+                            task_cache,
+                            execution_env,
+                            takes_input,
+                            self.task_access.clone(),
+                        ) {
+                            Ok(ctx) => ctx,
+                            Err(e) => {
+                                dispatch_error = Some(e);
+                                break;
+                            }
+                        }
+                    };
+                    let Some(mut exec_context) = exec_context else {
                         continue;
                     };
 
-                    let vendor_behavior = cached_vendor_behavior;
-
-                    let output_client = if let Some(handle) = &self.ui_sender {
-                        TaskOutput::UI(handle.task(info.to_string()))
+                    let task_id_str = info.to_string();
+                    let task_prefix = self.prefix(&info);
+                    // The display label always includes the task name for
+                    // CI group markers, even when log_prefix is None.
+                    let display_label = if self.run_opts.single_package {
+                        info.task().to_string()
                     } else {
-                        TaskOutput::Direct(self.output_client(&info, vendor_behavior))
+                        format!("{}:{}", info.package(), info.task())
                     };
-
-                    let tracker = self.run_tracker.track_task(info.clone().into_owned());
+                    let task_handle = self
+                        .grouping_layer
+                        .task_with_label(&task_id_str, display_label);
+                    self.grouping_layer
+                        .logger()
+                        .register_task(&task_id_str, &task_prefix);
+                    let tracker = self.run_tracker.track_task(info.into_owned());
                     let parent_span = Span::current();
-                    let execution_telemetry = package_task_event.child();
 
                     tasks.push(tokio::spawn(async move {
                         exec_context
                             .execute(
                                 parent_span.id(),
                                 tracker,
-                                output_client,
+                                task_output,
+                                task_handle,
                                 callback,
                                 &execution_telemetry,
                             )
@@ -336,9 +496,17 @@ impl<'a> Visitor<'a> {
             }
         }
 
-        // Wait for the engine task to finish and for all of our tasks to finish
-        engine_handle.await.expect("engine execution panicked")?;
-        // This will poll the futures until they are all completed
+        // Close the receiver so the engine can finish if we broke out early.
+        // Without this, the engine would block trying to send the next task.
+        drop(node_stream);
+
+        // Always wait for the engine, even after a dispatch error. If we broke
+        // early the engine will see the closed channel and return
+        // Err(ExecuteError::Visitor), which is expected — not a real error.
+        let engine_result = engine_handle.await.expect("engine execution panicked");
+
+        // Always drain spawned tasks so every TaskTracker is consumed before
+        // the ExecutionTracker is dropped.
         let mut internal_errors = Vec::new();
         while let Some(result) = tasks.next().await {
             if let Err(e) = result.unwrap_or_else(|e| panic!("task executor panicked: {e}")) {
@@ -352,6 +520,14 @@ impl<'a> Visitor<'a> {
                 handle.stop().await;
             }
         }
+
+        // Propagate the dispatch error first — the engine error is an expected
+        // consequence of us closing the channel early, not a root cause.
+        if let Some(err) = dispatch_error {
+            return Err(err);
+        }
+
+        engine_result?;
 
         if !internal_errors.is_empty() {
             return Err(Error::InternalErrors(
@@ -407,9 +583,11 @@ impl<'a> Visitor<'a> {
         // output any warnings that we collected while running tasks
         if let Ok(warnings) = self.warnings.lock() {
             if !warnings.is_empty() {
-                eprintln!();
-                warn!("finished with warnings");
-                eprintln!();
+                turborepo_log::warn(
+                    turborepo_log::Source::turbo(turborepo_log::Subsystem::Run),
+                    "finished with warnings",
+                )
+                .emit();
 
                 PlatformEnv::output_header(global_env_mode == EnvMode::Strict, self.color_config);
 
@@ -444,51 +622,6 @@ impl<'a> Visitor<'a> {
             .await?)
     }
 
-    fn sink(run_opts: &RunOpts) -> OutputSink<StdWriter> {
-        let (out, err) = if run_opts.should_redirect_stderr_to_stdout() {
-            (std::io::stdout().into(), std::io::stdout().into())
-        } else {
-            (std::io::stdout().into(), std::io::stderr().into())
-        };
-        OutputSink::new(out, err)
-    }
-
-    fn output_client(
-        &self,
-        task_id: &TaskId,
-        vendor_behavior: Option<&VendorBehavior>,
-    ) -> OutputClient<impl std::io::Write> {
-        let behavior = match self.run_opts.log_order {
-            ResolvedLogOrder::Stream => turborepo_ui::OutputClientBehavior::Passthrough,
-            ResolvedLogOrder::Grouped => turborepo_ui::OutputClientBehavior::Grouped,
-        };
-
-        let mut logger = self.sink.logger(behavior);
-        if let Some(vendor_behavior) = vendor_behavior {
-            let group_name = if self.run_opts.single_package {
-                task_id.task().to_string()
-            } else {
-                format!("{}:{}", task_id.package(), task_id.task())
-            };
-
-            let header_factory = (vendor_behavior.group_prefix)(group_name.to_owned());
-            let footer_factory = (vendor_behavior.group_suffix)(group_name.to_owned());
-
-            logger.with_header_footer(Some(header_factory), Some(footer_factory));
-
-            let (error_header, error_footer) = (
-                vendor_behavior
-                    .error_group_prefix
-                    .map(|f| f(group_name.to_owned())),
-                vendor_behavior
-                    .error_group_suffix
-                    .map(|f| f(group_name.to_owned())),
-            );
-            logger.with_error_header_footer(error_header, error_footer);
-        }
-        logger
-    }
-
     pub(crate) fn prefix<'b>(&self, task_id: &'b TaskId) -> Cow<'b, str> {
         match self.run_opts.log_prefix {
             ResolvedLogPrefix::Task if self.run_opts.single_package => task_id.task().into(),
@@ -503,28 +636,6 @@ impl<'a> Visitor<'a> {
             true => task_id.task().to_string(),
             false => task_id.to_string(),
         }
-    }
-
-    fn prefixed_ui<W: Write>(
-        color_config: ColorConfig,
-        is_github_actions: bool,
-        stdout: W,
-        stderr: W,
-        prefix: StyledObject<String>,
-    ) -> PrefixedUI<W> {
-        let mut prefixed_ui = PrefixedUI::new(color_config, stdout, stderr)
-            .with_output_prefix(prefix.clone())
-            // TODO: we can probably come up with a more ergonomic way to achieve this
-            .with_error_prefix(
-                Style::new().apply_to(format!("{}ERROR: ", color_config.apply(prefix.clone()))),
-            )
-            .with_warn_prefix(prefix);
-        if is_github_actions {
-            prefixed_ui = prefixed_ui
-                .with_error_prefix(Style::new().apply_to("[ERROR] ".to_string()))
-                .with_warn_prefix(Style::new().apply_to("[WARN] ".to_string()));
-        }
-        prefixed_ui
     }
 
     /// Only used for the hashing comparison between Rust and Go. After port,

@@ -4,7 +4,10 @@ use biome_deserialize_macros::Deserializable;
 use biome_json_parser::JsonParserOptions;
 use serde::Serialize;
 
-use crate::{DevelopmentTask, Error};
+use crate::{
+    DevelopmentTask, Error,
+    port::{generate_port_from_name, parse_port_from_host},
+};
 
 pub enum ParseResult {
     Actual(ConfigV1),
@@ -117,27 +120,6 @@ impl biome_deserialize::Deserializable for LocalHost {
     }
 }
 
-fn parse_port_from_host(host: &str) -> Option<u16> {
-    // Try to extract port from host string
-    // Formats: "hostname:port", "protocol://hostname:port"
-
-    // Remove protocol if present
-    let without_protocol = if let Some(idx) = host.find("://") {
-        &host[idx + 3..]
-    } else {
-        host
-    };
-
-    // Extract port after the last colon
-    if let Some(colon_idx) = without_protocol.rfind(':')
-        && let Ok(port) = without_protocol[colon_idx + 1..].parse::<u16>()
-    {
-        return Some(port);
-    }
-
-    None
-}
-
 impl ConfigV1 {
     pub fn from_str(input: &str, source: &str) -> Result<ParseResult, Error> {
         let jsonc_options = JsonParserOptions::default()
@@ -239,23 +221,48 @@ impl ConfigV1 {
             })
     }
 
+    /// Resolves an application by name. Tries a direct key match first,
+    /// then falls back to scanning by `packageName`. This handles the common
+    /// case where the config key (e.g. a Vercel project name) differs from
+    /// the local package name.
+    fn find_application(&self, name: &str) -> Option<(&String, &Application)> {
+        self.applications.get_key_value(name).or_else(|| {
+            self.applications
+                .iter()
+                .find(|(key, app)| app.package_name(key) == name)
+        })
+    }
+
+    /// Returns the dev server port for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`. When no explicit port is configured,
+    /// a deterministic port is generated from the config map key.
     pub fn port(&self, name: &str) -> Option<u16> {
-        let application = self.applications.get(name)?;
-        Some(application.port(name))
+        let (key, app) = self.find_application(name)?;
+        Some(app.port(key))
     }
 
     pub fn local_proxy_port(&self) -> Option<u16> {
         self.options.as_ref()?.local_proxy_port
     }
 
+    /// Returns the routing configuration for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`.
     pub fn routing(&self, app_name: &str) -> Option<&[PathGroup]> {
-        let application = self.applications.get(app_name)?;
-        application.routing.as_deref()
+        let (_, app) = self.find_application(app_name)?;
+        app.routing.as_deref()
     }
 
+    /// Returns the fallback URL for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`.
     pub fn fallback(&self, name: &str) -> Option<&str> {
-        let application = self.applications.get(name)?;
-        application.fallback()
+        let (_, app) = self.find_application(name)?;
+        app.fallback()
     }
 
     /// Returns the name and package of the application that serves the root
@@ -292,35 +299,10 @@ impl Application {
     }
 }
 
-const MIN_PORT: u16 = 3000;
-const MAX_PORT: u16 = 8000;
-const PORT_RANGE: u16 = MAX_PORT - MIN_PORT;
-
-fn generate_port_from_name(name: &str) -> u16 {
-    let mut hash: i32 = 0;
-    for c in name.chars() {
-        let code = i32::try_from(u32::from(c)).expect("char::MAX is less than 2^31");
-        hash = (hash << 5).overflowing_sub(hash).0.overflowing_add(code).0;
-    }
-    let hash = hash.abs_diff(0);
-    let port = hash % u32::from(PORT_RANGE);
-    MIN_PORT + u16::try_from(port).expect("u32 modulo a u16 number will be a valid u16")
-}
-
 #[cfg(test)]
 mod test {
-    use std::char;
-
     use super::*;
-
-    #[test]
-    fn test_char_as_i32() {
-        let max_char = u32::from(char::MAX);
-        assert!(
-            i32::try_from(max_char).is_ok(),
-            "max char should fit in i32"
-        );
-    }
+    use crate::port::{MAX_PORT, MIN_PORT};
 
     #[test]
     fn test_child_config_parse() {
@@ -437,6 +419,131 @@ mod test {
                 );
             }
             ParseResult::Reference(_) => panic!("expected to get main config"),
+        }
+    }
+
+    #[test]
+    fn test_port_lookup_by_package_name() {
+        let input = r#"{
+        "applications": {
+            "my-vercel-project": {
+                "packageName": "my-app",
+                "development": {"local": 3001}
+            }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(config_v1.port("my-app"), Some(3001));
+                assert_eq!(config_v1.port("my-vercel-project"), Some(3001));
+            }
+            ParseResult::Reference(_) => panic!("expected main config"),
+        }
+    }
+
+    #[test]
+    fn test_port_lookup_by_package_name_auto_generated() {
+        let input = r#"{
+        "applications": {
+            "my-vercel-project": {
+                "packageName": "my-app"
+            }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                let port_by_pkg = config_v1.port("my-app");
+                let port_by_key = config_v1.port("my-vercel-project");
+                assert!(port_by_pkg.is_some());
+                assert!(port_by_key.is_some());
+                assert_eq!(port_by_pkg, port_by_key);
+                assert_eq!(
+                    port_by_key,
+                    Some(generate_port_from_name("my-vercel-project"))
+                );
+            }
+            ParseResult::Reference(_) => panic!("expected main config"),
+        }
+    }
+
+    #[test]
+    fn test_port_returns_none_for_unknown_name() {
+        let input = r#"{"applications": {"web": {"development": {"local": 3000}}}}"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(config_v1.port("nonexistent"), None);
+            }
+            ParseResult::Reference(_) => panic!("expected main config"),
+        }
+    }
+
+    #[test]
+    fn test_direct_key_takes_priority_over_package_name() {
+        let input = r#"{
+        "applications": {
+            "web": {
+                "development": {"local": 3000}
+            },
+            "vercel-web": {
+                "packageName": "web",
+                "development": {"local": 4000}
+            }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(config_v1.port("web"), Some(3000));
+                assert_eq!(config_v1.port("vercel-web"), Some(4000));
+            }
+            ParseResult::Reference(_) => panic!("expected main config"),
+        }
+    }
+
+    #[test]
+    fn test_fallback_lookup_by_package_name() {
+        let input = r#"{
+        "applications": {
+            "my-vercel-project": {
+                "packageName": "my-app",
+                "development": {
+                    "local": 3001,
+                    "fallback": "example.com"
+                }
+            }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert_eq!(config_v1.fallback("my-app"), Some("example.com"));
+                assert_eq!(config_v1.fallback("my-vercel-project"), Some("example.com"));
+            }
+            ParseResult::Reference(_) => panic!("expected main config"),
+        }
+    }
+
+    #[test]
+    fn test_routing_lookup_by_package_name() {
+        let input = r#"{
+        "applications": {
+            "my-vercel-project": {
+                "packageName": "my-app",
+                "routing": [{"paths": ["/docs"], "group": "docs"}],
+                "development": {"local": 3001}
+            }
+        }
+    }"#;
+        let config = ConfigV1::from_str(input, "microfrontends.json").unwrap();
+        match config {
+            ParseResult::Actual(config_v1) => {
+                assert!(config_v1.routing("my-app").is_some());
+                assert!(config_v1.routing("my-vercel-project").is_some());
+            }
+            ParseResult::Reference(_) => panic!("expected main config"),
         }
     }
 

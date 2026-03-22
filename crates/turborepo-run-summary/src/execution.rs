@@ -5,7 +5,7 @@ use serde::Serialize;
 use tokio::sync::mpsc;
 use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPath};
 use turborepo_task_id::TaskId;
-use turborepo_ui::{BOLD, BOLD_GREEN, BOLD_RED, ColorConfig, MAGENTA, YELLOW, color, cprintln};
+use turborepo_ui::{BOLD, BOLD_GREEN, BOLD_RED, ColorConfig, MAGENTA, color};
 
 use crate::{TurboDuration, task::TaskExecutionSummary};
 
@@ -134,35 +134,62 @@ impl<'a> ExecutionSummary<'a> {
             .max()
             .unwrap_or_default();
 
-        let lines: Vec<_> = line_data
-            .into_iter()
-            .map(|(header, trailer)| {
-                color!(
-                    ui,
-                    BOLD,
-                    "{}{}:    {}",
-                    " ".repeat(max_length - header.len()),
-                    header,
-                    trailer
-                )
-            })
-            .collect();
-
         if self.attempted == 0 {
-            println!();
-            cprintln!(ui, YELLOW, "No tasks were executed as part of this run.");
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                "No tasks were executed as part of this run.",
+            )
+            .emit();
         }
 
-        println!();
-        for line in lines {
-            println!("{line}");
+        // All output goes through the Logger. The TerminalSink renders
+        // ANSI codes for color; the StructuredLogSink strips them.
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+            "",
+        )
+        .emit();
+        for (header, trailer) in &line_data {
+            turborepo_log::info(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+                format!(
+                    "{}",
+                    color!(
+                        ui,
+                        BOLD,
+                        "{}{}:    {}",
+                        " ".repeat(max_length - header.len()),
+                        header,
+                        trailer
+                    )
+                ),
+            )
+            .emit();
         }
-
-        println!();
+        turborepo_log::info(
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Summary),
+            "",
+        )
+        .emit();
     }
 
     fn successful(&self) -> usize {
         self.success + self.cached
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.attempted_tasks
+    pub(crate) fn attempted(&self) -> usize {
+        self.attempted
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.failed_tasks
+    pub(crate) fn failed(&self) -> usize {
+        self.failed
+    }
+
+    // Used in observability/otel.rs to populate RunMetricsPayload.cached_tasks
+    pub(crate) fn cached(&self) -> usize {
+        self.cached
     }
 }
 
@@ -301,7 +328,7 @@ impl TaskTracker<()> {
                 state: None,
             })
             .await
-            .expect("execution summary state thread finished");
+            .ok();
         TaskTracker {
             sender,
             started_at,
@@ -324,7 +351,7 @@ impl TaskTracker<()> {
                 }),
             })
             .await
-            .expect("execution summary state thread finished")
+            .ok();
     }
 }
 
@@ -359,7 +386,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
                 state: Some(state),
             })
             .await
-            .expect("summary state thread finished");
+            .ok();
         execution
     }
 
@@ -388,7 +415,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
                 state: Some(state),
             })
             .await
-            .expect("summary state thread finished");
+            .ok();
         execution
     }
 
@@ -421,7 +448,7 @@ impl TaskTracker<chrono::DateTime<Local>> {
                 state: Some(state),
             })
             .await
-            .expect("summary state thread finished");
+            .ok();
         execution
     }
 }
@@ -622,5 +649,78 @@ mod test {
         assert_eq!(summary.failed, 2);
         assert_eq!(summary.cached, 5);
         assert_eq!(summary.exit_code, 1);
+    }
+
+    // Regression tests for https://github.com/vercel/turborepo/issues/11527
+    //
+    // The crash occurs when a TaskTracker tries to send to the state thread
+    // after its receiver has been dropped (e.g. during tokio runtime shutdown).
+    // These tests verify that every send site handles a dead receiver
+    // gracefully instead of panicking.
+    //
+    // We construct trackers with an already-closed channel to guarantee the
+    // send path hits Err(SendError) — the exact condition from the bug.
+
+    fn tracker_with_dead_channel() -> TaskTracker<()> {
+        let (sender, receiver) = mpsc::channel::<Message>(1);
+        drop(receiver);
+        TaskTracker {
+            sender,
+            started_at: (),
+            task_id: TaskId::new("pkg", "build"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_start_with_dead_receiver() {
+        let tracker = tracker_with_dead_channel();
+        // start() sends Event::Building — must not panic
+        tracker.start().await;
+    }
+
+    #[tokio::test]
+    async fn test_dry_run_with_dead_receiver() {
+        let tracker = tracker_with_dead_channel();
+        // dry_run() sends Event::Canceled — must not panic
+        tracker.dry_run().await;
+    }
+
+    #[tokio::test]
+    async fn test_cached_with_dead_receiver() {
+        let (sender, receiver) = mpsc::channel::<Message>(1);
+        drop(receiver);
+        let tracker: TaskTracker<DateTime<Local>> = TaskTracker {
+            sender,
+            started_at: Local::now(),
+            task_id: TaskId::new("pkg", "build"),
+        };
+        // cached() sends Event::Cached — must not panic
+        tracker.cached().await;
+    }
+
+    #[tokio::test]
+    async fn test_build_succeeded_with_dead_receiver() {
+        let (sender, receiver) = mpsc::channel::<Message>(1);
+        drop(receiver);
+        let tracker: TaskTracker<DateTime<Local>> = TaskTracker {
+            sender,
+            started_at: Local::now(),
+            task_id: TaskId::new("pkg", "build"),
+        };
+        // build_succeeded() sends Event::Built — must not panic
+        tracker.build_succeeded(0).await;
+    }
+
+    #[tokio::test]
+    async fn test_build_failed_with_dead_receiver() {
+        let (sender, receiver) = mpsc::channel::<Message>(1);
+        drop(receiver);
+        let tracker: TaskTracker<DateTime<Local>> = TaskTracker {
+            sender,
+            started_at: Local::now(),
+            task_id: TaskId::new("pkg", "build"),
+        };
+        // build_failed() sends Event::BuildFailed — must not panic
+        tracker.build_failed(Some(1), "error").await;
     }
 }

@@ -52,13 +52,23 @@ export async function packageManager({
       { pm: "pnpm", label: "pnpm" },
       { pm: "yarn", label: "yarn" },
       { pm: "bun", label: "bun" }
-    ].map(({ pm, label }) => ({
-      name: label,
-      value: pm as PackageManager,
-      disabled: availablePackageManagers[pm as PackageManager]
-        ? false
-        : `not installed`
-    }))
+    ]
+      .sort((a, b) => {
+        const aInstalled = Boolean(
+          availablePackageManagers[a.pm as PackageManager]
+        );
+        const bInstalled = Boolean(
+          availablePackageManagers[b.pm as PackageManager]
+        );
+        return Number(bInstalled) - Number(aInstalled);
+      })
+      .map(({ pm, label }) => ({
+        name: label,
+        value: pm as PackageManager,
+        disabled: availablePackageManagers[pm as PackageManager]
+          ? false
+          : `not installed`
+      }))
   });
 
   return {

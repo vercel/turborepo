@@ -2,6 +2,7 @@
 //!
 //! This module provides functionality to render task graphs in various formats:
 //! - DOT format (Graphviz)
+//! - SVG (rendered natively via layout-rs)
 //! - Mermaid format
 //! - HTML with embedded Viz.js
 //!
@@ -14,12 +15,18 @@ use std::{
     process::{Command, Stdio},
 };
 
+use layout::{
+    backends::svg::SVGWriter,
+    core::{base::Orientation, geometry::Point, style::StyleAttr},
+    std_shapes::shapes::{Arrow, Element, ShapeKind},
+    topo::layout::VisualGraph,
+};
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_types::GraphOpts;
 use which::which;
 
-use crate::{Built, Engine, TaskDefinitionInfo};
+use crate::{Built, Engine, TaskDefinitionInfo, TaskNode};
 
 /// Errors that can occur during graph visualization.
 #[derive(Debug, Error)]
@@ -114,6 +121,8 @@ pub fn write_graph<T: TaskDefinitionInfo + Clone, S: ChildSpawner>(
                 render_mermaid_graph(&filename, engine, single_package)?;
             } else if extension == "html" {
                 render_html(&filename, engine, single_package)?;
+            } else if extension == "svg" {
+                render_svg(&filename, engine, single_package)?;
             } else if extension == "dot" {
                 let mut opts = OpenOptions::new();
                 opts.truncate(true).create(true).write(true);
@@ -211,6 +220,66 @@ fn render_html<T: TaskDefinitionInfo + Clone>(
     )
     .map_err(Error::GraphOutput)?;
     file.write_all(HTML_SUFFIX.as_bytes())
+        .map_err(Error::GraphOutput)?;
+    Ok(())
+}
+
+fn render_svg<T: TaskDefinitionInfo + Clone>(
+    filename: &AbsoluteSystemPath,
+    engine: &Engine<Built, T>,
+    single_package: bool,
+) -> Result<(), Error> {
+    use petgraph::visit::EdgeRef;
+
+    let task_graph = engine.task_graph();
+
+    let display_node = |node: &TaskNode| -> String {
+        match (single_package, node) {
+            (_, TaskNode::Root) => node.to_string(),
+            (true, TaskNode::Task(task)) => task.task().to_string(),
+            (false, TaskNode::Task(_)) => node.to_string(),
+        }
+    };
+
+    let mut vg = VisualGraph::new(Orientation::TopToBottom);
+
+    let default_look = StyleAttr::simple();
+
+    // Build nodes, mapping petgraph NodeIndex -> layout-rs NodeHandle
+    let mut handle_map = std::collections::HashMap::new();
+    for idx in task_graph.node_indices() {
+        let node = &task_graph[idx];
+        let label = display_node(node);
+        let shape = ShapeKind::new_box(&label);
+        let element = Element::create(
+            shape,
+            default_look.clone(),
+            Orientation::LeftToRight,
+            Point::zero(),
+        );
+        let handle = vg.add_node(element);
+        handle_map.insert(idx, handle);
+    }
+
+    // Build edges
+    for edge in task_graph.edge_references() {
+        let src = handle_map[&edge.source()];
+        let dst = handle_map[&edge.target()];
+        let arrow = Arrow::simple("");
+        vg.add_edge(arrow, src, dst);
+    }
+
+    // Compute layout and render to SVG
+    let mut backend = SVGWriter::new();
+    vg.do_it(false, false, false, &mut backend);
+    let svg_content = backend.finalize();
+
+    let mut opts = OpenOptions::new();
+    opts.truncate(true).create(true).write(true);
+    let mut file = filename
+        .open_with_options(opts)
+        .map_err(Error::GraphOutput)?;
+    file.write_all(svg_content.as_bytes())
         .map_err(Error::GraphOutput)?;
     Ok(())
 }

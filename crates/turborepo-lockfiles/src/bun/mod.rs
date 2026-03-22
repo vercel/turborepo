@@ -88,7 +88,12 @@
 //! - [`PackageEntry`]: External package representation
 //! - [`LockfileVersion`]: Version enum for format compatibility
 
-use std::{any::Any, collections::HashMap, str::FromStr, sync::OnceLock};
+use std::{
+    any::Any,
+    collections::{BTreeMap, HashMap},
+    str::FromStr,
+    sync::OnceLock,
+};
 
 use biome_json_formatter::context::JsonFormatOptions;
 use biome_json_parser::JsonParserOptions;
@@ -588,8 +593,10 @@ impl Lockfile for BunLockfile {
     fn all_dependencies(
         &self,
         key: &str,
-    ) -> Result<Option<std::borrow::Cow<'_, std::collections::HashMap<String, String>>>, crate::Error>
-    {
+    ) -> Result<
+        Option<std::borrow::Cow<'_, std::collections::BTreeMap<String, String>>>,
+        crate::Error,
+    > {
         let entry_key = self
             .key_to_entry
             .get(key)
@@ -600,19 +607,21 @@ impl Lockfile for BunLockfile {
             .get(entry_key)
             .ok_or_else(|| crate::Error::MissingPackage(key.into()))?;
 
-        let mut deps = HashMap::new();
+        let mut deps = std::collections::BTreeMap::new();
 
         let Some(info) = &entry.info else {
             return Ok(Some(std::borrow::Cow::Owned(deps)));
         };
 
         for (dependency, version) in info.all_dependencies() {
+            let nested_key = format!("{entry_key}/{dependency}");
+            let nested_entry = self.data.packages.get(&nested_key);
+
             let is_optional = info.optional_dependencies.contains_key(dependency)
                 || info.optional_peers.contains(dependency);
 
             if is_optional {
-                let parent_key = format!("{entry_key}/{dependency}");
-                let has_nested = self.data.packages.contains_key(&parent_key);
+                let has_nested = nested_entry.is_some();
 
                 if !has_nested {
                     let is_optional_peer_only =
@@ -625,7 +634,18 @@ impl Lockfile for BunLockfile {
                 }
             }
 
-            deps.insert(dependency.to_string(), version.to_string());
+            // When a nested entry exists for this dependency (e.g.,
+            // "chalk/ansi-styles/color-convert/color-name"), return an exact
+            // version constraint so resolve_package matches the correct
+            // nested version rather than a different nested entry that
+            // happens to also satisfy the semver range.
+            let resolved_version = if let Some(nested) = nested_entry {
+                format!("={}", nested.version())
+            } else {
+                version.to_string()
+            };
+
+            deps.insert(dependency.to_string(), resolved_version);
         }
 
         Ok(Some(std::borrow::Cow::Owned(deps)))
@@ -874,14 +894,28 @@ impl BunLockfile {
 
             let ident = PackageIdent::parse(&entry.ident);
             if ident.is_workspace() {
-                // Workspace entries: [ident, info] — bun requires the info
-                // object even when empty
+                // Workspace entries: [ident] when no info, [ident, info]
+                // when there are dependencies. Bun omits the info object
+                // entirely for workspace mappings with no dependencies.
+                let ident_json = serde_json::to_string(&entry.ident)?;
+                let has_info = entry.info.as_ref().is_some_and(|i| !i.is_empty());
+                if has_info {
+                    let info_json = serde_json::to_string(&entry.info.as_ref().unwrap())?;
+                    let info_json_spaced = self.format_info_json(&info_json);
+                    output.push_str(&format!(
+                        "    \"{key}\": [{ident_json}, {info_json_spaced}],"
+                    ));
+                } else {
+                    output.push_str(&format!("    \"{key}\": [{ident_json}],"));
+                }
+            } else if ident.is_local_package() {
+                // file:, link:, and tarball entries: [ident, info] — 2 elements
                 let ident_json = serde_json::to_string(&entry.ident)?;
                 let info_json =
                     serde_json::to_string(&entry.info.as_ref().unwrap_or(&PackageInfo::default()))?;
                 let info_json_spaced = self.format_info_json(&info_json);
                 output.push_str(&format!(
-                    "    \"{key}\": [{ident_json}, {info_json_spaced}],"
+                    "    \"{key}\": [{ident_json}, {info_json_spaced}],",
                 ));
             } else {
                 let ident_json = serde_json::to_string(&entry.ident)?;
@@ -1375,6 +1409,19 @@ impl BunLockfile {
                     // Format: "storybook@workspace:apps/storybook" -> workspace path is
                     // "apps/storybook"
                     if let Some(workspace_path) = ident.workspace_path() {
+                        // Ensure transitive workspace dependencies are in the
+                        // pruned set. The initial pruned_data.workspaces only
+                        // contains the root and target workspaces, but
+                        // workspaces depended on transitively must also be
+                        // included.
+                        if !pruned_data.workspaces.contains_key(workspace_path)
+                            && let Some(ws_entry) = self.data.workspaces.get(workspace_path)
+                        {
+                            pruned_data
+                                .workspaces
+                                .insert(workspace_path.to_string(), ws_entry.clone());
+                        }
+
                         // Check if this workspace is in the pruned set
                         if pruned_data.workspaces.contains_key(workspace_path) {
                             // This workspace IS in the pruned set - keep the mapping as-is
@@ -1384,8 +1431,9 @@ impl BunLockfile {
                             continue;
                         }
 
-                        // This workspace is NOT in the pruned set
-                        // Try to find the actual npm package entry instead
+                        // This workspace is NOT in the pruned set (doesn't
+                        // exist in the original data either). Try to find the
+                        // actual npm package entry instead.
                         // Get the workspace name (last component of path)
                         let workspace_name = workspace_path
                             .split('/')
@@ -1505,24 +1553,12 @@ impl BunLockfile {
             .map(|entry| entry.ident.as_str())
             .collect();
 
-        // Filter overrides to only include those for packages in the subgraph
-        // Extract package names from idents for comparison with override keys
-        let included_package_names: HashSet<String> = pruned_data
-            .packages
-            .values()
-            .filter_map(|entry| {
-                // Extract package name from ident (format: "name@version")
-                entry.ident.split('@').next().map(|s| s.to_string())
-            })
-            .collect();
-
-        for (pkg_name, override_version) in &self.data.overrides {
-            if included_package_names.contains(pkg_name) {
-                pruned_data
-                    .overrides
-                    .insert(pkg_name.clone(), override_version.clone());
-            }
-        }
+        // Preserve ALL overrides from the original lockfile. turbo prune copies
+        // the root package.json with all overrides intact, so the lockfile must
+        // keep them in sync. If overrides are selectively stripped here, bun
+        // detects the mismatch with package.json and re-resolves, which breaks
+        // `bun install --frozen-lockfile` when a range has drifted (e.g. "latest").
+        pruned_data.overrides = self.data.overrides.clone();
 
         // Filter patched_dependencies to only include those for packages in the
         // subgraph
@@ -1571,11 +1607,11 @@ impl BunLockfile {
         };
 
         // Collect workspace dependencies
-        let workspace_deps: HashMap<String, HashMap<String, String>> = pruned_data
+        let workspace_deps: HashMap<String, BTreeMap<String, String>> = pruned_data
             .workspaces
             .iter()
             .map(|(ws_path, ws_entry)| {
-                let mut deps = HashMap::new();
+                let mut deps = BTreeMap::new();
                 if let Some(d) = &ws_entry.dependencies {
                     deps.extend(d.clone());
                 }
@@ -1636,6 +1672,75 @@ impl BunLockfile {
                 });
             }
             Err(_e) => {}
+        }
+
+        // NESTED KEY PROMOTION: In bun lockfiles, nested entries like
+        // "accepts/negotiator" only exist as overrides of a hoisted top-level
+        // entry ("negotiator"). When pruning removes the hoisted version but
+        // keeps a nested version, we must promote the nested entry to top-level
+        // to maintain a valid lockfile structure that bun's --frozen-lockfile
+        // accepts.
+        loop {
+            let top_level_pkg_names: HashSet<String> = pruned_data
+                .packages
+                .iter()
+                .filter(|(key, _)| PackageKey::parse(key).parent().is_none())
+                .filter_map(|(_, entry)| {
+                    let ident = PackageIdent::parse(&entry.ident);
+                    if !ident.is_workspace() {
+                        Some(ident.name().to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            // Find the first nested entry (by sorted key order) whose package
+            // name has no top-level entry. We promote one package per iteration
+            // because promotion renames children, which may expose further
+            // entries that need promotion.
+            let mut sorted_pkg_keys: Vec<_> = pruned_data.packages.keys().cloned().collect();
+            sorted_pkg_keys.sort();
+
+            let mut promote_target: Option<(String, String)> = None; // (pkg_name, old_key)
+            for key in &sorted_pkg_keys {
+                if PackageKey::parse(key).parent().is_none() {
+                    continue;
+                }
+
+                let entry = &pruned_data.packages[key];
+                let ident = PackageIdent::parse(&entry.ident);
+                if ident.is_workspace() {
+                    continue;
+                }
+
+                let pkg_name = ident.name().to_string();
+                if !top_level_pkg_names.contains(&pkg_name) {
+                    promote_target = Some((pkg_name, key.clone()));
+                    break;
+                }
+            }
+
+            let Some((pkg_name, old_key)) = promote_target else {
+                break;
+            };
+
+            // Rename the entry and all its children
+            let old_prefix = format!("{old_key}/");
+            let new_prefix = format!("{pkg_name}/");
+            let mut renames: Vec<(String, String)> = vec![(old_key, pkg_name)];
+            for key in &sorted_pkg_keys {
+                if key.starts_with(&old_prefix) {
+                    let new_key = format!("{new_prefix}{}", &key[old_prefix.len()..]);
+                    renames.push((key.clone(), new_key));
+                }
+            }
+
+            for (old, new) in renames {
+                if let Some(entry) = pruned_data.packages.remove(&old) {
+                    pruned_data.packages.insert(new, entry);
+                }
+            }
         }
 
         // After pruning, some packages may have required peer dependencies that
@@ -1781,6 +1886,15 @@ impl PackageEntry {
 }
 
 impl PackageInfo {
+    pub fn is_empty(&self) -> bool {
+        self.dependencies.is_empty()
+            && self.dev_dependencies.is_empty()
+            && self.optional_dependencies.is_empty()
+            && self.peer_dependencies.is_empty()
+            && self.optional_peers.is_empty()
+            && self.other.is_empty()
+    }
+
     pub fn all_dependencies(&self) -> impl Iterator<Item = (&str, &str)> {
         [
             self.dependencies.iter(),
@@ -2024,11 +2138,12 @@ mod test {
             .unwrap();
         let subgraph_data = subgraph.lockfile().unwrap();
 
-        // Check that overrides are filtered
-        assert_eq!(subgraph_data.overrides.len(), 1);
+        // All overrides are preserved to stay in sync with the root
+        // package.json that turbo prune copies as-is
+        assert_eq!(subgraph_data.overrides.len(), 3);
         assert!(subgraph_data.overrides.contains_key("foo"));
-        assert!(!subgraph_data.overrides.contains_key("bar"));
-        assert!(!subgraph_data.overrides.contains_key("unused"));
+        assert!(subgraph_data.overrides.contains_key("bar"));
+        assert!(subgraph_data.overrides.contains_key("unused"));
 
         // Check that workspaces are correct
         assert_eq!(subgraph_data.workspaces.len(), 2);
@@ -2357,11 +2472,11 @@ mod test {
         assert!(subgraph_data.packages.contains_key("lodash-override"));
         assert!(!subgraph_data.packages.contains_key("express"));
 
-        // Verify overrides filtering
-        assert_eq!(subgraph_data.overrides.len(), 2);
+        // All overrides are preserved to stay in sync with root package.json
+        assert_eq!(subgraph_data.overrides.len(), 3);
         assert!(subgraph_data.overrides.contains_key("react"));
         assert!(subgraph_data.overrides.contains_key("lodash"));
-        assert!(!subgraph_data.overrides.contains_key("express"));
+        assert!(subgraph_data.overrides.contains_key("express"));
 
         // Verify patches filtering
         assert_eq!(subgraph_data.patched_dependencies.len(), 1);
@@ -2415,7 +2530,7 @@ mod test {
         let lockfile = BunLockfile::from_str(&contents).unwrap();
 
         // Simulate what turbo prune would call: Get transitive closure first
-        let unresolved_deps: std::collections::HashMap<String, String> =
+        let unresolved_deps: std::collections::BTreeMap<String, String> =
             [("@hookform/resolvers".to_string(), "^5.0.1".to_string())]
                 .into_iter()
                 .collect();
@@ -2908,6 +3023,549 @@ mod test {
                 "should reject malicious version: {}",
                 malicious_version
             );
+        }
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/11923
+    // When multiple workspaces depend on different versions of the same package
+    // (e.g., color-convert@3.x, color-convert@2.x, color-convert@1.x), pruning
+    // for a single workspace must preserve the nested key hierarchy so bun
+    // resolves the correct version for each parent.
+    #[test]
+    fn test_subgraph_multiple_versions_same_package() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "bug-repro",
+                    "dependencies": {
+                        "typescript": "^5.9.3"
+                    }
+                },
+                "apps/app1": {
+                    "name": "app1",
+                    "dependencies": {
+                        "color": "^5.0.3",
+                        "express-winston": "4.2.0"
+                    },
+                    "peerDependencies": {
+                        "typescript": "^5"
+                    }
+                },
+                "apps/app2": {
+                    "name": "app2",
+                    "dependencies": {
+                        "ansi-styles": "4.3.0"
+                    },
+                    "peerDependencies": {
+                        "typescript": "^5"
+                    }
+                }
+            },
+            "packages": {
+                "ansi-styles": ["ansi-styles@4.3.0", "", { "dependencies": { "color-convert": "^2.0.1" } }, "sha512-ansi"],
+                "app1": ["app1@workspace:apps/app1"],
+                "app2": ["app2@workspace:apps/app2"],
+                "chalk": ["chalk@2.4.2", "", { "dependencies": { "ansi-styles": "^3.2.1", "escape-string-regexp": "^1.0.5", "supports-color": "^5.3.0" } }, "sha512-chalk"],
+                "color": ["color@5.0.3", "", { "dependencies": { "color-convert": "^3.1.3", "color-string": "^2.1.3" } }, "sha512-color"],
+                "color-convert": ["color-convert@3.1.3", "", { "dependencies": { "color-name": "^2.0.0" } }, "sha512-cc3"],
+                "color-name": ["color-name@2.1.0", "", {}, "sha512-cn2"],
+                "color-string": ["color-string@2.1.4", "", { "dependencies": { "color-name": "^2.0.0" } }, "sha512-cs"],
+                "escape-string-regexp": ["escape-string-regexp@1.0.5", "", {}, "sha512-esr"],
+                "express-winston": ["express-winston@4.2.0", "", { "dependencies": { "chalk": "^2.4.2", "lodash": "^4.17.21" } }, "sha512-ew"],
+                "has-flag": ["has-flag@3.0.0", "", {}, "sha512-hf"],
+                "lodash": ["lodash@4.17.23", "", {}, "sha512-lo"],
+                "supports-color": ["supports-color@5.5.0", "", { "dependencies": { "has-flag": "^3.0.0" } }, "sha512-sc"],
+                "typescript": ["typescript@5.9.3", "", {}, "sha512-ts"],
+                "ansi-styles/color-convert": ["color-convert@2.0.1", "", { "dependencies": { "color-name": "~1.1.4" } }, "sha512-cc2"],
+                "ansi-styles/color-convert/color-name": ["color-name@1.1.4", "", {}, "sha512-cn114"],
+                "chalk/ansi-styles": ["ansi-styles@3.2.1", "", { "dependencies": { "color-convert": "^1.9.0" } }, "sha512-as3"],
+                "chalk/ansi-styles/color-convert": ["color-convert@1.9.3", "", { "dependencies": { "color-name": "1.1.3" } }, "sha512-cc1"],
+                "chalk/ansi-styles/color-convert/color-name": ["color-name@1.1.3", "", {}, "sha512-cn113"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        // Compute transitive closure for app1 (simulating turbo prune --scope=app1)
+        let mut app1_deps = std::collections::BTreeMap::new();
+        app1_deps.insert("color".to_string(), "^5.0.3".to_string());
+        app1_deps.insert("express-winston".to_string(), "4.2.0".to_string());
+
+        let closure = crate::transitive_closure(&lockfile, "apps/app1", app1_deps, false).unwrap();
+
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+        // Create subgraph
+        let subgraph = lockfile
+            .subgraph(&["apps/app1".into()], &package_idents)
+            .unwrap();
+
+        // Verify the pruned lockfile round-trips correctly
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+
+        let reparsed =
+            BunLockfile::from_str(&encoded_str).expect("pruned lockfile should be parseable");
+
+        // app1 uses:
+        //   color -> color-convert@3.1.3 -> color-name@2.1.0
+        //   express-winston -> chalk -> chalk/ansi-styles@3.2.1
+        //     -> chalk/ansi-styles/color-convert@1.9.3
+        //     -> chalk/ansi-styles/color-convert/color-name@1.1.3
+
+        let has_ident = |ident: &str| reparsed.data.packages.values().any(|e| e.ident == ident);
+
+        assert!(
+            has_ident("color-convert@3.1.3"),
+            "color-convert@3.1.3 (for color@5) should be in subgraph"
+        );
+
+        assert!(
+            has_ident("color-convert@1.9.3"),
+            "color-convert@1.9.3 (for chalk/ansi-styles) should be in subgraph"
+        );
+
+        // color-convert@2.0.1 (used by ansi-styles@4.3.0, app2-only) should NOT be
+        // present
+        assert!(
+            !has_ident("color-convert@2.0.1"),
+            "color-convert@2.0.1 (app2 only) should NOT be in subgraph"
+        );
+
+        // ansi-styles@4.3.0 (app2-only) should NOT be present
+        assert!(
+            !has_ident("ansi-styles@4.3.0"),
+            "ansi-styles@4.3.0 (app2 only) should NOT be in subgraph"
+        );
+
+        assert!(
+            has_ident("color-name@1.1.3"),
+            "color-name@1.1.3 (for chalk chain) should be in subgraph"
+        );
+
+        // color should resolve to 5.0.3
+        let color_dep = reparsed
+            .resolve_package("apps/app1", "color", "^5.0.3")
+            .unwrap()
+            .expect("should resolve color");
+        assert_eq!(color_dep.key, "color@5.0.3");
+
+        // chalk should resolve to 2.4.2
+        let chalk_dep = reparsed
+            .resolve_package("apps/app1", "chalk", "^2.4.2")
+            .unwrap()
+            .expect("should resolve chalk");
+        assert_eq!(chalk_dep.key, "chalk@2.4.2");
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12156
+    // When pruning removes the hoisted version of a package but keeps a nested
+    // version, the nested entry must be promoted to top-level so that bun's
+    // --frozen-lockfile doesn't reject the structural change.
+    #[test]
+    fn test_nested_entries_promoted_when_hoisted_version_pruned() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-monorepo",
+                    "dependencies": {
+                        "typescript": "^5.0.0"
+                    }
+                },
+                "apps/web": {
+                    "name": "web",
+                    "dependencies": {
+                        "express": "^4.18.0"
+                    },
+                    "peerDependencies": {
+                        "typescript": "^5"
+                    }
+                },
+                "apps/admin": {
+                    "name": "admin",
+                    "dependencies": {
+                        "compression": "^1.8.0"
+                    },
+                    "peerDependencies": {
+                        "typescript": "^5"
+                    }
+                }
+            },
+            "packages": {
+                "accepts": ["accepts@1.3.8", "", { "dependencies": { "mime-types": "~2.1.34", "negotiator": "0.6.3" } }, "sha512-accepts"],
+                "admin": ["admin@workspace:apps/admin"],
+                "body-parser": ["body-parser@1.20.3", "", { "dependencies": { "debug": "2.6.9", "depd": "2.0.0" } }, "sha512-bp"],
+                "bytes": ["bytes@3.1.2", "", {}, "sha512-bytes"],
+                "compressible": ["compressible@2.0.18", "", { "dependencies": { "mime-db": "~1.52.0" } }, "sha512-compress"],
+                "compression": ["compression@1.8.1", "", { "dependencies": { "bytes": "3.1.2", "compressible": "~2.0.18", "debug": "2.6.9", "negotiator": "~0.6.4", "on-headers": "~1.1.0", "safe-buffer": "5.2.1", "vary": "~1.1.2" } }, "sha512-compression"],
+                "debug": ["debug@2.6.9", "", { "dependencies": { "ms": "2.0.0" } }, "sha512-debug"],
+                "depd": ["depd@2.0.0", "", {}, "sha512-depd"],
+                "express": ["express@4.21.2", "", { "dependencies": { "accepts": "~1.3.8", "body-parser": "1.20.3" } }, "sha512-express"],
+                "mime-db": ["mime-db@1.52.0", "", {}, "sha512-mimedb"],
+                "mime-types": ["mime-types@2.1.35", "", { "dependencies": { "mime-db": "1.52.0" } }, "sha512-mimetypes"],
+                "ms": ["ms@2.0.0", "", {}, "sha512-ms"],
+                "negotiator": ["negotiator@0.6.4", "", {}, "sha512-neg064"],
+                "on-headers": ["on-headers@1.1.0", "", {}, "sha512-onh"],
+                "safe-buffer": ["safe-buffer@5.2.1", "", {}, "sha512-sb"],
+                "typescript": ["typescript@5.9.3", "", {}, "sha512-ts"],
+                "vary": ["vary@1.1.2", "", {}, "sha512-vary"],
+                "web": ["web@workspace:apps/web"],
+                "accepts/negotiator": ["negotiator@0.6.3", "", {}, "sha512-neg063"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        // Prune for apps/web only. The transitive closure includes
+        // negotiator@0.6.3 (via accepts) but NOT negotiator@0.6.4 (only
+        // needed by compression, which is in apps/admin).
+        let mut web_deps = std::collections::BTreeMap::new();
+        web_deps.insert("express".to_string(), "^4.18.0".to_string());
+        let closure = crate::transitive_closure(&lockfile, "apps/web", web_deps, false).unwrap();
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+        let subgraph = lockfile
+            .subgraph(&["apps/web".into()], &package_idents)
+            .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+        let pruned =
+            BunLockfile::from_str(&encoded_str).expect("pruned lockfile should be parseable");
+
+        // The nested entry "accepts/negotiator" should be promoted to
+        // "negotiator" since the hoisted negotiator@0.6.4 was pruned.
+        assert!(
+            pruned.data.packages.contains_key("negotiator"),
+            "negotiator should exist as a top-level entry after promotion"
+        );
+        assert!(
+            !pruned.data.packages.contains_key("accepts/negotiator"),
+            "nested accepts/negotiator should have been promoted to top-level"
+        );
+        assert_eq!(
+            pruned.data.packages["negotiator"].ident, "negotiator@0.6.3",
+            "promoted entry should have the correct ident"
+        );
+    }
+
+    // Test nested key promotion with deeply nested chains
+    #[test]
+    fn test_nested_promotion_deep_chain() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "deep-chain-test",
+                    "dependencies": {}
+                },
+                "apps/web": {
+                    "name": "web",
+                    "dependencies": {
+                        "express-winston": "4.2.0"
+                    }
+                },
+                "apps/other": {
+                    "name": "other",
+                    "dependencies": {
+                        "ansi-styles": "4.3.0",
+                        "color-convert": "2.0.1"
+                    }
+                }
+            },
+            "packages": {
+                "ansi-styles": ["ansi-styles@4.3.0", "", { "dependencies": { "color-convert": "^2.0.1" } }, "sha512-as4"],
+                "chalk": ["chalk@2.4.2", "", { "dependencies": { "ansi-styles": "^3.2.1" } }, "sha512-chalk"],
+                "color-convert": ["color-convert@2.0.1", "", { "dependencies": { "color-name": "~1.1.4" } }, "sha512-cc2"],
+                "color-name": ["color-name@2.1.0", "", {}, "sha512-cn2"],
+                "express-winston": ["express-winston@4.2.0", "", { "dependencies": { "chalk": "^2.4.2" } }, "sha512-ew"],
+                "other": ["other@workspace:apps/other"],
+                "web": ["web@workspace:apps/web"],
+                "chalk/ansi-styles": ["ansi-styles@3.2.1", "", { "dependencies": { "color-convert": "^1.9.0" } }, "sha512-as3"],
+                "chalk/ansi-styles/color-convert": ["color-convert@1.9.3", "", { "dependencies": { "color-name": "1.1.3" } }, "sha512-cc1"],
+                "chalk/ansi-styles/color-convert/color-name": ["color-name@1.1.3", "", {}, "sha512-cn113"],
+                "color-convert/color-name": ["color-name@1.1.4", "", {}, "sha512-cn114"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        // Prune for apps/web. The transitive closure includes chalk ->
+        // chalk/ansi-styles -> chalk/ansi-styles/color-convert ->
+        // chalk/ansi-styles/color-convert/color-name but NOT the hoisted
+        // ansi-styles@4.3.0, color-convert@2.0.1, or color-name@2.1.0.
+        let mut web_deps = std::collections::BTreeMap::new();
+        web_deps.insert("express-winston".to_string(), "4.2.0".to_string());
+        let closure = crate::transitive_closure(&lockfile, "apps/web", web_deps, false).unwrap();
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+        let subgraph = lockfile
+            .subgraph(&["apps/web".into()], &package_idents)
+            .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+        let pruned =
+            BunLockfile::from_str(&encoded_str).expect("pruned lockfile should be parseable");
+
+        // After promotion, deeply nested entries should be flattened.
+        // "chalk/ansi-styles" → "ansi-styles" (promoted, children renamed)
+        // "ansi-styles/color-convert" → "color-convert" (promoted, children renamed)
+        // "color-convert/color-name" → "color-name" (promoted)
+        assert!(
+            pruned.data.packages.contains_key("ansi-styles"),
+            "ansi-styles should be promoted to top-level"
+        );
+        assert!(
+            pruned.data.packages.contains_key("color-convert"),
+            "color-convert should be promoted to top-level"
+        );
+        assert!(
+            pruned.data.packages.contains_key("color-name"),
+            "color-name should be promoted to top-level"
+        );
+
+        // No nested keys should remain for these packages
+        assert!(
+            !pruned.data.packages.contains_key("chalk/ansi-styles"),
+            "chalk/ansi-styles should have been promoted"
+        );
+
+        // Verify idents
+        assert_eq!(
+            pruned.data.packages["ansi-styles"].ident,
+            "ansi-styles@3.2.1"
+        );
+        assert_eq!(
+            pruned.data.packages["color-convert"].ident,
+            "color-convert@1.9.3"
+        );
+        assert_eq!(pruned.data.packages["color-name"].ident, "color-name@1.1.3");
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/11701
+    // file: protocol dependencies should be serialized as 2-element arrays
+    // [ident, info], not corrupted into 4-element arrays [ident, "", info, ""]
+    #[test]
+    fn test_file_protocol_roundtrip() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "file-dep-fixture",
+                },
+                "apps/api": {
+                    "name": "api",
+                    "dependencies": {
+                        "@api/sdk": "file:apps/api/.api/apis/sdk",
+                        "lodash": "^4.17.21"
+                    }
+                },
+                "packages/ui": {
+                    "name": "@repo/ui",
+                    "dependencies": {
+                        "lodash": "^4.17.21"
+                    }
+                }
+            },
+            "packages": {
+                "@api/sdk": ["@api/sdk@file:apps/api/.api/apis/sdk", { "dependencies": { "cross-fetch": "^3.1.5" } }],
+                "@repo/ui": ["@repo/ui@workspace:packages/ui"],
+                "api": ["api@workspace:apps/api"],
+                "cross-fetch": ["cross-fetch@3.1.8", "", { "dependencies": { "node-fetch": "^2.6.12" } }, "sha512-crossfetch"],
+                "lodash": ["lodash@4.17.23", "", {}, "sha512-lodash"],
+                "node-fetch": ["node-fetch@2.7.0", "", {}, "sha512-nodefetch"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+        // Verify the file: entry was parsed correctly
+        let sdk_entry = &lockfile.data.packages["@api/sdk"];
+        assert_eq!(sdk_entry.ident, "@api/sdk@file:apps/api/.api/apis/sdk");
+        assert!(
+            sdk_entry.registry.is_none(),
+            "file: packages should not have registry"
+        );
+        assert!(
+            sdk_entry.checksum.is_none(),
+            "file: packages should not have checksum"
+        );
+
+        // Prune to just the api workspace
+        let mut api_deps = std::collections::BTreeMap::new();
+        api_deps.insert(
+            "@api/sdk".to_string(),
+            "file:apps/api/.api/apis/sdk".to_string(),
+        );
+        api_deps.insert("lodash".to_string(), "^4.17.21".to_string());
+
+        let closure = crate::transitive_closure(&lockfile, "apps/api", api_deps, false).unwrap();
+        let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+        let subgraph = lockfile
+            .subgraph(&["apps/api".into()], &package_idents)
+            .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+
+        // The encoded lockfile must be reparseable
+        let reparsed = BunLockfile::from_str(&encoded_str)
+            .expect("pruned lockfile with file: deps should be parseable");
+
+        // Verify the file: entry survived the roundtrip as a 2-element array
+        let sdk_reparsed = &reparsed.data.packages["@api/sdk"];
+        assert_eq!(sdk_reparsed.ident, "@api/sdk@file:apps/api/.api/apis/sdk");
+        assert!(
+            sdk_reparsed.registry.is_none(),
+            "file: packages should not gain a registry after roundtrip"
+        );
+        assert!(
+            sdk_reparsed.checksum.is_none(),
+            "file: packages should not gain a checksum after roundtrip"
+        );
+
+        // Verify the encoded string does NOT contain empty strings for the file: entry
+        // A correct entry looks like: ["@api/sdk@file:apps/api/.api/apis/sdk", { ... }]
+        // A corrupted entry looks like: ["@api/sdk@file:apps/api/.api/apis/sdk", "", {
+        // ... }, ""]
+        assert!(
+            !encoded_str.contains(r#""@api/sdk@file:apps/api/.api/apis/sdk", """#),
+            "file: entry should not have empty registry string inserted"
+        );
+    }
+
+    // Regression test: link: protocol dependencies should also be 2-element arrays
+    #[test]
+    fn test_link_protocol_roundtrip() {
+        let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "link-dep-fixture",
+                },
+                "apps/web": {
+                    "name": "web",
+                    "dependencies": {
+                        "my-local-pkg": "link:../../local-pkg"
+                    }
+                }
+            },
+            "packages": {
+                "my-local-pkg": ["my-local-pkg@link:../../local-pkg", {}],
+                "web": ["web@workspace:apps/web"]
+            }
+        }))
+        .unwrap();
+
+        let lockfile = BunLockfile::from_str(&contents).unwrap();
+        let subgraph = lockfile
+            .subgraph(
+                &["apps/web".into()],
+                &["my-local-pkg@link:../../local-pkg".into()],
+            )
+            .unwrap();
+
+        let encoded = subgraph.encode().unwrap();
+        let encoded_str = String::from_utf8(encoded).unwrap();
+
+        BunLockfile::from_str(&encoded_str)
+            .expect("pruned lockfile with link: deps should be parseable");
+
+        assert!(
+            !encoded_str.contains(r#""my-local-pkg@link:../../local-pkg", """#),
+            "link: entry should not have empty registry string inserted"
+        );
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/12252
+    // When two workspaces have workspace-scoped entries for the same package
+    // at different versions, and a shared transitive dependency references that
+    // package with a wide semver range, the transitive closure must resolve
+    // to the correct workspace-scoped version for each workspace — not whichever
+    // version happened to be cached first during parallel processing.
+    #[test]
+    fn test_all_transitive_closures_deterministic_with_workspace_scoped_packages() {
+        use std::collections::{BTreeMap, HashMap, HashSet};
+
+        let lockfile_content = r#"{
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": { "name": "test-monorepo" },
+                "apps/app-a": {
+                    "name": "app-a",
+                    "dependencies": { "shared": "^1.0.0" }
+                },
+                "apps/app-b": {
+                    "name": "app-b",
+                    "dependencies": { "shared": "^1.0.0" }
+                }
+            },
+            "packages": {
+                "app-a": ["app-a@workspace:apps/app-a"],
+                "app-b": ["app-b@workspace:apps/app-b"],
+                "shared": ["shared@1.0.0", "", {
+                    "dependencies": { "lib": ">=1.0.0" }
+                }, "sha512-shared"],
+                "lib": ["lib@2.0.0", "", {}, "sha512-lib2"],
+                "app-a/lib": ["lib@2.0.0", "", {}, "sha512-lib2"],
+                "app-b/lib": ["lib@1.0.0", "", {}, "sha512-lib1"]
+            }
+        }"#;
+
+        let lockfile = BunLockfile::from_str(lockfile_content).unwrap();
+
+        let mut workspaces = HashMap::new();
+        workspaces.insert(
+            "apps/app-a".to_string(),
+            BTreeMap::from([("shared".to_string(), "^1.0.0".to_string())]),
+        );
+        workspaces.insert(
+            "apps/app-b".to_string(),
+            BTreeMap::from([("shared".to_string(), "^1.0.0".to_string())]),
+        );
+
+        // Run multiple times to catch race-condition-driven non-determinism.
+        // Before the fix, the result would vary depending on which workspace
+        // populated the shared resolve cache first.
+        let mut prev_app_a: Option<HashSet<crate::Package>> = None;
+        let mut prev_app_b: Option<HashSet<crate::Package>> = None;
+
+        for _ in 0..50 {
+            let result =
+                crate::all_transitive_closures(&lockfile, workspaces.clone(), false).unwrap();
+
+            let app_a_pkgs = result.get("apps/app-a").unwrap();
+            let app_b_pkgs = result.get("apps/app-b").unwrap();
+
+            assert!(
+                app_a_pkgs.iter().any(|p| p.key == "lib@2.0.0"),
+                "app-a should have lib@2.0.0 via workspace-scoped resolution"
+            );
+            assert!(
+                app_b_pkgs.iter().any(|p| p.key == "lib@1.0.0"),
+                "app-b should have lib@1.0.0 via workspace-scoped resolution"
+            );
+
+            if let Some(ref prev) = prev_app_a {
+                assert_eq!(app_a_pkgs, prev, "app-a closure changed between runs");
+            }
+            if let Some(ref prev) = prev_app_b {
+                assert_eq!(app_b_pkgs, prev, "app-b closure changed between runs");
+            }
+
+            prev_app_a = Some(app_a_pkgs.clone());
+            prev_app_b = Some(app_b_pkgs.clone());
         }
     }
 }

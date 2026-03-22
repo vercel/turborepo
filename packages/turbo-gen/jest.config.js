@@ -6,6 +6,9 @@ const config = {
   coveragePathIgnorePatterns: ["__fixtures__/", "/__tests__/test-utils.ts"],
   transformIgnorePatterns: ["node_modules/*", "packages/turbo-workspaces/*"],
   modulePathIgnorePatterns: ["<rootDir>/node_modules", "<rootDir>/dist"],
+  moduleNameMapper: {
+    "^node-plop$": "<rootDir>/__mocks__/node-plop.js"
+  },
   collectCoverage: true,
   verbose: process.env.RUNNER_DEBUG === "1",
   silent: process.env.RUNNER_DEBUG !== "1"

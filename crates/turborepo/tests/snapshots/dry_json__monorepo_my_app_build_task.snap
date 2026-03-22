@@ -1,0 +1,63 @@
+---
+source: crates/turborepo/tests/dry_json.rs
+expression: task
+---
+{
+  "taskId": "my-app#build",
+  "task": "build",
+  "package": "my-app",
+  "hash": "0555ce94ca234049",
+  "inputs": {
+    ".env.local": "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391",
+    "package.json": "1746e0db2361085b5953a6a3beab08c24af5bc08"
+  },
+  "hashOfExternalDependencies": "459c029558afe716",
+  "cache": {
+    "local": false,
+    "remote": false,
+    "status": "MISS",
+    "timeSaved": 0
+  },
+  "command": "echo building",
+  "cliArguments": [],
+  "outputs": [
+    "apple.json",
+    "banana.txt"
+  ],
+  "excludedOutputs": null,
+  "logFile": "apps/my-app/.turbo/turbo-build.log",
+  "directory": "apps/my-app",
+  "dependencies": [],
+  "dependents": [],
+  "with": [],
+  "resolvedTaskDefinition": {
+    "outputs": [
+      "apple.json",
+      "banana.txt"
+    ],
+    "cache": true,
+    "dependsOn": [],
+    "inputs": [
+      "$TURBO_DEFAULT$",
+      ".env.local"
+    ],
+    "outputLogs": "full",
+    "persistent": false,
+    "interruptible": false,
+    "env": [],
+    "passThroughEnv": null,
+    "interactive": false
+  },
+  "expandedOutputs": [],
+  "framework": "",
+  "envMode": "strict",
+  "environmentVariables": {
+    "specified": {
+      "env": [],
+      "passThroughEnv": null
+    },
+    "configured": [],
+    "inferred": [],
+    "passthrough": null
+  }
+}

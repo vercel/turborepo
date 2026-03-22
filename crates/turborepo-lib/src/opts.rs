@@ -1,5 +1,3 @@
-use std::backtrace;
-
 use camino::Utf8PathBuf;
 use serde::Serialize;
 use thiserror::Error;
@@ -26,22 +24,40 @@ use crate::{
     Args,
 };
 
+/// Why remote caching was disabled by local configuration.
+/// Determined during opts resolution — no network call required.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum RemoteCacheDisabledReason {
+    /// User never opted in: no token, no team.
+    NotLinked,
+    /// TURBO_TOKEN env var is set but no team is configured.
+    /// The token gets effectively ignored because `is_linked` returns false.
+    TokenWithoutTeam,
+    /// `remoteCache.enabled: false` in turbo.json.
+    InConfig,
+    /// `TURBO_REMOTE_CACHE_ENABLED=0` env var.
+    InEnvVar,
+    /// CLI flags (e.g. `--cache=local:rw`, or `--no-cache` + `--force`)
+    /// disabled both remote read and write.
+    ByFlags,
+}
+
 #[derive(Debug, Error)]
 pub enum Error {
     #[error("Expected `run` command.")]
-    ExpectedRun(#[backtrace] backtrace::Backtrace),
+    ExpectedRun,
     #[error(transparent)]
     ParseFloat(#[from] std::num::ParseFloatError),
     #[error(
         "Invalid percentage value for `--concurrency` flag. This should be a percentage of CPU \
-         cores, between 1% and 100%: {1}"
+         cores, between 1% and 100%: {0}"
     )]
-    InvalidConcurrencyPercentage(#[backtrace] backtrace::Backtrace, f64),
+    InvalidConcurrencyPercentage(f64),
     #[error(
         "Invalid value for `--concurrency` flag. This should be a positive integer greater than \
-         or equal to 1: {1}"
+         or equal to 1: {0}"
     )]
-    ConcurrencyOutOfBounds(#[backtrace] backtrace::Backtrace, String),
+    ConcurrencyOutOfBounds(String),
     #[error(
         "Cannot set `cache` config and other cache options (`force`, `remoteOnly`, \
          `remoteCacheReadOnly`) at the same time."
@@ -66,9 +82,19 @@ pub struct Opts {
     pub scope_opts: ScopeOpts,
     pub tui_opts: TuiOpts,
     pub future_flags: FutureFlags,
+    pub experimental_observability: Option<crate::config::ExperimentalObservabilityOptions>,
     /// Pre-resolved git root from worktree detection, if available.
     /// Allows `SCM::new` to skip its own `git rev-parse` subprocess.
     pub git_root: Option<AbsoluteSystemPathBuf>,
+    /// If remote caching is disabled, this captures the reason.
+    /// `None` means remote caching is enabled (by local config).
+    pub remote_cache_disabled_reason: Option<RemoteCacheDisabledReason>,
+    /// Resolved log file path, if enabled via `--log-file`, `logFile` in
+    /// turbo.json, or `TURBO_LOG_FILE` env var.
+    #[serde(skip)]
+    pub log_file_path: Option<AbsoluteSystemPathBuf>,
+    /// Whether JSON output mode is enabled (`--json`).
+    pub json: bool,
 }
 
 impl Opts {
@@ -182,6 +208,47 @@ impl Opts {
         let repo_opts = RepoOpts::from(inputs);
         let tui_opts = TuiOpts::from(inputs);
         let future_flags = config.future_flags();
+        let experimental_observability = config.experimental_observability().cloned();
+
+        let remote_cache_disabled_reason = if !cache_opts.cache.remote.should_use() {
+            let is_linked = turborepo_api_client::is_linked(&api_auth);
+            if !is_linked {
+                let has_token_env = std::env::var("TURBO_TOKEN")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+                    .is_some();
+                if has_token_env {
+                    Some(RemoteCacheDisabledReason::TokenWithoutTeam)
+                } else {
+                    Some(RemoteCacheDisabledReason::NotLinked)
+                }
+            } else if config.enabled == Some(false) {
+                let disabled_by_env = std::env::var("TURBO_REMOTE_CACHE_ENABLED")
+                    .ok()
+                    .filter(|v| v == "0")
+                    .is_some();
+                if disabled_by_env {
+                    Some(RemoteCacheDisabledReason::InEnvVar)
+                } else {
+                    Some(RemoteCacheDisabledReason::InConfig)
+                }
+            } else {
+                // Linked and enabled in config, but remote cache is still disabled.
+                // This means CLI flags (--no-cache + --force, or --cache=local:rw)
+                // disabled both remote read and write.
+                Some(RemoteCacheDisabledReason::ByFlags)
+            }
+        } else {
+            None
+        };
+
+        let json = execution_args.json;
+
+        let log_file_path = resolve_log_file_path(
+            repo_root,
+            execution_args.log_file.as_ref(),
+            inputs.config.log_file(),
+        );
 
         Ok(Self {
             repo_opts,
@@ -193,8 +260,96 @@ impl Opts {
             tui_opts,
             future_flags,
             git_root: cache_dir_result.git_root,
+            experimental_observability,
+            remote_cache_disabled_reason,
+            log_file_path,
+            json,
         })
     }
+}
+
+/// Resolve the log file path from the config layers.
+///
+/// Priority: CLI flag (`--log-file`) > turbo.json/env (`logFile` /
+/// `TURBO_LOG_FILE`).
+fn resolve_log_file_path(
+    repo_root: &AbsoluteSystemPath,
+    cli_flag: Option<&Option<String>>,
+    config_value: Option<&crate::config::LogFileConfig>,
+) -> Option<AbsoluteSystemPathBuf> {
+    // CLI: --log-file (present with no value → default, with value → custom)
+    if let Some(maybe_path) = cli_flag {
+        return Some(match maybe_path {
+            Some(path) => resolve_path_relative_to_root(repo_root, path),
+            None => default_log_file_path(repo_root),
+        });
+    }
+
+    // turbo.json / env var (merged by the config layer)
+    match config_value {
+        Some(crate::config::LogFileConfig::Enabled) => Some(default_log_file_path(repo_root)),
+        Some(crate::config::LogFileConfig::Path(path)) => {
+            Some(resolve_path_relative_to_root(repo_root, path))
+        }
+        None => None,
+    }
+}
+
+fn resolve_path_relative_to_root(
+    repo_root: &AbsoluteSystemPath,
+    path: &str,
+) -> AbsoluteSystemPathBuf {
+    let joined = repo_root.as_std_path().join(path);
+
+    let resolved = match AbsoluteSystemPathBuf::new(joined.to_string_lossy().to_string()) {
+        Ok(p) => p,
+        Err(_) => {
+            tracing::warn!(
+                "Invalid structured log path '{}', using default location",
+                path
+            );
+            return default_log_file_path(repo_root);
+        }
+    };
+
+    // Prevent path traversal outside the repo root. Canonicalization
+    // resolves `..` segments so we can compare prefixes reliably.
+    let repo_canonical = repo_root
+        .as_std_path()
+        .canonicalize()
+        .unwrap_or_else(|_| repo_root.as_std_path().to_path_buf());
+    let resolved_canonical = resolved
+        .as_std_path()
+        .canonicalize()
+        // If the file doesn't exist yet, canonicalize the parent.
+        .or_else(|_| {
+            resolved
+                .as_std_path()
+                .parent()
+                .and_then(|p| p.canonicalize().ok())
+                .ok_or(std::io::ErrorKind::NotFound)
+                .map(|parent| parent.join(resolved.as_std_path().file_name().unwrap_or_default()))
+        })
+        // Last resort: use the raw joined path for the prefix check.
+        .unwrap_or_else(|_| resolved.as_std_path().to_path_buf());
+
+    if !resolved_canonical.starts_with(&repo_canonical) {
+        tracing::warn!(
+            "Structured log path '{}' escapes the repository root, using default location",
+            path
+        );
+        return default_log_file_path(repo_root);
+    }
+
+    resolved
+}
+
+fn default_log_file_path(repo_root: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf {
+    let millis = std::time::SystemTime::now()
+        .duration_since(std::time::SystemTime::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    repo_root.join_components(&[".turbo", "logs", &format!("{millis}.json")])
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -310,6 +465,13 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             ),
         };
 
+        // --json forces stream order — no grouping.
+        let log_order = if inputs.execution_args.json {
+            ResolvedLogOrder::Stream
+        } else {
+            log_order
+        };
+
         Ok(Self {
             tasks: inputs.execution_args.tasks.clone(),
             log_prefix,
@@ -331,7 +493,12 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             cache_dir: inputs.cache_dir_result.path.clone(),
             is_shared_worktree_cache: inputs.cache_dir_result.is_shared_worktree,
             is_github_actions,
-            ui_mode: inputs.config.ui(),
+            // --json disables the TUI and forces stream mode.
+            ui_mode: if inputs.execution_args.json {
+                UIMode::Stream
+            } else {
+                inputs.config.ui()
+            },
         })
     }
 }
@@ -345,18 +512,12 @@ fn parse_concurrency(concurrency_raw: &str) -> Result<u32, self::Error> {
                 .unwrap_or(1);
             Ok((num_cpus as f64 * percent / 100.0).max(1.0) as u32)
         } else {
-            Err(Error::InvalidConcurrencyPercentage(
-                backtrace::Backtrace::capture(),
-                percent,
-            ))
+            Err(Error::InvalidConcurrencyPercentage(percent))
         };
     }
     match concurrency_raw.parse::<u32>() {
         Ok(concurrency) if concurrency >= 1 => Ok(concurrency),
-        Ok(_) | Err(_) => Err(Error::ConcurrencyOutOfBounds(
-            backtrace::Backtrace::capture(),
-            concurrency_raw.to_string(),
-        )),
+        Ok(_) | Err(_) => Err(Error::ConcurrencyOutOfBounds(concurrency_raw.to_string())),
     }
 }
 
@@ -466,9 +627,11 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
         let unused_remote_cache_opts_team_id =
             inputs.config.team_id().map(|team_id| team_id.to_string());
         let signature = inputs.config.signature();
+        let enforce_signature_key_length = inputs.config.future_flags().longer_signature_key;
         let remote_cache_opts = Some(RemoteCacheOpts::new(
             unused_remote_cache_opts_team_id,
             signature,
+            enforce_signature_key_length,
         ));
 
         let cache_opts = CacheOpts {
@@ -737,7 +900,11 @@ mod test {
             runcache_opts,
             tui_opts,
             future_flags: Default::default(),
+            experimental_observability: None,
             git_root: None,
+            remote_cache_disabled_reason: None,
+            log_file_path: None,
+            json: false,
         };
         let synthesized = opts.synthesize_command();
         assert_eq!(synthesized, expected);

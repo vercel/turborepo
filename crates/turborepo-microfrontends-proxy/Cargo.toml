@@ -5,7 +5,7 @@ edition = { workspace = true }
 license = "MIT"
 
 [dependencies]
-dashmap = "6.1"
+dashmap = { workspace = true }
 futures-util = "0.3.31"
 http-body-util = "0.1"
 hyper = { version = "1.0", features = ["full"] }

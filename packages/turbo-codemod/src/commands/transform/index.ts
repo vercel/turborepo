@@ -1,9 +1,9 @@
 import picocolors from "picocolors";
 import { input, select } from "@inquirer/prompts";
 import { logger } from "@turbo/utils";
-import { loadTransformers } from "../../utils/loadTransformers";
-import { checkGitStatus } from "../../utils/checkGitStatus";
-import { directoryInfo } from "../../utils/directoryInfo";
+import { loadTransformers } from "../../utils/load-transformers";
+import { checkGitStatus } from "../../utils/check-git-status";
+import { directoryInfo } from "../../utils/directory-info";
 import { Runner } from "../../runner";
 import type {
   TransformCommandOptions,

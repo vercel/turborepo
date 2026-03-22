@@ -17,7 +17,7 @@ A run consists of the following steps:
 
 ## Entry Point
 
-- **CLI Entry**: `crates/turborepo/src/main.rs` - Thin wrapper that calls `turborepo_lib::main`
+- **CLI Entry**: `crates/turborepo/src/main.rs` - Constructs `TurboQueryServer` (the concrete `QueryServer` implementation) and passes it to `turborepo_lib::main`
 - **Command Handler**: `crates/turborepo-lib/src/commands/run.rs` - Entry point for the run command, sets up signal handling and UI
 - **Main Logic**: `crates/turborepo-lib/src/run/mod.rs` - Core run implementation
 
@@ -29,9 +29,36 @@ A run consists of the following steps:
 
 - Package discovery and lockfile analysis
 - Task filtering based on arguments (task names and `--filter`)
+- Root task scoping via `FilterMode` (from `turborepo-types`): when no filter
+  or only exclude filters are active, root tasks defined in `turbo.json` are
+  auto-included. Explicit include filters or `--affected` suppress root task
+  injection. See `calculate_filtered_packages` and `FilterMode`.
 - Task graph construction and validation
+- Task-level affected detection (see below)
 - Cache setup (local and remote)
+- Activating shared HTTP client initialization once telemetry, remote cache, or
+  linked analytics are known to be needed
+- Building a tracked repo index eagerly, then augmenting it with scoped
+  untracked-file discovery once the selected package set is known
 - Producing a final `Run` struct ready for execution
+
+#### Task-Level Affected Detection
+
+When the `affectedUsingTaskInputs` future flag is enabled and `--affected` is
+active, the run builder applies a second filtering pass after engine
+construction:
+
+1. **File change detection**: SCM provides the set of changed files between refs
+2. **Task input matching** (`turborepo-types/src/task_input_matching.rs`): Each
+   task's `inputs` globs are compiled and checked against the changed files.
+   Shared with `turbo query { affectedTasks }`.
+3. **Task change detection** (`turborepo-lib/src/task_change_detector.rs`):
+   Determines directly affected tasks, handling global deps and per-task inputs
+4. **Engine pruning** (`Engine::retain_affected_tasks`): Returns a new engine
+   containing only directly affected tasks plus their transitive dependents
+
+This differs from the default `--affected` behavior which operates at the
+package level (all tasks in changed packages run).
 
 ### 2. Package Graph (`crates/turborepo-repository/src/package_graph/`)
 
@@ -41,6 +68,14 @@ Represents the workspace structure and package dependencies:
 - Discovers packages in workspace
 - Performs lockfile analysis
 - Builds dependency relationships between workspace packages
+- Validates that all non-root packages have a `name` field
+  (`PackageGraph::validate()`)
+
+The package graph intentionally allows cyclic dependencies between packages —
+this aligns with how npm, pnpm, and yarn handle cyclic workspace deps. Cycle
+detection is deferred to the task graph layer (engine builder), since
+package-level cycles only matter when they produce task-level cycles via
+topological (`^`) dependencies.
 
 ### 3. Task Graph (`crates/turborepo-lib/src/engine/`)
 
@@ -55,7 +90,8 @@ The core task graph consists of:
 - Parses `turbo.json` and other configuration sources to determine task definitions
 - Resolves task dependencies (topological `^build` and direct `build`)
 - Creates task nodes and dependency edges
-- Validates task definitions and checks for circular dependencies
+- Validates task definitions and is the sole layer that checks for circular
+  dependencies (both cycles and self-dependencies in the task graph)
 
 #### Engine Execution (`crates/turborepo-lib/src/engine/execute.rs`)
 
@@ -121,6 +157,37 @@ Multi-layered caching system:
 - `RunCache`: High-level cache coordination
 - `TaskCache`: Individual task cache management
 - `AsyncCache`: Handles async cache operations. Supports both local filesystem and remote HTTP caches
+- `SharedHttpClient`: Process-wide lazy/activatable `reqwest::Client`
+  initialization shared by telemetry and remote-cache consumers
+
+#### Shared HTTP Client Initialization
+
+Network consumers do not construct an HTTP client speculatively at process
+startup. Instead:
+
+1. The CLI and run builder determine whether telemetry, remote cache, or linked
+   analytics will actually need networking for the current invocation
+2. Once that need is known, they activate shared client initialization
+   immediately so TLS setup overlaps with other startup work
+3. Telemetry flushes and remote-cache operations both reuse the same initialized
+   `reqwest::Client`
+
+This avoids paying client/TLS setup on invocations with no network use while
+still warming the client before the first network request in the common case.
+
+#### Two-Stage Repo Index Construction
+
+`turbo run` builds SCM state in two stages:
+
+1. A background startup task reads `.git/index` and records committed blob IDs
+   plus modified/deleted tracked files for the whole repo
+2. After package filtering finishes, Turborepo computes the package roots it
+   actually needs for hashing and augments that tracked index with untracked
+   files only for those prefixes
+
+This keeps the cheap tracked-index work overlapped with other startup work while
+avoiding a repo-wide untracked walk when only a subset of packages will be
+hashed.
 
 #### Worktree Cache Sharing
 
@@ -160,6 +227,25 @@ Creates a "content identifier" for a specific task depending on current state of
 - **Global Hash**: Package manager lockfile, global dependencies, environment variables
 - **Task Hash**: Task definition, package dependencies, input files, environment variables
 - **File Hashing**: Uses git for tracking file changes efficiently
+- **Explicit Inputs**: When tasks use custom `inputs`, glob matches still walk the
+  filesystem, but clean tracked matches reuse blob OIDs from the repo index
+  instead of re-hashing file contents
+
+#### `globalConfiguration` and `global.inputs`
+
+When the `globalConfiguration` future flag is enabled, `global.inputs` (formerly
+`globalDependencies`) files are **not** included in the global hash. Instead,
+they are prepended as implicit input globs to every task's `TaskInputs` during
+engine construction (see `prepend_global_inputs` in
+`crates/turborepo-engine/src/task_definition.rs`).
+
+This means:
+- The global hash still exists (lockfile, engines, global env, root deps) but
+  does not include `global.inputs` file hashes
+- Tasks can exclude specific global input files via negation globs
+  (e.g. `"inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/tsconfig.json"]`)
+- Tasks with no explicit `inputs` key get `default: true` set so package files
+  are still hashed alongside the global inputs
 
 #### Hash Calculation
 
@@ -193,16 +279,37 @@ The summary module is responsible for any time of summary:
 - Stitches together result from visitor and the task tracker
 - Constructs final summary depending on user ask e.g. `--dry=json`/`--summarize`
 
+### 8. Query Subsystem
+
+The query subsystem powers `turbo query` (GraphQL introspection of the
+package/task graph) and the Web UI mode (`--ui=web`).
+
+**Crate layout:**
+
+- `turborepo-query-api` — Trait definitions (`QueryServer`, `QueryRun`) and
+  shared error/result types.  `turborepo-lib` depends on this thin interface
+  crate instead of the heavy implementation.
+- `turborepo-query` — GraphQL implementation using async-graphql, axum, and
+  oxc.  Implements the resolvers and HTTP server.
+- `turborepo/src/main.rs` — Wires the two halves together via `TurboQueryServer`,
+  which implements `QueryServer` by delegating to `turborepo-query`.
+
+**Data flow:** `main()` constructs `Arc<TurboQueryServer>` → passes to
+`turborepo_lib::main` → threaded through `shim` → `cli::run` →
+`commands::run` → `RunBuilder` → `Run`.  The `Run` struct stores the
+`query_server` and uses it in `start_web_ui()` and the `turbo query`
+command handler.
+
 ## Data Flow Overview
 
 ### 1. Task Graph Building
 
 ```
 RunBuilder
-  ├── Package Discovery → PackageGraph
+  ├── Package Discovery → PackageGraph (validates package names)
   ├── Task Discovery → EngineBuilder
   ├── Task Graph Construction → Engine (built)
-  └── Validation → Ready Engine
+  └── Task Graph Validation (cycles, missing deps) → Ready Engine
 ```
 
 **Process:**
@@ -211,7 +318,7 @@ RunBuilder
 2. Load turbo.json configurations for tasks
 3. Create task nodes for each package × task combination
 4. Build dependency edges based on `dependsOn` configurations
-5. Validate graph for cycles and missing dependencies
+5. Validate task graph for cycles and missing dependencies
 
 ### 2. Task Graph Traversal
 
@@ -285,3 +392,126 @@ RunTracker
 2. `ExecutionTracker` aggregates state across all tasks
 3. Final summary includes timing, cache status, errors
 4. Summary is saved to `.turbo/runs/` and optionally printed
+
+### 8. Observability (`crates/turborepo-run-summary/src/observability/` and `crates/turborepo-otel/`)
+
+The observability subsystem enables exporting run metrics to external backends via OpenTelemetry.
+
+#### Architecture
+
+The system uses a two-layer design:
+
+1. **`turborepo-otel`**: Low-level OTLP exporter crate
+   - Manages the OpenTelemetry SDK meter provider and instruments
+   - Supports gRPC and HTTP/Protobuf protocols
+   - Handles connection lifecycle and metric flushing
+
+2. **`turborepo-run-summary/observability`**: Integration layer
+   - Provides a `RunObserver` trait for pluggable backends
+   - Converts `RunSummary` data into metrics payloads
+   - Enabled via the `otel` feature flag
+
+#### Main Components
+
+- `observability::Handle`: Main entry point; wraps backend-specific implementations
+- `RunObserver` trait: Abstraction allowing future backends (Prometheus, etc.)
+- `OtelObserver`: OpenTelemetry implementation of `RunObserver`
+
+#### Configuration
+
+Observability is configured via `experimentalObservability.otel` in `turbo.json`:
+
+```jsonc
+{
+  "futureFlags": {
+    "experimentalObservability": true
+  },
+  "experimentalObservability": {
+    "otel": {
+      "enabled": true,
+      "protocol": "http/protobuf",
+      "endpoint": "https://otel-collector.example.com:4318/v1/metrics",
+      "resource": {
+        "service.name": "turborepo"
+      },
+      "metrics": {
+        "runSummary": true,
+        "taskDetails": true,
+        "runAttributes": {
+          "id": false,        // turbo.run.id — unbounded cardinality
+          "scmRevision": false // turbo.scm.revision — unbounded cardinality
+        },
+        "taskAttributes": {
+          "id": false,    // turbo.task.id
+          "hashes": false // turbo.task.hash, turbo.task.external_inputs_hash — unbounded
+        }
+      }
+    }
+  }
+}
+```
+
+Configuration can also be set via environment variables (`TURBO_EXPERIMENTAL_OTEL_*`) or CLI flags (`--experimental-otel-*`).
+
+#### Metrics Emitted
+
+- `turbo.run.duration_ms` - Run duration histogram
+- `turbo.run.tasks.attempted` - Tasks attempted counter
+- `turbo.run.tasks.failed` - Tasks failed counter
+- `turbo.run.tasks.cached` - Cache hit counter
+- `turbo.task.duration_ms` - Per-task duration histogram (when `taskDetails` enabled)
+- `turbo.task.cache.events` - Per-task cache events (when `taskDetails` enabled)
+
+Attributes with unbounded cardinality (unique run IDs, Git SHAs, content hashes) are gated behind `runAttributes` and `taskAttributes` config flags, all defaulting to `false`. See the `Metric Attributes and Cardinality` section in `crates/turborepo-otel/src/lib.rs` for the full attribute inventory.
+
+#### Data Flow
+
+```
+RunSummary.finish()
+  ├── observability::Handle.record(&summary)
+  │     ├── Convert to RunMetricsPayload
+  │     └── Record via OpenTelemetry instruments
+  └── observability::Handle.shutdown()
+        └── Flush pending metrics to backend
+```
+
+### 9. User-Facing Logging (`crates/turborepo-log/`)
+
+Structured event system for messages intended for end users (warnings,
+errors, informational output). Distinct from `tracing`, which remains
+for developer diagnostics.
+
+#### Key Types
+
+- `Logger` — Dispatches events to registered sinks. Set globally via
+  `init()` (once, at startup) or used directly via `Logger::handle()`
+  for testing.
+- `LogHandle` — Source-scoped handle for emitting events. Created via
+  `log()` (global) or `Logger::handle()` (specific logger). Resolves
+  the global logger at `.emit()` time, not at handle or builder
+  creation time — handles and builders created before `init()` work
+  once the global logger is set.
+- `LogSink` — Trait for event destinations. Built-in sinks:
+  `CollectorSink` (in-memory buffer for post-run summaries) and
+  `FileSink` (newline-delimited JSON with optional size limiting).
+- `LogEvent` — Structured event with level, source, message, typed
+  fields, and timestamp.
+
+#### Relationship to `turborepo-ui`
+
+`turborepo-ui` handles terminal rendering (TUI, console formatting).
+`turborepo-log` handles structured event capture and dispatch. A
+terminal sink in `turborepo-ui` can implement `LogSink` to bridge
+events into the rendering pipeline. `turborepo-log` intentionally has
+no dependency on `turborepo-ui` — it sits at the bottom of the
+dependency graph.
+
+#### Data Flow
+
+```
+Subsystem / Task Executor
+  └── LogHandle.warn("msg").field("k", v).emit()
+        └── Logger.emit(&event)
+              ├── CollectorSink → in-memory buffer → post-run summary
+              └── FileSink → JSONL file → external tooling
+```

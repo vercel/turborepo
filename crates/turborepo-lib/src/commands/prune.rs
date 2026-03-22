@@ -1,11 +1,16 @@
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
-use std::sync::{LazyLock, OnceLock};
+use std::{
+    str::FromStr,
+    sync::{LazyLock, OnceLock},
+};
 
+use globwalk::{ValidatedGlob, WalkType};
 use miette::Diagnostic;
 use tracing::trace;
 use turbopath::{
     AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPath,
+    RelativeUnixPathBuf,
 };
 use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName, PackageNode},
@@ -51,6 +56,13 @@ pub enum Error {
     MissingLockfile,
     #[error("Unable to read config: {0}")]
     Config(#[from] crate::config::Error),
+    #[error("Glob error while resolving globalDependencies: {0}")]
+    Glob(#[from] globwalk::GlobError),
+    #[error("Walk error while resolving globalDependencies: {0}")]
+    Walk(#[from] globwalk::WalkError),
+    #[error(transparent)]
+    #[diagnostic(transparent)]
+    TurboJson(#[from] turborepo_turbo_json::Error),
 }
 
 static ADDITIONAL_FILES: LazyLock<Vec<(&'static RelativeUnixPath, Option<CopyDestination>)>> =
@@ -161,6 +173,8 @@ pub async fn prune(
             workspace_names.push(workspace);
         }
     }
+    prune.copy_file_dependencies(&workspace_names)?;
+
     trace!("new workspaces: {}", workspace_paths.join(", "));
     trace!("lockfile keys: {}", lockfile_keys.join(", "));
 
@@ -181,9 +195,33 @@ pub async fn prune(
             .create_with_contents(&lockfile_contents)?;
     }
 
+    // When the source repo uses per-workspace lockfiles, the workspace
+    // directories were copied with their own pnpm-lock.yaml files. Since the
+    // pruned output uses a single shared lockfile, remove these stale copies.
+    if matches!(
+        prune.package_graph.package_manager(),
+        turborepo_repository::package_manager::PackageManager::Pnpm
+            | turborepo_repository::package_manager::PackageManager::Pnpm6
+            | turborepo_repository::package_manager::PackageManager::Pnpm9
+    ) {
+        prune.remove_per_workspace_lockfiles(&workspace_paths, lockfile_name)?;
+    }
+
     for (relative_path, required_for_install) in ADDITIONAL_FILES.as_slice() {
         let path = relative_path.to_anchored_system_path_buf();
         prune.copy_file(&path, *required_for_install)?;
+    }
+
+    // The pruned output always uses a shared (root-level) lockfile, so if the
+    // source repo had shared-workspace-lockfile=false, we need to override it
+    // in the copied .npmrc so that pnpm install works correctly.
+    if matches!(
+        prune.package_graph.package_manager(),
+        turborepo_repository::package_manager::PackageManager::Pnpm
+            | turborepo_repository::package_manager::PackageManager::Pnpm6
+            | turborepo_repository::package_manager::PackageManager::Pnpm9
+    ) {
+        prune.ensure_shared_lockfile_in_npmrc()?;
     }
 
     for (relative_path, required_for_install) in ADDITIONAL_DIRECTORIES.as_slice() {
@@ -192,6 +230,7 @@ pub async fn prune(
     }
 
     prune.copy_turbo_json(&workspace_names)?;
+    prune.copy_global_dependencies()?;
 
     let original_patches = prune
         .package_graph
@@ -214,7 +253,16 @@ pub async fn prune(
             &pruned_patches,
             repo_root,
         );
-        let mut pruned_json_contents = serde_json::to_string_pretty(&pruned_json)?;
+
+        // Read the original package.json as serde_json::Value to preserve key
+        // ordering. Serializing the PackageJson struct directly would sort keys
+        // alphabetically, producing a byte-different file that invalidates
+        // cache hashes. See https://github.com/vercel/turborepo/issues/12369
+        let original_contents = prune.root.resolve(package_json()).read_to_string()?;
+        let original_value: serde_json::Value = serde_json::from_str(&original_contents)?;
+        let pruned_value = serde_json::to_value(&pruned_json)?;
+        let merged = merge_preserving_key_order(&original_value, &pruned_value);
+        let mut pruned_json_contents = serde_json::to_string_pretty(&merged)?;
         // Add trailing newline to match Go behavior
         pruned_json_contents.push('\n');
 
@@ -235,11 +283,36 @@ pub async fn prune(
             )?;
         }
 
-        for patch in pruned_patches {
+        for patch in &pruned_patches {
             prune.copy_file(
                 &patch.to_anchored_system_path_buf(),
                 Some(CopyDestination::Docker),
             )?;
+        }
+
+        // Prune pnpm-workspace.yaml's patchedDependencies so it only
+        // references patches that are actually in the pruned output.
+        if matches!(
+            package_manager,
+            turborepo_repository::package_manager::PackageManager::Pnpm
+                | turborepo_repository::package_manager::PackageManager::Pnpm6
+                | turborepo_repository::package_manager::PackageManager::Pnpm9
+        ) {
+            let ws_config =
+                turborepo_repository::package_manager::pnpm::WORKSPACE_CONFIGURATION_PATH;
+            let ws_path = AnchoredSystemPathBuf::from_raw(ws_config)?;
+            let full_ws = prune.full_directory.resolve(&ws_path);
+            turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+                &full_ws,
+                &pruned_patches,
+            )?;
+            if prune.docker {
+                let docker_ws = prune.docker_directory().resolve(&ws_path);
+                turborepo_repository::package_manager::pnpm::prune_workspace_patches(
+                    &docker_ws,
+                    &pruned_patches,
+                )?;
+            }
         }
     } else {
         prune.copy_file(package_json(), Some(CopyDestination::Docker))?;
@@ -432,6 +505,128 @@ impl<'a> Prune<'a> {
         Ok(())
     }
 
+    /// Copy directories for `file:` protocol dependencies into the pruned
+    /// output. These are local packages referenced by path that aren't
+    /// workspaces, so they wouldn't otherwise be included.
+    fn copy_file_dependencies(&self, workspace_names: &[String]) -> Result<(), Error> {
+        let all_workspaces = std::iter::once(PackageName::Root).chain(
+            workspace_names
+                .iter()
+                .map(|name| PackageName::Other(name.clone())),
+        );
+
+        for workspace in all_workspaces {
+            let Some(info) = self.package_graph.package_info(&workspace) else {
+                continue;
+            };
+
+            let workspace_abs_dir = self.root.resolve(info.package_path());
+
+            for (_dep_name, dep_version) in info.package_json.all_dependencies() {
+                let Some(path_str) = dep_version.strip_prefix("file:") else {
+                    continue;
+                };
+
+                let Ok(relative_path) = RelativeUnixPathBuf::new(path_str) else {
+                    continue;
+                };
+
+                // Resolve the file: path relative to the workspace directory.
+                // join_unix_path normalizes the result (resolves ..)
+                let abs_dep_path = workspace_abs_dir.join_unix_path(relative_path);
+
+                // Skip if the path is outside the repo root
+                let Ok(anchored) = AnchoredSystemPathBuf::new(&self.root, &abs_dep_path) else {
+                    trace!(
+                        "file: dependency {path_str} from {workspace} is outside repo root, \
+                         skipping"
+                    );
+                    continue;
+                };
+
+                if !abs_dep_path.try_exists()? {
+                    trace!("file: dependency {path_str} from {workspace} doesn't exist, skipping");
+                    continue;
+                }
+
+                trace!(
+                    "Copying file: dependency {path_str} from {workspace} -> {}",
+                    anchored
+                );
+
+                self.copy_directory(&anchored, Some(CopyDestination::Docker))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Remove per-workspace lockfiles from workspace directories in the pruned
+    /// output. These are stale copies from the source repo that would conflict
+    /// with the merged root-level lockfile.
+    fn remove_per_workspace_lockfiles(
+        &self,
+        workspace_paths: &[String],
+        lockfile_name: &str,
+    ) -> Result<(), Error> {
+        for ws_path in workspace_paths {
+            let ws_dir = AnchoredSystemPathBuf::from_raw(ws_path)?;
+            let ws_lockfile_path = ws_dir.join_component(lockfile_name);
+            let full_path = self.full_directory.resolve(&ws_lockfile_path);
+            if full_path.try_exists()? {
+                trace!("Removing per-workspace lockfile: {}", full_path);
+                std::fs::remove_file(full_path.as_path())?;
+            }
+        }
+        Ok(())
+    }
+
+    /// When the source repo uses `shared-workspace-lockfile=false`, the pruned
+    /// output contains a single merged lockfile. We need to ensure the .npmrc
+    /// in the output uses the shared lockfile so `pnpm install` works
+    /// correctly.
+    fn ensure_shared_lockfile_in_npmrc(&self) -> Result<(), Error> {
+        let npmrc_path = AnchoredSystemPathBuf::from_raw(".npmrc")?;
+        let full_npmrc = self.full_directory.resolve(&npmrc_path);
+        if !full_npmrc.try_exists()? {
+            return Ok(());
+        }
+
+        let contents = full_npmrc.read_to_string()?;
+        if !contents.contains("shared-workspace-lockfile") {
+            return Ok(());
+        }
+
+        let rewritten: String = contents
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim();
+                if trimmed.starts_with("shared-workspace-lockfile") {
+                    "shared-workspace-lockfile=true"
+                } else {
+                    line
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let rewritten = if contents.ends_with('\n') && !rewritten.ends_with('\n') {
+            format!("{rewritten}\n")
+        } else {
+            rewritten
+        };
+
+        full_npmrc.create_with_contents(&rewritten)?;
+
+        if self.docker {
+            let docker_npmrc = self.docker_directory().resolve(&npmrc_path);
+            if docker_npmrc.try_exists()? {
+                docker_npmrc.create_with_contents(&rewritten)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn internal_dependencies(&self) -> Vec<PackageName> {
         let workspaces = std::iter::once(PackageNode::Workspace(PackageName::Root))
             .chain(
@@ -451,6 +646,67 @@ impl<'a> Prune<'a> {
             .collect();
         names.sort();
         names
+    }
+
+    /// Copy files matched by `globalDependencies` globs when the
+    /// `pruneGlobalDependencies` future flag is enabled.
+    fn copy_global_dependencies(&self) -> Result<(), Error> {
+        let Some((mut turbo_json, _)) = self
+            .get_turbo_json(turbo_json())
+            .transpose()
+            .or_else(|| self.get_turbo_json(turbo_jsonc()).transpose())
+            .transpose()?
+        else {
+            return Ok(());
+        };
+
+        let prune_enabled = turbo_json
+            .future_flags
+            .as_ref()
+            .map(|ff| ff.value.prune_includes_global_files)
+            .unwrap_or(false);
+        if !prune_enabled {
+            return Ok(());
+        }
+
+        turbo_json.resolve_global_config();
+
+        let Some(global_deps) = &turbo_json.global_dependencies else {
+            return Ok(());
+        };
+
+        let global_dep_globs: Vec<&str> = global_deps.iter().map(|s| s.value.as_ref()).collect();
+        if global_dep_globs.is_empty() {
+            return Ok(());
+        }
+
+        let (raw_inclusions, raw_exclusions): (Vec<&str>, Vec<&str>) =
+            global_dep_globs.iter().partition(|g| !g.starts_with('!'));
+
+        let inclusions = raw_inclusions
+            .iter()
+            .map(|i| ValidatedGlob::from_str(i))
+            .collect::<Result<Vec<_>, _>>()?;
+        let exclusions = raw_exclusions
+            .iter()
+            .map(|e| ValidatedGlob::from_str(e.strip_prefix('!').unwrap_or(e)))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let matched_files =
+            globwalk::globwalk(&self.root, &inclusions, &exclusions, WalkType::Files)?;
+
+        for file_path in &matched_files {
+            let anchored = AnchoredSystemPathBuf::new(&self.root, file_path)?;
+            // turbo.json is already written by copy_turbo_json as a pruned
+            // version. Don't overwrite it with the original.
+            if anchored.as_str() == CONFIG_FILE || anchored.as_str() == CONFIG_FILE_JSONC {
+                continue;
+            }
+            trace!("Copying global dependency: {}", anchored);
+            self.copy_file(&anchored, Some(CopyDestination::Docker))?;
+        }
+
+        Ok(())
     }
 
     fn copy_turbo_json(&self, workspaces: &[String]) -> Result<(), Error> {
@@ -480,7 +736,81 @@ impl<'a> Prune<'a> {
         };
 
         let turbo_json =
-            RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.into();
+            RawRootTurboJson::parse(&turbo_json_contents, turbo_json_name.as_str())?.try_into()?;
         Ok(Some((turbo_json, turbo_json_name)))
+    }
+}
+
+/// Merge `pruned` values into `original`, preserving the key ordering from
+/// `original`. Keys present in `original` but absent from `pruned` are dropped.
+/// Keys present in `pruned` but absent from `original` are appended.
+fn merge_preserving_key_order(
+    original: &serde_json::Value,
+    pruned: &serde_json::Value,
+) -> serde_json::Value {
+    match (original, pruned) {
+        (serde_json::Value::Object(orig_map), serde_json::Value::Object(pruned_map)) => {
+            let mut result = serde_json::Map::new();
+            for (key, orig_val) in orig_map {
+                if let Some(pruned_val) = pruned_map.get(key) {
+                    result.insert(
+                        key.clone(),
+                        merge_preserving_key_order(orig_val, pruned_val),
+                    );
+                }
+            }
+            for (key, pruned_val) in pruned_map {
+                if !orig_map.contains_key(key) {
+                    result.insert(key.clone(), pruned_val.clone());
+                }
+            }
+            serde_json::Value::Object(result)
+        }
+        (_, pruned) => pruned.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::merge_preserving_key_order;
+
+    #[test]
+    fn merge_preserves_key_order() {
+        let original: serde_json::Value = serde_json::from_str(
+            r#"{"z_last": 1, "a_first": 2, "m_middle": {"nested_z": true, "nested_a": false}}"#,
+        )
+        .unwrap();
+        let pruned =
+            json!({"a_first": 2, "m_middle": {"nested_a": false, "nested_z": true}, "z_last": 1});
+
+        let merged = merge_preserving_key_order(&original, &pruned);
+        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["z_last", "a_first", "m_middle"]);
+
+        let nested_keys: Vec<_> = merged["m_middle"].as_object().unwrap().keys().collect();
+        assert_eq!(nested_keys, vec!["nested_z", "nested_a"]);
+    }
+
+    #[test]
+    fn merge_drops_removed_keys() {
+        let original: serde_json::Value =
+            serde_json::from_str(r#"{"keep": 1, "drop": 2, "also_keep": 3}"#).unwrap();
+        let pruned = json!({"keep": 1, "also_keep": 3});
+
+        let merged = merge_preserving_key_order(&original, &pruned);
+        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["keep", "also_keep"]);
+    }
+
+    #[test]
+    fn merge_appends_new_keys() {
+        let original: serde_json::Value = serde_json::from_str(r#"{"existing": 1}"#).unwrap();
+        let pruned = json!({"existing": 1, "new_key": 2});
+
+        let merged = merge_preserving_key_order(&original, &pruned);
+        let keys: Vec<_> = merged.as_object().unwrap().keys().collect();
+        assert_eq!(keys, vec!["existing", "new_key"]);
     }
 }

@@ -1,14 +1,11 @@
-#![cfg(feature = "git2")]
 use std::str::FromStr;
 
 use globwalk::ValidatedGlob;
 use tracing::{debug, warn};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, PathError};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, PathError};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
-#[cfg(feature = "git2")]
-use crate::hash_object::hash_objects;
-use crate::{Error, GitHashes, GitRepo, RepoGitIndex, SCM};
+use crate::{Error, GitHashes, GitRepo, RepoGitIndex, SCM, hash_object::hash_objects};
 
 impl SCM {
     pub fn get_hashes_for_files(
@@ -134,6 +131,7 @@ impl GitRepo {
                 package_path,
                 inputs,
                 true,
+                repo_index,
             );
         }
 
@@ -188,16 +186,68 @@ impl GitRepo {
         Ok(hashes)
     }
 
-    #[tracing::instrument(skip(self, turbo_root, inputs))]
+    fn git_relative_to_package_relative(
+        &self,
+        full_pkg_path: &AbsoluteSystemPath,
+        pkg_prefix: &turbopath::RelativeUnixPathBuf,
+        git_relative: &turbopath::RelativeUnixPathBuf,
+    ) -> turbopath::RelativeUnixPathBuf {
+        turbopath::RelativeUnixPath::strip_prefix(git_relative, pkg_prefix)
+            .ok()
+            .map(|stripped| stripped.to_owned())
+            .unwrap_or_else(|| {
+                let full_file_path = self.root.join_unix_path(git_relative);
+                AnchoredSystemPathBuf::relative_path_between(full_pkg_path, &full_file_path)
+                    .to_unix()
+            })
+    }
+
+    fn extend_hashes_from_candidates(
+        &self,
+        full_pkg_path: &AbsoluteSystemPath,
+        pkg_prefix: &turbopath::RelativeUnixPathBuf,
+        repo_index: Option<&RepoGitIndex>,
+        candidate_paths: Vec<turbopath::RelativeUnixPathBuf>,
+        hashes: &mut GitHashes,
+    ) -> Result<(), Error> {
+        if candidate_paths.is_empty() {
+            return Ok(());
+        }
+
+        let (known_hashes, to_hash) = if let Some(index) = repo_index {
+            index.partition_existing_paths_for_hashing(candidate_paths)
+        } else {
+            (Vec::new(), candidate_paths)
+        };
+
+        hashes.reserve(known_hashes.len() + to_hash.len());
+        for (git_relative, oid) in known_hashes {
+            let package_relative =
+                self.git_relative_to_package_relative(full_pkg_path, pkg_prefix, &git_relative);
+            hashes.insert(package_relative, oid);
+        }
+
+        if !to_hash.is_empty() {
+            let mut new_hashes = GitHashes::with_capacity(to_hash.len());
+            hash_objects(&self.root, full_pkg_path, to_hash, &mut new_hashes)?;
+            hashes.extend(new_hashes);
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self, turbo_root, inputs, repo_index))]
     fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
         package_path: &AnchoredSystemPath,
         inputs: &[S],
         include_configs: bool,
+        repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
         let full_pkg_path = turbo_root.resolve(package_path);
         let package_unix_path_buf = package_path.to_unix();
+        let pkg_prefix = self.root.anchor(&full_pkg_path)?.to_unix();
         let package_unix_path = package_unix_path_buf.as_str();
 
         static CONFIG_FILES: &[&str] = &["package.json", "turbo.json", "turbo.jsonc"];
@@ -232,12 +282,18 @@ impl GitRepo {
             &exclusions,
             globwalk::WalkType::Files,
         )?;
-        let mut to_hash = Vec::with_capacity(files.len());
+        let mut candidate_paths = Vec::with_capacity(files.len());
         for entry in &files {
-            to_hash.push(self.root.anchor(entry)?.to_unix());
+            candidate_paths.push(self.root.anchor(entry)?.to_unix());
         }
         let mut hashes = GitHashes::with_capacity(files.len());
-        hash_objects(&self.root, &full_pkg_path, to_hash, &mut hashes)?;
+        self.extend_hashes_from_candidates(
+            &full_pkg_path,
+            &pkg_prefix,
+            repo_index,
+            candidate_paths,
+            &mut hashes,
+        )?;
         Ok(hashes)
     }
 
@@ -298,18 +354,32 @@ impl GitRepo {
                     // compiling a glob and walking directories.
                     let resolved =
                         full_pkg_path.join_unix_path(turbopath::RelativeUnixPath::new(raw_glob)?);
-                    if resolved.symlink_metadata().is_ok() {
-                        let git_relative = self.root.anchor(&resolved)?.to_unix();
-                        let pkg_relative =
-                            turbopath::RelativeUnixPath::strip_prefix(&git_relative, &pkg_prefix)
-                                .ok()
-                                .map(|s| s.to_owned());
-                        let already_known = pkg_relative
-                            .as_ref()
-                            .is_some_and(|rel| hashes.contains_key(rel));
-                        if !already_known {
-                            literal_to_hash.push(git_relative);
+                    match resolved.symlink_metadata() {
+                        Ok(meta) if meta.is_dir() => {
+                            // Directory literal — fall through to the glob
+                            // walker which will expand it via
+                            // add_doublestar_to_dir (e.g. "src" -> "src/**").
+                            glob_buf.push_str(package_unix_path);
+                            glob_buf.push('/');
+                            glob_buf.push_str(raw_glob.trim_start_matches('/'));
+                            glob_inclusions.push(ValidatedGlob::from_str(&glob_buf)?);
                         }
+                        Ok(_) => {
+                            let git_relative = self.root.anchor(&resolved)?.to_unix();
+                            let pkg_relative = turbopath::RelativeUnixPath::strip_prefix(
+                                &git_relative,
+                                &pkg_prefix,
+                            )
+                            .ok()
+                            .map(|s| s.to_owned());
+                            let already_known = pkg_relative
+                                .as_ref()
+                                .is_some_and(|rel| hashes.contains_key(rel));
+                            if !already_known {
+                                literal_to_hash.push(git_relative);
+                            }
+                        }
+                        Err(_) => {}
                     }
                 } else {
                     glob_buf.push_str(package_unix_path);
@@ -321,9 +391,13 @@ impl GitRepo {
 
             // Hash any literal files discovered via direct stat.
             if !literal_to_hash.is_empty() {
-                let mut new_hashes = GitHashes::with_capacity(literal_to_hash.len());
-                hash_objects(&self.root, &full_pkg_path, literal_to_hash, &mut new_hashes)?;
-                hashes.extend(new_hashes);
+                self.extend_hashes_from_candidates(
+                    &full_pkg_path,
+                    &pkg_prefix,
+                    repo_index,
+                    literal_to_hash,
+                    &mut hashes,
+                )?;
             }
 
             // Only do the expensive glob walk for patterns that are actual globs.
@@ -351,9 +425,13 @@ impl GitRepo {
                 }
 
                 if !to_hash.is_empty() {
-                    let mut new_hashes = GitHashes::with_capacity(to_hash.len());
-                    hash_objects(&self.root, &full_pkg_path, to_hash, &mut new_hashes)?;
-                    hashes.extend(new_hashes);
+                    self.extend_hashes_from_candidates(
+                        &full_pkg_path,
+                        &pkg_prefix,
+                        repo_index,
+                        to_hash,
+                        &mut hashes,
+                    )?;
                 }
             }
         }
@@ -387,7 +465,7 @@ mod tests {
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPathBuf};
 
     use super::*;
-    use crate::manual::get_package_file_hashes_without_git;
+    use crate::{OidHash, manual::get_package_file_hashes_without_git};
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp_dir = tempfile::tempdir().unwrap();
@@ -476,7 +554,7 @@ mod tests {
         let mut expected = GitHashes::new();
         expected.insert(
             RelativeUnixPathBuf::new("committed-file").unwrap(),
-            "3a29e62ea9ba15c4a4009d1f605d391cdd262033".to_string(),
+            OidHash::from_hex_str("3a29e62ea9ba15c4a4009d1f605d391cdd262033"),
         );
         assert_eq!(hashes, expected);
     }
@@ -589,15 +667,15 @@ mod tests {
         let mut all_expected = all_expected.clone();
         all_expected.insert(
             RelativeUnixPathBuf::new("../new-root-file").unwrap(),
-            "8906ddcdd634706188bd8ef1c98ac07b9be3425e".to_string(),
+            OidHash::from_hex_str("8906ddcdd634706188bd8ef1c98ac07b9be3425e"),
         );
         all_expected.insert(
             RelativeUnixPathBuf::new("dir/ignored-file").unwrap(),
-            "5537770d04ec8aaf7bae2d9ff78866de86df415c".to_string(),
+            OidHash::from_hex_str("5537770d04ec8aaf7bae2d9ff78866de86df415c"),
         );
         all_expected.insert(
             RelativeUnixPathBuf::new("$TURBO_DEFAULT$").unwrap(),
-            "2f26c7b914476b3c519e4f0fbc0d16c52a60d178".to_string(),
+            OidHash::from_hex_str("2f26c7b914476b3c519e4f0fbc0d16c52a60d178"),
         );
 
         let input_tests: &[(&[&str], bool, &[&str])] = &[
@@ -703,7 +781,7 @@ mod tests {
         for (inputs, include_default_files, expected_files) in input_tests {
             let expected: GitHashes = HashMap::from_iter(expected_files.iter().map(|key| {
                 let key = RelativeUnixPathBuf::new(*key).unwrap();
-                let value = all_expected.get(&key).unwrap().clone();
+                let value = *all_expected.get(&key).unwrap();
                 (key, value)
             }));
 
@@ -721,11 +799,130 @@ mod tests {
         Ok(())
     }
 
+    /// Regression test for worktrees that live outside the main repo directory.
+    ///
+    /// Reproduces the real-world layout where:
+    ///   ~/project/front           <- main repo
+    ///   ~/project/front-worktree/ <- linked worktrees (sibling, NOT a child)
+    ///
+    /// Before the fix, `git_root` was set to the main worktree root, causing
+    /// `self.root.anchor(turbo_root)` to fail with "Path X is not parent of Y"
+    /// because the worktree path cannot be strip-prefixed by a sibling path.
+    #[test]
+    fn test_package_hashes_in_external_worktree() -> Result<(), Error> {
+        use crate::worktree::WorktreeInfo;
+
+        // Two separate temp dirs to simulate sibling directories
+        let (_tmp_main, main_root) = tmp_dir();
+        let (_tmp_wt, worktree_parent) = tmp_dir();
+
+        // Set up the main repo with a package
+        let pkg_dir = main_root.join_component("my-pkg");
+        pkg_dir.create_dir_all()?;
+        main_root
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        pkg_dir
+            .join_component("index.js")
+            .create_with_contents("console.log('hello')")?;
+
+        setup_repository(&main_root);
+        commit_all(&main_root);
+
+        // Create a linked worktree at a sibling path (not inside main_root)
+        let worktree_path = worktree_parent.join_component("my-branch");
+        require_git_cmd(
+            &main_root,
+            &[
+                "worktree",
+                "add",
+                worktree_path.as_str(),
+                "-b",
+                "test-external-worktree",
+            ],
+        );
+
+        // Detect worktree info from within the linked worktree
+        let info = WorktreeInfo::detect(&worktree_path).unwrap();
+        assert!(info.is_linked_worktree());
+        assert_eq!(info.git_root, worktree_path);
+
+        // Construct SCM the same way the run builder does: using the pre-resolved
+        // git_root from worktree detection
+        let scm = crate::SCM::new_with_git_root(&worktree_path, info.git_root);
+        let crate::SCM::Git(git) = scm else {
+            panic!("expected git SCM");
+        };
+
+        // This is the call that previously failed with "is not parent of"
+        let package_path = AnchoredSystemPathBuf::from_raw("my-pkg")?;
+        let hashes =
+            git.get_package_file_hashes::<&str>(&worktree_path, &package_path, &[], false, None)?;
+
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("index.js").unwrap()),
+            "should hash files in the worktree package"
+        );
+        assert!(
+            hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()),
+            "should hash package.json in the worktree package"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_inputs_in_nested_turbo_root() -> Result<(), Error> {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let turbo_root = repo_root.join_component("subdir");
+        let my_pkg_dir = turbo_root.join_component("my-pkg");
+        my_pkg_dir.create_dir_all()?;
+
+        my_pkg_dir
+            .join_component("committed-file")
+            .create_with_contents("committed bytes")?;
+        my_pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+
+        setup_repository(&repo_root);
+        commit_all(&repo_root);
+
+        my_pkg_dir
+            .join_component("uncommitted-file")
+            .create_with_contents("uncommitted bytes")?;
+
+        let scm = crate::SCM::new_with_git_root(&turbo_root, repo_root.clone());
+        let crate::SCM::Git(git) = scm else {
+            panic!("expected git SCM");
+        };
+        let package_path = AnchoredSystemPathBuf::from_raw("my-pkg")?;
+
+        let hashes =
+            git.get_package_file_hashes(&turbo_root, &package_path, &["**/*-file"], false, None)?;
+
+        let expected = to_hash_map(&[
+            ("committed-file", "3a29e62ea9ba15c4a4009d1f605d391cdd262033"),
+            (
+                "uncommitted-file",
+                "4e56ad89387e6379e4e91ddfe9872cf6a72c9976",
+            ),
+            ("package.json", "9e26dfeeb6e641a33dae4961196235bdb965b21b"),
+        ]);
+
+        assert_eq!(hashes, expected);
+        Ok(())
+    }
+
     fn to_hash_map(pairs: &[(&str, &str)]) -> GitHashes {
-        HashMap::from_iter(
-            pairs
-                .iter()
-                .map(|(path, hash)| (RelativeUnixPathBuf::new(*path).unwrap(), hash.to_string())),
-        )
+        HashMap::from_iter(pairs.iter().map(|(path, hash)| {
+            (
+                RelativeUnixPathBuf::new(*path).unwrap(),
+                OidHash::from_hex_str(hash),
+            )
+        }))
     }
 }

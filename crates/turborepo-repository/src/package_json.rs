@@ -202,11 +202,11 @@ impl PackageJson {
     }
 
     pub fn all_dependencies(&self) -> impl Iterator<Item = (&String, &String)> + '_ {
-        self.dev_dependencies
+        self.dependencies
             .iter()
             .flatten()
+            .chain(self.dev_dependencies.iter().flatten())
             .chain(self.optional_dependencies.iter().flatten())
-            .chain(self.dependencies.iter().flatten())
             .chain(self.peer_dependencies.iter().flatten())
     }
 
@@ -256,5 +256,42 @@ mod test {
         let package_json: PackageJson = PackageJson::from_value(json.clone()).unwrap();
         let actual = serde_json::to_value(package_json).unwrap();
         assert_eq!(actual, json);
+    }
+
+    #[test]
+    fn all_dependencies_prefers_dependencies_over_dev() {
+        let json = json!({
+            "name": "test",
+            "dependencies": { "shared-pkg": "2.0.0" },
+            "devDependencies": { "shared-pkg": "1.0.0", "dev-only": "1.0.0" }
+        });
+        let pkg: PackageJson = PackageJson::from_value(json).unwrap();
+        // Simulate the first-occurrence-wins dedup used by
+        // Dependencies::new (via BTreeMap::entry().or_insert_with).
+        let mut deduped = std::collections::BTreeMap::new();
+        for (k, v) in pkg.all_dependencies() {
+            deduped.entry(k.as_str()).or_insert(v.as_str());
+        }
+        // dependencies version must win over devDependencies
+        assert_eq!(deduped.get("shared-pkg"), Some(&"2.0.0"));
+        assert_eq!(deduped.get("dev-only"), Some(&"1.0.0"));
+    }
+
+    #[test]
+    fn all_dependencies_iteration_order() {
+        let json = json!({
+            "name": "test",
+            "dependencies": { "shared-pkg": "2.0.0" },
+            "devDependencies": { "shared-pkg": "1.0.0" },
+            "peerDependencies": { "shared-pkg": "*" }
+        });
+        let pkg: PackageJson = PackageJson::from_value(json).unwrap();
+        let versions: Vec<_> = pkg
+            .all_dependencies()
+            .filter(|(k, _)| k.as_str() == "shared-pkg")
+            .map(|(_, v)| v.as_str())
+            .collect();
+        // dependencies must come first, then devDependencies, then peer
+        assert_eq!(versions, vec!["2.0.0", "1.0.0", "*"]);
     }
 }

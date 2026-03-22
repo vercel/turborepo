@@ -30,7 +30,11 @@ pub mod signature_authentication;
 mod test_cases;
 mod upload_progress;
 
-use std::{backtrace, backtrace::Backtrace};
+use std::{
+    backtrace,
+    backtrace::Backtrace,
+    sync::{Arc, OnceLock},
+};
 
 pub use async_cache::AsyncCache;
 use camino::Utf8PathBuf;
@@ -58,7 +62,7 @@ pub enum CacheError {
     TimeoutError(String),
     #[error("could not connect to the cache")]
     ConnectError,
-    #[error("signing artifact failed: {0}")]
+    #[error("artifact signature error")]
     SignatureError(#[from] SignatureError, #[backtrace] Backtrace),
     #[error("invalid duration")]
     InvalidDuration(#[backtrace] Backtrace),
@@ -90,6 +94,8 @@ pub enum CacheError {
     MetadataWriteFailure(serde_json::Error, #[backtrace] Backtrace),
     #[error("Unable to perform write as cache is shutting down")]
     CacheShuttingDown,
+    #[error("Invalid restore manifest: {0}")]
+    InvalidManifest(String),
     #[error("Unable to determine config cache base")]
     ConfigCacheInvalidBase,
     #[error("Unable to hash config cache inputs")]
@@ -104,16 +110,75 @@ impl From<turborepo_api_client::Error> for CacheError {
     }
 }
 
+/// Git state captured once at the beginning of a `turbo run`.
+/// Stored in each task's `-meta.json` sidecar so that cache entries
+/// can be traced back to the commit (and working-tree state) that
+/// produced them.
+///
+/// Currently only written to the local filesystem cache's `-meta.json`
+/// sidecar. Remote cache entries do not include SCM state.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CacheScmState {
+    /// The HEAD commit SHA, if available.
+    pub sha: Option<String>,
+    /// A hash summarizing all uncommitted changes (staged, unstaged,
+    /// and untracked files). `None` when the working tree is clean or
+    /// when git is unavailable.
+    pub dirty_hash: Option<String>,
+}
+
+/// SCM state that is computed in the background and resolved lazily.
+///
+/// Git operations (rev-parse, status, diff) are spawned at run start but
+/// the cache no longer blocks on them. `get()` returns the resolved state
+/// if the background work has finished, or `None` if it hasn't yet. This
+/// keeps git subprocesses off the critical startup path.
+#[derive(Debug, Clone)]
+pub struct LazyScmState(Arc<OnceLock<Option<CacheScmState>>>);
+
+impl LazyScmState {
+    pub fn new() -> Self {
+        Self(Arc::new(OnceLock::new()))
+    }
+
+    /// Create an already-resolved instance (useful in tests).
+    pub fn resolved(state: Option<CacheScmState>) -> Self {
+        let lock = OnceLock::new();
+        let _ = lock.set(state);
+        Self(Arc::new(lock))
+    }
+
+    /// Set the resolved value. No-op if already set.
+    pub fn resolve(&self, state: Option<CacheScmState>) {
+        let _ = self.0.set(state);
+    }
+
+    /// Returns the SCM state if the background computation has finished
+    /// and produced a value. Returns `None` if still pending or if git
+    /// was unavailable.
+    pub fn get(&self) -> Option<&CacheScmState> {
+        self.0.get().and_then(|s| s.as_ref())
+    }
+}
+
+impl Default for LazyScmState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub enum CacheSource {
     Local,
     Remote,
 }
 
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct CacheHitMetadata {
     pub source: CacheSource,
     pub time_saved: u64,
+    pub sha: Option<String>,
+    pub dirty_hash: Option<String>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize)]
@@ -192,13 +257,23 @@ pub struct CacheOpts {
 pub struct RemoteCacheOpts {
     unused_team_id: Option<String>,
     signature: bool,
+    enforce_signature_key_length: bool,
 }
 
 impl RemoteCacheOpts {
-    pub fn new(unused_team_id: Option<String>, signature: bool) -> Self {
+    pub fn new(
+        unused_team_id: Option<String>,
+        signature: bool,
+        enforce_signature_key_length: bool,
+    ) -> Self {
         Self {
             unused_team_id,
             signature,
+            enforce_signature_key_length,
         }
+    }
+
+    pub fn enforce_signature_key_length(&self) -> bool {
+        self.enforce_signature_key_length
     }
 }

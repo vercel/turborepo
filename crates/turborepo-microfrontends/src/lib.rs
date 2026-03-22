@@ -24,6 +24,7 @@
 #![deny(clippy::all)]
 mod configv1;
 mod error;
+mod port;
 mod schema;
 
 use configv1::ConfigV1;
@@ -194,8 +195,11 @@ impl TurborepoMfeConfig {
         })
     }
 
+    /// Returns the dev server port for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`. See [`ConfigV1::port`] for details.
     pub fn port(&self, name: &str) -> Option<u16> {
-        // Prefer config_v1 for compatibility with lenient parsing
         self.config_v1.port(name)
     }
 
@@ -208,19 +212,24 @@ impl TurborepoMfeConfig {
     }
 
     pub fn local_proxy_port(&self) -> Option<u16> {
-        // Prefer config_v1 for compatibility with lenient parsing
         self.config_v1.local_proxy_port()
     }
 
+    /// Returns the routing configuration for the given application.
+    ///
+    /// Note: delegates to `self.inner` (strict `TurborepoConfig`) because
+    /// `configv1::PathGroup` and `schema::PathGroup` differ (the former has
+    /// a `flag` field). On the lenient parser path (`has_mfe_dependency=true`),
+    /// `self.inner` is empty and this always returns `None`.
     pub fn routing(&self, app_name: &str) -> Option<&[schema::PathGroup]> {
-        // Return empty slice since config_v1::PathGroup is different from
-        // schema::PathGroup This is only used for validation; actual routing
-        // uses config_v1
         self.inner.routing(app_name)
     }
 
+    /// Returns the fallback URL for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`.
     pub fn fallback(&self, app_name: &str) -> Option<&str> {
-        // Prefer config_v1 for compatibility with lenient parsing
         self.config_v1.fallback(app_name)
     }
 
@@ -376,6 +385,10 @@ impl Config {
         }
     }
 
+    /// Returns the dev server port for the given application.
+    ///
+    /// Looks up `name` first as a config map key, then falls back to
+    /// scanning by `packageName`. See [`ConfigV1::port`] for details.
     pub fn port(&self, name: &str) -> Option<u16> {
         match &self.inner {
             ConfigInner::V1(config_v1) => config_v1.port(name),

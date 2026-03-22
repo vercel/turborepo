@@ -1,0 +1,26 @@
+[package]
+name = "turborepo-otel"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+
+[dependencies]
+opentelemetry = { version = "0.31", features = ["metrics"] }
+opentelemetry-otlp = { version = "0.31", default-features = false, features = [
+  "grpc-tonic",
+  "http-proto",
+  "metrics",
+  "reqwest-client",
+] }
+opentelemetry-semantic-conventions = "0.31"
+opentelemetry_sdk = { version = "0.31", features = [
+  "metrics",
+  "rt-tokio",
+  "experimental_async_runtime",
+  "experimental_metrics_periodicreader_with_async_runtime",
+] }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+tonic = "0.14"
+tracing = { workspace = true }

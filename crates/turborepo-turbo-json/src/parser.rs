@@ -17,14 +17,15 @@ use convert_case::{Case, Casing};
 use miette::Diagnostic;
 use struct_iterable::Iterable;
 use thiserror::Error;
-use tracing::log::warn;
 use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
 use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;
 
 use crate::raw::{
-    Pipeline, RawPackageTurboJson, RawRemoteCacheOptions, RawRootTurboJson, RawTaskDefinition,
-    RawTurboJson,
+    Pipeline, RawExperimentalObservability, RawGlobalConfig, RawObservabilityOtel,
+    RawObservabilityOtelMetrics, RawObservabilityOtelRunAttributes,
+    RawObservabilityOtelTaskAttributes, RawPackageTurboJson, RawRemoteCacheOptions,
+    RawRootTurboJson, RawTaskDefinition, RawTurboJson,
 };
 
 /// Error type for turbo.json parsing failures using biome parser
@@ -194,6 +195,134 @@ impl WithMetadata for RawRemoteCacheOptions {
     }
 }
 
+impl WithMetadata for RawObservabilityOtelRunAttributes {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.id.add_text(text.clone());
+        self.scm_revision.add_text(text);
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.id.add_path(path.clone());
+        self.scm_revision.add_path(path);
+    }
+}
+
+impl WithMetadata for RawObservabilityOtelTaskAttributes {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.id.add_text(text.clone());
+        self.hashes.add_text(text);
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.id.add_path(path.clone());
+        self.hashes.add_path(path);
+    }
+}
+
+impl WithMetadata for RawObservabilityOtelMetrics {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.run_summary.add_text(text.clone());
+        self.task_details.add_text(text.clone());
+        self.run_attributes.add_text(text.clone());
+        if let Some(attrs) = &mut self.run_attributes {
+            attrs.add_text(text.clone());
+        }
+        self.task_attributes.add_text(text.clone());
+        if let Some(attrs) = &mut self.task_attributes {
+            attrs.add_text(text);
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.run_summary.add_path(path.clone());
+        self.task_details.add_path(path.clone());
+        self.run_attributes.add_path(path.clone());
+        if let Some(attrs) = &mut self.run_attributes {
+            attrs.add_path(path.clone());
+        }
+        self.task_attributes.add_path(path.clone());
+        if let Some(attrs) = &mut self.task_attributes {
+            attrs.add_path(path);
+        }
+    }
+}
+
+impl WithMetadata for RawObservabilityOtel {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.enabled.add_text(text.clone());
+        self.protocol.add_text(text.clone());
+        self.endpoint.add_text(text.clone());
+        self.timeout_ms.add_text(text.clone());
+        self.interval_ms.add_text(text.clone());
+        self.use_remote_cache_token.add_text(text.clone());
+        self.metrics.add_text(text.clone());
+        if let Some(metrics) = &mut self.metrics {
+            metrics.add_text(text);
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.enabled.add_path(path.clone());
+        self.protocol.add_path(path.clone());
+        self.endpoint.add_path(path.clone());
+        self.timeout_ms.add_path(path.clone());
+        self.interval_ms.add_path(path.clone());
+        self.use_remote_cache_token.add_path(path.clone());
+        self.metrics.add_path(path.clone());
+        if let Some(metrics) = &mut self.metrics {
+            metrics.add_path(path);
+        }
+    }
+}
+
+impl WithMetadata for RawExperimentalObservability {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.otel.add_text(text.clone());
+        if let Some(otel) = &mut self.otel {
+            otel.add_text(text);
+        }
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.otel.add_path(path.clone());
+        if let Some(otel) = &mut self.otel {
+            otel.add_path(path);
+        }
+    }
+}
+
+impl WithMetadata for RawGlobalConfig {
+    fn add_text(&mut self, text: Arc<str>) {
+        self.inputs.add_text(text.clone());
+        self.env.add_text(text.clone());
+        self.pass_through_env.add_text(text.clone());
+        self.ui.add_text(text.clone());
+        self.allow_no_package_manager.add_text(text.clone());
+        self.daemon.add_text(text.clone());
+        self.env_mode.add_text(text.clone());
+        self.cache_dir.add_text(text.clone());
+        self.no_update_notifier.add_text(text.clone());
+        self.concurrency.add_text(text.clone());
+        self.remote_cache.add_text(text.clone());
+        self.experimental_observability.add_text(text);
+    }
+
+    fn add_path(&mut self, path: Arc<str>) {
+        self.inputs.add_path(path.clone());
+        self.env.add_path(path.clone());
+        self.pass_through_env.add_path(path.clone());
+        self.ui.add_path(path.clone());
+        self.allow_no_package_manager.add_path(path.clone());
+        self.daemon.add_path(path.clone());
+        self.env_mode.add_path(path.clone());
+        self.cache_dir.add_path(path.clone());
+        self.no_update_notifier.add_path(path.clone());
+        self.concurrency.add_path(path.clone());
+        self.remote_cache.add_path(path.clone());
+        self.experimental_observability.add_path(path);
+    }
+}
+
 impl WithMetadata for RawRootTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
         self.span.add_text(text.clone());
@@ -219,7 +348,11 @@ impl WithMetadata for RawRootTurboJson {
         self.env_mode.add_text(text.clone());
         self.no_update_notifier.add_text(text.clone());
         self.concurrency.add_text(text.clone());
-        self.future_flags.add_text(text);
+        self.future_flags.add_text(text.clone());
+        self.global.add_text(text.clone());
+        if let Some(global) = &mut self.global {
+            global.value.add_text(text);
+        }
     }
 
     fn add_path(&mut self, path: Arc<str>) {
@@ -245,7 +378,11 @@ impl WithMetadata for RawRootTurboJson {
         self.env_mode.add_path(path.clone());
         self.no_update_notifier.add_path(path.clone());
         self.concurrency.add_path(path.clone());
-        self.future_flags.add_path(path);
+        self.future_flags.add_path(path.clone());
+        self.global.add_path(path.clone());
+        if let Some(global) = &mut self.global {
+            global.value.add_path(path);
+        }
     }
 }
 
@@ -283,13 +420,7 @@ impl WithMetadata for RawPackageTurboJson {
 
 impl RawRootTurboJson {
     pub fn parse(text: &str, file_path: &str) -> Result<Self, BiomeParseError> {
-        let turbo_json = parse_turbo_json::<RawRootTurboJson>(text, file_path)?;
-
-        if turbo_json.experimental_spaces.is_some() {
-            warn!("`experimentalSpaces` key in turbo.json is deprecated and does not do anything")
-        }
-
-        Ok(turbo_json)
+        parse_turbo_json::<RawRootTurboJson>(text, file_path)
     }
 }
 
@@ -304,10 +435,10 @@ impl RawTurboJson {
     ///
     /// This is a convenience helper for constructing RawTurboJson from
     /// serde_json::json! macro in tests.
-    pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, BiomeParseError> {
+    pub fn parse_from_serde(value: serde_json::Value) -> Result<RawTurboJson, crate::error::Error> {
         let json_string = serde_json::to_string(&value).expect("should be able to serialize");
         let raw_root = RawRootTurboJson::parse(&json_string, "turbo.json")?;
-        Ok(Self::from(raw_root))
+        raw_root.try_into()
     }
 }
 
@@ -389,6 +520,40 @@ mod tests {
             .render_report(&mut msg, report.as_ref())
             .unwrap();
         assert_snapshot!(msg);
+    }
+
+    #[test]
+    fn test_no_update_notifier_parsed_from_root_turbo_json() {
+        let json = r#"{"noUpdateNotifier": true}"#;
+        let result = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        assert_eq!(
+            result.no_update_notifier.as_ref().map(|v| *v.as_inner()),
+            Some(true),
+            "noUpdateNotifier should be parsed from root turbo.json"
+        );
+    }
+
+    #[test]
+    fn test_no_update_notifier_parsed_from_full_turbo_json() {
+        let json = r#"{
+          "$schema": "https://turborepo.dev/schema.json",
+          "noUpdateNotifier": true,
+          "tasks": {
+            "build": {
+              "dependsOn": ["prebuild", "^build"],
+              "outputs": ["output-file.txt", "dist/**"]
+            },
+            "prebuild": {},
+            "lint": {},
+            "check-types": {}
+          }
+        }"#;
+        let result = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        assert_eq!(
+            result.no_update_notifier.as_ref().map(|v| *v.as_inner()),
+            Some(true),
+            "noUpdateNotifier should be parsed from a full turbo.json"
+        );
     }
 
     #[test]

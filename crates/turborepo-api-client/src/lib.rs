@@ -27,9 +27,11 @@ pub use crate::error::{Error, Result};
 pub mod analytics;
 mod error;
 mod retry;
+mod shared_http_client;
 pub mod telemetry;
 
 pub use bytes::Bytes;
+pub use shared_http_client::SharedHttpClient;
 pub use tokio_stream::Stream;
 
 static AUTHORIZATION_REGEX: LazyLock<Regex> =
@@ -607,11 +609,51 @@ impl APIClient {
     /// resulting client.
     #[tracing::instrument(skip_all)]
     pub fn build_http_client(connect_timeout: Option<Duration>) -> Result<reqwest::Client> {
-        let mut builder = reqwest::Client::builder();
-        if let Some(dur) = connect_timeout {
-            builder = builder.connect_timeout(dur);
+        Self::build_http_client_with_native_roots(connect_timeout, true)
+    }
+
+    /// Builds an HTTP client using only the bundled Mozilla CA bundle
+    /// (webpki-roots). This is instant (~0ms) because no system Keychain
+    /// access is needed. Sufficient for all standard HTTPS connections.
+    #[tracing::instrument(skip_all)]
+    pub fn build_http_client_webpki_only(
+        connect_timeout: Option<Duration>,
+    ) -> Result<reqwest::Client> {
+        Self::build_http_client_with_native_roots(connect_timeout, false)
+    }
+
+    fn build_http_client_with_native_roots(
+        connect_timeout: Option<Duration>,
+        #[allow(unused_variables)] native_roots: bool,
+    ) -> Result<reqwest::Client> {
+        let build = |#[allow(unused_variables)] use_native: bool| {
+            let mut builder = reqwest::Client::builder();
+            #[cfg(feature = "rustls-tls")]
+            {
+                builder = builder
+                    .tls_built_in_webpki_certs(true)
+                    .tls_built_in_native_certs(use_native);
+            }
+            if let Some(dur) = connect_timeout {
+                builder = builder.connect_timeout(dur);
+            }
+            builder.build()
+        };
+
+        match build(native_roots) {
+            Ok(client) => Ok(client),
+            Err(e) if native_roots => {
+                // The system certificate store may be inaccessible (e.g.
+                // "Access is denied" on locked-down Windows machines).
+                // Fall back to the bundled Mozilla CA bundle which doesn't
+                // require any OS-level access.
+                tracing::warn!(
+                    "System certificate store is unavailable ({e}), using bundled certificates"
+                );
+                build(false).map_err(Error::TlsError)
+            }
+            Err(e) => Err(Error::TlsError(e)),
         }
-        builder.build().map_err(Error::TlsError)
     }
 
     pub fn base_url(&self) -> &str {
@@ -624,23 +666,22 @@ impl APIClient {
 
     /// Creates a request builder with the standard API timeout applied.
     fn api_request(&self, method: Method, url: impl reqwest::IntoUrl) -> RequestBuilder {
-        let builder = self.client.request(method, url);
-        match self.timeout {
-            Some(dur) => builder.timeout(dur),
-            None => builder,
+        let mut builder = self.client.request(method, url);
+        if let Some(dur) = self.timeout {
+            builder = builder.timeout(dur);
         }
+        add_ai_agent_header(builder)
     }
 
     /// Creates a request builder with upload timeout semantics:
     /// connect_timeout is set on the shared client, and the total
     /// request timeout uses upload_timeout (falling back to api timeout).
     fn upload_request(&self, method: Method, url: impl reqwest::IntoUrl) -> RequestBuilder {
-        let builder = self.client.request(method, url);
-        let effective_timeout = self.upload_timeout.or(self.timeout);
-        match effective_timeout {
-            Some(dur) => builder.timeout(dur),
-            None => builder,
+        let mut builder = self.client.request(method, url);
+        if let Some(dur) = self.upload_timeout.or(self.timeout) {
+            builder = builder.timeout(dur);
         }
+        add_ai_agent_header(builder)
     }
 
     #[tracing::instrument(skip_all)]
@@ -819,6 +860,13 @@ impl AnonAPIClient {
             base_url: base_url.as_ref().to_string(),
             user_agent,
         }
+    }
+}
+
+pub(crate) fn add_ai_agent_header(builder: RequestBuilder) -> RequestBuilder {
+    match turborepo_ai_agents::get_agent() {
+        Some(agent) => builder.header("x-ai-agent", agent),
+        None => builder,
     }
 }
 

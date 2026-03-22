@@ -7,7 +7,7 @@ import {
   migrateRootConfig
 } from "../src/transforms/transform-env-literals-to-wildcards";
 
-describe.only("transform-env-literals-to-wildcards", () => {
+describe("transform-env-literals-to-wildcards", () => {
   const { useFixture } = setupTestFixtures({
     directory: __dirname,
     test: "transform-env-literals-to-wildcards"

@@ -25,7 +25,7 @@ crossterm = { version = "0.29", features = ["event-stream"] }
 dialoguer = { workspace = true }
 futures = { workspace = true }
 indicatif = { workspace = true }
-nix = { version = "0.26.2", features = ["signal"] }
+nix = { workspace = true, features = ["signal"] }
 ratatui = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -35,6 +35,7 @@ tracing = { workspace = true }
 tui-term = { workspace = true }
 turbopath = { workspace = true }
 turborepo-ci = { workspace = true }
+turborepo-log = { workspace = true }
 turborepo-types = { workspace = true }
 turborepo-vt100 = { workspace = true }
 which = { workspace = true }

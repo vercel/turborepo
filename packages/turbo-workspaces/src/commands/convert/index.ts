@@ -1,9 +1,10 @@
 import { input, select } from "@inquirer/prompts";
 import picocolors from "picocolors";
-import { getAvailablePackageManagers, type PackageManager } from "@turbo/utils";
+import { getAvailablePackageManagers } from "@turbo/utils";
+import type { PackageManager } from "../../types";
 import { Logger } from "../../logger";
 import { directoryInfo } from "../../utils";
-import { getWorkspaceDetails } from "../../getWorkspaceDetails";
+import { getWorkspaceDetails } from "../../get-workspace-details";
 import { convertProject } from "../../convert";
 import type { ConvertCommandArgument, ConvertCommandOptions } from "./types";
 

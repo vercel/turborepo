@@ -49,7 +49,7 @@ This requires Git history to compute what changed.
 # GitHub Actions
 - uses: actions/checkout@v4
   with:
-    fetch-depth: 2  # Minimum for --affected
+    fetch-depth: 2 # Minimum for --affected
     # Use 0 for full history if merge base is far
 ```
 
@@ -60,7 +60,7 @@ Turborepo compares the current HEAD to the merge base with `main`. If that commi
 For PRs with many commits, consider:
 
 ```yaml
-fetch-depth: 0  # Full history
+fetch-depth: 0 # Full history
 ```
 
 ## Environment Variables Reference

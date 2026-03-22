@@ -1,0 +1,57 @@
+---
+source: crates/turborepo/tests/dry_json.rs
+expression: task
+---
+{
+  "taskId": "util#build",
+  "task": "build",
+  "package": "util",
+  "hash": "bf1798d3e46e1b48",
+  "inputs": {
+    "package.json": "e755064fd7893809d10fc067bb409c7ae516327f"
+  },
+  "hashOfExternalDependencies": "459c029558afe716",
+  "cache": {
+    "local": false,
+    "remote": false,
+    "status": "MISS",
+    "timeSaved": 0
+  },
+  "command": "echo building",
+  "cliArguments": [],
+  "outputs": null,
+  "excludedOutputs": null,
+  "logFile": "packages/util/.turbo/turbo-build.log",
+  "directory": "packages/util",
+  "dependencies": [],
+  "dependents": [],
+  "with": [],
+  "resolvedTaskDefinition": {
+    "outputs": [],
+    "cache": true,
+    "dependsOn": [],
+    "inputs": [],
+    "outputLogs": "full",
+    "persistent": false,
+    "interruptible": false,
+    "env": [
+      "NODE_ENV"
+    ],
+    "passThroughEnv": null,
+    "interactive": false
+  },
+  "expandedOutputs": [],
+  "framework": "",
+  "envMode": "strict",
+  "environmentVariables": {
+    "specified": {
+      "env": [
+        "NODE_ENV"
+      ],
+      "passThroughEnv": null
+    },
+    "configured": [],
+    "inferred": [],
+    "passthrough": null
+  }
+}

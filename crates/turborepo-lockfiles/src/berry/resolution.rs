@@ -150,13 +150,14 @@ impl Resolution {
         // The patch still gets picked up as we include patches for any
         // packages in the pruned lockfile if the package is a member.
         if matches!(dependency_override.protocol(), Some("patch")) {
-            return Some(
-                Descriptor::from(
-                    Locator::from_patch_reference(reference)
-                        .expect("expected patch reference to contain locator"),
-                )
-                .into_owned(),
-            );
+            // If the patch reference can't be parsed (e.g. malformed or
+            // unusual encoding), fall back to the original dependency so
+            // resolution can continue instead of panicking.
+            // See https://github.com/vercel/turborepo/issues/3273
+            let Some(locator) = Locator::from_patch_reference(reference) else {
+                return Some(dependency.clone().into_owned());
+            };
+            return Some(Descriptor::from(locator).into_owned());
         }
 
         Some(dependency_override)
@@ -325,6 +326,23 @@ mod test {
         assert_eq!(
             dependency,
             Some(Descriptor::try_from("lodash@npm:4.17.21").unwrap())
+        );
+    }
+
+    #[test]
+    fn test_patch_resolution_unparseable_falls_back() {
+        // When the patch reference can't be parsed by from_patch_reference,
+        // reduce_dependency should fall back to the original dependency
+        // instead of panicking. See https://github.com/vercel/turborepo/issues/3273
+        let resolution = parse_resolution("lodash@^4.17.21").unwrap();
+        let dependency = resolution.reduce_dependency(
+            "patch:not-a-valid-patch-ref",
+            &Descriptor::try_from("lodash@npm:^4.17.21").unwrap(),
+            &Locator::try_from("test@workspace:.").unwrap(),
+        );
+        assert_eq!(
+            dependency,
+            Some(Descriptor::try_from("lodash@npm:^4.17.21").unwrap())
         );
     }
 

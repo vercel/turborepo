@@ -16,6 +16,7 @@ use turborepo_repository::{
     package_graph::{self, PackageGraph, PackageName},
 };
 use turborepo_scm::SCM;
+use turborepo_types::FilterMode;
 use wax::Program;
 
 use crate::{
@@ -199,24 +200,26 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         }
     }
 
-    /// Resolves a set of filter patterns into a set of packages,
-    /// based on the current state of the workspace. The result is
-    /// guaranteed to be a subset of the packages in the workspace,
-    /// and non-empty. If the filter is empty, none of the packages
-    /// in the workspace will be returned.
+    /// Resolve the set of packages matching the given filter patterns.
     ///
-    /// It applies the following rules:
+    /// Returns the matched packages alongside a [`FilterMode`] that
+    /// describes the kind of filter that was applied. The caller uses
+    /// `FilterMode` to decide whether root tasks should be injected
+    /// without re-parsing raw filter strings.
+    ///
+    /// Root (`//`) is never included in the returned package set — the
+    /// caller is responsible for adding it when appropriate (see
+    /// `RunBuilder::calculate_filtered_packages`).
     pub fn resolve(
         &self,
         affected: &Option<(Option<String>, Option<String>)>,
         patterns: &[String],
-    ) -> Result<(HashMap<PackageName, PackageInclusionReason>, bool), ResolutionError> {
-        // inference is None only if we are in the root
+    ) -> Result<(HashMap<PackageName, PackageInclusionReason>, FilterMode), ResolutionError> {
         let is_all_packages = patterns.is_empty() && self.inference.is_none() && affected.is_none();
 
-        let filter_patterns = if is_all_packages {
-            // return all packages in the workspace
-            self.pkg_graph
+        if is_all_packages {
+            let packages = self
+                .pkg_graph
                 .packages()
                 .filter(|(name, _)| matches!(name, PackageName::Other(_)))
                 .map(|(name, _)| {
@@ -227,23 +230,17 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                         },
                     )
                 })
-                .collect()
-        } else {
-            self.get_packages_from_patterns(affected, patterns)?
-        };
+                .collect();
+            return Ok((packages, FilterMode::AllPackages));
+        }
 
-        Ok((filter_patterns, is_all_packages))
-    }
-
-    fn get_packages_from_patterns(
-        &self,
-        affected: &Option<(Option<String>, Option<String>)>,
-        patterns: &[String],
-    ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
-        let mut selectors = patterns
+        // Parse selectors once — reused for both mode classification and resolution.
+        let mut selectors: Vec<TargetSelector> = patterns
             .iter()
             .map(|pattern| TargetSelector::from_str(pattern))
             .collect::<Result<Vec<_>, _>>()?;
+
+        let mode = self.classify_filter_mode(&selectors, affected);
 
         if let Some((from_ref, to_ref)) = affected {
             selectors.push(TargetSelector {
@@ -259,7 +256,54 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             });
         }
 
-        self.get_filtered_packages(selectors)
+        let packages = self.get_filtered_packages(selectors)?;
+        Ok((packages, mode))
+    }
+
+    /// Classify the filter mode from parsed selectors.
+    ///
+    /// Only patterns from the CLI are considered — affected ranges and
+    /// package inference are separate selection mechanisms that always
+    /// produce an explicit selection.
+    fn classify_filter_mode(
+        &self,
+        pattern_selectors: &[TargetSelector],
+        affected: &Option<(Option<String>, Option<String>)>,
+    ) -> FilterMode {
+        if self.inference.is_some() || affected.is_some() || pattern_selectors.is_empty() {
+            return FilterMode::ExplicitSelection;
+        }
+
+        if pattern_selectors.iter().all(|s| s.exclude) {
+            let root_excluded = pattern_selectors
+                .iter()
+                .any(|s| Self::selector_matches_root(s));
+            FilterMode::ExcludeOnly { root_excluded }
+        } else {
+            FilterMode::ExplicitSelection
+        }
+    }
+
+    /// Check whether a selector would match the root package.
+    ///
+    /// Uses the same glob matching as `match_package_names` for name
+    /// patterns, and checks `parent_dir` for the repo root directory.
+    fn selector_matches_root(selector: &TargetSelector) -> bool {
+        if !selector.name_pattern.is_empty()
+            && let Ok(matcher) = SimpleGlob::new(&selector.name_pattern)
+            && matcher.is_match(PackageName::Root.as_ref())
+        {
+            return true;
+        }
+
+        if let Some(ref parent_dir) = selector.parent_dir {
+            let dir_str = parent_dir.as_str();
+            if dir_str == "." || dir_str.is_empty() {
+                return true;
+            }
+        }
+
+        false
     }
 
     fn get_filtered_packages(
@@ -783,6 +827,7 @@ mod test {
 
     use super::{FilterResolver, PackageInference};
     use crate::{
+        FilterMode,
         change_detector::GitChangeDetector,
         filter::ResolutionError,
         target_selector::{GitRange, TargetSelector},
@@ -1780,6 +1825,151 @@ mod test {
         assert!(
             !packages.contains_key(&PackageName::from("pkg-a")),
             "pkg-a should not match './*' filter from apps directory"
+        );
+    }
+
+    // -- FilterMode classification tests --------------------------------------
+    //
+    // These test `classify_filter_mode` (private) and `selector_matches_root`
+    // through the public `resolve()` method, asserting on the returned
+    // `FilterMode`. This validates the core decision logic for root task
+    // injection without needing expensive integration tests.
+
+    fn resolve_filter_mode(
+        patterns: &[&str],
+        affected: &Option<(Option<String>, Option<String>)>,
+        package_inference: Option<PackageInference>,
+    ) -> FilterMode {
+        resolve_filter_mode_with_changes(patterns, affected, package_inference, &[])
+    }
+
+    fn resolve_filter_mode_with_changes(
+        patterns: &[&str],
+        affected: &Option<(Option<String>, Option<String>)>,
+        package_inference: Option<PackageInference>,
+        changed: &[(&str, Option<&str>, &[&str])],
+    ) -> FilterMode {
+        let (_tempdir, resolver) = make_project(
+            &[
+                ("packages/project-0", "packages/project-1"),
+                ("packages/project-0", "project-5"),
+            ],
+            &["project-3"],
+            package_inference,
+            TestChangeDetector::new(changed),
+        );
+        let patterns: Vec<String> = patterns.iter().map(|s| s.to_string()).collect();
+        let (_, mode) = resolver.resolve(affected, &patterns).unwrap();
+        mode
+    }
+
+    #[test]
+    fn filter_mode_no_patterns_is_all_packages() {
+        let mode = resolve_filter_mode(&[], &None, None);
+        assert_eq!(mode, FilterMode::AllPackages);
+    }
+
+    #[test]
+    fn filter_mode_single_exclude_is_exclude_only() {
+        let mode = resolve_filter_mode(&["!project-3"], &None, None);
+        assert_eq!(
+            mode,
+            FilterMode::ExcludeOnly {
+                root_excluded: false
+            }
+        );
+    }
+
+    #[test]
+    fn filter_mode_multiple_excludes_is_exclude_only() {
+        let mode = resolve_filter_mode(&["!project-3", "!project-5"], &None, None);
+        assert_eq!(
+            mode,
+            FilterMode::ExcludeOnly {
+                root_excluded: false
+            }
+        );
+    }
+
+    #[test]
+    fn filter_mode_exclude_root_by_name() {
+        let mode = resolve_filter_mode(&["!//"], &None, None);
+        assert_eq!(
+            mode,
+            FilterMode::ExcludeOnly {
+                root_excluded: true
+            }
+        );
+    }
+
+    #[test]
+    fn filter_mode_exclude_root_by_directory() {
+        let mode = resolve_filter_mode(&["!{.}"], &None, None);
+        assert_eq!(
+            mode,
+            FilterMode::ExcludeOnly {
+                root_excluded: true
+            }
+        );
+    }
+
+    #[test]
+    fn filter_mode_wildcard_exclude_matches_root() {
+        // !* should match all packages including root (//).
+        let mode = resolve_filter_mode(&["!*"], &None, None);
+        assert_eq!(
+            mode,
+            FilterMode::ExcludeOnly {
+                root_excluded: true
+            }
+        );
+    }
+
+    #[test]
+    fn filter_mode_include_is_explicit_selection() {
+        let mode = resolve_filter_mode(&["project-3"], &None, None);
+        assert_eq!(mode, FilterMode::ExplicitSelection);
+    }
+
+    #[test]
+    fn filter_mode_mixed_include_exclude_is_explicit_selection() {
+        let mode = resolve_filter_mode(&["project-3", "!project-5"], &None, None);
+        assert_eq!(mode, FilterMode::ExplicitSelection);
+    }
+
+    #[test]
+    fn filter_mode_affected_forces_explicit_selection() {
+        // Even with exclude-only patterns, affected overrides to ExplicitSelection.
+        let affected = Some((Some("main".to_string()), None));
+        let mode = resolve_filter_mode_with_changes(
+            &["!project-3"],
+            &affected,
+            None,
+            &[("main", None, &["project-3"])],
+        );
+        assert_eq!(mode, FilterMode::ExplicitSelection);
+    }
+
+    #[test]
+    fn filter_mode_inference_forces_explicit_selection() {
+        let inference = Some(PackageInference {
+            package_name: Some("project-0".to_string()),
+            directory_root: AnchoredSystemPathBuf::try_from("packages/project-0").unwrap(),
+        });
+        // Exclude-only patterns with inference should still be ExplicitSelection.
+        let mode = resolve_filter_mode(&["!project-3"], &None, inference);
+        assert_eq!(mode, FilterMode::ExplicitSelection);
+    }
+
+    #[test]
+    fn filter_mode_exclude_root_among_multiple() {
+        // One of several excludes targets root — root_excluded should be true.
+        let mode = resolve_filter_mode(&["!project-3", "!//"], &None, None);
+        assert_eq!(
+            mode,
+            FilterMode::ExcludeOnly {
+                root_excluded: true
+            }
         );
     }
 }

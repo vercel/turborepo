@@ -1,7 +1,7 @@
 import path from "node:path";
 import fs from "fs-extra";
 import { ConvertError } from "../errors";
-import { updateDependencies } from "../updateDependencies";
+import { updateDependencies } from "../update-dependencies";
 import type {
   DetectArgs,
   ReadArgs,
@@ -138,9 +138,9 @@ async function create(args: CreateArgs): Promise<void> {
 
     // workspace dependencies
     logger.workspaceHeader();
-    project.workspaceData.workspaces.forEach((workspace) => {
+    for (const workspace of project.workspaceData.workspaces) {
       updateDependencies({ workspace, project, to, logger, options });
-    });
+    }
   } else if (!options?.dry) {
     fs.writeJSONSync(project.paths.packageJson, packageJson, { spaces: 2 });
   }
@@ -228,21 +228,25 @@ async function convertLock(args: ConvertArgs): Promise<void> {
 
   // handle moving lockfile from `packageManager` to npm
   switch (project.packageManager) {
-    case "pnpm":
+    case "pnpm": {
       // can't convert from pnpm to npm - just remove the lock
       removeLockFile({ project, options });
       break;
-    case "bun":
+    }
+    case "bun": {
       // can't convert from bun to npm - just remove the lock
       removeLockFile({ project, options });
       break;
-    case "npm":
+    }
+    case "npm": {
       // we're already using npm, so we don't need to convert
       break;
-    case "yarn":
+    }
+    case "yarn": {
       // can't convert from yarn to npm - just remove the lock
       removeLockFile({ project, options });
       break;
+    }
   }
 }
 

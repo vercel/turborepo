@@ -6,17 +6,16 @@
  * Restricts which packages a tag can import and which packages can import this
  * tag.
  */
-export type TagRules = {
-  /**
-   * Rules for a tag's dependencies.
-   *
-   * Restricts which packages a tag can import.
-   */
-  dependencies: Permissions | null;
-  /**
-   * Rules for a tag's dependents.
-   *
-   * Restricts which packages can import this tag.
-   */
-  dependents: Permissions | null;
-};
+export type TagRules = { 
+/**
+ * Rules for a tag's dependencies.
+ *
+ * Restricts which packages a tag can import.
+ */
+dependencies?: Permissions, 
+/**
+ * Rules for a tag's dependents.
+ *
+ * Restricts which packages can import this tag.
+ */
+dependents?: Permissions, };

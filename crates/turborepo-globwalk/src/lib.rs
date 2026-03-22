@@ -531,6 +531,7 @@ where
 struct CompiledGlobs {
     base_path: PathBuf,
     include_patterns: Vec<Glob<'static>>,
+    ex_patterns: Vec<Glob<'static>>,
     ex_filter: FilterAny,
 }
 
@@ -543,12 +544,12 @@ fn compile_globs<S: AsRef<str>>(
     let (base_path_new, include_paths, exclude_paths) =
         preprocess_paths_and_globs(base_path, include, exclude)?;
 
-    let ex_patterns: Vec<_> = exclude_paths
+    let ex_patterns: Vec<Glob<'static>> = exclude_paths
         .into_iter()
         .map(glob_with_contextual_error)
         .collect::<Result<_, _>>()?;
 
-    let ex_filter = FilterAny::any(ex_patterns)
+    let ex_filter = FilterAny::any(ex_patterns.clone())
         .map_err(|e| WalkError::BadPattern("exclusion".into(), Box::new(e)))?;
 
     let include_patterns = include_paths
@@ -559,8 +560,78 @@ fn compile_globs<S: AsRef<str>>(
     Ok(CompiledGlobs {
         base_path: base_path_new,
         include_patterns,
+        ex_patterns,
         ex_filter,
     })
+}
+
+/// Try to decompose a glob pattern relative to `base_path` into
+/// `(literal_prefix, literal_suffix)` separated by a single `*` segment.
+///
+/// For example, with base `/repo` and glob pattern matching
+/// `/repo/packages/*/package.json`, this returns
+/// `Some(("/repo/packages", "package.json"))`.
+///
+/// Returns `None` if the pattern doesn't have exactly one `*` wildcard segment
+/// or contains `**`, `?`, `[`, or `{` metacharacters.
+fn try_decompose_shallow_wildcard(
+    _base_path: &Path,
+    glob: &Glob<'_>,
+) -> Option<(PathBuf, PathBuf)> {
+    // Wax glob patterns are relative to the base path that `walk` is called
+    // with, but `preprocess_paths_and_globs` joins them with the absolute base
+    // path before compilation. So `glob.to_string()` returns an absolute path
+    // like `/repo/packages/*/package.json`. We need to work with the full
+    // absolute path and extract the prefix/suffix around the `*`.
+    let pattern = glob.to_string();
+
+    // Quick reject: skip patterns with complex metacharacters.
+    if pattern.contains("**")
+        || pattern.contains('?')
+        || pattern.contains('[')
+        || pattern.contains('{')
+    {
+        return None;
+    }
+
+    // Split on '/' and find segments containing `*`. Filter out empty segments
+    // (leading '/' on absolute paths creates one).
+    let segments: Vec<&str> = pattern.split('/').collect();
+    let star_positions: Vec<usize> = segments
+        .iter()
+        .enumerate()
+        .filter(|(_, s)| !s.is_empty() && s.contains('*'))
+        .map(|(i, _)| i)
+        .collect();
+
+    // Must have exactly one segment containing `*`, and it must be exactly `*`.
+    if star_positions.len() != 1 {
+        return None;
+    }
+    let star_idx = star_positions[0];
+    if segments[star_idx] != "*" {
+        return None;
+    }
+
+    // Require at least one suffix segment after the star — patterns like `dir/*`
+    // match files directly and need the full walker.
+    if star_idx + 1 >= segments.len() {
+        return None;
+    }
+
+    // Build the literal prefix from the segments before the star.
+    // For absolute paths like "/repo/packages", rejoin with '/' separator.
+    let prefix: PathBuf = segments[..star_idx].join("/").into();
+
+    // Build the literal suffix from segments after the star.
+    let suffix: PathBuf = segments[star_idx + 1..].iter().collect();
+
+    // The prefix must be an existing directory.
+    if !prefix.is_dir() {
+        return None;
+    }
+
+    Some((prefix, suffix))
 }
 
 fn walk_compiled_globs(
@@ -568,21 +639,22 @@ fn walk_compiled_globs(
     walk_type: WalkType,
     settings: Settings,
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, WalkError> {
-    // Partition globs into literal paths (invariant) and patterns (variant).
-    // Invariant globs like "packages/foo/package.json" resolve to exactly one
-    // path. A single stat syscall replaces the directory walk that wax would
-    // otherwise perform, saving thousands of syscalls in large monorepos where
-    // package.json/turbo.json are appended to every task's include list.
+    // Partition globs into three categories for optimal dispatch:
+    //
+    // 1. Invariant (no wildcards) — resolved via a single stat syscall.
+    // 2. Shallow wildcard (`<prefix>/*/<suffix>`) — expanded via readdir on the
+    //    prefix dir, then each child is checked in parallel. This avoids the
+    //    walkdir overhead for patterns like `packages/*/package.json` where a
+    //    single glob walker would sequentially traverse hundreds of entries.
+    // 3. General variant — full wax directory walk (one rayon task per pattern).
     let mut literal_results: Vec<AbsoluteSystemPathBuf> = Vec::new();
+    let mut shallow_wildcards: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut variant_globs: Vec<&Glob<'static>> = Vec::new();
 
     for glob in &compiled.include_patterns {
         if let Some(path) = glob.variance().path() {
+            // Invariant: no wildcards at all — single stat.
             let full_path = compiled.base_path.join(path);
-            // Use symlink_metadata to detect broken symlinks (exists() returns
-            // false for those, but they should still be yielded).
-            // symlink_metadata doesn't follow symlinks, so broken symlinks
-            // are still detected (exists() would return false).
             let dominated = full_path
                 .symlink_metadata()
                 .ok()
@@ -594,10 +666,58 @@ fn walk_compiled_globs(
             if dominated && let Ok(abs) = AbsoluteSystemPathBuf::try_from(full_path.as_path()) {
                 literal_results.push(abs);
             }
+        } else if let Some(decomposed) = try_decompose_shallow_wildcard(&compiled.base_path, glob) {
+            shallow_wildcards.push(decomposed);
         } else {
             variant_globs.push(glob);
         }
     }
+
+    // Expand shallow wildcards: readdir each prefix, then stat candidates in
+    // parallel. This turns one slow sequential walk (e.g. 54ms for 603 dirs)
+    // into a batch of parallel stat calls spread across all rayon workers.
+    let shallow_candidates: Vec<PathBuf> = shallow_wildcards
+        .iter()
+        .flat_map(|(prefix, suffix)| {
+            let Ok(entries) = std::fs::read_dir(prefix) else {
+                return Vec::new();
+            };
+            entries
+                .filter_map(|e| e.ok())
+                .map(|e| e.path().join(suffix))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+
+    let ex_patterns = &compiled.ex_patterns;
+    let shallow_results: Vec<AbsoluteSystemPathBuf> = shallow_candidates
+        .par_iter()
+        .filter_map(|candidate| {
+            let meta = candidate.symlink_metadata().ok()?;
+            let dominated = match walk_type {
+                WalkType::Files => !meta.is_dir(),
+                WalkType::Folders => meta.is_dir(),
+                WalkType::All => true,
+            };
+            if !dominated {
+                return None;
+            }
+            // Check exclusion patterns. Exclusion globs are compiled from
+            // absolute paths (e.g. `/repo/**/node_modules/**`), so match
+            // against the full candidate path using slash-normalized form for
+            // cross-platform correctness.
+            if !ex_patterns.is_empty() {
+                let candidate_str = candidate.to_slash_lossy();
+                if ex_patterns
+                    .iter()
+                    .any(|ex| ex.is_match(candidate_str.as_ref()))
+                {
+                    return None;
+                }
+            }
+            AbsoluteSystemPathBuf::try_from(candidate.as_path()).ok()
+        })
+        .collect();
 
     let mut results: HashSet<AbsoluteSystemPathBuf> = variant_globs
         .par_iter()
@@ -613,6 +733,7 @@ fn walk_compiled_globs(
         .collect::<Result<HashSet<_>, _>>()?;
 
     results.extend(literal_results);
+    results.extend(shallow_results);
     Ok(results)
 }
 
@@ -1731,6 +1852,35 @@ mod test {
                 .replace('/', std::path::MAIN_SEPARATOR_STR)
                 .to_string(),
             "apps/some-app/package.json"
+                .replace('/', std::path::MAIN_SEPARATOR_STR)
+                .to_string(),
+        ]);
+        assert_eq!(paths, expected);
+    }
+
+    #[test]
+    fn workspace_globbing_includes_dotfiles() {
+        // Wax's `*` matches dot-prefixed directories. The shallow wildcard
+        // fast path must preserve this behavior.
+        let files = &["apps/visible/package.json", "apps/.hidden/package.json"];
+        let tmp = setup_files(files);
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let include = ["apps/*/package.json"]
+            .into_iter()
+            .map(ValidatedGlob::from_str)
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let exclude: &[ValidatedGlob] = &[];
+        let iter = globwalk(&root, &include, exclude, WalkType::Files).unwrap();
+        let paths: HashSet<String> = iter
+            .into_iter()
+            .map(|path| root.anchor(path).unwrap().to_string())
+            .collect();
+        let expected: HashSet<String> = HashSet::from_iter([
+            "apps/visible/package.json"
+                .replace('/', std::path::MAIN_SEPARATOR_STR)
+                .to_string(),
+            "apps/.hidden/package.json"
                 .replace('/', std::path::MAIN_SEPARATOR_STR)
                 .to_string(),
         ]);

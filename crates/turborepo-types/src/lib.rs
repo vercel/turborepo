@@ -15,7 +15,8 @@
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
 pub mod secret;
-use std::{collections::HashMap, fmt, str::FromStr};
+pub mod task_input_matching;
+use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
 
 use biome_deserialize_macros::Deserializable;
 use clap::ValueEnum;
@@ -425,10 +426,37 @@ pub struct ScopeOpts {
 }
 
 impl ScopeOpts {
-    /// Get the filter patterns.
-    pub fn get_filters(&self) -> Vec<String> {
-        self.filter_patterns.clone()
+    /// Returns the raw `--filter` patterns as provided on the CLI.
+    ///
+    /// Strings may include `!` prefixes for exclusion and other filter
+    /// microsyntax (e.g., `{dir}`, `[gitref]`, `...`). Use
+    /// `TargetSelector::from_str` for structured parsing.
+    pub fn get_filters(&self) -> &[String] {
+        &self.filter_patterns
     }
+}
+
+/// How packages were resolved by the scope filter.
+///
+/// Returned alongside the filtered package set from `resolve_packages`
+/// so the caller can decide whether to inject root tasks without
+/// re-parsing raw filter strings.
+///
+/// See `RunBuilder::calculate_filtered_packages` in `turborepo-lib` for
+/// how these variants control root task injection.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FilterMode {
+    /// No filter was specified — all workspace packages selected.
+    AllPackages,
+    /// Only exclude filters were used (e.g. `--filter=!docs`).
+    /// Semantically equivalent to "all packages minus the excluded ones".
+    ///
+    /// `root_excluded` is true when any exclude selector targets the root
+    /// package (e.g. `--filter=!//` or `--filter=!{.}`).
+    ExcludeOnly { root_excluded: bool },
+    /// Include filters were present (possibly with excludes too),
+    /// or package inference / --affected was active.
+    ExplicitSelection,
 }
 
 /// Projection of run options that only includes information necessary to
@@ -490,7 +518,15 @@ pub struct TaskOutputs {
 ///
 /// Contains glob patterns for files that the task depends on, and a flag
 /// indicating whether to include default inputs ($TURBO_DEFAULT$).
-#[derive(Debug, PartialEq, Clone, Eq, Default)]
+///
+/// # Affected detection semantics
+///
+/// When both `globs` is empty and `default` is false (which is what
+/// `Default::default()` produces, representing either `inputs: []` or a
+/// missing `inputs` key), affected detection treats all files in the
+/// package as inputs. This matches turbo's existing hashing behavior
+/// where an omitted `inputs` key means "hash everything."
+#[derive(Debug, PartialEq, Clone, Eq, Hash, Default)]
 pub struct TaskInputs {
     /// Glob patterns for input files
     pub globs: Vec<String>,
@@ -1024,7 +1060,7 @@ pub trait RunOptsInfo {
 /// re-export or use a compatible type.
 pub trait HashTrackerInfo {
     /// Returns the computed hash for a task
-    fn hash(&self, task_id: &TaskId) -> Option<String>;
+    fn hash(&self, task_id: &TaskId) -> Option<Arc<str>>;
     /// Returns the detailed environment variable map for a task
     fn env_vars(&self, task_id: &TaskId) -> Option<HashTrackerDetailedMap>;
     /// Returns the cache hit metadata for a task
@@ -1060,6 +1096,10 @@ pub struct HashTrackerCacheHitMetadata {
     pub remote: bool,
     /// Time saved by the cache hit in milliseconds
     pub time_saved: u64,
+    /// The HEAD commit SHA that produced this cache entry
+    pub sha: Option<String>,
+    /// A hash of uncommitted changes when this cache entry was produced
+    pub dirty_hash: Option<String>,
 }
 
 /// Trait for types that provide task definition information needed for hashing.

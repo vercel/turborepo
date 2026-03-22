@@ -1,4 +1,4 @@
-export type PackageManagerType = "npm" | "pnpm" | "yarn-berry" | "bun";
+export type PackageManagerType = "npm" | "pnpm" | "yarn" | "yarn-berry" | "bun";
 
 export interface TestCase {
   fixture: {

@@ -1,0 +1,33 @@
+---
+source: crates/turborepo/tests/query_test.rs
+expression: "json[\"data\"]"
+---
+{
+  "packages": {
+    "items": [
+      {
+        "tasks": {
+          "items": []
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "one#build"
+            }
+          ]
+        }
+      },
+      {
+        "tasks": {
+          "items": [
+            {
+              "fullName": "two#build"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

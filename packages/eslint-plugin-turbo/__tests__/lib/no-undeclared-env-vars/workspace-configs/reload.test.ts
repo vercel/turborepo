@@ -44,7 +44,7 @@ describe("Project reload functionality", () => {
 
     // Verify that configurations were reloaded
     expect(project.allConfigs).not.toBe(initialConfigs);
-    expect(project.allConfigs.length).toBe(initialConfigs.length);
+    expect(project.allConfigs).toHaveLength(initialConfigs.length);
 
     // Verify that project root and workspaces were updated
     expect(project.projectRoot).toBeDefined();
@@ -112,7 +112,7 @@ describe("Project reload functionality", () => {
     project.reload();
 
     // Verify that the final state is consistent
-    expect(project.allConfigs.length).toBe(initialConfigs.length);
+    expect(project.allConfigs).toHaveLength(initialConfigs.length);
     expect(project.projectRoot).toBeDefined();
     expect(project.projectWorkspaces.length).toBeGreaterThan(0);
   });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "@jest/globals";
-import { getTransformsForMigration } from "../src/commands/migrate/steps/getTransformsForMigration";
+import { getTransformsForMigration } from "../src/commands/migrate/steps/get-transforms-for-migration";
 
 describe("get-transforms-for-migration", () => {
   it("ordering", () => {

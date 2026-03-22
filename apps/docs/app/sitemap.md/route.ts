@@ -30,16 +30,13 @@ function buildTree(
     // Find parent by removing last segment
     const segments = page.url.split("/").filter(Boolean);
     if (segments.length <= 1) {
-      // Top-level page (e.g., /docs)
       root.push(node);
     } else {
-      // Try to find parent
       const parentUrl = "/" + segments.slice(0, -1).join("/");
       const parent = map.get(parentUrl);
       if (parent) {
         parent.children.push(node);
       } else {
-        // No direct parent found, add to root
         root.push(node);
       }
     }
@@ -48,16 +45,53 @@ function buildTree(
   return root;
 }
 
-function renderNode(node: PageNode, indent: number): string {
+function inferDocType(url: string): string {
+  if (url.includes("/getting-started")) return "Tutorial";
+  if (url.includes("/reference/")) return "Reference";
+  if (url.includes("/guides/")) return "How-to";
+  return "Conceptual";
+}
+
+function extractTopics(url: string): string[] {
+  const segments = url
+    .replace(/^\/docs\/?/, "")
+    .split("/")
+    .filter(Boolean);
+  return segments.slice(0, 3);
+}
+
+function truncateToWords(text: string, maxWords: number): string {
+  const words = text.split(/\s+/);
+  if (words.length <= maxWords) return text;
+  return `${words.slice(0, maxWords).join(" ")}...`;
+}
+
+function renderNode(
+  node: PageNode,
+  indent: number,
+  parentTitle?: string
+): string {
   const prefix = "    ".repeat(indent);
   const lines: string[] = [];
 
-  lines.push(`${prefix}- [${node.title}](${node.url})`);
-  lines.push(`${prefix}    - Summary: ${node.description}`);
+  const segments: string[] = [];
+  segments.push(`Type: ${inferDocType(node.url)}`);
+  if (node.description) {
+    segments.push(`Summary: ${truncateToWords(node.description, 100)}`);
+  }
+  if (parentTitle) {
+    segments.push(`Prerequisites: ${parentTitle}`);
+  }
+  const topics = extractTopics(node.url);
+  if (topics.length > 0) {
+    segments.push(`Topics: ${topics.join(", ")}`);
+  }
+
+  lines.push(`${prefix}- [${node.title}](${node.url}) | ${segments.join(" | ")}`);
 
   for (const child of node.children) {
     lines.push("");
-    lines.push(renderNode(child, indent + 1));
+    lines.push(renderNode(child, indent + 1, node.title));
   }
 
   return lines.join("\n");

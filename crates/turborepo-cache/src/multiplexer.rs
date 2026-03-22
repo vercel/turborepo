@@ -9,7 +9,7 @@ use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{APIAuth, APIClient};
 
 use crate::{
-    CacheConfig, CacheError, CacheHitMetadata, CacheOpts,
+    CacheConfig, CacheError, CacheHitMetadata, CacheOpts, LazyScmState,
     fs::FSCache,
     http::{HTTPCache, UploadMap},
 };
@@ -33,9 +33,10 @@ impl CacheMultiplexer {
     pub fn new(
         opts: &CacheOpts,
         repo_root: &AbsoluteSystemPath,
-        api_client: APIClient,
+        api_client: Option<APIClient>,
         api_auth: Option<APIAuth>,
         analytics_recorder: Option<AnalyticsSender>,
+        scm_state: LazyScmState,
     ) -> Result<Self, CacheError> {
         let use_fs_cache = opts.cache.local.should_use();
         let use_http_cache = opts.cache.remote.should_use();
@@ -44,7 +45,11 @@ impl CacheMultiplexer {
         // configure yourself out of having a cache. We should tell you about it
         // but we shouldn't fail your build for that reason.
         if !use_fs_cache && !use_http_cache {
-            warn!("no caches are enabled");
+            turborepo_log::warn(
+                turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                "no caches are enabled",
+            )
+            .emit();
         }
 
         debug!(
@@ -52,21 +57,30 @@ impl CacheMultiplexer {
             opts.cache_dir, repo_root
         );
         let fs_cache = use_fs_cache
-            .then(|| FSCache::new(&opts.cache_dir, repo_root, analytics_recorder.clone()))
+            .then(|| {
+                FSCache::new(
+                    &opts.cache_dir,
+                    repo_root,
+                    analytics_recorder.clone(),
+                    scm_state,
+                )
+            })
             .transpose()?;
 
-        let http_cache = use_http_cache
-            .then_some(api_auth)
-            .flatten()
-            .map(|api_auth| {
-                HTTPCache::new(
+        let http_cache = if use_http_cache {
+            match (api_client, api_auth) {
+                (Some(api_client), Some(api_auth)) => Some(HTTPCache::new(
                     api_client,
                     opts,
                     repo_root.to_owned(),
                     api_auth,
                     analytics_recorder.clone(),
-                )
-            });
+                )?),
+                _ => None,
+            }
+        } else {
+            None
+        };
 
         Ok(CacheMultiplexer {
             should_print_skipping_remote_put: AtomicBool::new(true),
@@ -117,8 +131,11 @@ impl CacheMultiplexer {
                         .should_print_skipping_remote_put
                         .load(Ordering::Relaxed)
                     {
-                        // Warn once per build, not per task
-                        warn!("Remote cache is read-only, skipping upload");
+                        turborepo_log::warn(
+                            turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
+                            "Remote cache is read-only, skipping upload",
+                        )
+                        .emit();
                         self.should_print_skipping_remote_put
                             .store(false, Ordering::Relaxed);
                     }
@@ -159,8 +176,7 @@ impl CacheMultiplexer {
 
         if self.cache_config.remote.read
             && let Some(http) = self.get_http_cache()
-            && let Ok(Some((CacheHitMetadata { source, time_saved }, files))) =
-                http.fetch(key).await
+            && let Ok(Some((hit_metadata, files))) = http.fetch(key).await
         {
             // Store this into fs cache. We can ignore errors here because we know
             // we have previously successfully stored in HTTP cache, and so the overall
@@ -169,10 +185,10 @@ impl CacheMultiplexer {
             if self.cache_config.local.write
                 && let Some(fs) = &self.fs
             {
-                let _ = fs.put(anchor, key, &files, time_saved);
+                let _ = fs.put(anchor, key, &files, hit_metadata.time_saved);
             }
 
-            return Ok(Some((CacheHitMetadata { source, time_saved }, files)));
+            return Ok(Some((hit_metadata, files)));
         }
 
         Ok(None)

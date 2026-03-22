@@ -3,107 +3,52 @@
 //! This module provides types for handling task output to both the terminal
 //! and the TUI.
 
-use std::io::Write;
+use turborepo_ui::sender::TaskSender;
 
-use either::Either;
-use turbopath::AbsoluteSystemPath;
-use turborepo_run_cache::CacheOutput;
-use turborepo_ui::{
-    OutputClient, OutputWriter, PrefixedUI, sender::TaskSender, tui::event::CacheResult,
-};
+/// Wrapper for TUI lifecycle signaling.
+///
+/// In stream mode (no TUI), this is `None` — lifecycle signals are not
+/// needed since `TerminalSink` handles all rendering.
+///
+/// In TUI mode, this holds a `TaskSender` for start/succeeded/failed
+/// lifecycle events that the TUI needs to manage task panes.
+pub struct TaskOutput(Option<TaskSender>);
 
-/// Small wrapper over our two output types that defines a shared interface for
-/// interacting with them.
-pub enum TaskOutput<W> {
-    Direct(OutputClient<W>),
-    UI(TaskSender),
-}
-
-/// Struct for displaying information about task
-impl<W: Write> TaskOutput<W> {
-    pub fn finish(self, use_error: bool, is_cache_hit: bool) -> std::io::Result<Option<Vec<u8>>> {
-        match self {
-            TaskOutput::Direct(client) => client.finish(use_error),
-            TaskOutput::UI(client) if use_error => Ok(Some(client.failed())),
-            TaskOutput::UI(client) => Ok(Some(client.succeeded(is_cache_hit))),
-        }
+impl TaskOutput {
+    pub fn stream() -> Self {
+        Self(None)
     }
 
-    pub fn stdout(&self) -> Either<OutputWriter<'_, W>, TaskSender> {
-        match self {
-            TaskOutput::Direct(client) => Either::Left(client.stdout()),
-            TaskOutput::UI(client) => Either::Right(client.clone()),
-        }
+    pub fn tui(sender: TaskSender) -> Self {
+        Self(Some(sender))
     }
 
-    pub fn stderr(&self) -> Either<OutputWriter<'_, W>, TaskSender> {
-        match self {
-            TaskOutput::Direct(client) => Either::Left(client.stderr()),
-            TaskOutput::UI(client) => Either::Right(client.clone()),
-        }
+    pub fn sender(&self) -> Option<&TaskSender> {
+        self.0.as_ref()
     }
 
-    pub fn task_logs(&self) -> Either<OutputWriter<'_, W>, TaskSender> {
-        match self {
-            TaskOutput::Direct(client) => Either::Left(client.stdout()),
-            TaskOutput::UI(client) => Either::Right(client.clone()),
-        }
-    }
-}
-
-/// Struct for displaying information about task's cache
-pub enum TaskCacheOutput<W> {
-    Direct(PrefixedUI<W>),
-    UI(TaskSender),
-}
-
-impl<W: Write> TaskCacheOutput<W> {
-    pub fn task_writer(&mut self) -> Either<turborepo_ui::PrefixedWriter<&mut W>, TaskSender> {
-        match self {
-            TaskCacheOutput::Direct(prefixed) => Either::Left(prefixed.output_prefixed_writer()),
-            TaskCacheOutput::UI(task) => Either::Right(task.clone()),
-        }
-    }
-
-    pub fn warn(&mut self, message: impl std::fmt::Display) {
-        match self {
-            TaskCacheOutput::Direct(prefixed) => prefixed.warn(message),
-            TaskCacheOutput::UI(task) => {
-                let _ = write!(task, "\r\n{message}\r\n");
-            }
-        }
-    }
-}
-
-impl<W: Write> CacheOutput for TaskCacheOutput<W> {
-    fn status(&mut self, message: &str, result: CacheResult) {
-        match self {
-            TaskCacheOutput::Direct(direct) => {
-                // Only output if there's a message to display
-                if !message.is_empty() {
-                    direct.output(message);
-                }
-            }
-            TaskCacheOutput::UI(task) => task.status(message, result),
-        }
-    }
-
-    fn error(&mut self, message: &str) {
-        match self {
-            TaskCacheOutput::Direct(prefixed) => prefixed.error(message),
-            TaskCacheOutput::UI(task) => {
-                let _ = write!(task, "{message}\r\n");
+    /// Signal task completion to the TUI (if active).
+    pub fn finish(self, is_error: bool, is_cache_hit: bool) {
+        if let Some(sender) = self.0 {
+            if is_error {
+                sender.failed();
+            } else {
+                sender.succeeded(is_cache_hit);
             }
         }
     }
 
-    fn replay_logs(&mut self, log_file: &AbsoluteSystemPath) -> Result<(), turborepo_ui::Error> {
-        match self {
-            TaskCacheOutput::Direct(direct) => {
-                let writer = direct.output_prefixed_writer();
-                turborepo_ui::replay_logs(writer, log_file)
-            }
-            TaskCacheOutput::UI(task) => turborepo_ui::replay_logs_with_crlf(task, log_file),
+    /// Signal task start to the TUI (if active).
+    pub fn start(&self, output_logs: turborepo_ui::tui::event::OutputLogs) {
+        if let Some(sender) = &self.0 {
+            sender.start(output_logs);
+        }
+    }
+
+    /// Set stdin for interactive tasks (TUI only).
+    pub fn set_stdin(&self, stdin: Box<dyn std::io::Write + Send>) {
+        if let Some(sender) = &self.0 {
+            sender.set_stdin(stdin);
         }
     }
 }
@@ -156,82 +101,66 @@ impl std::io::Write for StdWriter {
 
 #[cfg(test)]
 mod tests {
-    use turborepo_run_cache::CacheOutput;
-    use turborepo_ui::{ColorConfig, PrefixedUI, tui::event::CacheResult};
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    };
 
     use super::*;
 
-    fn create_test_prefixed_ui<'a>(
-        out: &'a mut Vec<u8>,
-        err: &'a mut Vec<u8>,
-    ) -> PrefixedUI<&'a mut Vec<u8>> {
-        PrefixedUI::new(ColorConfig::new(true), out, err)
-            .with_output_prefix(console::Style::new().apply_to("test: ".to_string()))
+    /// A writer that tracks whether it has been dropped. Used to verify
+    /// that `set_stdin` in stream mode drops the stdin handle.
+    struct DropTracker {
+        dropped: Arc<AtomicBool>,
+    }
+
+    impl DropTracker {
+        fn new() -> (Self, Arc<AtomicBool>) {
+            let dropped = Arc::new(AtomicBool::new(false));
+            (
+                Self {
+                    dropped: dropped.clone(),
+                },
+                dropped,
+            )
+        }
+    }
+
+    impl std::io::Write for DropTracker {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    impl Drop for DropTracker {
+        fn drop(&mut self) {
+            self.dropped.store(true, Ordering::SeqCst);
+        }
     }
 
     #[test]
-    fn test_direct_status_with_message_outputs() {
-        let mut out_buffer = Vec::new();
-        let mut err_buffer = Vec::new();
-        let prefixed_ui = create_test_prefixed_ui(&mut out_buffer, &mut err_buffer);
-        let mut output: TaskCacheOutput<&mut Vec<u8>> = TaskCacheOutput::Direct(prefixed_ui);
-
-        output.status("cache miss, executing abc123", CacheResult::Miss);
-
-        let output_str = String::from_utf8(out_buffer).unwrap();
-        assert!(
-            output_str.contains("cache miss"),
-            "expected output to contain 'cache miss', got: {output_str}"
-        );
+    fn stream_mode_has_no_sender() {
+        let output = TaskOutput::stream();
+        assert!(output.sender().is_none());
     }
 
+    /// Regression test for #12393: in stream mode, `set_stdin` has no TUI
+    /// sender to forward stdin to, so the stdin handle is dropped. This is
+    /// why the task executor must NOT pass stdin through `set_stdin` in
+    /// stream mode — it must hold it in a guard instead.
     #[test]
-    fn test_direct_status_with_empty_message_outputs_nothing() {
-        let mut out_buffer = Vec::new();
-        let mut err_buffer = Vec::new();
-        let prefixed_ui = create_test_prefixed_ui(&mut out_buffer, &mut err_buffer);
-        let mut output: TaskCacheOutput<&mut Vec<u8>> = TaskCacheOutput::Direct(prefixed_ui);
+    fn stream_mode_set_stdin_drops_handle() {
+        let output = TaskOutput::stream();
+        let (tracker, dropped) = DropTracker::new();
 
-        // Empty message should not produce any output
-        output.status("", CacheResult::Miss);
-
-        let output_str = String::from_utf8(out_buffer).unwrap();
+        assert!(!dropped.load(Ordering::SeqCst));
+        output.set_stdin(Box::new(tracker));
         assert!(
-            output_str.is_empty(),
-            "expected no output for empty message, got: {output_str:?}"
-        );
-    }
-
-    #[test]
-    fn test_direct_status_cache_hit_with_message() {
-        let mut out_buffer = Vec::new();
-        let mut err_buffer = Vec::new();
-        let prefixed_ui = create_test_prefixed_ui(&mut out_buffer, &mut err_buffer);
-        let mut output: TaskCacheOutput<&mut Vec<u8>> = TaskCacheOutput::Direct(prefixed_ui);
-
-        output.status("cache hit, replaying logs xyz789", CacheResult::Hit);
-
-        let output_str = String::from_utf8(out_buffer).unwrap();
-        assert!(
-            output_str.contains("cache hit"),
-            "expected output to contain 'cache hit', got: {output_str}"
-        );
-    }
-
-    #[test]
-    fn test_direct_status_cache_hit_empty_message() {
-        let mut out_buffer = Vec::new();
-        let mut err_buffer = Vec::new();
-        let prefixed_ui = create_test_prefixed_ui(&mut out_buffer, &mut err_buffer);
-        let mut output: TaskCacheOutput<&mut Vec<u8>> = TaskCacheOutput::Direct(prefixed_ui);
-
-        // Empty message with cache hit should also produce no output
-        output.status("", CacheResult::Hit);
-
-        let output_str = String::from_utf8(out_buffer).unwrap();
-        assert!(
-            output_str.is_empty(),
-            "expected no output for empty message, got: {output_str:?}"
+            dropped.load(Ordering::SeqCst),
+            "stdin should be dropped when set_stdin is called in stream mode"
         );
     }
 }

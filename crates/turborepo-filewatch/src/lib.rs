@@ -25,13 +25,7 @@
 #![allow(clippy::result_large_err)]
 #![feature(assert_matches)]
 
-use std::{
-    fmt::{Debug, Display},
-    future::IntoFuture,
-    path::Path,
-    sync::Arc,
-    time::Duration,
-};
+use std::{fmt::Debug, future::IntoFuture, path::Path, sync::Arc, time::Duration};
 
 // windows -> no recursive watch, watch ancestors
 // linux -> recursive watch, watch ancestors
@@ -45,7 +39,7 @@ use notify::{Config, RecommendedWatcher};
 use notify::{Event, EventHandler, RecursiveMode, Watcher};
 use thiserror::Error;
 use tokio::sync::{broadcast, mpsc, watch::error::RecvError};
-use tracing::{debug, warn};
+use tracing::{debug, error, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathRelation};
 #[cfg(feature = "manual_recursive_watch")]
 use {
@@ -93,17 +87,12 @@ pub enum WatchError {
 // Clone. We provide a wrapper that uses an Arc to implement Clone so that we
 // can send errors on a broadcast channel.
 #[derive(Clone, Debug, Error)]
+#[error("{0}")]
 pub struct NotifyError(Arc<notify::Error>);
 
 impl From<notify::Error> for NotifyError {
     fn from(value: notify::Error) -> Self {
         Self(Arc::new(value))
-    }
-}
-
-impl Display for NotifyError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
     }
 }
 
@@ -156,6 +145,10 @@ impl FileSystemWatcher {
                 let Ok(Ok(watcher)) = task.await else {
                     // if the watcher fails, just return. we don't set the event sender, and other
                     // services will never start
+                    error!(
+                        "file watcher failed to start. watch mode and other daemon-dependent \
+                         features will not work"
+                    );
                     return;
                 };
 
@@ -164,7 +157,12 @@ impl FileSystemWatcher {
                 if let Err(e) = wait_for_cookie(&cookie_dir, &mut recv_file_events).await {
                     // if we can't get a cookie here, we should not make the file
                     // watching available to downstream services
-                    warn!("failed to wait for initial filesystem cookie: {}", e);
+                    error!(
+                        "failed to wait for initial filesystem cookie: {}. This means the file \
+                         system event backend (e.g. FSEvents on macOS) is not delivering events. \
+                         watch mode will not work. Try running `turbo daemon clean` and retrying.",
+                        e
+                    );
                     return;
                 }
                 debug!("filewatching ready");

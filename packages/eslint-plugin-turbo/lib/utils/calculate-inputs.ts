@@ -4,7 +4,7 @@ import path from "node:path";
 import type { WorkspaceConfig } from "@turbo/utils";
 import { getWorkspaceConfigs } from "@turbo/utils";
 import type { PipelineV1, RootSchemaV1, RootSchemaV2 } from "@turbo/types";
-import { forEachTaskDef } from "@turbo/utils/src/getTurboConfigs";
+import { forEachTaskDef } from "@turbo/utils/src/get-turbo-configs";
 import { dotEnv } from "./dotenv-processing";
 import { wildcardTests } from "./wildcard-processing";
 
@@ -58,12 +58,15 @@ function processLegacyConfig(
 
   // After processing length is 0, 1, or more than 1.
   switch (processed.length) {
-    case 0:
+    case 0: {
       return [];
-    case 1:
+    }
+    case 1: {
       return processed;
-    default:
+    }
+    default: {
       return [...new Set(processed)].sort();
+    }
   }
 }
 
@@ -73,12 +76,15 @@ function processEnv(env: Array<string> | undefined): Array<string> {
   }
 
   switch (env.length) {
-    case 0:
+    case 0: {
       return [];
-    case 1:
+    }
+    case 1: {
       return [env[0]];
-    default:
+    }
+    default: {
       return [...new Set(env)].sort();
+    }
   }
 }
 
@@ -90,12 +96,15 @@ function processPassThroughEnv(
   }
 
   switch (passThroughEnv.length) {
-    case 0:
+    case 0: {
       return [];
-    case 1:
+    }
+    case 1: {
       return [passThroughEnv[0]];
-    default:
+    }
+    default: {
       return [...new Set(passThroughEnv)].sort();
+    }
   }
 }
 
@@ -340,9 +349,9 @@ export class Project {
       );
     }
 
-    this.projectWorkspaces.forEach((projectWorkspace) => {
+    for (const projectWorkspace of this.projectWorkspaces) {
       if (!projectWorkspace.turboConfig) {
-        return;
+        continue;
       }
 
       forEachTaskDef(
@@ -367,7 +376,7 @@ export class Project {
           );
         }
       );
-    });
+    }
 
     return {
       global,

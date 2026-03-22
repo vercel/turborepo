@@ -392,11 +392,11 @@ impl AuthTokens {
             ("client_id", VERCEL_OAUTH_CLIENT_ID),
         ];
 
-        let response = client
-            .post(VERCEL_OAUTH_TOKEN_URL)
-            .form(&params)
-            .send()
-            .await?;
+        let mut request = client.post(VERCEL_OAUTH_TOKEN_URL).form(&params);
+        if let Some(agent) = turborepo_ai_agents::get_agent() {
+            request = request.header("x-ai-agent", agent);
+        }
+        let response = request.send().await?;
 
         let status = response.status();
 

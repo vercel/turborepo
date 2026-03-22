@@ -17,6 +17,10 @@ inputs:
     description: "Determiners whether the cache should be saved. If `false`, the cache is only restored."
     required: false
     default: "false"
+  cache:
+    description: "Whether to enable the Rust cache. Set to `false` for jobs that don't compile."
+    required: false
+    default: "true"
 
 runs:
   using: "composite"
@@ -41,7 +45,7 @@ runs:
       run: echo "::add-matcher::${{ github.action_path }}/matchers.json"
 
     - name: "Setup Rust Cache"
-      if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+      if: inputs.cache == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
       uses: Swatinem/rust-cache@v2
       with:
         shared-key: ${{ inputs.shared-cache-key }}

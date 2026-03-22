@@ -1,0 +1,14 @@
+---
+source: crates/turborepo/tests/task_dependencies.rs
+expression: stdout.to_string()
+---
+digraph {
+	compound = "true"
+	newrank = "true"
+	subgraph "root" {
+		"[root] //#exists" -> "[root] ___ROOT___"
+		"[root] workspace-a#build2" -> "[root] //#exists"
+		"[root] workspace-a#build2" -> "[root] workspace-b#build2"
+		"[root] workspace-b#build2" -> "[root] //#exists"
+	}
+}

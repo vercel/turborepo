@@ -142,6 +142,62 @@ When using `outputLogs: "errors-only"`, show task hashes on start/completion:
 - Cache miss: `cache miss, executing <hash> (only logging errors)`
 - Cache hit: `cache hit, replaying logs (no errors) <hash>`
 
+### `longerSignatureKey`
+
+Enforce a minimum key length of 32 bytes for `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is enabled. Short keys weaken HMAC-SHA256 signatures. Fails the run immediately if the key is too short.
+
+### `globalConfiguration`
+
+Moves global configuration keys under a top-level `global` key for clarity and changes how `global.inputs` (formerly `globalDependencies`) affects task hashing.
+
+When enabled:
+
+- Global config keys move under `global` with cleaner names
+- `global.inputs` files are **prepended to every task's inputs** instead of being folded into the global hash — tasks can opt out of specific global inputs using negation globs
+
+```json
+{
+  "futureFlags": { "globalConfiguration": true },
+  "global": {
+    "inputs": ["tsconfig.json", ".env"],
+    "env": ["CI", "NODE_ENV"],
+    "passThroughEnv": ["AWS_SECRET_KEY"],
+    "ui": "tui",
+    "envMode": "strict",
+    "cacheDir": ".turbo/cache",
+    "remoteCache": { "enabled": true },
+    "concurrency": "50%"
+  },
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    }
+  }
+}
+```
+
+**Key rename mapping:**
+
+| Old (top-level)                                                                                                                  | New (`global.`)           |
+| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------- |
+| `globalDependencies`                                                                                                             | `inputs`                  |
+| `globalEnv`                                                                                                                      | `env`                     |
+| `globalPassThroughEnv`                                                                                                           | `passThroughEnv`          |
+| `ui`, `envMode`, `cacheDir`, `daemon`, `concurrency`, `noUpdateNotifier`, `dangerouslyDisablePackageManagerCheck`, `remoteCache` | Same names under `global` |
+
+**Behavior change for `global.inputs`:**
+
+With `globalDependencies` (old): files are hashed into the **global hash**, which is embedded in every task's cache key. Changing any of these files invalidates all tasks — there is no opt-out.
+
+With `global.inputs` (new): files are treated as **implicit task inputs** prepended to each task's `inputs` globs. This means:
+
+- Tasks can exclude specific global files: `"inputs": ["$TURBO_DEFAULT$", "!$TURBO_ROOT$/tsconfig.json"]`
+- The global hash no longer includes these file hashes (it still includes lockfile, engines, global env, etc.)
+- Tasks with no explicit `inputs` still hash all package files plus the global inputs
+
+See the [gotchas doc](./gotchas.md) for guidance on using `$TURBO_DEFAULT$` with `global.inputs`.
+
 ## noUpdateNotifier
 
 Disable update notifications when new turbo versions are available.

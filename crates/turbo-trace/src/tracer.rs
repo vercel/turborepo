@@ -3,15 +3,10 @@ use std::{collections::HashMap, fmt, sync::Arc};
 use camino::{Utf8Path, Utf8PathBuf};
 use globwalk::WalkType;
 use miette::{Diagnostic, Report, SourceSpan};
-use swc_common::{
-    FileName, SourceMap,
-    comments::SingleThreadedComments,
-    errors::{ColorConfig, Handler},
-    input::StringInput,
-};
-use swc_ecma_ast::EsVersion;
-use swc_ecma_parser::{EsSyntax, Parser, Syntax, TsSyntax, lexer::Lexer};
-use swc_ecma_visit::VisitWith;
+use oxc_allocator::Allocator;
+use oxc_estree::{CompactTSSerializer, ESTree};
+use oxc_parser::Parser;
+use oxc_span::SourceType;
 use thiserror::Error;
 use tokio::task::JoinSet;
 use tracing::debug;
@@ -20,7 +15,7 @@ use unrs_resolver::{
     EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
 };
 
-use crate::import_finder::ImportFinder;
+use crate::import_finder::{self, ImportResult};
 
 #[derive(Debug, Default)]
 pub struct SeenFile {
@@ -29,13 +24,12 @@ pub struct SeenFile {
     // (i.e. crates with both a binary and library)
     // https://github.com/rust-lang/rust/issues/95513
     #[allow(dead_code)]
-    pub ast: Option<swc_ecma_ast::Module>,
+    pub ast: Option<serde_json::Value>,
 }
 
 pub struct Tracer {
     files: Vec<(AbsoluteSystemPathBuf, usize)>,
     ts_config: Option<AbsoluteSystemPathBuf>,
-    source_map: Arc<SourceMap>,
     cwd: AbsoluteSystemPathBuf,
     errors: Vec<TraceError>,
     import_type: ImportTraceType,
@@ -43,8 +37,8 @@ pub struct Tracer {
 
 #[derive(Clone, Debug, Error, Diagnostic)]
 pub enum TraceError {
-    #[error("failed to parse file {}: {:?}", .0, .1)]
-    ParseError(AbsoluteSystemPathBuf, swc_ecma_parser::error::Error),
+    #[error("failed to parse file {0}: {1}")]
+    ParseError(AbsoluteSystemPathBuf, String),
     #[error("failed to read file: {0}")]
     FileNotFound(AbsoluteSystemPathBuf),
     #[error(transparent)]
@@ -69,28 +63,13 @@ pub enum TraceError {
 impl TraceResult {
     #[allow(dead_code)]
     pub fn emit_errors(&self) {
-        let handler = Handler::with_tty_emitter(
-            ColorConfig::Auto,
-            true,
-            false,
-            Some(self.source_map.clone()),
-        );
         for error in &self.errors {
-            match error {
-                TraceError::ParseError(_, e) => {
-                    e.clone().into_diagnostic(&handler).emit();
-                }
-                e => {
-                    eprintln!("{:?}", Report::new(e.clone()));
-                }
-            }
+            eprintln!("{:?}", Report::new(error.clone()));
         }
     }
 }
 
 pub struct TraceResult {
-    #[allow(dead_code)]
-    source_map: Arc<SourceMap>,
     pub errors: Vec<TraceError>,
     pub files: HashMap<AbsoluteSystemPathBuf, SeenFile>,
 }
@@ -116,6 +95,41 @@ pub enum ImportTraceType {
     Values,
 }
 
+/// Parse a file with oxc and extract imports.
+///
+/// Returns the list of found imports and optionally the serialized AST (as
+/// ESTree JSON). The AST is serialized eagerly while the oxc allocator is
+/// alive, since the parsed `Program<'a>` cannot outlive it.
+pub fn parse_file(
+    file_path: &AbsoluteSystemPath,
+    file_content: &str,
+    import_type: ImportTraceType,
+    include_ast: bool,
+) -> Result<(Vec<ImportResult>, Option<serde_json::Value>), String> {
+    let source_type = SourceType::from_path(file_path.as_std_path()).unwrap_or_default();
+
+    let allocator = Allocator::default();
+    let ret = Parser::new(&allocator, file_content, source_type).parse();
+
+    if ret.panicked {
+        let messages: Vec<String> = ret.errors.iter().map(|e| e.to_string()).collect();
+        return Err(messages.join(", "));
+    }
+
+    let imports = import_finder::find_imports(&ret.module_record, &ret.program.body, import_type);
+
+    let ast_json = if include_ast {
+        let mut serializer = CompactTSSerializer::new(false);
+        ret.program.serialize(&mut serializer);
+        let json_string = serializer.into_string();
+        serde_json::from_str(&json_string).ok()
+    } else {
+        None
+    };
+
+    Ok((imports, ast_json))
+}
+
 impl Tracer {
     pub fn new(
         cwd: AbsoluteSystemPathBuf,
@@ -133,7 +147,6 @@ impl Tracer {
             cwd,
             import_type: ImportTraceType::All,
             errors: Vec::new(),
-            source_map: Arc::new(SourceMap::default()),
         }
     }
 
@@ -142,66 +155,33 @@ impl Tracer {
         self.import_type = import_type;
     }
 
-    #[tracing::instrument(skip(resolver, source_map))]
+    #[tracing::instrument(skip(errors))]
     pub async fn get_imports_from_file(
-        source_map: &SourceMap,
         errors: &mut Vec<TraceError>,
         resolver: &Resolver,
         file_path: &AbsoluteSystemPath,
         import_type: ImportTraceType,
     ) -> Option<(Vec<AbsoluteSystemPathBuf>, SeenFile)> {
-        // Read the file content
         let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
             errors.push(TraceError::FileNotFound(file_path.to_owned()));
             return None;
         };
 
-        let comments = SingleThreadedComments::default();
-
-        let source_file = source_map.new_source_file(
-            FileName::Custom(file_path.to_string()).into(),
-            file_content.clone(),
-        );
-
-        let syntax = if matches!(file_path.extension(), Some("ts") | Some("tsx")) {
-            Syntax::Typescript(TsSyntax {
-                tsx: file_path.extension() == Some("tsx"),
-                decorators: true,
-                ..Default::default()
-            })
-        } else {
-            Syntax::Es(EsSyntax {
-                jsx: true,
-                import_attributes: true,
-                ..Default::default()
-            })
-        };
-
-        let lexer = Lexer::new(
-            syntax,
-            EsVersion::EsNext,
-            StringInput::from(&*source_file),
-            Some(&comments),
-        );
-
-        let mut parser = Parser::new_from(lexer);
-
-        // Parse the file as a module
-        let module: swc_ecma_ast::Module = match parser.parse_module() {
-            Ok(module) => module,
-            Err(err) => {
-                errors.push(TraceError::ParseError(file_path.to_owned(), err));
+        let (imports, ast_json) = match parse_file(file_path, &file_content, import_type, true) {
+            Ok(result) => result,
+            Err(msg) => {
+                errors.push(TraceError::ParseError(file_path.to_owned(), msg));
                 return None;
             }
         };
 
-        // Visit the AST and find imports
-        let mut finder = ImportFinder::new(import_type);
-        module.visit_with(&mut finder);
-        // Convert found imports/requires to absolute paths and add them to files to
-        // visit
         let mut files = Vec::new();
-        for (import, span, _) in finder.imports() {
+        for ImportResult {
+            specifier: import,
+            span,
+            ..
+        } in &imports
+        {
             debug!("processing {} in {}", import, file_path);
             let Some(file_dir) = file_path.parent() else {
                 errors.push(TraceError::RootFile(file_path.to_owned()));
@@ -223,7 +203,6 @@ impl Tracer {
                 }
                 Err(err) => {
                     if !import.starts_with(".") {
-                        // Try to resolve the import as a type import via `@/types/<import>`
                         let type_package = format!("@types/{import}");
                         debug!("trying to resolve type import: {type_package}");
                         let resolved_type_import = resolver
@@ -238,7 +217,6 @@ impl Tracer {
                         }
                     }
 
-                    // Also try without the extension just in case the wrong extension is used
                     let without_extension = Utf8Path::new(import).with_extension("");
                     debug!(
                         "trying to resolve extensionless import: {}",
@@ -256,9 +234,8 @@ impl Tracer {
                     }
 
                     debug!("failed to resolve: {:?}", err);
-                    let (start, end) = source_map.span_to_char_offset(&source_file, *span);
-                    let start = start as usize;
-                    let end = end as usize;
+                    let start = span.start as usize;
+                    let end = span.end as usize;
 
                     errors.push(TraceError::Resolve {
                         import: import.to_string(),
@@ -271,7 +248,7 @@ impl Tracer {
             }
         }
 
-        Some((files, SeenFile { ast: Some(module) }))
+        Some((files, SeenFile { ast: ast_json }))
     }
 
     pub async fn trace_file(
@@ -294,14 +271,9 @@ impl Tracer {
             return;
         }
 
-        let Some((imports, seen_file)) = Self::get_imports_from_file(
-            &self.source_map,
-            &mut self.errors,
-            resolver,
-            &file_path,
-            self.import_type,
-        )
-        .await
+        let Some((imports, seen_file)) =
+            Self::get_imports_from_file(&mut self.errors, resolver, &file_path, self.import_type)
+                .await
         else {
             return;
         };
@@ -323,9 +295,6 @@ impl Tracer {
             .skip(1)
             .find(|p| p.join_component("tsconfig.json").exists());
 
-        // Resolves the closest `node_modules` directory. This is to work with monorepos
-        // where both the package and the monorepo have a `node_modules`
-        // directory.
         let node_modules_dir = root
             .ancestors()
             .skip(1)
@@ -364,12 +333,8 @@ impl Tracer {
             .with_extension(".d.ts")
             .with_extension(".mjs")
             .with_extension(".cjs")
-            // Some packages export a `module` field instead of `main`. This is non-standard,
-            // but was a proposal at some point.
             .with_main_field("module")
             .with_main_field("types")
-            // Condition names are used to determine which export to use when importing a module.
-            // We add a bunch so unrs_resolver can resolve all kinds of imports.
             .with_condition_names(&["import", "require", "node", "types", "default"]);
 
         if let Some(ts_config) = ts_config {
@@ -397,7 +362,6 @@ impl Tracer {
         }
 
         TraceResult {
-            source_map: self.source_map.clone(),
             files: seen,
             errors: self.errors,
         }
@@ -421,7 +385,6 @@ impl Tracer {
             Ok(files) => files,
             Err(e) => {
                 return TraceResult {
-                    source_map: self.source_map.clone(),
                     files: HashMap::new(),
                     errors: vec![TraceError::GlobError(Arc::new(e))],
                 };
@@ -431,7 +394,6 @@ impl Tracer {
         let mut futures = JoinSet::new();
 
         let resolver = Arc::new(Self::create_resolver(self.ts_config.as_deref()));
-        let source_map = self.source_map.clone();
         let shared_self = Arc::new(self);
 
         for file in files {
@@ -443,7 +405,6 @@ impl Tracer {
                 let mut errors = Vec::new();
 
                 let Some((imported_files, seen_file)) = Self::get_imports_from_file(
-                    &shared_self.source_map,
                     &mut errors,
                     resolver,
                     &file,
@@ -455,9 +416,6 @@ impl Tracer {
                 };
 
                 for mut import in imported_files {
-                    // Windows has this annoying habit of abbreviating paths
-                    // like `C:\Users\Admini~1` instead of `C:\Users\Administrator`
-                    // We canonicalize to get the proper, full length path
                     if cfg!(windows) {
                         match import.to_realpath() {
                             Ok(path) => {
@@ -496,7 +454,6 @@ impl Tracer {
         }
 
         TraceResult {
-            source_map,
             files: usages,
             errors,
         }

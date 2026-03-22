@@ -12,7 +12,12 @@ export const Navbar = () => (
   <header className="sticky top-0 z-40 w-full gap-6 border-b bg-sidebar @container">
     <div className="mx-auto flex h-16 w-full max-w-(--fd-layout-width) items-center gap-4 px-4 py-3.5 md:px-6">
       <div className="flex shrink-0 items-center gap-2.5">
-        <a href="https://vercel.com/" rel="noopener" target="_blank">
+        <a
+          aria-label="Vercel"
+          href="https://vercel.com/"
+          rel="noopener"
+          target="_blank"
+        >
           <SiVercel className="size-5" />
         </a>
         <SlashIcon className="size-5 text-border" />

@@ -329,12 +329,13 @@ mod test {
                         def.cache.as_ref().map(|cache| *cache.as_inner()),
                         Some(false)
                     );
-                    // Make sure proxy is in there
                     if task_name == "dev" {
-                        assert_eq!(
-                            def.with.as_ref().unwrap().first().unwrap().as_inner(),
-                            &UnescapedString::from("web#proxy")
-                        )
+                        assert!(def
+                            .with
+                            .as_ref()
+                            .unwrap()
+                            .iter()
+                            .any(|t| { t.as_inner() == &UnescapedString::from("web#proxy") }));
                     }
                 } else {
                     panic!("didn't find {task_name}");
@@ -350,10 +351,12 @@ mod test {
                         def.cache.as_ref().map(|cache| *cache.as_inner()),
                         Some(false)
                     );
-                    assert_eq!(
-                        def.with.as_ref().unwrap().first().unwrap().as_inner(),
-                        &UnescapedString::from("web#proxy")
-                    )
+                    assert!(def
+                        .with
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .any(|t| { t.as_inner() == &UnescapedString::from("web#proxy") }));
                 } else {
                     panic!("didn't find {task_name}");
                 }

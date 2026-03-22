@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use futures::{StreamExt, stream::FuturesUnordered};
 use tokio::sync::{Semaphore, mpsc, oneshot};
-use tracing::log::debug;
+use tracing::debug;
 use turborepo_graph_utils::Walker;
 use turborepo_task_id::TaskId;
 // Re-export StopExecution from turborepo-types for backwards compatibility
@@ -41,6 +41,10 @@ pub enum ExecuteError {
     Semaphore(#[from] tokio::sync::AcquireError),
     #[error("Engine visitor closed channel before walk finished")]
     Visitor,
+    #[error(
+        "Task graph contains a cycle — validate_graph should have rejected it before execution"
+    )]
+    CyclicTaskGraph,
 }
 
 impl From<mpsc::error::SendError<Message<VisitorData, VisitorResult>>> for ExecuteError {
@@ -77,6 +81,9 @@ impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
         let mut tasks: FuturesUnordered<tokio::task::JoinHandle<Result<(), ExecuteError>>> =
             FuturesUnordered::new();
 
+        if petgraph::algo::is_cyclic_directed(&self.task_graph) {
+            return Err(ExecuteError::CyclicTaskGraph);
+        }
         let (walker, mut nodes) = Walker::new(&self.task_graph).walk();
         let walker = Arc::new(Mutex::new(walker));
 

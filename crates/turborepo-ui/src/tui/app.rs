@@ -65,6 +65,8 @@ pub struct App<W> {
     preferences: PreferenceLoader,
     scrollback_len: u64,
     scroll_momentum: ScrollMomentum,
+    log_events: Vec<turborepo_log::LogEvent>,
+    showing_log_panel: bool,
 }
 
 impl<W> App<W> {
@@ -121,6 +123,8 @@ impl<W> App<W> {
             preferences,
             scrollback_len,
             scroll_momentum: ScrollMomentum::new(),
+            log_events: Vec::new(),
+            showing_log_panel: false,
         }
     }
 
@@ -144,6 +148,7 @@ impl<W> App<W> {
             focus: &self.section_focus,
             has_selection,
             is_help_popup_open: self.showing_help_popup,
+            is_log_panel_open: self.showing_log_panel,
         })
     }
 
@@ -435,7 +440,34 @@ impl<W> App<W> {
         }
 
         if !found_task {
-            return Err(Error::TaskNotFound { name: task.into() });
+            // Task might already be running or finished (e.g., from a concurrent
+            // watch run that hasn't fully stopped yet, or from in-flight events
+            // of a prior run). Handle gracefully instead of crashing the TUI.
+            let in_running = self
+                .tasks_by_status
+                .running
+                .iter()
+                .any(|t| t.name() == task);
+            let in_finished = self
+                .tasks_by_status
+                .finished
+                .iter()
+                .any(|t| t.name() == task);
+            if !in_running && !in_finished {
+                return Err(Error::TaskNotFound { name: task.into() });
+            }
+            if in_finished
+                && let Some(idx) = self
+                    .tasks_by_status
+                    .finished
+                    .iter()
+                    .position(|t| t.name() == task)
+            {
+                let finished = self.tasks_by_status.finished.remove(idx);
+                self.tasks_by_status
+                    .running
+                    .push(finished.restart().start());
+            }
         }
         self.tasks
             .get_mut(task)
@@ -797,15 +829,16 @@ pub async fn run_app(
 }
 
 /// Check if an event indicates we need to start rendering the TUI.
-/// We start rendering when we receive a cache miss, meaning a task will
-/// actually run.
+/// We start rendering when we receive a cache miss (meaning a task will
+/// actually run) or when tasks are updated (which only happens in watch mode,
+/// where the TUI must always render so the user can see status and interact).
 fn should_start_terminal(event: &Event) -> bool {
     matches!(
         event,
         Event::Status {
             result: CacheResult::Miss,
             ..
-        }
+        } | Event::UpdateTasks { .. }
     )
 }
 
@@ -998,6 +1031,22 @@ fn cleanup<B: Backend<Error = io::Error> + io::Write>(
     let tasks_started = app.tasks_by_status.tasks_started();
     app.persist_tasks(tasks_started)?;
     app.preferences.flush_to_disk().ok();
+
+    // Discard any stale mouse tracking events from stdin before re-enabling
+    // echo. There's a race between sending DisableMouseCapture to the terminal
+    // and the terminal actually stopping mouse event generation. Any events
+    // buffered in the kernel's input queue during that window would be echoed
+    // as raw escape sequences (e.g. ^[[<35;29;43M) once disable_raw_mode()
+    // restores canonical mode with echo.
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        let _ = nix::sys::termios::tcflush(
+            std::io::stdin().as_raw_fd(),
+            nix::sys::termios::FlushArg::TCIFLUSH,
+        );
+    }
+
     crossterm::terminal::disable_raw_mode()?;
     terminal.show_cursor()?;
 
@@ -1014,6 +1063,9 @@ fn update(
     event: Event,
 ) -> Result<Option<oneshot::Sender<()>>, Error> {
     match event {
+        Event::LogEvent(log_event) => {
+            app.log_events.push(log_event);
+        }
         Event::StartTask { task, output_logs } => {
             app.start_task(&task, output_logs)?;
         }
@@ -1102,6 +1154,9 @@ fn update(
         Event::ToggleHelpPopup => {
             app.showing_help_popup = !app.showing_help_popup;
         }
+        Event::ToggleLogPanel => {
+            app.showing_log_panel = !app.showing_log_panel;
+        }
         Event::Input { bytes } => {
             app.forward_input(&bytes)?;
         }
@@ -1184,8 +1239,12 @@ fn view<W>(app: &mut App<W>, f: &mut Frame) {
     if app.showing_help_popup {
         let area = popup_area(*f.buffer_mut().area());
         let area = area.intersection(*f.buffer_mut().area());
-        f.render_widget(Clear, area); // Clears background underneath popup
+        f.render_widget(Clear, area);
         f.render_widget(popup(area), area);
+    }
+
+    if app.showing_log_panel {
+        super::log_panel::render_log_panel(f, &app.log_events);
     }
 }
 
@@ -2208,6 +2267,19 @@ mod test {
     }
 
     #[test]
+    fn test_should_start_terminal_on_update_tasks() {
+        // UpdateTasks should trigger terminal start (this event is only sent
+        // in watch mode, where the TUI must always render)
+        let update_event = Event::UpdateTasks {
+            tasks: vec!["task-a".to_string()],
+        };
+        assert!(
+            super::should_start_terminal(&update_event),
+            "terminal should start on UpdateTasks event (watch mode)"
+        );
+    }
+
+    #[test]
     fn test_should_not_start_terminal_on_other_events() {
         // Other events should NOT trigger terminal start
         let start_event = Event::StartTask {
@@ -2377,6 +2449,167 @@ mod test {
                 "terminal output {name} should be resized back when sidebar is shown"
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_start_task_idempotent_when_already_running() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<bool> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Start task a normally (planned -> running)
+        app.start_task("a", OutputLogs::Full)?;
+        assert_eq!(app.tasks_by_status.running.len(), 1);
+        assert_eq!(app.tasks_by_status.planned.len(), 1);
+
+        // Call start_task again while a is already running. This can happen
+        // when a concurrent watch run sends StartTask for a task that hasn't
+        // been fully stopped yet. Should not error.
+        app.start_task("a", OutputLogs::Full)?;
+        assert_eq!(
+            app.tasks_by_status.running.len(),
+            1,
+            "task should still be in running exactly once"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_start_task_restarts_finished_task() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<bool> = App::new(
+            100,
+            100,
+            vec!["a".to_string(), "b".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Run task a to completion
+        app.start_task("a", OutputLogs::Full)?;
+        app.finish_task("a", TaskResult::Success)?;
+        assert_eq!(app.tasks_by_status.finished.len(), 1);
+        assert_eq!(app.tasks_by_status.running.len(), 0);
+
+        // Call start_task on the finished task. This happens when a watch
+        // rebuild starts a task that completed in a prior run but wasn't
+        // moved back to planned via restart_tasks. Should move it to running.
+        app.start_task("a", OutputLogs::Full)?;
+        assert_eq!(
+            app.tasks_by_status.running.len(),
+            1,
+            "finished task should move to running"
+        );
+        assert_eq!(
+            app.tasks_by_status.finished.len(),
+            0,
+            "task should no longer be in finished"
+        );
+
+        Ok(())
+    }
+
+    /// Regression test for watch mode hanging when all tasks hit cache.
+    ///
+    /// Before the fix, `should_start_terminal` only matched
+    /// `CacheResult::Miss`. In watch mode the TUI is never stopped between
+    /// runs, so when every task was a cache hit the terminal was never
+    /// initialized and the user saw a blank screen with a cursor (appearing
+    /// to hang). The fix makes `should_start_terminal` also match
+    /// `UpdateTasks` (only sent in watch mode) so the TUI always renders.
+    ///
+    /// This test replays the exact event sequence that watch mode produces when
+    /// all tasks hit cache, verifying:
+    /// 1. `should_start_terminal` fires on the `UpdateTasks` event
+    /// 2. The app correctly processes all subsequent cache-hit events
+    /// 3. The app is NOT marked done (watch mode keeps running)
+    #[test]
+    fn test_watch_mode_all_cache_hits_does_not_hang() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let tasks = vec!["build#app-a".to_string(), "build#app-b".to_string()];
+
+        let mut app: App<Vec<u8>> = App::new(
+            100,
+            100,
+            tasks.clone(),
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        // Simulate the watch mode event sequence for an all-cache-hit run.
+        // In watch mode, execute_run sends UpdateTasks before spawning the run.
+        let update_event = Event::UpdateTasks {
+            tasks: tasks.clone(),
+        };
+        assert!(
+            super::should_start_terminal(&update_event),
+            "UpdateTasks must trigger terminal initialization in watch mode"
+        );
+
+        // The run proceeds: each task gets StartTask, Status(Hit), EndTask(CacheHit).
+        for task in &tasks {
+            app.start_task(task, OutputLogs::Full)?;
+            app.set_status(task.clone(), "cached".to_string(), CacheResult::Hit)?;
+            app.finish_task(task, TaskResult::CacheHit)?;
+        }
+
+        // All tasks finished with cache hits
+        assert_eq!(app.tasks_by_status.finished.len(), 2);
+        assert_eq!(app.tasks_by_status.running.len(), 0);
+
+        // In watch mode, the TUI must NOT be marked done after a run completes
+        // (the visitor skips sending Event::Stop when is_watch=true).
+        assert!(
+            !app.done,
+            "app must not be done after a watch run completes — it waits for file changes"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_log_event_reaches_app() -> Result<(), Error> {
+        let repo_root_tmp = tempdir()?;
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
+            .expect("Failed to create AbsoluteSystemPathBuf");
+
+        let mut app: App<Box<dyn io::Write + Send>> = App::new(
+            100,
+            100,
+            vec!["a".to_string()],
+            PreferenceLoader::new(&repo_root),
+            2048,
+        );
+
+        assert!(app.log_events.is_empty());
+
+        let event = turborepo_log::LogEvent::new(
+            turborepo_log::Level::Warn,
+            turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
+            "something went wrong",
+        );
+        update(&mut app, Event::LogEvent(event))?;
+
+        assert_eq!(app.log_events.len(), 1);
+        assert_eq!(app.log_events[0].message(), "something went wrong");
+        assert_eq!(app.log_events[0].level(), turborepo_log::Level::Warn);
 
         Ok(())
     }

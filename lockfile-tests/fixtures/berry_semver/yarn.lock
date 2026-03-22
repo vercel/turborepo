@@ -5,27 +5,41 @@ __metadata:
   version: 6
   cacheKey: 8
 
-"file-source@npm:2":
-  version: 2.6.1
-  resolution: "file-source@npm:2.6.1"
-  dependencies:
-    stream-source: 0.10
-  checksum: db27232df214b27ddd7026bbd202caf0bde31123811ebac0a9772d6a41735efdc3ee8050661f56d02d43811bde79938adb5ed8cbfe5f813c7cd09b86d19b6c84
-  languageName: node
-  linkType: hard
-
 "foo@workspace:packages/foo":
   version: 0.0.0-use.local
   resolution: "foo@workspace:packages/foo"
   dependencies:
-    file-source: 2
+    is-number: 2
   languageName: unknown
   linkType: soft
 
-"stream-source@npm:0.10":
-  version: 0.10.12
-  resolution: "stream-source@npm:0.10.12"
-  checksum: 65a0e0a38014dcfa6e219e92d83bde5fe716cf16df339e9d7e951525c0d129771416de4d77c3389c38cdd20a43d9575f90cc91041d6fa0c2f053b989780e3591
+"is-buffer@npm:^1.1.5":
+  version: 1.1.6
+  resolution: "is-buffer@npm:1.1.6"
+  checksum: 4a186d995d8bbf9153b4bd9ff9fd04ae75068fe695d29025d25e592d9488911eeece84eefbd8fa41b8ddcc0711058a71d4c466dcf6f1f6e1d83830052d8ca707
   languageName: node
   linkType: hard
 
+"is-number@npm:2":
+  version: 2.1.0
+  resolution: "is-number@npm:2.1.0"
+  dependencies:
+    kind-of: ^3.0.2
+  checksum: d80e041a43a8de31ecc02037d532f1f448ec9c5b6c02fe7ee67bdd45d21cd9a4b3b4cf07e428ae5adafc2f17408c49fcb0a227915916d94a16d576c39e689f60
+  languageName: node
+  linkType: hard
+
+"kind-of@npm:^3.0.2":
+  version: 3.2.2
+  resolution: "kind-of@npm:3.2.2"
+  dependencies:
+    is-buffer: ^1.1.5
+  checksum: e898df8ca2f31038f27d24f0b8080da7be274f986bc6ed176f37c77c454d76627619e1681f6f9d2e8d2fd7557a18ecc419a6bb54e422abcbb8da8f1a75e4b386
+  languageName: node
+  linkType: hard
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft

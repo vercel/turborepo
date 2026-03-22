@@ -8,6 +8,7 @@ describe("rename-output-mode", () => {
     directory: __dirname,
     test: "rename-output-mode"
   });
+
   it("migrates turbo.json outputs - basic", () => {
     // load the fixture for the test
     const { root, read } = useFixture({

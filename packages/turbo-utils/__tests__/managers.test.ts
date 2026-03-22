@@ -10,7 +10,7 @@ import {
 jest.mock("execa");
 jest.mock("node:os");
 
-const mockExeca = execa as jest.MockedFunction<typeof execa>;
+const mockExeca = jest.mocked(execa);
 const mockOs = os as jest.Mocked<typeof os>;
 
 describe("managers", () => {

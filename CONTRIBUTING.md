@@ -65,6 +65,18 @@ and `rustls-tls` features.
 By default, the `rustls-tls` feature is selected so that `cargo build` works
 out of the box. If you wish to select `native-tls`, you may do so by running `cargo build --no-default-features --features native-tls`.
 
+### OpenTelemetry Observability
+
+Turborepo includes OpenTelemetry (OTel) support for exporting metrics in default builds.
+
+If you need to build without OTel support, use:
+
+```bash
+cargo build -p turbo --no-default-features --features rustls-tls
+```
+
+`experimentalObservability` is still gated by `futureFlags.experimentalObservability` in `turbo.json`.
+
 ## Running tests
 
 > [!IMPORTANT]
@@ -87,29 +99,15 @@ cargo test -p <module>
 ```
 
 - Integration tests
-  ```bash
-  pnpm test -- --filter=turborepo-tests-integration
-  ```
-- A single integration test
-  e.g., to run everything in `turborepo-tests/integration/tests/run-summary`:
 
   ```bash
-  # Build `turbo` first because the next command doesn't run through `turbo`
-  pnpm -- turbo run build --filter=@turbo/cli
-  pnpm test -F turborepo-tests-integration -- "run-summary"
+  cargo test -p turbo
   ```
 
-- Updating integration tests
+- A single integration test file
 
   ```bash
-  turbo run build --filter=@turbo/cli
-  pnpm --filter turborepo-tests-integration test:interactive
-  ```
-
-  You can pass a test name to run a single test, or a directory to run all tests in that directory.
-
-  ```bash
-  pnpm --filter turborepo-tests-integration test:interactive tests/turbo-help.t
+  cargo test -p turbo --test force_test
   ```
 
 ## Manually testing `turbo`
@@ -146,6 +144,42 @@ There are many open-source Turborepos out in the community that you can test wit
 - This repository! Keep in mind that you'll be building and running `turbo` in the same repository, which can be confusing at times.
 
 ## Debugging tips
+
+## Logging & Output
+
+All output in Turborepo flows through `turborepo-log`. Use the following decision tree when adding new output:
+
+| What you're writing              | Use this                                                               | Why                                                                                                                                        |
+| -------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Internal debug/trace info        | `tracing::{debug,trace,info,warn}!`                                    | Developer diagnostics, filtered by `TURBO_LOG_VERBOSITY`. Not user-facing.                                                                 |
+| User-facing warning/error/status | `turborepo_log::{warn,error,info}(Source::turbo(Subsystem::X), ...)`   | Renders in both terminal and TUI via sinks. Structured, sanitized.                                                                         |
+| Task child process output        | `TaskHandle::task_output(channel, bytes)`                              | Routes through `GroupingLayer` for grouped/passthrough buffering, then to sinks for rendering. `TerminalSink` adds per-line task prefixes. |
+| Task-scoped error/warning        | `task_handle.emit(LogEvent::new(Level::Error, Source::task(id), msg))` | Appears inline in the task's output stream (grouped with child process bytes).                                                             |
+| Cache status message             | `task_handle.task_output(OutputChannel::Stdout, message.as_bytes())`   | Plain text, rendered with task prefix by `TerminalSink`. Also call `TaskSender::status()` for TUI lifecycle.                               |
+
+### Adding a new subsystem
+
+To emit logs from a new area of the codebase, add a variant to the `Subsystem` enum in `crates/turborepo-log/src/event.rs`. The enum is `#[non_exhaustive]` so this is non-breaking. Each variant maps to a lowercase string via the `Display` impl.
+
+### Architecture
+
+```
+Task Executor / Commands
+        |
+   GroupingLayer          <- per-task buffering (passthrough vs grouped)
+        |
+     Logger               <- broadcasts to all sinks
+        |
+   +---------+---------+
+   |         |         |
+Terminal   TuiSink   FileSink
+ Sink
+```
+
+- `TerminalSink`: Owns line prefixing (ColorSelector, per-task line buffers), CI group markers, and color rendering.
+- `TuiSink`: Routes task output to the TUI's task panes, normalizes `\n` to `\r\n` for the VT100 parser.
+- `FileSink` / `CollectorSink`: Structured JSON capture.
+- `GroupingLayer`: Manages per-task buffering. In passthrough mode (stream), events flow immediately. In grouped mode, events buffer per-task and flush atomically on task completion.
 
 ### Links in error messages
 

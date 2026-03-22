@@ -30,6 +30,9 @@ use crate::{
 };
 
 const TURBO_GLOBAL_WARNING_DISABLED: &str = "TURBO_GLOBAL_WARNING_DISABLED";
+/// Set by the shim when running as global turbo so the CLI can
+/// re-emit the warning through `turborepo_log` after logger init.
+pub const GLOBAL_WARNING_ENV_VAR: &str = "__TURBO_GLOBAL_WARNING";
 
 /// Environment variable name for the invocation directory.
 /// This is set by the shim to communicate the original invocation directory
@@ -233,15 +236,22 @@ where
     // it to execute local turbo. We simply use it to set the `--single-package`
     // and `--cwd` flags.
     if is_turbo_binary_path_set() {
-        let repo_state = match RepoState::infer(&args.cwd) {
-            Ok(state) => state,
-            Err(e) => return ShimResult::ShimError(e.into()),
+        let repo_state = {
+            let _span = tracing::info_span!("repo_inference").entered();
+            match RepoState::infer(&args.cwd) {
+                Ok(state) => state,
+                Err(e) => return ShimResult::ShimError(e.into()),
+            }
         };
         debug!("Repository Root: {}", repo_state.root);
         return run_cli(runtime, Some(repo_state), color_config);
     }
 
-    match RepoState::infer(&args.cwd) {
+    let repo_result = {
+        let _span = tracing::info_span!("repo_inference").entered();
+        RepoState::infer(&args.cwd)
+    };
+    match repo_result {
         Ok(repo_state) => {
             debug!("Repository Root: {}", repo_state.root);
             run_correct_turbo(runtime, repo_state, args, color_config)
@@ -350,20 +360,24 @@ where
             });
 
         if should_warn_on_global {
-            if let Some(declared_version) = declared_version {
-                warn!(
+            let message = if let Some(declared_version) = declared_version {
+                format!(
                     "No locally installed `turbo` found in your repository. Using globally \
                      installed version ({version}), which can cause unexpected \
                      behavior.\n\nInstalling the version in your repository ({declared_version}) \
                      before calling `turbo` will result in more predictable behavior across \
                      environments."
-                );
+                )
             } else {
-                warn!(
+                format!(
                     "No locally installed `turbo` found in your repository. Using globally \
                      installed version ({version}). Using a specified version in your repository \
                      will result in more predictable behavior."
-                );
+                )
+            };
+            debug!(%message, "global turbo warning");
+            unsafe {
+                env::set_var(GLOBAL_WARNING_ENV_VAR, &message);
             }
         }
         run_cli(runtime, Some(repo_state), ui)

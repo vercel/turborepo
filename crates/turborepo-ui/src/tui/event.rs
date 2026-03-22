@@ -3,6 +3,8 @@ use serde::Serialize;
 use tokio::sync::oneshot;
 
 pub enum Event {
+    LogEvent(turborepo_log::LogEvent),
+    ToggleLogPanel,
     StartTask {
         task: String,
         output_logs: OutputLogs,

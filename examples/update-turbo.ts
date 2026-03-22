@@ -43,11 +43,17 @@ exampleDirs.forEach((dir) => {
       throw new Error(`Unknown package manager "${packageManager}" in ${dir}`);
     }
 
+    const cwd = path.join(examplesDir, dir);
+
+    // Yarn Classic refuses to upgrade if the lockfile is out of sync.
+    // Sync it first so the upgrade command can proceed.
+    if (packageManager.startsWith("yarn")) {
+      console.log(`Running yarn install in ${dir} (syncing lockfile)...`);
+      execSync("yarn install", { stdio: "inherit", cwd });
+    }
+
     console.log(`Running ${updateCmd} in ${dir}...`);
-    execSync(updateCmd, {
-      stdio: "inherit",
-      cwd: path.join(examplesDir, dir)
-    });
+    execSync(updateCmd, { stdio: "inherit", cwd });
   } catch (error) {
     throw new Error(`Failed to process ${packageJsonPath}: ${error}`);
   }

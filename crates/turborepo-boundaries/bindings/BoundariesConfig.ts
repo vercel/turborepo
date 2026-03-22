@@ -5,32 +5,31 @@
  *
  * Allows users to restrict a package's dependencies and dependents.
  */
-export type BoundariesConfig = {
-  /**
-   * The boundaries rules for tags.
-   *
-   * Restricts which packages can import a tag and which packages a tag can
-   * import.
-   */
-  tags: { [key in string]?: TagRules } | null;
-  /**
-   * Declares any implicit dependencies, i.e. any dependency not declared in
-   * a `package.json`.
-   *
-   * These can include dependencies automatically injected by a framework or
-   * a testing library.
-   */
-  implicitDependencies: Array<string> | null;
-  /**
-   * Rules for a package's dependencies.
-   *
-   * Restricts which packages this package can import.
-   */
-  dependencies: Permissions | null;
-  /**
-   * Rules for a package's dependents.
-   *
-   * Restricts which packages can import this package.
-   */
-  dependents: Permissions | null;
-};
+export type BoundariesConfig = { 
+/**
+ * The boundaries rules for tags.
+ *
+ * Restricts which packages can import a tag and which packages a tag can
+ * import.
+ */
+tags?: { [key in string]?: TagRules }, 
+/**
+ * Declares any implicit dependencies, i.e. any dependency not declared in
+ * a `package.json`.
+ *
+ * These can include dependencies automatically injected by a framework or
+ * a testing library.
+ */
+implicitDependencies?: Array<string>, 
+/**
+ * Rules for a package's dependencies.
+ *
+ * Restricts which packages this package can import.
+ */
+dependencies?: Permissions, 
+/**
+ * Rules for a package's dependents.
+ *
+ * Restricts which packages can import this package.
+ */
+dependents?: Permissions, };

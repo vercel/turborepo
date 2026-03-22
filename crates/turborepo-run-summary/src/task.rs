@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, sync::Arc};
 
 use serde::Serialize;
 use turbopath::{AnchoredSystemPathBuf, RelativeUnixPathBuf};
@@ -43,11 +43,17 @@ pub struct TaskCacheSummary {
     source: Option<CacheSource>,
     // 0 if a cache miss
     time_saved: u64,
+    /// The HEAD commit SHA that produced the cache entry, if available.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sha: Option<String>,
+    /// A hash of uncommitted changes when the cache entry was produced.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    dirty_hash: Option<String>,
 }
 
 #[derive(Debug, Serialize, Copy, Clone)]
 #[serde(rename_all = "UPPERCASE")]
-enum CacheStatus {
+pub enum CacheStatus {
     Hit,
     Miss,
 }
@@ -87,7 +93,7 @@ pub struct SinglePackageTaskSummary {
 #[derive(Debug, Serialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct SharedTaskSummary<T> {
-    pub hash: String,
+    pub hash: Arc<str>,
     pub inputs: BTreeMap<RelativeUnixPathBuf, String>,
     pub hash_of_external_dependencies: String,
     pub cache: TaskCacheSummary,
@@ -146,6 +152,19 @@ pub struct TaskEnvVarSummary {
 }
 
 impl TaskCacheSummary {
+    // Used in observability/otel.rs to populate TaskMetricsPayload.cache_status
+    pub(crate) fn status(&self) -> CacheStatus {
+        self.status
+    }
+
+    // Used in observability/otel.rs to populate TaskMetricsPayload.cache_source
+    pub(crate) fn cache_source_label(&self) -> Option<&'static str> {
+        self.source.map(|source| match source {
+            CacheSource::Local => "LOCAL",
+            CacheSource::Remote => "REMOTE",
+        })
+    }
+
     pub fn cache_miss() -> Self {
         Self {
             local: false,
@@ -153,6 +172,8 @@ impl TaskCacheSummary {
             status: CacheStatus::Miss,
             time_saved: 0,
             source: None,
+            sha: None,
+            dirty_hash: None,
         }
     }
 }
@@ -160,8 +181,8 @@ impl TaskCacheSummary {
 impl From<Option<CacheHitMetadata>> for TaskCacheSummary {
     fn from(response: Option<CacheHitMetadata>) -> Self {
         match response {
-            Some(CacheHitMetadata { source, time_saved }) => {
-                let source = CacheSource::from(source);
+            Some(cache_hit) => {
+                let source = CacheSource::from(cache_hit.source);
                 // Assign these deprecated fields Local and Remote based on the information
                 // available in the itemStatus. Note that these fields are
                 // problematic, because an ItemStatus isn't always the composite
@@ -179,7 +200,9 @@ impl From<Option<CacheHitMetadata>> for TaskCacheSummary {
                     remote,
                     status: CacheStatus::Hit,
                     source: Some(source),
-                    time_saved,
+                    time_saved: cache_hit.time_saved,
+                    sha: cache_hit.sha,
+                    dirty_hash: cache_hit.dirty_hash,
                 }
             }
             None => Self::cache_miss(),
@@ -202,6 +225,8 @@ impl From<Option<HashTrackerCacheHitMetadata>> for TaskCacheSummary {
                     status: CacheStatus::Hit,
                     source: Some(source),
                     time_saved: metadata.time_saved,
+                    sha: metadata.sha,
+                    dirty_hash: metadata.dirty_hash,
                 }
             }
             None => Self::cache_miss(),
@@ -434,6 +459,8 @@ mod test {
             status: CacheStatus::Hit,
             source: Some(CacheSource::Local),
             time_saved: 6,
+            sha: None,
+            dirty_hash: None,
         },
         serde_json::json!({
                 "local": true,
@@ -443,6 +470,27 @@ mod test {
                 "timeSaved": 6,
             })
         ; "local cache hit"
+    )]
+    #[test_case(
+        TaskCacheSummary {
+            local: true,
+            remote: false,
+            status: CacheStatus::Hit,
+            source: Some(CacheSource::Local),
+            time_saved: 6,
+            sha: Some("abc123".to_string()),
+            dirty_hash: Some("def456".to_string()),
+        },
+        serde_json::json!({
+                "local": true,
+                "remote": false,
+                "status": "HIT",
+                "source": "LOCAL",
+                "timeSaved": 6,
+                "sha": "abc123",
+                "dirtyHash": "def456",
+            })
+        ; "local cache hit with scm state"
     )]
     #[test_case(
         TaskSummaryTaskDefinition {

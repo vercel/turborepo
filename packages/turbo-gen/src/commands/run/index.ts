@@ -1,5 +1,5 @@
 import { logger } from "@turbo/utils";
-import { getProject } from "../../utils/getProject";
+import { getProject } from "../../utils/get-project";
 import { custom } from "../../generators";
 
 export interface CustomGeneratorCLIOptions {

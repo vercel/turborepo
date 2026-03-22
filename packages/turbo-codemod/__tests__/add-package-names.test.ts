@@ -50,7 +50,7 @@ describe("add-package-names", () => {
     }
   });
 
-  it("duplicate names", async () => {
+  it("duplicate names - aborts with error", async () => {
     // load the fixture for the test
     const { root, readJson } = useFixture({
       fixture: "duplicate-names"
@@ -62,28 +62,17 @@ describe("add-package-names", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    // result should be correct
-    expect(result.fatalError).toBeUndefined();
-    expect(result.changes).toMatchInlineSnapshot(`
-      {
-        "packages/utils/package.json": {
-          "action": "modified",
-          "additions": 1,
-          "deletions": 1,
-        },
-      }
-    `);
+    // should abort with an error listing the duplicate names
+    expect(result.fatalError).toBeDefined();
+    expect(result.fatalError?.message).toContain("some-pkg");
+    expect(result.changes).toMatchInlineSnapshot(`{}`);
 
-    // validate unique names
-    const names = new Set();
-
+    // verify names are unchanged
     for (const pkg of ["ui", "utils"]) {
       const pkgJson = readJson<{ name: string }>(
         `packages/${pkg}/package.json`
       );
-      expect(pkgJson?.name).toBeDefined();
-      expect(names.has(pkgJson?.name)).toBe(false);
-      names.add(pkgJson?.name);
+      expect(pkgJson?.name).toBe("some-pkg");
     }
   });
 
@@ -114,6 +103,28 @@ describe("add-package-names", () => {
       expect(names.has(pkgJson?.name)).toBe(false);
       names.add(pkgJson?.name);
     }
+  });
+
+  it("aborts when workspace package shares name with root (#8312)", async () => {
+    // load the fixture for the test
+    const { root, readJson } = useFixture({
+      fixture: "root-shares-name-with-workspace"
+    });
+
+    // run the transformer
+    const result = await transformer({
+      root,
+      options: { force: false, dryRun: false, print: false }
+    });
+
+    // should abort with an error about the duplicate "my-lib" name
+    expect(result.fatalError).toBeDefined();
+    expect(result.fatalError?.message).toContain("my-lib");
+    expect(result.changes).toMatchInlineSnapshot(`{}`);
+
+    // the lib package must keep its original name — never renamed
+    const libPkg = readJson<{ name: string }>("packages/lib/package.json");
+    expect(libPkg?.name).toBe("my-lib");
   });
 
   it("ignored packages", async () => {
