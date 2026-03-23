@@ -41,6 +41,66 @@ turbo query query.gql
 
 Shorthands generate GraphQL queries for common operations so you don't need to write them by hand. The JSON output is identical to what you'd get from a raw query.
 
+### `ls`
+
+List packages in your monorepo. This is a shorthand for a `packages` query, equivalent to `turbo ls`.
+
+```bash title="Terminal"
+turbo query ls [packages] [flags]
+```
+
+With no arguments, lists all packages:
+
+```bash title="Terminal"
+turbo query ls
+```
+
+```json title="Output"
+{
+  "packageManager": "npm",
+  "packages": {
+    "count": 3,
+    "items": [
+      { "name": "docs", "path": "apps/docs" },
+      { "name": "ui", "path": "packages/ui" },
+      { "name": "web", "path": "apps/web" }
+    ]
+  }
+}
+```
+
+When passed package names, returns detailed information including tasks, dependencies, and dependents:
+
+```bash title="Terminal"
+turbo query ls web
+```
+
+#### `--filter` (`-F`)
+
+Use pnpm-style package selectors to narrow the package list. Same syntax as [`turbo run --filter`](/docs/reference/command-line-reference/run#--filter).
+
+```bash title="Terminal"
+turbo query ls --filter=web...
+turbo query ls -F my-app...
+```
+
+#### `--affected`
+
+Show only packages affected by changes between the current branch and `main`. Cannot be combined with `--filter`.
+
+```bash title="Terminal"
+turbo query ls --affected
+```
+
+#### `--output`
+
+Control the output format. Defaults to `pretty` (human-readable).
+
+```bash title="Terminal"
+turbo query ls --output json
+turbo query ls --output pretty
+```
+
 ### `affected`
 
 Check which packages or tasks are affected by changes between two git refs.

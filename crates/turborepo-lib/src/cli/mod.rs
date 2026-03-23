@@ -886,6 +886,28 @@ pub enum QuerySubcommand {
     /// Check which packages or tasks are affected by changes between two git
     /// refs
     Affected(AffectedArgs),
+    /// List packages in your monorepo (shorthand for a packages query)
+    Ls(LsArgs),
+}
+
+#[derive(clap::Args, Clone, Debug, PartialEq)]
+pub struct LsArgs {
+    /// Show only packages that are affected by changes between
+    /// the current branch and `main`
+    #[clap(long, group = "scope-filter-group")]
+    pub affected: bool,
+    /// Use the given selector to specify package(s) to act as
+    /// entry points. The syntax mirrors pnpm's syntax, and
+    /// additional documentation and examples can be found in
+    /// turbo's documentation https://turborepo.dev/docs/reference/command-line-reference/run#--filter
+    #[clap(short = 'F', long, group = "scope-filter-group")]
+    pub filter: Vec<String>,
+    /// Get insight into a specific package, such as
+    /// its dependencies and tasks
+    pub packages: Vec<String>,
+    /// Output format
+    #[clap(long, value_enum)]
+    pub output: Option<OutputFormat>,
 }
 
 #[derive(clap::Args, Clone, Debug, PartialEq)]
@@ -1636,6 +1658,9 @@ async fn run_main(
         Command::Ls {
             packages, output, ..
         } => {
+            let Some(ref query_server) = query_server else {
+                return Err(error::Error::QueryNotAvailable);
+            };
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
 
             event.track_call();
@@ -1643,7 +1668,7 @@ async fn run_main(
             let packages = packages.clone();
             let base = CommandBase::new(cli_args, repo_root, version, color_config)?;
             event.track_ui_mode(base.opts.run_opts.ui_mode);
-            ls::run(base, packages, event, output).await?;
+            ls::run(base, packages, event, output, query_server.as_ref()).await?;
 
             Ok(0)
         }
