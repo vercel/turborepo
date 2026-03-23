@@ -86,7 +86,10 @@ Inside `packages/typescript-config`, you have a few `json` files which represent
 }
 ```
 
-<LinkToDocumentation href="https://www.typescriptlang.org/tsconfig" text="tsconfig options reference" />
+<LinkToDocumentation
+  href="https://www.typescriptlang.org/tsconfig"
+  text="tsconfig options reference"
+/>
 
 ### Creating the rest of the package
 
@@ -292,6 +295,41 @@ import { MY_STRING } from "#utils.ts" // Uses .ts extension // [!code highlight]
 export const Button = () => {
   return (
     <button>{MY_STRING}</button>
+  )
+}
+```
+</Tab>
+
+</Tabs>
+
+If you prefer to import without file extensions, add explicit fallbacks for the source files
+you want to support:
+
+<Tabs storageKey="ts-imports-jit-extensionless" items={["package.json", "Source code"]}>
+  <Tab value="package.json">
+```json title="./packages/ui/package.json"
+{
+  "imports": {
+    "#*": [
+      "./src/*",
+      "./src/*.ts",
+      "./src/*.tsx",
+      "./src/*/index.ts",
+      "./src/*/index.tsx"
+    ]
+  }
+}
+```
+</Tab>
+<Tab value="Source code">
+```tsx title="./packages/ui/button.tsx"
+import { Card } from "#card" // Uses fallback entries to resolve without an extension // [!code highlight]
+
+export const Button = () => {
+  return (
+    <button>
+      <Card />
+    </button>
   )
 }
 ```
