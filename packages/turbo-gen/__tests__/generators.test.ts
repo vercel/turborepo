@@ -1,6 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
-import path from "node:path";
 import type { DependencyGroups, PackageJson } from "@turbo/utils";
+
+type MockFn = ReturnType<typeof jest.fn>;
 
 // Mock fs-extra
 jest.mock("fs-extra", () => ({
@@ -43,8 +44,14 @@ import { gatherAddRequirements } from "../src/utils/gather-add-requirements";
 import { generate as copyGenerate } from "../src/generators/copy";
 import { generate as emptyGenerate } from "../src/generators/empty";
 
-const mockedFs = jest.mocked(fs);
 const mockedGather = jest.mocked(gatherAddRequirements);
+
+// fs-extra has overloaded method signatures that jest.mocked can't resolve,
+// so we cast the individual methods we need.
+const mockedReadJSON = fs.readJSON as unknown as MockFn;
+const mockedWriteJSON = fs.writeJSON as unknown as MockFn;
+const mockedCopy = fs.copy as unknown as MockFn;
+const mockedWriteFileSync = fs.writeFileSync as unknown as MockFn;
 
 function stubProject(): Parameters<typeof copyGenerate>[0]["project"] {
   return {} as Parameters<typeof copyGenerate>[0]["project"];
@@ -64,8 +71,8 @@ function stubOpts(
 describe("copy generator — dependency merging", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockedFs.copy.mockResolvedValue(undefined);
-    mockedFs.writeJSON.mockResolvedValue(undefined);
+    mockedCopy.mockResolvedValue(undefined);
+    mockedWriteJSON.mockResolvedValue(undefined);
   });
 
   it("merges user-selected deps with existing source deps", async () => {
@@ -103,15 +110,15 @@ describe("copy generator — dependency merging", () => {
       dependencies: userDeps
     });
 
-    mockedFs.readJSON.mockResolvedValue(structuredClone(sourcePackageJson));
+    mockedReadJSON.mockResolvedValue(structuredClone(sourcePackageJson));
 
     await copyGenerate({
       project: stubProject(),
       opts: stubOpts()
     });
 
-    expect(mockedFs.writeJSON).toHaveBeenCalledTimes(1);
-    const written = mockedFs.writeJSON.mock.calls[0]![1] as PackageJson;
+    expect(mockedWriteJSON).toHaveBeenCalledTimes(1);
+    const written = mockedWriteJSON.mock.calls[0]![1] as PackageJson;
 
     // Source deps preserved
     expect(written.dependencies?.react).toBe("^18.0.0");
@@ -154,14 +161,14 @@ describe("copy generator — dependency merging", () => {
       dependencies: userDeps
     });
 
-    mockedFs.readJSON.mockResolvedValue(structuredClone(sourcePackageJson));
+    mockedReadJSON.mockResolvedValue(structuredClone(sourcePackageJson));
 
     await copyGenerate({
       project: stubProject(),
       opts: stubOpts()
     });
 
-    const written = mockedFs.writeJSON.mock.calls[0]![1] as PackageJson;
+    const written = mockedWriteJSON.mock.calls[0]![1] as PackageJson;
 
     // User selection overrides source version
     expect(written.dependencies?.["shared-lib"]).toBe("workspace:*");
@@ -198,14 +205,14 @@ describe("copy generator — dependency merging", () => {
       dependencies: userDeps
     });
 
-    mockedFs.readJSON.mockResolvedValue(structuredClone(sourcePackageJson));
+    mockedReadJSON.mockResolvedValue(structuredClone(sourcePackageJson));
 
     await copyGenerate({
       project: stubProject(),
       opts: stubOpts()
     });
 
-    const written = mockedFs.writeJSON.mock.calls[0]![1] as PackageJson;
+    const written = mockedWriteJSON.mock.calls[0]![1] as PackageJson;
     expect(written.dependencies?.["@repo/ui"]).toBe("workspace:*");
   });
 });
@@ -236,11 +243,11 @@ describe("empty generator — dependency merging", () => {
       opts: stubOpts({ method: "empty" })
     });
 
-    expect(mockedFs.writeFileSync).toHaveBeenCalled();
+    expect(mockedWriteFileSync).toHaveBeenCalled();
 
     // Find the package.json write (first writeFileSync call is package.json)
     const packageJsonCall = (
-      mockedFs.writeFileSync.mock.calls as [string, string][]
+      mockedWriteFileSync.mock.calls as [string, string][]
     ).find(([filePath]) => filePath.endsWith("package.json"));
 
     expect(packageJsonCall).toBeDefined();
