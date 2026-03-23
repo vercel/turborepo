@@ -34,6 +34,9 @@ pub const EXPECTED_TEAM_CREATED_AT: u64 = 0;
 pub const EXPECTED_SSO_TEAM_ID: &str = "expected_sso_team_id";
 pub const EXPECTED_SSO_TEAM_SLUG: &str = "expected_sso_team_slug";
 
+/// Per-artifact SCM metadata: (sha, dirty_hash).
+type ArtifactScmMetadata = HashMap<String, (Option<String>, Option<String>)>;
+
 pub async fn start_test_server(
     port: u16,
     ready_tx: Option<tokio::sync::oneshot::Sender<()>>,
@@ -42,8 +45,7 @@ pub async fn start_test_server(
     let head_durations_ref = get_durations_ref.clone();
     let put_durations_ref = get_durations_ref.clone();
 
-    let get_metadata_ref: Arc<Mutex<HashMap<String, (Option<String>, Option<String>)>>> =
-        Arc::new(Mutex::new(HashMap::new()));
+    let get_metadata_ref: Arc<Mutex<ArtifactScmMetadata>> = Arc::new(Mutex::new(HashMap::new()));
     let head_metadata_ref = get_metadata_ref.clone();
     let put_metadata_ref = get_metadata_ref.clone();
     let put_tempdir_ref = Arc::new(tempfile::tempdir()?);
@@ -177,12 +179,9 @@ pub async fn start_test_server(
                     HeaderValue::from_str(&duration.to_string()).unwrap(),
                 );
 
-                if let Some((sha, dirty_hash)) =
-                    get_metadata_ref.lock().await.get(&hash).cloned()
-                {
+                if let Some((sha, dirty_hash)) = get_metadata_ref.lock().await.get(&hash).cloned() {
                     if let Some(sha) = sha {
-                        headers
-                            .insert("x-artifact-sha", HeaderValue::from_str(&sha).unwrap());
+                        headers.insert("x-artifact-sha", HeaderValue::from_str(&sha).unwrap());
                     }
                     if let Some(dirty_hash) = dirty_hash {
                         headers.insert(
@@ -209,12 +208,10 @@ pub async fn start_test_server(
                     HeaderValue::from_str(&duration.to_string()).unwrap(),
                 );
 
-                if let Some((sha, dirty_hash)) =
-                    head_metadata_ref.lock().await.get(&hash).cloned()
+                if let Some((sha, dirty_hash)) = head_metadata_ref.lock().await.get(&hash).cloned()
                 {
                     if let Some(sha) = sha {
-                        headers
-                            .insert("x-artifact-sha", HeaderValue::from_str(&sha).unwrap());
+                        headers.insert("x-artifact-sha", HeaderValue::from_str(&sha).unwrap());
                     }
                     if let Some(dirty_hash) = dirty_hash {
                         headers.insert(

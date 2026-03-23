@@ -588,7 +588,11 @@ mod test {
         )
         .unwrap();
 
-        let anchored_files: Vec<_> = test_case.files.iter().map(|f| f.path().to_owned()).collect();
+        let anchored_files: Vec<_> = test_case
+            .files
+            .iter()
+            .map(|f| f.path().to_owned())
+            .collect();
         cache
             .put(&repo_root_path, &hash, &anchored_files, test_case.duration)
             .await?;
@@ -656,7 +660,11 @@ mod test {
         )
         .unwrap();
 
-        let anchored_files: Vec<_> = test_case.files.iter().map(|f| f.path().to_owned()).collect();
+        let anchored_files: Vec<_> = test_case
+            .files
+            .iter()
+            .map(|f| f.path().to_owned())
+            .collect();
         cache
             .put(&repo_root_path, &hash, &anchored_files, test_case.duration)
             .await?;
@@ -742,7 +750,15 @@ mod test {
             team_slug: None,
         };
 
-        let cache = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None, LazyScmState::new()).unwrap();
+        let cache = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::new(),
+        )
+        .unwrap();
 
         // Verify that the cache has the token refresh capability
         // The actual token refresh would be tested in integration tests with a proper
@@ -782,8 +798,15 @@ mod test {
             team_slug: None,
         };
 
-        let cache =
-            HTTPCache::new(api_client, &opts, repo_root_path, initial_api_auth, None, LazyScmState::new()).unwrap();
+        let cache = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            initial_api_auth,
+            None,
+            LazyScmState::new(),
+        )
+        .unwrap();
 
         // Verify initial token
         let initial_auth = cache.api_auth.lock().unwrap().clone();
@@ -836,8 +859,17 @@ mod test {
             team_slug: None,
         };
 
-        let cache =
-            Arc::new(HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None, LazyScmState::new()).unwrap());
+        let cache = Arc::new(
+            HTTPCache::new(
+                api_client,
+                &opts,
+                repo_root_path,
+                api_auth,
+                None,
+                LazyScmState::new(),
+            )
+            .unwrap(),
+        );
 
         // Test concurrent access to the auth mutex
         let handles: Vec<_> = (0..5)
@@ -895,7 +927,14 @@ mod test {
         unsafe {
             std::env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "short");
         }
-        let result = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None, LazyScmState::new());
+        let result = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::new(),
+        );
         unsafe {
             std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
         }
@@ -945,7 +984,14 @@ mod test {
         unsafe {
             std::env::set_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY", "short");
         }
-        let result = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None, LazyScmState::new());
+        let result = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::new(),
+        );
         unsafe {
             std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
         }
@@ -990,7 +1036,14 @@ mod test {
                 "this-key-is-at-least-32-bytes-!!", // exactly 32 bytes
             );
         }
-        let result = HTTPCache::new(api_client, &opts, repo_root_path, api_auth, None, LazyScmState::new());
+        let result = HTTPCache::new(
+            api_client,
+            &opts,
+            repo_root_path,
+            api_auth,
+            None,
+            LazyScmState::new(),
+        );
         unsafe {
             std::env::remove_var("TURBO_REMOTE_CACHE_SIGNATURE_KEY");
         }

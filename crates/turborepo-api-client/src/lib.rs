@@ -374,7 +374,8 @@ impl CacheClient for APIClient {
                     token,
                     request_url.clone(),
                     "PUT",
-                    "Authorization, Content-Type, User-Agent, x-artifact-duration, x-artifact-tag, x-artifact-sha, x-artifact-dirty-hash",
+                    "Authorization, Content-Type, User-Agent, x-artifact-duration, \
+                     x-artifact-tag, x-artifact-sha, x-artifact-dirty-hash",
                 )
                 .await?;
 
