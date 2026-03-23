@@ -1792,7 +1792,6 @@ async fn run_main(
             let Some(ref query_server) = query_server else {
                 return Err(error::Error::QueryNotAvailable);
             };
-            warn!("query command is experimental and may change in the future");
             let subcommand = subcommand.clone();
             let query = query.clone();
             let variables = variables.clone();
