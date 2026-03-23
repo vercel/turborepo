@@ -1,8 +1,5 @@
 import { treaty } from '@elysiajs/eden'
-import { app } from '../../../web/src/app/api/v1/[[...slugs]]/route'
-
-
-
+import { app } from '@/app/api/v1/[[...slugs]]/route'
 
 
 export const api =
