@@ -87,7 +87,7 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
     if (deps && Object.keys(deps).length > 0) {
       packageJson[group as keyof DependencyGroups] = {
         ...packageJson[group as keyof DependencyGroups],
-        ...deps,
+        ...deps
       };
     }
   }

@@ -27,7 +27,10 @@ export async function generate({ project, opts }: TurboGeneratorArguments) {
   for (const group of Object.keys(dependencies)) {
     const deps = dependencies[group as keyof DependencyGroups];
     if (deps && Object.keys(deps).length > 0) {
-      packageJson[group as keyof DependencyGroups] = deps;
+      packageJson[group as keyof DependencyGroups] = {
+        ...packageJson[group as keyof DependencyGroups],
+        ...deps
+      };
     }
   }
 
