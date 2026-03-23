@@ -19,25 +19,42 @@
   "sideEffects": [
     "**/*.css"
   ],
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "svelte": "./dist/index.js"
+      "default": "./dist/index.js",
+      "svelte": "./dist/index.js",
+      "types": "./dist/index.d.ts"
     }
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
   },
   "devDependencies": {
+    "@eslint/compat": "^2.0.3",
+    "@eslint/js": "^9.39.4",
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@sveltejs/kit": "^2.49.0",
-    "@sveltejs/package": "^2.5.0",
-    "@sveltejs/vite-plugin-svelte": "^5.1.0",
-    "eslint": "^9.39.1",
-    "svelte": "^5.46.0",
-    "svelte-check": "^4.3.0",
-    "typescript": "5.9.2",
-    "vite": "^6.3.2"
+    "@sveltejs/adapter-auto": "^7.0.1",
+    "@sveltejs/kit": "^2.55.0",
+    "@sveltejs/package": "^2.5.7",
+    "@sveltejs/vite-plugin-svelte": "^7.0.0",
+    "@types/node": "^24.12.0",
+    "@vitest/browser-playwright": "^4.1.0",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-svelte": "^3.16.0",
+    "globals": "^17.4.0",
+    "playwright": "^1.58.2",
+    "prettier": "^3.8.1",
+    "prettier-plugin-svelte": "^3.5.1",
+    "publint": "^0.3.18",
+    "svelte": "^5.54.1",
+    "svelte-check": "^4.4.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1",
+    "vite": "^8.0.1",
+    "vitest": "^4.1.0",
+    "vitest-browser-svelte": "^2.1.0"
   }
 }
