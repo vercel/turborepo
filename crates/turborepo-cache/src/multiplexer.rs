@@ -62,7 +62,7 @@ impl CacheMultiplexer {
                     &opts.cache_dir,
                     repo_root,
                     analytics_recorder.clone(),
-                    scm_state,
+                    scm_state.clone(),
                 )
             })
             .transpose()?;
@@ -75,6 +75,7 @@ impl CacheMultiplexer {
                     repo_root.to_owned(),
                     api_auth,
                     analytics_recorder.clone(),
+                    scm_state,
                 )?),
                 _ => None,
             }

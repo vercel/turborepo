@@ -115,8 +115,9 @@ impl From<turborepo_api_client::Error> for CacheError {
 /// can be traced back to the commit (and working-tree state) that
 /// produced them.
 ///
-/// Currently only written to the local filesystem cache's `-meta.json`
-/// sidecar. Remote cache entries do not include SCM state.
+/// Sent to the remote cache as `x-artifact-sha` and
+/// `x-artifact-dirty-hash` headers, and also written to the local
+/// filesystem cache's `-meta.json` sidecar.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CacheScmState {
     /// The HEAD commit SHA, if available.
