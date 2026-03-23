@@ -7,13 +7,13 @@
 //! Handles logging into Vercel, verifying SSO, and storing the token.
 
 mod auth;
+pub(crate) mod device_flow;
 mod error;
-mod login_server;
 mod ui;
 
 pub use auth::*;
+pub use device_flow::TokenSet;
 pub use error::Error;
-pub use login_server::*;
 use serde::Deserialize;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::{CacheClient, Client, SecretString, TokenClient};
@@ -29,8 +29,8 @@ pub const VERCEL_TOKEN_FILE: &str = "auth.json";
 pub const TURBO_TOKEN_DIR: &str = "turborepo";
 pub const TURBO_TOKEN_FILE: &str = "config.json";
 
-const VERCEL_OAUTH_CLIENT_ID: &str = "cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp";
 const VERCEL_OAUTH_TOKEN_URL: &str = "https://vercel.com/api/login/oauth/token";
+const DEFAULT_TOKEN_EXPIRY_SECS: u64 = 8 * 60 * 60; // 8 hours
 
 #[derive(Debug, Clone)]
 pub struct AuthTokens {
@@ -43,6 +43,7 @@ pub struct AuthTokens {
 struct OAuthTokenResponse {
     access_token: SecretString,
     refresh_token: SecretString,
+    expires_in: Option<u64>,
 }
 
 /// Token.
@@ -340,7 +341,7 @@ fn current_unix_time() -> u128 {
         .as_millis()
 }
 
-fn current_unix_time_secs() -> u64 {
+pub(crate) fn current_unix_time_secs() -> u64 {
     use std::time::{SystemTime, UNIX_EPOCH};
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -389,7 +390,7 @@ impl AuthTokens {
         let params = [
             ("refresh_token", refresh_token.expose()),
             ("grant_type", "refresh_token"),
-            ("client_id", VERCEL_OAUTH_CLIENT_ID),
+            ("client_id", device_flow::VERCEL_CLI_CLIENT_ID),
         ];
 
         let mut request = client.post(VERCEL_OAUTH_TOKEN_URL).form(&params);
@@ -401,7 +402,9 @@ impl AuthTokens {
         let status = response.status();
 
         if !status.is_success() {
-            return Err(Error::FailedToGetToken);
+            return Err(Error::TokenRefreshFailed {
+                status: status.as_u16(),
+            });
         }
 
         let response_text = response.text().await?;
@@ -411,7 +414,12 @@ impl AuthTokens {
         Ok(AuthTokens {
             token: Some(oauth_response.access_token),
             refresh_token: Some(oauth_response.refresh_token),
-            expires_at: Some(current_unix_time_secs() + 8 * 60 * 60),
+            expires_at: Some(
+                current_unix_time_secs()
+                    + oauth_response
+                        .expires_in
+                        .unwrap_or(DEFAULT_TOKEN_EXPIRY_SECS),
+            ),
         })
     }
 

@@ -10,7 +10,9 @@ use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_ui::ColorConfig;
 
-use crate::LoginServer;
+pub(crate) fn is_vercel(login_url: &str) -> bool {
+    login_url.contains("vercel.com")
+}
 
 const VERCEL_TOKEN_DIR: &str = "com.vercel.cli";
 const VERCEL_TOKEN_FILE: &str = "auth.json";
@@ -19,7 +21,6 @@ pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
     pub color_config: &'a ColorConfig,
     pub login_url: &'a str,
     pub api_client: &'a T,
-    pub login_server: &'a dyn LoginServer,
 
     pub sso_team: Option<&'a str>,
     pub existing_token: Option<&'a str>,
@@ -27,17 +28,11 @@ pub struct LoginOptions<'a, T: Client + TokenClient + CacheClient> {
     pub sso_login_callback_port: Option<u16>,
 }
 impl<'a, T: Client + TokenClient + CacheClient> LoginOptions<'a, T> {
-    pub fn new(
-        color_config: &'a ColorConfig,
-        login_url: &'a str,
-        api_client: &'a T,
-        login_server: &'a dyn LoginServer,
-    ) -> Self {
+    pub fn new(color_config: &'a ColorConfig, login_url: &'a str, api_client: &'a T) -> Self {
         Self {
             color_config,
             login_url,
             api_client,
-            login_server,
             sso_team: None,
             existing_token: None,
             force: false,
@@ -78,7 +73,9 @@ pub async fn get_token_with_refresh() -> Result<Option<turborepo_api_client::Sec
                 && auth_tokens.refresh_token.is_some()
                 && let Ok(new_tokens) = auth_tokens.refresh_token().await
             {
-                let _ = new_tokens.write_to_auth_file(&auth_path);
+                if let Err(e) = new_tokens.write_to_auth_file(&auth_path) {
+                    tracing::warn!("Failed to write refreshed tokens to {auth_path}: {e}");
+                }
                 return Ok(new_tokens.token);
             }
 
@@ -114,6 +111,7 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
 
+    use super::is_vercel;
     use crate::{AuthTokens, Token, current_unix_time_secs};
 
     // Mock the turborepo_dirs functions for testing
@@ -161,26 +159,19 @@ mod tests {
 
     #[tokio::test]
     async fn test_vca_token_with_valid_refresh() {
-        // This test verifies that vca_ prefixed tokens attempt refresh when expired
-        // Note: This test focuses on the logic flow rather than actual HTTP refresh
-        // since we can't easily mock the HTTP client in this unit test
-
         let vercel_config_dir = create_mock_vercel_config_dir();
         let current_time = current_unix_time_secs();
 
-        // Setup expired vca_ token with refresh token
         setup_auth_file(
             &vercel_config_dir,
             "vca_expired_token_123",
             Some("refresh_token_456"),
-            Some(current_time - 3600), // Expired 1 hour ago
+            Some(current_time - 3600),
         );
 
-        // Read the auth tokens to verify the setup
         let auth_path = vercel_config_dir.join_components(&["com.vercel.cli", "auth.json"]);
         let auth_tokens = Token::from_auth_file(&auth_path).expect("Failed to read auth file");
 
-        // Verify the token is expired and has vca_ prefix
         assert!(auth_tokens.is_expired());
         assert!(
             auth_tokens
@@ -191,11 +182,6 @@ mod tests {
                 .starts_with("vca_")
         );
         assert!(auth_tokens.refresh_token.is_some());
-
-        // The actual refresh would happen in get_token_with_refresh, but we
-        // can't test the HTTP call in a unit test. The important logic
-        // is that it attempts refresh for vca_ tokens and falls back
-        // appropriately.
     }
 
     #[tokio::test]
@@ -204,22 +190,18 @@ mod tests {
         let turbo_config_dir = create_mock_turbo_config_dir();
         let current_time = current_unix_time_secs();
 
-        // Setup expired legacy token (no vca_ prefix) with refresh token
         setup_auth_file(
             &vercel_config_dir,
             "legacy_token_123",
             Some("refresh_token_456"),
-            Some(current_time - 3600), // Expired 1 hour ago
+            Some(current_time - 3600),
         );
 
-        // Setup fallback turbo config token
         setup_turbo_config_file(&turbo_config_dir, "turbo_fallback_token");
 
-        // Read the auth tokens to verify the setup
         let auth_path = vercel_config_dir.join_components(&["com.vercel.cli", "auth.json"]);
         let auth_tokens = Token::from_auth_file(&auth_path).expect("Failed to read auth file");
 
-        // Verify the token is expired and does NOT have vca_ prefix
         assert!(auth_tokens.is_expired());
         assert!(
             !auth_tokens
@@ -230,12 +212,6 @@ mod tests {
                 .starts_with("vca_")
         );
         assert!(auth_tokens.refresh_token.is_some());
-
-        // The key behavior: legacy tokens should NOT attempt refresh even if
-        // they have a refresh token. They should fall back to turbo
-        // config instead. This is the critical logic we're testing -
-        // that the vca_ prefix check prevents refresh attempts for
-        // legacy tokens.
     }
 
     #[tokio::test]
@@ -244,22 +220,18 @@ mod tests {
         let turbo_config_dir = create_mock_turbo_config_dir();
         let current_time = current_unix_time_secs();
 
-        // Setup expired vca_ token WITHOUT refresh token
         setup_auth_file(
             &vercel_config_dir,
             "vca_expired_token_123",
-            None,                      // No refresh token
-            Some(current_time - 3600), // Expired 1 hour ago
+            None,
+            Some(current_time - 3600),
         );
 
-        // Setup fallback turbo config token
         setup_turbo_config_file(&turbo_config_dir, "turbo_fallback_token");
 
-        // Read the auth tokens to verify the setup
         let auth_path = vercel_config_dir.join_components(&["com.vercel.cli", "auth.json"]);
         let auth_tokens = Token::from_auth_file(&auth_path).expect("Failed to read auth file");
 
-        // Verify the token is expired, has vca_ prefix, but no refresh token
         assert!(auth_tokens.is_expired());
         assert!(
             auth_tokens
@@ -270,9 +242,6 @@ mod tests {
                 .starts_with("vca_")
         );
         assert!(auth_tokens.refresh_token.is_none());
-
-        // Even vca_ tokens should fall back to turbo config if they don't have
-        // a refresh token
     }
 
     #[tokio::test]
@@ -280,19 +249,16 @@ mod tests {
         let vercel_config_dir = create_mock_vercel_config_dir();
         let current_time = current_unix_time_secs();
 
-        // Setup non-expired vca_ token
         setup_auth_file(
             &vercel_config_dir,
             "vca_valid_token_123",
             Some("refresh_token_456"),
-            Some(current_time + 3600), // Expires 1 hour from now
+            Some(current_time + 3600),
         );
 
-        // Read the auth tokens to verify the setup
         let auth_path = vercel_config_dir.join_components(&["com.vercel.cli", "auth.json"]);
         let auth_tokens = Token::from_auth_file(&auth_path).expect("Failed to read auth file");
 
-        // Verify the token is NOT expired
         assert!(!auth_tokens.is_expired());
         assert!(
             auth_tokens
@@ -312,19 +278,16 @@ mod tests {
         let vercel_config_dir = create_mock_vercel_config_dir();
         let current_time = current_unix_time_secs();
 
-        // Setup non-expired legacy token
         setup_auth_file(
             &vercel_config_dir,
             "legacy_token_123",
             Some("refresh_token_456"),
-            Some(current_time + 3600), // Expires 1 hour from now
+            Some(current_time + 3600),
         );
 
-        // Read the auth tokens to verify the setup
         let auth_path = vercel_config_dir.join_components(&["com.vercel.cli", "auth.json"]);
         let auth_tokens = Token::from_auth_file(&auth_path).expect("Failed to read auth file");
 
-        // Verify the token is NOT expired
         assert!(!auth_tokens.is_expired());
         assert!(
             !auth_tokens
@@ -338,19 +301,27 @@ mod tests {
         // Non-expired legacy tokens should be returned as-is
     }
 
+    #[test]
+    fn test_is_vercel() {
+        assert!(is_vercel("https://vercel.com"));
+        assert!(is_vercel("https://api.vercel.com"));
+        assert!(is_vercel("https://vercel.com/api"));
+        assert!(!is_vercel("https://my-cache.example.com"));
+        assert!(!is_vercel("http://localhost:3000"));
+    }
+
     #[tokio::test]
     async fn test_token_prefix_edge_cases() {
         let current_time = current_unix_time_secs();
 
-        // Test various token prefixes to ensure only "vca_" triggers refresh
         let test_cases = vec![
-            ("vca_token", true),         // Should attempt refresh
-            ("VCA_token", false),        // Case sensitive - should not refresh
-            ("vca_", true),              // Minimal vca_ prefix - should attempt refresh
-            ("vca", false),              // Missing underscore - should not refresh
-            ("xvca_token", false),       // Has vca_ but not at start - should not refresh
-            ("", false),                 // Empty token - should not refresh
-            ("some_other_token", false), // Different prefix - should not refresh
+            ("vca_token", true),
+            ("VCA_token", false),
+            ("vca_", true),
+            ("vca", false),
+            ("xvca_token", false),
+            ("", false),
+            ("some_other_token", false),
         ];
 
         for (token, should_attempt_refresh) in test_cases {
@@ -359,7 +330,7 @@ mod tests {
                 refresh_token: Some(turborepo_api_client::SecretString::new(
                     "refresh_token".to_string(),
                 )),
-                expires_at: Some(current_time - 3600), // Expired
+                expires_at: Some(current_time - 3600),
             };
 
             let has_vca_prefix = token.starts_with("vca_");
