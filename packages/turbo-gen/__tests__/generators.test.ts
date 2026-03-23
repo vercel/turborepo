@@ -1,9 +1,12 @@
 import { describe, it, expect, jest, beforeEach } from "@jest/globals";
 import type { DependencyGroups, PackageJson } from "@turbo/utils";
+import fs from "fs-extra";
+import { gatherAddRequirements } from "../src/utils/gather-add-requirements";
+import { generate as copyGenerate } from "../src/generators/copy";
+import { generate as emptyGenerate } from "../src/generators/empty";
 
 type MockFn = ReturnType<typeof jest.fn>;
 
-// Mock fs-extra
 jest.mock("fs-extra", () => ({
   __esModule: true,
   default: {
@@ -17,7 +20,6 @@ jest.mock("fs-extra", () => ({
   }
 }));
 
-// Mock @turbo/utils
 jest.mock("@turbo/utils", () => ({
   logger: {
     log: jest.fn(),
@@ -30,19 +32,12 @@ jest.mock("@turbo/utils", () => ({
   createProject: jest.fn()
 }));
 
-// Mock picocolors
 jest.mock("picocolors", () => ({
   __esModule: true,
   default: { bold: jest.fn((s: string) => s) }
 }));
 
-// Mock gatherAddRequirements
 jest.mock("../src/utils/gather-add-requirements");
-
-import fs from "fs-extra";
-import { gatherAddRequirements } from "../src/utils/gather-add-requirements";
-import { generate as copyGenerate } from "../src/generators/copy";
-import { generate as emptyGenerate } from "../src/generators/empty";
 
 const mockedGather = jest.mocked(gatherAddRequirements);
 
