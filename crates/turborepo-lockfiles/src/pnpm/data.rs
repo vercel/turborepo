@@ -386,6 +386,13 @@ impl PnpmLockfile {
         };
 
         let override_specifier = self.apply_overrides(name, specifier);
+
+        // Prefer the original specifier if it already matches a snapshot,
+        // so overrides don't corrupt resolved peer-dep variants.
+        if override_specifier != specifier && self.has_package(&self.format_key(name, specifier)) {
+            return Ok(Some(specifier));
+        }
+
         if resolved_specifier == override_specifier {
             Ok(Some(resolved_version))
         } else if self.has_package_by_parts(name, override_specifier, key_buf) {
