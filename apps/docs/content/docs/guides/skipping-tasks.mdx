@@ -21,6 +21,15 @@ Ideally, you would do a quick check to see if any of that work needs to happen i
 
 ## Using `turbo query affected`
 
+<Callout type="warn">
+  The comparison requires everything between base and head to exist in the
+  checkout. If the checkout is too shallow, then all packages will be considered
+  changed.
+
+For example, setting up Git to check out with `--filter=blob:none --depth=0` will ensure `turbo query affected` has the right history to work correctly.
+
+</Callout>
+
 After you've checked out the repo, but **before** any other work, you can take a few seconds to check if your `web` workspace is affected by the changes in your branch:
 
 ```bash title="Terminal"

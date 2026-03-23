@@ -109,6 +109,15 @@ Check which packages or tasks are affected by changes between two git refs.
 turbo query affected [flags]
 ```
 
+<Callout type="warn">
+  The comparison requires everything between base and head to exist in the
+  checkout. If the checkout is too shallow, then all packages will be considered
+  changed.
+
+For example, setting up Git to check out with `--filter=blob:none --depth=0` will ensure `turbo query affected` has the right history to work correctly.
+
+</Callout>
+
 With no flags, returns all affected tasks:
 
 ```bash title="Terminal"

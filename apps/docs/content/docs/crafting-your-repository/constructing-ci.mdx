@@ -93,7 +93,9 @@ As your codebase and CI grow, you may start to look for more ways to get even fa
 <Step>
 ### Checkout the repository
 
-Start by cloning your repository. A clone with sufficient history is necessary for comparisons. By default, `turbo query affected` compares against the merge-base with your default branch.
+Start by cloning your repository. A clone with sufficient history is necessary for comparisons — if the checkout is too shallow, all packages will be considered changed. For example, cloning with `--filter=blob:none --depth=0` will ensure the right history is available.
+
+By default, `turbo query affected` compares against the merge-base with your default branch.
 
 </Step>
 <Step>
